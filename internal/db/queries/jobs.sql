@@ -939,3 +939,26 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
         ELSE updated_at
     END
 WHERE id = sqlc.arg(id);
+
+-- name: RoleClusterCountsFor :many
+-- Role-cluster counts for a SPECIFIC set of (company_slug, role_fingerprint) pairs, so
+-- a read path can resolve a page of cards in one query instead of one per card.
+--
+-- RoleClusterCountsAll exists beside this and is not a substitute: it aggregates the
+-- whole catalogue, which is right for a reindex building its lookup once and ruinous
+-- for a request. Filtering on role_fingerprint alone would not do either, since
+-- jobs_company_role_fingerprint_idx leads with company_slug; leading with the company
+-- set keeps the index usable.
+--
+-- The two sets are matched as a cross product here and narrowed to the exact pairs by
+-- the caller. A pair-wise join would need a two-argument unnest the query analyzer
+-- cannot type, and the surplus is bounded: a page holds few distinct companies, and a
+-- fingerprint belonging to another of them simply has no rows.
+SELECT j.company_slug,
+       j.role_fingerprint,
+       COUNT(*)::bigint AS repost_count,
+       COUNT(*) FILTER (WHERE j.closed_at IS NULL)::bigint AS mass_count
+FROM jobs j
+WHERE j.company_slug = ANY(sqlc.arg(company_slugs)::text[])
+  AND j.role_fingerprint = ANY(sqlc.arg(role_fingerprints)::text[])
+GROUP BY j.company_slug, j.role_fingerprint;

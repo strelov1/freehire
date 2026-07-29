@@ -7,6 +7,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/ghost"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/moderation"
 )
@@ -69,6 +70,7 @@ func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	h.attachGhostToRows(c, jobs, views)
 
 	return listResponse(c, views, total, limit, offset)
 }
@@ -96,8 +98,22 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	}); err == nil {
 		repost, mass = cnt.RepostCount, cnt.MassCount
 	}
-	reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
+	now := time.Now()
+	reality := jobview.ClassifyReality(job, now, int(repost), int(mass))
 	view.Reality = &reality
+
+	// The ghost signal reads the reality class as one of its four criteria, so it is
+	// derived here rather than recomputed. Best-effort like the rest of this block: an
+	// evidence-lookup failure leaves the signal off the response instead of failing the
+	// job read, and the honest direction for a missing lookup is to say nothing.
+	view.Ghost = jobview.ClassifyGhost(jobview.GhostInput{
+		Now:          now,
+		Closed:       job.ClosedAt.Valid,
+		RealityClass: reality.Class,
+		ATSAbsentAt:  job.AtsAbsentAt.Time,
+		HasATSAbsent: job.AtsAbsentAt.Valid,
+		Evidence:     h.ghostEvidence(c, job.ID),
+	})
 
 	// Referral availability: true when the company has an approved referrer, so the detail
 	// page can show the "ask for a referral" block. Best-effort — a lookup error degrades
@@ -115,4 +131,132 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"data": view})
+}
+
+// ghostEvidence gathers the outcome evidence for one job. Best-effort: a lookup
+// failure yields no evidence, which downgrades or removes the signal rather than
+// failing the job read. That is the honest direction — a missing lookup is a gap in
+// what we know, and the signal's whole discipline is to say nothing where it has
+// not observed.
+func (h *jobsHandlers) ghostEvidence(c *fiber.Ctx, jobID int64) ghost.Evidence {
+	return h.ghostEvidenceAll(c, []int64{jobID})[jobID]
+}
+
+// ghostEvidenceAll gathers outcome evidence for a page of jobs in two queries
+// rather than two per card. The returned map is sparse — only jobs with evidence
+// appear — so a page with none costs two empty result sets.
+func (h *jobsHandlers) ghostEvidenceAll(c *fiber.Ctx, jobIDs []int64) map[int64]ghost.Evidence {
+	if len(jobIDs) == 0 {
+		return nil
+	}
+	appRows, err := h.queries.ListGhostApplicationEvidence(c.Context(), jobIDs)
+	if err != nil {
+		return nil
+	}
+	reportRows, err := h.queries.ListGhostReportEvidence(c.Context(), jobIDs)
+	if err != nil {
+		return nil
+	}
+
+	apps := make([]ghost.Application, len(appRows))
+	for i, r := range appRows {
+		apps[i] = ghost.Application{
+			JobID:                r.JobID,
+			UserID:               r.UserID,
+			Stage:                r.Stage,
+			LastActivityAt:       r.LastActivityAt.Time,
+			HasPendingSuggestion: r.HasPendingSuggestion,
+		}
+	}
+	reports := make([]ghost.Report, len(reportRows))
+	for i, r := range reportRows {
+		reports[i] = ghost.Report{JobID: r.JobID, UserID: r.UserID, AppliedOn: r.AppliedOn.Time}
+	}
+	return ghost.Aggregate(time.Now(), apps, reports)
+}
+
+// attachGhostToRows attaches the ghost signal to a page served from Postgres, where
+// the rows are already in hand. The reality class is recomputed per row from its
+// cluster counts, fetched for the whole page at once — the same bulk shape the
+// reindex path uses, rather than a count query per card.
+//
+// Best-effort throughout: a failed lookup leaves the signal off those cards. The
+// list must not fail because an optional badge could not be computed.
+func (h *jobsHandlers) attachGhostToRows(c *fiber.Ctx, rows []db.Job, views []jobview.Job) {
+	if len(rows) == 0 {
+		return
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	evidence := h.ghostEvidenceAll(c, ids)
+
+	clusters := h.roleClusterCounts(c, rows)
+
+	now := time.Now()
+	for i, r := range rows {
+		// A lookup miss is a singleton cluster (counts 1) — the same default the
+		// per-row query degrades to, and what the bulk query deliberately omits.
+		repost, mass := 1, 1
+		if cnt, ok := clusters[clusterKey{r.CompanySlug, r.RoleFingerprint.String}]; ok {
+			repost, mass = cnt.repost, cnt.mass
+		}
+		reality := jobview.ClassifyReality(r, now, repost, mass)
+		views[i].Ghost = jobview.ClassifyGhost(jobview.GhostInput{
+			Now:          now,
+			Closed:       r.ClosedAt.Valid,
+			RealityClass: reality.Class,
+			ATSAbsentAt:  r.AtsAbsentAt.Time,
+			HasATSAbsent: r.AtsAbsentAt.Valid,
+			Evidence:     evidence[r.ID],
+		})
+	}
+}
+
+// clusterKey identifies one role cluster. The bulk count query matches its two sets
+// as a cross product, so the caller keys by the exact pair rather than trusting that
+// every returned row belongs to a card on this page.
+type clusterKey struct {
+	companySlug     string
+	roleFingerprint string
+}
+
+type clusterCount struct{ repost, mass int }
+
+// roleClusterCounts resolves the repost/mass-posting counts for a page of rows in one
+// query. The per-card alternative would issue a query per card on a public list
+// endpoint; this is the same lookup the reindex builds, scoped to the page.
+func (h *jobsHandlers) roleClusterCounts(c *fiber.Ctx, rows []db.Job) map[clusterKey]clusterCount {
+	slugs := make([]string, 0, len(rows))
+	prints := make([]string, 0, len(rows))
+	seen := map[clusterKey]struct{}{}
+	for _, r := range rows {
+		if !r.RoleFingerprint.Valid || r.RoleFingerprint.String == "" {
+			continue
+		}
+		key := clusterKey{r.CompanySlug, r.RoleFingerprint.String}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		slugs = append(slugs, r.CompanySlug)
+		prints = append(prints, r.RoleFingerprint.String)
+	}
+	if len(slugs) == 0 {
+		return nil
+	}
+
+	rowsOut, err := h.queries.RoleClusterCountsFor(c.Context(), db.RoleClusterCountsForParams{
+		CompanySlugs:     slugs,
+		RoleFingerprints: prints,
+	})
+	if err != nil {
+		return nil
+	}
+	out := make(map[clusterKey]clusterCount, len(rowsOut))
+	for _, r := range rowsOut {
+		out[clusterKey{r.CompanySlug, r.RoleFingerprint.String}] = clusterCount{int(r.RepostCount), int(r.MassCount)}
+	}
+	return out
 }

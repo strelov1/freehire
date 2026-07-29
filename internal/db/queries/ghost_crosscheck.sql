@@ -41,3 +41,10 @@ UPDATE jobs SET ats_absent_at = now() WHERE id = ANY(sqlc.arg(job_ids)::bigint[]
 -- Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
 UPDATE jobs SET ats_absent_at = NULL
 WHERE id = ANY(sqlc.arg(job_ids)::bigint[]) AND ats_absent_at IS NOT NULL;
+
+-- name: ListJobGhostStamps :many
+-- The absence stamps of a page of jobs, for the read paths that do not already hold
+-- the rows — search results come back from Meilisearch, which does not carry this
+-- column (and cannot: reindex is content_hash-incremental, so a column no adapter
+-- writes would never reach the index on its own).
+SELECT id, ats_absent_at FROM jobs WHERE id = ANY(sqlc.arg(job_ids)::bigint[]);

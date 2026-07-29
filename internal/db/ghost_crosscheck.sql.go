@@ -120,6 +120,39 @@ func (q *Queries) ListCompanyBoardTitles(ctx context.Context, arg ListCompanyBoa
 	return items, nil
 }
 
+const listJobGhostStamps = `-- name: ListJobGhostStamps :many
+SELECT id, ats_absent_at FROM jobs WHERE id = ANY($1::bigint[])
+`
+
+type ListJobGhostStampsRow struct {
+	ID          int64              `json:"id"`
+	AtsAbsentAt pgtype.Timestamptz `json:"ats_absent_at"`
+}
+
+// The absence stamps of a page of jobs, for the read paths that do not already hold
+// the rows — search results come back from Meilisearch, which does not carry this
+// column (and cannot: reindex is content_hash-incremental, so a column no adapter
+// writes would never reach the index on its own).
+func (q *Queries) ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]ListJobGhostStampsRow, error) {
+	rows, err := q.db.Query(ctx, listJobGhostStamps, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJobGhostStampsRow{}
+	for rows.Next() {
+		var i ListJobGhostStampsRow
+		if err := rows.Scan(&i.ID, &i.AtsAbsentAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const stampJobATSAbsent = `-- name: StampJobATSAbsent :exec
 UPDATE jobs SET ats_absent_at = now() WHERE id = ANY($1::bigint[])
 `

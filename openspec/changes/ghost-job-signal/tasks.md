@@ -54,11 +54,11 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 5. Serving the signal
 
-- [ ] 5.1 Add failing tests in `internal/jobview`: a closed job carries no ghost field; a job below the anonymity gate carries the level and criteria but **no** count fields; a job above it carries the distinct-contributor count.
-- [ ] 5.2 Write `jobview.Ghost` and `ClassifyGhost(job, now, evidence)` following `ClassifyReality`'s row-based shape and its documented reasoning, with `omitempty` on the field and on the gated counts.
-- [ ] 5.3 Wire the bulk evidence lookup into the job list and job detail read paths, hydrating one sparse map per request rather than a query per card.
-- [ ] 5.4 Regenerate the web contracts (`make` target per `web/AGENTS.md`) so `Ghost` reaches `web/src/lib/generated/contracts`.
-- [ ] 5.5 `go test ./internal/jobview/... ./internal/handler/...` green.
+- [x] 5.1 Add failing tests in `internal/jobview`: a closed job carries no ghost field; a job below the anonymity gate carries the level and criteria but **no** count fields; a job above it carries the distinct-contributor count.
+- [x] 5.2 Write `jobview.Ghost` and `ClassifyGhost(job, now, evidence)` following `ClassifyReality`'s row-based shape and its documented reasoning, with `omitempty` on the field and on the gated counts.
+- [x] 5.3 Wire the bulk evidence lookup into the job detail, job list AND SEARCH read paths, hydrating sparse maps per request rather than a query per card. Search was added beyond the original task: it is the surface where cards are actually browsed, so omitting it would have left the badge almost nowhere. It needs a Postgres read for `ats_absent_at` because reindex is `content_hash`-incremental and a column no adapter writes never reaches the index — the `is_tech` trap. Also added `RoleClusterCountsFor`, a page-scoped bulk variant, so the list does not issue a cluster query per card.
+- [x] 5.4 Regenerate the web contracts (`make` target per `web/AGENTS.md`) so `Ghost` reaches `web/src/lib/generated/contracts`.
+- [x] 5.5 `go test ./internal/jobview/... ./internal/handler/...` green.
 
 ## 6. The interface
 

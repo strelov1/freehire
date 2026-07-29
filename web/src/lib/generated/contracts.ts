@@ -62,6 +62,35 @@ export interface Enrichment {
 }
 
 /**
+ * Ghost is the served ghost signal: a hedged level, the criteria that produced it,
+ * and the denominator of the scale the interface shows. It carries facts so the UI
+ * can state them, never a bare accusation — the same doctrine as Reality.
+ * Contributors is the number of DISTINCT people behind the outcome criteria, and it
+ * is ABSENT below the anonymity gate rather than zeroed or rounded. Absence is what
+ * makes the guarantee structural: with a single witness there is no count to serve,
+ * so no later caller can forget to redact one. (A count of one would identify that
+ * applicant to the employer.)
+ * The signal is computed on read and never stored — it is time-dependent, and a
+ * stored level would go stale sitting still.
+ */
+export interface Ghost {
+  level: string;
+  criteria: string[];
+  criteria_total: number /* int */;
+  contributors?: number /* int */;
+  ats_checked_at?: string;
+}
+
+//////////
+// source: jobview.go
+/*
+Package jobview defines the single public wire shape of a job — the JSON
+representation served by the list, detail, and search endpoints and stored in
+the search index. Keeping one type (instead of parallel per-endpoint structs)
+makes drift between the API surfaces impossible.
+*/
+
+/**
  * Job is the public wire shape of a job. It carries the public_slug and
  * deliberately omits the internal numeric id, which must never be exposed: the
  * id is enumerable and its growth leaks inventory size and fill rate.
@@ -165,6 +194,13 @@ export interface Job {
    * it is time-dependent. Nil when not computed (e.g. a plain FromRow without counts).
    */
   reality?: Reality;
+  /**
+   * Ghost is the ghost-job signal (level + the criteria that fired + the scale's
+   * denominator), computed at read time by ClassifyGhost — never stored, and never
+   * present on a closed job. Nil at level `none`, which is most of the catalogue:
+   * the field appears only when the system has something to say.
+   */
+  ghost?: Ghost;
   /**
    * ReferralAvailable is true when the job's company has at least one approved employee
    * referrer, so the detail page can show the "ask for a referral" affordance. A

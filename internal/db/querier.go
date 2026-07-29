@@ -1080,6 +1080,11 @@ type Querier interface {
 	// The emails linked to one of the caller's applications, newest first, for the
 	// application detail page.
 	ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([]ListJobEmailsRow, error)
+	// The absence stamps of a page of jobs, for the read paths that do not already hold
+	// the rows — search results come back from Meilisearch, which does not carry this
+	// column (and cannot: reindex is content_hash-incremental, so a column no adapter
+	// writes would never reach the index on its own).
+	ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]ListJobGhostStampsRow, error)
 	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
 	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),
 	// the scan re-reads the same window as bare ids (id is never toasted, so this
@@ -1658,6 +1663,20 @@ type Querier interface {
 	// more than one posting are returned (singletons are the count-1 default a lookup miss
 	// already implies), keeping the map small. NULL/empty fingerprints are excluded.
 	RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCountsAllRow, error)
+	// Role-cluster counts for a SPECIFIC set of (company_slug, role_fingerprint) pairs, so
+	// a read path can resolve a page of cards in one query instead of one per card.
+	//
+	// RoleClusterCountsAll exists beside this and is not a substitute: it aggregates the
+	// whole catalogue, which is right for a reindex building its lookup once and ruinous
+	// for a request. Filtering on role_fingerprint alone would not do either, since
+	// jobs_company_role_fingerprint_idx leads with company_slug; leading with the company
+	// set keeps the index usable.
+	//
+	// The two sets are matched as a cross product here and narrowed to the exact pairs by
+	// the caller. A pair-wise join would need a two-argument unnest the query analyzer
+	// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
+	// fingerprint belonging to another of them simply has no rows.
+	RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error)
 	// The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
 	// each collapsed canon's countries/regions/cities with the union across its cluster's
 	// OPEN rows (a canon in one country must still be findable by the countries of the reposts

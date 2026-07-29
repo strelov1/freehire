@@ -45,15 +45,18 @@ const (
 // had no data — a reader must be able to see how much is unknown.
 const CriteriaTotal = 4
 
-// contributorGate is how many DISTINCT people must have contributed outcome
-// evidence before the stronger claim is available.
+// ContributorGate is how many DISTINCT people must have contributed outcome
+// evidence before the stronger claim is available. It is exported because the
+// serving layer withholds the counts below the same threshold — one number, two
+// consequences, and letting them drift apart would serve a count that identifies
+// a single applicant to the employer.
 //
 // Two independent constraints land on the same number, and both must hold. A
 // count of one identifies the single applicant to the employer, so a served
 // count would deanonymise them. And one account must not be able to mark an
 // honest posting on its own. Lowering this breaks a privacy guarantee and an
 // abuse guarantee at the same time.
-const contributorGate = 2
+const ContributorGate = 2
 
 // absenceStampMaxAgeDays is how old a cross-check stamp may be and still count.
 // The worker re-stamps on every run, so a stamp older than this means the worker
@@ -95,7 +98,7 @@ type Result struct {
 //
 // Two gates, and they are not the same gate. `convergence` asks whether enough
 // independent criteria fired for the system to say anything at all.
-// `contributorGate` asks whether real people witnessed it, and is the only route
+// `ContributorGate` asks whether real people witnessed it, and is the only route
 // to LevelLikely — so structural evidence, however much of it converges, can
 // never produce the stronger claim.
 //
@@ -120,7 +123,7 @@ func Classify(in Input) Result {
 	}
 
 	converged := len(criteria) >= convergence
-	witnessed := in.Contributors >= contributorGate
+	witnessed := in.Contributors >= ContributorGate
 
 	level := LevelNone
 	switch {

@@ -1642,6 +1642,67 @@ func (q *Queries) RoleClusterCountsAll(ctx context.Context) ([]RoleClusterCounts
 	return items, nil
 }
 
+const roleClusterCountsFor = `-- name: RoleClusterCountsFor :many
+SELECT j.company_slug,
+       j.role_fingerprint,
+       COUNT(*)::bigint AS repost_count,
+       COUNT(*) FILTER (WHERE j.closed_at IS NULL)::bigint AS mass_count
+FROM jobs j
+WHERE j.company_slug = ANY($1::text[])
+  AND j.role_fingerprint = ANY($2::text[])
+GROUP BY j.company_slug, j.role_fingerprint
+`
+
+type RoleClusterCountsForParams struct {
+	CompanySlugs     []string `json:"company_slugs"`
+	RoleFingerprints []string `json:"role_fingerprints"`
+}
+
+type RoleClusterCountsForRow struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	RepostCount     int64       `json:"repost_count"`
+	MassCount       int64       `json:"mass_count"`
+}
+
+// Role-cluster counts for a SPECIFIC set of (company_slug, role_fingerprint) pairs, so
+// a read path can resolve a page of cards in one query instead of one per card.
+//
+// RoleClusterCountsAll exists beside this and is not a substitute: it aggregates the
+// whole catalogue, which is right for a reindex building its lookup once and ruinous
+// for a request. Filtering on role_fingerprint alone would not do either, since
+// jobs_company_role_fingerprint_idx leads with company_slug; leading with the company
+// set keeps the index usable.
+//
+// The two sets are matched as a cross product here and narrowed to the exact pairs by
+// the caller. A pair-wise join would need a two-argument unnest the query analyzer
+// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
+// fingerprint belonging to another of them simply has no rows.
+func (q *Queries) RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error) {
+	rows, err := q.db.Query(ctx, roleClusterCountsFor, arg.CompanySlugs, arg.RoleFingerprints)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RoleClusterCountsForRow{}
+	for rows.Next() {
+		var i RoleClusterCountsForRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.RoleFingerprint,
+			&i.RepostCount,
+			&i.MassCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const roleClusterGeoAll = `-- name: RoleClusterGeoAll :many
 SELECT
     o.company_slug,
