@@ -234,6 +234,7 @@ func Register(app *fiber.App, cfg Config) {
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), boardresolve.New())
 	reportsH := newReportHandlers(queries)
+	ghostReportsH := newGhostReportHandlers(queries)
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
@@ -413,6 +414,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Job reports + review queue (see reportHandlers).
 	reportsH.register(api, mw)
+	ghostReportsH.register(api, mw)
 
 	// Community discussion threads (see communityHandlers).
 	communityH.register(api, mw)

@@ -260,6 +260,10 @@ type Querier interface {
 	// Total live messages for the caller (same optional filters as ListEmails), for
 	// pagination.
 	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
+	// How many claims this account has filed since a cutoff, for the daily cap. Counts
+	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
+	// exists to bound, so forgiving it would leave the cap trivially bypassable.
+	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
 	// Per-stage application counts for the Pipeline snapshot. An application is any
 	// row the user applied to or staged (saved-only rows are excluded); a row with
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
@@ -318,6 +322,22 @@ type Querier interface {
 	// granted separately by the caller (credits.Reward), idempotent by the contribution id.
 	CreateContribution(ctx context.Context, arg CreateContributionParams) (LinkContribution, error)
 	CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error)
+	// File one person's claim that they applied to a posting and were never answered.
+	//
+	// Two of the three refusals are STRUCTURAL rather than checks the service performs:
+	// the INSERT selects from users and jobs, so an unproven address or a posting already
+	// taken down inserts no row at all. That is the same shape CreateAPIKey uses for the
+	// verified-address gate — a guarantee nothing downstream can forget to apply.
+	//
+	// A conflicting row that has been RETRACTED is revived rather than refused: retracting
+	// by mistake must not lock somebody out of their own claim forever, and reviving cannot
+	// inflate anything, since the row (and so the person) is still counted once. A
+	// conflicting row that is still live updates nothing (the DO UPDATE's WHERE), returning
+	// no row, which the repository reports as a duplicate.
+	//
+	// Because all four outcomes are "no row", the repository asks GhostReportRefusalReason
+	// which one it was. That costs an extra query only on the failure path.
+	CreateGhostReport(ctx context.Context, arg CreateGhostReportParams) (GhostReport, error)
 	// Record a member's offer to refer into a company. The UNIQUE (user_id, company_slug)
 	// constraint rejects a second offer for the same company; the repository maps that unique
 	// violation to a domain "already offered" error. Starts pending, awaiting moderation.
@@ -791,6 +811,12 @@ type Querier interface {
 	// decide whether a correctly-signed token was revoked. One primary-key lookup; this
 	// is the price of making a stateless JWT revocable at all.
 	GetUserTokenVersion(ctx context.Context, id int64) (int32, error)
+	// Why CreateGhostReport returned no row. Read only on the failure path, so the happy
+	// path stays one statement. Each column answers one gate, and the repository maps the
+	// first failing one — unverified before closed before duplicate — because an
+	// unverified account should be told to confirm its address rather than that somebody
+	// already reported the job.
+	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
 	// Mint a persona. ON CONFLICT (user_id) DO NOTHING makes a concurrent same-user mint
 	// return no row (the repository re-reads the winner); a handle-unique violation is a
@@ -1588,6 +1614,9 @@ type Querier interface {
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
+	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
+	// nothing and surfaces as not-found, rather than silently re-stamping the date.
+	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
 	// Undo a whole autopilot run: restore the pre-run document and clear both autopilot columns.
 	// The report goes with the document because a report describing edits that no longer exist
 	// misdescribes the CV. A CV with no snapshot matches nothing and returns no row, which the
