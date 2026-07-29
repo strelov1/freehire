@@ -12,9 +12,11 @@ package linkimport
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -40,6 +42,12 @@ type Result struct {
 	// company. The intake asks the catalog about it to tell a genuinely new employer from one
 	// we already carry under another ATS.
 	CompanySlug string
+	// Deduped reports that the catalog already carried this vacancy, so the row just written
+	// was marked a duplicate of it and PublicSlug names the CANONICAL posting rather than the
+	// row this import wrote. The row is written rather than skipped because it is what makes
+	// the submitted URL resolvable at all: FindOpenJobByURL matches duplicates and answers
+	// with the posting they duplicate.
+	Deduped bool
 }
 
 // BoardResolver detects the ATS board embedded in a page whose host says nothing — a company
@@ -190,6 +198,10 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	}
 	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
+	// A page read by the generic resolver is filed under its own URL, so nothing stops it from
+	// becoming a second row for a vacancy a crawl already wrote. Ask before writing.
+	canon, deduped := im.canonicalForRole(ctx, params)
+
 	tx, err := im.pool.Begin(ctx)
 	if err != nil {
 		return Result{}, false, err
@@ -200,7 +212,15 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err != nil {
 		return Result{}, false, err
 	}
-	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
+	if deduped {
+		if _, err := qtx.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{
+			ID:          res.Job.ID,
+			DuplicateOf: pgtype.Int8{Int64: canon.ID, Valid: true},
+		}); err != nil {
+			return Result{}, false, err
+		}
+	} else if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
+		// A duplicate never reaches search, so enriching it pays an LLM for an invisible row.
 		TargetVersion:     int32(enrich.Version),
 		JobID:             res.Job.ID,
 		ExcludeCategories: vocab.NonTechCategories,
@@ -210,14 +230,51 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, false, err
 	}
-	im.index(ctx, res)
+	if !deduped {
+		im.index(ctx, res)
+	}
 
-	return Result{
+	out := Result{
 		Source:      res.Job.Source,
 		ExternalID:  res.Job.ExternalID,
 		PublicSlug:  res.Job.PublicSlug,
 		CompanySlug: res.Job.CompanySlug,
-	}, true, nil
+		Deduped:     deduped,
+	}
+	if deduped {
+		out.PublicSlug = canon.PublicSlug
+	}
+	return out, true, nil
+}
+
+// canonicalForRole asks whether the catalog already holds this vacancy in an open, canonical
+// row — the check that keeps a storefront link from duplicating the posting it fronts.
+//
+// Only the generic identity is asked about: every board identity is already deduplicated by
+// UpsertJob's ON CONFLICT (source, external_id), so asking would spend a query to learn
+// nothing. An empty fingerprint clusters with nobody.
+//
+// A lookup failure is not fatal — the row is written unmarked, exactly as before. Dedup is an
+// improvement, not a condition of keeping the vacancy.
+func (im *Importer) canonicalForRole(ctx context.Context, p db.UpsertJobParams) (db.CanonicalJobForRoleRow, bool) {
+	if p.Source != linksource.GenericSource || p.RoleFingerprint.String == "" {
+		return db.CanonicalJobForRoleRow{}, false
+	}
+	row, err := im.q.CanonicalJobForRole(ctx, db.CanonicalJobForRoleParams{
+		CompanySlug:     p.CompanySlug,
+		RoleFingerprint: p.RoleFingerprint,
+		Source:          p.Source,
+		ExternalID:      p.ExternalID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.CanonicalJobForRoleRow{}, false
+	}
+	if err != nil {
+		log.Printf("linkimport: canonical posting for %s/%s: %v",
+			p.CompanySlug, p.RoleFingerprint.String, err)
+		return db.CanonicalJobForRoleRow{}, false
+	}
+	return row, true
 }
 
 // index pushes a just-written open job to the live search index, best-effort — same doc

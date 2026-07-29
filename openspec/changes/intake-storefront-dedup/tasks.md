@@ -11,15 +11,15 @@
 
 ## 2. The collapse on import
 
-- [ ] 2.1 Write the failing integration test in `internal/linkimport`: with a crawled posting
+- [x] 2.1 Write the failing integration test in `internal/linkimport`: with a crawled posting
       seeded in the same role cluster, importing a storefront page writes a row carrying
       `duplicate_of`, returns the canonical `public_slug`, and queues no enrichment for it
-- [ ] 2.2 Add `Deduped` to `linkimport.Result` and the canon lookup to `write`, gated to the
+- [x] 2.2 Add `Deduped` to `linkimport.Result` and the canon lookup to `write`, gated to the
       generic identity and to a non-empty `role_fingerprint`; on a hit mark the row, skip the
       enrichment enqueue, and skip the search push
-- [ ] 2.3 Verify the test catches the regression: stub the lookup to find nothing, confirm the
+- [x] 2.3 Verify the test catches the regression: stub the lookup to find nothing, confirm the
       test fails, restore
-- [ ] 2.4 Confirm the pre-existing `linkimport` tests still pass — an import with no canon must
+- [x] 2.4 Confirm the pre-existing `linkimport` tests still pass — an import with no canon must
       still be enqueued and indexed
 
 ## 3. The intake answer

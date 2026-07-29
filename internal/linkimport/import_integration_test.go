@@ -19,6 +19,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobhash"
 )
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
@@ -150,5 +151,70 @@ func TestImport_ReportsAPageThatIsNotAVacancy(t *testing.T) {
 	}
 	if rows != 0 {
 		t.Errorf("catalog holds %d postings, want none", rows)
+	}
+}
+
+// fingerprintOf builds the role fingerprint write() derives for a posting, so a seeded row
+// lands in the same role cluster as the imported page. The DESCRIPTION is part of it, not just
+// the title and company — two postings of one role whose descriptions differ do not cluster.
+// Derived rather than hardcoded so the test follows the definition if it moves; markup
+// differences are fine, since the fingerprint normalizes to visible text.
+func fingerprintOf(title, companySlug, description string) string {
+	return jobhash.RoleFingerprint(db.UpsertJobParams{
+		Title: title, CompanySlug: companySlug, Description: description,
+	})
+}
+
+func TestImport_CollapsesOntoAPostingTheCatalogAlreadyCarries(t *testing.T) {
+	// A storefront over an ATS board we crawl. The page parses, so the generic resolver would
+	// file it under (weblink, <the URL>) — a second row for a vacancy the catalog already holds.
+	// It must still be written (that row is what makes the storefront URL resolvable), but
+	// marked a duplicate of the crawled row and kept out of the enrichment queue.
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+
+	var canonID int64
+	if err := pool.QueryRow(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug, role_fingerprint)
+		VALUES ('greenhouse', 'mindera:1', 'https://boards.greenhouse.io/mindera/jobs/1',
+		        'Staff Java Backend Developer', 'staff-java-mindera', 'Mindera', 'mindera', $1)
+		RETURNING id`, fingerprintOf("Staff Java Backend Developer", "mindera", "Lead the backend guild.")).
+		Scan(&canonID); err != nil {
+		t.Fatalf("seed the crawled posting: %v", err)
+	}
+
+	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
+
+	res, ok, err := im.Import(ctx, pageURL, Board{})
+	if err != nil || !ok {
+		t.Fatalf("import = (ok %v, err %v), want the vacancy imported", ok, err)
+	}
+	if !res.Deduped {
+		t.Error("Deduped = false, want true — the catalog already carries this vacancy")
+	}
+	if res.PublicSlug != "staff-java-mindera" {
+		t.Errorf("PublicSlug = %q, want the canonical staff-java-mindera", res.PublicSlug)
+	}
+
+	var dupOf *int64
+	if err := pool.QueryRow(ctx,
+		`SELECT duplicate_of FROM jobs WHERE source = 'weblink' AND external_id = $1`, pageURL).
+		Scan(&dupOf); err != nil {
+		t.Fatalf("read the written row: %v", err)
+	}
+	if dupOf == nil || *dupOf != canonID {
+		t.Errorf("duplicate_of = %v, want %d", dupOf, canonID)
+	}
+
+	var queued int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM enrichment_outbox o
+		JOIN jobs j ON j.id = o.job_id
+		WHERE j.source = 'weblink'`).Scan(&queued); err != nil {
+		t.Fatalf("read enrichment queue: %v", err)
+	}
+	if queued != 0 {
+		t.Errorf("enrichment queue holds %d rows for the duplicate, want 0 — it never reaches search", queued)
 	}
 }
