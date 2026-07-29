@@ -61,10 +61,12 @@ Pipeline and cross-package invariants live in [docs/agents/mail-stack.md](../../
 ## Assistant (`assistant.go`, `assistant_*_tools.go`)
 
 Routes (all on `mw.key` — the session cookie, the session JWT the extension's
-connect flow minted, or a full-scope API key — then `requireRollout`, because
-inference is billed to us and the assistant is not open to everyone while it is
-free). The gate is `key` rather than `cookie` because the extension's side panel
-holds conversations too and cannot send an httpOnly cookie across origins:
+connect flow minted, or a full-scope API key — and nothing else). Authentication
+is the whole gate: every signed-in user reaches the assistant. The gate is `key`
+rather than `cookie` because the extension's side panel holds conversations too
+and cannot send an httpOnly cookie across origins. **Nothing meters a turn** —
+the beta-tester gate that used to bound this spend is gone, and credit metering
+has not replaced it yet:
 
 | Route | Does |
 |---|---|

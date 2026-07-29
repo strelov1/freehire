@@ -15,8 +15,8 @@ export const accountNav = [
   // Mail inbox: connect Gmail and/or claim a freehire mailbox to track application
   // replies. Open to every signed-in user.
   { href: '/my/inbox', label: 'Inbox' },
-  // Out of restricted rollout: the assistant now runs on the user's own machine
-  // with their own Claude subscription, so it costs us nothing to open up.
+  // The agent: open to every signed-in user. It runs in our backend, and unlike the CV
+  // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent' },
   // CV builder + AI tailoring: open to every signed-in user (credits meter the AI spend).
   { href: '/my/cvs', label: 'CV builder' },

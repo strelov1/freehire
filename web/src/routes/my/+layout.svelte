@@ -32,9 +32,10 @@
     if (browser) localStorage.setItem('hire.myNavCollapsed', collapsed ? '1' : '0');
   }
 
-  // Moderator-only sections (Inbox) and beta-only sections (Agent) are hidden
-  // from the nav for everyone else; the relevant server surfaces enforce the
-  // real gate, this just declutters the UI.
+  // Sections marked moderator- or beta-only are hidden from the nav for everyone
+  // else; the relevant server surfaces enforce the real gate, this just declutters
+  // the UI. No section carries such a mark today — the Agent lost its beta gate and
+  // is open to every signed-in user.
   const navItems = $derived(
     visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );

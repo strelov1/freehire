@@ -2,7 +2,6 @@
   import { onMount, tick, untrack } from 'svelte';
   import { AlertTriangle, PanelLeft, Plus, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import { currentUser } from '$lib/auth.svelte';
   import {
     createSession,
     listSessions,
@@ -47,7 +46,6 @@
   //    into a navigation so each chat has its own URL and Back works; the tailor host,
   //    whose chat is bound to one CV, passes nothing.
   //  - showSessionRail: whether to render the session sidebar (off on the focused /tailor surface).
-  //  - requireBeta: kept so an embedder can gate the chat in the UI as well as at the API.
   let {
     session = undefined,
     kickoff = undefined,
@@ -58,7 +56,6 @@
     beforeTurn = undefined,
     onSessionChange = undefined,
     showSessionRail = true,
-    requireBeta = false,
     preset = 'chat',
     openingActions = undefined,
   }: {
@@ -79,7 +76,6 @@
     beforeTurn?: () => Promise<void>;
     onSessionChange?: (id: string) => void;
     showSessionRail?: boolean;
-    requireBeta?: boolean;
     /** What an empty conversation offers instead of a blank prompt. Shown only while the
      *  session has no messages: once it has any, the composer is the way in. A host that
      *  passes these should NOT also pass a kickoff — the whole point is that the first turn
@@ -89,10 +85,6 @@
      *  whatever preset it was created with. */
     preset?: ChatPreset;
   } = $props();
-
-  // The API gates the assistant to the restricted rollout; this mirrors it in the
-  // UI so a non-member sees an explanation instead of a wall of 403s.
-  const allowed = $derived(!requireBeta || (currentUser()?.beta_tester ?? false));
 
   let phase = $state<Phase>('loading');
   let error = $state<string | null>(null);
@@ -531,7 +523,6 @@
   }
 
   onMount(() => {
-    if (!allowed) return;
     void boot();
     return cancelTurn;
   });
@@ -561,10 +552,6 @@
     >
       Open your chats
     </a>
-  </div>
-{:else if !allowed}
-  <div class="m-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-    The agent is a limited beta and isn't available for your account yet.
   </div>
 {:else}
   <div class="flex min-h-0 flex-1">

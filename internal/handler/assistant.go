@@ -75,37 +75,20 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 // the extension's side panel holds conversations too, and it cannot send hire's
 // httpOnly cookie across origins — so the gate is `key`, which resolves the cookie,
 // the session JWT the connect flow minted, or a full-scope API key to one user.
-// Every route stays behind the restricted rollout: inference is billed to us, so it
-// is not open to everyone while it is free.
+// Authentication is the whole gate: every signed-in user reaches the assistant. The
+// beta-tester restriction that used to sit here was written when the agent ran on the
+// candidate's own machine, and did not survive the move in-process. Note what left
+// with it — nothing meters a turn, so until credit metering lands, being signed in is
+// all that bounds our inference spend.
 func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
-	gate := h.requireRollout
-	api.Post("/assistant/sessions", mw.key, gate, h.CreateAssistantSession)
-	api.Get("/assistant/sessions", mw.key, gate, h.ListAssistantSessions)
-	api.Get("/assistant/sessions/:id", mw.key, gate, h.GetAssistantSession)
-	api.Delete("/assistant/sessions/:id", mw.key, gate, h.DeleteAssistantSession)
-	api.Post("/assistant/sessions/:id/messages", mw.key, gate, h.PostAssistantMessage)
+	api.Post("/assistant/sessions", mw.key, h.CreateAssistantSession)
+	api.Get("/assistant/sessions", mw.key, h.ListAssistantSessions)
+	api.Get("/assistant/sessions/:id", mw.key, h.GetAssistantSession)
+	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
+	api.Post("/assistant/sessions/:id/messages", mw.key, h.PostAssistantMessage)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
-	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, gate, h.PostAssistantAutopilot)
-}
-
-// requireRollout admits moderators and beta testers. Membership is read fresh per
-// request rather than from the token, so revoking it takes effect immediately, and
-// a read failure fails closed — the assistant spends our money, so an unresolvable
-// caller is refused rather than let through.
-func (h *assistantHandlers) requireRollout(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	u, err := h.queries.GetUserByID(c.Context(), userID)
-	if err != nil {
-		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
-	}
-	if u.Role != "moderator" && !u.BetaTester {
-		return fiber.NewError(fiber.StatusForbidden, "forbidden")
-	}
-	return c.Next()
+	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, h.PostAssistantAutopilot)
 }
 
 // assistantMaxPrompt bounds one user message. The agent's context is finite and a

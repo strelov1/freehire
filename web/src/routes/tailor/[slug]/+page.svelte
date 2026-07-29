@@ -405,7 +405,6 @@
               openingActions={opening}
               {sessionLabel}
               showSessionRail={false}
-              requireBeta={false}
               {onTurnComplete}
               onRunStateChange={(running) => (runActive = running)}
               onTurnStateChange={(active) => (turnActive = active)}
