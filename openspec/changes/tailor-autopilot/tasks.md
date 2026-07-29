@@ -62,5 +62,5 @@
 
 ## 12. Verification
 
-- [ ] 12.1 `go build ./...`, `go vet ./...`, `go test ./...`, and the web unit tests all green
-- [ ] 12.2 Drive a real run in the local stack against a vacancy with a populated experience bank: watch the tool stream, confirm the preview changes, the report renders, the revert restores, and the closing message asks exactly one question
+- [x] 12.1 `go build ./...`, `go vet ./...`, `go test ./...`, the integration suites (`-tags=integration` over `internal/db` and `internal/handler`, real Postgres), `svelte-check`, the web build and 457 web unit tests — all green
+- [ ] 12.2 Drive a real run against a live model — BLOCKED: the local `.env` carries no `LLM_BASE_URL`/`LLM_API_KEY`, so no model can be reached from this machine. The mechanics (search → refused unevidenced bullet → evidenced bullet → report → snapshot → undo) are covered end to end over real HTTP and real Postgres by `TestAnAutopilotRunSearchesEditsAndReports` and the undo tests; what is NOT verified is a real model's judgement and the workspace's rendering under one
