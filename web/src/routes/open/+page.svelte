@@ -14,8 +14,8 @@
   // on deploy), mirroring the homepage stat-strip. Recount on change:
   //   ATS platforms   → registered adapters in internal/sources/source.go `All()`
   //   Telegram channels → `- channel:` entries in sources/telegram.yml
-  const ATS_PLATFORMS = 156;
-  const TELEGRAM_CHANNELS = 91;
+  const ATS_PLATFORMS = 166;
+  const TELEGRAM_CHANNELS = 88;
 
   const nf = new Intl.NumberFormat('en');
   const compactNf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
@@ -64,8 +64,8 @@
   });
 
   const stats = $derived([
-    { value: fmt(data.scale.jobs, '3M+'), label: 'open jobs', href: '/api/v1/jobs' },
-    { value: fmt(data.scale.companies, '220K+'), label: 'companies', href: '/api/v1/companies' },
+    { value: fmt(data.scale.jobs, '3.3M+'), label: 'open jobs', href: '/api/v1/jobs' },
+    { value: fmt(data.scale.companies, '200K+'), label: 'companies', href: '/api/v1/companies' },
     { value: nf.format(ATS_PLATFORMS), label: 'ATS platforms', href: null },
     { value: nf.format(TELEGRAM_CHANNELS), label: 'Telegram channels', href: null },
   ]);
