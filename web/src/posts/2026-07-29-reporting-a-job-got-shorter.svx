@@ -1,0 +1,23 @@
+---
+title: Reporting a job got shorter
+date: 2026-07-29
+summary: The explanation is now optional, and "no response" asks when you applied instead of asking you to write an essay.
+type: changelog
+tags:
+  - reports
+  - job-seekers
+---
+
+Reporting a problem with a vacancy used to demand a written explanation before it
+would send. The reason you picked already says what is wrong, so that field is now
+optional — pick a reason and send, or add a line if there is something we would not
+guess. The Telegram contact field is gone.
+
+"No response — applied but never heard back" now works differently from the rest.
+Instead of a text box, it asks one thing: **when did you apply?** That date is what
+makes the report useful to anyone other than us. Without it, "nobody answered me"
+cannot be told apart from "I applied on Tuesday", and there was nothing we could do
+with it beyond reading it.
+
+The other four reasons — no longer relevant, spam, fraud, other — still go to a human
+who can take the posting down.
