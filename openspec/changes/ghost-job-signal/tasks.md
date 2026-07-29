@@ -45,12 +45,12 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 4. The ATS cross-check
 
-- [ ] 4.1 Add a failing test for the role key: an aggregator posting whose description was truncated still matches the company board's full-text posting under the same title; a per-city title variant matches its base role. Reuse `jobhash.stripTrailingClause`/`normalizeRoleText` rather than restating the normalization — export what is needed.
-- [ ] 4.2 Add a failing integration test for the coverage gate: a company present only on aggregator sources is never stamped, however unmatched its titles.
-- [ ] 4.3 Add the queries: candidate aggregator jobs by keyset, and a company's open role keys from sources of kind `ats`/`company` (`sources.ProviderKind` decides the kinds; the query takes the resolved provider list). Run `make sqlc`.
-- [ ] 4.4 Write `cmd/ghost-crosscheck`: run-once-and-exit, `DATABASE_URL`, keyset over open aggregator jobs grouped by company, one role-key query per company, stamping and clearing `ats_absent_at`. **Dry-run by default**, `--apply` to write — the `cmd/prune` discipline. The dry run prints the calibration report: how many jobs would reach each level, broken down by source and by company.
-- [ ] 4.5 Add a failing test that a run stamps and a subsequent run clears when the role reappears on the company's board, so the stamp tracks the world rather than accumulating.
-- [ ] 4.6 `go test ./cmd/ghost-crosscheck/...` green and `go test -tags=integration ./internal/db/` still green.
+- [x] 4.1 Add a failing test for the role key: an aggregator posting whose description was truncated still matches the company board's full-text posting under the same title; a per-city title variant matches its base role. Reuse `jobhash.stripTrailingClause`/`normalizeRoleText` rather than restating the normalization — export what is needed.
+- [x] 4.2 Add a failing integration test for the coverage gate: a company present only on aggregator sources is never stamped, however unmatched its titles.
+- [x] 4.3 Add the queries: candidate aggregator jobs by keyset, and a company's open role keys from sources of kind `ats`/`company` (`sources.ProviderKind` decides the kinds; the query takes the resolved provider list). Run `make sqlc`.
+- [x] 4.4 Write `cmd/ghost-crosscheck`: run-once-and-exit, `DATABASE_URL`, keyset over open aggregator jobs grouped by company, one role-key query per company, stamping and clearing `ats_absent_at`. **Dry-run by default**, `--apply` to write — the `cmd/prune` discipline. The dry run prints the calibration report: how many jobs would reach each level, broken down by source and by company.
+- [x] 4.5 Add a failing test that a run stamps and a subsequent run clears when the role reappears on the company's board, so the stamp tracks the world rather than accumulating.
+- [x] 4.6 `go test ./cmd/ghost-crosscheck/...` green and `go test -tags=integration ./internal/db/` still green.
 
 ## 5. Serving the signal
 

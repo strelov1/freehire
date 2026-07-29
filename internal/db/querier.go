@@ -129,6 +129,9 @@ type Querier interface {
 	// worker died (stale claimed_at), so no separate reaper process is needed.
 	// Oldest post first so a backlog drains in posting order.
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
+	// Withdraw the absence stamp: the role turned up on the company's board after all.
+	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
+	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
 	// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
@@ -881,6 +884,15 @@ type Querier interface {
 	// worker groups these by canonical(query) so each distinct filter hits the search
 	// index once regardless of how many subscriptions share it.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
+	// Keyset page of open aggregator postings to cross-check, ordered by id so the scan
+	// resumes exactly where it stopped. The worker buffers a page and groups it by company
+	// itself, so a company's board is read once rather than once per posting; ordering by
+	// company instead would make the keyset cursor non-unique and risk skipping rows.
+	//
+	// The caller passes the aggregator provider names (sources.AggregatorProviders): the
+	// provider taxonomy lives in Go adapter markers, not in the database, and copying it
+	// into SQL would leave two lists to keep in step.
+	ListAggregatorJobsForCrosscheck(ctx context.Context, arg ListAggregatorJobsForCrosscheckParams) ([]ListAggregatorJobsForCrosscheckRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
@@ -927,6 +939,15 @@ type Querier interface {
 	// companies that are actually hiring, matching the /companies list's hiring scope, and
 	// rides companies_hiring_job_count_idx instead of scanning the full heap.
 	ListCompaniesForReindex(ctx context.Context, arg ListCompaniesForReindexParams) ([]Company, error)
+	// The open titles a company carries on its OWN board — a source of kind `ats` or
+	// `company`, never an aggregator. The worker turns these into role keys and asks
+	// whether an aggregator posting's key is among them.
+	//
+	// This is the COVERAGE GATE's data as well as its answer. An empty result means we do
+	// not crawl this company's board at all, and the worker must then stamp nothing:
+	// absence is evidence only where we looked, and without the gate the signal would
+	// report our own blind spots as the employer's fault.
+	ListCompanyBoardTitles(ctx context.Context, arg ListCompanyBoardTitlesParams) ([]string, error)
 	// All companies with their current collection membership. cmd/import-collections
 	// reads this to know the existing company slugs (the match target) and each
 	// company's current tags (so it can reconcile only the tags it manages, leaving any
@@ -1752,6 +1773,10 @@ type Querier interface {
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
 	// caller's message (→ 404).
 	SoftDeleteEmail(ctx context.Context, arg SoftDeleteEmailParams) (int64, error)
+	// Record that this posting's role was not found on its company's own board, as of now.
+	// Re-stamped on every run, so the reader can ignore a stamp that has aged out and a
+	// worker that has stopped falls silent instead of accusing from a frozen snapshot.
+	StampJobATSAbsent(ctx context.Context, jobIds []int64) error
 	// Record that a batch of jobs' content is embedded under the given model. Run in the
 	// same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
 	// the index write and this stamp is safely retried (idempotent re-embed). The stamp
