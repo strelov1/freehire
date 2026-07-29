@@ -35,6 +35,8 @@
 ## 5. Finish
 
 - [x] 5.1 Commit and open the PR (#1243); merge pending review
-- [ ] 5.2 Archive and sync the OpenSpec change
-- [ ] 5.3 Post-merge ops: re-ingest the four providers, then `make reindex`
+- [x] 5.2 Archive and sync the OpenSpec change
+- [x] 5.3 Post-merge ops: deployed (release.sh, blue), re-ingested all four providers.
+      Full reindex refused (free 32GiB < the 70GiB floor); incremental indexing at ingest
+      carried the change into search, verified on the reported job
 - [ ] 5.4 Offer a changelog entry (user-visible: hybrid jobs leave the remote filter)
