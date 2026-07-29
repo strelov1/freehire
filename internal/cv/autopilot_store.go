@@ -53,9 +53,9 @@ func SanitizeAutopilotReport(entries []AutopilotEntry) ([]AutopilotEntry, error)
 				i, e.Status, strings.Join(AutopilotStatuses, ", "))
 		}
 		out = append(out, AutopilotEntry{
-			Requirement: truncateRunes(requirement, maxAutopilotRequirement),
+			Requirement: clip(requirement, maxAutopilotRequirement),
 			Status:      e.Status,
-			Note:        truncateRunes(strings.TrimSpace(e.Note), maxAutopilotNote),
+			Note:        clip(e.Note, maxAutopilotNote),
 		})
 	}
 	return out, nil
@@ -67,16 +67,6 @@ func validAutopilotStatus(s AutopilotStatus) bool {
 		return true
 	}
 	return false
-}
-
-// truncateRunes bounds a display string by runes, so a multi-byte character is never cut
-// in half into invalid UTF-8.
-func truncateRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return string(r[:max])
 }
 
 // SetAutopilotReport replaces the run report on an owned CV, or returns ErrNotFound.

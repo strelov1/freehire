@@ -138,24 +138,23 @@
   // Whether the turn in flight is an unattended run rather than a reply to something typed.
   let runActive = $state(false);
 
+  /** Whether a turn may be started right now: the pane is settled and nothing is running. */
+  const canStartTurn = () => phase === 'ready' && !turnActive && !switching && !!activeId;
+
   /**
    * Start an unattended run from outside the chat — the workspace's "Run again" beside the
    * run report. Exported rather than driven by a prop because it is an ACTION, not state:
    * a boolean the host toggles would re-run the moment anything else re-rendered.
    */
   export function startRun() {
-    if (phase !== 'ready' || turnActive || switching || !activeId) return;
+    if (!canStartTurn()) return;
     void dispatch(undefined);
   }
 
-  /** Run an opening action. Guarded on an idle, empty session: these are the FIRST turn. */
+  /** Run an opening action — the first turn of a conversation nobody has typed into yet. */
   function runOpening(action: OpeningAction) {
-    if (phase !== 'ready' || turnActive || switching || !activeId) return;
-    if (action.kind === 'message') {
-      void dispatch(action.text);
-      return;
-    }
-    void dispatch(undefined);
+    if (!canStartTurn()) return;
+    void dispatch(action.kind === 'message' ? action.text : undefined);
   }
 
   /** The conversation the host is currently being navigated to, or null. Held until the
@@ -488,14 +487,14 @@
     if (!id) return;
     error = null;
     turnActive = true;
+    let started: Turn;
     if (text === undefined) {
       runActive = true;
       onRunStateChange?.(true);
+      started = startAutopilot(id, (event) => onEvent(id, event));
+    } else {
+      started = sendTurn(id, text, (event) => onEvent(id, event));
     }
-    const started =
-      text === undefined
-        ? startAutopilot(id, (event) => onEvent(id, event))
-        : sendTurn(id, text, (event) => onEvent(id, event));
     turn = started;
     void scrollToBottom();
     try {

@@ -391,20 +391,15 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if h.runner == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
-	}
-	if h.cv == nil || h.cv.cvStore == nil {
+	if h.runner == nil || h.cv == nil || h.cv.cvStore == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
 	if sess.Preset != assistant.PresetTailor || sess.CVID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	if err := h.cv.cvStore.SnapshotForAutopilot(c.Context(), *sess.CVID, userID); err != nil {
+	// The owner comes from the session the ownership check just resolved, not from the
+	// request a second time: two readings of who is calling are one too many.
+	if err := h.cv.cvStore.SnapshotForAutopilot(c.Context(), *sess.CVID, sess.UserID); err != nil {
 		return mapCVError(err)
 	}
 	return h.streamTurn(c, sess, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps})
