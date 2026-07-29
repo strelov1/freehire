@@ -121,16 +121,27 @@ WHERE source = $1 AND external_id = $2;
 -- URL. Both sides go through normalize_job_url (migration 0042), so a link differing only
 -- by scheme, www., tracking query, fragment, case or trailing slash still matches; the
 -- same expression backs jobs_normalized_url_idx, so this is an index lookup.
--- Scoped to open canonical rows, matching that partial index: a closed or suppressed
--- posting is not one to show a match card for. Two open rows may share a URL (an
--- aggregator and an ATS row the dedup passes have not collapsed), so the most recently
--- confirmed one wins, with id as the deterministic tiebreak.
-SELECT public_slug
-FROM jobs
-WHERE normalize_job_url(url) = normalize_job_url(@url)
-  AND closed_at IS NULL
-  AND duplicate_of IS NULL
-ORDER BY last_seen_at DESC, id DESC
+-- Scoped to open rows: a closed posting is not one to show a match card for.
+--
+-- Duplicates ARE matched, and answer with the posting they duplicate. One in five open
+-- postings is a duplicate of another, and the candidate standing on one is looking at a
+-- vacancy the catalogue knows — answering "we do not have this" because the dedup passes
+-- preferred a twin is wrong from where they are sitting. This is the opposite of what the
+-- search index wants (one row per group), which is why the scoping lives here and not in
+-- the dedup itself.
+--
+-- A duplicate whose canonical row has since closed falls back to its own slug: the group's
+-- chosen representative is gone, and this one is still open.
+--
+-- Two open rows may share a URL (an aggregator and an ATS row the dedup passes have not
+-- collapsed), so a canonical row wins over a duplicate, then the most recently confirmed,
+-- with id as the deterministic tiebreak.
+SELECT COALESCE(canonical.public_slug, j.public_slug)
+FROM jobs j
+LEFT JOIN jobs canonical ON canonical.id = j.duplicate_of AND canonical.closed_at IS NULL
+WHERE normalize_job_url(j.url) = normalize_job_url(@url)
+  AND j.closed_at IS NULL
+ORDER BY (j.duplicate_of IS NULL) DESC, j.last_seen_at DESC, j.id DESC
 LIMIT 1;
 
 -- name: GetJobIDBySlug :one

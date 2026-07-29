@@ -102,7 +102,7 @@ func TestFindOpenJobByURL_ResolvesDespiteURLNoise(t *testing.T) {
 	}
 }
 
-func TestFindOpenJobByURL_SkipsClosedAndDuplicatePostings(t *testing.T) {
+func TestFindOpenJobByURL_SkipsClosedAndFollowsDuplicates(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -119,7 +119,32 @@ func TestFindOpenJobByURL_SkipsClosedAndDuplicatePostings(t *testing.T) {
 		}
 	})
 
-	t.Run("duplicate", func(t *testing.T) {
+	// A duplicate is not "nothing here". The candidate is standing on a page whose
+	// vacancy the catalogue holds; the dedup passes merely picked a twin to represent
+	// the group. Answer with that twin — one in five open postings is a duplicate, so
+	// the alternative is telling every fifth page it is unknown.
+	t.Run("duplicate resolves to what it duplicates", func(t *testing.T) {
+		truncate(t, pool)
+		mustUpsert(t, q, urlJob("himalayas:canonical", "https://himalayas.app/companies/mindera/jobs/other"))
+		mustUpsert(t, q, urlJob("himalayas:dup", himalayasPosting))
+		canonicalID, _ := dupOf(t, pool, "himalayas:canonical")
+		const canonicalSlug = "pslug-himalayas:canonical"
+		if _, err := pool.Exec(ctx,
+			"UPDATE jobs SET duplicate_of = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
+			t.Fatalf("suppress himalayasPosting: %v", err)
+		}
+		slug, err := findByURL(t, q, himalayasPosting)
+		if err != nil {
+			t.Fatalf("duplicate page: %v", err)
+		}
+		if slug != canonicalSlug {
+			t.Errorf("duplicate page resolved to %q, want the canonical %q", slug, canonicalSlug)
+		}
+	})
+
+	// Unless the representative is gone. Then the open row in hand is the best answer
+	// there is, and reporting nothing would hide a vacancy that is still live.
+	t.Run("duplicate of a closed canonical answers with itself", func(t *testing.T) {
 		truncate(t, pool)
 		mustUpsert(t, q, urlJob("himalayas:canonical", "https://himalayas.app/companies/mindera/jobs/other"))
 		mustUpsert(t, q, urlJob("himalayas:dup", himalayasPosting))
@@ -128,8 +153,15 @@ func TestFindOpenJobByURL_SkipsClosedAndDuplicatePostings(t *testing.T) {
 			"UPDATE jobs SET duplicate_of = $1 WHERE external_id = $2", canonicalID, "himalayas:dup"); err != nil {
 			t.Fatalf("suppress himalayasPosting: %v", err)
 		}
-		if slug, err := findByURL(t, q, himalayasPosting); !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("suppressed posting resolved to %q (err %v), want no rows", slug, err)
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", canonicalID); err != nil {
+			t.Fatalf("close canonical: %v", err)
+		}
+		slug, err := findByURL(t, q, himalayasPosting)
+		if err != nil {
+			t.Fatalf("duplicate page: %v", err)
+		}
+		if slug == "" || slug == "pslug-himalayas:canonical" {
+			t.Errorf("resolved to %q, want the duplicate's own slug", slug)
 		}
 	})
 }
@@ -202,7 +234,10 @@ func TestFindOpenJobByURL_UsesTheExpressionIndex(t *testing.T) {
 		plan.WriteString(line)
 		plan.WriteString("\n")
 	}
-	if !strings.Contains(plan.String(), "jobs_normalized_url_idx") {
-		t.Errorf("plan does not use jobs_normalized_url_idx:\n%s", plan.String())
+	// The open-rows index (0051), not the canonical-only one (0042): this lookup now
+	// matches duplicates too. Without an index it is a sequential scan of every open
+	// posting, which is what this endpoint was rewritten to escape.
+	if !strings.Contains(plan.String(), "jobs_normalized_url_open_idx") {
+		t.Errorf("plan does not use jobs_normalized_url_open_idx:\n%s", plan.String())
 	}
 }

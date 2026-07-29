@@ -94,6 +94,29 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		}
 	})
 
+	// One in five open postings is a duplicate of another. The candidate is standing
+	// on a page we know perfectly well; answering "freehire does not have this" because
+	// the dedup passes preferred a twin is wrong from where they are sitting.
+	t.Run("a duplicate page resolves to the posting it duplicates", func(t *testing.T) {
+		if _, err := pool.Exec(ctx,
+			`WITH canonical AS (
+			   INSERT INTO jobs (source, external_id, url, title, public_slug)
+			   VALUES ('ashby', 'truelogic:ef27e902', 'https://jobs.ashbyhq.com/truelogic/ef27e902', 'Senior Full Stack', 'senior-full-stack-canonical')
+			   RETURNING id
+			 )
+			 INSERT INTO jobs (source, external_id, url, title, public_slug, duplicate_of)
+			 SELECT 'ashby', 'truelogic:c6d2719d', 'https://jobs.ashbyhq.com/truelogic/c6d2719d',
+			        'Senior Full Stack', 'senior-full-stack-duplicate', id
+			 FROM canonical`); err != nil {
+			t.Fatalf("seed duplicate pair: %v", err)
+		}
+
+		const page = "https%3A%2F%2Fjobs.ashbyhq.com%2Ftruelogic%2Fc6d2719d"
+		if slug := findSlug(t, app, page); slug != "senior-full-stack-canonical" {
+			t.Errorf("slug = %q, want the canonical posting", slug)
+		}
+	})
+
 	t.Run("unknown page is unresolved", func(t *testing.T) {
 		if slug := findSlug(t, app, "https%3A%2F%2Fexample.test%2Fcareers%2Fsome-job"); slug != "" {
 			t.Errorf("slug = %q, want no match", slug)
