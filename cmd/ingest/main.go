@@ -32,9 +32,10 @@ import (
 	"github.com/strelov1/freehire/internal/worker"
 )
 
-// staleAfter is the grace window before an unseen job is closed: many crawl cycles
+// staleAfter is the DEFAULT grace window before an unseen job is closed: many crawl cycles
 // at the hourly per-provider cadence, so a board failing several runs in a row keeps
-// its jobs open.
+// its jobs open. An adapter that crawls only a slice of its catalogue widens it for its own
+// provider — see sweepWindowFor.
 const staleAfter = 48 * time.Hour
 
 func main() {
@@ -178,7 +179,11 @@ func run() int {
 	// registered providers), so this is accepted to avoid the far worse over-close: closing
 	// live jobs of boards a partial/timed-out run never reached.
 	queries := db.New(pool)
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-staleAfter), Valid: true}
+	now := time.Now()
+	// A slice-crawled source (e.g. whatjobs) declares a window wider than staleAfter: its crawl
+	// reaches only a keyword's first pages, so a posting that drifted deeper reads as unseen and
+	// the default window would close it and reopen it on the next run.
+	grace := sources.SweepGraceWindows(registry)
 	// A self-closing source (e.g. jobtech) manages its own closes from its stream, so the
 	// unseen sweep must skip it: it re-reports only changed ads, and the cutoff would wrongly
 	// close every still-open ad it did not touch this run.
@@ -198,6 +203,8 @@ func run() int {
 		if selfClosing[provider] {
 			continue
 		}
+		window := sweepWindowFor(grace, provider)
+		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
 		var closed int64
 		var err error
 		if sweepBySource(runStats[provider], fullCatalog[provider]) {
@@ -219,7 +226,7 @@ func run() int {
 			log.Printf("close stale jobs (%s): %v", provider, err)
 			continue
 		}
-		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, staleAfter)
+		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
 	}
 	return worker.ExitCode(failed, 0)
 }
@@ -252,4 +259,15 @@ func shouldSweep(stats pipeline.Stats) bool {
 // falls back to the safe company-scoped CloseUnseenJobs. Callers gate on shouldSweep first.
 func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
 	return fullCatalog && stats.Failed == 0
+}
+
+// sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes
+// them: the window its adapter declared (sources.SweepGraceWindows) when it crawls only a slice
+// of a catalogue too deep to walk, else staleAfter. Widening is per-provider so one feed's drift
+// tolerance never slows the sweep for the ATS boards, whose crawls are complete.
+func sweepWindowFor(grace map[string]time.Duration, provider string) time.Duration {
+	if w, ok := grace[provider]; ok {
+		return w
+	}
+	return staleAfter
 }

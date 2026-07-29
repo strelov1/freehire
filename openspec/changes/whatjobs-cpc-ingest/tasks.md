@@ -1,8 +1,8 @@
 ## 1. Sweep grace window
 
-- [ ] 1.1 Add the `sweepGrace` marker interface to `internal/sources/source.go`, documented in the style of `selfClosing`/`fullCatalog`: an adapter declares a window wider than the sweep default when its crawl deliberately covers only a slice of its catalogue
-- [ ] 1.2 Add `sources.SweepGraceWindows(reg map[string]Source) map[string]time.Duration` to `internal/sources/registry.go`, mirroring `SelfClosingProviders`, with a test proving a declaring adapter appears and a non-declaring one does not
-- [ ] 1.3 Make `cmd/ingest` compute the sweep cutoff from the provider's declared window, falling back to the existing 48-hour default; test that a declaring provider's recently-drifted job survives and a default provider's behaviour is unchanged
+- [x] 1.1 Add the `sweepGrace` marker interface to `internal/sources/source.go`, documented in the style of `selfClosing`/`fullCatalog`: an adapter declares a window wider than the sweep default when its crawl deliberately covers only a slice of its catalogue
+- [x] 1.2 Add `sources.SweepGraceWindows(reg map[string]Source) map[string]time.Duration` to `internal/sources/registry.go`, mirroring `SelfClosingProviders`, with a test proving a declaring adapter appears and a non-declaring one does not
+- [x] 1.3 Make `cmd/ingest` compute the sweep cutoff from the provider's declared window, falling back to the existing 48-hour default; test that a declaring provider's recently-drifted job survives and a default provider's behaviour is unchanged
 
 ## 2. Feed client
 

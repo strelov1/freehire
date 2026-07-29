@@ -133,3 +133,14 @@ type selfClosing interface{ selfClosing() }
 // never reached. cmd/ingest gates the source-scoped close on a zero-Failed run for exactly
 // this reason. See FullCatalogProviders.
 type fullCatalog interface{ fullCatalog() }
+
+// sweepGrace marks an adapter that needs the post-run unseen sweep to wait longer than the
+// default before closing its jobs, and reports how long. It is the opposite case to fullCatalog:
+// the crawl deliberately reaches only a SLICE of the source's catalogue (a keyword's first N
+// pages of a feed far deeper than any crawl can walk), so a posting that merely drifted past
+// that depth reads as unseen. On the default window it would be closed and then reopened when it
+// drifts back — churn that also lands in job_daily_stats as a phantom removal. A window wider
+// than the drift absorbs it, at the cost of a genuinely withdrawn posting lingering that long.
+// The marker is only sound for a source whose postings CANNOT be probed for liveness; anything
+// verifiable should be closed on evidence instead. See SweepGraceWindows.
+type sweepGrace interface{ sweepGrace() time.Duration }

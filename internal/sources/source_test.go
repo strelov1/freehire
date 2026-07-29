@@ -2,8 +2,10 @@ package sources
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"testing"
+	"time"
 )
 
 type fakeSource struct{ provider string }
@@ -34,6 +36,22 @@ func (f fakeAggregatorSource) Fetch(context.Context, CompanyEntry) ([]Job, error
 
 func (f fakeAggregatorSource) boardless()  {}
 func (f fakeAggregatorSource) aggregator() {}
+
+// fakeGraceSource declares a sweep window wider than the default: its crawl reaches only a
+// slice of its catalogue, so the default window would close a posting that merely drifted
+// past the crawl's page depth.
+type fakeGraceSource struct {
+	provider string
+	grace    time.Duration
+}
+
+func (f fakeGraceSource) Provider() string { return f.provider }
+
+func (f fakeGraceSource) Fetch(context.Context, CompanyEntry) ([]Job, error) { return nil, nil }
+
+func (f fakeGraceSource) aggregator() {}
+
+func (f fakeGraceSource) sweepGrace() time.Duration { return f.grace }
 
 func TestRegIndexesByProvider(t *testing.T) {
 	r := reg(fakeSource{"greenhouse"}, fakeSource{"lever"})
@@ -90,6 +108,19 @@ func TestAggregatorProvidersListsOnlyAggregators(t *testing.T) {
 	want := []string{"himalayas", "jobstash"}
 	if !slices.Equal(got, want) {
 		t.Errorf("AggregatorProviders() = %v, want %v", got, want)
+	}
+}
+
+func TestSweepGraceWindowsListsOnlyDeclaringProviders(t *testing.T) {
+	got := SweepGraceWindows(reg(
+		fakeSource{"greenhouse"},                         // board-based, no window → absent (default applies)
+		fakeAggregatorSource{"jobstash"},                 // aggregator without a window → absent
+		fakeGraceSource{"whatjobs", 14 * 24 * time.Hour}, // declares a window → listed
+	))
+
+	want := map[string]time.Duration{"whatjobs": 14 * 24 * time.Hour}
+	if !maps.Equal(got, want) {
+		t.Errorf("SweepGraceWindows() = %v, want %v", got, want)
 	}
 }
 

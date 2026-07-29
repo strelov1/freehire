@@ -3,6 +3,7 @@ package main
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/sources"
@@ -55,6 +56,27 @@ func TestShouldSweep(t *testing.T) {
 	for _, tc := range cases {
 		if got := shouldSweep(tc.stats); got != tc.want {
 			t.Errorf("%s: shouldSweep = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A slice-crawled source declares a window wider than the default so a posting that merely
+// drifted past the crawl's page depth is not closed and then reopened; every other provider
+// keeps the default untouched.
+func TestSweepWindowFor(t *testing.T) {
+	grace := map[string]time.Duration{"whatjobs": 14 * 24 * time.Hour}
+
+	cases := []struct {
+		name     string
+		provider string
+		want     time.Duration
+	}{
+		{"declaring provider gets its wider window", "whatjobs", 14 * 24 * time.Hour},
+		{"ordinary provider keeps the default", "greenhouse", staleAfter},
+	}
+	for _, tc := range cases {
+		if got := sweepWindowFor(grace, tc.provider); got != tc.want {
+			t.Errorf("%s: sweepWindowFor(%q) = %v, want %v", tc.name, tc.provider, got, tc.want)
 		}
 	}
 }

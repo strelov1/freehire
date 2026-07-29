@@ -3,6 +3,7 @@ package sources
 import (
 	"os"
 	"slices"
+	"time"
 )
 
 // SelfClosingProviders returns the provider names in reg that manage their own closes and
@@ -25,6 +26,20 @@ func FullCatalogProviders(reg map[string]Source) []string {
 	for name, src := range reg {
 		if _, ok := src.(fullCatalog); ok {
 			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// SweepGraceWindows returns the post-run sweep window each adapter in reg declares that is wider
+// than the default (see sweepGrace). cmd/ingest consults this when computing a provider's cutoff;
+// a provider absent from the map is swept on the default window, which is every provider but the
+// slice-crawled few.
+func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
+	out := make(map[string]time.Duration)
+	for name, src := range reg {
+		if s, ok := src.(sweepGrace); ok {
+			out[name] = s.sweepGrace()
 		}
 	}
 	return out
