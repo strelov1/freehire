@@ -36,6 +36,10 @@ type Result struct {
 	Source     string
 	ExternalID string
 	PublicSlug string
+	// CompanySlug is the employer the posting was filed under, empty when the page named no
+	// company. The intake asks the catalog about it to tell a genuinely new employer from one
+	// we already carry under another ATS.
+	CompanySlug string
 }
 
 // BoardResolver detects the ATS board embedded in a page whose host says nothing — a company
@@ -74,14 +78,37 @@ func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Cli
 	}
 }
 
+// Board is an ATS board a caller has already resolved for the link it is importing. The intake
+// resolves one on every link before importing it, and it can name a board no URL parse would
+// reach — a storefront on the company's own domain whose posting id gives away the greenhouse
+// board behind it. A zero Board simply means "unknown".
+type Board struct {
+	Source string
+	Board  string
+}
+
+func (b Board) known() bool { return b.Source != "" && b.Board != "" }
+
 // Import resolves raw through the registry and writes the vacancy it parses. ok=false
 // means the page is not a single vacancy we can read (no adapter matched, or the page
 // carries no posting) — the caller decides what to do with it, and nothing is written. A
 // non-nil error is a transient fetch/parse failure or a write failure.
-func (im *Importer) Import(ctx context.Context, raw string) (Result, bool, error) {
+//
+// known is the board the caller already resolved, and it only ever overrides the generic
+// resolver — the host-scoped adapters and board coverage already write a board's own identity,
+// and cost less. Generic reads any page with a JobPosting block, and files it under (weblink,
+// <the URL>): correct when nothing better is known, but a second row for a posting we crawl
+// under (greenhouse, <board>:<id>) when a board IS known. Preferring the board there is what
+// keeps a storefront link from duplicating the posting it points at.
+func (im *Importer) Import(ctx context.Context, raw string, known Board) (Result, bool, error) {
 	resolved, err := linksource.ResolveLinks(ctx, im.reg, []string{raw})
 	if err != nil {
 		return Result{}, false, err
+	}
+	if len(resolved) == 0 || resolved[0].Source == linksource.GenericSource {
+		if r, ok := im.resolveOnKnownBoard(ctx, raw, known); ok {
+			return im.write(ctx, r)
+		}
 	}
 	if len(resolved) == 0 {
 		if r, ok := im.resolveVanityDomain(ctx, raw); ok {
@@ -90,6 +117,24 @@ func (im *Importer) Import(ctx context.Context, raw string) (Result, bool, error
 		return Result{}, false, nil
 	}
 	return im.write(ctx, resolved[0])
+}
+
+// resolveOnKnownBoard reads the posting from the board the caller named, so it is stored under
+// the identity a crawl of that board would give it. A board we cannot crawl (no ingest adapter)
+// or a posting absent from it leaves the caller's own resolution in place.
+func (im *Importer) resolveOnKnownBoard(ctx context.Context, raw string, known Board) (linksource.Resolved, bool) {
+	if !known.known() || im.ingest == nil {
+		return linksource.Resolved{}, false
+	}
+	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, known.Source, known.Board, raw)
+	if err != nil {
+		log.Printf("linkimport: known board %s/%s for %s: %v", known.Source, known.Board, raw, err)
+		return linksource.Resolved{}, false
+	}
+	if !ok {
+		return linksource.Resolved{}, false
+	}
+	return linksource.Resolved{Source: known.Source, Job: job}, true
 }
 
 // resolveVanityDomain is the last thing tried before a link is given up on: a company careers
@@ -168,9 +213,10 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	im.index(ctx, res)
 
 	return Result{
-		Source:     res.Job.Source,
-		ExternalID: res.Job.ExternalID,
-		PublicSlug: res.Job.PublicSlug,
+		Source:      res.Job.Source,
+		ExternalID:  res.Job.ExternalID,
+		PublicSlug:  res.Job.PublicSlug,
+		CompanySlug: res.Job.CompanySlug,
 	}, true, nil
 }
 

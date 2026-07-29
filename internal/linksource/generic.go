@@ -27,10 +27,15 @@ type generic struct {
 // NewGeneric builds the last-resort JobPosting-ld+json link resolver.
 func NewGeneric(c Client) Source { return generic{http: c} }
 
+// GenericSource is the provenance tag of a page read by the last-resort resolver, exported
+// because a caller has to be able to tell "read off the page itself, keyed by its URL" from a
+// real board identity — the import path prefers a known board over it.
+const GenericSource = "weblink"
+
 // Source is a fixed provenance tag for hand-imported links. It is not in sources.All, so
 // these jobs are treated as orphans by the liveness worker (URL-probed and closed when
 // dead) — the right lifecycle for a one-off posting that has no board to re-crawl it.
-func (generic) Source() string { return "weblink" }
+func (generic) Source() string { return GenericSource }
 
 // Match accepts any absolute http(s) URL. The real gate is Resolve finding a JobPosting
 // block, so a non-vacancy page returns ok=false rather than a bogus job.

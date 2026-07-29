@@ -62,7 +62,7 @@ func TestImport_WritesTheParsedVacancy(t *testing.T) {
 
 	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
 
-	res, ok, err := im.Import(ctx, pageURL)
+	res, ok, err := im.Import(ctx, pageURL, Board{})
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -108,11 +108,11 @@ func TestImport_IsIdempotentForTheSameURL(t *testing.T) {
 
 	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
 
-	first, _, err := im.Import(ctx, pageURL)
+	first, _, err := im.Import(ctx, pageURL, Board{})
 	if err != nil {
 		t.Fatalf("first import: %v", err)
 	}
-	second, ok, err := im.Import(ctx, pageURL)
+	second, ok, err := im.Import(ctx, pageURL, Board{})
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestImport_ReportsAPageThatIsNotAVacancy(t *testing.T) {
 
 	im := New(pool, q, nil, pageClient{body: plainPage}, nil, nil)
 
-	res, ok, err := im.Import(ctx, "https://careers.mindera.test/about-us")
+	res, ok, err := im.Import(ctx, "https://careers.mindera.test/about-us", Board{})
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}

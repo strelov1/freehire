@@ -22,6 +22,15 @@ Resolving a single outbound job-detail URL into a fully parsed vacancy under the
   and `Find` commits to a single adapter.
 - **A fetched-but-absent posting is `ok=false`; an unfetchable board is an error.** Conflating
   them makes the caller file a reachable vacancy as unimportable.
+- **`generic` winning is not the same as nothing matching.** Its `Match` is always true, so a
+  page it can read never reaches anything downstream — `linkimport` therefore checks for
+  `GenericSource` explicitly, not just for an empty result, before preferring a board the
+  caller already resolved. A `len(resolved) == 0` guard alone leaves that branch dead for every
+  page carrying a `JobPosting` block, which is most storefronts.
+- **A posting id is matched anywhere in the path, last segment first** (`pickPosting`). A
+  storefront appends a readable slug after the id (`…/jobs/<id>/<title>/`), so tail-only
+  matching reports a posting as absent from its own board. Precision is safe here because the
+  comparison is against one board's own ids.
 
 ## How it works
 A Telegram post often just links to a real vacancy elsewhere. Rather than treating the Telegram post itself as the job, `internal/linksource` follows the outbound URL and resolves the actual detail page at the destination ATS. This reuses the same adapter pattern as `internal/sources` but at the granularity of a single page: a `LinkSource` matches the link's host and parses that one detail page into a normalized job. The job is then stored under the destination source's identity (e.g. greenhouse, lever), not under telegram, so the dedup key `(source, external_id)` naturally prevents duplication if another source also carries the same posting.

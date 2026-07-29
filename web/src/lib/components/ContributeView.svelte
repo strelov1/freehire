@@ -84,9 +84,15 @@
         {:else if resolved.status === 'tracked'}
           Added — and we already track this company, so the rest of its roles will follow on the
           next crawl.
+        {:else if resolved.status === 'imported' && resolved.company_slug}
+          Added — we already carry this company, and now we'll crawl this board of theirs too.
+          <span class="font-medium">+1 AI credit.</span>
         {:else if resolved.status === 'imported'}
           Added, and this company is new to us — we'll start crawling its board.
           <span class="font-medium">+1 AI credit.</span>
+        {:else if resolved.status === 'review'}
+          Added. Its careers site isn't one we can crawl yet, so we'll check by hand whether we
+          can pull the rest of its jobs. <span class="font-medium">Not credited yet.</span>
         {:else}
           We couldn't read that page. We'll check by hand whether we can pull its jobs — if we
           can, we'll award you a credit. <span class="font-medium">Not credited yet.</span>

@@ -147,6 +147,29 @@ func TestBoardCoverageMatchesAVacancyByItsIDInThePath(t *testing.T) {
 	}
 }
 
+func TestBoardCoverageMatchesAVacancyByAnIDBeforeTheSlug(t *testing.T) {
+	// A storefront over the board puts a human-readable slug AFTER the id
+	// (…/jobs/<id>/<title>/), so reading only the last path segment finds a title where an id
+	// was expected and the posting looks absent from its own board.
+	board := &fakeBoard{
+		provider: "recruitee",
+		jobs: []sources.Job{
+			{ExternalID: "7862086", URL: "https://acme.recruitee.com/o/senior-go", Title: "Senior Go"},
+		},
+	}
+	// Reached through ResolveOnBoard, since the board came from elsewhere (the intake resolved
+	// it) rather than from this unrecognisable host.
+	reg := map[string]sources.Source{"recruitee": board}
+	job, ok, err := ResolveOnBoard(context.Background(), reg, "recruitee", "acme",
+		"https://careers.acme.test/en/jobs/7862086/senior-go/")
+	if err != nil || !ok {
+		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the vacancy matched by the id before the slug", ok, err)
+	}
+	if job.Title != "Senior Go" {
+		t.Errorf("resolved %q, want Senior Go", job.Title)
+	}
+}
+
 // TestImportRegistryOrder pins the resolver order the import path depends on. Getting it
 // wrong is silent and expensive: board coverage ahead of the host-scoped adapters would fetch
 // a whole board where a per-job API call would do, and anything after generic would never be

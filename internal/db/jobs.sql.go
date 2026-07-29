@@ -188,6 +188,34 @@ func (q *Queries) CompaniesWithRoleClusters(ctx context.Context) ([]string, erro
 	return items, nil
 }
 
+const companyHasOtherJobs = `-- name: CompanyHasOtherJobs :one
+SELECT EXISTS (
+    SELECT 1
+    FROM jobs
+    WHERE company_slug = $1
+      AND NOT (source = $2 AND external_id = $3)
+) AS carried
+`
+
+type CompanyHasOtherJobsParams struct {
+	CompanySlug string `json:"company_slug"`
+	Source      string `json:"source"`
+	ExternalID  string `json:"external_id"`
+}
+
+// Whether the catalog carries this company beyond the one posting named by (source,
+// external_id) — asked right after an import, to answer "is this company new to us?".
+// The board-level check (BoardTracked) cannot answer it: a company reached through an
+// ATS we do not recognise, or through a second ATS, is still a company we already carry.
+// The posting itself is excluded by its dedup identity because it is written before this
+// runs. Callers skip the question for an empty company_slug, which names nobody.
+func (q *Queries) CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJobsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, companyHasOtherJobs, arg.CompanySlug, arg.Source, arg.ExternalID)
+	var carried bool
+	err := row.Scan(&carried)
+	return carried, err
+}
+
 const enqueueJobEnrichment = `-- name: EnqueueJobEnrichment :execrows
 INSERT INTO enrichment_outbox (job_id, target_version)
 SELECT id, $1::int

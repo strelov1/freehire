@@ -263,6 +263,10 @@ func TestSubmitResolvesGreenhouseJobIDForServerSideVanity(t *testing.T) {
 	cases := []string{
 		"https://www.sumup.com/careers/positions/x/8578073002/?city=Brazil",
 		"https://www.talkspace.com/careers/job?gh_jid=6118228004",
+		// The id need not be the LAST segment: a Phenom-style storefront over Greenhouse puts a
+		// human-readable slug after it (dropbox.jobs/en/jobs/<id>/<title>/), and reading only the
+		// tail missed a board we had been crawling all along.
+		"https://www.dropbox.jobs/en/jobs/7862086/frontend-product-software-engineer-design-systems/",
 	}
 	for _, raw := range cases {
 		got, err := submit(New(repo, nil), 7, raw)

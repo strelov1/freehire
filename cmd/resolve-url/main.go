@@ -61,7 +61,8 @@ func run() int {
 
 	var saved, skipped, failed int
 	for _, raw := range urls {
-		res, ok, err := im.Import(ctx, raw)
+		// No board hint: this worker takes bare URLs, with no intake to have resolved one.
+		res, ok, err := im.Import(ctx, raw, linkimport.Board{})
 		switch {
 		case err != nil:
 			failed++

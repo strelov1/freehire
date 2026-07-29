@@ -269,13 +269,22 @@ func (h *telegramHandlers) intakeReply(out intakeOutcome) string {
 	case outcomeFound:
 		return "👍 We already have this one:\n" + h.jobURL(out.PublicSlug)
 	case outcomeTracked:
-		reply := "✅ Added — and we already track this company, so the rest of its roles will follow on the next crawl.\n" + h.jobURL(out.PublicSlug)
-		if out.CompanySlug != "" && h.frontendOrigin != "" {
-			reply += "\n" + h.frontendOrigin + "/companies/" + out.CompanySlug
-		}
-		return reply
+		return "✅ Added — and we already track this company, so the rest of its roles will follow on the next crawl.\n" +
+			h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
 	case outcomeImported:
+		if out.CompanySlug != "" {
+			return "✅ Added — we already carry this company, and now we'll crawl this board of theirs too.\n" +
+				h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
+		}
 		return "🎉 Added, and this company is new to us — we'll start crawling its board.\n" + h.jobURL(out.PublicSlug)
+	case outcomeReview:
+		// Imported, but the page named no board we know how to crawl, so no crawl is promised.
+		if out.CompanySlug != "" {
+			return "✅ Added — we already carry this company. Its careers site isn't one we can crawl yet, so we'll look at it by hand.\n" +
+				h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
+		}
+		return "✅ Added. Its careers site isn't one we can crawl yet — we'll check by hand whether we can pull the rest of its jobs.\n" +
+			h.jobURL(out.PublicSlug)
 	}
 	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
 	// board behind it, and answering only "couldn't read" would hide a contribution we just
@@ -298,4 +307,13 @@ func (h *telegramHandlers) jobURL(slug string) string {
 		return ""
 	}
 	return h.frontendOrigin + "/jobs/" + slug
+}
+
+// companyURL renders a company link on its own line, so a reply can append it unconditionally.
+// Empty under the same rule as jobURL.
+func (h *telegramHandlers) companyURL(slug string) string {
+	if slug == "" || h.frontendOrigin == "" {
+		return ""
+	}
+	return "\n" + h.frontendOrigin + "/companies/" + slug
 }

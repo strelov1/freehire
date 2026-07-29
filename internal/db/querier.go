@@ -200,6 +200,13 @@ type Querier interface {
 	// Whether a company is referral-eligible — has at least one approved offer. Served by
 	// referral_offers_company_approved_idx.
 	CompanyHasApprovedReferrer(ctx context.Context, companySlug string) (bool, error)
+	// Whether the catalog carries this company beyond the one posting named by (source,
+	// external_id) — asked right after an import, to answer "is this company new to us?".
+	// The board-level check (BoardTracked) cannot answer it: a company reached through an
+	// ATS we do not recognise, or through a second ATS, is still a company we already carry.
+	// The posting itself is excluded by its dedup identity because it is written before this
+	// runs. Callers skip the question for an empty company_slug, which names nobody.
+	CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJobsParams) (bool, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.

@@ -61,9 +61,26 @@ door onto the same flow is a second behaviour waiting to drift. `GET /api/v1/me/
 still lists the caller's own, now carrying the `surface` each row came through
 (`web` | `telegram` | `extension` | `cli` | `unknown`).
 
-The intake answers with four outcomes: `found` (already carried), `tracked` (imported, and we
-already crawl this board), `imported` (imported, board queued for onboarding), `queued`
-(unreadable page, link filed for triage).
+The intake answers with five outcomes, all of them about the BOARD: `found` (already carried),
+`tracked` (imported, and we already crawl this board), `imported` (imported, board queued for
+onboarding), `review` (imported, but the URL names no board we can crawl — a careers site on the
+company's own domain — so the link went to triage), `queued` (unreadable page, link filed for
+triage).
+
+**Whether we know the COMPANY is a separate question, answered by `company_slug`**, which is set
+whenever the catalogue already carries that employer through ANY source. The board checks cannot
+answer it: `BoardTracked` is keyed by `(source, board)`, so a company we reach through a second
+ATS — or through an ATS the recogniser does not know — is board-new and company-old at once.
+Collapsing the two is what once told a contributor of a Dropbox posting on `dropbox.jobs` (a
+Phenom vanity domain, deliberately unrecognisable) that "this company is new to us — we'll start
+crawling its board", while we had been crawling Dropbox's Greenhouse board all along and no crawl
+followed.
+
+**The board `Inspect` resolves is handed to the import** (`linkimport.Board`). It overrides only
+the generic resolver, which files a page under `(weblink, <the URL>)` — correct when nothing
+better is known, a duplicate when the posting is one we crawl under `(greenhouse, <board>:<id>)`.
+The id-in-the-URL lookup is often the only thing that knows this, since a storefront's host
+names no board.
 
 Two orderings inside it are load-bearing, both pinned by tests:
 - the catalog lookup runs FIRST, or a posting we carry from an aggregator gets a second row

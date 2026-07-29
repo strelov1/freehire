@@ -299,6 +299,20 @@ WHERE company_slug = sqlc.arg(company_slug)
   AND role_fingerprint = sqlc.arg(role_fingerprint)
   AND role_fingerprint <> '';
 
+-- name: CompanyHasOtherJobs :one
+-- Whether the catalog carries this company beyond the one posting named by (source,
+-- external_id) — asked right after an import, to answer "is this company new to us?".
+-- The board-level check (BoardTracked) cannot answer it: a company reached through an
+-- ATS we do not recognise, or through a second ATS, is still a company we already carry.
+-- The posting itself is excluded by its dedup identity because it is written before this
+-- runs. Callers skip the question for an empty company_slug, which names nobody.
+SELECT EXISTS (
+    SELECT 1
+    FROM jobs
+    WHERE company_slug = sqlc.arg(company_slug)
+      AND NOT (source = sqlc.arg(source) AND external_id = sqlc.arg(external_id))
+) AS carried;
+
 -- name: ListRoleClusterCopies :many
 -- The open postings sharing a role cluster (company_slug + role_fingerprint) with the
 -- anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps

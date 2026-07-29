@@ -1640,13 +1640,16 @@ ${BASE_URL}/auth/oauth/google/start`,
         auth: 'cookie-or-key',
         summary: 'Hand freehire a link: import the posting, and the board behind it.',
         description:
-          'Four outcomes in one shape, distinguished by status: **200 found** — the ' +
+          'Five outcomes in one shape, distinguished by status: **200 found** — the ' +
           'catalogue already carries it, nothing fetched or written; **201 tracked** ' +
           '— we crawl that board already and the posting just had not landed, so it ' +
           'was imported now; **201 imported** — imported, and its board queued for ' +
-          'onboarding; **202 queued** — nothing could read the page, so the link went ' +
-          'to manual triage. Rate-limited, because it makes the server fetch a URL ' +
-          'you chose. A URL that is not http(s) is a 422.',
+          'onboarding; **201 review** — imported, but its careers site names no board ' +
+          'we can crawl, so the link went to manual triage; **202 queued** — nothing ' +
+          'could read the page, so the link went to manual triage. `company_slug` is ' +
+          'returned whenever the catalogue already carries the employer, through any ' +
+          'source — independent of what became of the board. Rate-limited, because it ' +
+          'makes the server fetch a URL you chose. A URL that is not http(s) is a 422.',
         body: [
           { name: 'url', type: 'string', required: true, description: 'The job page to resolve.' },
           { name: 'surface', type: 'string', description: 'Where the link came from (website, extension, cli, bot) — recorded, not validated against a whitelist.' },
@@ -1654,7 +1657,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         curl: `curl -X POST "${BASE_URL}/jobs/resolve" \\
   -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' \\
   -d '{"url":"https://boards.greenhouse.io/acme/jobs/123","surface":"cli"}'`,
-        responseExample: `{ "data": { "outcome": "tracked", "public_slug": "senior-backend-engineer-acme-1a2b", "company": "Acme" } }`,
+        responseExample: `{ "data": { "status": "tracked", "public_slug": "senior-backend-engineer-acme-1a2b", "company_slug": "acme" } }`,
       },
       {
         method: 'GET',

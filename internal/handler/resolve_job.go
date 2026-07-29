@@ -25,6 +25,10 @@ const (
 	outcomeTracked = "tracked"
 	// outcomeImported — imported, and the board behind it queued for onboarding.
 	outcomeImported = "imported"
+	// outcomeReview — imported, but the page names no board we can crawl (a careers site on
+	// the company's own domain), so the link went to manual triage rather than onboarding.
+	// Distinct from outcomeImported precisely because no crawl follows from it.
+	outcomeReview = "review"
 	// outcomeQueued — nothing could read the page; the link went to manual triage.
 	outcomeQueued = "queued"
 )
@@ -39,7 +43,12 @@ const (
 //	201 tracked  — we crawl this board already; the posting had not landed, so it was imported
 //	               now, and the company we cover is named
 //	201 imported — imported, and the board behind it queued for onboarding
+//	201 review   — imported, but no crawlable board could be named, so the link went to triage
 //	202 queued   — nothing could read the page, so the link went to manual triage
+//
+// company_slug rides along on every 201 whose employer the catalog already carries, whatever
+// became of the board — the two are independent, and a surface that reads "new company" off
+// the status alone gets it wrong for a company we reach through a different ATS.
 func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 	var in resolveJobRequest
 	if err := c.BodyParser(&in); err != nil {
@@ -67,7 +76,7 @@ func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 			JSON(fiber.Map{"data": fiber.Map{"public_slug": nil, "status": out.Status}})
 	}
 	body := fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}
-	if out.Status == outcomeTracked {
+	if out.CompanySlug != "" {
 		body["company_slug"] = out.CompanySlug
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": body})

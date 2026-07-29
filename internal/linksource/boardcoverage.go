@@ -3,6 +3,7 @@ package linksource
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/atsboard"
@@ -123,9 +124,9 @@ func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 			return j, true
 		}
 	}
-	if id := lastPathSegment(raw); id != "" {
+	for _, seg := range pathSegmentsFromEnd(raw) {
 		for _, j := range jobs {
-			if j.ExternalID != "" && j.ExternalID == id {
+			if j.ExternalID != "" && j.ExternalID == seg {
 				return j, true
 			}
 		}
@@ -145,19 +146,21 @@ func normalizeURL(raw string) string {
 	return host + strings.TrimSuffix(u.Path, "/")
 }
 
-// lastPathSegment returns a URL's final path segment ("" when there is none) — where an ATS
-// puts the posting id in most of its URL shapes.
-func lastPathSegment(raw string) string {
+// pathSegmentsFromEnd returns a URL's path segments last-first — the order to look for a
+// posting id in. Most ATS URL shapes end in the id, but a storefront over the board appends a
+// readable slug after it (…/jobs/<id>/<title>/), so the tail alone is not enough. Matching is
+// against one board's own posting ids, a set small enough that scanning inward costs no
+// precision.
+func pathSegmentsFromEnd(raw string) []string {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return ""
+		return nil
 	}
 	p := strings.Trim(u.Path, "/")
 	if p == "" {
-		return ""
+		return nil
 	}
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
+	segs := strings.Split(p, "/")
+	slices.Reverse(segs)
+	return segs
 }

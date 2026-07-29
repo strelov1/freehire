@@ -37,6 +37,25 @@ const vacancyPage = `<html><head><script type="application/ld+json">
  "hiringOrganization":{"@type":"Organization","name":"Mindera"}}
 </script></head><body>Apply now</body></html>`
 
+// secondMinderaPage is another vacancy from a company the catalog already carries, on the same
+// unrecognisable careers host — the case that used to be answered "this company is new to us".
+const secondMinderaPage = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting",
+ "title":"Principal Java Architect","description":"Shape the platform.",
+ "datePosted":"2026-07-02","jobLocationType":"TELECOMMUTE",
+ "hiringOrganization":{"@type":"Organization","name":"Mindera"}}
+</script></head><body>Apply now</body></html>`
+
+// storefrontPage is a vanity careers storefront over an ATS board: it carries a perfectly good
+// JobPosting block, so the generic resolver reads it happily and would file it under the page's
+// own URL — the duplicate a known board has to override.
+const storefrontPage = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting",
+ "title":"Frontend Product Software Engineer, Design Systems","description":"Design systems work.",
+ "datePosted":"2026-07-20","jobLocationType":"TELECOMMUTE",
+ "hiringOrganization":{"@type":"Organization","name":"Globobox"}}
+</script></head><body>Apply now</body></html>`
+
 const aboutPage = `<html><head><title>About us</title></head><body>No vacancy here.</body></html>`
 
 // pagesClient is a test linksource.Client: it serves the body registered for the first
@@ -81,6 +100,25 @@ type resolveReply struct {
 	} `json:"data"`
 }
 
+// fakeGreenhouse serves one greenhouse board, so a storefront link resolved to that board can
+// be read from it. Its posting URL is the board's own, not the storefront's — which is exactly
+// why the posting has to be matched by id.
+type fakeGreenhouse struct{}
+
+func (fakeGreenhouse) Provider() string { return "greenhouse" }
+
+func (fakeGreenhouse) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	if e.Board != "globobox" {
+		return nil, nil
+	}
+	return []sources.Job{{
+		ExternalID: "7862086",
+		URL:        "https://jobs.globobox.test/listing/7862086?gh_jid=7862086",
+		Title:      "Frontend Product Software Engineer, Design Systems",
+		Company:    "Globobox",
+	}}, nil
+}
+
 // fakeRecruitee is a stand-in ingest adapter for a platform with no single-page link adapter,
 // so the intake reaches it through board coverage — the path most pasted links now take.
 type fakeRecruitee struct{}
@@ -119,6 +157,8 @@ func TestResolveJobEndpoint(t *testing.T) {
 	queries := db.New(pool)
 	pages := pagesClient{
 		"/jobs/staff-java-backend-developer": vacancyPage,
+		"/jobs/principal-java-architect":     secondMinderaPage,
+		"/jobs/7862086":                      storefrontPage,
 		"/about-us":                          aboutPage,
 	}
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
@@ -128,7 +168,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 			queries:      queries,
 			contribution: contributionSvc,
 			imports: linkimport.New(pool, queries, nil, pages,
-				map[string]sources.Source{"recruitee": fakeRecruitee{}}, nil),
+				map[string]sources.Source{"recruitee": fakeRecruitee{}, "greenhouse": fakeGreenhouse{}}, nil),
 		},
 	}
 
@@ -179,14 +219,20 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 	})
 
-	t.Run("a parseable page is imported", func(t *testing.T) {
+	t.Run("a parseable page on an unrecognised host is imported and filed for review", func(t *testing.T) {
+		// No board can be derived from a company's own careers domain, so nothing is queued for
+		// onboarding — answering "imported" here would promise a crawl that never starts.
 		const page = "https://careers.mindera.test/jobs/staff-java-backend-developer"
 		resp, out := resolve(t, page, true)
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("status = %d, want 201", resp.StatusCode)
 		}
-		if out.Data == nil || out.Data.Status != "imported" || out.Data.PublicSlug == nil {
-			t.Fatalf("body = %+v, want status imported with a slug", out.Data)
+		if out.Data == nil || out.Data.Status != "review" || out.Data.PublicSlug == nil {
+			t.Fatalf("body = %+v, want status review with a slug", out.Data)
+		}
+		if out.Data.CompanySlug != "" {
+			t.Errorf("company_slug = %q, want empty — nothing else of Mindera's is in the catalog",
+				out.Data.CompanySlug)
 		}
 		var stored string
 		if err := pool.QueryRow(ctx,
@@ -208,6 +254,64 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		if rows != 1 {
 			t.Errorf("catalog holds %d imported postings, want 1", rows)
+		}
+	})
+
+	t.Run("a storefront link lands on the board it fronts, not as a second posting", func(t *testing.T) {
+		// The shape that started this: a vanity storefront over a Greenhouse board we already
+		// crawl (dropbox.jobs over greenhouse/dropbox). Its host names no board and its path puts
+		// the greenhouse job id BEFORE a readable slug, so every URL parse misses it — but the
+		// catalogue already holds that id, which is what resolves the board. The posting must
+		// update the row we crawl rather than appear a second time under (weblink, <the URL>).
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug)
+			 VALUES ('greenhouse', 'globobox:7862086', 'https://jobs.globobox.test/listing/7862086',
+			         'Frontend Product Software Engineer, Design Systems', 'frontend-design-systems-globobox',
+			         'Globobox', 'globobox')`); err != nil {
+			t.Fatalf("seed the crawled greenhouse posting: %v", err)
+		}
+		const page = "https://www.globobox.jobs/en/jobs/7862086/frontend-product-software-engineer-design-systems/"
+		resp, out := resolve(t, page, true)
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+		if out.Data == nil || out.Data.Status != "tracked" {
+			t.Fatalf("body = %+v, want status tracked — we crawl the board behind that storefront", out.Data)
+		}
+		if out.Data.CompanySlug != "globobox" {
+			t.Errorf("company_slug = %q, want globobox", out.Data.CompanySlug)
+		}
+		var rows int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM jobs WHERE source = 'weblink' AND external_id = $1`, page).Scan(&rows); err != nil {
+			t.Fatalf("count weblink duplicates: %v", err)
+		}
+		if rows != 0 {
+			t.Errorf("the storefront link wrote %d weblink rows, want 0 — it duplicates the crawled posting", rows)
+		}
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM jobs WHERE company_slug = 'globobox'`).Scan(&rows); err != nil {
+			t.Fatalf("count globobox postings: %v", err)
+		}
+		if rows != 1 {
+			t.Errorf("catalog holds %d Globobox postings, want 1 — the import must land on the crawled row", rows)
+		}
+	})
+
+	t.Run("a company we already carry is not called new", func(t *testing.T) {
+		// Whether we can name the BOARD and whether we know the COMPANY are separate questions:
+		// the previous subtest put a Mindera posting in the catalog, so this second vacancy from
+		// the same company must come back naming it, however unrecognisable its host is.
+		resp, out := resolve(t, "https://careers.mindera.test/jobs/principal-java-architect", true)
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+		if out.Data == nil || out.Data.Status != "review" {
+			t.Fatalf("body = %+v, want status review", out.Data)
+		}
+		if out.Data.CompanySlug != "mindera" {
+			t.Errorf("company_slug = %q, want mindera — the catalog already carries this company",
+				out.Data.CompanySlug)
 		}
 	})
 

@@ -33,8 +33,12 @@ type intakeService struct {
 }
 
 // intakeOutcome is what happened to one link, in the vocabulary every surface renders from.
-// PublicSlug is empty unless a posting is in the catalog; CompanySlug is set only for
-// outcomeTracked, where naming the company we already cover is the point.
+// PublicSlug is empty unless a posting is in the catalog.
+//
+// Status and CompanySlug answer two different questions, and conflating them is what told a
+// contributor of a second Dropbox ATS that "this company is new to us": Status is the fate of
+// the BOARD (crawled already, queued for onboarding, or filed for review), CompanySlug names
+// the COMPANY when the catalog already carries it — through any source, not just this one.
 type intakeOutcome struct {
 	Status      string
 	PublicSlug  string
@@ -66,7 +70,13 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 		return intakeOutcome{}, err
 	}
 
-	res, imported, err := s.imports.Import(ctx, pageURL)
+	// The board Inspect just resolved is handed to the import: it is often the only thing that
+	// knows a storefront link belongs to a board we already crawl, and without it the posting
+	// would be written a second time under its URL.
+	res, imported, err := s.imports.Import(ctx, pageURL, linkimport.Board{
+		Source: intake.Source,
+		Board:  intake.Board,
+	})
 	if err != nil {
 		// A transient fetch or parse failure, not a verdict on the page.
 		log.Printf("intake: import %s: %v", pageURL, err)
@@ -83,10 +93,43 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 		out.Status = outcomeQueued
 	case intake.Tracked:
 		out.Status, out.PublicSlug = outcomeTracked, res.PublicSlug
-	default:
+	case intake.Recognized:
 		out.Status, out.PublicSlug = outcomeImported, res.PublicSlug
+	default:
+		// Imported, but no board could be named from the URL — a careers site on the company's
+		// own domain. Nothing was queued for onboarding, so promising a crawl here would be a
+		// promise nothing keeps; the link is in the manual triage queue instead.
+		out.Status, out.PublicSlug = outcomeReview, res.PublicSlug
+	}
+	if out.CompanySlug == "" {
+		out.CompanySlug = s.companyAlreadyCarried(ctx, res)
 	}
 	return out, nil
+}
+
+// companyAlreadyCarried names the employer of a just-imported posting when the catalog holds
+// more of it than this one row — the answer to "is this company new to us?", which the board
+// checks cannot give: a company reached through an ATS we do not recognise, or through a
+// second ATS, is one we already carry. Empty when the company is genuinely new, when nothing
+// was imported, or on a lookup failure — the posting is saved either way, so the question
+// degrades to "we won't claim we know them".
+func (s *intakeService) companyAlreadyCarried(ctx context.Context, res linkimport.Result) string {
+	if res.CompanySlug == "" {
+		return ""
+	}
+	carried, err := s.queries.CompanyHasOtherJobs(ctx, db.CompanyHasOtherJobsParams{
+		CompanySlug: res.CompanySlug,
+		Source:      res.Source,
+		ExternalID:  res.ExternalID,
+	})
+	if err != nil {
+		log.Printf("intake: company coverage for %s: %v", res.CompanySlug, err)
+		return ""
+	}
+	if !carried {
+		return ""
+	}
+	return res.CompanySlug
 }
 
 // record persists the inspected link and, for a board we already crawl, returns the company

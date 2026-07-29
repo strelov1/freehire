@@ -218,17 +218,20 @@ export interface Contribution {
   created_at: string | null;
 }
 
-/** What became of a link handed to the intake.
+/** What became of the BOARD behind a link handed to the intake.
  *  - `found`    the catalog already carried the posting
  *  - `tracked`  imported, and we already crawl this company's board
  *  - `imported` imported, and the board behind it is now queued for onboarding
+ *  - `review`   imported, but its careers site names no board we can crawl, so it went to triage
  *  - `queued`   nothing could read the page, so the link went to manual triage */
-export type IntakeStatus = 'found' | 'tracked' | 'imported' | 'queued';
+export type IntakeStatus = 'found' | 'tracked' | 'imported' | 'review' | 'queued';
 
 export interface ResolvedLink {
   public_slug: string | null;
   status: IntakeStatus;
-  /** Set only for `tracked`: the company we already cover, so the UI can link to it. */
+  /** The employer, when the catalog already carries it — through any source, not just the one
+   *  this link came from. Whether we know the COMPANY is a separate question from what became
+   *  of its BOARD, so this rides along with every outcome, not just `tracked`. */
   company_slug?: string;
 }
 

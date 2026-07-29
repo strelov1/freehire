@@ -15,9 +15,14 @@ import (
 var ghNumericID = regexp.MustCompile(`^[0-9]{7,12}$`)
 
 // greenhouseJobID extracts a Greenhouse job id from a link that carries one but no board token:
-// the gh_jid query param (Greenhouse's embed param, e.g. company.com/careers?gh_jid=123), or a
-// trailing all-numeric path segment (company.com/careers/…/<id>/). ok=false when neither is
-// present. A non-Greenhouse id won't be found downstream, so a false positive is harmless.
+// the gh_jid query param (Greenhouse's embed param, e.g. company.com/careers?gh_jid=123), or an
+// all-numeric path segment (company.com/careers/…/<id>/…). ok=false when neither is present.
+//
+// The path is read from the RIGHT, and not only at the tail: a storefront over Greenhouse often
+// appends a human-readable slug after the id (dropbox.jobs/en/jobs/<id>/<title>/), and matching
+// the last segment alone missed those. Scanning the whole path costs nothing in precision —
+// the id is only ever believed if the catalogue holds a Greenhouse posting under it, so a
+// numeric segment that is not a job id simply finds nothing.
 func greenhouseJobID(rawURL string) (string, bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -27,8 +32,10 @@ func greenhouseJobID(rawURL string) (string, bool) {
 		return id, true
 	}
 	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if last := segs[len(segs)-1]; ghNumericID.MatchString(last) {
-		return last, true
+	for i := len(segs) - 1; i >= 0; i-- {
+		if ghNumericID.MatchString(segs[i]) {
+			return segs[i], true
+		}
 	}
 	return "", false
 }

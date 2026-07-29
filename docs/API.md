@@ -2290,7 +2290,7 @@ curl "https://freehire.me/api/v1/jobs/find?url=https%3A%2F%2Fboards.greenhouse.i
 
 Hand freehire a link: import the posting, and the board behind it.
 
-Four outcomes in one shape, distinguished by status: **200 found** — the catalogue already carries it, nothing fetched or written; **201 tracked** — we crawl that board already and the posting just had not landed, so it was imported now; **201 imported** — imported, and its board queued for onboarding; **202 queued** — nothing could read the page, so the link went to manual triage. Rate-limited, because it makes the server fetch a URL you chose. A URL that is not http(s) is a 422.
+Five outcomes in one shape, distinguished by status: **200 found** — the catalogue already carries it, nothing fetched or written; **201 tracked** — we crawl that board already and the posting just had not landed, so it was imported now; **201 imported** — imported, and its board queued for onboarding; **201 review** — imported, but its careers site names no board we can crawl, so the link went to manual triage; **202 queued** — nothing could read the page, so the link went to manual triage. `company_slug` is returned whenever the catalogue already carries the employer, through any source — independent of what became of the board. Rate-limited, because it makes the server fetch a URL you chose. A URL that is not http(s) is a 422.
 
 **Body**
 
@@ -2306,7 +2306,7 @@ curl -X POST "https://freehire.me/api/v1/jobs/resolve" \
 ```
 
 ```json
-{ "data": { "outcome": "tracked", "public_slug": "senior-backend-engineer-acme-1a2b", "company": "Acme" } }
+{ "data": { "status": "tracked", "public_slug": "senior-backend-engineer-acme-1a2b", "company_slug": "acme" } }
 ```
 
 ### `GET /me/contributions`
