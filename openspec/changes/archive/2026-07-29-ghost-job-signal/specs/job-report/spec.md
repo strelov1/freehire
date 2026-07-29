@@ -22,7 +22,7 @@ which is worse than nothing because it reads as evidence. The reason vocabulary 
 signal; free text is the elaboration, and elaboration is voluntary. When present, `details`
 MUST still be bounded in length.
 
-#### Scenario: User files a report with an explanation
+#### Scenario: User files a report
 
 - **WHEN** an authenticated user `POST`s `{ "reason": "fraud", "details": "asks for payment" }` to `/api/v1/jobs/<slug>/reports`
 - **THEN** the system stores a `pending` report owned by that user against the resolved job and responds `201` with `{ "data": <report> }`
@@ -47,10 +47,12 @@ MUST still be bounded in length.
 - **WHEN** an authenticated user `POST`s a report to a slug that matches no job
 - **THEN** the system responds `404` and creates no report
 
-#### Scenario: Invalid reason is rejected
+#### Scenario: Invalid reason or empty details is rejected
 
 - **WHEN** an authenticated user `POST`s a body whose `reason` is outside the controlled vocabulary
 - **THEN** the system responds `400` before any database write
+- **AND WHEN** the body's `details` is missing or blank
+- **THEN** the report is ACCEPTED with empty details — this scenario's former second half is deliberately inverted, since the reason vocabulary already states what is wrong
 
 #### Scenario: Over-long details are rejected
 

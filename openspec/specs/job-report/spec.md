@@ -13,15 +13,32 @@ reported job or any public read surface (list, search, company, sitemap) on its 
 request MUST be authenticated by session cookie or API key; an unauthenticated request
 MUST be rejected with `401`.
 
-`reason` and `details` are required; `contact_telegram` is optional. `reason` MUST be one
-of the controlled values `no_response`, `not_relevant`, `spam`, `fraud`, `other`; any other
-value MUST be rejected before any database write. `details` MUST be non-empty after
-trimming whitespace.
+`reason` is required and MUST be one of the controlled values `no_response`, `not_relevant`,
+`spam`, `fraud`, `other`; any other value MUST be rejected before any database write.
+`details` and `contact_telegram` are **optional**. A report carrying only a reason MUST be
+accepted.
+
+`details` was previously mandatory. Requiring an explanation of a report whose reason
+already says what is wrong buys a moderator little and costs every reporter a paragraph
+before they can act — and a mandatory field mostly collects "spam" typed to get past it,
+which is worse than nothing because it reads as evidence. The reason vocabulary is the
+signal; free text is the elaboration, and elaboration is voluntary. When present, `details`
+MUST still be bounded in length.
 
 #### Scenario: User files a report
 
 - **WHEN** an authenticated user `POST`s `{ "reason": "fraud", "details": "asks for payment" }` to `/api/v1/jobs/<slug>/reports`
 - **THEN** the system stores a `pending` report owned by that user against the resolved job and responds `201` with `{ "data": <report> }`
+
+#### Scenario: A reason alone is a complete report
+
+- **WHEN** an authenticated user `POST`s `{ "reason": "spam" }` with no `details`
+- **THEN** the report is stored and the system responds `201`
+
+#### Scenario: Blank details are accepted as absent
+
+- **WHEN** an authenticated user `POST`s `details` consisting only of whitespace
+- **THEN** the report is stored with empty details rather than rejected
 
 #### Scenario: Unauthenticated report is rejected
 
@@ -35,7 +52,14 @@ trimming whitespace.
 
 #### Scenario: Invalid reason or empty details is rejected
 
-- **WHEN** an authenticated user `POST`s a body whose `reason` is outside the controlled vocabulary, or whose `details` is missing or blank
+- **WHEN** an authenticated user `POST`s a body whose `reason` is outside the controlled vocabulary
+- **THEN** the system responds `400` before any database write
+- **AND WHEN** the body's `details` is missing or blank
+- **THEN** the report is ACCEPTED with empty details — this scenario's former second half is deliberately inverted, since the reason vocabulary already states what is wrong
+
+#### Scenario: Over-long details are rejected
+
+- **WHEN** an authenticated user `POST`s `details` beyond the length bound
 - **THEN** the system responds `400` before any database write
 
 ### Requirement: At most one open report per user and job
@@ -217,3 +241,4 @@ hand instead of assuming a reply was sent.
 
 - **WHEN** a moderator decides a report asking to notify the reporter and the mail is accepted by the transport
 - **THEN** the response reports that the reporter was notified
+
