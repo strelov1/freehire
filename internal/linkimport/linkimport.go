@@ -198,16 +198,15 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	}
 	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
-	// A page read by the generic resolver is filed under its own URL, so nothing stops it from
-	// becoming a second row for a vacancy a crawl already wrote. Ask before writing.
-	canon, deduped := im.canonicalForRole(ctx, params)
-
 	tx, err := im.pool.Begin(ctx)
 	if err != nil {
 		return Result{}, false, err
 	}
 	defer tx.Rollback(ctx)
 	qtx := im.q.WithTx(tx)
+	// Asked inside the transaction that writes the row, so the canon cannot close between the
+	// question and the marking.
+	canon, deduped := canonicalForRole(ctx, qtx, params)
 	res, err := qtx.UpsertJob(ctx, params)
 	if err != nil {
 		return Result{}, false, err
@@ -256,11 +255,11 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 //
 // A lookup failure is not fatal — the row is written unmarked, exactly as before. Dedup is an
 // improvement, not a condition of keeping the vacancy.
-func (im *Importer) canonicalForRole(ctx context.Context, p db.UpsertJobParams) (db.CanonicalJobForRoleRow, bool) {
+func canonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams) (db.CanonicalJobForRoleRow, bool) {
 	if p.Source != linksource.GenericSource || p.RoleFingerprint.String == "" {
 		return db.CanonicalJobForRoleRow{}, false
 	}
-	row, err := im.q.CanonicalJobForRole(ctx, db.CanonicalJobForRoleParams{
+	row, err := q.CanonicalJobForRole(ctx, db.CanonicalJobForRoleParams{
 		CompanySlug:     p.CompanySlug,
 		RoleFingerprint: p.RoleFingerprint,
 		Source:          p.Source,
