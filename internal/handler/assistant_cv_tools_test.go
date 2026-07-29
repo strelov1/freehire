@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/cv"
@@ -21,13 +22,19 @@ type cvRepo struct {
 	jobID   int64
 	data    []byte
 	written []byte
+	// report and undo are what an autopilot run leaves behind: its log, and the
+	// document as it stood before the run's first edit.
+	report []byte
+	undo   []byte
 }
 
 func (r *cvRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
 	if id != r.id || userID != r.userID {
 		return db.GetCVByIDRow{}, cv.ErrNotFound
 	}
-	return db.GetCVByIDRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}}, nil
+	return db.GetCVByIDRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data,
+		JobID:           pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0},
+		AutopilotReport: r.report, AutopilotRevertable: r.undo != nil}, nil
 }
 
 func (r *cvRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
@@ -54,6 +61,30 @@ func (r *cvRepo) SetSession(context.Context, uuid.UUID, int64, string) (int64, e
 func (r *cvRepo) SetTemplate(context.Context, uuid.UUID, int64, string) (int64, error) { return 1, nil }
 func (r *cvRepo) ListTailored(context.Context, int64) ([]db.ListTailoredCVsByUserRow, error) {
 	return nil, nil
+}
+
+func (r *cvRepo) SnapshotForAutopilot(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
+	if id != r.id || userID != r.userID {
+		return 0, nil
+	}
+	r.undo = r.data
+	return 1, nil
+}
+
+func (r *cvRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
+	if id != r.id || userID != r.userID {
+		return 0, nil
+	}
+	r.report = report
+	return 1, nil
+}
+
+func (r *cvRepo) RevertAutopilot(_ context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error) {
+	if id != r.id || userID != r.userID || r.undo == nil {
+		return db.RevertCVAutopilotRow{}, pgx.ErrNoRows
+	}
+	r.data, r.undo, r.report = r.undo, nil, nil
+	return db.RevertCVAutopilotRow{ID: id, Title: "CV", TemplateID: "classic-ats", Data: r.data}, nil
 }
 
 // testCVID is the CV every case in this file addresses. Fixed so a failure names a
@@ -250,5 +281,74 @@ func TestCVEditToolOnAForeignCVFails(t *testing.T) {
 		`{"patch":{"op":"set_summary","value":"Hijacked"}}`))
 	if err == nil {
 		t.Fatal("a tool run for a different user must not reach another user's CV")
+	}
+}
+
+// tailor_report is how an autopilot run tells the workspace what it did. It replaces the
+// whole report, refuses a status the panel could not render, and returns a receipt rather
+// than the report — a tool result is replayed into the model's context on every later turn.
+func TestTailorReportPersistsTheRunLog(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "tailor_report")
+	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{"items":[
+		{"requirement":"Kafka in production","status":"closed_bank","note":"Reframed the payments bullet."},
+		{"requirement":"Team leadership","status":"open","note":"Nothing in the bank."}
+	]}`))
+	if err != nil {
+		t.Fatalf("tailor_report: %v", err)
+	}
+
+	payload, _ := json.Marshal(out)
+	if !strings.Contains(string(payload), `"saved":2`) {
+		t.Errorf("receipt = %s, want the number saved", payload)
+	}
+	if strings.Contains(string(payload), "Kafka") {
+		t.Errorf("receipt echoes the report back: %s — it would be replayed into context every turn", payload)
+	}
+	if !strings.Contains(string(repo.report), "Kafka in production") ||
+		!strings.Contains(string(repo.report), "closed_bank") {
+		t.Errorf("stored report = %s, want both entries", repo.report)
+	}
+}
+
+func TestTailorReportRefusesAnUnknownStatus(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "tailor_report")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"items":[{"requirement":"Kafka","status":"mostly_closed"}]}`))
+	if err == nil {
+		t.Fatal("an out-of-vocabulary status was accepted")
+	}
+	if !strings.Contains(err.Error(), "closed_bank") {
+		t.Errorf("error %q must name the valid statuses — it is the model's only way to correct itself", err)
+	}
+	if repo.report != nil {
+		t.Errorf("a refused report was persisted: %s", repo.report)
+	}
+}
+
+func TestTailorReportReplacesRatherThanAppends(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "tailor_report")
+
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"items":[{"requirement":"Kafka","status":"open"}]}`)); err != nil {
+		t.Fatalf("first report: %v", err)
+	}
+	// The candidate later confirms it in conversation; the agent re-reports the same list
+	// with that one entry changed.
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"items":[{"requirement":"Kafka","status":"closed_candidate","note":"Their words: ran the payments cluster."}]}`)); err != nil {
+		t.Fatalf("second report: %v", err)
+	}
+
+	var entries []map[string]any
+	if err := json.Unmarshal(repo.report, &entries); err != nil {
+		t.Fatalf("stored report not valid json: %v", err)
+	}
+	if len(entries) != 1 || entries[0]["status"] != "closed_candidate" {
+		t.Errorf("stored report = %s, want one entry carrying the newer status", repo.report)
 	}
 }

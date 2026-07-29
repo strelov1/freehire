@@ -12,10 +12,10 @@
 
 ## 3. The report tool
 
-- [ ] 3.1 Add `tailor_report` in `internal/handler/assistant_cv_tools.go`: schema of `{requirement, status, note}` items, status from the fixed vocabulary, registered on the tailoring preset only
-- [ ] 3.2 Sanitize before persisting — coerce nothing, refuse an out-of-vocabulary status with a message naming the valid ones, bound item count and text lengths
-- [ ] 3.3 Persist as a whole-report replacement onto the session's bound CV and return `{"saved": n}`, not the report
-- [ ] 3.4 Test: a valid report round-trips, an invalid status is refused as a tool error with the CV unchanged, a second call replaces rather than appends
+- [x] 3.1 Add `tailor_report` in `internal/handler/assistant_cv_tools.go`: schema of `{requirement, status, note}` items, status from the fixed vocabulary, registered on the tailoring preset only
+- [x] 3.2 Sanitize before persisting — coerce nothing, refuse an out-of-vocabulary status with a message naming the valid ones, bound item count and text lengths
+- [x] 3.3 Persist as a whole-report replacement onto the session's bound CV and return `{"saved": n}`, not the report
+- [x] 3.4 Test: a valid report round-trips, an invalid status is refused as a tool error with the CV unchanged, a second call replaces rather than appends
 
 ## 4. The run endpoint
 

@@ -22,6 +22,72 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64) []assi
 		h.cvContextTool(jobID),
 		h.cvGetTool(cvID),
 		h.cvEditTool(cvID),
+		h.tailorReportTool(cvID),
+	}
+}
+
+// tailorReportTool records what a run made of each requirement, so the workspace can show
+// the outcome beside the fit analysis and the candidate can see what is left.
+//
+// The whole report is written on every call. There is no append: a requirement closed later
+// from the candidate's own words arrives as the same list with one entry changed, which
+// keeps one write path instead of two and makes the stored value always the current truth.
+//
+// The result is a receipt, not the report. A tool result is persisted in the transcript and
+// replayed into the model's context on EVERY later turn of the session, so echoing a
+// forty-line report back would be paid for again and again for nothing.
+func (h *assistantHandlers) tailorReportTool(cvID uuid.UUID) assistant.Tool {
+	return assistant.Tool{
+		Name: "tailor_report",
+		Description: "Record what you made of EVERY requirement you considered, as one list — this replaces " +
+			"the previous report rather than adding to it. Call it once at the end of an unattended run, " +
+			"before you write your summary, and again later whenever a requirement's outcome changes " +
+			"(the candidate confirms experience you then write into the CV).",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"items": map[string]any{
+					"type":        "array",
+					"description": "One entry per requirement, in the order they appear in the fit analysis.",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"requirement": map[string]any{
+								"type":        "string",
+								"description": "The requirement, copied verbatim from cv_context.",
+							},
+							"status": map[string]any{
+								"type": "string",
+								"enum": cv.AutopilotStatuses,
+								"description": "closed_bank: the experience bank had evidence and you rewrote the CV around it. " +
+									"closed_candidate: the candidate confirmed it in conversation, you banked their words and cited them. " +
+									"open: the bank holds nothing — this is what to ask about. " +
+									"not_reached: the run ended before you got to it.",
+							},
+							"note": map[string]any{
+								"type":        "string",
+								"description": "One short line: what you changed, or why it is still open.",
+							},
+						},
+						"required":             []string{"requirement", "status"},
+						"additionalProperties": false,
+					},
+				},
+			},
+			"required": []string{"items"},
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				Items []cv.AutopilotEntry `json:"items"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			if err := h.cv.cvStore.SetAutopilotReport(ctx, cvID, userID, in.Items); err != nil {
+				return nil, cvToolError(err)
+			}
+			return map[string]any{"saved": len(in.Items)}, nil
+		},
 	}
 }
 

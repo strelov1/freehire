@@ -42,6 +42,12 @@ type Record struct {
 	// AgentSessionID is the roy session bound to a tailored CV (empty when none).
 	AgentSessionID string
 	Document       Document
+	// AutopilotReport is the last unattended run's account of itself, one entry per
+	// requirement it considered. Empty when no run has happened (or the last was reverted).
+	AutopilotReport []AutopilotEntry
+	// AutopilotRevertable says whether a pre-run snapshot is still held, i.e. whether
+	// "undo the run" has anything to restore.
+	AutopilotRevertable bool
 }
 
 // TailoredItem is a tailored CV in the re-open list: metadata plus the vacancy (slug, title,
@@ -68,6 +74,9 @@ type Repository interface {
 	SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error)
 	SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) (int64, error)
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
+	SnapshotForAutopilot(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
+	SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error)
+	RevertAutopilot(ctx context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error)
 }
 
 // Seeder provides the user's extracted résumé, used to seed a base CV when they have none.
@@ -124,10 +133,12 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID, userID int64) (Record, er
 		return Record{}, err
 	}
 	return Record{
-		Meta:           Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
-		JobID:          int8Value(row.JobID),
-		AgentSessionID: textValue(row.AgentSessionID),
-		Document:       doc,
+		Meta:                Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
+		JobID:               int8Value(row.JobID),
+		AgentSessionID:      textValue(row.AgentSessionID),
+		Document:            doc,
+		AutopilotReport:     decodeAutopilotReport(row.AutopilotReport),
+		AutopilotRevertable: row.AutopilotRevertable,
 	}, nil
 }
 
@@ -391,4 +402,16 @@ func (r queriesRepository) SetTemplate(ctx context.Context, id uuid.UUID, userID
 
 func (r queriesRepository) ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
 	return r.q.ListTailoredCVsByUser(ctx, userID)
+}
+
+func (r queriesRepository) SnapshotForAutopilot(ctx context.Context, id uuid.UUID, userID int64) (int64, error) {
+	return r.q.SnapshotCVForAutopilot(ctx, db.SnapshotCVForAutopilotParams{ID: id, UserID: userID})
+}
+
+func (r queriesRepository) SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
+	return r.q.SetCVAutopilotReport(ctx, db.SetCVAutopilotReportParams{ID: id, UserID: userID, AutopilotReport: report})
+}
+
+func (r queriesRepository) RevertAutopilot(ctx context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error) {
+	return r.q.RevertCVAutopilot(ctx, db.RevertCVAutopilotParams{ID: id, UserID: userID})
 }
