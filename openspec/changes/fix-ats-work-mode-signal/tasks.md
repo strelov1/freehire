@@ -34,7 +34,7 @@
 
 ## 5. Finish
 
-- [ ] 5.1 Commit, open the PR, merge the branch
+- [x] 5.1 Commit and open the PR (#1243); merge pending review
 - [ ] 5.2 Archive and sync the OpenSpec change
 - [ ] 5.3 Post-merge ops: re-ingest the four providers, then `make reindex`
 - [ ] 5.4 Offer a changelog entry (user-visible: hybrid jobs leave the remote filter)
