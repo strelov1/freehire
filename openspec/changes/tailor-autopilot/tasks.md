@@ -19,9 +19,9 @@
 
 ## 4. The run endpoint
 
-- [ ] 4.1 Add `POST /api/v1/assistant/sessions/:id/autopilot` (cookie-only, SSE) — owner check, tailoring preset with a bound CV required, a foreign session reported as missing
-- [ ] 4.2 Take the pre-run snapshot before starting the turn, and run with the server-owned brief and a ceiling of 30
-- [ ] 4.3 Test: a non-tailoring session is refused with no turn started, a foreign session reports not found, a successful run snapshots the document before the first patch
+- [x] 4.1 Add `POST /api/v1/assistant/sessions/:id/autopilot` (cookie-only, SSE) — owner check, tailoring preset with a bound CV required, a foreign session reported as missing
+- [x] 4.2 Take the pre-run snapshot before starting the turn, and run with the server-owned brief and a ceiling of 30
+- [x] 4.3 Test: a non-tailoring session is refused with no turn started, a foreign session reports not found, a successful run snapshots the document before the first patch
 
 ## 5. The revert endpoint
 

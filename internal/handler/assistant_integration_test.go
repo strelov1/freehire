@@ -25,6 +25,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
 )
@@ -48,7 +49,12 @@ func (m *turnModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.To
 // scripted model behind the turn endpoint.
 func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *assistantHandlers) {
 	queries := db.New(pool)
-	h := &assistantHandlers{store: assistant.NewStore(queries), queries: queries}
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries,
+		// The tailoring tools and the autopilot run reach the CV store, so the assistant
+		// under test carries the same CV service the HTTP surface uses.
+		cv: &cvHandlers{cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), queries: queries},
+	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 	}

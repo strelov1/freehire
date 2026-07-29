@@ -83,6 +83,9 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/assistant/sessions/:id", mw.key, gate, h.GetAssistantSession)
 	api.Delete("/assistant/sessions/:id", mw.key, gate, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, gate, h.PostAssistantMessage)
+	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
+	// the candidate can watch it happen and undo it.
+	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, gate, h.PostAssistantAutopilot)
 }
 
 // requireRollout admits moderators and beta testers. Membership is read fresh per
@@ -278,7 +281,17 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 	if len([]rune(prompt)) > assistantMaxPrompt {
 		return fiber.NewError(fiber.StatusBadRequest, "message is too long")
 	}
+	return h.streamTurn(c, sess, prompt, assistant.TurnConfig{})
+}
 
+// streamTurn runs one turn and writes it to the response as SSE. It is shared by every
+// entry point that starts a turn, so the stream's shape — the headers, the cleared write
+// deadline, the keepalive, the cancellation on a dead client — is written once.
+//
+// The prompt and the turn's bounds are the caller's arguments rather than the request's
+// body: an unattended run's brief and its raised ceiling are ours to choose, and a ceiling
+// a client can set is not a bound.
+func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, prompt string, turn assistant.TurnConfig) error {
 	registry := h.registry(sess)
 	system := assistant.SystemPrompt(sess.Preset)
 
@@ -335,7 +348,7 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 			}
 		}()
 
-		err := h.runner.Run(ctx, sess, registry, system, prompt, assistant.TurnConfig{}, func(e assistant.Event) {
+		err := h.runner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
 			mu.Lock()
 			defer mu.Unlock()
 			if !write(string(e.Kind), e) {
@@ -352,6 +365,49 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 		}
 	}))
 	return nil
+}
+
+// autopilotMaxSteps bounds an unattended tailoring run. A run reads the fit analysis and
+// the CV, then spends roughly two rounds per requirement — a search and an edit — over a
+// dozen or two requirements. The ordinary ceiling is written for a question and would cut
+// such a run off halfway through the list.
+const autopilotMaxSteps = 30
+
+// autopilotBrief opens an unattended run. It is deliberately short: the method — walk every
+// requirement, search the bank, edit what the evidence supports, ask nothing until the end —
+// lives in the tailoring system prompt, where it is stated once. This only says which of the
+// two rhythms the candidate chose, because a turn does not start until a message arrives.
+const autopilotBrief = "Tailor this CV for the vacancy yourself, working from my experience bank. " +
+	"Go through every requirement without stopping to ask me, then tell me what is left."
+
+// PostAssistantAutopilot runs the unattended tailoring pass on a tailoring session: it
+// snapshots the CV so the whole run can be undone, then streams one long turn.
+//
+// Everything a client could otherwise dictate is fixed here — the brief, the ceiling, and
+// the snapshot. The snapshot in particular cannot be the client's job: a run that edits a
+// CV whose pre-run state was never captured is a run nobody can take back.
+func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
+	sess, err := h.ownedSession(c)
+	if err != nil {
+		return err
+	}
+	if h.runner == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
+	}
+	if h.cv == nil || h.cv.cvStore == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
+	}
+	if sess.Preset != assistant.PresetTailor || sess.CVID == nil {
+		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
+	}
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if err := h.cv.cvStore.SnapshotForAutopilot(c.Context(), *sess.CVID, userID); err != nil {
+		return mapCVError(err)
+	}
+	return h.streamTurn(c, sess, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps})
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.
