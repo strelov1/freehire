@@ -166,6 +166,7 @@
         // Put the CV in the address, replacing this entry rather than adding one. A reload of
         // the bare /tailor/<slug> is a bootstrap request, and until the address names the CV
         // the candidate is one F5 away from an empty workspace. Back still leaves the page.
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() supplies the path; the rule can't see through the appended ?cv= query
         void goto(`${resolve('/tailor/[slug]', { slug })}?cv=${cvId}`, {
           replaceState: true,
           noScroll: true,
