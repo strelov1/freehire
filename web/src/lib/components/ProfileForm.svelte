@@ -14,6 +14,7 @@
   import { Button, Input } from '$lib/ui';
   import RemoteSearchSelect from './facets/RemoteSearchSelect.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
+  import TabRow, { tabId } from './TabRow.svelte';
 
   // Mirror of the server's specialization cap (searchprofile.maxSpecializations).
   const MAX_SPECIALIZATIONS = 5;
@@ -51,7 +52,13 @@
   let formError = $state<string | null>(null);
   let busy = $state(false);
   // Which form section is shown — the profile is long, so split it into two tabs sharing
-  // one Save (both tabs feed the same PUT).
+  // one Save (both tabs feed the same PUT). The list drives TabRow, and typing it `as const`
+  // ties `formTab` to it: an id that is not a section stops being expressible.
+  const formTabs = [
+    { id: 'main', label: 'Skills & role' },
+    { id: 'location', label: 'Location & work' },
+  ] as const;
+  const formPanelId = 'profile-form-panel';
   let formTab = $state<'main' | 'location'>('main');
 
   // Location & work preferences — the optional "where & how I want to work" block. Seeded
@@ -281,26 +288,13 @@
 <form onsubmit={submit} class="flex flex-col gap-6 rounded-xl border border-border bg-card p-5 sm:p-6">
   <!-- Sub-tabs: the professional self vs. where/how you want to work. One Save below covers
        both (a single PUT). -->
-  <div class="flex gap-5 border-b border-border">
-    <button
-      type="button"
-      onclick={() => (formTab = 'main')}
-      class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {formTab === 'main'
-        ? 'border-brand text-foreground'
-        : 'border-transparent text-muted-foreground hover:text-foreground'}"
-    >
-      Skills &amp; role
-    </button>
-    <button
-      type="button"
-      onclick={() => (formTab = 'location')}
-      class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {formTab === 'location'
-        ? 'border-brand text-foreground'
-        : 'border-transparent text-muted-foreground hover:text-foreground'}"
-    >
-      Location &amp; work
-    </button>
-  </div>
+  <TabRow
+    tabs={formTabs}
+    active={formTab}
+    onSelect={(id) => (formTab = id)}
+    label="Profile form sections"
+    panelId={formPanelId}
+  />
 
   <!-- Region-pill group, reused by remote reach and relocation targets. Declared at the form
        top level so it is available inside either tab. -->
@@ -333,6 +327,15 @@
     />
   {/snippet}
 
+  <!-- One panel around both sections: they are mutually exclusive, so a single element can
+       carry the tabpanel role and stay pointed at whichever tab is active. `gap-6` repeats the
+       form's own spacing, which the section's blocks used to inherit as direct form children. -->
+  <div
+    id={formPanelId}
+    role="tabpanel"
+    aria-labelledby={tabId(formPanelId, formTab)}
+    class="flex flex-col gap-6"
+  >
   {#if formTab === 'main'}
   <!-- Your CV: uploaded state or an empty drop-zone. Uploading extracts skills into the
        field below and stores the CV for the readiness tab. -->
@@ -564,6 +567,7 @@
     {/if}
   </div>
   {/if}
+  </div>
 
   {#if formError}
     <p class="text-sm text-destructive">{formError}</p>

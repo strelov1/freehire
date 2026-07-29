@@ -14,6 +14,7 @@
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import ResumeStructuredView from '$lib/components/ResumeStructuredView.svelte';
   import States from '$lib/components/States.svelte';
+  import TabRow, { tabId } from '$lib/components/TabRow.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type { ATSResponse, FacetCounts, ResumeStructured, Verdict } from '$lib/types';
@@ -35,6 +36,16 @@
   // independently of the filter-driven reload.
   let structured = $state<ResumeStructured | null>(null);
   let loadError = $state(false);
+  // The tab strip's sections. `as const` ties `tab` to this list, so a section can't be
+  // referenced by an id the strip doesn't offer.
+  const TABS = [
+    { id: 'settings', label: 'Settings' },
+    { id: 'structured', label: 'Profile' },
+    { id: 'experience', label: 'Experience' },
+    { id: 'coverage', label: 'Market coverage' },
+    { id: 'readiness', label: 'CV readiness' },
+  ] as const;
+  const PANEL_ID = 'profile-panel';
   let tab = $state<'settings' | 'structured' | 'experience' | 'coverage' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
@@ -240,55 +251,21 @@
     <div class="flex gap-6">
       <main class="flex min-w-0 flex-1 flex-col gap-6">
         <!-- Tabs -->
-        <div class="flex gap-5 border-b border-border">
-          <button
-            type="button"
-            onclick={() => (tab = 'settings')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'settings'
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          >
-            Settings
-          </button>
-          <button
-            type="button"
-            onclick={() => (tab = 'structured')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'structured'
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          >
-            Profile
-          </button>
-          <button
-            type="button"
-            onclick={() => (tab = 'experience')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'experience'
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          >
-            Experience
-          </button>
-          <button
-            type="button"
-            onclick={() => (tab = 'coverage')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'coverage'
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          >
-            Market coverage
-          </button>
-          <button
-            type="button"
-            onclick={() => (tab = 'readiness')}
-            class="-mb-px border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors {tab === 'readiness'
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'}"
-          >
-            CV readiness
-          </button>
-        </div>
+        <TabRow
+          tabs={TABS}
+          active={tab}
+          onSelect={(id) => (tab = id)}
+          label="Profile sections"
+          panelId={PANEL_ID}
+        />
 
         <!-- Body -->
+        <div
+          id={PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={tabId(PANEL_ID, tab)}
+          class="flex flex-col gap-6"
+        >
         {#if tab === 'experience'}
           <!-- What the product has recorded about what this person has done, and the only
                place they can correct or remove it. -->
@@ -353,6 +330,7 @@
             {/if}
           </div>
         {/if}
+        </div>
       </main>
 
       <!-- Filters refine the Market coverage comparison only, so the summary sidebar

@@ -126,9 +126,13 @@
       </p>
       <!-- Capped, and right-aligned only once it shares the row: the example is two lines
            of hint, and letting it set the row's width pushed the whole action under the
-           paragraph. Narrow, it wraps to its own line and follows the text's edge. -->
+           paragraph. Narrow, it takes its own line and follows the text's edge.
+           `basis-full` below `sm` is what forces that own line — `flex-wrap` alone could not,
+           because the paragraph beside it is `flex-1` (so `flex-basis: 0`) and never claims
+           enough width to push anything down. With the action also refusing to shrink, it held
+           its full 16rem on a phone and crushed the paragraph to one word per line. -->
       <div
-        class="flex max-w-[16rem] shrink-0 flex-col items-start gap-1.5 text-left sm:items-end sm:text-right"
+        class="flex basis-full flex-col items-start gap-1.5 text-left sm:max-w-[16rem] sm:basis-auto sm:shrink-0 sm:items-end sm:text-right"
       >
         {@render interviewEntry('bank-example')}
       </div>
