@@ -129,7 +129,6 @@ type Decision struct {
 	Email     string
 	JobTitle  string
 	JobSlug   string
-	Reason    string
 	Details   string
 	Note      string
 	Outcome   string
@@ -275,8 +274,7 @@ func (s *Service) notify(ctx context.Context, asked bool, rep ReportDetail, d De
 	if !asked || s.notifier == nil {
 		return false
 	}
-	d.Email, d.JobTitle, d.JobSlug = rep.ReporterEmail, rep.JobTitle, rep.JobSlug
-	d.Reason, d.Details = rep.Reason, rep.Details
+	d.Email, d.JobTitle, d.JobSlug, d.Details = rep.ReporterEmail, rep.JobTitle, rep.JobSlug, rep.Details
 	if err := s.notifier.NotifyDecision(ctx, d); err != nil {
 		log.Printf("report: notifying the reporter of report %d failed: %v", rep.ID, err)
 		return false

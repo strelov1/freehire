@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/report"
 )
@@ -42,7 +43,6 @@ func reported() report.Decision {
 		Email:    "lina@example.test",
 		JobTitle: "Senior Web Designer",
 		JobSlug:  "senior-web-designer-incogni-1234",
-		Reason:   "not_relevant",
 		Details:  "This job is not Remote, in their original post it says Hybrid",
 		Outcome:  report.OutcomeResolved,
 	}
@@ -160,6 +160,21 @@ func TestNotice_LongReportIsTruncated(t *testing.T) {
 	}
 	if !strings.Contains(got.html, "…") {
 		t.Error("a truncated quotation should show that it was cut")
+	}
+}
+
+func TestNotice_TruncationKeepsValidUTF8(t *testing.T) {
+	// A report with no spaces in a multi-byte script — plausible for a Russian or CJK
+	// reporter — is where a byte-slice cut lands mid-rune and garbles the quotation.
+	d := reported()
+	d.Details = strings.Repeat("这个职位不是远程的", 200)
+	got := notice(t, d)
+
+	if !utf8.ValidString(got.html) {
+		t.Error("the HTML body is not valid UTF-8: the quotation was cut mid-rune")
+	}
+	if !utf8.ValidString(got.text) {
+		t.Error("the text body is not valid UTF-8: the quotation was cut mid-rune")
 	}
 }
 

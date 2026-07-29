@@ -1450,7 +1450,7 @@ curl "https://freehire.me/api/v1/reports" -H "Authorization: Bearer $MODERATOR_A
 
 **Auth:** Moderator
 
-Resolve a report, optionally closing the job.
+Resolve a report, optionally closing the job and telling the reporter.
 
 **Path parameters**
 
@@ -1463,23 +1463,25 @@ Resolve a report, optionally closing the job.
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `close_job` | boolean | no | Soft-close the reported job. (e.g. `true`) |
+| `note` | string | no | What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way. (e.g. `Fixed — the job is now marked hybrid`) |
+| `notify_reporter` | boolean | no | Email the reporter this decision. Defaults to false when omitted. (e.g. `true`) |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/reports/3/resolve" \
   -H "Authorization: Bearer $MODERATOR_API_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"close_job":true}'
+  -d '{"close_job":true,"note":"Fixed — the job is now marked hybrid","notify_reporter":true}'
 ```
 
 ```json
-{ "data": { "id": 3, "status": "resolved" } }
+{ "data": { "id": 3, "status": "resolved", "notified": true } }
 ```
 
 ### `POST /reports/{id}/dismiss`
 
 **Auth:** Moderator
 
-Dismiss a report with a reason.
+Dismiss a report with a reason, optionally telling the reporter.
 
 **Path parameters**
 
@@ -1491,7 +1493,8 @@ Dismiss a report with a reason.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `reason` | string | no | Why it was dismissed. (e.g. `not an issue`) |
+| `reason` | string | no | Why nothing changed. Emailed to the reporter verbatim when notify_reporter is set. (e.g. `not an issue`) |
+| `notify_reporter` | boolean | no | Email the reporter this decision. Defaults to false when omitted. (e.g. `true`) |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/reports/3/dismiss" \

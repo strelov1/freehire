@@ -113,7 +113,13 @@ caller that wants a notice says so.
 - **Mail volume follows moderation volume.** → Bounded by the review queue, which is capped
   at 500 pending rows and worked by hand.
 - **Notes and reported details are attacker-influenced text rendered into HTML.** → Both go
-  through `html/template` escaping; nothing is interpolated raw.
+  through `html/template` escaping; nothing is interpolated raw. The quoted report is cut on
+  a rune boundary, so a Cyrillic or CJK report cannot end in half a character.
+- **A decision can mail an unverified address.** A password-registered account can file a
+  report before confirming its address, and the queue defaults to notifying — so a typo'd
+  address hard-bounces. → Watch-item, not a gate: the same address already receives the
+  verification code, so this adds no exposure SES does not already have. If bounce rates
+  move, gate the notice on `users.email_verified`.
 
 ## Migration Plan
 

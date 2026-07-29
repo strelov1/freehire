@@ -5,6 +5,7 @@ import (
 	"context"
 	"html/template"
 	"strings"
+	"unicode/utf8"
 )
 
 // EmailSender is the slice of the SES transport the notifier needs; *emailnotify.Client
@@ -117,15 +118,21 @@ func textBody(m noticeMail) string {
 }
 
 // truncate cuts s to at most n bytes, marking the cut so the reader can tell their report
-// was quoted in part.
+// was quoted in part. The cut lands on a rune boundary: a report written in Cyrillic or CJK
+// has multi-byte runes and often no spaces to back off to, and half a rune is invalid UTF-8
+// that renders as a replacement character in the reader's mail client.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	cut := s[:n]
-	// Back off to the last space so the cut lands between words, not mid-word.
+	// Prefer a word boundary; fall back to a rune boundary when there is no usable space.
 	if i := strings.LastIndexByte(cut, ' '); i > n/2 {
 		cut = cut[:i]
+	} else {
+		for len(cut) > 0 && !utf8.ValidString(cut) {
+			cut = cut[:len(cut)-1]
+		}
 	}
 	return strings.TrimRight(cut, " ") + "…"
 }

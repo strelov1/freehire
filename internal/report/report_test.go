@@ -298,7 +298,7 @@ func TestResolve_NotifiesTheReporterAfterMarking(t *testing.T) {
 	if got.Email != "lina@example.test" || got.JobTitle != "Senior Web Designer" || got.JobSlug != "senior-web-designer-incogni-1234" {
 		t.Errorf("recipient/job context not carried: %+v", got)
 	}
-	if got.Note != "Fixed — the job is now marked hybrid" || got.Reason != "not_relevant" || got.Details != "listed remote, source says hybrid" {
+	if got.Note != "Fixed — the job is now marked hybrid" || got.Details != "listed remote, source says hybrid" {
 		t.Errorf("decision content not carried: %+v", got)
 	}
 	if got.Outcome != report.OutcomeResolved || !got.JobClosed {

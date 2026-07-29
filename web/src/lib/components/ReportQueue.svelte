@@ -5,6 +5,7 @@
   import { AsyncData } from '$lib/asyncData.svelte';
   import {
     decisionLabel,
+    decisionNotePlaceholder,
     decisionNotePrompt,
     decisionOutcome,
     reportReasonLabel,
@@ -72,6 +73,8 @@
       actionNotice = decisionOutcome({
         notifyRequested: notifyReporter,
         notified: decided.notified ?? false,
+        reporterEmail: r.reporter_email,
+        jobTitle: r.job_title,
       });
       deciding = null;
       drop(r.id);
@@ -135,7 +138,7 @@
                 <textarea
                   bind:value={note}
                   rows="3"
-                  placeholder="Fixed — the job is now marked hybrid"
+                  placeholder={decisionNotePlaceholder(deciding.kind)}
                   class="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm"
                 ></textarea>
               </label>

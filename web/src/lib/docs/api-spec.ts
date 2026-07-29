@@ -1077,22 +1077,49 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'POST',
         path: '/reports/{id}/resolve',
         auth: 'moderator',
-        summary: 'Resolve a report, optionally closing the job.',
+        summary: 'Resolve a report, optionally closing the job and telling the reporter.',
         pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The report id.', example: '3' }],
-        body: [{ name: 'close_job', type: 'boolean', description: 'Soft-close the reported job.', example: 'true' }],
+        body: [
+          { name: 'close_job', type: 'boolean', description: 'Soft-close the reported job.', example: 'true' },
+          {
+            name: 'note',
+            type: 'string',
+            description: 'What you did about the report. Emailed to the reporter verbatim when notify_reporter is set, and stored as the review reason either way.',
+            example: 'Fixed — the job is now marked hybrid',
+          },
+          {
+            name: 'notify_reporter',
+            type: 'boolean',
+            description: 'Email the reporter this decision. Defaults to false when omitted.',
+            example: 'true',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/reports/3/resolve" \\
   -H "Authorization: Bearer $MODERATOR_API_KEY" \\
   -H 'Content-Type: application/json' \\
-  -d '{"close_job":true}'`,
-        responseExample: `{ "data": { "id": 3, "status": "resolved" } }`,
+  -d '{"close_job":true,"note":"Fixed — the job is now marked hybrid","notify_reporter":true}'`,
+        responseExample: `{ "data": { "id": 3, "status": "resolved", "notified": true } }`,
       },
       {
         method: 'POST',
         path: '/reports/{id}/dismiss',
         auth: 'moderator',
-        summary: 'Dismiss a report with a reason.',
+        summary: 'Dismiss a report with a reason, optionally telling the reporter.',
         pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The report id.', example: '3' }],
-        body: [{ name: 'reason', type: 'string', description: 'Why it was dismissed.', example: 'not an issue' }],
+        body: [
+          {
+            name: 'reason',
+            type: 'string',
+            description: 'Why nothing changed. Emailed to the reporter verbatim when notify_reporter is set.',
+            example: 'not an issue',
+          },
+          {
+            name: 'notify_reporter',
+            type: 'boolean',
+            description: 'Email the reporter this decision. Defaults to false when omitted.',
+            example: 'true',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/reports/3/dismiss" \\
   -H "Authorization: Bearer $MODERATOR_API_KEY" \\
   -H 'Content-Type: application/json' \\

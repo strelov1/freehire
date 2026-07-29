@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { decisionLabel, decisionOutcome, reportReasonLabel, type DecisionKind } from './reports';
+import {
+  decisionLabel,
+  decisionNotePlaceholder,
+  decisionNotePrompt,
+  decisionOutcome,
+  reportReasonLabel,
+  type DecisionKind,
+} from './reports';
 
 describe('reportReasonLabel', () => {
   it('labels a known reason and falls back to the raw value', () => {
@@ -13,6 +20,20 @@ describe('decisionLabel', () => {
     const labels = (['close', 'resolve', 'dismiss'] as DecisionKind[]).map(decisionLabel);
     expect(new Set(labels).size).toBe(3);
     expect(decisionLabel('close')).toMatch(/close/i);
+  });
+});
+
+describe('decisionNotePrompt', () => {
+  it('tells the moderator the reporter reads what they write', () => {
+    for (const kind of ['close', 'resolve', 'dismiss'] as DecisionKind[]) {
+      expect(decisionNotePrompt(kind)).toMatch(/reporter/i);
+    }
+  });
+
+  it('shapes the example note to the decision', () => {
+    expect(decisionNotePlaceholder('dismiss')).not.toBe(decisionNotePlaceholder('resolve'));
+    // A dismissal fixed nothing, so its example must not claim a fix.
+    expect(decisionNotePlaceholder('dismiss')).not.toMatch(/fixed/i);
   });
 });
 
@@ -31,6 +52,17 @@ describe('decisionOutcome', () => {
     // The moderator must learn two things: the decision stands, and nobody was told.
     expect(warning).toMatch(/recorded|saved|stands/i);
     expect(warning).toMatch(/email|notif/i);
+  });
+
+  it('names who was not reached, since the row leaves the queue either way', () => {
+    const warning = decisionOutcome({
+      notifyRequested: true,
+      notified: false,
+      reporterEmail: 'lina@example.test',
+      jobTitle: 'Senior Web Designer',
+    });
+    expect(warning).toContain('lina@example.test');
+    expect(warning).toContain('Senior Web Designer');
   });
 
   it('never claims a notice was sent that was not', () => {
