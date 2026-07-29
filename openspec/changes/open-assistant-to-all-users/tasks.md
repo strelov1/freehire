@@ -22,4 +22,4 @@
 - [x] 4.1 `go build ./... && go vet ./... && go test ./...` green; run the assistant integration tests under their build tag.
 - [x] 4.2 Invoke the `simplify` skill over the whole diff; tests stay green after it.
 - [x] 4.3 Request code review on the full diff, act on Critical and Important findings.
-- [ ] 4.4 Open the follow-up for AI-credit metering of assistant turns, so the debt this change takes on is recorded somewhere other than the design doc.
+- [x] 4.4 Open the follow-up for AI-credit metering of assistant turns, so the debt this change takes on is recorded somewhere other than the design doc.
