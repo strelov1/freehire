@@ -50,7 +50,6 @@ export function decisionNotePrompt(kind: DecisionKind): string {
 }
 
 interface DecisionResult {
-  kind: DecisionKind;
   /** Whether the moderator asked for the reporter to be told. */
   notifyRequested: boolean;
   /** Whether the server reports the notice was actually delivered. */

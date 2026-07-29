@@ -213,12 +213,9 @@ type Review struct {
 // before the mark, so the report stays pending and the action is safe to retry. A missing
 // report is ErrReportNotFound; one no longer pending is ErrAlreadyDecided.
 func (s *Service) Resolve(ctx context.Context, reviewerID, id int64, in ResolveInput) (Review, error) {
-	rep, err := s.repo.Get(ctx, id)
+	rep, err := s.pending(ctx, id)
 	if err != nil {
 		return Review{}, err
-	}
-	if rep.Status != statusPending {
-		return Review{}, ErrAlreadyDecided
 	}
 	if in.CloseJob {
 		if err := s.closer.Close(ctx, rep.JobID); err != nil {
@@ -229,38 +226,44 @@ func (s *Service) Resolve(ctx context.Context, reviewerID, id int64, in ResolveI
 	if err != nil {
 		return Review{}, err
 	}
-	return Review{
-		Report: decided,
-		Notified: s.notify(ctx, in.NotifyReporter, rep, Decision{
-			Note:      in.Note,
-			Outcome:   OutcomeResolved,
-			JobClosed: in.CloseJob,
-		}),
-	}, nil
+	notified := s.notify(ctx, in.NotifyReporter, rep, Decision{
+		Note:      in.Note,
+		Outcome:   OutcomeResolved,
+		JobClosed: in.CloseJob,
+	})
+	return Review{Report: decided, Notified: notified}, nil
 }
 
 // Dismiss marks a pending report dismissed with an optional reason, recording the reviewing
 // moderator. The reported job is not touched. A missing report is ErrReportNotFound; one no
 // longer pending is ErrAlreadyDecided.
 func (s *Service) Dismiss(ctx context.Context, reviewerID, id int64, in DismissInput) (Review, error) {
-	rep, err := s.repo.Get(ctx, id)
+	rep, err := s.pending(ctx, id)
 	if err != nil {
 		return Review{}, err
-	}
-	if rep.Status != statusPending {
-		return Review{}, ErrAlreadyDecided
 	}
 	decided, err := s.repo.MarkDismissed(ctx, id, reviewerID, in.Reason)
 	if err != nil {
 		return Review{}, err
 	}
-	return Review{
-		Report: decided,
-		Notified: s.notify(ctx, in.NotifyReporter, rep, Decision{
-			Note:    in.Reason,
-			Outcome: OutcomeDismissed,
-		}),
-	}, nil
+	notified := s.notify(ctx, in.NotifyReporter, rep, Decision{
+		Note:    in.Reason,
+		Outcome: OutcomeDismissed,
+	})
+	return Review{Report: decided, Notified: notified}, nil
+}
+
+// pending loads the report a decision targets, rejecting one that is no longer awaiting
+// review. Both decisions start here, so neither can forget the guard.
+func (s *Service) pending(ctx context.Context, id int64) (ReportDetail, error) {
+	rep, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return ReportDetail{}, err
+	}
+	if rep.Status != statusPending {
+		return ReportDetail{}, ErrAlreadyDecided
+	}
+	return rep, nil
 }
 
 // notify announces a decision that has already been recorded, reporting whether the reporter

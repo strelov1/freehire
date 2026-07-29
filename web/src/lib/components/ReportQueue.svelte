@@ -70,7 +70,6 @@
           ? await api.dismissReport(r.id, text, notifyReporter)
           : await api.resolveReport(r.id, kind === 'close', text, notifyReporter);
       actionNotice = decisionOutcome({
-        kind,
         notifyRequested: notifyReporter,
         notified: decided.notified ?? false,
       });

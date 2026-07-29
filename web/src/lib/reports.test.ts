@@ -18,15 +18,15 @@ describe('decisionLabel', () => {
 
 describe('decisionOutcome', () => {
   it('is silent when the decision landed and the notice went out', () => {
-    expect(decisionOutcome({ kind: 'resolve', notifyRequested: true, notified: true })).toBeNull();
+    expect(decisionOutcome({ notifyRequested: true, notified: true })).toBeNull();
   });
 
   it('is silent when no notice was asked for', () => {
-    expect(decisionOutcome({ kind: 'dismiss', notifyRequested: false, notified: false })).toBeNull();
+    expect(decisionOutcome({ notifyRequested: false, notified: false })).toBeNull();
   });
 
   it('warns when a requested notice did not go out', () => {
-    const warning = decisionOutcome({ kind: 'close', notifyRequested: true, notified: false });
+    const warning = decisionOutcome({ notifyRequested: true, notified: false });
     expect(warning).not.toBeNull();
     // The moderator must learn two things: the decision stands, and nobody was told.
     expect(warning).toMatch(/recorded|saved|stands/i);
@@ -34,7 +34,7 @@ describe('decisionOutcome', () => {
   });
 
   it('never claims a notice was sent that was not', () => {
-    const warning = decisionOutcome({ kind: 'resolve', notifyRequested: true, notified: false });
+    const warning = decisionOutcome({ notifyRequested: true, notified: false });
     expect(warning).not.toMatch(/\bsent\b(?!.*(not|n't))/i);
   });
 });
