@@ -77,10 +77,10 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 8. Whole-change verification
 
-- [ ] 8.1 `go build ./... && go vet ./... && gofmt -l .` clean.
-- [ ] 8.2 `go test ./...` green; `go test -tags=integration ./internal/db/` green.
-- [ ] 8.3 Confirm no Meilisearch surface changed — no new filterable attribute, no index settings diff. The v1 verdict is read-time by design and a facet would open a hard-500 window until a rebuild swaps in.
-- [ ] 8.4 Verify the structural feature flag holds: on a database with the migration applied and no crosscheck run and no reports, no job in the catalogue reaches a level above `none`.
+- [x] 8.1 `go build ./... && go vet ./... && gofmt -l .` clean.
+- [x] 8.2 `go test ./...` green; `go test -tags=integration ./internal/db/` green.
+- [x] 8.3 Confirmed: `git diff main...HEAD -- internal/search/` is EMPTY, so no filterable attribute and no index settings moved. (`internal/handler/search.go` did change — that is the read path hydrating the signal, not the index topology.)
+- [x] 8.4 Asserted as a named property, `TestClassify_SilentUntilASecondCriterionExists`, rather than left as a consequence of the other cases: at every reality class, with no stamp and no evidence, the level is `none`. The convergence threshold IS the flag, and a flag that is the logic cannot be left on by accident.
 
 ## 9. Rollout (ops — executed at Finish)
 

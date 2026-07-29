@@ -176,3 +176,29 @@ func TestClassify_Deterministic(t *testing.T) {
 		t.Errorf("not deterministic: %+v != %+v", first, second)
 	}
 }
+
+// The rollout's feature flag IS this threshold, so it is asserted as a property
+// rather than left as a consequence of other tests.
+//
+// On the day the migration and image land, ats_absent_at is unpopulated everywhere
+// and no report exists, so the only criterion that can fire is evergreen_posting.
+// Convergence needs two. The catalogue is therefore silent until cmd/ghost-crosscheck
+// is deliberately run with --apply — a flag that cannot be left on by accident,
+// because it is the logic rather than a switch beside it.
+func TestClassify_SilentUntilASecondCriterionExists(t *testing.T) {
+	for _, realityClass := range []string{"fresh", "stale", "likely-evergreen"} {
+		in := base()
+		in.RealityClass = realityClass
+		// The world as it is at deploy: no cross-check has run, nobody has
+		// reported, nobody's tracked application has gone silent.
+		in.HasATSAbsent = false
+		in.Contributors = 0
+		in.SilentApplications = 0
+		in.Reports = 0
+
+		if got := Classify(in); got.Level != LevelNone {
+			t.Errorf("reality %q: level = %q, want %q — the catalogue must be silent at deploy",
+				realityClass, got.Level, LevelNone)
+		}
+	}
+}
