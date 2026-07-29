@@ -45,7 +45,7 @@ ones only the candidate can answer, and their answers are banked for every futur
 
 ## Impact
 
-- **Schema:** migration `0051` adds `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`.
+- **Schema:** migration `0052` adds `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`.
 - **API:** new `POST /api/v1/assistant/sessions/:id/autopilot` (SSE, cookie-only, tailoring sessions
   only) and `POST /api/v1/me/cvs/:id/autopilot/undo`. The CV read shape gains the report and a
   revertable flag.

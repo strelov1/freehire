@@ -84,7 +84,7 @@ func (r *cvRepo) RevertAutopilot(_ context.Context, id uuid.UUID, userID int64) 
 		return db.RevertCVAutopilotRow{}, pgx.ErrNoRows
 	}
 	r.data, r.undo, r.report = r.undo, nil, nil
-	return db.RevertCVAutopilotRow{ID: id, Title: "CV", TemplateID: "classic-ats", Data: r.data}, nil
+	return db.RevertCVAutopilotRow{ID: id, Title: "CV", TemplateID: "classic-ats"}, nil
 }
 
 // testCVID is the CV every case in this file addresses. Fixed so a failure names a

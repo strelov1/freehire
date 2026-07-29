@@ -71,6 +71,26 @@ on each call and MUST return a receipt rather than echoing the report back into 
 - **WHEN** the candidate confirms experience for an open requirement after the run and the agent writes it into the CV
 - **THEN** the report is replaced with one marking that requirement closed from what the candidate said
 
+### Requirement: A run accounts for itself even when it never reports
+
+The system SHALL write the vacancy's requirements onto the tailored CV as not-reached when a
+run starts, so a run that ends before reporting still leaves a report behind. This MUST be the
+server's doing rather than the agent's: a run that exhausts its tool-call ceiling is asked for
+its final answer with no tools offered, so the run that most needs to be accounted for is
+exactly the one that cannot report. Whatever the agent reports afterwards replaces the whole
+list. A vacancy with no cached analysis to read MUST leave the previous report untouched
+rather than fail the run.
+
+#### Scenario: A run that reports nothing still leaves a report
+
+- **WHEN** a run edits the CV and ends without calling the report tool
+- **THEN** the CV carries a report naming the vacancy's requirements, each recorded as not reached
+
+#### Scenario: The agent's report replaces the plan
+
+- **WHEN** a run completes and reports its outcomes
+- **THEN** the stored report is the agent's, not the not-reached list the run started from
+
 ### Requirement: A run is revertable in one move
 
 The system SHALL snapshot the tailored CV's document before a run makes its first edit, and SHALL
@@ -114,13 +134,20 @@ conversation in which each confirmed answer is banked before it is written into 
 
 The workspace SHALL render the run report in its right-hand panel above the existing fit analysis,
 showing each requirement with its outcome, and SHALL offer starting another run and reverting the last
-one from that block. The report MUST arrive with the CV the workspace already re-reads after a turn,
+one from that block. Starting a run MUST be offered whether or not a report exists — a CV that has
+just been reverted has no report by design, and one whose run stopped early may have none either —
+while reverting is offered exactly while a snapshot is held. The report MUST arrive with the CV the workspace already re-reads after a turn,
 without an additional poll, and the fit analysis it sits above MUST NOT be recomputed by a run.
 
 #### Scenario: The report appears after a run
 
 - **WHEN** an autopilot run finishes
 - **THEN** the workspace's Verdict panel shows each requirement with its outcome above the fit analysis
+
+#### Scenario: Another run can be started after an undo
+
+- **WHEN** the last run has been undone and the report cleared
+- **THEN** the panel still offers to start a run
 
 #### Scenario: The fit analysis is left alone
 

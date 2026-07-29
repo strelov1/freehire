@@ -1,6 +1,6 @@
 ## 1. Storage
 
-- [x] 1.1 Add migration `0051_cvs_autopilot.sql`: `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`, both nullable, with a comment explaining that one is the run log and the other the pre-run document
+- [x] 1.1 Add migration `0052_cvs_autopilot.sql`: `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`, both nullable, with a comment explaining that one is the run log and the other the pre-run document
 - [x] 1.2 Add owner-scoped queries in `internal/db/queries`: snapshot the document into `autopilot_undo`, write `autopilot_report`, read both with the CV, restore from the snapshot clearing both columns; run `make sqlc`
 - [x] 1.3 Cover the queries with the existing integration-test harness: snapshot writes only for the owner, restore returns the snapshot and leaves both columns null, restore on a CV with no snapshot reports nothing to revert
 
@@ -42,7 +42,7 @@
 ## 8. Workspace — entry point
 
 - [x] 8.1 Replace the bootstrap's automatic kickoff with the two-action empty state: "Tailor it for me" starts a run, "Walk me through it" sends today's kickoff text
-- [x] 8.2 Test the empty state: nothing is sent on mount, each action sends exactly its own turn, and a resumed session shows neither
+- [x] 8.2 Test `openingFor`: a fresh workspace offers both rhythms (and the run carries no text of its own), a resumed one offers none. That nothing is SENT on mount follows from the actions being data — the markup that renders them is not unit-tested (no component renderer; see 9.2)
 
 ## 9. Workspace — report and revert
 

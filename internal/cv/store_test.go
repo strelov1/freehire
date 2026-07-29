@@ -283,5 +283,5 @@ func (f *fakeRepo) RevertAutopilot(_ context.Context, id uuid.UUID, userID int64
 	}
 	r.data, r.undo, r.report = r.undo, nil, nil
 	f.rows[id] = r
-	return db.RevertCVAutopilotRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+	return db.RevertCVAutopilotRow{ID: id, Title: r.title, TemplateID: r.templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }

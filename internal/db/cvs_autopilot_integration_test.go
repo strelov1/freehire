@@ -81,21 +81,20 @@ func TestAutopilotSnapshotAndRevert(t *testing.T) {
 	}
 
 	// Reverting restores the pre-run document and clears both columns.
-	reverted, err := q.RevertCVAutopilot(ctx, RevertCVAutopilotParams{ID: created.ID, UserID: owner})
-	if err != nil {
+	if _, err := q.RevertCVAutopilot(ctx, RevertCVAutopilotParams{ID: created.ID, UserID: owner}); err != nil {
 		t.Fatalf("revert: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(reverted.Data, &doc); err != nil {
-		t.Fatalf("reverted data not valid json: %v", err)
-	}
-	if doc["summary"] != "before the run" {
-		t.Errorf("reverted document = %s, want the pre-run one", reverted.Data)
 	}
 
 	after, err := q.GetCVByID(ctx, GetCVByIDParams{ID: created.ID, UserID: owner})
 	if err != nil {
 		t.Fatalf("get after revert: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(after.Data, &doc); err != nil {
+		t.Fatalf("reverted data not valid json: %v", err)
+	}
+	if doc["summary"] != "before the run" {
+		t.Errorf("reverted document = %s, want the pre-run one", after.Data)
 	}
 	if after.AutopilotRevertable {
 		t.Error("revertable = true after a revert; want false — the snapshot is spent")
@@ -142,15 +141,18 @@ func TestAutopilotSnapshotIsTakenFresh(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	reverted, err := q.RevertCVAutopilot(ctx, RevertCVAutopilotParams{ID: created.ID, UserID: owner})
-	if err != nil {
+	if _, err := q.RevertCVAutopilot(ctx, RevertCVAutopilotParams{ID: created.ID, UserID: owner}); err != nil {
 		t.Fatalf("revert: %v", err)
 	}
+	back, err := q.GetCVByID(ctx, GetCVByIDParams{ID: created.ID, UserID: owner})
+	if err != nil {
+		t.Fatalf("get after revert: %v", err)
+	}
 	var doc map[string]any
-	if err := json.Unmarshal(reverted.Data, &doc); err != nil {
+	if err := json.Unmarshal(back.Data, &doc); err != nil {
 		t.Fatalf("reverted data not valid json: %v", err)
 	}
 	if doc["summary"] != "second" {
-		t.Errorf("reverted to %s, want the document as it stood when the LAST run started", reverted.Data)
+		t.Errorf("reverted to %s, want the document as it stood when the LAST run started", back.Data)
 	}
 }

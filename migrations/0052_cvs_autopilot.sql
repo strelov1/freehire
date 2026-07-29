@@ -15,7 +15,7 @@
 --
 -- Both are nullable and unbackfilled — an existing CV simply has no run yet.
 --
--- Applied to a fresh volume by initdb after 0050; on an existing prod volume run this file
+-- Applied to a fresh volume by initdb after 0051; on an existing prod volume run this file
 -- manually (SET ROLE hire) BEFORE deploying code that reads it.
 
 ALTER TABLE cvs ADD COLUMN autopilot_report jsonb;

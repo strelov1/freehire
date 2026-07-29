@@ -2,8 +2,8 @@
   // The dedicated CV-tailoring workspace: a three-column surface — left panel tabbed between the
   // structured Editor and the Chat, a centre live HTML CV preview (zoom + Download PDF), and a
   // right context panel tabbed between Templates, the Job description, and the Verdict. Two modes:
-  //  - bootstrap (no ?cv): create the tailored CV + a seeded agent session, auto-start, and
-  //    store the session id on the CV so it can be re-opened.
+  //  - bootstrap (no ?cv): create the tailored CV + a seeded agent session and store the
+  //    session id on the CV. Nothing is sent: the empty chat offers two ways to start.
   //  - resume (?cv=<id>): reuse the existing CV + its stored session — re-attach, NO kickoff.
   //
   // The page owns the CV document in memory so the Editor and the centre preview share one object:
@@ -56,6 +56,8 @@
   let autopilotReport = $state<AutopilotEntry[] | undefined>(undefined);
   let autopilotRevertable = $state(false);
   let runActive = $state(false);
+  // Any turn, not just a run: "Run again" would silently do nothing while one is in flight.
+  let turnActive = $state(false);
   let undoing = $state(false);
   // The chat owns starting a turn; "Run again" beside the report reaches it through here.
   let chatRef = $state<AssistantChat>();
@@ -406,6 +408,8 @@
               requireBeta={false}
               {onTurnComplete}
               onRunStateChange={(running) => (runActive = running)}
+              onTurnStateChange={(active) => (turnActive = active)}
+              beforeTurn={flushPendingSave}
             />
           </div>
         </div>
@@ -461,7 +465,7 @@
         {analysis}
         {autopilotReport}
         autopilotRevertable={autopilotRevertable}
-        autopilotBusy={runActive || undoing}
+        autopilotBusy={turnActive || runActive || undoing}
         onRerunAutopilot={() => chatRef?.startRun()}
         onUndoAutopilot={undoAutopilot}
         {onTemplateSelected}

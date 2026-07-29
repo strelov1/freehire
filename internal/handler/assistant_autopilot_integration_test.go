@@ -337,3 +337,64 @@ func TestAnAutopilotRunSearchesEditsAndReports(t *testing.T) {
 		t.Error("the run left no snapshot; it could not be undone")
 	}
 }
+
+// A run that never reaches its own report still has to leave one. The runner's last call on
+// hitting the step cap offers NO tools, so a capped run cannot call tailor_report at all —
+// and a CV edited by a run with no report on it would show the workspace no way to undo it.
+// The server therefore lays down the requirement list as `not_reached` when the run starts;
+// whatever the agent reports later replaces it.
+func TestARunThatNeverReportsStillLeavesOne(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	// The model answers in prose and calls nothing: the run "ends" having reported nothing.
+	model := &turnModel{replies: []*llms.ContentChoice{{Content: "I had a look."}}}
+	app, h := newAssistantApp(pool, iss, model)
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-silent@example.test", true)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+	seedFitAnalysis(t, pool, userID, cvID)
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("autopilot: status %d", resp.StatusCode)
+	}
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+
+	rec, err := h.cv.cvStore.Get(context.Background(), cvID, userID)
+	if err != nil {
+		t.Fatalf("get cv: %v", err)
+	}
+	if len(rec.AutopilotReport) == 0 {
+		t.Fatal("a run that reported nothing left no report; the panel would offer no way to undo it")
+	}
+	for _, entry := range rec.AutopilotReport {
+		if entry.Status != cv.AutopilotNotReached {
+			t.Errorf("entry %q = %q, want every requirement recorded as not reached", entry.Requirement, entry.Status)
+		}
+	}
+	if !rec.AutopilotRevertable {
+		t.Error("the run left no snapshot")
+	}
+}
+
+// seedFitAnalysis caches a fit analysis for (user, job) so the run has a requirement list to
+// lay down. The vacancy is the one seedTailoringSession created for this CV.
+func seedFitAnalysis(t *testing.T, pool *pgxpool.Pool, userID int64, cvID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	var jobID int64
+	if err := pool.QueryRow(ctx, `SELECT job_id FROM cvs WHERE id = $1`, cvID).Scan(&jobID); err != nil {
+		t.Fatalf("read job id: %v", err)
+	}
+	analysis := `{"requirement_match":[
+		{"text":"Kafka in production","priority":"required","status":"missing-have"},
+		{"text":"Team leadership","priority":"preferred","status":"missing-gap"}
+	]}`
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO user_job_analysis (user_id, job_id, analysis, model)
+		 VALUES ($1, $2, $3::jsonb, 'test-model')`, userID, jobID, analysis); err != nil {
+		t.Fatalf("seed analysis: %v", err)
+	}
+}

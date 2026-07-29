@@ -2,6 +2,10 @@
   // What an unattended run did, shown above the fit analysis: one row per requirement with
   // how it was closed, plus the two things to do next — run again, or undo the whole run.
   //
+  // The block renders whether or not a run has happened. Hiding it behind "has a report"
+  // would take "Run again" away in the two states that need it most: right after an undo
+  // (which clears the report by design), and after a run that stopped before reporting.
+  //
   // This is the run's own account of itself, not a re-scored verdict: nothing here recomputes
   // the fit analysis underneath, which still measures the BASE CV against the vacancy.
   import { RotateCcw, Undo2 } from '@lucide/svelte';
@@ -33,11 +37,14 @@
   };
 </script>
 
-{#if rows.length > 0}
   <section class="mb-4 rounded-xl border border-border bg-muted/30 p-3">
     <header class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-sm font-semibold text-foreground">
-        Autopilot · {summary.closed} of {summary.total} closed
+        {#if summary.total > 0}
+          Autopilot · {summary.closed} of {summary.total} closed
+        {:else}
+          Autopilot
+        {/if}
       </h3>
       <div class="flex items-center gap-1">
         <button
@@ -85,6 +92,10 @@
         {summary.notReached} requirement{summary.notReached === 1 ? '' : 's'} were not reached — running
         again picks up from there.
       </p>
+    {:else if rows.length === 0}
+      <p class="text-sm text-muted-foreground">
+        Nothing has been run on this CV yet. A run goes through every requirement using your
+        experience bank, then comes back with what it could not close.
+      </p>
     {/if}
   </section>
-{/if}

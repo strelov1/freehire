@@ -17,6 +17,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/browsertools"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
@@ -394,7 +395,10 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if h.runner == nil || h.cv == nil || h.cv.cvStore == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	if sess.Preset != assistant.PresetTailor || sess.CVID == nil {
+	// Both bindings, not just the CV: the CV tools are registered only when the session
+	// carries a vacancy too, so a CV-only session would burn a thirty-round turn with no
+	// cv_context, no cv_edit and no way to report.
+	if sess.Preset != assistant.PresetTailor || sess.CVID == nil || sess.JobID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
 	// The owner comes from the session the ownership check just resolved, not from the
@@ -402,7 +406,42 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if err := h.cv.cvStore.SnapshotForAutopilot(c.Context(), *sess.CVID, sess.UserID); err != nil {
 		return mapCVError(err)
 	}
+	h.layDownRunPlan(c.Context(), sess)
 	return h.streamTurn(c, sess, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps})
+}
+
+// layDownRunPlan writes the vacancy's requirements onto the CV as `not_reached` before the
+// run starts, so a run that never reports still leaves one.
+//
+// It has to be the server's doing, because the agent cannot cover this case: on reaching the
+// step cap the runner makes its final call with NO tools offered, so a run that spends its
+// whole budget is exactly the run that cannot call `tailor_report`. Without the plan, the
+// worst-case run — the one that edited the CV and stopped halfway — is also the one whose
+// panel shows nothing, and therefore offers no way to undo it.
+//
+// Best-effort: a missing or unreadable analysis leaves the report as it was. The run itself
+// is worth starting either way, and the agent replaces the whole report when it reports.
+func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.Session) {
+	if h.cv.matchAnalysisCache == nil {
+		return
+	}
+	analysis, err := h.cv.cachedAnalysisCtx(ctx, sess.UserID, *sess.JobID)
+	if err != nil || analysis == nil {
+		return
+	}
+	plan := make([]cv.AutopilotEntry, 0, len(analysis.RequirementMatch))
+	for _, r := range analysis.RequirementMatch {
+		if strings.TrimSpace(r.Text) == "" {
+			continue
+		}
+		plan = append(plan, cv.AutopilotEntry{Requirement: r.Text, Status: cv.AutopilotNotReached})
+	}
+	if len(plan) == 0 {
+		return
+	}
+	if err := h.cv.cvStore.SetAutopilotReport(ctx, *sess.CVID, sess.UserID, plan); err != nil {
+		log.Printf("assistant: could not lay down the run plan cv=%s: %v", sess.CVID, err)
+	}
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.

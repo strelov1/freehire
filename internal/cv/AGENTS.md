@@ -57,3 +57,14 @@ Three rules the code encodes rather than documents:
 
 The snapshot is taken fresh at the start of EVERY run, so "undo the run" always means the
 document as the last run found it.
+
+Two known edges, both deliberate:
+
+- **Runs are not serialised per CV.** Two runs started at once (a double click, two tabs) each
+  snapshot, and the second captures a half-edited document — so undoing returns to the middle of
+  the first run. The workspace disables its entry points while a turn is in flight; a server-side
+  lock is machinery this has not yet earned.
+- **A run lays down its own plan.** The handler writes the vacancy's requirements as
+  `not_reached` before the turn starts, because a run that exhausts the step cap gets its final
+  model call with no tools offered and therefore cannot report. The agent's report replaces the
+  plan wholesale.

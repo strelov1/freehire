@@ -106,4 +106,4 @@ WHERE id = $1 AND user_id = $2;
 UPDATE cvs
 SET data = autopilot_undo, autopilot_undo = NULL, autopilot_report = NULL, updated_at = now()
 WHERE id = $1 AND user_id = $2 AND autopilot_undo IS NOT NULL
-RETURNING id, title, template_id, data, created_at, updated_at;
+RETURNING id, title, template_id, created_at, updated_at;

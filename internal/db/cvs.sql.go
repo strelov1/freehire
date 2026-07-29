@@ -300,7 +300,7 @@ const revertCVAutopilot = `-- name: RevertCVAutopilot :one
 UPDATE cvs
 SET data = autopilot_undo, autopilot_undo = NULL, autopilot_report = NULL, updated_at = now()
 WHERE id = $1 AND user_id = $2 AND autopilot_undo IS NOT NULL
-RETURNING id, title, template_id, data, created_at, updated_at
+RETURNING id, title, template_id, created_at, updated_at
 `
 
 type RevertCVAutopilotParams struct {
@@ -312,7 +312,6 @@ type RevertCVAutopilotRow struct {
 	ID         uuid.UUID          `json:"id"`
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
-	Data       []byte             `json:"data"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
@@ -328,7 +327,6 @@ func (q *Queries) RevertCVAutopilot(ctx context.Context, arg RevertCVAutopilotPa
 		&i.ID,
 		&i.Title,
 		&i.TemplateID,
-		&i.Data,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

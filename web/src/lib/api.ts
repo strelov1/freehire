@@ -1328,15 +1328,6 @@ export function createApi(
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
   }
 
-  /**
-   * Run the tailoring unattended on a tailoring conversation: the server owns the brief and
-   * the turn's ceiling, and snapshots the CV before the first edit so the run can be undone.
-   * Streams as SSE exactly like an ordinary turn — callers read it through the same reader.
-   */
-  function autopilotUrl(sessionId: string): string {
-    return `${baseUrl}/api/v1/assistant/sessions/${sessionId}/autopilot`;
-  }
-
   /** Undo a whole autopilot run: restores the pre-run document and clears the run's report.
    *  409 when there is no run to undo. */
   async function undoAutopilotRun(cvId: string): Promise<CvMeta> {
@@ -1571,7 +1562,6 @@ export function createApi(
     cvPdfUrl,
     tailorCv,
     startTailorSession,
-    autopilotUrl,
     undoAutopilotRun,
     listThreads,
     countThreads,

@@ -54,6 +54,8 @@
     sessionLabel = undefined,
     onTurnComplete = undefined,
     onRunStateChange = undefined,
+    onTurnStateChange = undefined,
+    beforeTurn = undefined,
     onSessionChange = undefined,
     showSessionRail = true,
     requireBeta = false,
@@ -68,6 +70,13 @@
      *  the duration: a run rewrites the same document the editor holds and saves on a
      *  debounce, and whoever writes last would silently win. */
     onRunStateChange?: (running: boolean) => void;
+    /** Told when ANY turn starts and ends, so a host can disable what a running turn would
+     *  make a no-op. `onRunStateChange` is the narrower signal: only unattended runs. */
+    onTurnStateChange?: (active: boolean) => void;
+    /** Awaited before a turn is started. The tailoring host writes its pending edit here: a
+     *  debounce armed a moment ago would otherwise fire mid-turn and overwrite what the agent
+     *  wrote — and the run's pre-run snapshot would be taken without that edit in it. */
+    beforeTurn?: () => Promise<void>;
     onSessionChange?: (id: string) => void;
     showSessionRail?: boolean;
     requireBeta?: boolean;
@@ -433,6 +442,7 @@
   function endTurn() {
     turnActive = false;
     turn = null;
+    onTurnStateChange?.(false);
     if (runActive) {
       runActive = false;
       onRunStateChange?.(false);
@@ -487,6 +497,16 @@
     if (!id) return;
     error = null;
     turnActive = true;
+    onTurnStateChange?.(true);
+    // Before anything reaches the server: the host may be holding an edit on a timer, and
+    // the run is about to snapshot and rewrite the very document that edit belongs to.
+    if (beforeTurn) {
+      try {
+        await beforeTurn();
+      } catch {
+        /* the host reports its own save failures; a turn is still worth starting */
+      }
+    }
     let started: Turn;
     if (text === undefined) {
       runActive = true;

@@ -52,8 +52,12 @@ the agent the candidate then talks to would not know what it had just done. Keep
 turn reuses the transcript, the SSE event stream, the tool registry and the cancellation path, and
 costs one prompt section plus one new tool.
 
-The known weakness is that the model may stop early. It is mitigated, not hidden: the report shows
-`not_reached` for what it never got to, and "Run again" continues from there.
+The known weakness is that the model may stop early. It is mitigated by the SERVER, not by the
+prompt: on reaching the ceiling `Runner.Run` makes its final call with no tools offered, so a
+run that spends its whole budget is precisely the one that cannot call `tailor_report`. The
+endpoint therefore lays the requirement list down as `not_reached` before the turn starts, and
+the agent's own report replaces it. Without that, the worst-case run — edited the CV, stopped
+halfway — would be the one whose panel shows nothing and offers no way back.
 
 ### A dedicated endpoint owns the brief and the ceiling
 
@@ -80,7 +84,7 @@ the log only in the chat (it scrolls away in three messages).
 
 ### The report is stored on the CV, replaced whole
 
-Two `jsonb` columns on `cvs` (migration `0051`): `autopilot_report` and `autopilot_undo`. The panel
+Two `jsonb` columns on `cvs` (migration `0052`): `autopilot_report` and `autopilot_undo`. The panel
 must render after a reload, and it should not have to parse a transcript to do it. The CV read already
 happens after every turn (`onTurnComplete` → `getCv`), so the report rides along with no new endpoint.
 
@@ -103,6 +107,10 @@ longer exist. The revert is the whole episode, not just its text.
 - **Thirty rounds is a bigger bill per click than any turn today** → The ceiling is server-owned and
   reachable only through this endpoint, on tailoring sessions, one run at a time per click. If the cost
   proves material, the debit seam is already named.
+- **Two runs at once on one CV** → The second snapshot captures a half-edited document, so undo
+  returns to the middle of the first run. The client disables both entry points while a turn is in
+  flight; the server does not serialise runs, because a per-CV lock is machinery this feature has
+  not yet earned. Documented in `internal/cv/AGENTS.md` as a known edge.
 - **The editor lock is a coarse instrument** → It blocks a tab for a minute or two of run time. The
   alternative — reconciling two writers on one document — is a much larger change than this feature
   earns, and the lock makes the existing race visible rather than introducing it.
@@ -114,7 +122,7 @@ longer exist. The revert is the whole episode, not just its text.
 
 ## Migration Plan
 
-Migration `0051` adds two nullable `jsonb` columns; existing rows read as "no run yet" and the panel
+Migration `0052` adds two nullable `jsonb` columns; existing rows read as "no run yet" and the panel
 falls back to the plain Verdict tab. Nothing backfills. Deploy is migration-first, per the repository's
 standing rule that a migration lands before the code that reads it. Rollback is the reverse: the
 endpoints stop being called, the columns are inert, and no other behaviour depends on them — except the
