@@ -10,6 +10,7 @@
   // typing re-renders the preview instantly, autosave persists in the background, and an agent turn
   // refetches and replaces the document.
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
@@ -154,13 +155,22 @@
           sessionId = s.session_id;
         }
       } else {
-        // Bootstrap: create the tailored CV + a seeded session, then bind the session to the CV.
+        // Bootstrap: reach the tailored CV for this vacancy (the backend returns the existing
+        // one when there is one) and the conversation bound to it.
         const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
         job = j;
         cvId = tailor.tailor_cv_id;
         analysis = tailor.analysis;
         sessionId = tailor.session_id;
-        await loadCv(); // bootstrap has no CV record in hand yet — fetch the fresh tailored copy
+        await loadCv(); // bootstrap has no CV record in hand yet — fetch the tailored copy
+        // Put the CV in the address, replacing this entry rather than adding one. A reload of
+        // the bare /tailor/<slug> is a bootstrap request, and until the address names the CV
+        // the candidate is one F5 away from an empty workspace. Back still leaves the page.
+        void goto(`${resolve('/tailor/[slug]', { slug })}?cv=${cvId}`, {
+          replaceState: true,
+          noScroll: true,
+          keepFocus: true,
+        });
       }
       status = 'ready';
     } catch (e) {

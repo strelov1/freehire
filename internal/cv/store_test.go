@@ -285,3 +285,26 @@ func (f *fakeRepo) RevertAutopilot(_ context.Context, id uuid.UUID, userID int64
 	f.rows[id] = r
 	return db.RevertCVAutopilotRow{ID: id, Title: r.title, TemplateID: r.templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
+
+func (f *fakeRepo) GetTailoredForJob(_ context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
+	// Newest by insertion order, mirroring the query's `updated_at DESC, id DESC`.
+	var bestID uuid.UUID
+	var best *fakeRow
+	for id, r := range f.rows {
+		row := r
+		if row.userID != userID || row.jobID != jobID {
+			continue
+		}
+		if best == nil || row.seq > best.seq {
+			best, bestID = &row, id
+		}
+	}
+	if best == nil {
+		return db.GetTailoredCVForJobRow{}, pgx.ErrNoRows
+	}
+	return db.GetTailoredCVForJobRow{
+		ID: bestID, Title: best.title, TemplateID: best.templateID, Data: best.data,
+		AgentSessionID: pgtype.Text{String: best.sessionID, Valid: best.sessionID != ""},
+		CreatedAt:      stamp(), UpdatedAt: stamp(),
+	}, nil
+}

@@ -107,3 +107,14 @@ UPDATE cvs
 SET data = autopilot_undo, autopilot_undo = NULL, autopilot_report = NULL, updated_at = now()
 WHERE id = $1 AND user_id = $2 AND autopilot_undo IS NOT NULL
 RETURNING id, title, template_id, created_at, updated_at;
+
+-- name: GetTailoredCVForJob :one
+-- The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
+-- reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
+-- same request again: without this read every refresh minted another copy and stranded the
+-- conversation bound to the previous one.
+SELECT id, title, template_id, data, agent_session_id, created_at, updated_at
+FROM cvs
+WHERE user_id = $1 AND job_id = $2
+ORDER BY updated_at DESC, id DESC
+LIMIT 1;

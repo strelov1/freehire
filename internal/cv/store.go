@@ -77,6 +77,7 @@ type Repository interface {
 	SnapshotForAutopilot(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
 	SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error)
 	RevertAutopilot(ctx context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error)
+	GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error)
 }
 
 // Seeder provides the user's extracted résumé, used to seed a base CV when they have none.
@@ -321,11 +322,32 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 		}
 		base = Record{Meta: meta, Document: doc}
 	}
+	// One tailored copy per vacancy. The workspace's address carries no CV reference, so a
+	// reload re-runs this exact request; minting a second copy leaves the candidate's
+	// conversation bound to the first one, which is what "my chat disappeared" looks like.
+	if existing, err := s.tailoredForJob(ctx, userID, jobID); err == nil {
+		return base.Meta, existing, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return Meta{}, Meta{}, err
+	}
+
 	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, base.Document)
 	if err != nil {
 		return Meta{}, Meta{}, err
 	}
 	return base.Meta, tailored, nil
+}
+
+// tailoredForJob returns the user's existing tailored copy for a vacancy, or ErrNotFound.
+func (s *Store) tailoredForJob(ctx context.Context, userID, jobID int64) (Meta, error) {
+	row, err := s.repo.GetTailoredForJob(ctx, userID, jobID)
+	if err != nil {
+		return Meta{}, mapNotFound(err)
+	}
+	return Meta{
+		ID: row.ID, Title: row.Title, TemplateID: row.TemplateID,
+		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+	}, nil
 }
 
 // defaultBaseTitle names a base CV seeded from the résumé (the user can rename it later).
@@ -414,4 +436,10 @@ func (r queriesRepository) SetAutopilotReport(ctx context.Context, id uuid.UUID,
 
 func (r queriesRepository) RevertAutopilot(ctx context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error) {
 	return r.q.RevertCVAutopilot(ctx, db.RevertCVAutopilotParams{ID: id, UserID: userID})
+}
+
+func (r queriesRepository) GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
+	return r.q.GetTailoredCVForJob(ctx, db.GetTailoredCVForJobParams{
+		UserID: userID, JobID: pgtype.Int8{Int64: jobID, Valid: true},
+	})
 }

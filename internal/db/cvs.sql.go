@@ -200,6 +200,48 @@ func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByID
 	return i, err
 }
 
+const getTailoredCVForJob = `-- name: GetTailoredCVForJob :one
+SELECT id, title, template_id, data, agent_session_id, created_at, updated_at
+FROM cvs
+WHERE user_id = $1 AND job_id = $2
+ORDER BY updated_at DESC, id DESC
+LIMIT 1
+`
+
+type GetTailoredCVForJobParams struct {
+	UserID int64       `json:"user_id"`
+	JobID  pgtype.Int8 `json:"job_id"`
+}
+
+type GetTailoredCVForJobRow struct {
+	ID             uuid.UUID          `json:"id"`
+	Title          string             `json:"title"`
+	TemplateID     string             `json:"template_id"`
+	Data           []byte             `json:"data"`
+	AgentSessionID pgtype.Text        `json:"agent_session_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+// The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
+// reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
+// same request again: without this read every refresh minted another copy and stranded the
+// conversation bound to the previous one.
+func (q *Queries) GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error) {
+	row := q.db.QueryRow(ctx, getTailoredCVForJob, arg.UserID, arg.JobID)
+	var i GetTailoredCVForJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.TemplateID,
+		&i.Data,
+		&i.AgentSessionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listCVsByUser = `-- name: ListCVsByUser :many
 SELECT id, title, template_id, created_at, updated_at
 FROM cvs

@@ -74,9 +74,19 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	sessionID, err := h.startTailoringSession(c.Context(), userID, tailored.ID, job.ID)
+	// A reload of /tailor/<slug> re-runs this request. The CV it reaches is the one that
+	// already exists (Tailor is idempotent per vacancy), so its conversation must be reached
+	// too — minting a second session here would rebind the CV and orphan everything the
+	// candidate had already said, which is exactly what "my chat disappeared" was.
+	sessionID, err := h.existingTailoringSession(c.Context(), userID, tailored.ID)
 	if err != nil {
 		return err
+	}
+	if sessionID == "" {
+		sessionID, err = h.startTailoringSession(c.Context(), userID, tailored.ID, job.ID)
+		if err != nil {
+			return err
+		}
 	}
 	// Charge the tailor cost only once the session is fully minted, so a mint failure never
 	// leaves the caller charged for an unusable session (a retry would mint a new CV id and
@@ -89,6 +99,30 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
 		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
 	}})
+}
+
+// existingTailoringSession reports the conversation already bound to a tailored CV, or "" when
+// it has none. A session id that no longer resolves to a live conversation counts as none: the
+// binding is text on the CV, and a deleted conversation must not strand the workspace.
+func (h *cvHandlers) existingTailoringSession(ctx context.Context, userID int64, cvID uuid.UUID) (string, error) {
+	rec, err := h.cvStore.Get(ctx, cvID, userID)
+	if err != nil {
+		return "", mapCVError(err)
+	}
+	if rec.AgentSessionID == "" {
+		return "", nil
+	}
+	if h.assistantSessions == nil {
+		return rec.AgentSessionID, nil
+	}
+	id, err := uuid.Parse(rec.AgentSessionID)
+	if err != nil {
+		return "", nil
+	}
+	if _, err := h.assistantSessions.Session(ctx, id, userID); err != nil {
+		return "", nil
+	}
+	return rec.AgentSessionID, nil
 }
 
 // tailorSessionResponse re-establishes a tailoring session for an EXISTING tailored CV (one

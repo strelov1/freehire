@@ -43,7 +43,9 @@ type CanonicalJobForRoleRow struct {
 // agree rather than fight.
 // A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
 // that no reader expects. The row being written is excluded by its own dedup identity, because
-// a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+// a re-import of the same URL would otherwise find itself. Served by the partial
+// jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
+// non-partial fallback.
 func (q *Queries) CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error) {
 	row := q.db.QueryRow(ctx, canonicalJobForRole,
 		arg.CompanySlug,

@@ -123,3 +123,41 @@ func TestStoreTailorUsesExistingBaseUntouched(t *testing.T) {
 		t.Errorf("tailored doc != base doc")
 	}
 }
+
+// Tailoring the SAME vacancy twice must reach the same tailored CV.
+//
+// The workspace opens at /tailor/<slug>, and without a `?cv` reference that address is a
+// bootstrap. So every reload used to mint another copy: three CVs for one vacancy in half an
+// hour on production, each with its own empty conversation, and the candidate's actual chat
+// stranded on the first of them. The bootstrap is the same request either way — it has to be
+// idempotent per (user, vacancy).
+func TestStoreTailorReturnsTheExistingCopyForTheSameVacancy(t *testing.T) {
+	repo := newFakeRepo()
+	s := NewStore(repo)
+	ctx := context.Background()
+
+	if _, err := s.Create(ctx, 7, "My CV", DefaultTemplateID, Document{Summary: "base"}); err != nil {
+		t.Fatalf("seed base: %v", err)
+	}
+
+	_, first, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false})
+	if err != nil {
+		t.Fatalf("first tailor: %v", err)
+	}
+	_, second, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false})
+	if err != nil {
+		t.Fatalf("second tailor: %v", err)
+	}
+	if first.ID != second.ID {
+		t.Errorf("second bootstrap made a new CV (%s vs %s); the candidate's conversation is bound to the first", second.ID, first.ID)
+	}
+
+	// A DIFFERENT vacancy still gets its own copy.
+	_, other, err := s.Tailor(ctx, 7, 200, "Tailored", fakeSeeder{ok: false})
+	if err != nil {
+		t.Fatalf("other tailor: %v", err)
+	}
+	if other.ID == first.ID {
+		t.Error("a second vacancy reused the first vacancy's tailored CV")
+	}
+}

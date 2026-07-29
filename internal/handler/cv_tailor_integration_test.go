@@ -427,3 +427,71 @@ func cvScopedKey(t *testing.T, h *cvHandlers, userID int64) string {
 	}
 	return token
 }
+
+// Reloading /tailor/<slug> re-runs the bootstrap: the address carries no CV reference, so the
+// page asks for a tailored CV again. That must reach the SAME CV and the SAME conversation —
+// three CVs appeared on one vacancy in half an hour on production, each with an empty chat,
+// because every refresh minted another copy and rebound the session.
+func TestTailorCVBootstrapIsIdempotentPerVacancy(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	app := buildTailorApp(h, iss)
+
+	user := seedAccount(t, pool, "tailor-reload@example.test", true)
+	tok, _ := iss.Issue(user, testTokenVersion)
+	jobID := seedJobSlug(t, pool, "backend-eng")
+	seedAnalysis(t, h, user, jobID)
+	seedFreshResume(t, pool, user)
+
+	bootstrap := func() tailorCVResponse {
+		t.Helper()
+		resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"})
+		if resp.StatusCode != fiber.StatusCreated {
+			t.Fatalf("bootstrap = %d, want 201", resp.StatusCode)
+		}
+		var got struct {
+			Data tailorCVResponse `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&got)
+		resp.Body.Close()
+		return got.Data
+	}
+
+	first := bootstrap()
+	// Something was said in that conversation, so losing it would be losing real work.
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO assistant_messages (session_id, seq, role, content)
+		 VALUES ($1, 1, 'user', '{"text":"tailor it for me"}'::jsonb)`, first.SessionID); err != nil {
+		t.Fatalf("seed a message: %v", err)
+	}
+
+	second := bootstrap()
+
+	if second.TailorCVID != first.TailorCVID {
+		t.Errorf("reload made a new CV (%s vs %s)", second.TailorCVID, first.TailorCVID)
+	}
+	if second.SessionID != first.SessionID {
+		t.Errorf("reload rebound the conversation (%s vs %s) — the candidate's messages are on the old one", second.SessionID, first.SessionID)
+	}
+
+	var cvs, sessions int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT (SELECT count(*) FROM cvs WHERE user_id = $1 AND job_id = $2),
+		        (SELECT count(*) FROM assistant_sessions WHERE user_id = $1 AND job_id = $2)`,
+		user, jobID).Scan(&cvs, &sessions); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if cvs != 1 || sessions != 1 {
+		t.Errorf("after two bootstraps: %d CVs and %d sessions, want one of each", cvs, sessions)
+	}
+
+	// And the debit happened once, not twice.
+	var debits int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM credit_ledger WHERE user_id = $1 AND kind = 'debit' AND feature = 'tailor'`,
+		user).Scan(&debits); err != nil {
+		t.Fatalf("count debits: %v", err)
+	}
+	if debits != 1 {
+		t.Errorf("tailor debits = %d, want 1 — a reload is not a second purchase", debits)
+	}
+}

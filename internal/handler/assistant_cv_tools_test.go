@@ -63,6 +63,13 @@ func (r *cvRepo) ListTailored(context.Context, int64) ([]db.ListTailoredCVsByUse
 	return nil, nil
 }
 
+func (r *cvRepo) GetTailoredForJob(_ context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
+	if userID != r.userID || jobID != r.jobID {
+		return db.GetTailoredCVForJobRow{}, pgx.ErrNoRows
+	}
+	return db.GetTailoredCVForJobRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data}, nil
+}
+
 func (r *cvRepo) SnapshotForAutopilot(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
 	if id != r.id || userID != r.userID {
 		return 0, nil

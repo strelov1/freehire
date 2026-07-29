@@ -76,7 +76,9 @@ type Querier interface {
 	// agree rather than fight.
 	// A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
 	// that no reader expects. The row being written is excluded by its own dedup identity, because
-	// a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+	// a re-import of the same URL would otherwise find itself. Served by the partial
+	// jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
+	// non-partial fallback.
 	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
 	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
 	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
@@ -727,6 +729,11 @@ type Querier interface {
 	// channel's live recipient), and the user's linked Telegram chat (NULL when
 	// unlinked → the worker soft-skips telegram delivery rather than failing it).
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
+	// The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
+	// reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
+	// same request again: without this read every refresh minted another copy and stranded the
+	// conversation bound to the previous one.
+	GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
