@@ -272,6 +272,36 @@ ghost level is `none`, the reality badge renders unchanged.
 - **WHEN** a job is `likely-evergreen` and its ghost level is `none`
 - **THEN** the reality badge renders exactly as before
 
+### Requirement: The report dialog routes a no-response complaint to the evidence channel
+
+The existing "Report this job" dialog SHALL, when the user picks the `no_response` reason, ask
+when they applied and file a ghost report, rather than filing a moderation-queue report. The
+other four reasons SHALL continue to reach the moderation queue unchanged.
+
+One dialog, two destinations, and the user is told neither: they are describing what happened to
+them, not choosing a routing. Today `no_response` reaches a queue whose only lever is closing the
+job — a person says "nobody answered me" and the only available response is to delete the posting,
+which helps nobody and is why such reports accumulate undecided.
+
+The apply date is what the reason was always missing. Without it a no-response complaint cannot be
+told from impatience, which is precisely why it could never be more than a moderator's judgement
+call.
+
+#### Scenario: No-response becomes evidence
+
+- **WHEN** a user picks `no_response` and states when they applied
+- **THEN** a ghost report is filed for that job and no moderation-queue report is created
+
+#### Scenario: The other reasons are unchanged
+
+- **WHEN** a user picks `not_relevant`, `spam`, `fraud` or `other`
+- **THEN** a moderation-queue report is filed exactly as before
+
+#### Scenario: The dialog asks for a date it can use
+
+- **WHEN** a user picks `no_response`
+- **THEN** the dialog asks for the apply date before it will submit, and refuses a future date
+
 ### Requirement: The verdict is computed on read and never stored
 
 The system SHALL compute the ghost signal at read time from the evidence, and MUST NOT persist the

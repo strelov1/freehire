@@ -54,15 +54,17 @@ type FileInput struct {
 }
 
 // validate normalizes and checks the input, returning a trimmed copy ready to persist. A
-// reason outside the vocabulary, blank details, or over-long details is ErrInvalid.
+// reason outside the vocabulary or over-long details is ErrInvalid.
+//
+// Details are OPTIONAL, and blank is stored as absent rather than refused. The reason
+// vocabulary already states what is wrong, so the free text is elaboration — and a
+// mandatory elaboration mostly collects whatever a reporter types to get past the field,
+// which is worse than an empty one because it reaches a moderator looking like evidence.
 func (in FileInput) validate() (FileInput, error) {
 	if !validReasons[in.Reason] {
 		return FileInput{}, fmt.Errorf("%w: unknown reason %q", ErrInvalid, in.Reason)
 	}
 	details := strings.TrimSpace(in.Details)
-	if details == "" {
-		return FileInput{}, fmt.Errorf("%w: details are required", ErrInvalid)
-	}
 	if len(details) > maxDetailsLen {
 		return FileInput{}, fmt.Errorf("%w: details too long", ErrInvalid)
 	}

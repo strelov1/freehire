@@ -25,12 +25,23 @@ source is). The aggregator is then testable without a database.
 ## 3. The report channel
 
 - [x] 3.1 Migration `0051_ghost_job_signal.sql` — DONE IN GROUP 2, which needed the table for `ListGhostReportEvidence`. Creates `ghost_reports` (`UNIQUE (user_id, job_id)`, `applied_on`, `retracted_at`, cascading FKs, partial index on live rows) and `jobs.ats_absent_at`. One migration: they ship together, and the column must exist before any generated `SELECT` reads it.
-- [ ] 3.2 Add failing tests in `internal/ghostreport`: `applied_on` in the future or over 12 months old is invalid; a claim under 21 days old is stored but yields no evidence; a retracted report yields none.
-- [ ] 3.3 Write `internal/ghostreport` — a Fiber-free, pgx-free service owning validation, the maturity rule and retraction, over a repository interface. Follow `internal/report`'s shape.
+- [x] 3.2 Add failing tests in `internal/ghostreport`: `applied_on` in the future or over 12 months old is invalid; a claim under 21 days old is stored but yields no evidence; a retracted report yields none.
+- [x] 3.3 Write `internal/ghostreport` — a Fiber-free, pgx-free service owning validation, the maturity rule and retraction, over a repository interface. Follow `internal/report`'s shape.
 - [ ] 3.4 Add failing handler integration tests in `internal/handler`: 201 on file; 409 on a duplicate; 409 on a closed job; 403 for an unverified email; 429 past the daily cap; 204 on retract; unauthenticated is 401.
 - [ ] 3.5 Write `internal/handler/ghost_reports.go` and register `POST`/`DELETE /jobs/:slug/ghost-report` behind `RequireAuthOrKey`. Retraction returns **204**, never `SendStatus(200)` — that writes the body `OK` and breaks JSON clients on a call that succeeded.
 - [ ] 3.6 Add the queries to `internal/db/queries/ghost_reports.sql` and run `make sqlc`; map the unique violation to the conflict error in the repository, as `job_reports` does.
 - [ ] 3.7 `go test ./internal/ghostreport/... ./internal/handler/...` and the integration suite green.
+
+## 3b. The report dialog
+
+Added after the dialog was reviewed against this work: `no_response` is the ghost intent, and it
+has been landing in a queue whose only verdict is closing the job.
+
+- [x] 3b.1 Add a failing test in `internal/report` that a report with blank or absent `details` is accepted, and that over-long details are still refused. Then drop the required-details rule from `FileInput.validate`.
+- [x] 3b.2 Update `openspec` — done: `job-report` gains the optional-`details` requirement, `ghost-job-signal` gains the dialog-routing requirement.
+- [ ] 3b.3 In `ReportDialog.svelte`, route `no_response` to a date step that files a ghost report; leave the other four reasons on the moderation path.
+- [x] 3b.4 Make "What's wrong?" optional in the dialog ("Tell us more"), drop its `*`, and remove the "Telegram for follow-up" field. The API keeps `contact_telegram` — it is documented and reachable by third-party clients, so it is not orphaned by the SPA dropping it.
+- [ ] 3b.5 `go test ./internal/report/... ./internal/handler/...` and `pnpm test && pnpm lint` in `web/` green.
 
 ## 4. The ATS cross-check
 

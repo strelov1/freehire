@@ -155,18 +155,36 @@ func TestReportsEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid reason and blank details are 400", func(t *testing.T) {
-		for _, body := range []string{
-			`{"reason":"because","details":"x"}`,
-			`{"reason":"spam","details":"   "}`,
-		} {
-			resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user1Cookie, body))
-			if err != nil {
-				t.Fatalf("bad file: %v", err)
-			}
-			if resp.StatusCode != fiber.StatusBadRequest {
-				t.Errorf("body %s: status = %d, want 400", body, resp.StatusCode)
-			}
+	t.Run("an out-of-vocabulary reason is 400", func(t *testing.T) {
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user1Cookie,
+			`{"reason":"because","details":"x"}`))
+		if err != nil {
+			t.Fatalf("bad file: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Errorf("status = %d, want 400", resp.StatusCode)
+		}
+	})
+
+	// The reason already says what is wrong; the free text is elaboration, and
+	// elaboration is voluntary. Blank is stored as absent rather than refused, so a
+	// moderator never meets whitespace typed to get past a required field.
+	t.Run("a reason with blank details is accepted and stored empty", func(t *testing.T) {
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user2Cookie,
+			`{"reason":"spam","details":"   "}`))
+		if err != nil {
+			t.Fatalf("file without details: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusCreated {
+			t.Fatalf("status = %d, want 201", resp.StatusCode)
+		}
+		id := decodeID(t, resp)
+		var details string
+		if err := pool.QueryRow(ctx, "SELECT details FROM job_reports WHERE id = $1", id).Scan(&details); err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if details != "" {
+			t.Errorf("details = %q, want empty", details)
 		}
 	})
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, Send, ShieldAlert, X } from '@lucide/svelte';
+  import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert, X } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { reportReasons } from '$lib/reports';
   import type { ReportReason } from '$lib/types';
@@ -10,12 +10,11 @@
   // parent owns open/close; this component owns the two-step flow within.
   let { slug, onClose }: { slug: string; onClose: () => void } = $props();
 
-  // step 'reason' picks one of the controlled reasons; 'details' collects the
-  // required explanation + optional contact; 'done' is the post-submit thank-you.
+  // step 'reason' picks one of the controlled reasons; 'details' collects an
+  // optional elaboration; 'done' is the post-submit thank-you.
   let step = $state<'reason' | 'details' | 'done'>('reason');
   let reason = $state<ReportReason | null>(null);
   let details = $state('');
-  let contactTelegram = $state('');
   let submitting = $state(false);
   let error = $state<string | null>(null);
 
@@ -38,7 +37,6 @@
   function messageFor(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 409) return 'You already have an open report for this job.';
-      if (e.status === 400) return 'Please describe what is wrong.';
       if (e.status === 401) return 'Please sign in to report a job.';
     }
     return 'Something went wrong. Please try again.';
@@ -50,11 +48,7 @@
     error = null;
     submitting = true;
     try {
-      await api.reportJob(slug, {
-        reason,
-        details,
-        contact_telegram: contactTelegram.trim() || undefined,
-      });
+      await api.reportJob(slug, { reason, details });
       step = 'done';
     } catch (err) {
       error = messageFor(err);
@@ -120,31 +114,20 @@
           <ArrowLeft class="size-4" /> Back
         </button>
 
+        <!-- Optional by design: the reason already says what is wrong, so this is
+             elaboration. A required field mostly collects whatever gets typed to
+             pass it, which reaches a moderator looking like evidence. -->
         <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">What's wrong? <span class="text-destructive">*</span></span>
+          <span class="font-medium">Tell us more</span>
           <span class="text-xs text-muted-foreground">
-            A line or two helps us review it faster and protect other users.
+            Optional — a line or two helps us review it faster.
           </span>
           <textarea
             bind:value={details}
-            required
             rows="4"
-            placeholder="Describe what's wrong…"
+            placeholder="Anything else we should know…"
             class="mt-1 resize-y rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           ></textarea>
-        </label>
-
-        <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">Telegram for follow-up</span>
-          <span class="relative">
-            <Send class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              bind:value={contactTelegram}
-              placeholder="username or link"
-              class="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </span>
         </label>
 
         {#if error}

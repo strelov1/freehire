@@ -124,6 +124,27 @@ func TestFile_TrimsDetailsAndContact(t *testing.T) {
 	}
 }
 
+// The reason vocabulary already says what is wrong, so an explanation is
+// elaboration rather than the report itself. A mandatory field mostly collects
+// whatever gets past it, which is worse than an empty one: it reads as evidence.
+func TestFile_AcceptsAReasonWithoutDetails(t *testing.T) {
+	for _, details := range []string{"", "   "} {
+		repo := &fakeRepo{}
+		_, err := report.New(repo, &fakeCloser{}).File(context.Background(), 7, 1,
+			report.FileInput{Reason: "spam", Details: details})
+		if err != nil {
+			t.Fatalf("details %q: File: %v", details, err)
+		}
+		if !repo.createCalled {
+			t.Errorf("details %q: the report was not stored", details)
+		}
+		if repo.created.Details != "" {
+			t.Errorf("details %q: stored as %q, want empty — blank is absent, not content",
+				details, repo.created.Details)
+		}
+	}
+}
+
 func TestFile_ValidatesBeforePersist(t *testing.T) {
 	cases := []struct {
 		name string
@@ -131,8 +152,6 @@ func TestFile_ValidatesBeforePersist(t *testing.T) {
 	}{
 		{"empty reason", report.FileInput{Reason: "", Details: "d"}},
 		{"unknown reason", report.FileInput{Reason: "because", Details: "d"}},
-		{"missing details", report.FileInput{Reason: "spam", Details: ""}},
-		{"blank details", report.FileInput{Reason: "spam", Details: "   "}},
 		{"details too long", report.FileInput{Reason: "spam", Details: strings.Repeat("x", 5001)}},
 	}
 	for _, tc := range cases {
