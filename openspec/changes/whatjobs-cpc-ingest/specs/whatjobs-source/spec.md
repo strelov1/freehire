@@ -64,6 +64,32 @@ carry that segment SHALL be skipped rather than stored under a guessed id.
 - **WHEN** a posting's url does not contain a `pub_api__cpl__<digits>__<digits>` segment
 - **THEN** that posting is not returned as a job
 
+#### Scenario: A page where nothing carries an id fails the board
+
+- **WHEN** a page returns postings and not one of them carries a recognizable native id
+- **THEN** the board's crawl fails with an error naming the keyword, rather than reporting an empty
+  result — a provider credited with zero ingested jobs is skipped by the unseen sweep, so a silent
+  empty would leave every existing row open indefinitely with nothing refreshing it
+
+### Requirement: A blank keyword is refused rather than crawled
+
+The system MUST NOT request the feed when the board's keyword is empty or whitespace-only, and SHALL
+fail that board with an error naming the company. The feed answers a blank keyword with its entire
+unfiltered inventory — tens of thousands of postings, most not technical — so one padded board entry
+would otherwise pour that into the catalogue. Config validation rejects only a strictly empty board,
+which is why the adapter checks after trimming. A keyword padded with surrounding whitespace is a
+real keyword and SHALL be sent trimmed.
+
+#### Scenario: A whitespace-only keyword issues no request
+
+- **WHEN** a board entry's keyword is `"   "`
+- **THEN** the crawl fails for that entry and no feed request is made
+
+#### Scenario: A padded keyword is trimmed and used
+
+- **WHEN** a board entry's keyword is `"  golang  "`
+- **THEN** the feed is queried for `golang`
+
 ### Requirement: The feed's junk fields are discarded rather than stored
 
 The system SHALL ignore the feed's `salary`, `job_type` and `logo` fields, which carry no

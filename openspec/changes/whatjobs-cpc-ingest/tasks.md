@@ -37,3 +37,9 @@
 - [x] 6.1 Run `go build ./... && go vet ./... && go test ./...` green
 - [x] 6.2 Run one live board end to end against the real feed with the publisher id set, and confirm the stored rows: description free of the reseller signature, no salary, unset posted date, URL intact, country present
 - [x] 6.3 Document the provider in `internal/sources/AGENTS.md` — the keyword-as-board shape, the env-only publisher id, and the two feed traps (slash in `user_agent`, `limit=1` with a keyword)
+
+## 7. Review findings
+
+- [x] 7.1 Refuse a blank (whitespace-only) keyword before any request — config validation only rejects a strictly empty board, and the feed answers a blank keyword with its whole unfiltered inventory (32k postings for `"   "`, 560k for `""`)
+- [x] 7.2 Send the keyword trimmed, so a padded board entry still crawls the intended slice
+- [x] 7.3 Fail the board when a page returns postings but none carries a recognizable native id — a silent empty result would be invisible, since a provider with zero ingested jobs is skipped by the sweep and its rows would stay open forever

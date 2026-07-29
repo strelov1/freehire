@@ -279,6 +279,73 @@ func TestWhatJobsRegisteredOnlyWhenPublisherSet(t *testing.T) {
 	}
 }
 
+// A keyword that is blank after trimming must never be sent. Config validation only rejects an
+// EMPTY board, so an entry holding spaces slips through — and the feed answers a blank keyword with
+// its entire unfiltered inventory (32k postings for "   ", 560k for ""), which a single stray board
+// entry would pour into the catalogue. The adapter refuses instead of crawling.
+func TestWhatJobsRefusesABlankKeyword(t *testing.T) {
+	for _, board := range []string{"", "   ", "\t\n"} {
+		fake := (&recordingJSON{}).route("jobs.json", whatjobsPage)
+
+		_, err := NewWhatJobs(fake, "7065").Fetch(context.Background(), CompanyEntry{
+			Company: "WhatJobs — oops",
+			Board:   board,
+		})
+		if err == nil {
+			t.Errorf("Fetch with board %q should fail, not crawl the whole feed", board)
+		}
+		if len(fake.urls) != 0 {
+			t.Errorf("board %q: adapter issued %d request(s), want none", board, len(fake.urls))
+		}
+	}
+}
+
+// A keyword padded with whitespace is still a real keyword; only a blank one is refused.
+func TestWhatJobsTrimsThePaddedKeyword(t *testing.T) {
+	fake := (&recordingJSON{}).route("jobs.json", `{"data":[]}`)
+
+	if _, err := NewWhatJobs(fake, "7065").Fetch(context.Background(), CompanyEntry{Board: "  golang  "}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got := fake.query(t, 0).Get("keyword"); got != "golang" {
+		t.Errorf("keyword = %q, want the trimmed %q", got, "golang")
+	}
+}
+
+// If the feed ever changes its tracked-URL shape, every posting loses its native id and the crawl
+// returns nothing. That failure is invisible on its own: a provider that ingested zero jobs is
+// skipped by the sweep, so the existing rows would sit open forever while nothing refreshed them.
+// A page that carried postings yet yielded no usable id is therefore an error, not an empty result.
+func TestWhatJobsUnrecognizedURLShapeIsAnError(t *testing.T) {
+	// A full page whose urls carry no pub_api__cpl__ segment at all.
+	fake := (&recordingJSON{}).route("page=1", `{"data":[
+	 {"title":"A","company":"Acme","location":"Austin","snippet":"<p>x</p>","url":"https://www.whatjobs.com/jobs/a-1"},
+	 {"title":"B","company":"Acme","location":"Austin","snippet":"<p>y</p>","url":"https://www.whatjobs.com/jobs/b-2"}
+	]}`)
+
+	_, err := NewWhatJobs(fake, "7065").Fetch(context.Background(), CompanyEntry{Board: "golang"})
+	if err == nil {
+		t.Fatal("a page of postings with no recognizable ids must fail the board, not read as empty")
+	}
+	if !strings.Contains(err.Error(), "golang") {
+		t.Errorf("error should name the keyword: %v", err)
+	}
+}
+
+// A page that merely MIXES usable and unusable postings is normal — only a page with nothing usable
+// signals the format changed.
+func TestWhatJobsMixedPageIsNotAnError(t *testing.T) {
+	fake := (&recordingJSON{}).route("page=1", whatjobsPage).route("page=2", `{"data":[]}`)
+
+	jobs, err := NewWhatJobs(fake, "7065").Fetch(context.Background(), CompanyEntry{Board: "golang"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Errorf("got %d jobs, want 1", len(jobs))
+	}
+}
+
 // The board file must load and validate against the real registry, so a malformed entry fails the
 // build rather than a cron run. Validation needs the provider registered, hence the env.
 func TestWhatJobsBoardFileValidates(t *testing.T) {

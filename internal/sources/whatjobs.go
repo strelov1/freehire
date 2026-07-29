@@ -97,6 +97,14 @@ type whatjobsPosting struct {
 // post-filtering lets a posting appear on more than one page, so repeats are collapsed here rather
 // than left for the pipeline to upsert over and over.
 func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	// A blank keyword is refused rather than crawled. Config validation only rejects an EMPTY board,
+	// so an entry padded with whitespace reaches here — and the feed answers a blank keyword with its
+	// whole unfiltered inventory (tens of thousands of postings, most of them not even technical),
+	// which one stray board entry would pour into the catalogue.
+	keyword := strings.TrimSpace(e.Board)
+	if keyword == "" {
+		return nil, fmt.Errorf("whatjobs: company %q has a blank keyword board", e.Company)
+	}
 	var jobs []Job
 	seen := make(map[string]bool)
 	page := 1
@@ -104,24 +112,37 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		var resp struct {
 			Data []whatjobsPosting `json:"data"`
 		}
-		if err := w.http.GetJSON(ctx, w.pageURL(e.Board, page), &resp); err != nil {
-			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %w", e.Board, page, err)
+		if err := w.http.GetJSON(ctx, w.pageURL(keyword, page), &resp); err != nil {
+			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %w", keyword, page, err)
 		}
 		if len(resp.Data) == 0 {
 			break
 		}
+		var usable int
 		for _, p := range resp.Data {
 			job, ok := p.toJob()
-			if !ok || seen[job.ExternalID] {
+			if !ok {
+				continue
+			}
+			usable++
+			if seen[job.ExternalID] {
 				continue
 			}
 			seen[job.ExternalID] = true
 			jobs = append(jobs, job)
 		}
+		// A page full of postings none of which carried a native id means the tracked-URL shape
+		// changed. Returning an empty result would hide that: a provider credited with zero ingested
+		// jobs is skipped by the unseen sweep, so every existing row would stay open indefinitely
+		// while nothing refreshed it. Failing the board surfaces it in board_health within a cycle.
+		if usable == 0 {
+			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %d postings, none carrying a %s id — tracked URL shape changed?",
+				keyword, page, len(resp.Data), whatjobsTrackedID)
+		}
 	}
 	if page > whatjobsMaxPages {
 		log.Printf("whatjobs: keyword %q hit the %d-page budget with %d postings — slice is bounded, not exhausted",
-			e.Board, whatjobsMaxPages, len(jobs))
+			keyword, whatjobsMaxPages, len(jobs))
 	}
 	return jobs, nil
 }
