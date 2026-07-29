@@ -30,10 +30,11 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 	ctx := context.Background()
 
 	var ownerID, otherID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('keys@example.test') RETURNING id`).Scan(&ownerID); err != nil {
+	// Both accounts are verified: minting a key requires a proven address.
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, email_verified) VALUES ('keys@example.test', true) RETURNING id`).Scan(&ownerID); err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('other@example.test') RETURNING id`).Scan(&otherID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, email_verified) VALUES ('other@example.test', true) RETURNING id`).Scan(&otherID); err != nil {
 		t.Fatalf("seed other user: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
@@ -169,4 +170,48 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 			t.Errorf("revoked key apply status = %d, want 401", after.StatusCode)
 		}
 	})
+}
+
+// An account whose address was never proven cannot mint an API key. Registration hands
+// out a session immediately, so without this gate a squatter who registered someone
+// else's address could take a durable, full-scope bearer credential away with them —
+// one that the later seizure of the account has to chase down.
+func TestCreateAPIKeyRequiresAVerifiedAddress(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, email_verified)
+		 VALUES ('unverified@example.test', 'hash', false) RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed unverified account: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	h := &authHandlers{queries: db.New(pool)}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/api/v1/me/api-keys", auth.RequireAuth(iss, testVersions), h.CreateAPIKey)
+
+	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/api-keys", bytes.NewBufferString(`{"name":"squatter cli"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("create status = %d, want 403 (body %s)", resp.StatusCode, body)
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM api_keys WHERE user_id = $1`, userID).Scan(&n); err != nil {
+		t.Fatalf("count keys: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("%d key(s) persisted for an unverified account", n)
+	}
 }

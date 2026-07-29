@@ -31,7 +31,9 @@ func seedAccount(t *testing.T, pool *pgxpool.Pool, email string, beta bool) int6
 	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (email, beta_tester) VALUES ($1, $2) RETURNING id`, email, beta).Scan(&id); err != nil {
+		// Verified, like every real account these surfaces see: an unproven address
+		// cannot mint the API key some of these fixtures need.
+		`INSERT INTO users (email, beta_tester, email_verified) VALUES ($1, $2, true) RETURNING id`, email, beta).Scan(&id); err != nil {
 		t.Fatalf("seed user %s: %v", email, err)
 	}
 	return id

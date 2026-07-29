@@ -270,7 +270,12 @@ func TestAPIKeyScope(t *testing.T) {
 	q := New(pool)
 	ctx := context.Background()
 
+	// Verified: CreateAPIKey refuses an account whose address was never proven, so a
+	// scope test has to start from an account that is allowed to hold keys at all.
 	user := seedAccount(t, pool, "scoped@example.test")
+	if _, err := pool.Exec(ctx, `UPDATE users SET email_verified = true WHERE id = $1`, user); err != nil {
+		t.Fatalf("verify account: %v", err)
+	}
 
 	t.Run("authentication reports the key's scope", func(t *testing.T) {
 		if _, err := q.CreateAPIKey(ctx, CreateAPIKeyParams{

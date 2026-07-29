@@ -4,8 +4,17 @@
 -- expires_at NULL means the key never expires. scope confines the credential to a
 -- surface ('full' for a user-created key, 'cv' for the tailoring agent's); it comes
 -- from the server, never from client input. Returns display fields only, never the hash.
+--
+-- The INSERT ... SELECT is the verified-address gate, not a style choice: registration
+-- hands out a session before the address is proven, so a squatter on someone else's
+-- email could otherwise mint a never-expiring, full-scope bearer credential and keep it
+-- past the seizure that hands the account to its real owner. Putting the condition in
+-- the statement means no call site can mint around it. Inserting nothing yields no row,
+-- which the caller reads as "not allowed" (403).
 INSERT INTO api_keys (user_id, name, token_hash, token_prefix, expires_at, scope)
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT $1, $2, $3, $4, $5, $6
+FROM users
+WHERE users.id = $1 AND users.email_verified
 RETURNING id, name, token_prefix, scope, created_at, last_used_at, expires_at;
 
 -- name: ListAPIKeysByUser :many

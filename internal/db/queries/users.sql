@@ -74,19 +74,38 @@ RETURNING token_version;
 -- Complete a reset-by-emailed-code: set the new hash, revoke every session, and mark
 -- the address verified — receiving the code IS proof of control, so a reset doubles as
 -- verification and an unverified account stops being a merge target.
+--
+-- The account's API keys are destroyed in the same statement. A reset is how an owner
+-- takes an account back, so whoever knew the old password must lose every credential
+-- minted under it — and a key authenticates against api_keys alone, so bumping
+-- token_version does not reach it. The DELETE is a data-modifying CTE rather than a
+-- second statement on purpose: Postgres runs it exactly once and to completion whether
+-- or not the primary query reads its output, which welds the revocation to the reset so
+-- no call site can perform one without the other.
+WITH revoked_keys AS (
+    DELETE FROM api_keys WHERE user_id = $1
+)
 UPDATE users
 SET password_hash = $2, email_verified = true, token_version = token_version + 1
-WHERE id = $1
+WHERE users.id = $1
 RETURNING token_version;
 
 -- name: SeizeUnverifiedAccount :one
 -- Hand an unverified, password-backed account to the proven owner of its address when a
--- provider-verified OAuth identity arrives for it: the password is destroyed and every
--- session revoked, so a squatter who registered the address first loses both ways in.
+-- provider-verified OAuth identity arrives for it: the password is destroyed, every
+-- session revoked, and every API key deleted, so a squatter who registered the address
+-- first loses all three ways in. The keys matter most of the three: they are the only
+-- credential that survives a token_version bump (a key is matched against api_keys by
+-- its own hash and never consults users), and one minted with expires_at NULL would
+-- otherwise outlive the takeover forever. Same data-modifying-CTE reasoning as
+-- ResetUserPassword — the revocation cannot be separated from the seizure.
 -- Returns the new generation for the session the sign-in is about to mint.
+WITH revoked_keys AS (
+    DELETE FROM api_keys WHERE user_id = $1
+)
 UPDATE users
 SET password_hash = NULL, email_verified = true, token_version = token_version + 1
-WHERE id = $1
+WHERE users.id = $1
 RETURNING token_version;
 
 -- name: GetUserResume :one

@@ -22,10 +22,18 @@ Three packages split this surface — keep the split:
   and resolves to nothing. This is the anti-takeover gate; do not add a path around it.
 - **The seizure rule.** When a provider-verified identity arrives for an address held by an
   *unverified, password-backed* account, that account is **seized**: `password_hash = NULL`,
-  `email_verified = true`, `token_version + 1` (see `migrations`/`users.sql`). The password
-  someone set on an address they never proved is destroyed rather than silently joined —
-  otherwise registering against a stranger's address would pre-hijack their future OAuth
-  sign-in.
+  `email_verified = true`, `token_version + 1`, **and every row in `api_keys` deleted** (see
+  `migrations`/`users.sql`). The password someone set on an address they never proved is
+  destroyed rather than silently joined — otherwise registering against a stranger's address
+  would pre-hijack their future OAuth sign-in.
+- **`token_version` does not reach API keys — the takeover statements delete them.** A key is
+  matched against `api_keys.token_hash` and `expires_at` and never joins `users`, so bumping
+  the generation leaves it live. That is intentional for `logout-all` and a password change
+  (a key is a durable programmatic credential, not a session), and wrong for the two events
+  where the account changes hands: `SeizeUnverifiedAccount` and `ResetUserPassword` therefore
+  carry a `DELETE FROM api_keys` as a data-modifying CTE, so the revocation cannot be
+  separated from the takeover. A new takeover-shaped path must do the same; bumping the
+  version alone would leave a never-expiring bearer credential in the previous holder's hands.
 - **Every credential change bumps `token_version`.** Set/reset password and seizure all
   increment it, which strands every outstanding JWT. That coupling is the entire revocation
   story for a stateless token — a new credential write path that skips the bump silently

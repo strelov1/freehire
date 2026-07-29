@@ -17,11 +17,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// seedAPIKeyUser creates an account that may hold API keys — verified, because
+// CreateAPIKey refuses an address that was never proven.
 func seedAPIKeyUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
+		`INSERT INTO users (email, email_verified) VALUES ($1, true) RETURNING id`, email).Scan(&id); err != nil {
 		t.Fatalf("seed user %s: %v", email, err)
 	}
 	return id

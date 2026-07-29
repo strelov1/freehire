@@ -29,9 +29,10 @@ func TestMarketCoverageEndpoint(t *testing.T) {
 	ctx := context.Background()
 	queries := db.New(pool)
 
+	// Verified: minting an API key requires a proven address.
 	var userID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email) VALUES ('coverage@example.test') RETURNING id`).Scan(&userID); err != nil {
+		`INSERT INTO users (email, email_verified) VALUES ('coverage@example.test', true) RETURNING id`).Scan(&userID); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 

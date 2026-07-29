@@ -13,6 +13,8 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 - Credential endpoints (`register`/`login`) are throttled by a per-instance rate limiter (10/min, keyed on client IP).
 - **API keys are hashed at rest:** the row stores only the `HashAPIKey(token)` SHA-256 (i.e. `SHA-256(token)`) plus a short non-secret `token_prefix` (enough to tell keys apart in a list); the plaintext (minted by `GenerateAPIKey`) is shown exactly once at create time and is unrecoverable.
 - **Key management is cookie-only (`RequireAuth`)** — a leaked key must not be able to create, list, or revoke keys.
+- **Minting a key requires a proven address.** `CreateAPIKey` is an `INSERT ... SELECT ... WHERE users.email_verified`; no row means `403`. The gate lives in the statement because registration hands out a session before the address is proven, so a squatter on someone else's email could otherwise walk away with a never-expiring, full-scope credential.
+- **A key does not carry `tv`, so a version bump does not revoke it.** `AuthenticateAPIKey` matches `token_hash` + `expires_at` and never joins `users`. This is deliberate for `logout-all` and a password change — a key is a durable programmatic credential, not a session — but it means a *takeover* must delete the rows: `SeizeUnverifiedAccount` and `ResetUserPassword` do so in the same statement. Do not "fix" this by joining `tv` into `AuthenticateAPIKey`; that would make every key die with every sign-out-everywhere and leave dead rows listed as live.
 - **Per-user job endpoints and `/auth/me` accept either credential** (`RequireAuthOrKey`).
 
 ## How it works

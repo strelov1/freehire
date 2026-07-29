@@ -48,7 +48,8 @@ func newAgentInboxFixture(t *testing.T, email string) *agentInboxFixture {
 	queries := db.New(pool)
 
 	var uid int64
-	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&uid); err != nil {
+	// Verified: the fixture mints an API key, which an unproven address cannot do.
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email, email_verified) VALUES ($1, true) RETURNING id`, email).Scan(&uid); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 

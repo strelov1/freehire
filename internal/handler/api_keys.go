@@ -2,10 +2,12 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
@@ -60,6 +62,15 @@ func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string
 		Scope:     auth.ScopeFull,
 		ExpiresAt: expiresAt,
 	})
+	// The statement inserts nothing — and so returns no row — when the account's address
+	// was never proven. The caller is authenticated (a session cookie got them here), so
+	// this is an authorization refusal, not a failed lookup: 403, not 404. The SPA reads
+	// email_verified from /auth/me and hides the button, so this is the guard for a
+	// direct API call rather than the message a user normally meets.
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", db.CreateAPIKeyRow{}, fiber.NewError(fiber.StatusForbidden,
+			"confirm your email address before creating an API key")
+	}
 	if err != nil {
 		return "", db.CreateAPIKeyRow{}, err
 	}
