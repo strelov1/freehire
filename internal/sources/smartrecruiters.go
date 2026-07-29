@@ -61,6 +61,7 @@ type smartRecruitersPosting struct {
 		Region  string `json:"region"`
 		Country string `json:"country"`
 		Remote  bool   `json:"remote"`
+		Hybrid  bool   `json:"hybrid"`
 	} `json:"location"`
 }
 
@@ -139,7 +140,7 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		Location:    joinNonEmpty(p.Location.City, p.Location.Region, p.Location.Country),
 		Description: sanitizeHTML(body),
 		Remote:      p.Location.Remote,
-		WorkMode:    workModeFromRemote(p.Location.Remote),
+		WorkMode:    workModeFromRemoteHybrid(p.Location.Remote, p.Location.Hybrid),
 		PostedAt:    parseRFC3339(p.ReleasedDate),
 		// experienceLevel is the employer's own structured seniority; the pipeline gives it
 		// precedence over the title dictionary, so it fills the grade for title-silent roles.

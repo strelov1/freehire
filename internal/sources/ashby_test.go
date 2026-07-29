@@ -77,3 +77,43 @@ func TestAshbyFetch(t *testing.T) {
 		t.Error("PostedAt = nil, want parsed publishedAt with milliseconds")
 	}
 }
+
+// Ashby sets isRemote on every posting that is not strictly onsite, so a hybrid role
+// carries isRemote=true alongside workplaceType="Hybrid". workplaceType is the field the
+// Ashby board itself renders as "Location Type", so it decides the work mode.
+func TestAshbyFetchWorkplaceTypeBeatsIsRemote(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"jobs": [
+			{
+				"id": "hybrid-uuid",
+				"title": "Senior Web Designer",
+				"location": "Vilnius",
+				"jobUrl": "https://jobs.ashbyhq.com/surfshark/hybrid-uuid",
+				"publishedAt": "2026-07-28T09:35:42.943+00:00",
+				"descriptionHtml": "<p>Design it.</p>",
+				"isRemote": true,
+				"workplaceType": "Hybrid"
+			}
+		]
+	}`}
+
+	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Surfshark", Provider: "ashby", Board: "surfshark",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+
+	j := jobs[0]
+	if j.WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid from workplaceType", j.WorkMode)
+	}
+	// A hybrid role requires office presence, so it is not remote — and its location
+	// text carries no "remote" to trigger the heuristic either.
+	if j.Remote {
+		t.Error("Remote = true, want false: a hybrid role is not remote")
+	}
+}

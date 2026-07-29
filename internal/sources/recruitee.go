@@ -33,6 +33,7 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location     string `json:"location"`
 			CreatedAt    string `json:"created_at"`
 			Remote       bool   `json:"remote"`
+			Hybrid       bool   `json:"hybrid"`
 			Description  string `json:"description"`
 			Requirements string `json:"requirements"`
 		} `json:"offers"`
@@ -52,7 +53,7 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location:    o.Location,
 			Description: sanitizeHTML(o.Description + o.Requirements),
 			Remote:      o.Remote,
-			WorkMode:    workModeFromRemote(o.Remote),
+			WorkMode:    workModeFromRemoteHybrid(o.Remote, o.Hybrid),
 			PostedAt:    parseSpaceTime(o.CreatedAt),
 		})
 	}

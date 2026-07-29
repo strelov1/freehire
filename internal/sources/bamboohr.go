@@ -18,11 +18,28 @@ func NewBambooHR(c JSONGetter) Source { return bambooHR{http: c} }
 func (bambooHR) Provider() string { return "bamboohr" }
 
 // bambooHRPosting is one item from the careers list (no description here); the list
-// carries the remote flag, the detail carries the body.
+// carries the work-mode signal, the detail carries the body.
 type bambooHRPosting struct {
-	ID       string `json:"id"`
-	Name     string `json:"jobOpeningName"`
-	IsRemote bool   `json:"isRemote"`
+	ID           string `json:"id"`
+	Name         string `json:"jobOpeningName"`
+	IsRemote     bool   `json:"isRemote"`
+	LocationType string `json:"locationType"`
+}
+
+// bambooHRLocationType maps BambooHR's numeric locationType onto our work-mode
+// vocabulary. It is the only structured signal the public careers list carries: isRemote
+// is null on every posting there, so reading it alone leaves every job mode-less.
+func bambooHRLocationType(t string) string {
+	switch t {
+	case "0":
+		return "onsite"
+	case "1":
+		return "remote"
+	case "2":
+		return "hybrid"
+	default:
+		return ""
+	}
 }
 
 func (b bambooHR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -65,15 +82,17 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 	}
 
 	jo := d.Result.JobOpening
+	location := joinNonEmpty(jo.Location.City, jo.Location.State, jo.Location.AddressCountry)
+	mode := firstNonEmpty(bambooHRLocationType(p.LocationType), workModeFromRemote(p.IsRemote))
 	return Job{
 		ExternalID:  p.ID,
 		URL:         jo.ShareURL,
 		Title:       p.Name,
 		Company:     e.Company,
-		Location:    joinNonEmpty(jo.Location.City, jo.Location.State, jo.Location.AddressCountry),
+		Location:    location,
 		Description: sanitizeHTML(jo.Description),
-		Remote:      p.IsRemote,
-		WorkMode:    workModeFromRemote(p.IsRemote),
+		Remote:      mode == "remote" || isRemote(location),
+		WorkMode:    mode,
 		PostedAt:    parseDate(jo.DatePosted),
 	}, true
 }

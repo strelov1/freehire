@@ -91,3 +91,40 @@ func TestBambooHRFetchSkipsFailedDetail(t *testing.T) {
 		t.Fatalf("want only 52 to survive, got %d jobs", len(jobs))
 	}
 }
+
+// BambooHR leaves isRemote null on the public careers list and carries the real signal in
+// locationType: "0" onsite, "1" remote, "2" hybrid.
+func TestBambooHRFetchReadsLocationType(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/careers/60/detail", bambooDetail("60", "Office Manager")).
+		route("/careers/61/detail", bambooDetail("61", "Account Manager")).
+		route("/careers/62/detail", bambooDetail("62", "Security Engineer")).
+		route("/careers/list", `{"result": [
+			{"id": "60", "jobOpeningName": "Office Manager", "isRemote": null, "locationType": "0"},
+			{"id": "61", "jobOpeningName": "Account Manager", "isRemote": null, "locationType": "1"},
+			{"id": "62", "jobOpeningName": "Security Engineer", "isRemote": null, "locationType": "2"}
+		]}`)
+
+	jobs, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "bamboohr", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+
+	for id, want := range map[string]string{"60": "onsite", "61": "remote", "62": "hybrid"} {
+		if got := byID[id].WorkMode; got != want {
+			t.Errorf("job %s WorkMode = %q, want %q", id, got, want)
+		}
+	}
+	if !byID["61"].Remote {
+		t.Error("locationType 1 should set Remote = true")
+	}
+	if byID["62"].Remote {
+		t.Error("locationType 2 (hybrid) should leave Remote = false")
+	}
+}

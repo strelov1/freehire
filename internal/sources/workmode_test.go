@@ -29,3 +29,24 @@ func TestWorkplaceTypeMode(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkModeFromRemoteHybrid(t *testing.T) {
+	cases := []struct {
+		remote, hybrid bool
+		want           string
+	}{
+		{remote: true, hybrid: false, want: "remote"},
+		{remote: false, hybrid: true, want: "hybrid"},
+		// Both false is "not marked", which an ATS cannot distinguish from "office" —
+		// so it stays unknown rather than becoming a guessed onsite.
+		{remote: false, hybrid: false, want: ""},
+		// The flags are mutually exclusive in practice; if a board sets both, the
+		// broader arrangement wins.
+		{remote: true, hybrid: true, want: "remote"},
+	}
+	for _, c := range cases {
+		if got := workModeFromRemoteHybrid(c.remote, c.hybrid); got != c.want {
+			t.Errorf("workModeFromRemoteHybrid(%v, %v) = %q, want %q", c.remote, c.hybrid, got, c.want)
+		}
+	}
+}

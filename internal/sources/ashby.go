@@ -49,25 +49,29 @@ type AshbyPosting struct {
 	PublishedAt     string `json:"publishedAt"`
 	DescriptionHTML string `json:"descriptionHtml"`
 	IsRemote        bool   `json:"isRemote"`
+	WorkplaceType   string `json:"workplaceType"`
 	EmploymentType  string `json:"employmentType"`
 }
 
 // MapAshbyPosting maps an Ashby API posting into a Job, so the board adapter and the
-// link-following adapter produce identical facets for the same posting. Remote unions the
-// explicit isRemote flag with the location heuristic (a false flag with a "Remote"
-// location is genuinely remote — the greenhouse convention), while WorkMode carries the
-// structured signal only. ExternalID and Company are left to the caller: the board
-// adapter sets the raw id (the pipeline namespaces it by board) and the configured
-// company; the link resolver namespaces the id itself and derives the company from the
-// board slug (the per-board API carries no company name).
+// link-following adapter produce identical facets for the same posting. workplaceType —
+// what the board renders as "Location Type" — decides the work mode; isRemote only says
+// "not strictly onsite" (a hybrid posting sets it too), so it is the fallback for boards
+// that omit workplaceType. Remote unions the resolved mode with the location heuristic,
+// keeping the greenhouse convention that a "Remote" location alone marks a job remote.
+// ExternalID and Company are left to the caller: the board adapter sets the raw id (the
+// pipeline namespaces it by board) and the configured company; the link resolver
+// namespaces the id itself and derives the company from the board slug (the per-board API
+// carries no company name).
 func MapAshbyPosting(j AshbyPosting) Job {
+	mode := firstNonEmpty(workplaceTypeMode(j.WorkplaceType), workModeFromRemote(j.IsRemote))
 	return Job{
 		URL:            j.JobURL,
 		Title:          j.Title,
 		Location:       j.Location,
 		Description:    sanitizeHTML(j.DescriptionHTML),
-		Remote:         j.IsRemote || isRemote(j.Location),
-		WorkMode:       workModeFromRemote(j.IsRemote),
+		Remote:         mode == "remote" || isRemote(j.Location),
+		WorkMode:       mode,
 		PostedAt:       parseRFC3339(j.PublishedAt),
 		EmploymentType: ashbyEmploymentType(j.EmploymentType),
 	}

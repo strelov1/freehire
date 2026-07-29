@@ -84,6 +84,22 @@ func workModeFromRemote(remote bool) string {
 	return ""
 }
 
+// workModeFromRemoteHybrid maps the PAIR of booleans an ATS exposes when it tracks remote
+// and hybrid separately (Recruitee, SmartRecruiters) to a work mode. The two flags are
+// mutually exclusive there, so reading the remote one alone silently drops every hybrid
+// posting. Both false stays "" rather than "onsite": an ATS cannot distinguish "marked as
+// office" from "not marked at all", and the dictionary contract forbids the guess.
+func workModeFromRemoteHybrid(remote, hybrid bool) string {
+	switch {
+	case remote:
+		return "remote"
+	case hybrid:
+		return "hybrid"
+	default:
+		return ""
+	}
+}
+
 // workplaceTypeMode maps an ATS workplace-type enum (as Lever and JustJoin expose) to our
 // work mode vocabulary; an unspecified/unknown value yields "".
 func workplaceTypeMode(t string) string {

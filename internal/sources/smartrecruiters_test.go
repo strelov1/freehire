@@ -241,3 +241,32 @@ func TestSmartRecruitersFetchSkipsFailedDetail(t *testing.T) {
 		t.Fatalf("want only P1 to survive, got %d jobs", len(jobs))
 	}
 }
+
+// SmartRecruiters carries remote and hybrid as separate booleans on the posting's
+// location, and a hybrid posting sets remote=false — so reading location.remote alone
+// leaves every hybrid role without a work mode.
+func TestSmartRecruitersFetchHybridPosting(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("offset=0", `{"totalFound": 1, "content": [
+			{"id": "H1", "name": "Product Owner", "releasedDate": "2024-06-11T15:19:46.134Z",
+			 "location": {"city": "Sunshine Coast", "region": "Queensland", "country": "au", "remote": false, "hybrid": true}}
+		]}`).
+		route("/postings/H1", detailBody("H1", "H1"))
+
+	jobs, err := NewSmartRecruiters(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "smartrecruiters", Board: "Acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+
+	if jobs[0].WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid from location.hybrid", jobs[0].WorkMode)
+	}
+	if jobs[0].Remote {
+		t.Error("Remote = true, want false: a hybrid posting is not remote")
+	}
+}

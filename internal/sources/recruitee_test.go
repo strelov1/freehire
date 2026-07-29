@@ -79,3 +79,33 @@ func TestRecruiteeFetch(t *testing.T) {
 		t.Errorf("second job description = %q", jobs[1].Description)
 	}
 }
+
+// Recruitee exposes remote and hybrid as separate booleans, and they are mutually
+// exclusive: a hybrid offer carries remote=false, so reading the remote flag alone drops
+// the hybrid signal entirely.
+func TestRecruiteeFetchHybridOffer(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"offers": [
+			{"id": 1, "title": "Designer", "careers_url": "https://acme.recruitee.com/o/designer",
+			 "location": "Warszawa", "created_at": "2024-03-01 10:00:00 UTC",
+			 "remote": false, "hybrid": true, "description": "<p>Design.</p>", "requirements": ""}
+		]
+	}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "recruitee", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+
+	if jobs[0].WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid from the hybrid flag", jobs[0].WorkMode)
+	}
+	if jobs[0].Remote {
+		t.Error("Remote = true, want false: a hybrid offer is not remote")
+	}
+}
