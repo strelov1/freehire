@@ -17,7 +17,7 @@ precondition.
 
 #### Scenario: A first-time user sends a message with no setup
 
-- **WHEN** a signed-in beta tester opens the assistant for the first time and sends a message
+- **WHEN** a signed-in user opens the assistant for the first time and sends a message
 - **THEN** the turn runs and streams a reply, with no installation prompt and no "connect a machine" state anywhere in the flow
 
 #### Scenario: No external agent service is contacted
