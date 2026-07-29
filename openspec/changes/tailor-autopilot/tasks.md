@@ -25,8 +25,8 @@
 
 ## 5. The revert endpoint
 
-- [ ] 5.1 Add `POST /api/v1/me/cvs/:id/autopilot/undo` (cookie-only): restore the snapshot, clear the snapshot and the report, return the restored CV
-- [ ] 5.2 Test: revert restores the pre-run document and clears both columns; revert without a snapshot is refused and the document is unchanged
+- [x] 5.1 Add `POST /api/v1/me/cvs/:id/autopilot/undo` (cookie-only): restore the snapshot, clear the snapshot and the report, return the restored CV
+- [x] 5.2 Test: revert restores the pre-run document and clears both columns; revert without a snapshot is refused and the document is unchanged
 
 ## 6. The agent's method
 
@@ -36,7 +36,7 @@
 
 ## 7. Wire shape
 
-- [ ] 7.1 Extend the CV read shape with the report and a revertable flag; regenerate the TS contracts with `cmd/gen-contracts`
+- [x] 7.1 Extend the CV read shape with the report and a revertable flag; regenerate the TS contracts with `cmd/gen-contracts`
 - [ ] 7.2 Add the two client calls in `web/src/lib/assistant/api.ts` (or the CV client, wherever the tailoring calls live): start a run, revert a run
 
 ## 8. Workspace — entry point

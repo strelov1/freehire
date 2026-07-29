@@ -63,10 +63,14 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 	// Both gates are supplied so the test exercises whichever one `register`
 	// mounts: the extension reaches the assistant with a Bearer credential, which
 	// only `key` resolves.
-	h.register(api, middleware{
+	mw := middleware{
 		cookie: auth.RequireAuth(iss, testVersions),
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-	})
+	}
+	h.register(api, mw)
+	// The CV routes ride along: the autopilot's undo and the CV read that carries a run's
+	// report are the other half of the tailoring surface these tests exercise.
+	h.cv.register(api, mw)
 	return app, h
 }
 

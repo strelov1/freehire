@@ -20,6 +20,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/cv"
 )
 
 // seedTailoringSession creates a CV bound to a vacancy plus the tailoring session that
@@ -134,4 +135,86 @@ func mustUUID(t *testing.T, s string) uuid.UUID {
 		t.Fatalf("parse uuid %q: %v", s, err)
 	}
 	return id
+}
+
+// The revert is the other half of the run: it restores the document the run started from
+// and clears the log that described the run, since that log now names edits that are gone.
+func TestAutopilotUndoRestoresAndClears(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, h := newAssistantApp(pool, iss, &turnModel{})
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-undo@example.test", true)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+	_ = sessionID
+
+	ctx := context.Background()
+	// A run happened: the snapshot was taken, the document changed, a report was written.
+	if err := h.cv.cvStore.SnapshotForAutopilot(ctx, cvID, userID); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE cvs SET data = '{"summary":"after the run"}'::jsonb WHERE id = $1`, cvID); err != nil {
+		t.Fatalf("simulate the run's edit: %v", err)
+	}
+	if err := h.cv.cvStore.SetAutopilotReport(ctx, cvID, userID, []cv.AutopilotEntry{
+		{Requirement: "Kafka", Status: cv.AutopilotClosedBank, Note: "reframed"},
+	}); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/cvs/"+cvID.String()+"/autopilot/undo", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("undo: status %d", resp.StatusCode)
+	}
+
+	rec, err := h.cv.cvStore.Get(ctx, cvID, userID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if rec.Document.Summary != "before the run" {
+		t.Errorf("summary = %q, want the pre-run document", rec.Document.Summary)
+	}
+	if rec.AutopilotRevertable || len(rec.AutopilotReport) != 0 {
+		t.Errorf("after undo: revertable=%v report=%d, want both cleared", rec.AutopilotRevertable, len(rec.AutopilotReport))
+	}
+
+	// A second undo has nothing to restore, and says so rather than blanking the document.
+	again := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/me/cvs/"+cvID.String()+"/autopilot/undo", cookie, nil)
+	if again.StatusCode != fiber.StatusConflict {
+		t.Errorf("undo without a run: status %d, want 409", again.StatusCode)
+	}
+}
+
+// The CV read carries the run's log and whether it can still be undone, so the workspace
+// panel renders from the CV it already re-reads after every turn.
+func TestCVReadCarriesTheRunReport(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, h := newAssistantApp(pool, iss, &turnModel{})
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-read@example.test", true)
+	_, cvID := seedTailoringSession(t, pool, h, userID)
+
+	ctx := context.Background()
+	if err := h.cv.cvStore.SnapshotForAutopilot(ctx, cvID, userID); err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if err := h.cv.cvStore.SetAutopilotReport(ctx, cvID, userID, []cv.AutopilotEntry{
+		{Requirement: "Kafka in production", Status: cv.AutopilotClosedBank, Note: "reframed"},
+		{Requirement: "Team leadership", Status: cv.AutopilotOpen},
+	}); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+
+	resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+cvID.String(), cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("get cv: status %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	for _, want := range []string{`"autopilot_report"`, "Kafka in production", `"closed_bank"`, `"autopilot_revertable":true`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("CV read is missing %q:\n%s", want, body)
+		}
+	}
 }

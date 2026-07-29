@@ -105,6 +105,9 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
 	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
+	// Undo a whole autopilot run. Cookie-only: it rewrites the document, and the browser
+	// is where the candidate saw the run happen.
+	api.Post("/me/cvs/:id/autopilot/undo", mw.cookie, h.UndoAutopilotRun)
 }
 
 const maxCVTitleRunes = 200
@@ -123,6 +126,13 @@ type cvResponse struct {
 	// workspace resumes it.
 	AgentSessionID string      `json:"agent_session_id"`
 	Document       cv.Document `json:"document"`
+	// AutopilotReport is the last unattended run's account of itself, one entry per
+	// requirement. The workspace panel renders it from this read rather than by parsing
+	// the conversation, so it survives a reload. Empty when no run has happened.
+	AutopilotReport []cv.AutopilotEntry `json:"autopilot_report,omitempty"`
+	// AutopilotRevertable says whether the pre-run snapshot is still held — whether
+	// "undo the run" has anything to restore.
+	AutopilotRevertable bool `json:"autopilot_revertable"`
 }
 
 // cvTailoredResponse is a tailored CV in the /my/cvs re-open list: metadata plus the vacancy
@@ -154,7 +164,13 @@ func metaResponse(m cv.Meta) cvMetaResponse {
 }
 
 func recordResponse(rec cv.Record) cvResponse {
-	return cvResponse{cvMetaResponse: metaResponse(rec.Meta), AgentSessionID: rec.AgentSessionID, Document: rec.Document}
+	return cvResponse{
+		cvMetaResponse:      metaResponse(rec.Meta),
+		AgentSessionID:      rec.AgentSessionID,
+		Document:            rec.Document,
+		AutopilotReport:     rec.AutopilotReport,
+		AutopilotRevertable: rec.AutopilotRevertable,
+	}
 }
 
 // ListCVTemplates returns the registered CV templates and their display metadata (id, label,
@@ -270,6 +286,32 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 	}
 	meta, err := h.cvStore.Update(c.Context(), id, userID, cvTitle(in.Title), tmplID, in.Document)
 	if err != nil {
+		return mapCVError(err)
+	}
+	return c.JSON(fiber.Map{"data": metaResponse(meta)})
+}
+
+// UndoAutopilotRun restores the document an autopilot run started from and clears the run's
+// report along with it.
+//
+// The report goes with the document deliberately: it describes edits that the undo has just
+// removed, so keeping it would leave the panel claiming work that is no longer on the page.
+// A CV with no snapshot is a 409 rather than a silent no-op — nothing to undo is an answer,
+// not a success.
+func (h *cvHandlers) UndoAutopilotRun(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	meta, err := h.cvStore.RevertAutopilot(c.Context(), id, userID)
+	if err != nil {
+		if errors.Is(err, cv.ErrNoAutopilotRun) {
+			return fiber.NewError(fiber.StatusConflict, "there is no autopilot run to undo")
+		}
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})
