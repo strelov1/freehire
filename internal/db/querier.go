@@ -968,6 +968,30 @@ type Querier interface {
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
 	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
+	// Candidate applications for the ghost signal, for a page of jobs at a time.
+	//
+	// This query selects and gates; it does NOT judge. Whether an application is
+	// actually silent is decided in Go by internal/userjob's threshold ladder, whose
+	// five values carry their measured provenance. Restating that ladder here would let
+	// a change to it disagree silently with the personal tracking board — the same
+	// application judged by two ladders on two surfaces, with nothing binding them.
+	//
+	// The mailbox gate is the one rule that DOES belong here, because it is a join.
+	// jobtracking.Silence falls back to applied_at when an application has no linked
+	// mail, which is right for the owner's own board and wrong as input to a public
+	// claim: for a user with no connected mailbox there is never linked mail, so every
+	// application of theirs reads silent once the threshold passes — including the ones
+	// the employer answered somewhere we cannot see. Absence of a reply is evidence only
+	// where a reply would have been observed.
+	//
+	// last_activity_at and has_pending_suggestion mirror ListTrackedJobs deliberately:
+	// one definition of "when did this application last move", not two.
+	ListGhostApplicationEvidence(ctx context.Context, jobIds []int64) ([]ListGhostApplicationEvidenceRow, error)
+	// Non-retracted ghost reports for a page of jobs. Maturity — whether the stated
+	// apply date has aged past the `applied` threshold — is applied in Go alongside the
+	// silence ladder it reads from, so both channels clear the same bar from the same
+	// source.
+	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
 	// The referrer inbox: open (sent) requests for every company the referrer has an approved
 	// offer for. Joins the request pool to the caller's approved offers on company_slug, and
 	// the catalogue for the company's display name (LEFT so a request survives an unknown

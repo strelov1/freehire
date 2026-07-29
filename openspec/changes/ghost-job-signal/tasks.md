@@ -7,15 +7,24 @@
 
 ## 2. Outcome evidence
 
-- [ ] 2.1 Add a failing integration test in `internal/db`: a job with one silent application whose owner has **no** connected mailbox yields zero contributors; the same application with a `connected` Gmail row or an allocated mailbox yields one.
-- [ ] 2.2 Add a failing integration test that a terminal-stage application and an application whose linked mail is newer than the threshold both contribute nothing.
-- [ ] 2.3 Add `GhostEvidenceCountsAll` to `internal/db/queries/jobs.sql`: given job ids, return distinct contributors, silent applications and active reports **only for jobs with at least one unit**, so the map is sparse by construction. Document why the mailbox gate is in the SQL rather than the caller. Run `make sqlc`.
-- [ ] 2.4 Add a failing test that one user contributing on both channels counts once, then make the distinct-person count a `COUNT(DISTINCT user_id)` over the union rather than a sum of two counts.
-- [ ] 2.5 `go test -tags=integration ./internal/db/` green.
+The silence threshold ladder lives in `internal/userjob/silence.go` as five numbers carrying their
+provenance. Restating it in SQL would let a change to it disagree silently with the personal
+tracking board — the same application judged by two ladders on two surfaces, with nothing binding
+them. So the split is: **SQL selects candidates and holds the mailbox gate** (a join belongs
+there), **Go applies the ladder and counts distinct people** (a rule belongs where its single
+source is). The aggregator is then testable without a database.
+
+- [x] 2.1 Add failing tests in `internal/ghost/evidence_test.go`: an application inside its stage's threshold contributes nothing; one past it contributes; a terminal stage contributes nothing; an application with a pending suggestion contributes nothing, since unconfirmed mail makes the silence a question rather than a fact.
+- [x] 2.2 Add a failing test that one user contributing both a silent application and a report counts as **one** contributor, and that the returned map holds only jobs with at least one unit — sparse by construction rather than by the caller filtering.
+- [x] 2.3 Add a failing test that a report matures only once the `applied` threshold has passed since its stated apply date, reading that number from `userjob.SilenceThresholdDays` rather than restating it.
+- [x] 2.4 Write `internal/ghost/evidence.go`: the aggregator over candidate rows, returning per-job contributors/silent-applications/reports for `Classify`.
+- [x] 2.5 Add a failing integration test in `internal/db`: the candidate query returns an application only when its owner has a connected mailbox — a `connected` Gmail row or an allocated hosted mailbox — and omits it otherwise, whatever its silence.
+- [x] 2.6 Add `ListGhostApplicationEvidence` and `ListGhostReportEvidence` to `internal/db/queries/`, mirroring the tracking query's `last_activity_at` and `has_pending_suggestion` derivation rather than inventing a second definition of them. Run `make sqlc`.
+- [x] 2.7 `go test ./internal/ghost/...` and `go test -tags=integration ./internal/db/` green.
 
 ## 3. The report channel
 
-- [ ] 3.1 Write migration `0051_ghost_reports.sql`: `ghost_reports` (id, user_id, job_id, applied_on date, created_at, retracted_at) with `UNIQUE (user_id, job_id)`, FKs cascading on user and job delete, and `jobs.ats_absent_at TIMESTAMPTZ`. Both in one migration — they ship together and the column must exist before any generated `SELECT` reads it.
+- [x] 3.1 Migration `0051_ghost_job_signal.sql` — DONE IN GROUP 2, which needed the table for `ListGhostReportEvidence`. Creates `ghost_reports` (`UNIQUE (user_id, job_id)`, `applied_on`, `retracted_at`, cascading FKs, partial index on live rows) and `jobs.ats_absent_at`. One migration: they ship together, and the column must exist before any generated `SELECT` reads it.
 - [ ] 3.2 Add failing tests in `internal/ghostreport`: `applied_on` in the future or over 12 months old is invalid; a claim under 21 days old is stored but yields no evidence; a retracted report yields none.
 - [ ] 3.3 Write `internal/ghostreport` — a Fiber-free, pgx-free service owning validation, the maturity rule and retraction, over a repository interface. Follow `internal/report`'s shape.
 - [ ] 3.4 Add failing handler integration tests in `internal/handler`: 201 on file; 409 on a duplicate; 409 on a closed job; 403 for an unverified email; 429 past the daily cap; 204 on retract; unauthenticated is 401.
