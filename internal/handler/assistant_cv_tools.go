@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -230,7 +231,8 @@ func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 var cvPatchSchema = map[string]any{
 	"type": "object",
 	"description": "One patch: an `op` plus the address and payload that op reads. Indices are 0-based, " +
-		"counted over what cv_get returned. Send only the fields the op needs.",
+		"counted over what cv_get returned. Send only the fields the op needs. `evidence_id` is NOT a " +
+		"patch field — it sits beside `patch`, one level up.",
 	"properties": map[string]any{
 		"op": map[string]any{
 			"type":        "string",
@@ -327,10 +329,16 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
+			// The id may arrive INSIDE the patch instead of beside it. Both readings are
+			// reasonable — the evidence belongs to the bullet the patch writes — and a real
+			// run lost three edits in a row to the strict decoder refusing the nested one,
+			// then repeating the same shape because the error never said where it belonged.
+			// Accept either position; the provenance check below is untouched.
+			patch, evidenceID := liftEvidenceID(in.Patch, in.EvidenceID)
 			// Decode strictly, exactly as the HTTP endpoint does: a stray field or a
 			// numeric where a string belongs must fail with a reason rather than
 			// silently editing the wrong part of the document.
-			p, err := cv.DecodePatch(in.Patch)
+			p, err := cv.DecodePatch(patch)
 			if err != nil {
 				return nil, err // already reads "cv: invalid patch: <reason>"
 			}
@@ -339,7 +347,7 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 			if p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
 				return nil, errors.New("contact fields are not editable in a tailoring session")
 			}
-			if err := h.requireEvidence(ctx, userID, p.Op, in.EvidenceID); err != nil {
+			if err := h.requireEvidence(ctx, userID, p.Op, evidenceID); err != nil {
 				return nil, err
 			}
 			meta, err := h.cv.cvStore.Patch(ctx, cvID, userID, p)
@@ -349,6 +357,36 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
 			return map[string]any{"updated_at": meta.UpdatedAt, "title": meta.Title}, nil
 		},
 	}
+}
+
+// liftEvidenceID moves a nested `evidence_id` out of the patch object, so the strict patch
+// decoder sees only patch fields. A top-level id wins if both are present, and a patch that
+// carries none is returned untouched — the cheapest path stays allocation-free.
+func liftEvidenceID(patch json.RawMessage, topLevel string) (json.RawMessage, string) {
+	if !bytes.Contains(patch, []byte(`"evidence_id"`)) {
+		return patch, topLevel
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(patch, &fields); err != nil {
+		return patch, topLevel // let DecodePatch report the real problem
+	}
+	raw, ok := fields["evidence_id"]
+	if !ok {
+		return patch, topLevel
+	}
+	delete(fields, "evidence_id")
+	cleaned, err := json.Marshal(fields)
+	if err != nil {
+		return patch, topLevel
+	}
+	if topLevel != "" {
+		return cleaned, topLevel
+	}
+	var nested string
+	if err := json.Unmarshal(raw, &nested); err != nil {
+		return cleaned, topLevel // a non-string id fails the provenance check with its own message
+	}
+	return cleaned, nested
 }
 
 // cvToolError renders a CV failure for the model, keeping owner isolation intact:

@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 )
 
 // cvRepo is a one-document stand-in for cv.Repository: it serves a single owned
@@ -357,5 +358,69 @@ func TestTailorReportReplacesRatherThanAppends(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0]["status"] != "closed_candidate" {
 		t.Errorf("stored report = %s, want one entry carrying the newer status", repo.report)
+	}
+}
+
+// A real run failed three edits in a row with `unknown field "evidence_id"`: the model put the
+// id INSIDE the patch object instead of beside it. Both readings are reasonable — the id
+// belongs to the bullet the patch writes — and the strict patch decoder refuses the nested one.
+//
+// Refusing it costs a tool round and, when it repeats, the whole run: the same misplacement
+// comes back because nothing in the error says where the field belongs. So the tool accepts
+// either position. The provenance check is unchanged; only the reading is forgiving.
+func TestCVEditAcceptsEvidenceIdInsideThePatch(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{
+		Claim:      "Ran the payments Kafka cluster.",
+		Provenance: experience.ProvenanceStatedInChat,
+	})
+	a.experience = bank
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"patch":{"op":"add_bullet","experience":0,"value":"Ran the payments Kafka cluster.","evidence_id":"`+atom.ID.String()+`"}}`))
+	if err != nil {
+		t.Fatalf("a nested evidence_id was refused: %v", err)
+	}
+	if !strings.Contains(string(repo.written), "Kafka") {
+		t.Errorf("the bullet was not written: %s", repo.written)
+	}
+}
+
+// The wall still holds when the id is nested: a nested id that is not the candidate's own
+// evidence must be refused exactly as a top-level one is.
+func TestCVEditStillRequiresRealEvidenceWhenNested(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+	bank := newStubBank()
+	inferred := bank.add(3, experience.Atom{
+		Claim:      "Probably led the migration.",
+		Provenance: experience.ProvenanceAgentInferred,
+	})
+	a.experience = bank
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "cv_edit")
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"patch":{"op":"add_bullet","experience":0,"value":"Led the migration.","evidence_id":"`+inferred.ID.String()+`"}}`)); err == nil {
+		t.Fatal("a nested id pointing at the agent's own inference was accepted")
+	}
+	if repo.written != nil {
+		t.Errorf("a refused edit still wrote: %s", repo.written)
+	}
+}
+
+// A bullet with the id in NEITHER place is still refused, and the message says where it goes.
+func TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+	a.experience = newStubBank()
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"patch":{"op":"add_bullet","experience":0,"value":"Led the migration."}}`))
+	if err == nil {
+		t.Fatal("a bullet with no evidence was accepted")
+	}
+	if !strings.Contains(err.Error(), "experience_search") {
+		t.Errorf("error %q does not tell the model how to get an id", err)
 	}
 }

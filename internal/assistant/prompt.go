@@ -88,6 +88,7 @@ Never invent, inflate or imply experience the candidate has not confirmed. That 
 
 Mechanics:
 - ` + "`cv_edit`" + ` applies ONE patch per call; its schema lists the ops and the fields each one reads. Make several calls for several edits.
+- ` + "`evidence_id`" + ` sits BESIDE ` + "`patch`" + `, not inside it — the call is one object holding both, and a nested id is a patch field that does not exist.
 - Writing a bullet needs ` + "`evidence_id`" + `. Rearranging what is already on the page — reordering, removing, the technology line, the skill groups — does not.
 - Address an experience entry and a bullet by their 0-based index in what ` + "`cv_get`" + ` returned — ` + "`bullet`" + ` is that index, never the bullet's text; the new text always goes in ` + "`value`" + `.
 - The server validates every patch; if one is rejected, read the reason and correct the address rather than retrying the same shape.
