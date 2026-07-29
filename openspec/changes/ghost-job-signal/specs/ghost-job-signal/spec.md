@@ -37,10 +37,19 @@ The derivation SHALL be deterministic — no randomness, no LLM call — and SHA
 
 ### Requirement: Structural evidence alone can never reach the higher level
 
-The system SHALL assign the level `possible` when at least two criteria of any tier fire, and the
-level `likely` only when outcome evidence from **at least two distinct people** is present
-alongside at least one other criterion. Structural criteria, however many fire, MUST NOT produce
-`likely`.
+The system SHALL judge the evidence against two separate gates:
+
+- **convergence** — at least two criteria fired, of any tier;
+- **witnesses** — outcome evidence came from **at least two distinct people**.
+
+The level SHALL be `likely` when both gates pass, `possible` when exactly one passes, and `none`
+when neither does. Structural criteria, however many fire, MUST NOT produce `likely`, since they
+observe the shape of a posting and can witness nothing about it.
+
+Outcome evidence passing the witness gate SHALL reach `possible` even as a lone criterion. Two
+strangers independently reporting that nobody answered is a stronger fact than any two artifacts
+of posting shape, and requiring structural corroboration would leave the outcome tier — the only
+one that observes reality — unable to mark anything by itself.
 
 Two independent constraints force the same two-person threshold, and both must hold: a count of
 one identifies the single applicant to the employer, and one account must not be able to mark a
@@ -66,10 +75,15 @@ posting on its own.
 - **WHEN** two distinct people contribute outcome evidence and at least one other criterion fires
 - **THEN** the ghost level is `likely`
 
-#### Scenario: Outcome evidence alone is not enough
+#### Scenario: Outcome evidence alone reaches possible but not likely
 
-- **WHEN** two distinct people contribute outcome evidence and no other criterion fires
-- **THEN** the ghost level is `possible`
+- **WHEN** two distinct people contribute outcome evidence through the same channel and no other criterion fires
+- **THEN** the ghost level is `possible` — the witness gate passes, the convergence gate does not
+
+#### Scenario: One person firing both outcome criteria is still one witness
+
+- **WHEN** a single user has both a silent tracked application and a filed report on a job, and no structural criterion fires
+- **THEN** two criteria fire but the ghost level is `possible`, because the gate counts people rather than criteria
 
 ### Requirement: One person contributes at most one unit of outcome evidence
 

@@ -1,9 +1,9 @@
 ## 1. The verdict classifier
 
-- [ ] 1.1 Add failing table-driven tests in `internal/ghost/classify_test.go` covering the level rules: one criterion → `none`; two structural → `possible`; two structural plus one contributor → `possible`; two contributors plus one other criterion → `likely`; two contributors alone → `possible`. Include a named test that pins the doctrine directly — structural criteria, however many fire, never produce `likely` — since no scenario test would catch that rule being inverted.
-- [ ] 1.2 Write `internal/ghost/classify.go`: an `Input` of plain scalars (reality class, absence stamp + validity, distinct contributors, silent applications, reports, `Now`), a `Result{Level, Criteria}`, and the level constants. No database, no Fiber, no clock of its own — mirror `internal/jobreality`'s shape and document the tiers at the point of definition, as the silence ladder documents its provenance.
-- [ ] 1.3 Add a failing test that an absence stamp older than 14 days does not fire `ats_absent`, then implement the expiry inside `Classify` so no caller can forget it.
-- [ ] 1.4 `go test ./internal/ghost/...` green.
+- [x] 1.1 Add failing table-driven tests in `internal/ghost/classify_test.go` covering the level rules: one criterion → `none`; two structural → `possible`; two structural plus one contributor → `possible`; two contributors plus one other criterion → `likely`; two contributors alone → `possible`. Include a named test that pins the doctrine directly — structural criteria, however many fire, never produce `likely` — since no scenario test would catch that rule being inverted.
+- [x] 1.2 Write `internal/ghost/classify.go`: an `Input` of plain scalars (reality class, absence stamp + validity, distinct contributors, silent applications, reports, `Now`), a `Result{Level, Criteria}`, and the level constants. No database, no Fiber, no clock of its own — mirror `internal/jobreality`'s shape and document the tiers at the point of definition, as the silence ladder documents its provenance.
+- [x] 1.3 Add a failing test that an absence stamp older than 14 days does not fire `ats_absent`, then implement the expiry inside `Classify` so no caller can forget it.
+- [x] 1.4 `go test ./internal/ghost/...` green.
 
 ## 2. Outcome evidence
 
