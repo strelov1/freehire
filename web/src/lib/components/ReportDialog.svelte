@@ -73,8 +73,11 @@
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    if (!reason) return;
-    await send(() => api.reportJob(slug, { reason, details }));
+    // Captured into a local before the closure: narrowing `reason` with an early
+    // return does not survive into the callback passed to send().
+    const picked = reason;
+    if (!picked) return;
+    await send(() => api.reportJob(slug, { reason: picked, details }));
   }
 
   async function submitApplied(e: SubmitEvent) {
