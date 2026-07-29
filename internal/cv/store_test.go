@@ -162,6 +162,63 @@ func TestStoreCreateGetRoundTripSanitized(t *testing.T) {
 	}
 }
 
+func TestStoreGetForModelStripsTheContactBlock(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	doc := Document{Header: Header{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Phone:    "+44 7700 900000",
+		Location: "London, UK",
+		Links:    []string{"https://github.com/ada"},
+	}}
+	doc.Summary = "Backend engineer."
+
+	meta, err := s.Create(ctx, 7, "General", "classic-ats", doc)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	rec, err := s.GetForModel(ctx, meta.ID, 7)
+	if err != nil {
+		t.Fatalf("get for model: %v", err)
+	}
+	if h := rec.Document.Header; h.FullName != "" || h.Email != "" || h.Phone != "" || h.Links != nil {
+		t.Errorf("contact block reached a model reader: %+v", h)
+	}
+	// Location is not an identifier, and the agent reasons about it when the vacancy is
+	// tied to a place.
+	if rec.Document.Header.Location != "London, UK" {
+		t.Errorf("location = %q, want it kept", rec.Document.Header.Location)
+	}
+	if rec.Document.Summary != "Backend engineer." {
+		t.Errorf("body did not survive the redaction: %q", rec.Document.Summary)
+	}
+
+	// The redaction is on the copy handed out, never on what is stored.
+	stored, err := s.Get(ctx, meta.ID, 7)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if stored.Document.Header.FullName != "Ada Lovelace" || stored.Document.Header.Email != "ada@example.com" {
+		t.Errorf("stored contacts were mutated: %+v", stored.Document.Header)
+	}
+}
+
+func TestStoreGetForModelForeignUserIsNotFound(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+
+	meta, err := s.Create(ctx, 1, "Mine", "classic-ats", Document{})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := s.GetForModel(ctx, meta.ID, 2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestStoreGetForeignUserIsNotFound(t *testing.T) {
 	s := NewStore(newFakeRepo())
 	ctx := context.Background()

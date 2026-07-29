@@ -84,6 +84,39 @@ func TestCVGetToolReadsTheBoundDocument(t *testing.T) {
 	}
 }
 
+// contactfulCV carries every identifier the agent must never receive, so a leak on any
+// one of the four fails the case below.
+const contactfulCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example.com",` +
+	`"phone":"+44 7700 900000","links":["https://github.com/ada"]},` +
+	`"summary":"Backend engineer","experience":[{"company":"Acme","title":"Engineer","bullets":["Shipped a thing"]}]}`
+
+// The tailoring agent runs a model over the CV, and the model reads attacker-controlled
+// text (job descriptions, browsed pages) that can talk it into writing what it holds
+// somewhere it does not belong. The contact block must therefore never enter its context.
+//
+// This has to hold for the in-process tool, which carries no API key and issues no HTTP
+// request: the guard cannot be a test on how the caller arrived.
+func TestCVGetToolOmitsTheContactBlock(t *testing.T) {
+	a, _ := cvToolsAPI(t, contactfulCV)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9), "cv_get")
+	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("cv_get: %v", err)
+	}
+	raw, _ := json.Marshal(out)
+	payload := string(raw)
+
+	for _, identifier := range []string{"Ada Lovelace", "ada@example.com", "+44 7700 900000", "github.com/ada"} {
+		if strings.Contains(payload, identifier) {
+			t.Errorf("cv_get returned %q; the agent's model must never see it\npayload = %s", identifier, payload)
+		}
+	}
+	if !strings.Contains(payload, "Backend engineer") {
+		t.Errorf("payload = %s, want the body to survive the redaction", payload)
+	}
+}
+
 func TestCVEditToolAppliesAPatch(t *testing.T) {
 	a, repo := cvToolsAPI(t, oneExperienceCV)
 

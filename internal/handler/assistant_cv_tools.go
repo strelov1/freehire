@@ -53,7 +53,9 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 	}
 }
 
-// cvGetTool reads the tailored CV document the session is editing.
+// cvGetTool reads the tailored CV document the session is editing, minus the contact
+// block: this result goes straight into a model's context, and that model reads
+// attacker-controlled text elsewhere in the same turn.
 func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name:        "cv_get",
@@ -64,7 +66,7 @@ func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			rec, err := h.cv.cvStore.Get(ctx, cvID, userID)
+			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
 			if err != nil {
 				return nil, cvToolError(err)
 			}

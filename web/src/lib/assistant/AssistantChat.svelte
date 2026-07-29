@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
-  import { Marked } from 'marked';
-  import DOMPurify from 'isomorphic-dompurify';
   import { AlertTriangle, PanelLeft, Plus, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { currentUser } from '$lib/auth.svelte';
@@ -15,6 +13,7 @@
   import { sendTurn, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { splitPresentingCalls } from '$lib/assistant/deck';
+  import { renderMarkdown } from '$lib/assistant/markdown';
   import JobDeck from '$lib/assistant/JobDeck.svelte';
   import SessionRail from '$lib/assistant/SessionRail.svelte';
   import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
@@ -138,28 +137,6 @@
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, COMPOSER_CAP)}px`;
   });
-
-  // --- Markdown rendering (sanitized) --------------------------------------
-  // freehire is a PUBLIC app and model output is untrusted, so marked's output is
-  // run through DOMPurify before it reaches `{@html}`. `isomorphic-dompurify` is
-  // SSR-safe, so the guard holds even though this page paints client-side only.
-  const md = new Marked({ gfm: true, breaks: true });
-  // Open links the model writes in a new tab so clicking one never navigates the
-  // chat away. Scoped to this sanitize call so it never affects DOMPurify elsewhere.
-  function openLinksInNewTab(node: Element) {
-    if (node.tagName === 'A') {
-      node.setAttribute('target', '_blank');
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-  }
-  function renderMarkdown(text: string): string {
-    const html = md.parse(text, { async: false }) as string;
-    DOMPurify.addHook('afterSanitizeAttributes', openLinksInNewTab);
-    const clean = DOMPurify.sanitize(html);
-    DOMPurify.removeHook('afterSanitizeAttributes');
-    return clean;
-  }
-
 
   // --- Streaming spinner / thinking timers ---------------------------------
   const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;

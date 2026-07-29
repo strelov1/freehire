@@ -131,6 +131,25 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID, userID int64) (Record, er
 	}, nil
 }
 
+// GetForModel returns one owned CV with the contact block stripped, for every reader
+// that puts the document in front of a model.
+//
+// It is a second accessor rather than a flag on Get because the rule is about who is
+// READING, not about how the request arrived. The redaction used to be a handler-level
+// test on whether the caller held an API key; when the assistant moved in-process it
+// carried no key at all, the test stopped firing, and a requirement that was still on
+// the books quietly stopped being met. Naming the safe path makes it the one an agent
+// surface reaches for, and leaves Get to the owner's own full-fidelity reads (the
+// editor, the PDF render).
+func (s *Store) GetForModel(ctx context.Context, id uuid.UUID, userID int64) (Record, error) {
+	rec, err := s.Get(ctx, id, userID)
+	if err != nil {
+		return Record{}, err
+	}
+	rec.Document = rec.Document.withoutContacts()
+	return rec, nil
+}
+
 // int8Value unwraps a nullable bigint to its value, mapping NULL to 0.
 func int8Value(v pgtype.Int8) int64 {
 	if v.Valid {

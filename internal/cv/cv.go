@@ -108,6 +108,21 @@ type Header struct {
 	Links    []string `json:"links,omitempty"`
 }
 
+// withoutContacts returns a copy of the document with the candidate's identifiers
+// cleared. Location stays: it is not an identifier, and a tailoring agent reasons about
+// it when the vacancy is tied to a place. Links go, because a personal profile URL names
+// the candidate as squarely as their address does.
+//
+// The receiver is a value, so the stored document is untouched — only the copy handed
+// to a reader is stripped.
+func (d Document) withoutContacts() Document {
+	d.Header.FullName = ""
+	d.Header.Email = ""
+	d.Header.Phone = ""
+	d.Header.Links = nil
+	return d
+}
+
 // Experience is one work-history entry. Dates are free-form strings as printed on the
 // CV (e.g. "2021-03", "Mar 2021", "Present") — no date parsing is attempted.
 type ExperienceItem struct {

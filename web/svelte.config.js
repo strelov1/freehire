@@ -19,8 +19,7 @@ export default {
     // same-origin scripts run; SvelteKit auto-adds a per-response nonce (mode 'auto')
     // to the inline scripts IT injects (the hydration bootstrap). Inline JSON-LD
     // (<script type="application/ld+json">) is non-executable and unaffected.
-    // style-src/img-src are left unset (no default-src), so styles/fonts/logo.dev
-    // images are unrestricted.
+    // style-src is left unset (no default-src), so styles and fonts are unrestricted.
     //
     // The anti-FOUC theme script in app.html is author-written, so SvelteKit does NOT
     // nonce it — it is allowed by the SHA-256 of its exact contents below. WARNING:
@@ -42,6 +41,25 @@ export default {
         // forbid legacy plugin/embed vectors.
         'base-uri': ['self'],
         'object-src': ['none'],
+        // img-src is the layer under the assistant's markdown sanitizer. The chat
+        // renders model output with {@html}, and model output is untrusted — it reads
+        // job descriptions, browsed pages and other attacker-controlled text — so an
+        // image it can be talked into writing is a no-click GET carrying whatever the
+        // model held. The sanitizer (lib/assistant/markdown.ts) is the primary control;
+        // this pins where an image could go if that ever regresses.
+        //
+        // The list is exhaustive by inspection, not by habit: the only browser-side
+        // <img> sinks are CompanyLogo.svelte (the logo proxy) and TemplateGallery.svelte
+        // (same-origin /cv-previews/*.svg). OG cards render server-side and are never
+        // fetched under our own CSP, and job descriptions carry no images at all — the
+        // ingest sanitizer strips them (internal/sources/sanitize.go). `data:` is here
+        // for the handful of Tailwind utilities that inline an SVG.
+        'img-src': ['self', 'data:', 'https://logo.freehire.me'],
+        // Pinning img-src deliberately stopped there: connect-src was considered as
+        // part of the same hardening and left out, because getting it wrong fails
+        // silently — error reporting and analytics simply stop — and that deserves its
+        // own change with its own verification rather than riding along on this one.
+        //
         // Sentry: NO connect-src is set here on purpose. With no default-src, the
         // browser does not restrict fetch/beacon, so the Sentry SDK reaches its
         // ingest host (https://*.ingest.de.sentry.io — EU region) unblocked. The

@@ -224,7 +224,8 @@ func (h *cvHandlers) CreateCV(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": recordResponse(rec)})
 }
 
-// GetCV returns one owned CV with its full document.
+// GetCV returns one owned CV: the full document on the owner's own session, and the
+// document without its contact block to an agent reading with a key.
 func (h *cvHandlers) GetCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -234,18 +235,17 @@ func (h *cvHandlers) GetCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	rec, err := h.cvStore.Get(c.Context(), id, userID)
+	// An API-key caller is an agent running its own model over the CV, so it reads through
+	// the redacting accessor — the same one the in-process assistant's cv_get tool uses, so
+	// one implementation covers both and neither can drift. The owner's own cookie session
+	// reads in full; the stored contacts are untouched either way and still render in the PDF.
+	read := h.cvStore.Get
+	if auth.ViaAPIKey(c) {
+		read = h.cvStore.GetForModel
+	}
+	rec, err := read(c.Context(), id, userID)
 	if err != nil {
 		return mapCVError(err)
-	}
-	// An API-key caller (the CV-tailoring agent runs its own model over the CV) must not see
-	// the contact block; the owner's own cookie session sees it in full. The stored contacts
-	// are untouched and still render in the PDF.
-	if auth.ViaAPIKey(c) {
-		rec.Document.Header.FullName = ""
-		rec.Document.Header.Email = ""
-		rec.Document.Header.Phone = ""
-		rec.Document.Header.Links = nil
 	}
 	return c.JSON(fiber.Map{"data": recordResponse(rec)})
 }
