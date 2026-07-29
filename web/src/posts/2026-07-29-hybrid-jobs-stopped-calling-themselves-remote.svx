@@ -1,0 +1,30 @@
+---
+title: Hybrid jobs stopped calling themselves remote
+date: 2026-07-29
+summary: Thousands of jobs that ask you into an office two or three days a week were sitting in the remote filter; they now say hybrid, and three more job platforms started reporting the work format at all.
+type: changelog
+tags:
+  - filters
+  - sources
+draft: false
+---
+
+Filter by **Remote** and you expect to never see an office address. A reader pointed at a
+Vilnius design role we labelled remote while the company's own careers page said hybrid —
+and it turned out not to be one bad posting but a whole platform's worth.
+
+The job boards behind those postings send us a flag that reads like "remote", except it is
+really "not strictly office-based" — a hybrid role carries it exactly like a fully remote
+one does. We had been trusting that flag instead of the field sitting right beside it, the
+one the company actually fills in when it writes *Remote*, *Hybrid* or *On-site*. So every
+hybrid job on that platform arrived here wearing the wrong label.
+
+**Now we read the field the employer filled in.** For that platform alone, 33,000 jobs had
+been marked remote and 1,700 hybrid; the honest split is closer to 18,000 remote, 15,700
+hybrid and 18,000 on-site. The [remote filter](/?work_mode=remote) got smaller and truer,
+and the [hybrid filter](/?work_mode=hybrid) finally holds the jobs that belong in it.
+
+Three other platforms turned out to be quieter about the same thing — they report remote
+and hybrid separately, or hide the format in a field we never opened, so their jobs simply
+had no work format at all. They do now: more than 60,000 further jobs can tell you whether
+you would be commuting.
