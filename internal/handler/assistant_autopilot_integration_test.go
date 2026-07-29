@@ -21,6 +21,9 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
+	"github.com/strelov1/freehire/internal/llm"
 )
 
 // seedTailoringSession creates a CV bound to a vacancy plus the tailoring session that
@@ -216,5 +219,121 @@ func TestCVReadCarriesTheRunReport(t *testing.T) {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("CV read is missing %q:\n%s", want, body)
 		}
+	}
+}
+
+// scriptedTurnModel replays a fixed sequence of replies AND records the tool results it was
+// fed, so a test can assert on what the tools told the model — including a refusal.
+type scriptedTurnModel struct {
+	replies []*llms.ContentChoice
+	seen    []string
+}
+
+func (m *scriptedTurnModel) Chat(_ context.Context, msgs []llms.MessageContent, _ []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
+	for _, msg := range msgs {
+		if msg.Role != llms.ChatMessageTypeTool {
+			continue
+		}
+		for _, part := range msg.Parts {
+			if r, ok := part.(llms.ToolCallResponse); ok {
+				m.seen = append(m.seen, r.Content)
+			}
+		}
+	}
+	if len(m.replies) == 0 {
+		return &llms.ContentChoice{Content: "done"}, nil
+	}
+	reply := m.replies[0]
+	m.replies = m.replies[1:]
+	if s.OnText != nil && reply.Content != "" {
+		s.OnText(reply.Content)
+	}
+	return reply, nil
+}
+
+// The shape of a real run, driven end to end: the agent searches the bank, tries to write a
+// bullet without citing evidence and is refused, writes it citing the evidence, records the
+// report, and closes with a summary. The provenance wall must hold inside an unattended run
+// exactly as it does in conversation — that is the one rule the whole capability rests on.
+func TestAnAutopilotRunSearchesEditsAndReports(t *testing.T) {
+	pool := startPostgres(t)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	ctx := context.Background()
+
+	queries := db.New(pool)
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+
+	model := &scriptedTurnModel{}
+	app, h := newAssistantApp(pool, iss, model)
+	h.experience = bank
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-run@example.test", true)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+
+	// The candidate's own words are in the bank, so a bullet may cite them.
+	atom, err := bank.AddAtom(ctx, userID, experience.Atom{
+		Claim:      "Ran the payments Kafka cluster through a 10x traffic year.",
+		Skills:     []string{"kafka"},
+		Provenance: experience.ProvenanceStatedInChat,
+	})
+	if err != nil {
+		t.Fatalf("seed experience atom: %v", err)
+	}
+
+	model.replies = []*llms.ContentChoice{
+		callReplyChoice("experience_search", `{"query":"Kafka"}`),
+		// A bullet with no evidence_id: the claim wall must refuse it mid-run, exactly as it
+		// does in conversation. (set_summary would NOT be refused — a summary asserts nothing
+		// the bank has to back — so the attempt has to be a bullet to test the rule.)
+		callReplyChoice("cv_edit", `{"patch":{"op":"add_bullet","experience":0,"value":"Led a team of twelve."}}`),
+		callReplyChoice("cv_edit", `{"patch":{"op":"add_bullet","experience":0,"value":"Ran the payments Kafka cluster through a 10x traffic year."},"evidence_id":"`+atom.ID.String()+`"}`),
+		callReplyChoice("tailor_report", `{"items":[
+			{"requirement":"Kafka in production","status":"closed_bank","note":"Cited the payments cluster."},
+			{"requirement":"Team leadership","status":"open","note":"Nothing in the bank."}
+		]}`),
+		{Content: "Closed one of two. Have you led a team?"},
+	}
+
+	// The CV needs an experience entry for add_bullet to address.
+	if _, err := pool.Exec(ctx,
+		`UPDATE cvs SET data = '{"summary":"before the run","experience":[{"company":"Acme","title":"Engineer","bullets":[]}]}'::jsonb
+		 WHERE id = $1`, cvID); err != nil {
+		t.Fatalf("seed cv document: %v", err)
+	}
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("autopilot: status %d", resp.StatusCode)
+	}
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatalf("read stream: %v", err)
+	}
+
+	// The unevidenced edit came back as a refusal naming what to do next — inside the run.
+	var refused bool
+	for _, result := range model.seen {
+		if strings.Contains(result, "evidence_id") && strings.Contains(result, "experience_search") {
+			refused = true
+		}
+	}
+	if !refused {
+		t.Errorf("an unevidenced bullet was not refused during the run; tool results were %q", model.seen)
+	}
+
+	rec, err := h.cv.cvStore.Get(ctx, cvID, userID)
+	if err != nil {
+		t.Fatalf("get cv: %v", err)
+	}
+	if len(rec.Document.Experience) == 0 || len(rec.Document.Experience[0].Bullets) != 1 {
+		t.Fatalf("document = %+v, want exactly the evidenced bullet — the refused one must not be there", rec.Document)
+	}
+	if !strings.Contains(rec.Document.Experience[0].Bullets[0], "Kafka") {
+		t.Errorf("bullet = %q, want the evidenced one", rec.Document.Experience[0].Bullets[0])
+	}
+	if len(rec.AutopilotReport) != 2 || rec.AutopilotReport[0].Status != cv.AutopilotClosedBank {
+		t.Errorf("report = %+v, want both requirements recorded", rec.AutopilotReport)
+	}
+	if !rec.AutopilotRevertable {
+		t.Error("the run left no snapshot; it could not be undone")
 	}
 }

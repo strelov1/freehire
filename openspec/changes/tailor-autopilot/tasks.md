@@ -30,9 +30,9 @@
 
 ## 6. The agent's method
 
-- [ ] 6.1 Add the autopilot section to `tailorPrompt`: walk every requirement from `cv_context` in one turn, `experience_search` each, `cv_edit` what the evidence supports, ask nothing mid-run, close with `tailor_report` then a summary and ONE question
-- [ ] 6.2 Add the rule that a requirement closed later from the candidate's own words re-reports with the candidate status
-- [ ] 6.3 Integration test on a fake model, modelled on `assistant_profile_tool_integration_test.go`: search → edit → report in one turn, the report persisted, and `cv_edit` without `evidence_id` still refused inside a run
+- [x] 6.1 Add the autopilot section to `tailorPrompt`: walk every requirement from `cv_context` in one turn, `experience_search` each, `cv_edit` what the evidence supports, ask nothing mid-run, close with `tailor_report` then a summary and ONE question
+- [x] 6.2 Add the rule that a requirement closed later from the candidate's own words re-reports with the candidate status
+- [x] 6.3 Integration test on a fake model, modelled on `assistant_profile_tool_integration_test.go`: search → edit → report in one turn, the report persisted, and `cv_edit` without `evidence_id` still refused inside a run
 
 ## 7. Wire shape
 

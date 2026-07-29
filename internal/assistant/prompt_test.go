@@ -100,3 +100,23 @@ func TestBrowsePromptOpensOnThePageNotTheProfile(t *testing.T) {
 		t.Error("the browse prompt never mentions get_profile, so nothing tells the agent that the opening it just read does not apply here")
 	}
 }
+
+// An unattended run is the same method at a different rhythm. What the prompt has to state
+// is exactly what a run would otherwise get wrong: keep going, do not ask mid-pass, and
+// account for every requirement at the end — including the ones nothing could close.
+func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+
+	for _, want := range []string{"tailor_report", "closed_bank", "closed_candidate", "open", "not_reached"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the tailoring prompt never mentions %q; a run cannot report an outcome it was never told exists", want)
+		}
+	}
+	if !strings.Contains(p, "evidence_id") {
+		t.Error("the run section must restate that a bullet needs evidence — the wall holds when nobody is watching")
+	}
+	// One question at the end, not a list: the rest of the remainder is visible beside the CV.
+	if !strings.Contains(strings.ToLower(p), "one question") && !strings.Contains(p, "FIRST open one") {
+		t.Error("the prompt must ask for ONE closing question; a numbered list of gaps gets one answer")
+	}
+}

@@ -91,7 +91,19 @@ Mechanics:
 - Contact details cannot be edited here — do not try.
 - Keep the CV to one or two pages. Prefer sharpening existing bullets over adding new ones.
 - Explain each edit in one short sentence as you make it, so the candidate can follow along in the preview beside this chat.
-- If the conversation turns to other vacancies, show them ONLY by calling ` + "`present_jobs`" + ` — never write a vacancy's link into your text. Tailoring this CV stays the job; do not go looking for vacancies unasked.`
+- If the conversation turns to other vacancies, show them ONLY by calling ` + "`present_jobs`" + ` — never write a vacancy's link into your text. Tailoring this CV stays the job; do not go looking for vacancies unasked.
+
+UNATTENDED RUNS
+
+The candidate can ask you to do the whole pass yourself rather than walk it with you. When they do, the method above does not change — the rhythm does:
+
+- Work through EVERY requirement ` + "`cv_context`" + ` returned, in order, in this one turn. Do not stop at the first thing you cannot answer.
+- Ask NOTHING while you are running. A requirement the bank has nothing for is carried to the report, not turned into a question mid-pass.
+- Finish by calling ` + "`tailor_report`" + ` ONCE with every requirement you considered: ` + "`closed_bank`" + ` where the bank had evidence and you wrote it in, ` + "`open`" + ` where it had none, ` + "`not_reached`" + ` for anything you did not get to. Copy each requirement's text verbatim from ` + "`cv_context`" + `.
+- Then write a SHORT summary — what you changed, and how many requirements are still open — and ask about the FIRST open one. One question, not a list: they will see the rest beside the CV.
+- Afterwards the conversation is ordinary again. When they confirm experience for an open requirement, record their words with ` + "`experience_add`" + `, write the bullet citing that id, and call ` + "`tailor_report`" + ` again with the same list, that entry now ` + "`closed_candidate`" + `. The report is replaced whole every time, so send all of it.
+
+Nothing about the honest wall relaxes because nobody is watching. A bullet still needs an ` + "`evidence_id`" + `, and a requirement you cannot evidence stays off the page and goes in the report as open.`
 
 // profilePrompt is the experience interviewer. It exists because the bank fills fastest
 // when someone sits down to fill it, and because the gaps that matter are visible to us
