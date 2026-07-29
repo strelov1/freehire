@@ -3,10 +3,7 @@ package handler
 import (
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"context"
-	"github.com/strelov1/freehire/internal/ghost"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -191,11 +188,11 @@ func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, vi
 	if err != nil {
 		return
 	}
-	stamps := make(map[int64]pgtype.Timestamptz, len(stampRows))
+	stamps := make(map[int64]db.ListJobGhostStampsRow, len(stampRows))
 	for _, r := range stampRows {
-		stamps[r.ID] = r.AtsAbsentAt
+		stamps[r.ID] = r
 	}
-	evidence := h.ghostEvidence(c, ids)
+	evidence := ghostEvidenceFor(c.Context(), h.queries, ids)
 
 	now := time.Now()
 	for i, hit := range hits {
@@ -203,43 +200,18 @@ func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, vi
 		if hit.Reality != nil {
 			realityClass = hit.Reality.Class
 		}
-		stamp := stamps[hit.ID]
+		row := stamps[hit.ID]
 		views[i].Ghost = jobview.ClassifyGhost(jobview.GhostInput{
-			Now:          now,
+			Now: now,
+			// Read from Postgres, not from the hit: a sweep-closed job stays in the
+			// index until a reindex, whose timer is disabled, so the index cannot be
+			// trusted to say a posting is still up. Without this a warning would
+			// appear on postings already taken down.
+			Closed:       row.ClosedAt.Valid,
 			RealityClass: realityClass,
-			ATSAbsentAt:  stamp.Time,
-			HasATSAbsent: stamp.Valid,
+			ATSAbsentAt:  row.AtsAbsentAt.Time,
+			HasATSAbsent: row.AtsAbsentAt.Valid,
 			Evidence:     evidence[hit.ID],
 		})
 	}
-}
-
-// ghostEvidence gathers outcome evidence for a page of job ids in two queries.
-// Best-effort: a lookup failure yields no evidence, which is the honest direction —
-// a missing lookup is a gap in what we know, and the signal says nothing where it
-// has not observed.
-func (h *searchHandlers) ghostEvidence(c *fiber.Ctx, jobIDs []int64) map[int64]ghost.Evidence {
-	appRows, err := h.queries.ListGhostApplicationEvidence(c.Context(), jobIDs)
-	if err != nil {
-		return nil
-	}
-	reportRows, err := h.queries.ListGhostReportEvidence(c.Context(), jobIDs)
-	if err != nil {
-		return nil
-	}
-	apps := make([]ghost.Application, len(appRows))
-	for i, r := range appRows {
-		apps[i] = ghost.Application{
-			JobID:                r.JobID,
-			UserID:               r.UserID,
-			Stage:                r.Stage,
-			LastActivityAt:       r.LastActivityAt.Time,
-			HasPendingSuggestion: r.HasPendingSuggestion,
-		}
-	}
-	reports := make([]ghost.Report, len(reportRows))
-	for i, r := range reportRows {
-		reports[i] = ghost.Report{JobID: r.JobID, UserID: r.UserID, AppliedOn: r.AppliedOn.Time}
-	}
-	return ghost.Aggregate(time.Now(), apps, reports)
 }

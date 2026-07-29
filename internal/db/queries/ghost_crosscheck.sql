@@ -43,8 +43,13 @@ UPDATE jobs SET ats_absent_at = NULL
 WHERE id = ANY(sqlc.arg(job_ids)::bigint[]) AND ats_absent_at IS NOT NULL;
 
 -- name: ListJobGhostStamps :many
--- The absence stamps of a page of jobs, for the read paths that do not already hold
--- the rows — search results come back from Meilisearch, which does not carry this
--- column (and cannot: reindex is content_hash-incremental, so a column no adapter
--- writes would never reach the index on its own).
-SELECT id, ats_absent_at FROM jobs WHERE id = ANY(sqlc.arg(job_ids)::bigint[]);
+-- The absence stamp AND the closed state of a page of jobs, for the read paths that do
+-- not already hold the rows — search results come back from Meilisearch, which does not
+-- carry ats_absent_at (and cannot: reindex is content_hash-incremental, so a column no
+-- adapter writes would never reach the index on its own).
+--
+-- closed_at rides along because a closed posting must carry no ghost signal, and the
+-- index is NOT a reliable source for that either: a sweep-closed job stays in Meili
+-- until a reindex, whose timer is disabled. Reading the truth from Postgres is what
+-- stops a warning appearing on a posting that has already been taken down.
+SELECT id, ats_absent_at, closed_at FROM jobs WHERE id = ANY(sqlc.arg(job_ids)::bigint[]);

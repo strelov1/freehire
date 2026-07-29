@@ -105,3 +105,23 @@ func TestClassifyGhost_OmitsTheStampWhenTheCriterionDidNotFire(t *testing.T) {
 		t.Errorf("ats_checked_at = %v, want absent — the cross-check never ran on this posting", *got.ATSCheckedAt)
 	}
 }
+
+// The closed check must hold on EVERY serving path, not only where the row is in
+// hand. Search hits come from Meilisearch, and a sweep-closed job stays in the index
+// until a reindex whose timer is disabled — so the index cannot be trusted to say a
+// posting is still up, and the closed state is read from Postgres alongside the
+// absence stamp. Without it a warning appears on a posting already taken down.
+func TestClassifyGhost_ClosedWinsOverEveryOtherSignal(t *testing.T) {
+	in := stamped()
+	in.Closed = true
+	for _, ev := range []ghost.Evidence{
+		{},
+		{Contributors: 2, Reports: 2},
+		{Contributors: 9, SilentApplications: 9, Reports: 9},
+	} {
+		in.Evidence = ev
+		if got := ClassifyGhost(in); got != nil {
+			t.Errorf("evidence %+v: ghost = %+v, want nil", ev, got)
+		}
+	}
+}

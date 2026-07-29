@@ -1085,10 +1085,15 @@ type Querier interface {
 	// The emails linked to one of the caller's applications, newest first, for the
 	// application detail page.
 	ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([]ListJobEmailsRow, error)
-	// The absence stamps of a page of jobs, for the read paths that do not already hold
-	// the rows — search results come back from Meilisearch, which does not carry this
-	// column (and cannot: reindex is content_hash-incremental, so a column no adapter
-	// writes would never reach the index on its own).
+	// The absence stamp AND the closed state of a page of jobs, for the read paths that do
+	// not already hold the rows — search results come back from Meilisearch, which does not
+	// carry ats_absent_at (and cannot: reindex is content_hash-incremental, so a column no
+	// adapter writes would never reach the index on its own).
+	//
+	// closed_at rides along because a closed posting must carry no ghost signal, and the
+	// index is NOT a reliable source for that either: a sweep-closed job stays in Meili
+	// until a reindex, whose timer is disabled. Reading the truth from Postgres is what
+	// stops a warning appearing on a posting that has already been taken down.
 	ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]ListJobGhostStampsRow, error)
 	// Id-only projection of ListJobsByIDAfter, used as the corruption-degrade path:
 	// when a full SELECT * batch faults on a corrupted TOAST value (SQLSTATE XX001),

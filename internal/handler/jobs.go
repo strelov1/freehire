@@ -133,55 +133,17 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": view})
 }
 
-// ghostEvidence gathers the outcome evidence for one job. Best-effort: a lookup
-// failure yields no evidence, which downgrades or removes the signal rather than
-// failing the job read. That is the honest direction — a missing lookup is a gap in
-// what we know, and the signal's whole discipline is to say nothing where it has
-// not observed.
+// ghostEvidence gathers the outcome evidence for one job.
 func (h *jobsHandlers) ghostEvidence(c *fiber.Ctx, jobID int64) ghost.Evidence {
-	return h.ghostEvidenceAll(c, []int64{jobID})[jobID]
-}
-
-// ghostEvidenceAll gathers outcome evidence for a page of jobs in two queries
-// rather than two per card. The returned map is sparse — only jobs with evidence
-// appear — so a page with none costs two empty result sets.
-func (h *jobsHandlers) ghostEvidenceAll(c *fiber.Ctx, jobIDs []int64) map[int64]ghost.Evidence {
-	if len(jobIDs) == 0 {
-		return nil
-	}
-	appRows, err := h.queries.ListGhostApplicationEvidence(c.Context(), jobIDs)
-	if err != nil {
-		return nil
-	}
-	reportRows, err := h.queries.ListGhostReportEvidence(c.Context(), jobIDs)
-	if err != nil {
-		return nil
-	}
-
-	apps := make([]ghost.Application, len(appRows))
-	for i, r := range appRows {
-		apps[i] = ghost.Application{
-			JobID:                r.JobID,
-			UserID:               r.UserID,
-			Stage:                r.Stage,
-			LastActivityAt:       r.LastActivityAt.Time,
-			HasPendingSuggestion: r.HasPendingSuggestion,
-		}
-	}
-	reports := make([]ghost.Report, len(reportRows))
-	for i, r := range reportRows {
-		reports[i] = ghost.Report{JobID: r.JobID, UserID: r.UserID, AppliedOn: r.AppliedOn.Time}
-	}
-	return ghost.Aggregate(time.Now(), apps, reports)
+	return ghostEvidenceFor(c.Context(), h.queries, []int64{jobID})[jobID]
 }
 
 // attachGhostToRows attaches the ghost signal to a page served from Postgres, where
-// the rows are already in hand. The reality class is recomputed per row from its
-// cluster counts, fetched for the whole page at once — the same bulk shape the
-// reindex path uses, rather than a count query per card.
+// the rows are already in hand — so the closed state and the absence stamp come
+// straight off them, and only the outcome evidence needs a lookup.
 //
-// Best-effort throughout: a failed lookup leaves the signal off those cards. The
-// list must not fail because an optional badge could not be computed.
+// Best-effort throughout: a failed lookup leaves the signal off those cards. A list
+// must not fail because an optional badge could not be computed.
 func (h *jobsHandlers) attachGhostToRows(c *fiber.Ctx, rows []db.Job, views []jobview.Job) {
 	if len(rows) == 0 {
 		return
@@ -190,8 +152,7 @@ func (h *jobsHandlers) attachGhostToRows(c *fiber.Ctx, rows []db.Job, views []jo
 	for i, r := range rows {
 		ids[i] = r.ID
 	}
-	evidence := h.ghostEvidenceAll(c, ids)
-
+	evidence := ghostEvidenceFor(c.Context(), h.queries, ids)
 	clusters := h.roleClusterCounts(c, rows)
 
 	now := time.Now()

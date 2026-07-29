@@ -121,18 +121,24 @@ func (q *Queries) ListCompanyBoardTitles(ctx context.Context, arg ListCompanyBoa
 }
 
 const listJobGhostStamps = `-- name: ListJobGhostStamps :many
-SELECT id, ats_absent_at FROM jobs WHERE id = ANY($1::bigint[])
+SELECT id, ats_absent_at, closed_at FROM jobs WHERE id = ANY($1::bigint[])
 `
 
 type ListJobGhostStampsRow struct {
 	ID          int64              `json:"id"`
 	AtsAbsentAt pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedAt    pgtype.Timestamptz `json:"closed_at"`
 }
 
-// The absence stamps of a page of jobs, for the read paths that do not already hold
-// the rows — search results come back from Meilisearch, which does not carry this
-// column (and cannot: reindex is content_hash-incremental, so a column no adapter
-// writes would never reach the index on its own).
+// The absence stamp AND the closed state of a page of jobs, for the read paths that do
+// not already hold the rows — search results come back from Meilisearch, which does not
+// carry ats_absent_at (and cannot: reindex is content_hash-incremental, so a column no
+// adapter writes would never reach the index on its own).
+//
+// closed_at rides along because a closed posting must carry no ghost signal, and the
+// index is NOT a reliable source for that either: a sweep-closed job stays in Meili
+// until a reindex, whose timer is disabled. Reading the truth from Postgres is what
+// stops a warning appearing on a posting that has already been taken down.
 func (q *Queries) ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]ListJobGhostStampsRow, error) {
 	rows, err := q.db.Query(ctx, listJobGhostStamps, jobIds)
 	if err != nil {
@@ -142,7 +148,7 @@ func (q *Queries) ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]Lis
 	items := []ListJobGhostStampsRow{}
 	for rows.Next() {
 		var i ListJobGhostStampsRow
-		if err := rows.Scan(&i.ID, &i.AtsAbsentAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.AtsAbsentAt, &i.ClosedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
