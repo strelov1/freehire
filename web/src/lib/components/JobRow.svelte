@@ -9,7 +9,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
-  import { computeClientMatch, resolveMatchState } from '$lib/jobMatch';
+  import { computeClientMatch, matchTeaser, resolveMatchState } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import { metaDescription } from '$lib/seo';
   import type { Job } from '$lib/types';
@@ -95,12 +95,31 @@
     }),
   );
   // The viewer's skills as a lowercase set, only when there's a real match to show —
-  // used to tint each skill chip (a skill you have vs one you're missing). Null for
-  // guests / no-profile viewers, who see the plain brand chips.
+  // used to tint each skill chip (a skill you have vs one you're missing). Null in the
+  // locked states, where the teaser below decides the tint instead.
   const haveSet = $derived(
     matchState === 'ready' ? new Set(profileSkills.map((s) => s.toLowerCase())) : null,
   );
   const match = $derived(matchState === 'ready' ? computeClientMatch(skills, profileSkills) : null);
+
+  // A viewer with no match to show — signed out, or signed in with no skills — gets the
+  // job's deterministic teaser instead of an empty card corner: the same chips and strip,
+  // blurred, as an invitation to sign in. Seeded from the slug, so the figures survive
+  // hydration and agree with the sidebar block on the job's own page.
+  const teaser = $derived(
+    matchState === 'guest' || matchState === 'no-profile'
+      ? matchTeaser(job.public_slug, skills)
+      : null,
+  );
+
+  // A chip is red when the viewer's own profile lacks the skill, or — under the teaser —
+  // when the teaser marked it missing. Both tints come from the same source as the strip
+  // below, so the chips and the percentage can never tell different stories.
+  function chipVariant(skill: string): 'brand' | 'missing' {
+    if (haveSet) return haveSet.has(skill.toLowerCase()) ? 'brand' : 'missing';
+    if (teaser) return teaser.missing.has(skill) ? 'missing' : 'brand';
+    return 'brand';
+  }
 
   // Whether the signed-in user has saved this job, read from the shared saved set
   // (loaded once on the browse view). The bookmark reflects this and updates the
@@ -290,16 +309,23 @@
          doesn't need. With basis:auto the row's width is derived from its max-content
          width, so shorter chips would ironically shrink the row and cause *more*
          wrapping. -->
-    <div class="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1">
+    <!-- Under the teaser the chips are blurred with the strip below, because their
+         green/red tint is part of the same not-yet-computed signal. The blur stops at
+         this container so the salary beside it — real information — stays crisp. The
+         skill names themselves are left announced to assistive technology: they're the
+         job's own facet, and colour was never conveyed there in the first place. -->
+    <div
+      class={[
+        'flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-1',
+        teaser && 'pointer-events-none select-none opacity-90 blur-[1.5px]',
+      ]}
+    >
       <!-- A long dictionary slug ("event-driven-architecture") would wrap inside its
            own chip and stretch the row to two lines, breaking the card's rhythm on a
            phone. Each chip stays one line and ellipsises past max-w; the full skill is
            in `title` for anyone who needs it. -->
       {#each shownSkills as skill (skill)}
-        <Badge
-          variant={haveSet && !haveSet.has(skill.toLowerCase()) ? 'missing' : 'brand'}
-          class="max-w-[9rem]"
-        >
+        <Badge variant={chipVariant(skill)} class="max-w-[9rem]">
           <span class="truncate" title={skill}>{skill}</span>
         </Badge>
       {/each}
@@ -312,11 +338,26 @@
     {/if}
   </div>
 
-  <!-- Card-level profile match: a thin coverage bar shown only to a signed-in viewer with
-       a skills profile (`match` is null otherwise). `gutterRight` keeps the percent clear
-       of the feed's bottom-right hide control. -->
-  <JobMatchBar {match} gutterRight={!!onHide} />
+  <!-- Card-level profile match: the real client-computed coverage bar for a signed-in
+       viewer with a skills profile, the blurred teaser for one without. `blurred` is
+       gated on there being no real match too, so the two props cannot contradict each
+       other and render a genuine score under a blur. `gutterRight` keeps the percent
+       clear of the feed's bottom-right hide control. -->
+  <JobMatchBar match={match ?? teaser} blurred={!match && !!teaser} gutterRight={!!onHide} />
 </a>
+
+{#if teaser}
+  <!-- The blurred strip is hidden from assistive technology, so this is what stands in
+       for it — the invitation that would actually get this viewer a real match. It sits
+       outside the card link deliberately: `sr-only` is clip-based, not display:none, so
+       inside the <a> it would join the link's accessible name and every card in the feed
+       would announce a sign-in instruction that the link doesn't carry out. -->
+  <span class="sr-only">
+    {matchState === 'guest'
+      ? 'Sign in to see how this job matches your profile'
+      : 'Add your skills to see how this job matches your profile'}
+  </span>
+{/if}
 
 {#if footer}
   <!-- Optional in-card actions row (e.g. the saved list's reminder chip, the

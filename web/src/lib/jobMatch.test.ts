@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { resolveMatchState, matchBarSegments, computeClientMatch, partitionBlockers } from './jobMatch';
+import {
+  resolveMatchState,
+  matchBarSegments,
+  computeClientMatch,
+  matchTeaser,
+  teaserChips,
+  partitionBlockers,
+} from './jobMatch';
 
 describe('resolveMatchState', () => {
   const base = { jobSkills: ['go'], authenticated: true, profileLoaded: true, profileSkills: ['go'] };
@@ -73,6 +80,148 @@ describe('computeClientMatch', () => {
 
   it('does not let duplicate profile skills inflate the count', () => {
     expect(computeClientMatch(['go', 'kafka'], ['go', 'go'])).toEqual({ total: 2, matched: 1, percent: 50 });
+  });
+});
+
+describe('matchTeaser', () => {
+  const SKILLS = ['go', 'kafka', 'aws', 'postgres', 'docker'];
+  // Enough distinct slugs to exercise the hash rather than one lucky seed.
+  const MANY = Array.from(
+    { length: 200 },
+    (_, i) => matchTeaser(`senior-go-engineer-at-acme-${i}`, SKILLS)!,
+  );
+  // The percent ceiling has three regimes — a fractional bound below five skills, an
+  // exact-integer one at five (where 90% would round 4.5 up to a full house), and the
+  // flat 90 cap above six. Sampling only one skill count would leave two untested.
+  const ACROSS_COUNTS = [2, 3, 4, 5, 6, 10, 36, 100].flatMap((total) => {
+    const skills = Array.from({ length: total }, (_, i) => `skill-${i}`);
+    return Array.from({ length: 40 }, (_, i) => matchTeaser(`job-${total}-${i}`, skills)!);
+  });
+
+  it('is nothing at all for a job with no skills, leaving the no-skills state to render', () => {
+    expect(matchTeaser('some-slug', [])).toBeNull();
+  });
+
+  it('is nothing for a one-skill job, which has no have/missing story to tell', () => {
+    // "1 of 1 skills" beside an 87% bar is the one figure a viewer can catch out, and a
+    // lone chip carries no contrast either way — so such a job shows no teaser at all.
+    expect(matchTeaser('one-skill-job', ['go'])).toBeNull();
+  });
+
+  it('gives one slug the same figures every time it is derived', () => {
+    // The teaser is rendered during SSR and again after hydration, on the card and in
+    // the sidebar. Two derivations that disagree put two scores for one job on screen.
+    const first = matchTeaser('senior-go-engineer-at-acme', SKILLS);
+    const second = matchTeaser('senior-go-engineer-at-acme', SKILLS);
+    expect(second).toEqual(first);
+    expect([...second!.missing]).toEqual([...first!.missing]);
+  });
+
+  it('keeps the percent inside the 60-90 teaser band for every slug', () => {
+    for (const t of MANY) {
+      expect(t.percent).toBeGreaterThanOrEqual(60);
+      expect(t.percent).toBeLessThanOrEqual(90);
+    }
+  });
+
+  it('takes the total from the real skill count of the job', () => {
+    expect(matchTeaser('a-slug', SKILLS)!.total).toBe(5);
+    expect(matchTeaser('a-slug', ['go', 'kafka'])!.total).toBe(2);
+  });
+
+  it('derives matched from the percent, so the label cannot contradict the bar', () => {
+    for (const t of MANY) {
+      expect(t.matched).toBe(Math.round((t.percent / 100) * t.total));
+    }
+  });
+
+  it('marks exactly the skills the matched count leaves over as missing', () => {
+    for (const t of MANY) {
+      expect(t.missing.size).toBe(t.total - t.matched);
+    }
+  });
+
+  it('only ever marks skills the job actually carries', () => {
+    for (const t of MANY) {
+      for (const name of t.missing) expect(SKILLS).toContain(name);
+    }
+  });
+
+  it('always shows both tones — every teased job has a held and a missing skill', () => {
+    // An all-green row under a 73% bar, or an all-red one, reads as a rendering bug.
+    for (const t of MANY) {
+      expect(t.missing.size).toBeGreaterThanOrEqual(1);
+      expect(t.missing.size).toBeLessThanOrEqual(SKILLS.length - 1);
+    }
+    expect(matchTeaser('two-skill-job', ['go', 'kafka'])!.missing.size).toBe(1);
+  });
+
+  it('holds the percent band and both tones at every skill count', () => {
+    // The ceiling arithmetic is the subtlest line in the teaser; a regression in it (a
+    // dropped `- 1`, a changed cap) would still pass a suite that only samples five
+    // skills, because five is the one count where the bound happens to be exact.
+    for (const t of ACROSS_COUNTS) {
+      expect(t.percent).toBeGreaterThanOrEqual(60);
+      expect(t.percent).toBeLessThanOrEqual(90);
+      expect(t.matched).toBe(Math.round((t.percent / 100) * t.total));
+      expect(t.matched).toBeGreaterThanOrEqual(1);
+      expect(t.matched).toBeLessThan(t.total);
+      expect(t.missing.size).toBe(t.total - t.matched);
+    }
+  });
+
+  it('can mark any position missing, not just the tail of the row', () => {
+    // Which skills read as missing is the one thing the seed actually randomises; a
+    // shuffle that degenerated to "always the last ones" would still satisfy every
+    // other test here, so pin it to every position being reachable.
+    const positions = new Set(MANY.flatMap((t) => [...t.missing].map((s) => SKILLS.indexOf(s))));
+    expect(positions.size).toBe(SKILLS.length);
+  });
+
+  it('reaches every percent in the band rather than parking on a few', () => {
+    // Deterministic, so this is an exact count: 60..89 for a five-skill job (the ceiling
+    // keeps 90 out, since it would round to a full house).
+    expect(new Set(MANY.map((t) => t.percent)).size).toBe(30);
+  });
+});
+
+describe('teaserChips', () => {
+  const SKILLS = ['go', 'kafka', 'aws', 'postgres', 'docker', 'terraform'];
+
+  it('shows the job’s leading skills untouched when one of them already reads missing', () => {
+    expect(teaserChips(SKILLS, new Set(['kafka']), 3)).toEqual(['go', 'kafka', 'aws']);
+  });
+
+  it('trades the last chip for a missing skill when the whole window reads held', () => {
+    // A three-chip row cut from a six-skill job can miss the only red one entirely; the
+    // teaser is meant to show both tones, so the row borrows one from further down.
+    expect(teaserChips(SKILLS, new Set(['terraform']), 3)).toEqual(['go', 'kafka', 'terraform']);
+  });
+
+  it('borrows the first missing skill, keeping the job’s own order', () => {
+    expect(teaserChips(SKILLS, new Set(['docker', 'terraform']), 3)).toEqual([
+      'go',
+      'kafka',
+      'docker',
+    ]);
+  });
+
+  it('does not borrow into a one-chip row, which would leave it all-missing', () => {
+    // Trading the only chip for a missing skill inverts the contrast instead of showing
+    // it — a lone red chip is no better than a lone green one.
+    expect(teaserChips(SKILLS, new Set(['terraform']), 1)).toEqual(['go']);
+  });
+
+  it('shows every skill of a job shorter than the row', () => {
+    expect(teaserChips(['go', 'kafka'], new Set(['kafka']), 3)).toEqual(['go', 'kafka']);
+  });
+
+  it('leaves an all-held row alone when the job has no missing skill to borrow', () => {
+    expect(teaserChips(['go'], new Set(), 3)).toEqual(['go']);
+  });
+
+  it('has nothing to show for a job with no skills', () => {
+    expect(teaserChips([], new Set(), 3)).toEqual([]);
   });
 });
 

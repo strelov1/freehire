@@ -54,6 +54,92 @@ export function computeClientMatch(jobSkills: string[], profileSkills: string[])
   return { total, matched, percent };
 }
 
+/** The locked-state teaser: plausible figures for a match nobody has computed yet,
+ *  shown blurred to a guest (or a signed-in viewer with no skills) as an invitation
+ *  rather than an estimate. `{total, matched, percent}` is the `ClientMatch` shape, so
+ *  the same bar renders it; `missing` names which of the job's own skills read as
+ *  not-held, leaving each surface free to show as many chips as it has room for. */
+export type MatchTeaser = ClientMatch & { missing: Set<string> };
+
+/** FNV-1a (32-bit). Seeds the teaser from a job's slug so the same job yields the same
+ *  figures in the SSR pass and after hydration — `Math.random()` would re-roll on both,
+ *  flipping the score on first paint and again on every re-render of the feed. */
+function hashSeed(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** mulberry32 — a small seeded PRNG, enough to shuffle a handful of skill names. */
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const TEASER_MIN = 60;
+const TEASER_MAX = 90;
+
+/** Derive the teaser for one job. Null when the job has fewer than two skills: there is
+ *  no have/missing story to tell about a single one, and "1 of 1 skills" beside an 87%
+ *  bar is the one figure a viewer could catch out. Those jobs keep the plain card corner
+ *  and the sidebar's bare call-to-action.
+ *
+ *  `matched` follows from `percent` rather than being rolled beside it, so the "N of M
+ *  skills" label can never contradict the bar. What the seed actually randomises is
+ *  *which* skills read as missing, so the red chips scatter through the row.
+ *
+ *  The band's top is capped per skill count: at five skills, 90% would round to 5 of 5
+ *  and leave an all-green row under a bar that isn't full. Keeping the percent below
+ *  `100 − 50/total` guarantees one missing skill, so both tones always show. */
+export function matchTeaser(seed: string, jobSkills: string[]): MatchTeaser | null {
+  const total = jobSkills.length;
+  if (total < 2) return null;
+
+  const h = hashSeed(seed);
+  // The largest whole percent that still rounds below `total` — Math.ceil(x) - 1 is the
+  // greatest integer strictly less than x, for a fractional x and an exact one alike.
+  const ceiling = Math.min(TEASER_MAX, Math.ceil(100 - 50 / total) - 1);
+  const percent = TEASER_MIN + (h % (ceiling - TEASER_MIN + 1));
+  const matched = Math.round((percent / 100) * total);
+
+  // Give every skill a seeded sort key and take the lowest `total - matched` of them as
+  // the missing ones — a shuffle without the index juggling, so which skills read as
+  // missing scatters through the row instead of always being its tail.
+  const rand = mulberry32(h);
+  const missing = new Set(
+    jobSkills
+      .map((name) => ({ name, key: rand() }))
+      .toSorted((a, b) => a.key - b.key)
+      .slice(0, total - matched)
+      .map((s) => s.name),
+  );
+
+  return { total, matched, percent, missing };
+}
+
+/** Which skills a narrow teaser row should show. Takes the job's leading skills, but if
+ *  that window happens to be all-held it trades its last chip for the first missing skill
+ *  further down — a three-chip row cut from a job with one missing skill would otherwise
+ *  come out uniformly green, losing the have/missing contrast that is the teaser's whole
+ *  point. The job's own order is preserved among the chips that stay. */
+export function teaserChips(jobSkills: string[], missing: Set<string>, limit: number): string[] {
+  const shown = jobSkills.slice(0, limit);
+  // A one-chip row has nothing to spare: trading its only chip would leave it all-missing,
+  // which inverts the contrast rather than showing it.
+  if (shown.length > 1 && shown.length < jobSkills.length && !shown.some((s) => missing.has(s))) {
+    const borrowed = jobSkills.find((s) => missing.has(s));
+    if (borrowed) return [...shown.slice(0, -1), borrowed];
+  }
+  return shown;
+}
+
 /** The two progress-bar segment widths (in percent of the track): a full-weight
  *  green segment for exact matches and a half-weight amber segment for adjacent
  *  ones. Their sum is the (unrounded) coverage percent. */

@@ -4,7 +4,13 @@
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { resolveMatchState, matchBarSegments, partitionBlockers } from '$lib/jobMatch';
+  import {
+    resolveMatchState,
+    matchBarSegments,
+    matchTeaser,
+    teaserChips,
+    partitionBlockers,
+  } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import type { BlockerSeverity, Job, JobMatchResult } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -23,9 +29,12 @@
     if (isAuthenticated()) profileStore.ensureLoaded();
   });
 
+  // Top-level `skills` is the served dictionary facet; absent on a non-tech posting.
+  const jobSkills = $derived(job.skills ?? []);
+
   const blockState = $derived(
     resolveMatchState({
-      jobSkills: job.skills ?? [],
+      jobSkills,
       authenticated: isAuthenticated(),
       profileLoaded: profileStore.loaded,
       profileSkills: profileStore.profile?.skills,
@@ -55,8 +64,24 @@
     return 'text-muted-foreground';
   }
 
-  // Static teaser for the locked states — deliberately not a real score.
-  const teaser = { percent: 76, have: ['React', 'Docker', 'SQL'], missing: ['Kafka'] };
+  // The locked states' teaser — deliberately not a real score, but built from this job's
+  // own skills and seeded from its slug, so it agrees with the same job's card in the
+  // feed instead of naming skills the posting never mentioned.
+  // Gated on the block state, not just on the template branch it renders in, so "can the
+  // teaser reach a viewer with a real match?" is answered here rather than by reading the
+  // markup — and so the derivation doesn't run for the states that discard it.
+  const teaser = $derived(
+    blockState === 'guest' || blockState === 'no-profile'
+      ? matchTeaser(job.public_slug, jobSkills)
+      : null,
+  );
+  // Three is what a ~285px sidebar column fits at natural chip width; a fourth forced
+  // every name down to an unreadable stub ("anal…", "c…"). teaserChips makes sure the
+  // short row still carries a missing skill.
+  const TEASER_CHIPS = 3;
+  const teaserSkills = $derived(
+    teaser ? teaserChips(jobSkills, teaser.missing, TEASER_CHIPS) : [],
+  );
 
   const chip = 'rounded-full border px-2 py-0.5 text-xs font-medium';
   const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
@@ -75,21 +100,40 @@
   {#if blockState === 'no-skills'}
     <p class="text-sm text-muted-foreground">Not enough data to compare this job to your profile.</p>
   {:else if blockState === 'guest' || blockState === 'no-profile'}
-    <!-- Locked teaser: lightly-blurred static content (not a real score) + a footer CTA. -->
-    <div class="pointer-events-none select-none space-y-3 opacity-90 blur-[1.5px]" aria-hidden="true">
-      <div class="flex items-baseline justify-between gap-2">
-        <span class="text-2xl font-bold tabular-nums leading-none">{teaser.percent}%</span>
-        <span class="text-xs text-muted-foreground">4 of 5 skills</span>
+    <!-- Locked teaser: lightly-blurred figures (not a real score) over the job's own
+         skills + a footer CTA. A single-skill job has no teaser (nothing to contrast),
+         and then the call-to-action stands alone under the heading. -->
+    {#if teaser}
+      <div class="pointer-events-none select-none space-y-3 opacity-90 blur-[1.5px]" aria-hidden="true">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-2xl font-bold tabular-nums leading-none">{teaser.percent}%</span>
+          <span class="shrink-0 text-xs text-muted-foreground">
+            {teaser.matched} of {teaser.total} skills
+          </span>
+        </div>
+        <div class="flex h-2 overflow-hidden rounded bg-secondary">
+          <div class="h-full bg-brand" style="width: {teaser.percent}%"></div>
+        </div>
+        <!-- Chips keep their natural width and the row clips at the panel edge, rather
+             than every name being ellipsised to fit — a clipped last chip still reads,
+             an "anal…" does not. -->
+        <div class="flex flex-nowrap gap-1.5 overflow-hidden">
+          {#each teaserSkills as skill (skill)}
+            <span class={`${teaser.missing.has(skill) ? missChip : haveChip} whitespace-nowrap`}>
+              {skill}
+            </span>
+          {/each}
+        </div>
       </div>
-      <div class="flex h-2 overflow-hidden rounded bg-secondary">
-        <div class="h-full bg-brand" style="width: {teaser.percent}%"></div>
-      </div>
-      <div class="flex flex-wrap gap-1.5">
-        {#each teaser.have as skill (skill)}<span class={haveChip}>{skill}</span>{/each}
-        {#each teaser.missing as skill (skill)}<span class={missChip}>{skill}</span>{/each}
-      </div>
-    </div>
-    <div class="flex items-center justify-between gap-2 border-t border-dashed border-border pt-3">
+    {/if}
+    <!-- The dashed rule divides the teaser from the call-to-action; with no teaser above
+         it there is nothing to divide, so it goes. -->
+    <div
+      class={[
+        'flex items-center justify-between gap-2',
+        teaser && 'border-t border-dashed border-border pt-3',
+      ]}
+    >
       {#if blockState === 'guest'}
         <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Lock class="size-3.5 shrink-0" />Sign in to see your match
