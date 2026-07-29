@@ -362,6 +362,9 @@ export interface Report {
   reporter_email?: string;
   job_slug?: string;
   job_title?: string;
+  /** Present only on a decision response: whether the reporter was actually emailed.
+   *  A decision always stands, so `false` means "recorded, nobody told". */
+  notified?: boolean;
 }
 
 /** The content a user submits when reporting a job. */

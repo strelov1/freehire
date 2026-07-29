@@ -51,35 +51,56 @@ func (r *QueriesRepository) Create(ctx context.Context, reportedBy, jobID int64,
 	return fromRow(rep), nil
 }
 
-// Get loads a report by id, mapping a missing row to ErrReportNotFound.
-func (r *QueriesRepository) Get(ctx context.Context, id int64) (Report, error) {
+// Get loads a report by id with its reporter and job context, mapping a missing row to
+// ErrReportNotFound.
+func (r *QueriesRepository) Get(ctx context.Context, id int64) (ReportDetail, error) {
 	rep, err := r.q.GetReport(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Report{}, ErrReportNotFound
+		return ReportDetail{}, ErrReportNotFound
 	}
 	if err != nil {
-		return Report{}, err
+		return ReportDetail{}, err
 	}
-	return fromRow(rep), nil
+	return ReportDetail{
+		Report: Report{
+			ID:              rep.ID,
+			JobID:           rep.JobID,
+			Reason:          rep.Reason,
+			Details:         rep.Details,
+			ContactTelegram: rep.ContactTelegram,
+			Status:          rep.Status,
+			ReviewReason:    rep.ReviewReason,
+			ReviewedAt:      pgconv.TimePtr(rep.ReviewedAt),
+			CreatedAt:       pgconv.TimePtr(rep.CreatedAt),
+		},
+		ReporterEmail: rep.ReporterEmail,
+		JobSlug:       rep.JobSlug,
+		JobTitle:      rep.JobTitle,
+	}, nil
 }
 
 // ListPending returns the pending review queue with reporter email and job slug/title.
-func (r *QueriesRepository) ListPending(ctx context.Context) ([]PendingReport, error) {
+func (r *QueriesRepository) ListPending(ctx context.Context) ([]ReportDetail, error) {
 	rows, err := r.q.ListPendingReports(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]PendingReport, len(rows))
+	out := make([]ReportDetail, len(rows))
 	for i, row := range rows {
 		out[i] = fromPendingRow(row)
 	}
 	return out, nil
 }
 
-// MarkResolved marks a pending report resolved. The query is scoped to status='pending', so
-// a concurrent second decision affects no row — surfaced as ErrAlreadyDecided.
-func (r *QueriesRepository) MarkResolved(ctx context.Context, id, reviewedBy int64) (Report, error) {
-	rep, err := r.q.MarkReportResolved(ctx, db.MarkReportResolvedParams{ID: id, ReviewedBy: reviewedBy})
+// MarkResolved marks a pending report resolved, storing the moderator's note as the review
+// reason. The query is scoped to status='pending', so a concurrent second decision affects
+// no row — surfaced as ErrAlreadyDecided.
+func (r *QueriesRepository) MarkResolved(ctx context.Context, id, reviewedBy int64, note string) (Report, error) {
+	rep, err := r.q.MarkReportResolved(ctx, db.MarkReportResolvedParams{
+		ID:           id,
+		ReviewedBy:   reviewedBy,
+		ReviewReason: note,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Report{}, ErrAlreadyDecided
 	}
@@ -128,10 +149,10 @@ func fromRow(row db.JobReport) Report {
 	}
 }
 
-// fromPendingRow maps a moderator-queue row to PendingReport, adding the joined reporter and
+// fromPendingRow maps a moderator-queue row to ReportDetail, adding the joined reporter and
 // job columns.
-func fromPendingRow(row db.ListPendingReportsRow) PendingReport {
-	return PendingReport{
+func fromPendingRow(row db.ListPendingReportsRow) ReportDetail {
+	return ReportDetail{
 		Report: Report{
 			ID:              row.ID,
 			JobID:           row.JobID,

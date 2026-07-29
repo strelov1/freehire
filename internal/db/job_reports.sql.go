@@ -58,15 +58,38 @@ func (q *Queries) CreateReport(ctx context.Context, arg CreateReportParams) (Job
 }
 
 const getReport = `-- name: GetReport :one
-SELECT id, reported_by, job_id, reason, details, contact_telegram, status, review_reason, reviewed_by, reviewed_at, created_at FROM job_reports WHERE id = $1
+SELECT r.id, r.reported_by, r.job_id, r.reason, r.details, r.contact_telegram, r.status, r.review_reason, r.reviewed_by, r.reviewed_at, r.created_at, u.email AS reporter_email, j.public_slug AS job_slug, j.title AS job_title
+FROM job_reports r
+JOIN users u ON u.id = r.reported_by
+JOIN jobs j ON j.id = r.job_id
+WHERE r.id = $1
 `
 
-// Load a single report by id for the review path. The resolve/dismiss flow guards the
-// status in the service; the Mark* queries are additionally scoped to status='pending' as
-// defense-in-depth against a concurrent second decision.
-func (q *Queries) GetReport(ctx context.Context, id int64) (JobReport, error) {
+type GetReportRow struct {
+	ID              int64              `json:"id"`
+	ReportedBy      int64              `json:"reported_by"`
+	JobID           int64              `json:"job_id"`
+	Reason          string             `json:"reason"`
+	Details         string             `json:"details"`
+	ContactTelegram string             `json:"contact_telegram"`
+	Status          string             `json:"status"`
+	ReviewReason    string             `json:"review_reason"`
+	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ReporterEmail   string             `json:"reporter_email"`
+	JobSlug         string             `json:"job_slug"`
+	JobTitle        string             `json:"job_title"`
+}
+
+// Load a single report by id for the review path, with the reporter's email and the
+// reported job's slug and title — the decision notice needs them, and joining here spares
+// the decision path a second round trip. The resolve/dismiss flow guards the status in the
+// service; the Mark* queries are additionally scoped to status='pending' as defense-in-depth
+// against a concurrent second decision.
+func (q *Queries) GetReport(ctx context.Context, id int64) (GetReportRow, error) {
 	row := q.db.QueryRow(ctx, getReport, id)
-	var i JobReport
+	var i GetReportRow
 	err := row.Scan(
 		&i.ID,
 		&i.ReportedBy,
@@ -79,6 +102,9 @@ func (q *Queries) GetReport(ctx context.Context, id int64) (JobReport, error) {
 		&i.ReviewedBy,
 		&i.ReviewedAt,
 		&i.CreatedAt,
+		&i.ReporterEmail,
+		&i.JobSlug,
+		&i.JobTitle,
 	)
 	return i, err
 }
@@ -188,23 +214,27 @@ func (q *Queries) MarkReportDismissed(ctx context.Context, arg MarkReportDismiss
 
 const markReportResolved = `-- name: MarkReportResolved :one
 UPDATE job_reports
-SET status      = 'resolved',
-    reviewed_by = $1::bigint,
-    reviewed_at = now()
-WHERE id = $2 AND status = 'pending'
+SET status        = 'resolved',
+    reviewed_by   = $1::bigint,
+    reviewed_at   = now(),
+    review_reason = $2
+WHERE id = $3 AND status = 'pending'
 RETURNING id, reported_by, job_id, reason, details, contact_telegram, status, review_reason, reviewed_by, reviewed_at, created_at
 `
 
 type MarkReportResolvedParams struct {
-	ReviewedBy int64 `json:"reviewed_by"`
-	ID         int64 `json:"id"`
+	ReviewedBy   int64  `json:"reviewed_by"`
+	ReviewReason string `json:"review_reason"`
+	ID           int64  `json:"id"`
 }
 
-// Mark a pending report resolved, recording the deciding moderator. Scoped to
-// status='pending' so a concurrent second decision affects no row (the service maps 0 rows
-// to ErrAlreadyDecided). The optional job close is a separate write (CloseJobByID).
+// Mark a pending report resolved, recording the deciding moderator and their note. The note
+// shares review_reason with dismiss: both answer "why the moderator decided this", and both
+// are quoted back to the reporter in the decision notice. Scoped to status='pending' so a
+// concurrent second decision affects no row (the service maps 0 rows to ErrAlreadyDecided).
+// The optional job close is a separate write (CloseJobByID).
 func (q *Queries) MarkReportResolved(ctx context.Context, arg MarkReportResolvedParams) (JobReport, error) {
-	row := q.db.QueryRow(ctx, markReportResolved, arg.ReviewedBy, arg.ID)
+	row := q.db.QueryRow(ctx, markReportResolved, arg.ReviewedBy, arg.ReviewReason, arg.ID)
 	var i JobReport
 	err := row.Scan(
 		&i.ID,

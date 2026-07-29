@@ -11,10 +11,16 @@ INSERT INTO job_reports (
 RETURNING *;
 
 -- name: GetReport :one
--- Load a single report by id for the review path. The resolve/dismiss flow guards the
--- status in the service; the Mark* queries are additionally scoped to status='pending' as
--- defense-in-depth against a concurrent second decision.
-SELECT * FROM job_reports WHERE id = $1;
+-- Load a single report by id for the review path, with the reporter's email and the
+-- reported job's slug and title — the decision notice needs them, and joining here spares
+-- the decision path a second round trip. The resolve/dismiss flow guards the status in the
+-- service; the Mark* queries are additionally scoped to status='pending' as defense-in-depth
+-- against a concurrent second decision.
+SELECT r.*, u.email AS reporter_email, j.public_slug AS job_slug, j.title AS job_title
+FROM job_reports r
+JOIN users u ON u.id = r.reported_by
+JOIN jobs j ON j.id = r.job_id
+WHERE r.id = $1;
 
 -- name: ListPendingReports :many
 -- The moderator review queue: pending reports, newest first, with the reporter's email
@@ -30,13 +36,16 @@ ORDER BY r.created_at DESC
 LIMIT 500;
 
 -- name: MarkReportResolved :one
--- Mark a pending report resolved, recording the deciding moderator. Scoped to
--- status='pending' so a concurrent second decision affects no row (the service maps 0 rows
--- to ErrAlreadyDecided). The optional job close is a separate write (CloseJobByID).
+-- Mark a pending report resolved, recording the deciding moderator and their note. The note
+-- shares review_reason with dismiss: both answer "why the moderator decided this", and both
+-- are quoted back to the reporter in the decision notice. Scoped to status='pending' so a
+-- concurrent second decision affects no row (the service maps 0 rows to ErrAlreadyDecided).
+-- The optional job close is a separate write (CloseJobByID).
 UPDATE job_reports
-SET status      = 'resolved',
-    reviewed_by = sqlc.arg(reviewed_by)::bigint,
-    reviewed_at = now()
+SET status        = 'resolved',
+    reviewed_by   = sqlc.arg(reviewed_by)::bigint,
+    reviewed_at   = now(),
+    review_reason = sqlc.arg(review_reason)
 WHERE id = sqlc.arg(id) AND status = 'pending'
 RETURNING *;
 

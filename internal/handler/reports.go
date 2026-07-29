@@ -49,6 +49,17 @@ type reportResponse struct {
 	ReporterEmail   string     `json:"reporter_email,omitempty"`
 	JobSlug         string     `json:"job_slug,omitempty"`
 	JobTitle        string     `json:"job_title,omitempty"`
+	// Notified is set only on a decision response: whether the reporter was actually
+	// told. It is a pointer so the create and queue shapes omit it entirely rather than
+	// claiming a notice was never sent.
+	Notified *bool `json:"notified,omitempty"`
+}
+
+// toDecisionResponse maps a moderator decision, adding whether the reporter was reached.
+func toDecisionResponse(rev report.Review) reportResponse {
+	out := toReportResponse(rev.Report)
+	out.Notified = &rev.Notified
+	return out
 }
 
 // toReportResponse maps a stored report to its wire shape (no reporter email or job fields).
@@ -65,9 +76,9 @@ func toReportResponse(r report.Report) reportResponse {
 	}
 }
 
-// toPendingReportResponse maps a moderator-queue row, adding the reporter's email and the
+// toReportDetailResponse maps a report with its context, adding the reporter's email and the
 // reported job's slug and title.
-func toPendingReportResponse(r report.PendingReport) reportResponse {
+func toReportDetailResponse(r report.ReportDetail) reportResponse {
 	return reportResponse{
 		ID:              r.ID,
 		Reason:          r.Reason,
@@ -149,14 +160,18 @@ func (h *reportHandlers) ListPendingReports(c *fiber.Ctx) error {
 	}
 	out := make([]reportResponse, len(rows))
 	for i, r := range rows {
-		out[i] = toPendingReportResponse(r)
+		out[i] = toReportDetailResponse(r)
 	}
 	return c.JSON(fiber.Map{"data": out})
 }
 
-// resolveReportRequest is the optional resolve body: whether to also close the reported job.
+// resolveReportRequest is the optional resolve body: whether to also close the reported job,
+// the note the reporter is told, and whether to tell them at all. notify_reporter defaults
+// to false on absence, so a caller that wants the reporter contacted says so explicitly.
 type resolveReportRequest struct {
-	CloseJob bool `json:"close_job"`
+	CloseJob       bool   `json:"close_job"`
+	Note           string `json:"note"`
+	NotifyReporter bool   `json:"notify_reporter"`
 }
 
 // ResolveReport marks a pending report resolved, optionally soft-closing the reported job.
@@ -175,16 +190,22 @@ func (h *reportHandlers) ResolveReport(c *fiber.Ctx) error {
 	var in resolveReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := h.report.Resolve(c.Context(), reviewerID, id, in.CloseJob)
+	rev, err := h.report.Resolve(c.Context(), reviewerID, id, report.ResolveInput{
+		CloseJob:       in.CloseJob,
+		NotifyReporter: in.NotifyReporter,
+		Note:           in.Note,
+	})
 	if err != nil {
 		return reportError(err)
 	}
-	return c.JSON(fiber.Map{"data": toReportResponse(rep)})
+	return c.JSON(fiber.Map{"data": toDecisionResponse(rev)})
 }
 
-// dismissReportRequest is the optional dismissal reason body.
+// dismissReportRequest is the optional dismissal body: the reason the report changed
+// nothing, and whether to tell the reporter (see resolveReportRequest on the default).
 type dismissReportRequest struct {
-	Reason string `json:"reason"`
+	Reason         string `json:"reason"`
+	NotifyReporter bool   `json:"notify_reporter"`
 }
 
 // DismissReport marks a pending report dismissed with an optional reason, leaving the job
@@ -202,9 +223,12 @@ func (h *reportHandlers) DismissReport(c *fiber.Ctx) error {
 	var in dismissReportRequest
 	_ = c.BodyParser(&in)
 
-	rep, err := h.report.Dismiss(c.Context(), reviewerID, id, in.Reason)
+	rev, err := h.report.Dismiss(c.Context(), reviewerID, id, report.DismissInput{
+		NotifyReporter: in.NotifyReporter,
+		Reason:         in.Reason,
+	})
 	if err != nil {
 		return reportError(err)
 	}
-	return c.JSON(fiber.Map{"data": toReportResponse(rep)})
+	return c.JSON(fiber.Map{"data": toDecisionResponse(rev)})
 }

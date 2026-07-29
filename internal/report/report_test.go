@@ -22,6 +22,7 @@ type createArgs struct {
 type resolveArgs struct {
 	ID         int64
 	ReviewedBy int64
+	Note       string
 }
 
 type dismissArgs struct {
@@ -38,7 +39,7 @@ type fakeRepo struct {
 	createErr    error
 	createRet    report.Report
 
-	getRet report.Report
+	getRet report.ReportDetail
 	getErr error
 
 	resolved      resolveArgs
@@ -58,16 +59,16 @@ func (f *fakeRepo) Create(_ context.Context, reportedBy, jobID int64, reason, de
 	return f.createRet, f.createErr
 }
 
-func (f *fakeRepo) Get(_ context.Context, _ int64) (report.Report, error) {
+func (f *fakeRepo) Get(_ context.Context, _ int64) (report.ReportDetail, error) {
 	return f.getRet, f.getErr
 }
 
-func (f *fakeRepo) ListPending(_ context.Context) ([]report.PendingReport, error) {
+func (f *fakeRepo) ListPending(_ context.Context) ([]report.ReportDetail, error) {
 	return nil, nil
 }
 
-func (f *fakeRepo) MarkResolved(_ context.Context, id, reviewedBy int64) (report.Report, error) {
-	f.resolved, f.resolveCalled = resolveArgs{ID: id, ReviewedBy: reviewedBy}, true
+func (f *fakeRepo) MarkResolved(_ context.Context, id, reviewedBy int64, note string) (report.Report, error) {
+	f.resolved, f.resolveCalled = resolveArgs{ID: id, ReviewedBy: reviewedBy, Note: note}, true
 	return f.resolveRet, f.resolveErr
 }
 
@@ -167,9 +168,9 @@ func TestFile_PropagatesDuplicateOpen(t *testing.T) {
 }
 
 func TestResolve_ClosesJobWhenAsked(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}, resolveRet: report.Report{ID: 5, Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, JobID: 42, Status: "pending"}}, resolveRet: report.Report{ID: 5, Status: "resolved"}}
 	closer := &fakeCloser{}
-	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
+	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, report.ResolveInput{CloseJob: true})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -182,9 +183,9 @@ func TestResolve_ClosesJobWhenAsked(t *testing.T) {
 }
 
 func TestResolve_LeavesJobOpenWhenNotAsked(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}, resolveRet: report.Report{Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, JobID: 42, Status: "pending"}}, resolveRet: report.Report{Status: "resolved"}}
 	closer := &fakeCloser{}
-	if _, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, false); err != nil {
+	if _, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, report.ResolveInput{}); err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 	if closer.called {
@@ -196,9 +197,9 @@ func TestResolve_LeavesJobOpenWhenNotAsked(t *testing.T) {
 }
 
 func TestResolve_CloseErrorAbortsBeforeMark(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, JobID: 42, Status: "pending"}}
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, JobID: 42, Status: "pending"}}}
 	closer := &fakeCloser{err: errors.New("boom")}
-	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
+	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, report.ResolveInput{CloseJob: true})
 	if err == nil {
 		t.Fatal("expected the close error to propagate")
 	}
@@ -210,7 +211,7 @@ func TestResolve_CloseErrorAbortsBeforeMark(t *testing.T) {
 func TestResolve_NotFound(t *testing.T) {
 	repo := &fakeRepo{getErr: report.ErrReportNotFound}
 	closer := &fakeCloser{}
-	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
+	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, report.ResolveInput{CloseJob: true})
 	if !errors.Is(err, report.ErrReportNotFound) {
 		t.Errorf("err = %v, want ErrReportNotFound", err)
 	}
@@ -220,9 +221,9 @@ func TestResolve_NotFound(t *testing.T) {
 }
 
 func TestResolve_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "resolved"}}
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, Status: "resolved"}}}
 	closer := &fakeCloser{}
-	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, true)
+	_, err := report.New(repo, closer).Resolve(context.Background(), 3, 5, report.ResolveInput{CloseJob: true})
 	if !errors.Is(err, report.ErrAlreadyDecided) {
 		t.Errorf("err = %v, want ErrAlreadyDecided", err)
 	}
@@ -232,9 +233,9 @@ func TestResolve_AlreadyDecided(t *testing.T) {
 }
 
 func TestDismiss_MarksWithReason(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "pending"}, dismissRet: report.Report{Status: "dismissed"}}
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, Status: "pending"}}, dismissRet: report.Report{Status: "dismissed"}}
 	closer := &fakeCloser{}
-	_, err := report.New(repo, closer).Dismiss(context.Background(), 3, 5, "not a real issue")
+	_, err := report.New(repo, closer).Dismiss(context.Background(), 3, 5, report.DismissInput{Reason: "not a real issue"})
 	if err != nil {
 		t.Fatalf("Dismiss: %v", err)
 	}
@@ -246,9 +247,166 @@ func TestDismiss_MarksWithReason(t *testing.T) {
 	}
 }
 
+// fakeNotifier records the decision it was handed. It also captures whether the report had
+// already been marked when it ran, which is what proves the notice cannot describe an
+// outcome the database never stored.
+type fakeNotifier struct {
+	got          report.Decision
+	called       bool
+	markedFirst  bool
+	err          error
+	observedRepo *fakeRepo
+}
+
+func (n *fakeNotifier) NotifyDecision(_ context.Context, d report.Decision) error {
+	n.got, n.called = d, true
+	if n.observedRepo != nil {
+		n.markedFirst = n.observedRepo.resolveCalled || n.observedRepo.dismissCalled
+	}
+	return n.err
+}
+
+func TestResolve_NotifiesTheReporterAfterMarking(t *testing.T) {
+	repo := &fakeRepo{
+		getRet: report.ReportDetail{
+			Report:        report.Report{ID: 5, JobID: 42, Status: "pending", Reason: "not_relevant", Details: "listed remote, source says hybrid"},
+			ReporterEmail: "lina@example.test",
+			JobSlug:       "senior-web-designer-incogni-1234",
+			JobTitle:      "Senior Web Designer",
+		},
+		resolveRet: report.Report{ID: 5, Status: "resolved"},
+	}
+	notifier := &fakeNotifier{observedRepo: repo}
+	svc := report.New(repo, &fakeCloser{}).WithNotifier(notifier)
+
+	rev, err := svc.Resolve(context.Background(), 3, 5, report.ResolveInput{
+		CloseJob: true, NotifyReporter: true, Note: "Fixed — the job is now marked hybrid",
+	})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !notifier.called {
+		t.Fatal("the reporter was not notified")
+	}
+	if !notifier.markedFirst {
+		t.Error("the notice went out before the decision was marked")
+	}
+	if !rev.Notified {
+		t.Error("Review.Notified = false, want true after a delivered notice")
+	}
+	got := notifier.got
+	if got.Email != "lina@example.test" || got.JobTitle != "Senior Web Designer" || got.JobSlug != "senior-web-designer-incogni-1234" {
+		t.Errorf("recipient/job context not carried: %+v", got)
+	}
+	if got.Note != "Fixed — the job is now marked hybrid" || got.Reason != "not_relevant" || got.Details != "listed remote, source says hybrid" {
+		t.Errorf("decision content not carried: %+v", got)
+	}
+	if got.Outcome != report.OutcomeResolved || !got.JobClosed {
+		t.Errorf("outcome = %q closed = %v, want resolved/true", got.Outcome, got.JobClosed)
+	}
+}
+
+func TestDismiss_NotifiesTheReporterWithTheReason(t *testing.T) {
+	repo := &fakeRepo{
+		getRet: report.ReportDetail{
+			Report:        report.Report{ID: 7, JobID: 9, Status: "pending"},
+			ReporterEmail: "someone@example.test",
+		},
+		dismissRet: report.Report{ID: 7, Status: "dismissed"},
+	}
+	notifier := &fakeNotifier{observedRepo: repo}
+	svc := report.New(repo, &fakeCloser{}).WithNotifier(notifier)
+
+	rev, err := svc.Dismiss(context.Background(), 3, 7, report.DismissInput{
+		NotifyReporter: true, Reason: "the source really does say remote",
+	})
+	if err != nil {
+		t.Fatalf("Dismiss: %v", err)
+	}
+	if !notifier.called || !notifier.markedFirst || !rev.Notified {
+		t.Fatalf("dismiss notice: called=%v markedFirst=%v notified=%v", notifier.called, notifier.markedFirst, rev.Notified)
+	}
+	if notifier.got.Outcome != report.OutcomeDismissed || notifier.got.Note != "the source really does say remote" {
+		t.Errorf("dismiss decision = %+v, want dismissed with the reason as the note", notifier.got)
+	}
+	if notifier.got.JobClosed {
+		t.Error("dismiss must never report the job as closed")
+	}
+}
+
+func TestDecide_NotifierFailureLeavesTheReportDecided(t *testing.T) {
+	repo := &fakeRepo{
+		getRet:     report.ReportDetail{Report: report.Report{ID: 5, Status: "pending"}},
+		resolveRet: report.Report{ID: 5, Status: "resolved"},
+	}
+	notifier := &fakeNotifier{err: errors.New("ses is down")}
+	svc := report.New(repo, &fakeCloser{}).WithNotifier(notifier)
+
+	rev, err := svc.Resolve(context.Background(), 3, 5, report.ResolveInput{NotifyReporter: true})
+	if err != nil {
+		t.Fatalf("a failed notice must not fail the decision: %v", err)
+	}
+	if !repo.resolveCalled || rev.Report.Status != "resolved" {
+		t.Error("the decision must stand when the notice fails")
+	}
+	if rev.Notified {
+		t.Error("Review.Notified = true after a failed delivery")
+	}
+}
+
+func TestDecide_DoesNotNotifyWhenNotAsked(t *testing.T) {
+	repo := &fakeRepo{
+		getRet:     report.ReportDetail{Report: report.Report{ID: 5, Status: "pending"}},
+		resolveRet: report.Report{ID: 5, Status: "resolved"},
+		dismissRet: report.Report{ID: 5, Status: "dismissed"},
+	}
+	notifier := &fakeNotifier{}
+	svc := report.New(repo, &fakeCloser{}).WithNotifier(notifier)
+
+	if rev, err := svc.Resolve(context.Background(), 3, 5, report.ResolveInput{}); err != nil || rev.Notified {
+		t.Errorf("resolve opted out: notified=%v err=%v", rev.Notified, err)
+	}
+	if notifier.called {
+		t.Error("the notifier ran for a decision that opted out")
+	}
+}
+
+func TestDecide_WithoutANotifierIsASoftSkip(t *testing.T) {
+	repo := &fakeRepo{
+		getRet:     report.ReportDetail{Report: report.Report{ID: 5, Status: "pending"}},
+		resolveRet: report.Report{ID: 5, Status: "resolved"},
+	}
+	// No WithNotifier: the SES-less wiring every dev machine runs.
+	rev, err := report.New(repo, &fakeCloser{}).Resolve(context.Background(), 3, 5, report.ResolveInput{NotifyReporter: true})
+	if err != nil {
+		t.Fatalf("an unconfigured notifier must not fail the decision: %v", err)
+	}
+	if !repo.resolveCalled || rev.Notified {
+		t.Errorf("marked=%v notified=%v, want marked with no notice", repo.resolveCalled, rev.Notified)
+	}
+}
+
+func TestResolve_StoresTheModeratorNote(t *testing.T) {
+	repo := &fakeRepo{
+		getRet:     report.ReportDetail{Report: report.Report{ID: 5, JobID: 42, Status: "pending"}},
+		resolveRet: report.Report{ID: 5, Status: "resolved"},
+	}
+	const note = "Fixed — the job is now marked hybrid"
+	rev, err := report.New(repo, &fakeCloser{}).Resolve(context.Background(), 3, 5, report.ResolveInput{Note: note})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if repo.resolved.Note != note {
+		t.Errorf("stored note = %q, want %q", repo.resolved.Note, note)
+	}
+	if rev.Report.Status != "resolved" {
+		t.Errorf("returned status = %q, want resolved", rev.Report.Status)
+	}
+}
+
 func TestDismiss_AlreadyDecided(t *testing.T) {
-	repo := &fakeRepo{getRet: report.Report{ID: 5, Status: "dismissed"}}
-	_, err := report.New(repo, &fakeCloser{}).Dismiss(context.Background(), 3, 5, "")
+	repo := &fakeRepo{getRet: report.ReportDetail{Report: report.Report{ID: 5, Status: "dismissed"}}}
+	_, err := report.New(repo, &fakeCloser{}).Dismiss(context.Background(), 3, 5, report.DismissInput{})
 	if !errors.Is(err, report.ErrAlreadyDecided) {
 		t.Errorf("err = %v, want ErrAlreadyDecided", err)
 	}

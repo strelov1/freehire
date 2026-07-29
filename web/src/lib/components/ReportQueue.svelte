@@ -3,7 +3,13 @@
   import { resolve as resolveRoute } from '$app/paths';
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
-  import { reportReasonLabel } from '$lib/reports';
+  import {
+    decisionLabel,
+    decisionNotePrompt,
+    decisionOutcome,
+    reportReasonLabel,
+    type DecisionKind,
+  } from '$lib/reports';
   import type { Report } from '$lib/types';
   import { Badge, Button } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
@@ -14,6 +20,13 @@
   // The id currently being acted on, to disable its row's buttons.
   let acting = $state<number | null>(null);
   let actionError = $state<string | null>(null);
+  let actionNotice = $state<string | null>(null);
+
+  // The row whose decision form is open, and what that form will do. Only one at a
+  // time: a note belongs to one decision, so two open drafts would be ambiguous.
+  let deciding = $state<{ id: number; kind: DecisionKind } | null>(null);
+  let note = $state('');
+  let notifyReporter = $state(true);
 
   // Load once on mount (the parent only mounts this for a moderator).
   const reportsData = new AsyncData<Report[]>([]);
@@ -27,33 +40,44 @@
     reportsData.value = reportsData.value.filter((r) => r.id !== id);
   }
 
-  // Resolve a report; closeJob decides whether the reported vacancy is soft-closed.
-  async function resolve(r: Report, closeJob: boolean) {
+  // Open the decision form for one report, starting from a clean draft.
+  function open(r: Report, kind: DecisionKind) {
     if (acting !== null) return;
-    acting = r.id;
+    deciding = { id: r.id, kind };
+    note = '';
+    notifyReporter = true;
     actionError = null;
-    try {
-      await api.resolveReport(r.id, closeJob);
-      drop(r.id);
-    } catch {
-      actionError = `Could not resolve the report on "${r.job_title}". It may have already been decided.`;
-    } finally {
-      acting = null;
-    }
+    actionNotice = null;
   }
 
-  async function dismiss(r: Report) {
-    if (acting !== null) return;
-    const reason = window.prompt(`Dismiss the report on "${r.job_title}"? Optional reason:`, '');
-    // null = cancelled; an empty string is a reasonless dismissal, which is allowed.
-    if (reason === null) return;
+  function cancel() {
+    deciding = null;
+    note = '';
+  }
+
+  // Send the decision the open form describes. The note reaches the reporter, so it is
+  // trimmed rather than mailed with the moderator's stray whitespace.
+  async function decide(r: Report) {
+    if (deciding === null || acting !== null) return;
+    const kind = deciding.kind;
     acting = r.id;
     actionError = null;
+    actionNotice = null;
     try {
-      await api.dismissReport(r.id, reason);
+      const text = note.trim();
+      const decided =
+        kind === 'dismiss'
+          ? await api.dismissReport(r.id, text, notifyReporter)
+          : await api.resolveReport(r.id, kind === 'close', text, notifyReporter);
+      actionNotice = decisionOutcome({
+        kind,
+        notifyRequested: notifyReporter,
+        notified: decided.notified ?? false,
+      });
+      deciding = null;
       drop(r.id);
     } catch {
-      actionError = `Could not dismiss the report on "${r.job_title}". It may have already been decided.`;
+      actionError = `Could not decide the report on "${r.job_title}". It may have already been decided.`;
     } finally {
       acting = null;
     }
@@ -64,12 +88,16 @@
   <div class="flex flex-col gap-1">
     <h2 class="text-xl font-semibold tracking-tight">Reported jobs</h2>
     <p class="text-sm text-muted-foreground">
-      Reports awaiting review. Closing removes the vacancy from listings; dismissing leaves it live.
+      Reports awaiting review. Closing removes the vacancy from listings; dismissing leaves it live. Either way the
+      reporter can be emailed what you decided.
     </p>
   </div>
 
   {#if actionError}
     <p class="text-sm text-destructive">{actionError}</p>
+  {/if}
+  {#if actionNotice}
+    <p class="text-sm text-amber-600 dark:text-amber-500">{actionNotice}</p>
   {/if}
 
   {#if status === 'loading'}
@@ -100,17 +128,42 @@
                 : ''} · {timeAgo(r.created_at)}
             </span>
           </div>
-          <div class="flex shrink-0 flex-wrap gap-2">
-            <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => resolve(r, true)}>
-              Close job
-            </Button>
-            <Button variant="outline" size="sm" disabled={acting !== null} onclick={() => resolve(r, false)}>
-              Resolve, keep open
-            </Button>
-            <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => dismiss(r)}>
-              Dismiss
-            </Button>
-          </div>
+
+          {#if deciding?.id === r.id}
+            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+              <label class="flex flex-col gap-1">
+                <span class="text-xs font-medium text-muted-foreground">{decisionNotePrompt(deciding.kind)}</span>
+                <textarea
+                  bind:value={note}
+                  rows="3"
+                  placeholder="Fixed — the job is now marked hybrid"
+                  class="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm"
+                ></textarea>
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" bind:checked={notifyReporter} class="size-4 rounded border-input" />
+                Email this to {r.reporter_email ?? 'the reporter'}
+              </label>
+              <div class="flex flex-wrap gap-2">
+                <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => decide(r)}>
+                  {decisionLabel(deciding.kind)}
+                </Button>
+                <Button variant="ghost" size="sm" disabled={acting !== null} onclick={cancel}>Cancel</Button>
+              </div>
+            </div>
+          {:else}
+            <div class="flex shrink-0 flex-wrap gap-2">
+              <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => open(r, 'close')}>
+                {decisionLabel('close')}
+              </Button>
+              <Button variant="outline" size="sm" disabled={acting !== null} onclick={() => open(r, 'resolve')}>
+                {decisionLabel('resolve')}
+              </Button>
+              <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => open(r, 'dismiss')}>
+                {decisionLabel('dismiss')}
+              </Button>
+            </div>
+          {/if}
         </li>
       {/each}
     </ul>

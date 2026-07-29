@@ -60,7 +60,11 @@ func TestReportsEndToEnd(t *testing.T) {
 	user2Cookie, _ := iss.Issue(user2ID, testTokenVersion)
 	queries := db.New(pool)
 	reportRepo := report.NewQueriesRepository(queries)
-	h := &reportHandlers{report: report.New(reportRepo, reportRepo), queries: queries}
+	notifier := &recordingNotifier{}
+	h := &reportHandlers{
+		report:  report.New(reportRepo, reportRepo).WithNotifier(notifier),
+		queries: queries,
+	}
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
@@ -224,7 +228,8 @@ func TestReportsEndToEnd(t *testing.T) {
 	})
 
 	t.Run("moderator resolves with close: the job is soft-closed (200)", func(t *testing.T) {
-		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/reports/"+itoa(report1ID)+"/resolve", modCookie, `{"close_job":true}`))
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/reports/"+itoa(report1ID)+"/resolve", modCookie,
+			`{"close_job":true,"note":"Confirmed — the listing is gone","notify_reporter":true}`))
 		if err != nil {
 			t.Fatalf("resolve: %v", err)
 		}
@@ -247,6 +252,79 @@ func TestReportsEndToEnd(t *testing.T) {
 		}
 		if closed == nil {
 			t.Error("job1 should be soft-closed after resolve-with-close")
+		}
+		var note string
+		if err := pool.QueryRow(ctx, "SELECT review_reason FROM job_reports WHERE id = $1", report1ID).Scan(&note); err != nil {
+			t.Fatalf("read note: %v", err)
+		}
+		if note != "Confirmed — the listing is gone" {
+			t.Errorf("stored note = %q, want the moderator's note", note)
+		}
+		if len(notifier.sent) != 1 {
+			t.Fatalf("notices sent = %d, want 1", len(notifier.sent))
+		}
+		if d := notifier.sent[0]; d.Email != "u1@example.test" || !d.JobClosed || d.Outcome != report.OutcomeResolved {
+			t.Errorf("notice = %+v, want a resolved/closed notice to u1", d)
+		}
+	})
+
+	t.Run("the decision response says whether the reporter was notified", func(t *testing.T) {
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user2Cookie,
+			`{"reason":"spam","details":"this is not a real vacancy"}`))
+		if err != nil {
+			t.Fatalf("file: %v", err)
+		}
+		id := decodeID(t, resp)
+
+		before := len(notifier.sent)
+		dresp, err := app.Test(req(fiber.MethodPost, "/api/v1/reports/"+itoa(id)+"/dismiss", modCookie,
+			`{"reason":"the vacancy checks out","notify_reporter":true}`))
+		if err != nil {
+			t.Fatalf("dismiss: %v", err)
+		}
+		var out struct {
+			Data struct {
+				Notified bool `json:"notified"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(dresp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if !out.Data.Notified {
+			t.Error("notified = false, want true after a delivered notice")
+		}
+		if len(notifier.sent) != before+1 {
+			t.Errorf("notices sent = %d, want one more", len(notifier.sent))
+		}
+	})
+
+	t.Run("a decision that opts out sends nothing", func(t *testing.T) {
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user1Cookie,
+			`{"reason":"other","details":"the salary looks wrong"}`))
+		if err != nil {
+			t.Fatalf("file: %v", err)
+		}
+		id := decodeID(t, resp)
+
+		before := len(notifier.sent)
+		rresp, err := app.Test(req(fiber.MethodPost, "/api/v1/reports/"+itoa(id)+"/resolve", modCookie,
+			`{"note":"internal: duplicate of an earlier report"}`))
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		var out struct {
+			Data struct {
+				Notified bool `json:"notified"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(rresp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if out.Data.Notified {
+			t.Error("notified = true for a decision that never asked to notify")
+		}
+		if len(notifier.sent) != before {
+			t.Error("a decision that opted out still sent a notice")
 		}
 	})
 
@@ -290,4 +368,13 @@ func TestReportsEndToEnd(t *testing.T) {
 			t.Error("dismiss must not close the job")
 		}
 	})
+}
+
+// recordingNotifier stands in for the mail transport: the endpoints are what is under test
+// here, not the rendering, so it records the decisions it was handed.
+type recordingNotifier struct{ sent []report.Decision }
+
+func (n *recordingNotifier) NotifyDecision(_ context.Context, d report.Decision) error {
+	n.sent = append(n.sent, d)
+	return nil
 }

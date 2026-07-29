@@ -697,10 +697,12 @@ type Querier interface {
 	// The caller's reminder default rule. No row -> pgx.ErrNoRows, which the service
 	// reads as the off-by-default state (feature never configured).
 	GetReminderSettings(ctx context.Context, userID int64) (ReminderSetting, error)
-	// Load a single report by id for the review path. The resolve/dismiss flow guards the
-	// status in the service; the Mark* queries are additionally scoped to status='pending' as
-	// defense-in-depth against a concurrent second decision.
-	GetReport(ctx context.Context, id int64) (JobReport, error)
+	// Load a single report by id for the review path, with the reporter's email and the
+	// reported job's slug and title — the decision notice needs them, and joining here spares
+	// the decision path a second round trip. The resolve/dismiss flow guards the status in the
+	// service; the Mark* queries are additionally scoped to status='pending' as defense-in-depth
+	// against a concurrent second decision.
+	GetReport(ctx context.Context, id int64) (GetReportRow, error)
 	// Fetch one of a user's saved searches, owner-scoped. Used by the share use case to
 	// read the current name/public_slug before deciding whether to keep an existing slug
 	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
@@ -1222,9 +1224,11 @@ type Querier interface {
 	// Mark a pending report dismissed with an optional reason, recording the deciding
 	// moderator. Scoped to status='pending' (see MarkReportResolved). The job is not touched.
 	MarkReportDismissed(ctx context.Context, arg MarkReportDismissedParams) (JobReport, error)
-	// Mark a pending report resolved, recording the deciding moderator. Scoped to
-	// status='pending' so a concurrent second decision affects no row (the service maps 0 rows
-	// to ErrAlreadyDecided). The optional job close is a separate write (CloseJobByID).
+	// Mark a pending report resolved, recording the deciding moderator and their note. The note
+	// shares review_reason with dismiss: both answer "why the moderator decided this", and both
+	// are quoted back to the reporter in the decision notice. Scoped to status='pending' so a
+	// concurrent second decision affects no row (the service maps 0 rows to ErrAlreadyDecided).
+	// The optional job close is a separate write (CloseJobByID).
 	MarkReportResolved(ctx context.Context, arg MarkReportResolvedParams) (JobReport, error)
 	// Mark a pending submission approved, recording the deciding moderator and the minted job.
 	// Scoped to status='pending' so a concurrent second decision affects no row (the service

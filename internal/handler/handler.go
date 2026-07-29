@@ -32,6 +32,7 @@ import (
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/referral"
+	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
@@ -311,6 +312,10 @@ func Register(app *fiber.App, cfg Config) {
 				accounts.NewQueriesCodeStore(queries),
 				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
 			)
+			// And it tells a reporter what a moderator decided about their report.
+			// Without it the queue still decides reports — each decision simply
+			// reports that nobody was notified.
+			reportsH.report.WithNotifier(report.NewMailNotifier(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 		}
 	} else {
 		log.Print("accounts: AWS_REGION/NOTIFY_EMAIL_FROM unset — email verification and password reset are unavailable")

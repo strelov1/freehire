@@ -1174,14 +1174,27 @@ export function createApi(
     return requestData<Report[]>('/api/v1/reports');
   }
 
-  /** Resolve a pending report; optionally soft-close the reported job. */
-  async function resolveReport(id: number, closeJob: boolean): Promise<Report> {
-    return requestData<Report>(`/api/v1/reports/${id}/resolve`, jsonBody('POST', { close_job: closeJob }));
+  /** Resolve a pending report; optionally soft-close the reported job. The note is
+   *  emailed to the reporter when `notifyReporter` is set. */
+  async function resolveReport(
+    id: number,
+    closeJob: boolean,
+    note = '',
+    notifyReporter = false,
+  ): Promise<Report> {
+    return requestData<Report>(
+      `/api/v1/reports/${id}/resolve`,
+      jsonBody('POST', { close_job: closeJob, note, notify_reporter: notifyReporter }),
+    );
   }
 
-  /** Dismiss a pending report with an optional reason; the job is unchanged. */
-  async function dismissReport(id: number, reason?: string): Promise<Report> {
-    return requestData<Report>(`/api/v1/reports/${id}/dismiss`, jsonBody('POST', { reason: reason ?? '' }));
+  /** Dismiss a pending report with an optional reason; the job is unchanged. The reason
+   *  is emailed to the reporter when `notifyReporter` is set. */
+  async function dismissReport(id: number, reason = '', notifyReporter = false): Promise<Report> {
+    return requestData<Report>(
+      `/api/v1/reports/${id}/dismiss`,
+      jsonBody('POST', { reason, notify_reporter: notifyReporter }),
+    );
   }
 
   // --- Gmail inbox ---------------------------------------------------------
