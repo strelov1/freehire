@@ -108,6 +108,25 @@ the job is persisted.
 - **WHEN** a posting's description ends with `#J-18808-Ljbffr`
 - **THEN** the persisted description does not contain that marker
 
+### Requirement: The account's country is stated alongside the posting's city
+
+The system SHALL compose each job's location from the posting's city and the country the publisher
+account serves, because the feed names no country and its cities collide with better-known foreign
+ones (its London is in Ohio, its Vienna in Virginia). The country is a property of the credential —
+the vendor issues one publisher id per country — and not a guess about an individual posting, so it
+does not breach the dict-only rule. A posting with no city SHALL carry the country alone, with no
+dangling separator for the geography tokenizer to read as an empty token.
+
+#### Scenario: City is qualified by the account country
+
+- **WHEN** a posting's location is `New York`
+- **THEN** the job's location names both `New York` and the account's country
+
+#### Scenario: A posting without a city carries the country alone
+
+- **WHEN** a posting's location is empty
+- **THEN** the job's location is exactly the account's country
+
 ### Requirement: The feed's age field never becomes a posting date
 
 The system MUST NOT map the feed's `age` or `age_days` onto the job's posted date. Those fields
