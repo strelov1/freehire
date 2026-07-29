@@ -595,6 +595,47 @@ export interface Education {
 }
 
 /**
+ * AutopilotStatus is what an autopilot run made of one requirement. The vocabulary is
+ * fixed and small on purpose: the panel renders each value, and a value it cannot render
+ * is worse than a refused write. Nothing is coerced — an unrecognised status is reported
+ * back to the model with the valid ones named, which is how it corrects itself mid-turn.
+ */
+export type AutopilotStatus = string;
+/**
+ * AutopilotClosedBank: the experience bank already held evidence, and the run
+ * rewrote the CV around it.
+ */
+export const AutopilotClosedBank: AutopilotStatus = "closed_bank";
+/**
+ * AutopilotClosedCandidate: the candidate confirmed it in conversation after the
+ * run, their words were banked, and the bullet cites that record.
+ */
+export const AutopilotClosedCandidate: AutopilotStatus = "closed_candidate";
+/**
+ * AutopilotOpen: the bank holds nothing for it. This is the remainder worth asking about.
+ */
+export const AutopilotOpen: AutopilotStatus = "open";
+/**
+ * AutopilotNotReached: the run ended (step cap, cancellation) before reaching it.
+ */
+export const AutopilotNotReached: AutopilotStatus = "not_reached";
+/**
+ * AutopilotEntry is one requirement and what the run made of it.
+ */
+export interface AutopilotEntry {
+  requirement: string;
+  status: AutopilotStatus;
+  note?: string;
+}
+
+//////////
+// source: cv.go
+/*
+Package cv is the CV-builder domain: the structured CV Document, its sanitizer,
+seeding from the extracted résumé, and PDF rendering behind a Renderer interface.
+*/
+
+/**
  * Document is the typed, sanitized CV. Every field is optional; sections the user has
  * not filled in are left empty rather than invented, and Sanitize drops empty entries.
  */

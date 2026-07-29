@@ -141,9 +141,11 @@ func genStructs() (string, error) {
 				// Experience + Education + SkillGroup + Language + Project +
 				// Certification) and the tailoring Patch. Only the wire files — seed/store/
 				// renderer are server-only.
-				Path:         "github.com/strelov1/freehire/internal/cv",
-				OutputPath:   cvTS,
-				IncludeFiles: []string{"cv.go", "patch.go"},
+				Path:       "github.com/strelov1/freehire/internal/cv",
+				OutputPath: cvTS,
+				// autopilot.go carries the run report's wire shape; its server-side rules
+				// (sanitizing, the owner-scoped writes) live in autopilot_store.go and stay here.
+				IncludeFiles: []string{"cv.go", "patch.go", "autopilot.go"},
 			},
 		},
 	}
