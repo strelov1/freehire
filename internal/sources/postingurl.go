@@ -93,6 +93,7 @@ var applyFormSuffix = map[string]string{
 	"jobs.lever.co":      "/apply",
 	"jobs.eu.lever.co":   "/apply",
 	"apply.workable.com": "/apply",
+	"jobs.workable.com":  "/apply",
 }
 
 // CanonicalPostingURL rewrites a posting's application-form URL to the posting
