@@ -102,7 +102,7 @@ Each is self-contained and can be read independently.
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
-- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, gated to the restricted rollout. Tools act as the authenticated caller — no credential is minted for an agent
+- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, open to every signed-in user. Tools act as the authenticated caller — no credential is minted for an agent. A turn is not metered against AI credits yet, so authentication is the only thing bounding the spend
 - **Experience provenance:** every banked achievement records whether the CANDIDATE asserted it (`cv_import`/`stated_in_chat`/`manual`) or the MODEL did (`agent_inferred`). Only the former may be written into a CV, and the check lives in the service path, not in a system prompt
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value

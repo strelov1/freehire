@@ -2,8 +2,9 @@
 
 // Integration tests for the in-app assistant's HTTP surface against a real
 // Postgres: the session lifecycle (create, list, read, delete), the owner checks
-// on every one of them, the beta gate, and a full streamed turn driven by a
-// scripted model — its events, its persisted transcript, and its resumption.
+// on every one of them, the boundary at authentication (any signed-in user is
+// served, a caller with no credential is not), and a full streamed turn driven by
+// a scripted model — its events, its persisted transcript, and its resumption.
 // Run with: go test -tags=integration ./internal/handler/
 package handler
 
@@ -218,14 +219,18 @@ func TestAssistantSessionsAreOwnerScoped(t *testing.T) {
 	}
 }
 
-func TestAssistantIsGatedToTheRestrictedRollout(t *testing.T) {
+// The assistant applies no membership test beyond authentication: a signed-in user in
+// no group at all is served. Authentication itself did not loosen with the gate — a
+// caller presenting no credential is still refused, and this test guards both halves,
+// because "open to everyone" is one edit away from "open to anyone".
+func TestAssistantServesAUserInNoGroup(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, _ := newAssistantApp(pool, iss, nil)
 	_, plain := assistantUser(t, pool, iss, "plain@example.test", false)
 
-	if resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", plain, map[string]any{}); resp.StatusCode != fiber.StatusForbidden {
-		t.Errorf("non-beta create: status %d, want 403", resp.StatusCode)
+	if resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", plain, map[string]any{}); resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("create as a user who is neither moderator nor beta tester: status %d, want 201", resp.StatusCode)
 	}
 	if resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", "", nil); resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("unauthenticated list: status %d, want 401", resp.StatusCode)
@@ -338,17 +343,18 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	}
 }
 
-// Widening the carrier must not widen the rollout: the gate reads group membership
-// per request, whichever credential resolved the caller.
-func TestAssistantRefusesABearerCallerOutsideTheRollout(t *testing.T) {
+// The carrier decides nothing about standing: a user in no group is served over Bearer
+// exactly as the cookie serves them. Paired with the unauthenticated case above, this
+// pins the boundary at authentication and nowhere else.
+func TestAssistantServesABearerCallerInNoGroup(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, _ := newAssistantApp(pool, iss, nil)
 	_, token := assistantUser(t, pool, iss, "plain-extension@example.test", false)
 
 	resp := assistantBearerRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions", token, map[string]any{})
-	if resp.StatusCode != fiber.StatusForbidden {
-		t.Errorf("non-beta create over Bearer: status %d, want 403", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Errorf("create over Bearer as a user in no group: status %d, want 201", resp.StatusCode)
 	}
 }
 

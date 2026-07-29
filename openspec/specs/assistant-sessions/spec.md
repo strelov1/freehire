@@ -128,24 +128,19 @@ API key — resolving both to the same freehire user. A browser extension cannot
 send hire's httpOnly cookie across origins, and holding a conversation from the
 extension's side panel is why this widens.
 
-Widening the carrier SHALL change nothing else: the rollout gate, the owner
-scoping, and the "a session you do not own is missing, not forbidden" rule apply
-identically however the caller authenticated.
+Widening the carrier SHALL change nothing else: the owner scoping and the "a
+session you do not own is missing, not forbidden" rule apply identically however
+the caller authenticated.
 
 #### Scenario: A Bearer session JWT holds a conversation
 
 - **WHEN** the session list, a transcript read, or a turn is requested with a valid session JWT as `Authorization: Bearer` and no cookie
-- **THEN** the request is served as that user, subject to the same rollout gate and owner scoping as a cookie request
+- **THEN** the request is served as that user, subject to the same owner scoping as a cookie request
 
 #### Scenario: An unauthenticated request is still refused
 
 - **WHEN** an assistant route is called with neither a cookie nor a Bearer credential
 - **THEN** the request is rejected and no session is created, read or advanced
-
-#### Scenario: A Bearer caller outside the rollout is still refused
-
-- **WHEN** a valid Bearer credential belongs to a user who is neither a moderator nor a beta tester
-- **THEN** the request is refused, exactly as the same user would be through the cookie
 
 ### Requirement: The session list spans every conversation the user can return to
 
@@ -165,26 +160,33 @@ tailoring sessions stay out, because each is reached through the CV that owns it
 - **WHEN** the caller has a CV-tailoring conversation and requests the session list
 - **THEN** it is absent from the response
 
-### Requirement: The assistant is gated to the beta-tester group
+### Requirement: The assistant is open to every signed-in user
 
-Access to the assistant SHALL be restricted to members of a beta-tester group,
-represented by a `beta_tester` flag on the user account that is independent of
-`role` (a user may be both a moderator and a beta tester, or either alone). The
-`/my/assistant` page and its account-nav entry SHALL be shown only to beta
-testers; a non-beta user (including a moderator without the flag) SHALL NOT see
-the nav entry and SHALL be stopped at the page. The flag SHALL be exposed on the
-authenticated user's profile (`/auth/me`) so the client can gate the UI.
-Membership is granted out-of-band (manual SQL); no self-service grant exists.
+Every assistant route SHALL serve any caller it can authenticate, and SHALL apply
+no membership test beyond authentication. A signed-in user SHALL reach the
+assistant whatever their `role` and whatever the state of their `beta_tester`
+flag; an unauthenticated caller SHALL still be refused, and owner scoping SHALL
+still confine each caller to their own conversations. The `/my/assistant` page and
+its account-nav entry SHALL be shown to every signed-in user.
 
-#### Scenario: Beta tester sees and can open the assistant
+The `beta_tester` flag SHALL remain on the user account and SHALL remain exposed
+on the authenticated user's profile (`/auth/me`), independent of `role`. The
+assistant simply stops reading it — the flag outlives this consumer.
 
-- **WHEN** a signed-in user whose account has `beta_tester = true` loads the account area
-- **THEN** the "Agent" nav entry is present and the `/my/assistant` page renders the chat
+#### Scenario: A user with no special standing opens the assistant
 
-#### Scenario: Non-beta user cannot access the assistant
+- **WHEN** a signed-in user who is neither a moderator nor a beta tester requests the session list, creates a session, reads a transcript, or sends a turn
+- **THEN** the request is served exactly as it would be for a beta tester
 
-- **WHEN** a signed-in user without the beta-tester flag (including a plain moderator) loads the account area
-- **THEN** the "Agent" nav entry is absent and visiting `/my/assistant` directly shows the restricted-rollout notice instead of connecting
+#### Scenario: The nav entry is shown to everyone signed in
+
+- **WHEN** any signed-in user loads the account area
+- **THEN** the "Agent" nav entry is present and `/my/assistant` renders the chat rather than a restricted-rollout notice
+
+#### Scenario: Authentication is still required
+
+- **WHEN** an assistant route is called with neither a cookie nor a Bearer credential
+- **THEN** the request is refused and no session is created, read or advanced
 
 #### Scenario: The flag is independent of role
 

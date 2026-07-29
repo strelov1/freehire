@@ -112,8 +112,10 @@ is never mistaken for the answer.
    the valid ones. That message is the model's only path to self-correction.
 
 ## Limitations
-- No metering. The assistant is free behind the restricted-rollout gate;
-  `internal/credits` is the seam for a per-turn debit.
+- **No metering.** A turn is free to the caller and billed to us. This was affordable
+  while the restricted-rollout gate held the audience to a handful of accounts; that
+  gate is gone and the assistant is open to every signed-in user, so nothing bounds
+  the spend now. `internal/credits` is the seam for a per-turn debit.
 - No summarisation: a long session loses its oldest messages to the window rather
   than compacting them.
 - One tool round runs its calls sequentially. Parallel execution would need
