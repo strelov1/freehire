@@ -6,7 +6,7 @@
 -- (see hire-jobs-list-slow-query in the project's history) is that a seq scan on a
 -- list endpoint is cheap to add and expensive to find later.
 --
--- Applied to a fresh volume by initdb after 0052; on an existing prod volume run this
+-- Applied to a fresh volume by initdb after 0054; on an existing prod volume run this
 -- manually (SET ROLE hire). Safe to apply before or after the image — these only make
 -- existing queries faster. On prod, prefer CREATE INDEX CONCURRENTLY by hand: the
 -- statements below are the initdb form, and a plain CREATE INDEX takes a write lock

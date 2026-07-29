@@ -24,7 +24,7 @@ source is). The aggregator is then testable without a database.
 
 ## 3. The report channel
 
-- [x] 3.1 Migration `0051_ghost_job_signal.sql` — DONE IN GROUP 2, which needed the table for `ListGhostReportEvidence`. Creates `ghost_reports` (`UNIQUE (user_id, job_id)`, `applied_on`, `retracted_at`, cascading FKs, partial index on live rows) and `jobs.ats_absent_at`. One migration: they ship together, and the column must exist before any generated `SELECT` reads it.
+- [x] 3.1 Migration `0053_ghost_job_signal.sql` — DONE IN GROUP 2, which needed the table for `ListGhostReportEvidence`. Creates `ghost_reports` (`UNIQUE (user_id, job_id)`, `applied_on`, `retracted_at`, cascading FKs, partial index on live rows) and `jobs.ats_absent_at`. One migration: they ship together, and the column must exist before any generated `SELECT` reads it.
 - [x] 3.2 Add failing tests in `internal/ghostreport`: `applied_on` in the future or over 12 months old is invalid; a claim under 21 days old is stored but yields no evidence; a retracted report yields none.
 - [x] 3.3 Write `internal/ghostreport` — a Fiber-free, pgx-free service owning validation, the maturity rule and retraction, over a repository interface. Follow `internal/report`'s shape.
 - [x] 3.4 Add failing handler integration tests in `internal/handler`: 201 on file; 409 on a duplicate; 409 on a closed job; 403 for an unverified email; 429 past the daily cap; 204 on retract; unauthenticated is 401.
@@ -84,7 +84,7 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 9. Rollout (ops — executed at Finish)
 
-- [ ] 9.1 Apply migration `0051` to prod **before** deploying the image. The generated `SELECT`s read `jobs.*`, so an unapplied migration 500s every job read, not only this feature.
+- [ ] 9.1 Apply migrations `0053`, `0054` and `0055` to prod **before** deploying the image (renumbered from 0051-0053 when the branch was rebased onto a main that had taken 0051 and 0052). The generated `SELECT`s read `jobs.*`, so an unapplied migration 500s every job read, not only this feature.
 - [ ] 9.2 Deploy. Confirm the catalogue is unchanged — the feature is silent until 9.4.
 - [ ] 9.3 Run `cmd/ghost-crosscheck` by hand, dry-run, and capture the calibration report.
 - [ ] 9.4 **Calibration gate.** Read the report: who reaches `possible`, by source and by company. If staffing/consulting agencies and close-event-less enterprises dominate, STOP — the previous spike died exactly here, and the next step is a dict-only exclusion specified as its own change, not a lowered threshold. Only on passing does the cron start and can a mark first appear.
@@ -95,6 +95,6 @@ has been landing in a queue whose only verdict is closing the job.
 Found by reviewing the whole diff at once, not in production. Recorded here because each
 is a class of defect worth recognising again, not a typo.
 
-- [x] 8b.1 **Seq scan on the hottest read paths.** The only job-side index on `user_jobs` is partial on `vote IS NOT NULL`, so `ListGhostApplicationEvidence` — which filters on `applied_at IS NOT NULL` — was not served by it, and every job list page, search page and job detail read would sequentially scan `user_jobs`. Invisible at today's volumes and growing with user activity. Migration `0053` adds partial indexes matching the query's own terms, plus one on `emails.suggested_job_id` (only the confirmed `job_id` side was indexed).
+- [x] 8b.1 **Seq scan on the hottest read paths.** The only job-side index on `user_jobs` is partial on `vote IS NOT NULL`, so `ListGhostApplicationEvidence` — which filters on `applied_at IS NOT NULL` — was not served by it, and every job list page, search page and job detail read would sequentially scan `user_jobs`. Invisible at today's volumes and growing with user activity. Migration `0055` adds partial indexes matching the query's own terms, plus one on `emails.suggested_job_id` (only the confirmed `job_id` side was indexed).
 - [x] 8b.2 **A closed posting could still be warned about, but only via search.** The spec requires no signal on a closed job; the detail path honoured it through the row, and the search path never passed `Closed` at all — while a sweep-closed job stays in Meilisearch until a reindex whose timer is disabled. `ListJobGhostStamps` now returns `closed_at` beside the stamp, read from Postgres precisely because the index cannot be trusted on this. An invariant satisfied on one path and silently skipped on another is the worst kind: the detail test was green and said nothing about search. Pinned by `TestClassifyGhost_ClosedWinsOverEveryOtherSignal`.
 - [x] 8b.3 **The evidence hydration was duplicated** between the job and search handlers — and had already drifted, since only one of them would have gained the closed check. Extracted to one `ghostEvidenceFor`.

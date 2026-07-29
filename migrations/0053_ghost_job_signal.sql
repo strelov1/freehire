@@ -6,7 +6,7 @@
 -- verdict itself is NOT stored: it is time-dependent, so a stored class would go
 -- stale sitting still, the same reason jobs.reality is computed rather than kept.
 --
--- Applied to a fresh volume by initdb after 0050; on an existing prod volume run
+-- Applied to a fresh volume by initdb after 0052; on an existing prod volume run
 -- this manually (SET ROLE hire) BEFORE deploying the code. The generated SELECTs
 -- read jobs.*, so an unapplied column 42703s EVERY job read, not just this feature.
 

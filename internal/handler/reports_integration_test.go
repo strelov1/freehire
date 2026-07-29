@@ -170,7 +170,16 @@ func TestReportsEndToEnd(t *testing.T) {
 	// elaboration is voluntary. Blank is stored as absent rather than refused, so a
 	// moderator never meets whitespace typed to get past a required field.
 	t.Run("a reason with blank details is accepted and stored empty", func(t *testing.T) {
-		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+slug2+"/reports", user2Cookie,
+		// Its own job: filing leaves a PENDING report, and the (user, job) pair is
+		// unique per open report — reusing a pair another subtest needs would hand
+		// that one a 409 instead of the report it expects.
+		const blankSlug = "blank-details-gamma-eeee5555"
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug)
+			 VALUES ('test', 'report-blank', 'http://example.test/3', 'Blank Dev', $1)`, blankSlug); err != nil {
+			t.Fatalf("seed job: %v", err)
+		}
+		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs/"+blankSlug+"/reports", user1Cookie,
 			`{"reason":"spam","details":"   "}`))
 		if err != nil {
 			t.Fatalf("file without details: %v", err)

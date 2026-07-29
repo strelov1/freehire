@@ -141,7 +141,8 @@ ranking, does not hide the posting, does not close it, and disappears when the j
 
 ## Migration Plan
 
-1. Migration `0051` (`ghost_reports`, `jobs.ats_absent_at`) applied to prod **before** the image.
+1. Migrations `0053` (`ghost_reports`, `jobs.ats_absent_at`), `0054` (`insights_company_response`)
+   and `0055` (the evidence indexes) applied to prod **before** the image.
    An unapplied migration 500s every job read (42703), not only this feature.
 2. Deploy. The feature is silent by construction (see the structural flag above).
 3. `cmd/ghost-crosscheck` run by hand, dry-run, producing the calibration report.
