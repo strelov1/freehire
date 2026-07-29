@@ -68,6 +68,16 @@ type Querier interface {
 	// longer saved-but-unapplied, so cancel instead of sending. This is how job closure
 	// cancels reminders without hooking every scattered close path.
 	CancelReminderAtFire(ctx context.Context, id int64) (int64, error)
+	// The open canonical posting of one role cluster, asked by the import BEFORE it writes a
+	// posting under the URL-keyed generic identity: a careers storefront on a company's own domain
+	// fronts an ATS board we crawl, and without this the same vacancy lands twice — once from the
+	// crawl, once from the pasted link. Mirrors the canon RecomputeRoleDuplicatesForCompany picks
+	// (MIN(id) among the cluster's open rows) so this answer and the one a later reindex computes
+	// agree rather than fight.
+	// A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
+	// that no reader expects. The row being written is excluded by its own dedup identity, because
+	// a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
 	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
 	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
 	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
@@ -1207,6 +1217,10 @@ type Querier interface {
 	// has. Both paths share this one statement so the applied_count transition rule
 	// below cannot fork.
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
+	// Point one row at its canon. The import path only: the batch passes recompute whole companies
+	// (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
+	// doing so — this marks the single row an import just wrote.
+	MarkJobDuplicateOf(ctx context.Context, arg MarkJobDuplicateOfParams) (int64, error)
 	// Record one expired probe: increment the strike counter and, in the same write,
 	// close the job (closed_at) once it reaches the threshold the caller owns — the
 	// two-strike grace that absorbs a transient death signal. Returns the new strike

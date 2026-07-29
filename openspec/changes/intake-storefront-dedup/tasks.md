@@ -1,12 +1,12 @@
 ## 1. The catalogue lookup
 
-- [ ] 1.1 Write the failing integration test for `CanonicalJobForRole`: it finds the open
+- [x] 1.1 Write the failing integration test for `CanonicalJobForRole`: it finds the open
       canonical posting of a role cluster, excludes the row being imported by its own
       `(source, external_id)`, and returns no rows when every candidate is closed or is itself a
       duplicate (`internal/db/canonical_job_for_role_integration_test.go`, package `db`)
-- [ ] 1.2 Write the failing integration test for `MarkJobDuplicateOf`: it points one row at its
+- [x] 1.2 Write the failing integration test for `MarkJobDuplicateOf`: it points one row at its
       canon and reports one row affected
-- [ ] 1.3 Add both queries to `internal/db/queries/jobs.sql`, run `make sqlc`, and make the
+- [x] 1.3 Add both queries to `internal/db/queries/jobs.sql`, run `make sqlc`, and make the
       tests pass
 
 ## 2. The collapse on import

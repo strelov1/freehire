@@ -11,6 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const canonicalJobForRole = `-- name: CanonicalJobForRole :one
+SELECT id, public_slug
+FROM jobs
+WHERE company_slug = $1
+  AND role_fingerprint = $2
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND NOT (source = $3 AND external_id = $4)
+ORDER BY id
+LIMIT 1
+`
+
+type CanonicalJobForRoleParams struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	Source          string      `json:"source"`
+	ExternalID      string      `json:"external_id"`
+}
+
+type CanonicalJobForRoleRow struct {
+	ID         int64  `json:"id"`
+	PublicSlug string `json:"public_slug"`
+}
+
+// The open canonical posting of one role cluster, asked by the import BEFORE it writes a
+// posting under the URL-keyed generic identity: a careers storefront on a company's own domain
+// fronts an ATS board we crawl, and without this the same vacancy lands twice — once from the
+// crawl, once from the pasted link. Mirrors the canon RecomputeRoleDuplicatesForCompany picks
+// (MIN(id) among the cluster's open rows) so this answer and the one a later reindex computes
+// agree rather than fight.
+// A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
+// that no reader expects. The row being written is excluded by its own dedup identity, because
+// a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+func (q *Queries) CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error) {
+	row := q.db.QueryRow(ctx, canonicalJobForRole,
+		arg.CompanySlug,
+		arg.RoleFingerprint,
+		arg.Source,
+		arg.ExternalID,
+	)
+	var i CanonicalJobForRoleRow
+	err := row.Scan(&i.ID, &i.PublicSlug)
+	return i, err
+}
+
 const closeJobByID = `-- name: CloseJobByID :execrows
 UPDATE jobs
 SET closed_at  = now(),
@@ -1372,6 +1417,29 @@ func (q *Queries) ListRoleClusterCopies(ctx context.Context, arg ListRoleCluster
 		return nil, err
 	}
 	return items, nil
+}
+
+const markJobDuplicateOf = `-- name: MarkJobDuplicateOf :execrows
+UPDATE jobs
+SET duplicate_of = $1,
+    updated_at   = now()
+WHERE id = $2
+`
+
+type MarkJobDuplicateOfParams struct {
+	DuplicateOf pgtype.Int8 `json:"duplicate_of"`
+	ID          int64       `json:"id"`
+}
+
+// Point one row at its canon. The import path only: the batch passes recompute whole companies
+// (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
+// doing so — this marks the single row an import just wrote.
+func (q *Queries) MarkJobDuplicateOf(ctx context.Context, arg MarkJobDuplicateOfParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markJobDuplicateOf, arg.DuplicateOf, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markLivenessExpired = `-- name: MarkLivenessExpired :one

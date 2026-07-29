@@ -313,6 +313,35 @@ SELECT EXISTS (
       AND NOT (source = sqlc.arg(source) AND external_id = sqlc.arg(external_id))
 ) AS carried;
 
+-- name: CanonicalJobForRole :one
+-- The open canonical posting of one role cluster, asked by the import BEFORE it writes a
+-- posting under the URL-keyed generic identity: a careers storefront on a company's own domain
+-- fronts an ATS board we crawl, and without this the same vacancy lands twice — once from the
+-- crawl, once from the pasted link. Mirrors the canon RecomputeRoleDuplicatesForCompany picks
+-- (MIN(id) among the cluster's open rows) so this answer and the one a later reindex computes
+-- agree rather than fight.
+-- A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
+-- that no reader expects. The row being written is excluded by its own dedup identity, because
+-- a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+SELECT id, public_slug
+FROM jobs
+WHERE company_slug = sqlc.arg(company_slug)
+  AND role_fingerprint = sqlc.arg(role_fingerprint)
+  AND closed_at IS NULL
+  AND duplicate_of IS NULL
+  AND NOT (source = sqlc.arg(source) AND external_id = sqlc.arg(external_id))
+ORDER BY id
+LIMIT 1;
+
+-- name: MarkJobDuplicateOf :execrows
+-- Point one row at its canon. The import path only: the batch passes recompute whole companies
+-- (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
+-- doing so — this marks the single row an import just wrote.
+UPDATE jobs
+SET duplicate_of = sqlc.arg(duplicate_of),
+    updated_at   = now()
+WHERE id = sqlc.arg(id);
+
 -- name: ListRoleClusterCopies :many
 -- The open postings sharing a role cluster (company_slug + role_fingerprint) with the
 -- anchor job — the "N openings across cities" list for a collapsed role. Each copy keeps
