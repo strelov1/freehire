@@ -47,6 +47,12 @@ func TestDerive(t *testing.T) {
 		{"agent engineer", "", "ai_engineering", "Agent Engineer", []string{"ai_engineering", "agent_engineer"}},
 		{"ai agent engineer", "", "ai_engineering", "AI Agent Engineer", []string{"ai_engineering", "agent_engineer"}},
 		{"ai product engineer keeps product_engineer out", "", "ai_engineering", "AI Product Engineer", []string{"ai_engineering", "ai_product_engineer"}},
+		// Hyphenated spelling: without its own alias the shorter "product engineer"
+		// would win (a hyphen is a word boundary) and mislabel this as a plain
+		// product_engineer. "AI-Agent Engineer" needs no entry — "agent engineer"
+		// already resolves it to the right role.
+		{"ai-product engineer", "", "ai_engineering", "AI-product engineer", []string{"ai_engineering", "ai_product_engineer"}},
+		{"ai-agent engineer", "", "ai_engineering", "AI-Agent Engineer", []string{"ai_engineering", "agent_engineer"}},
 		{"cloud solutions engineer beats adjacency gap", "", "", "Cloud Solutions Engineer", []string{"cloud_solutions_engineer"}},
 		{"technical lead adds seniority-only", "lead", "", "Technical Lead", []string{"lead", "technical_lead"}},
 		{"fractional cto", "c_level", "", "Fractional CTO", []string{"c_level", "fractional_cto"}},

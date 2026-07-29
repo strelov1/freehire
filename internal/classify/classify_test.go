@@ -83,6 +83,16 @@ func TestParse(t *testing.T) {
 		{"AI Research Engineer", "", "ai_engineering"},
 		{"AI Automation Engineer", "", "ai_engineering"},
 		{"Lead Agent Engineer (Langchain)", "lead", "ai_engineering"},
+		// Hyphenated spellings of the same roles — a hyphen is a word boundary, so the
+		// spaced aliases cannot reach them.
+		{"AI-product engineer", "", "ai_engineering"},
+		{"AI-Agent Engineer", "", "ai_engineering"},
+		{"AI-Research Engineer", "", "ai_engineering"},
+		{"AI-Automation Engineer", "", "ai_engineering"},
+		// Trap: "algebrik.ai-product manager" is the domain "algebrik.ai" followed by
+		// "product manager", not an AI-product role. Anchoring every alias on the role
+		// noun ("engineer") keeps it in product.
+		{"Algebrik.ai-Product Manager", "", "product"},
 		// "AI-native"/"AI-enabled" describe how the engineer WORKS, not what they
 		// build, so they claim no category — the rest of the title still decides.
 		{"AI-Native Engineer (Test Automation)", "", "qa"},
@@ -145,6 +155,11 @@ func TestParseGradeBlindPhrases(t *testing.T) {
 		{"Middle East Editor", "", ""},
 		{"Sales Director – Middle East", "", "sales"},
 		{"Senior Backend Engineer, Middle East", "senior", "backend"},
+		// Hyphenated spellings of the same names. A hyphen is a word boundary, so the
+		// spaced phrase cannot mask them — each spelling is its own entry.
+		{"Enterprise Account Executive (Middle-East & Africa)", "", "sales"},
+		{"Demand Planning Specialist – Africa & Middle-East", "", ""},
+		{"Sales Lead-Generation Program Manager / Retail", "", "project_management"},
 		// Regression: the honest grade abbreviation still resolves.
 		{"Mid-Level Backend Engineer", "middle", "backend"},
 		{"Mid Backend Engineer", "middle", "backend"},

@@ -33,6 +33,11 @@ var gradeBlindPhrases = []string{
 	// A region, not a grade — and the costliest of these by far: 142 of 217 prod
 	// titles carrying "Middle East" were graded middle on the geography alone.
 	"middle east",
+	// The hyphenated spellings of the two phrases above. A hyphen is a word boundary,
+	// so the spaced forms cannot mask them and the grade word inside stays exposed
+	// ("Enterprise Account Executive (Middle-East & Africa)" read as middle).
+	"middle-east",
+	"lead-generation",
 }
 
 // seniorityTable lists seniority aliases in precedence order (most specific /
@@ -139,6 +144,14 @@ var categoryTable = []aliasEntry{
 	{"agent engineer", "ai_engineering"},
 	{"ai research engineer", "ai_engineering"},
 	{"ai automation engineer", "ai_engineering"},
+	// Hyphenated spellings. A hyphen is a word boundary, so the spaced aliases above
+	// cannot reach them. "ai-agent engineer" needs no entry — the bare "agent engineer"
+	// already matches it, the hyphen serving as its left boundary. Every alias stays
+	// anchored on the role noun so "Algebrik.ai-Product Manager" (a domain followed by
+	// "product manager") is not read as an AI-product role.
+	{"ai-product engineer", "ai_engineering"},
+	{"ai-research engineer", "ai_engineering"},
+	{"ai-automation engineer", "ai_engineering"},
 	{"ai engineer", "ai_engineering"},
 	{"llm", "ai_engineering"},
 	{"devops", "devops"},

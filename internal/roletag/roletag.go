@@ -105,7 +105,11 @@ var namedRoleTable = []struct {
 	// Agent work is its own craft inside ai_engineering; "ai product engineer" is
 	// listed here so the longest-alias-first ordering keeps it off product_engineer.
 	{"agent_engineer", "Agent Engineer", []string{"agent engineer", "ai agent engineer"}},
-	{"ai_product_engineer", "AI Product Engineer", []string{"ai product engineer"}},
+	// The hyphenated spelling needs its own alias: a hyphen is a word boundary, so
+	// without it the shorter "product engineer" wins the length ordering and the role
+	// lands on product_engineer. "ai-agent engineer" needs no such entry — the bare
+	// "agent engineer" already resolves it.
+	{"ai_product_engineer", "AI Product Engineer", []string{"ai product engineer", "ai-product engineer"}},
 	{"founding_designer", "Founding Designer", []string{"founding designer"}},
 	{"founding_pm", "Founding Product Manager", []string{"founding product manager", "founding pm"}},
 	{"staff_engineer", "Staff Engineer", []string{"staff engineer"}},
