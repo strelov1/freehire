@@ -146,6 +146,11 @@ findable under Ireland's. Narrowing that last 1.7% needs the dictionary to treat
 country as authoritative over a city-name match, which is a change to `internal/location` and out
 of scope here.
 
+The `postcode` field is deliberately unused. The dictionary reads a *state* token ("Austin, TX"),
+not a ZIP, and supplying the state would not help either: `"London, OH"` resolves to `gb`+`us`
+exactly as bare `"London"` does. So there is no formatting of city/state/ZIP that fixes the
+homonyms — only the dictionary change above would.
+
 ### Request hygiene
 
 `user_agent` is omitted entirely — it is optional, it only improves click attribution on shared

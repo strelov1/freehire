@@ -35,5 +35,5 @@
 ## 6. Verification
 
 - [x] 6.1 Run `go build ./... && go vet ./... && go test ./...` green
-- [ ] 6.2 Run one live board end to end against the real feed with the publisher id set, and confirm the stored rows: description free of the reseller signature, no salary, unset posted date, URL intact, country present
+- [x] 6.2 Run one live board end to end against the real feed with the publisher id set, and confirm the stored rows: description free of the reseller signature, no salary, unset posted date, URL intact, country present
 - [x] 6.3 Document the provider in `internal/sources/AGENTS.md` — the keyword-as-board shape, the env-only publisher id, and the two feed traps (slash in `user_agent`, `limit=1` with a keyword)

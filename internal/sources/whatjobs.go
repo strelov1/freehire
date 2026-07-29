@@ -73,22 +73,22 @@ func (whatjobs) aggregator() {}
 // wider than the sweep default. See whatjobsSweepGrace.
 func (whatjobs) sweepGrace() time.Duration { return whatjobsSweepGrace }
 
-// whatjobsPosting is one posting from the feed. snippet is the FULL description HTML despite the
-// name and despite the vendor's documentation, which describes it as a highlighted excerpt. The
-// documented onmousedown field does not exist. salary, jobType and logo are declared here to
-// document that they were read and found worthless — every row carries the same placeholder — so a
-// later reader does not go looking for them again.
+// whatjobsPosting is the part of a feed posting worth reading. snippet is the FULL description HTML
+// despite its name and despite the vendor's documentation, which calls it a highlighted excerpt.
+//
+// The feed sends five more fields, all deliberately unread, so that a later reader does not go
+// looking for them: salary is the literal "0.000000 - 0.000000" on every row, job_type is always
+// empty, logo always null, and age/age_days measure the record's age in the reseller's index rather
+// than the posting date. postcode carries a real US ZIP, but the geography dictionary cannot use it
+// — it reads a state token ("Austin, TX"), not a ZIP, and a ZIP would not settle the homonym cities
+// anyway: "London, OH" resolves to gb+us exactly as "London" alone does. The documented onmousedown
+// field does not exist at all.
 type whatjobsPosting struct {
 	Title    string `json:"title"`
 	Company  string `json:"company"`
 	Location string `json:"location"`
-	Postcode string `json:"postcode"`
 	Snippet  string `json:"snippet"`
 	URL      string `json:"url"`
-	AgeDays  int    `json:"age_days"`
-	Salary   string `json:"salary"`
-	JobType  string `json:"job_type"`
-	Logo     string `json:"logo"`
 }
 
 // Fetch reads one keyword slice. Pagination stops on an EMPTY page — never on a short one: the feed
@@ -149,13 +149,9 @@ var whatjobsResellerMark = regexp.MustCompile(`\s*#J-\d+-Ljbffr\s*$`)
 
 // toJob maps a posting, returning ok=false when the tracked URL carries no native id. The tracked
 // URL is stored verbatim — it is not IP-bound, so the stored copy serves any later visitor and the
-// publisher attribution rides along in its path.
-//
-// Three of the feed's fields are deliberately dropped rather than mapped. salary is the literal
-// "0.000000 - 0.000000" on every row, jobType is always empty and logo always null, so storing them
-// would assert facts the feed never carried. age/age_days are dropped too: they measure how long
-// the record has been in the reseller's index (postings from unrelated companies share one value),
-// so PostedAt stays nil and freshness falls back to when freehire first saw the row.
+// publisher attribution rides along in its path. PostedAt is left nil on purpose (see
+// whatjobsPosting): freshness then falls back to when freehire first saw the row, which is true,
+// where the feed's own age is not.
 func (p whatjobsPosting) toJob() (Job, bool) {
 	id, ok := whatjobsExternalID(p.URL)
 	if !ok {
