@@ -25,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/sources"
 )
@@ -56,7 +57,24 @@ const storefrontPage = `<html><head><script type="application/ld+json">
  "hiringOrganization":{"@type":"Organization","name":"Globobox"}}
 </script></head><body>Apply now</body></html>`
 
+// nimbusPage is a storefront vacancy for a company whose posting the catalog already carries
+// under a crawled source — the collapse case.
+const nimbusPage = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting",
+ "title":"Principal Java Architect","description":"Own the platform.",
+ "datePosted":"2026-07-21","jobLocationType":"TELECOMMUTE",
+ "hiringOrganization":{"@type":"Organization","name":"Nimbus"}}
+</script></head><body>Apply now</body></html>`
+
 const aboutPage = `<html><head><title>About us</title></head><body>No vacancy here.</body></html>`
+
+// fingerprintOf builds the role fingerprint the import derives, so a seeded canon lands in the
+// same role cluster as the page. The description is part of it, not just title and company.
+func fingerprintOf(title, companySlug, description string) string {
+	return jobhash.RoleFingerprint(db.UpsertJobParams{
+		Title: title, CompanySlug: companySlug, Description: description,
+	})
+}
 
 // pagesClient is a test linksource.Client: it serves the body registered for the first
 // path substring the requested URL contains, and errors for anything else.
@@ -156,10 +174,11 @@ func TestResolveJobEndpoint(t *testing.T) {
 	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	pages := pagesClient{
-		"/jobs/staff-java-backend-developer": vacancyPage,
-		"/jobs/principal-java-architect":     secondMinderaPage,
-		"/jobs/7862086":                      storefrontPage,
-		"/about-us":                          aboutPage,
+		"/jobs/staff-java-backend-developer":    vacancyPage,
+		"/jobs/principal-java-architect":        secondMinderaPage,
+		"/jobs/7862086":                         storefrontPage,
+		"/jobs/principal-java-architect-nimbus": nimbusPage,
+		"/about-us":                             aboutPage,
 	}
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
 	h := &contributionHandlers{
@@ -295,6 +314,39 @@ func TestResolveJobEndpoint(t *testing.T) {
 		}
 		if rows != 1 {
 			t.Errorf("catalog holds %d Globobox postings, want 1 — the import must land on the crawled row", rows)
+		}
+	})
+
+	t.Run("a vacancy we already carry answers found, and still records the board", func(t *testing.T) {
+		// A storefront over an ATS we do not recognise, fronting a company whose posting the
+		// catalog already holds. The vacancy is not new, so the answer is found — but the board
+		// behind the storefront may still be worth onboarding, so the contribution must be
+		// recorded before that answer is given.
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug, role_fingerprint)
+			VALUES ('greenhouse', 'nimbus:41', 'https://boards.greenhouse.io/nimbus/jobs/41',
+			        'Principal Java Architect', 'principal-java-nimbus', 'Nimbus', 'nimbus', $1)`,
+			fingerprintOf("Principal Java Architect", "nimbus", "Own the platform.")); err != nil {
+			t.Fatalf("seed the crawled posting: %v", err)
+		}
+		const page = "https://careers.nimbus.test/jobs/principal-java-architect-nimbus"
+		resp, out := resolve(t, page, true)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want 200 — the catalog already carries this vacancy", resp.StatusCode)
+		}
+		if out.Data == nil || out.Data.Status != "found" {
+			t.Fatalf("body = %+v, want status found", out.Data)
+		}
+		if out.Data.PublicSlug == nil || *out.Data.PublicSlug != "principal-java-nimbus" {
+			t.Errorf("slug = %v, want the canonical principal-java-nimbus", out.Data.PublicSlug)
+		}
+		var recorded int
+		if err := pool.QueryRow(ctx,
+			`SELECT count(*) FROM link_contributions WHERE url = $1`, page).Scan(&recorded); err != nil {
+			t.Fatalf("read the contribution queue: %v", err)
+		}
+		if recorded != 1 {
+			t.Errorf("contribution rows = %d, want 1 — a found vacancy does not excuse losing the board", recorded)
 		}
 	})
 

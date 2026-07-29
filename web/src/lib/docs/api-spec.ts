@@ -1641,7 +1641,10 @@ ${BASE_URL}/auth/oauth/google/start`,
         summary: 'Hand freehire a link: import the posting, and the board behind it.',
         description:
           'Five outcomes in one shape, distinguished by status: **200 found** — the ' +
-          'catalogue already carries it, nothing fetched or written; **201 tracked** ' +
+          'catalogue already carries the vacancy. Either the URL itself is stored (nothing ' +
+          'is fetched or written), or the page turned out to be a second copy of a posting ' +
+          'we already carry under another source, in which case the answer names the one we ' +
+          'had; **201 tracked** ' +
           '— we crawl that board already and the posting just had not landed, so it ' +
           'was imported now; **201 imported** — imported, and its board queued for ' +
           'onboarding; **201 review** — imported, but its careers site names no board ' +

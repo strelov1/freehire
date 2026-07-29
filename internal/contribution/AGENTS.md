@@ -67,6 +67,12 @@ onboarding), `review` (imported, but the URL names no board we can crawl — a c
 company's own domain — so the link went to triage), `queued` (unreadable page, link filed for
 triage).
 
+**`found` is reached two ways, and only one of them returns early.** The first is the catalogue
+lookup at the top of `Resolve`: the URL itself is stored, so nothing is fetched or written. The
+second comes after an import that collapsed onto a posting we already carry (`Result.Deduped`),
+and it must NOT return early — the contribution is recorded first, because a storefront fronting
+a board nobody has contributed is exactly the case where the vacancy is old and the board is new.
+
 **Whether we know the COMPANY is a separate question, answered by `company_slug`**, which is set
 whenever the catalogue already carries that employer through ANY source. The board checks cannot
 answer it: `BoardTracked` is keyed by `(source, board)`, so a company we reach through a second

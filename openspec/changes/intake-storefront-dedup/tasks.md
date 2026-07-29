@@ -24,23 +24,23 @@
 
 ## 3. The intake answer
 
-- [ ] 3.1 Write the failing integration test in `internal/handler`: a storefront link whose
+- [x] 3.1 Write the failing integration test in `internal/handler`: a storefront link whose
       vacancy the catalogue carries answers 200 `found` with the canonical slug, and the
       contribution row for its board exists after the call
-- [ ] 3.2 Answer `found` for a deduped import in `intakeService.Resolve`, after the contribution
+- [x] 3.2 Answer `found` for a deduped import in `intakeService.Resolve`, after the contribution
       is recorded, leaving the early catalogue-hit `found` untouched
-- [ ] 3.3 Confirm every pre-existing `TestResolveJobEndpoint` subtest is still green
+- [x] 3.3 Confirm every pre-existing `TestResolveJobEndpoint` subtest is still green
 
 ## 4. Documentation
 
-- [ ] 4.1 Restate the outcome in `internal/contribution/AGENTS.md`: `found` is reachable twice —
+- [x] 4.1 Restate the outcome in `internal/contribution/AGENTS.md`: `found` is reachable twice —
       before any fetch, and after an import that collapsed onto an existing posting
-- [ ] 4.2 Update the `/jobs/resolve` description in `web/src/lib/docs/api-spec.ts` and
+- [x] 4.2 Update the `/jobs/resolve` description in `web/src/lib/docs/api-spec.ts` and
       regenerate `docs/API.md` (`cd web && pnpm gen:api-docs`)
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./... && go vet ./... && gofmt -l internal cmd` clean, `go test ./...` green
-- [ ] 5.2 `go test -tags=integration ./internal/db/ ./internal/linkimport/ ./internal/handler/
+- [x] 5.1 `go build ./... && go vet ./... && gofmt -l internal cmd` clean, `go test ./...` green
+- [x] 5.2 `go test -tags=integration ./internal/db/ ./internal/linkimport/ ./internal/handler/
       ./internal/contribution/` green
-- [ ] 5.3 `cd web && pnpm lint && pnpm build` — lint reports 0 errors
+- [x] 5.3 `cd web && pnpm lint && pnpm build` — lint reports 0 errors

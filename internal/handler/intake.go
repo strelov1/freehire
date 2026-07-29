@@ -89,6 +89,12 @@ func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surf
 
 	out := intakeOutcome{Board: intake.Board, CompanySlug: companySlug, Rewarded: rewarded}
 	switch {
+	case imported && res.Deduped:
+		// The catalog already carried this vacancy under a crawled source. Answering found HERE
+		// rather than at the top of Resolve is what keeps the board: an unrecognised storefront
+		// may front a board nobody has contributed yet, and the vacancy being known says nothing
+		// about the board being known.
+		out.Status, out.PublicSlug = outcomeFound, res.PublicSlug
 	case !imported:
 		out.Status = outcomeQueued
 	case intake.Tracked:
