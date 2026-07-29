@@ -30,7 +30,7 @@
 - [x] 4.2 `gofmt -l`, `go vet ./...`, `go build ./...`, `go test ./...` all clean
 - [x] 4.3 Verify the four adapters against their live APIs — the Surfshark posting that
       triggered the report resolves to `hybrid`
-- [ ] 4.4 Code review on the full diff; fix Critical and Important findings
+- [x] 4.4 Code review on the full diff; fix Critical and Important findings
 
 ## 5. Finish
 

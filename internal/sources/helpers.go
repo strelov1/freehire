@@ -75,8 +75,11 @@ func isRemote(location string) bool {
 
 // workModeFromRemote maps an adapter's STRUCTURED remote flag to a work mode:
 // "remote" when set, else "" (a false flag does not imply onsite vs hybrid, so it
-// is left unknown for the parser/LLM to resolve). Adapters whose API exposes an
-// explicit remote boolean (Ashby, Recruitee, SmartRecruiters, Workable) use this.
+// is left unknown for the parser/LLM to resolve). Adapters whose API exposes a remote
+// boolean and nothing better (Workable, Breezy) use this. Reach for it only after
+// checking that the API carries no richer field: an ATS that also reports hybrid needs
+// workModeFromRemoteHybrid, and one with a workplace-type enum needs workplaceTypeMode —
+// a lone boolean often means "not onsite", which is not the same as "remote".
 func workModeFromRemote(remote bool) string {
 	if remote {
 		return "remote"
@@ -85,10 +88,13 @@ func workModeFromRemote(remote bool) string {
 }
 
 // workModeFromRemoteHybrid maps the PAIR of booleans an ATS exposes when it tracks remote
-// and hybrid separately (Recruitee, SmartRecruiters) to a work mode. The two flags are
-// mutually exclusive there, so reading the remote one alone silently drops every hybrid
-// posting. Both false stays "" rather than "onsite": an ATS cannot distinguish "marked as
-// office" from "not marked at all", and the dictionary contract forbids the guess.
+// and hybrid separately (Recruitee, SmartRecruiters) to a work mode. Reading the remote one
+// alone silently drops every hybrid posting, which is most of them on some boards.
+//
+// Remote wins when a posting sets both — around 2% of Recruitee offers do, and Recruitee
+// itself renders each of them as "Remote job", so the broader arrangement is what the
+// employer means. Both false stays "" rather than "onsite": an ATS cannot distinguish
+// "marked as office" from "not marked at all", and the dictionary contract forbids the guess.
 func workModeFromRemoteHybrid(remote, hybrid bool) string {
 	switch {
 	case remote:

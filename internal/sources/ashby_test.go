@@ -64,14 +64,13 @@ func TestAshbyFetch(t *testing.T) {
 	if strings.Contains(j.Description, "<script") {
 		t.Errorf("Description retained a script tag, got %q", j.Description)
 	}
-	// Remote unions Ashby's explicit isRemote flag with the location heuristic (see
-	// MapAshbyPosting); here the flag alone sets it.
+	// This posting carries no workplaceType, so isRemote is the fallback that resolves
+	// the mode — and Remote follows from that resolved mode (see MapAshbyPosting).
 	if !j.Remote {
-		t.Error("Remote = false, want true from the explicit isRemote field")
+		t.Error("Remote = false, want true from the isRemote fallback")
 	}
-	// The explicit isRemote flag also yields a structured work mode.
 	if j.WorkMode != "remote" {
-		t.Errorf("WorkMode = %q, want remote from the explicit isRemote field", j.WorkMode)
+		t.Errorf("WorkMode = %q, want remote from the isRemote fallback", j.WorkMode)
 	}
 	if j.PostedAt == nil {
 		t.Error("PostedAt = nil, want parsed publishedAt with milliseconds")

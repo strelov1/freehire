@@ -9,7 +9,7 @@ import (
 const ashbyBaseURL = "https://api.ashbyhq.com/posting-api/job-board"
 
 // ashby adapts the Ashby public job-board API. The list endpoint carries an HTML
-// description and an explicit remote flag, so no per-posting detail request is needed.
+// description and the posting's workplace type, so no per-posting detail request is needed.
 type ashby struct {
 	http JSONGetter
 }

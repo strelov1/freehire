@@ -40,8 +40,8 @@ func TestWorkModeFromRemoteHybrid(t *testing.T) {
 		// Both false is "not marked", which an ATS cannot distinguish from "office" —
 		// so it stays unknown rather than becoming a guessed onsite.
 		{remote: false, hybrid: false, want: ""},
-		// The flags are mutually exclusive in practice; if a board sets both, the
-		// broader arrangement wins.
+		// Around 2% of Recruitee offers set both, and Recruitee renders them as
+		// "Remote job" — the broader arrangement wins.
 		{remote: true, hybrid: true, want: "remote"},
 	}
 	for _, c := range cases {

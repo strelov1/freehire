@@ -10,9 +10,9 @@ Evidence gathered by probing the live APIs before writing code:
 | Provider | sampled | finding |
 |---|---|---|
 | ashby | 1097 postings / 7 boards | `(Hybrid, isRemote=true)` 701, `(Remote, true)` 80, `(OnSite, false)` 33, `(absent, absent)` 283 — `isRemote` is "not onsite" |
-| recruitee | 138 offers / 11 boards | `(remote,hybrid)` = (F,F) 110, (F,T) 15, (T,F) 13 — mutually exclusive |
-| smartrecruiters | 122 postings | `location` carries both `remote` and `hybrid` |
-| bamboohr | 902 postings / 120 boards | `isRemote` null everywhere; `locationType` `0` 619, `1` 115, `2` 168 |
+| recruitee | 1984 offers / 120 boards | `(remote,hybrid)` = (F,F) 904, (F,T) 602, (T,F) 442, (T,T) 36 |
+| smartrecruiters | 2485 postings / 120 boards | `location` carries both flags: (T,F) 273, (F,T) 615, (F,F) 1597 |
+| bamboohr | 999 postings / 150 boards | `isRemote` null on all 999; `locationType` `0` 438, `1` 268, `2` 293 |
 
 ## Goals / Non-Goals
 
@@ -32,14 +32,20 @@ neither field keep today's behaviour, and a board that someday sets only `isRemo
 resolves. Alternative — dropping `isRemote` entirely — was rejected as it removes a working
 signal for no gain.
 
-**`Remote` is derived from the resolved mode, not from the raw flag.** `mode == "remote" ||
-isRemote(location)`. This keeps the two fields from contradicting each other and preserves
-the greenhouse convention where a "Remote" location text alone marks a job remote.
+**`Remote` is derived from the resolved mode, not from the raw flag.** For Ashby that is
+`mode == "remote" || isRemote(location)`: the mode decides, and the location heuristic is
+preserved because it is pre-existing behaviour (the greenhouse convention, where a "Remote"
+location text alone marks a job remote — it can still leave `WorkMode=onsite` with
+`Remote=true` on the four sampled postings whose location reads "San Francisco or Remote").
+BambooHR takes `mode == "remote"` alone: it never had the heuristic, and adding it would
+widen this change for no evidenced gain.
 
 **Recruitee/SmartRecruiters: a new `workModeFromRemoteHybrid(remote, hybrid)` helper.** Two
 callers justify it, and the shared helper is where the "(false, false) is not onsite" rule
 is documented once. Alternative — inlining a switch in each adapter — would duplicate that
-reasoning in two places and invite a third adapter to guess `onsite`.
+reasoning in two places and invite a third adapter to guess `onsite`. Both flags true is a
+live case, not a hypothetical (36 of 1984 Recruitee offers); remote wins there because
+Recruitee renders every one of those offers as "Remote job".
 
 **BambooHR: `locationType` `0`=onsite, `1`=remote, `2`=hybrid.** BambooHR publishes no enum
 documentation, so the mapping was established by two independent signals: postings with
@@ -72,3 +78,7 @@ client-rendered and expose nothing in HTML.
 
 - Do the remaining 18 `workModeFromRemote` callers hide the same defect? Workable and breezy
   were cleared; the rest are unaudited and out of scope here.
+- BambooHR returns an all-null `location` for `locationType=1` and puts the real office in
+  `atsLocation`, which the adapter does not read. Those postings (~27%) therefore land with
+  an empty location and no geography — newly visible now that they carry `remote`. Worth a
+  follow-up change, not this one.

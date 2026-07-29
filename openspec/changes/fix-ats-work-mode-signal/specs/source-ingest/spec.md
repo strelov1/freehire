@@ -15,12 +15,13 @@ the parser's free-text heuristic; the parser fills `work_mode` only when the
 adapter has no structured signal.
 
 When an ATS exposes BOTH a work-mode field and a boolean flag for the same posting, the
-adapter SHALL read the field and MAY keep the flag only as a fallback for postings that
-omit the field. An adapter SHALL NOT map a boolean flag to `remote` when that flag merely
-separates onsite from every other arrangement, because such a flag is set on hybrid
-postings too. Where an ATS splits the signal across separate `remote` and `hybrid`
-booleans, both false SHALL yield no work mode rather than a guessed `onsite`, since the
-API cannot distinguish "marked as office" from "not marked at all".
+adapter SHALL resolve the mode from the field, and MAY fall back to the flag only for
+postings that omit the field — for a posting that carries the field, a flag that merely
+separates onsite from every other arrangement SHALL NOT be mapped to `remote`, because
+such a flag is set on hybrid postings too. Where an ATS splits the signal across separate
+`remote` and `hybrid` booleans, both false SHALL yield no work mode rather than a guessed
+`onsite`, since the API cannot distinguish "marked as office" from "not marked at all";
+both true SHALL yield `remote`, the broader arrangement.
 
 #### Scenario: A new posting stores its parsed geography
 
@@ -70,6 +71,11 @@ API cannot distinguish "marked as office" from "not marked at all".
 - **WHEN** an offer carries `remote=false` and `hybrid=false`
 - **THEN** the yielded job carries no structured `work_mode`, leaving the decision to the
   pipeline's location parser
+
+#### Scenario: An offer flagged both remote and hybrid resolves to remote
+
+- **WHEN** an offer carries `remote=true` and `hybrid=true`
+- **THEN** the yielded job's `work_mode` is `remote`
 
 #### Scenario: A BambooHR posting takes its work mode from locationType
 

@@ -61,3 +61,27 @@ func TestAshbySkipsWhenJobNotOnBoard(t *testing.T) {
 		t.Error("ok=true, want skip for a job no longer on the board")
 	}
 }
+
+// Link resolution shares MapAshbyPosting with the ingest adapter, so a hybrid posting
+// resolves to the same facets on both paths.
+func TestAshbyResolvesHybridPostingAsNotRemote(t *testing.T) {
+	const board = `{"apiVersion":"1","jobs":[
+ {"id":"d675ca96-5678-4ed9-be94-01fa1e641f28","title":"Senior Web Designer","location":"Vilnius","jobUrl":"https://jobs.ashbyhq.com/surfshark/d675ca96-5678-4ed9-be94-01fa1e641f28","publishedAt":"2026-07-28T09:35:42.943+00:00","descriptionHtml":"<p>Design it.</p>","isRemote":true,"workplaceType":"Hybrid"}
+]}`
+	const link = "https://jobs.ashbyhq.com/surfshark/d675ca96-5678-4ed9-be94-01fa1e641f28"
+	c := (&fakeClient{}).route("api.ashbyhq.com/posting-api/job-board/surfshark", board, "")
+
+	job, ok, err := NewAshby(c).Resolve(context.Background(), link)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !ok {
+		t.Fatal("ok=false, want the vacancy resolved")
+	}
+	if job.WorkMode != "hybrid" {
+		t.Errorf("WorkMode = %q, want hybrid from workplaceType", job.WorkMode)
+	}
+	if job.Remote {
+		t.Error("Remote = true, want false: a hybrid role is not remote")
+	}
+}

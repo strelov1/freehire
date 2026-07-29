@@ -91,7 +91,7 @@ func (b bambooHR) detail(ctx context.Context, e CompanyEntry, p bambooHRPosting)
 		Company:     e.Company,
 		Location:    location,
 		Description: sanitizeHTML(jo.Description),
-		Remote:      mode == "remote" || isRemote(location),
+		Remote:      mode == "remote",
 		WorkMode:    mode,
 		PostedAt:    parseDate(jo.DatePosted),
 	}, true

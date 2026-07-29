@@ -128,3 +128,26 @@ func TestBambooHRFetchReadsLocationType(t *testing.T) {
 		t.Error("locationType 2 (hybrid) should leave Remote = false")
 	}
 }
+
+// A board that omits locationType falls back to the list's isRemote flag.
+func TestBambooHRFetchFallsBackToIsRemote(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/careers/70/detail", bambooDetail("70", "Support Lead")).
+		route("/careers/list", `{"result": [
+			{"id": "70", "jobOpeningName": "Support Lead", "isRemote": true}
+		]}`)
+
+	jobs, err := NewBambooHR(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "bamboohr", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if jobs[0].WorkMode != "remote" || !jobs[0].Remote {
+		t.Errorf("WorkMode = %q, Remote = %v; want remote/true from the isRemote fallback",
+			jobs[0].WorkMode, jobs[0].Remote)
+	}
+}
