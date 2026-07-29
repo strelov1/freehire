@@ -71,9 +71,9 @@ has been landing in a queue whose only verdict is closing the job.
 
 ## 7. Company response rate
 
-- [ ] 7.1 Add a failing integration test: a company with applications below the sample gate serves no rate; above it serves the rate; applications from users without a connected mailbox count on neither side.
-- [ ] 7.2 Extend the `insights_company_stats` rollup and `cmd/rollup-company` with the two counters, and serve the gated rate on the company payload.
-- [ ] 7.3 `go test -tags=integration ./internal/db/` and `go test ./...` green.
+- [x] 7.1 Add a failing integration test: a company with applications below the sample gate serves no rate; above it serves the rate; applications from users without a connected mailbox count on neither side.
+- [x] 7.2 Added `insights_company_response` — a SCALAR table beside `insights_company_growth`, not columns on `insights_company_stats`, which is a per-day series and the wrong shape. Rebuilt by `cmd/rollup-company` in the same transaction. Growth and response answer unrelated questions (how fast a company hires vs. how it treats applicants) and a company can look excellent on one while looking terrible on the other, so folding them together would invite reading one as evidence for the other.
+- [x] 7.3 `go test -tags=integration ./internal/db/` and `go test ./...` green.
 
 ## 8. Whole-change verification
 

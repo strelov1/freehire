@@ -87,11 +87,23 @@ func run() int {
 		return 1
 	}
 
+	// The response-rate scalars ride the same transaction for the same reason: a
+	// reader must never see one table rebuilt and the other mid-flight.
+	if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
+		log.Printf("clear response: %v", err)
+		return 1
+	}
+	responders, err := q.RebuildInsightsCompanyResponse(ctx)
+	if err != nil {
+		log.Printf("rebuild response: %v", err)
+		return 1
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit: %v", err)
 		return 1
 	}
 
-	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies)", rows, companies)
+	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies) + insights_company_response (%d companies with an observable application)", rows, companies, responders)
 	return 0
 }

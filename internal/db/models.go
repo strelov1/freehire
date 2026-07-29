@@ -234,6 +234,12 @@ type InsightsCompanyGrowth struct {
 	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
+type InsightsCompanyResponse struct {
+	CompanySlug  string `json:"company_slug"`
+	Applications int32  `json:"applications"`
+	Answered     int32  `json:"answered"`
+}
+
 type InsightsCompanyStat struct {
 	CompanySlug string      `json:"company_slug"`
 	Day         pgtype.Date `json:"day"`

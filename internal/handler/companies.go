@@ -56,6 +56,10 @@ type companyDetailResponse struct {
 	// ReferralAvailable is true when the company has at least one approved employee
 	// referrer, so the company page can show the "ask for a referral" affordance.
 	ReferralAvailable bool `json:"referral_available"`
+	// Response is how many of the applications we can OBSERVE the outcome of were
+	// answered. Absent below the sample gate — which is nearly every company today,
+	// and the correct answer rather than an unfinished one.
+	Response *companyResponse `json:"response,omitempty"`
 }
 
 // companyView is the public projection of a company for the detail endpoint. It
@@ -321,6 +325,7 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		Company:           view,
 		Jobs:              views,
 		ReferralAvailable: referralAvailable,
+		Response:          companyResponseRate(c.Context(), h.queries, slug),
 	}})
 }
 

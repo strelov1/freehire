@@ -367,3 +367,39 @@ ORDER BY
     END) DESC,
     g.open_count DESC
 LIMIT sqlc.arg('lim')::int;
+
+-- name: DeleteAllInsightsCompanyResponse :exec
+DELETE FROM insights_company_response;
+
+-- name: RebuildInsightsCompanyResponse :execrows
+-- One row per company with an OBSERVABLE application: the applicant has a connected
+-- mailbox, so a reply would have been seen. Applications from people we cannot observe
+-- are excluded from BOTH sides of the ratio — counting them in the denominator would
+-- report our own blind spot as the employer's silence, which is the same mistake the
+-- job-level signal's mailbox gate exists to prevent.
+--
+-- "Answered" is any non-deleted mail linked to that application. Not a stage advance:
+-- a stage is what the candidate recorded, and a company that replied to somebody who
+-- never updated their board still replied.
+INSERT INTO insights_company_response (company_slug, applications, answered)
+SELECT
+    j.company_slug,
+    count(*)::int AS applications,
+    count(*) FILTER (WHERE EXISTS (
+        SELECT 1 FROM emails e
+         WHERE e.user_id = uj.user_id AND e.job_id = uj.job_id AND e.deleted_at IS NULL
+    ))::int AS answered
+FROM user_jobs uj
+JOIN jobs j ON j.id = uj.job_id
+WHERE uj.applied_at IS NOT NULL
+  AND j.company_slug <> ''
+  AND (EXISTS (SELECT 1 FROM gmail_connections gc
+                WHERE gc.user_id = uj.user_id AND gc.status = 'connected')
+    OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = uj.user_id))
+GROUP BY j.company_slug;
+
+-- name: GetCompanyResponse :one
+-- The observable application counts for one company. A company with no row has no
+-- observable applications at all, which the caller must treat as "not enough data"
+-- rather than as a zero response rate.
+SELECT applications, answered FROM insights_company_response WHERE company_slug = $1;

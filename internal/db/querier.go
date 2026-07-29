@@ -407,6 +407,7 @@ type Querier interface {
 	// Per-company open/growth scalar (backs the /insights/companies leaderboard)
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyGrowth(ctx context.Context) error
+	DeleteAllInsightsCompanyResponse(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-company hiring signal
 	// ---------------------------------------------------------------------------
@@ -658,6 +659,10 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
+	// The observable application counts for one company. A company with no row has no
+	// observable applications at all, which the caller must treat as "not enough data"
+	// rather than as a zero response rate.
+	GetCompanyResponse(ctx context.Context, companySlug string) (GetCompanyResponseRow, error)
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
@@ -1417,6 +1422,16 @@ type Querier interface {
 	// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
 	// keep the table lean.
 	RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// One row per company with an OBSERVABLE application: the applicant has a connected
+	// mailbox, so a reply would have been seen. Applications from people we cannot observe
+	// are excluded from BOTH sides of the ratio — counting them in the denominator would
+	// report our own blind spot as the employer's silence, which is the same mistake the
+	// job-level signal's mailbox gate exists to prevent.
+	//
+	// "Answered" is any non-deleted mail linked to that application. Not a stage advance:
+	// a stage is what the candidate recorded, and a company that replied to somebody who
+	// never updated their board still replied.
+	RebuildInsightsCompanyResponse(ctx context.Context) (int64, error)
 	// Per-(company, day) hiring velocity with a running open count, from the retained
 	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
 	// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
