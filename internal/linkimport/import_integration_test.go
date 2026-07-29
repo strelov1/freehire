@@ -20,6 +20,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
@@ -217,4 +218,55 @@ func TestImport_CollapsesOntoAPostingTheCatalogAlreadyCarries(t *testing.T) {
 	if queued != 0 {
 		t.Errorf("enrichment queue holds %d rows for the duplicate, want 0 — it never reaches search", queued)
 	}
+}
+
+func TestImport_ABoardIdentityIsNeverCollapsed(t *testing.T) {
+	// A posting written under a board's own identity is deduplicated by
+	// UpsertJob's ON CONFLICT (source, external_id). Running the role-cluster check on it too
+	// would demote a crawled posting to a duplicate of a hand-imported one.
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug, role_fingerprint)
+		VALUES ('weblink', 'https://careers.acme.test/go', 'https://careers.acme.test/go',
+		        'Senior Go Engineer', 'senior-go-acme-web', 'Acme', 'acme', $1)`,
+		fingerprintOf("Senior Go Engineer", "acme", "")); err != nil {
+		t.Fatalf("seed the earlier import: %v", err)
+	}
+
+	im := New(pool, q, nil, pageClient{body: plainPage},
+		map[string]sources.Source{"recruitee": boardServing("Senior Go Engineer")}, nil)
+
+	res, ok, err := im.Import(ctx, "https://acme.recruitee.com/o/senior-go", Board{})
+	if err != nil || !ok {
+		t.Fatalf("import = (ok %v, err %v), want the board posting written", ok, err)
+	}
+	if res.Deduped {
+		t.Error("Deduped = true for a board identity, want false — it dedups on (source, external_id)")
+	}
+	var dupOf *int64
+	if err := pool.QueryRow(ctx,
+		`SELECT duplicate_of FROM jobs WHERE source = 'recruitee'`).Scan(&dupOf); err != nil {
+		t.Fatalf("read the board posting: %v", err)
+	}
+	if dupOf != nil {
+		t.Errorf("duplicate_of = %d, want NULL — a crawled posting is not demoted by an import", *dupOf)
+	}
+}
+
+// boardServing is an ingest adapter serving one posting on one board, so an import can reach a
+// board identity without a network.
+type boardServing string
+
+func (boardServing) Provider() string { return "recruitee" }
+
+func (b boardServing) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	return []sources.Job{{
+		ExternalID: "senior-go",
+		URL:        "https://" + e.Board + ".recruitee.com/o/senior-go",
+		Title:      string(b),
+		Company:    "Acme",
+	}}, nil
 }

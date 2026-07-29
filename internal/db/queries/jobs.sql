@@ -322,7 +322,9 @@ SELECT EXISTS (
 -- agree rather than fight.
 -- A canon must be open AND not itself a duplicate, or marking would build a chain (A -> B -> C)
 -- that no reader expects. The row being written is excluded by its own dedup identity, because
--- a re-import of the same URL would otherwise find itself. Served by jobs_company_slug_idx.
+-- a re-import of the same URL would otherwise find itself. Served by the partial
+-- jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
+-- non-partial fallback.
 SELECT id, public_slug
 FROM jobs
 WHERE company_slug = sqlc.arg(company_slug)

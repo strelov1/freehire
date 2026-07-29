@@ -204,13 +204,14 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	}
 	defer tx.Rollback(ctx)
 	qtx := im.q.WithTx(tx)
-	// Asked inside the transaction that writes the row, so the canon cannot close between the
-	// question and the marking.
-	canon, deduped := canonicalForRole(ctx, qtx, params)
 	res, err := qtx.UpsertJob(ctx, params)
 	if err != nil {
 		return Result{}, false, err
 	}
+	// Asked AFTER the upsert, because the answer depends on the written row's id: the batch
+	// recompute makes the cluster's oldest open row the canon, so collapsing onto a NEWER
+	// posting would be undone — and inverted — by the next reindex.
+	canon, deduped := canonicalForRole(ctx, qtx, params, res.Job.ID)
 	if deduped {
 		if _, err := qtx.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{
 			ID:          res.Job.ID,
@@ -229,7 +230,9 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, false, err
 	}
-	if !deduped {
+	if deduped {
+		im.unindex(ctx, res.Job.ID)
+	} else {
 		im.index(ctx, res)
 	}
 
@@ -247,16 +250,27 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 }
 
 // canonicalForRole asks whether the catalog already holds this vacancy in an open, canonical
-// row — the check that keeps a storefront link from duplicating the posting it fronts.
+// row older than the one just written (id), which is the row the batch recompute would pick as
+// the cluster's canon. Answering with a NEWER posting would have the next reindex undo the
+// marking and invert it, so this stays deliberately in step with
+// RecomputeRoleDuplicatesForCompany rather than racing it.
 //
-// Only the generic identity is asked about: every board identity is already deduplicated by
-// UpsertJob's ON CONFLICT (source, external_id), so asking would spend a query to learn
-// nothing. An empty fingerprint clusters with nobody.
+// Three things are never asked about:
+//   - a board identity, already deduplicated by UpsertJob's ON CONFLICT (source, external_id);
+//   - an empty fingerprint, which clusters with nobody;
+//   - an empty company slug. The recompute's driver list skips those companies entirely, so a
+//     row marked here would never be released when its canon closes — it would stay out of
+//     search and out of enrichment permanently.
+//
+// Running inside the write transaction keeps the canon from being deleted under the marking;
+// it does not stop a concurrent close (READ COMMITTED, no row lock). That race is benign: URL
+// resolution falls back to the duplicate's own slug once the canon closes, and the next
+// recompute releases the row.
 //
 // A lookup failure is not fatal — the row is written unmarked, exactly as before. Dedup is an
 // improvement, not a condition of keeping the vacancy.
-func canonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams) (db.CanonicalJobForRoleRow, bool) {
-	if p.Source != linksource.GenericSource || p.RoleFingerprint.String == "" {
+func canonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (db.CanonicalJobForRoleRow, bool) {
+	if p.Source != linksource.GenericSource || p.CompanySlug == "" || p.RoleFingerprint.String == "" {
 		return db.CanonicalJobForRoleRow{}, false
 	}
 	row, err := q.CanonicalJobForRole(ctx, db.CanonicalJobForRoleParams{
@@ -273,7 +287,24 @@ func canonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams) 
 			p.CompanySlug, p.RoleFingerprint.String, err)
 		return db.CanonicalJobForRoleRow{}, false
 	}
+	if row.ID >= id {
+		return db.CanonicalJobForRoleRow{}, false
+	}
 	return row, true
+}
+
+// unindex drops a row that was just demoted to a duplicate from the live index. A row written
+// for the first time was never there, but a re-import of a URL written before its canon existed
+// was — and skipping the push alone would leave that stale document searchable until the next
+// reindex, which is not on a tight schedule. Best-effort, like the push: the marking is
+// committed either way and the batch rebuild reconciles.
+func (im *Importer) unindex(ctx context.Context, id int64) {
+	if im.idx == nil {
+		return
+	}
+	if err := im.idx.SubmitJobDeletion(ctx, []int64{id}); err != nil {
+		log.Printf("linkimport: drop duplicate job %d from the index: %v", id, err)
+	}
 }
 
 // index pushes a just-written open job to the live search index, best-effort — same doc

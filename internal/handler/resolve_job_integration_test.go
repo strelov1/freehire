@@ -174,11 +174,11 @@ func TestResolveJobEndpoint(t *testing.T) {
 	cookie, _ := iss.Issue(userID, testTokenVersion)
 	queries := db.New(pool)
 	pages := pagesClient{
-		"/jobs/staff-java-backend-developer":    vacancyPage,
-		"/jobs/principal-java-architect":        secondMinderaPage,
-		"/jobs/7862086":                         storefrontPage,
-		"/jobs/principal-java-architect-nimbus": nimbusPage,
-		"/about-us":                             aboutPage,
+		"/jobs/staff-java-backend-developer": vacancyPage,
+		"/jobs/principal-java-architect":     secondMinderaPage,
+		"/jobs/7862086":                      storefrontPage,
+		"/jobs/nimbus-principal-architect":   nimbusPage,
+		"/about-us":                          aboutPage,
 	}
 	contributionSvc := contribution.New(contribution.NewQueriesRepository(queries), nil)
 	h := &contributionHandlers{
@@ -329,7 +329,7 @@ func TestResolveJobEndpoint(t *testing.T) {
 			fingerprintOf("Principal Java Architect", "nimbus", "Own the platform.")); err != nil {
 			t.Fatalf("seed the crawled posting: %v", err)
 		}
-		const page = "https://careers.nimbus.test/jobs/principal-java-architect-nimbus"
+		const page = "https://careers.nimbus.test/jobs/nimbus-principal-architect"
 		resp, out := resolve(t, page, true)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("status = %d, want 200 — the catalog already carries this vacancy", resp.StatusCode)
@@ -348,11 +348,21 @@ func TestResolveJobEndpoint(t *testing.T) {
 		if recorded != 1 {
 			t.Errorf("contribution rows = %d, want 1 — a found vacancy does not excuse losing the board", recorded)
 		}
+
+		// The premise that makes writing-and-marking better than skipping the write: the
+		// storefront URL now resolves, and it resolves to the posting we already had.
+		_, again := resolve(t, page, true)
+		if again.Data == nil || again.Data.Status != "found" {
+			t.Fatalf("resubmit = %+v, want status found", again.Data)
+		}
+		if again.Data.PublicSlug == nil || *again.Data.PublicSlug != "principal-java-nimbus" {
+			t.Errorf("resubmit slug = %v, want the canonical principal-java-nimbus", again.Data.PublicSlug)
+		}
 	})
 
 	t.Run("a company we already carry is not called new", func(t *testing.T) {
 		// Whether we can name the BOARD and whether we know the COMPANY are separate questions:
-		// the previous subtest put a Mindera posting in the catalog, so this second vacancy from
+		// an earlier subtest put a Mindera posting in the catalog, so this second vacancy from
 		// the same company must come back naming it, however unrecognisable its host is.
 		resp, out := resolve(t, "https://careers.mindera.test/jobs/principal-java-architect", true)
 		if resp.StatusCode != http.StatusCreated {

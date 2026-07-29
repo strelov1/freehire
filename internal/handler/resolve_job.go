@@ -18,7 +18,9 @@ type resolveJobRequest struct {
 // Intake outcomes. They differ only in what the system already knew about the link, which is
 // precisely what the caller needs to be told.
 const (
-	// outcomeFound — the catalog already carries this posting. No fetch, no write.
+	// outcomeFound — the catalog already carries this vacancy. Reached two ways: the URL
+	// itself is stored (no fetch, no write), or the page turned out to be a second copy of a
+	// posting we hold under another source, which collapses onto it.
 	outcomeFound = "found"
 	// outcomeTracked — we already crawl the board; this posting just had not landed yet, so it
 	// was imported now and the company we cover is named.
@@ -39,7 +41,8 @@ const (
 //
 // Four outcomes, one shape:
 //
-//	200 found    — the catalog already carries the posting (no fetch, no write)
+//	200 found    — the catalog already carries the vacancy: the URL is stored (no fetch, no
+//	               write), or the imported page collapsed onto a posting we already had
 //	201 tracked  — we crawl this board already; the posting had not landed, so it was imported
 //	               now, and the company we cover is named
 //	201 imported — imported, and the board behind it queued for onboarding
@@ -70,7 +73,11 @@ func (h *contributionHandlers) ResolveJob(c *fiber.Ctx) error {
 	}
 	switch out.Status {
 	case outcomeFound:
-		return c.JSON(fiber.Map{"data": fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}})
+		body := fiber.Map{"public_slug": out.PublicSlug, "status": out.Status}
+		if out.CompanySlug != "" {
+			body["company_slug"] = out.CompanySlug
+		}
+		return c.JSON(fiber.Map{"data": body})
 	case outcomeQueued:
 		return c.Status(fiber.StatusAccepted).
 			JSON(fiber.Map{"data": fiber.Map{"public_slug": nil, "status": out.Status}})

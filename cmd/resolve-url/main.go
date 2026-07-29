@@ -70,6 +70,11 @@ func run() int {
 		case !ok:
 			skipped++
 			log.Printf("resolve-url: %s did not resolve to a vacancy", raw)
+		case res.Deduped:
+			// Written, but demoted: the catalog already carried this vacancy. Saying "saved"
+			// with the canonical slug would read as a fresh posting.
+			saved++
+			log.Printf("resolve-url: %s collapsed onto %s — the catalog already had it", raw, res.PublicSlug)
 		default:
 			saved++
 			log.Printf("resolve-url: saved %s — %s", res.Source, res.PublicSlug)

@@ -70,6 +70,22 @@ func TestCanonicalJobForRole(t *testing.T) {
 		}
 	})
 
+	t.Run("the oldest eligible posting wins", func(t *testing.T) {
+		// The canon choice has to agree with RecomputeRoleDuplicatesForCompany, which takes the
+		// cluster's MIN(id). A later-seeded, equally eligible row must not win.
+		seed(t, "lever", "acme:2", "senior-go-acme-3", "fp-go", false)
+		row, err := q.CanonicalJobForRole(ctx, CanonicalJobForRoleParams{
+			CompanySlug: "acme", RoleFingerprint: fp("fp-go"),
+			Source: "weblink", ExternalID: "https://storefront.test/go",
+		})
+		if err != nil {
+			t.Fatalf("CanonicalJobForRole: %v", err)
+		}
+		if row.ID != canonID {
+			t.Errorf("canon = %d, want the oldest eligible row %d", row.ID, canonID)
+		}
+	})
+
 	t.Run("a closed posting is no canon", func(t *testing.T) {
 		seed(t, "greenhouse", "acme:9", "closed-role-acme", "fp-closed", true)
 		_, err := q.CanonicalJobForRole(ctx, CanonicalJobForRoleParams{
