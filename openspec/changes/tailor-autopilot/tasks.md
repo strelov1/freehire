@@ -57,8 +57,8 @@
 
 ## 11. Documentation
 
-- [ ] 11.1 Update `internal/assistant/AGENTS.md` (per-turn ceiling, the autopilot section of the tailoring prompt) and `internal/handler/AGENTS.md` (the two new routes)
-- [ ] 11.2 Note the run report and the revert in the tailoring workspace's own notes where the three-column surface is described
+- [x] 11.1 Update `internal/assistant/AGENTS.md` (per-turn ceiling, the autopilot section of the tailoring prompt) and `internal/handler/AGENTS.md` (the two new routes)
+- [x] 11.2 Note the run report and the revert in the tailoring workspace's own notes where the three-column surface is described
 
 ## 12. Verification
 

@@ -31,3 +31,29 @@ by `Render` (PDF, live) and `GeneratePreviews` (SVG, `cmd/cv-previews`).
 Fonts: the Typst binary embeds no proportional sans, so Liberation Sans (SIL OFL) is bundled
 under `fonts/`, staged into the sandbox, and exposed via `--font-path`. A template that wants
 sans uses `#set text(font: "Liberation Sans")`.
+
+## Autopilot runs
+
+A tailored CV carries what the last unattended run left behind: `autopilot_report` (one entry
+per requirement the run considered, with an outcome from a fixed vocabulary) and
+`autopilot_undo` (the document as it stood before the run's first edit). The wire shape lives
+in `autopilot.go` — it is generated to TypeScript — while `autopilot_store.go` holds what may
+be persisted and the owner-scoped writes that persist it. Keeping them in separate files is
+what stops the client seeing rules that are ours to enforce.
+
+Three rules the code encodes rather than documents:
+
+- **Nothing is coerced.** A status outside `closed_bank` / `closed_candidate` / `open` /
+  `not_reached` is refused with the valid ones named, because that message is the model's only
+  route to correcting itself inside the turn. Text is trimmed and truncated silently — those
+  are display concerns.
+- **A report is replaced whole.** There is no partial update: a requirement closed later from
+  the candidate's own words arrives as the same list with one entry changed, so the stored
+  value is always the current truth and there is one write path instead of two.
+- **A revert clears the report with the document.** `RevertAutopilot` restores the snapshot and
+  nulls both columns in one owner-scoped statement; a CV with no snapshot matches nothing and
+  yields `ErrNoAutopilotRun` (the handler's 409) rather than blanking the document with NULL.
+  Keeping the log would leave the workspace claiming edits that no longer exist.
+
+The snapshot is taken fresh at the start of EVERY run, so "undo the run" always means the
+document as the last run found it.

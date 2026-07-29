@@ -73,8 +73,16 @@ holds conversations too and cannot send an httpOnly cookie across origins:
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
 | `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
+| `POST /assistant/sessions/:id/autopilot` | run the tailoring pass unattended — same stream, server-owned brief and ceiling (**cookie-only**) |
 
 A session the caller does not own is a 404, never a 403, so ids stay unprobeable.
+The autopilot route departs from the `key` gate above: it rewrites a CV without
+being asked anything, and the browser is the one place the candidate can watch it
+happen and undo it. It refuses anything but a tailoring session bound to a CV
+(**409**), and snapshots that CV itself before the turn starts — a snapshot the
+client could forget to ask for is a run nobody can take back. Undoing it is
+`POST /me/cvs/:id/autopilot/undo` (also cookie-only), which restores the pre-run
+document and clears the run's report with it.
 
 The turn endpoint writes with `writeEvent`, which — unlike `writeSSE` — reports a
 failed write. That is how a streamed turn learns the client is gone: the failure

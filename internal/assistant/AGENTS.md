@@ -17,10 +17,12 @@ built from the same services the HTTP handlers use.
 - **Every turn ends with exactly one `result` event.** A client that receives no
   terminal event waits forever, so the loop emits one on every path: an answer,
   the step cap, cancellation, and failure.
-- **A turn is bounded three ways**: `MaxSteps` tool-calling rounds, the LLM
-  client's per-call timeout, and cancellation. Zero/negative bounds fall back to
-  defaults rather than meaning "unbounded" — an unbounded loop on a metered
-  gateway is a runaway bill.
+- **A turn is bounded three ways**: tool-calling rounds, the LLM client's per-call
+  timeout, and cancellation. Zero/negative bounds fall back to defaults rather
+  than meaning "unbounded" — an unbounded loop on a metered gateway is a runaway
+  bill. The round ceiling is `RunnerConfig.MaxSteps` unless the turn names its own
+  through `TurnConfig`; that value is always chosen server-side, because a ceiling
+  a client can raise is not a ceiling.
 - **The transcript IS the model's history.** One table holds both, including the
   assistant's tool calls and each tool's result, with the model's argument string
   stored verbatim. Two stores would drift; re-encoding parsed arguments would
@@ -48,6 +50,17 @@ POST /api/v1/assistant/sessions/:id/messages
 contract, registry and strict argument decoding; `message.go` the stored-message
 encoding and its round trip to `[]llms.MessageContent`; `store.go` the
 owner-scoped persistence; `prompt.go` the per-preset system prompts.
+
+**Unattended runs.** `POST /assistant/sessions/:id/autopilot` starts a tailoring pass
+that walks every requirement of the vacancy in ONE turn — searching the experience
+bank per requirement, editing what the evidence supports, asking nothing until it is
+done. Everything a client could otherwise dictate is server-owned: the brief, the
+raised ceiling (30 rounds against the usual 8), and the pre-run snapshot of the CV
+that makes the run undoable. The method itself is a section of `tailorPrompt`, not a
+second implementation — the rhythm changes, the rules do not, and `cv_edit` still
+refuses a bullet with no `evidence_id`. The run accounts for itself through
+`tailor_report`, which replaces the whole report on the CV and returns a receipt
+rather than an echo (a tool result is replayed into context on every later turn).
 
 **Presets.** A session records `chat`, `tailor`, `profile` or `browse`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
