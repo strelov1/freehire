@@ -118,6 +118,24 @@ when it reports a far larger total.
 - **WHEN** a keyword reports a total far beyond the crawl's page budget
 - **THEN** the crawl stops at the budget and the run succeeds with the slice it read
 
+#### Scenario: The bounded crawl says so
+
+- **WHEN** the page budget rather than an empty page is what ended a keyword's crawl
+- **THEN** the run logs that the slice is bounded, so a partial read is never mistaken for full
+  coverage of that keyword
+
+### Requirement: A keyword's repeated postings are collapsed before they are returned
+
+The system SHALL return each posting at most once per keyword crawl, keyed on the native posting id.
+The feed post-filters duplicates only within a page, so the same posting can surface on several
+pages of one keyword; returning it each time would have the pipeline upsert one row repeatedly
+across a deep crawl for no gain.
+
+#### Scenario: The same posting on two pages is returned once
+
+- **WHEN** two pages of one keyword both carry a posting with the same native id
+- **THEN** the crawl returns that posting once
+
 ### Requirement: The request avoids the feed's documented-but-broken parameters
 
 The system MUST NOT send a `user_agent` query parameter containing a forward slash, and MUST NOT

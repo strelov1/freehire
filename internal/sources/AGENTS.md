@@ -9,7 +9,9 @@ Source ingest: board list, provider registry, board-file parsing/validation, per
 - **`cmd/ingest` processes one board file per run** (path as first argument or `SOURCES_FILE`). It validates every entry against the registry and **fails fast** — a misconfigured board never starts a run.
 - **Run-once-and-exit worker** meant for cron (one schedule per file, so providers crawl independently). No long-lived process.
 - **Adapters are read-only over public ATS JSON APIs.** Per-board crawl is independent: one failing board is counted (`stats.Failed`) but does not abort the rest.
-- **Sources are keyless by default; `usajobs` is the lone exception.** USAJobs Search API requires `Authorization-Key` header — `sources.All` registers it only when `USAJOBS_API_KEY` is set in the environment. The key lives in the env, never in a board file.
+- **Sources are keyless by default.** The exceptions are `usajobs` (`USAJOBS_API_KEY`), `reed` (`REED_API_KEY`) and `whatjobs` (`WHATJOBS_PUBLISHER_ID`) — `sources.All` registers each only when its variable is set. The credential lives in the env, never in a board file; an unconfigured environment leaves the provider absent rather than listing one that cannot crawl.
+- **A board is not always a tenant.** For `hh` it is a `professional_role`, for `trudvsem` an OKATO region code, for `whatjobs` a SEARCH KEYWORD. Such a provider is an `aggregator` (many employers, company read per posting) but NOT `boardless` — the board is what selects the slice to crawl.
+- **`sweepGrace` widens the unseen sweep for a slice-crawled provider.** `whatjobs` reads at most 40 pages of a keyword from a feed thousands of pages deep, so a posting that drifts past that depth reads as unseen; on the 48-hour default it would be closed and reopened repeatedly, each cycle writing a phantom removal into `job_daily_stats`. The adapter declares 14 days instead (`sources.SweepGraceWindows` → `cmd/ingest`'s `sweepWindowFor`). Sound only where liveness cannot be probed — anything verifiable should close on evidence.
 - **Dedup key is `jobs.UNIQUE (source, external_id)`.** `UpsertJob` is `ON CONFLICT` on it.
 - **`sources.SelfClosingProviders`** lists providers whose adapters implement the `selfClosing` marker — they emit `Job{Removed: true}` for taken-down postings and are excluded from the unseen-job sweep.
 - **Board health table holds ONLY runtime state** — the board catalog stays in YAML (git); a stale row for a removed board is inert.
@@ -34,6 +36,17 @@ Source ingest: board list, provider registry, board-file parsing/validation, per
 3. **Liveness probe** (`cmd/liveness`): URL-probes orphan jobs from non-board sources. Closes after two consecutive `expired` reads (the `liveness_strikes` counter).
 
 **Telegram ingest** is a two-stage queue (crawl then LLM-extract): `cmd/tg-ingest` crawls `sources/telegram.yml` channels into `telegram_posts`; `cmd/tg-extract` drains via the LLM. Both are run-once-and-exit cron workers.
+
+**WhatJobs FeedAPI traps** (its documentation is wrong in several places; all of the below was verified against the live API):
+
+- A `/` in the `user_agent` query value makes the edge redirect with the value corrupted (`Mozilla/5.0` → `Mozilla%215.0`), which is why every code sample in the vendor's docs fails. The adapter sends no `user_agent` at all.
+- `limit` above 50 is silently clamped, and `limit=1` **with** a keyword returns an empty `data` with `per_page: 0`. Worse, the feed post-filters duplicates *after* selecting a page, so a request for 50 routinely returns 44 while more pages remain — **a short page is not the last page**, and the same posting can appear on several pages of one keyword.
+- Pagination dies past roughly 2000 pages regardless of the `total` reported (594k), so no keyword is ever exhaustible; keep board keywords narrow enough to fit the page budget.
+- `snippet` is the FULL description HTML, not the highlighted excerpt the docs describe. The documented `onmousedown` field does not exist.
+- `salary` is always `"0.000000 - 0.000000"`, `job_type` always `""`, `logo` always `null` — all three are dropped rather than stored.
+- `age`/`age_days` measure the record's age in the reseller's index, not the posting date (postings from unrelated companies share one value), so `PostedAt` is left nil.
+- An invalid publisher answers **410** (docs claim 422); `unique_id` does not deduplicate despite the docs.
+- No country field, and its cities collide with foreign ones (London is Ohio, Vienna is Virginia) — the account's country is stated by the adapter, since the publisher id is per-country.
 
 ## Limitations
 - No versioned migration runner for `board_health` migration (`0006_board_health.sql`) — apply to prod manually before deploying.

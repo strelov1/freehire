@@ -1,0 +1,42 @@
+# WhatJobs — a CPC network freehire publishes for, crawled as a multi-company aggregator.
+#
+# Each entry's board is a SEARCH KEYWORD, not a tenant id: the account exposes one searchable pool
+# rather than per-employer boards, so a keyword is how a slice is selected. The shape matches
+# sources/hh.yml, whose board is a professional_role. company is a display label only — the real
+# employer comes from each posting.
+#
+# The publisher id is NOT here: it is the account credential and lives in WHATJOBS_PUBLISHER_ID.
+# Without it the provider is not registered and this file fails validation, by design.
+#
+# US inventory only. The vendor issues one publisher id per country and this account is the US one;
+# `country`, `locale` and `geo` query parameters are ignored, so another market needs its own
+# account and its own registration.
+#
+# Keywords are chosen NARROW on purpose. A crawl reads at most 40 pages (2000 postings) of a
+# keyword, so a keyword whose total exceeds that is only ever read as a bounded slice — its deeper
+# postings drift in and out of view between runs. Every keyword below was measured to sit inside the
+# budget, which keeps each crawl complete. Live totals at the time of writing are in the comments;
+# they grow, so re-measure before adding a broad term. Deliberately NOT listed (measured far beyond
+# the budget): data engineer 44k, machine learning engineer 34k, data scientist 33k,
+# software engineer 11.5k, devops engineer 10k, security engineer 8k, site reliability engineer 5k,
+# platform engineer 4.8k, qa automation engineer 3k, java developer 3k.
+- company: WhatJobs — Backend engineers
+  board: "backend engineer" # ~1.9k
+- company: WhatJobs — Frontend engineers
+  board: "frontend engineer" # ~1.2k
+- company: WhatJobs — React developers
+  board: "react developer" # ~1.2k
+- company: WhatJobs — Python developers
+  board: "python developer" # ~1.0k
+- company: WhatJobs — Kubernetes engineers
+  board: "kubernetes engineer" # ~690
+- company: WhatJobs — iOS developers
+  board: "ios developer" # ~510
+- company: WhatJobs — Android developers
+  board: "android developer" # ~445
+- company: WhatJobs — Node.js developers
+  board: "node.js developer" # ~440
+- company: WhatJobs — Rust developers
+  board: "rust developer" # ~307
+- company: WhatJobs — Go developers
+  board: "golang" # ~107

@@ -272,6 +272,13 @@ func All(c HTTPClient) map[string]Source {
 	if key := os.Getenv("REED_API_KEY"); key != "" {
 		registry["reed"] = NewReed(c, key)
 	}
+	// whatjobs is a CPC network freehire publishes for, so its credential is the publisher id rather
+	// than an API key — but it is registered the same way: only when configured, so an environment
+	// without it does not list a provider whose every board would 410. The id is per-country; this
+	// account serves US inventory.
+	if id := os.Getenv("WHATJOBS_PUBLISHER_ID"); id != "" {
+		registry["whatjobs"] = NewWhatJobs(c, id)
+	}
 	// taleo needs a cookie-persisting client (its searchjobs POST requires the session cookie
 	// a careersection GET sets), so it cannot use the shared jar-less client. Build a dedicated
 	// one for a real crawl; on the transport-free listing path (c == nil) register a bare adapter

@@ -129,6 +129,23 @@ leaving it to infer "Vienna" or "London" — both of which appear in this feed a
 (London, Ohio 43140). This is a fact about the configured account, not a guess about a posting, so
 it does not breach the dict-only rule.
 
+Measured against `location.Parse` over the 738-posting sample (102 of which carry no location at
+all):
+
+| | bare city | city + `", United States"` |
+|---|---|---|
+| no country resolved | 218 | 0 |
+| a foreign country resolved | 11 | 11 |
+| US resolved | 407 | 636 |
+
+So the suffix rescues 229 postings and regresses none. It does not *fix* the 11 homonyms — the
+dictionary unions the tokens rather than letting the country arbitrate, so "Dublin, United States"
+resolves to `ie` **and** `us`. That is still strictly better than the bare city, which resolves to
+`ie` alone: the posting becomes findable under the US filter it belongs to, while remaining wrongly
+findable under Ireland's. Narrowing that last 1.7% needs the dictionary to treat an explicit
+country as authoritative over a city-name match, which is a change to `internal/location` and out
+of scope here.
+
 ### Request hygiene
 
 `user_agent` is omitted entirely — it is optional, it only improves click attribution on shared
