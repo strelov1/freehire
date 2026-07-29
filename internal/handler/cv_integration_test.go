@@ -86,7 +86,7 @@ func TestCVTemplatesEndpoint_OpenToAuthed(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &cvHandlers{queries: queries,
+	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
@@ -121,7 +121,7 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &cvHandlers{queries: queries,
+	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
@@ -180,7 +180,7 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	h := &cvHandlers{queries: queries,
+	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))} // storage disabled → seed no-ops
 	app := buildCVApp(h, iss)
@@ -271,7 +271,7 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	// S3 storage is DISABLED (nil blobs): seeding reads the structured résumé from
 	// Postgres, so it must work independently of object storage.
 	store := resume.New(nil, resume.NewQueriesRepository(queries))
-	h := &cvHandlers{queries: queries,
+	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), resume: store}
 	app := buildCVApp(h, iss)
 

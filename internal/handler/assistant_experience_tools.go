@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -166,7 +167,7 @@ func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Too
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			employmentID, err := optionalUUID(in.EmploymentID)
+			employmentID, err := h.resolveEmployment(ctx, userID, in.EmploymentID)
 			if err != nil {
 				return nil, err
 			}
@@ -300,6 +301,41 @@ func optionalUUID(raw string) (*uuid.UUID, error) {
 		return nil, errors.New("employment_id must be an id from experience_employments")
 	}
 	return &id, nil
+}
+
+// resolveEmployment parses the role an achievement attaches to, and — when the value is not
+// an id — refuses with the ids that WOULD have worked.
+//
+// The list is the whole point. A model that guesses ("the ringcentral one") used to be told
+// only that it was wrong, spend a round on experience_employments, and retry: one of the eight
+// rounds a turn has, burned on a lookup the refusal could have carried. The candidate's roles
+// are a handful of rows, already owner-scoped, and they are what the retry needs.
+func (h *assistantHandlers) resolveEmployment(ctx context.Context, userID int64, raw string) (*uuid.UUID, error) {
+	id, err := optionalUUID(raw)
+	if err == nil {
+		return id, nil
+	}
+	if h.experience == nil {
+		return nil, err
+	}
+	employments, listErr := h.experience.ListEmployments(ctx, userID)
+	if listErr != nil {
+		return nil, err // the original message; a failed lookup is not the model's problem to fix
+	}
+	if len(employments) == 0 {
+		return nil, errors.New("this candidate has no roles on file yet, so employment_id must be left out — " +
+			"record the achievement without one")
+	}
+	var b strings.Builder
+	b.WriteString("employment_id must be one of this candidate's roles: ")
+	for i, e := range employments {
+		if i > 0 {
+			b.WriteString("; ")
+		}
+		fmt.Fprintf(&b, "%s = %s", e.ID, strings.TrimSpace(e.Company+" "+e.Role))
+	}
+	b.WriteString(". Leave it out if none of them is where this happened.")
+	return nil, errors.New(b.String())
 }
 
 // searchResult shapes matches for the model: the claim it can reframe, the place it

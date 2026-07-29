@@ -1,0 +1,27 @@
+---
+title: One button tailors your CV to the job
+date: 2026-07-29
+summary: The CV workspace no longer opens on a conversation you have to drive — press "Tailor it for me" and the agent works through every requirement of the posting on its own, then comes back with the ones it could not answer for you.
+type: changelog
+tags:
+  - cv
+  - ai
+draft: false
+---
+
+Opening the [tailoring workspace](/features/tailor) used to mean starting a conversation and
+steering it: the agent offered to walk the gaps, and you worked through them one message at a
+time. Everything it needed was already there — the posting's requirements, your experience bank,
+the method — but you had to ask for each step.
+
+Now the empty chat offers two ways in. **"Walk me through it"** is the old rhythm. **"Tailor it
+for me"** is new: the agent goes through every requirement of the posting by itself, searches
+your experience bank for each one, and rewrites the relevant bullets in the vacancy's language.
+It asks you nothing while it works.
+
+When it finishes, the panel beside your CV lists every requirement and what became of it —
+closed from your bank, still open, or not reached. Then it asks about the first thing it could
+not close. Anything you confirm there is banked, so the next vacancy will not ask you again.
+
+If you do not like what it did, **Undo the run** puts the CV back exactly as it was before,
+in one move.

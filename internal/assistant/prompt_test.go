@@ -120,3 +120,22 @@ func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
 		t.Error("the prompt must ask for ONE closing question; a numbered list of gaps gets one answer")
 	}
 }
+
+// Two recorded sessions opened with a long restatement of the fit analysis the candidate had
+// open beside the chat, then spent every remaining round searching the bank one requirement at
+// a time — and edited nothing. The prompt now says where the evidence already is, and to spend
+// rounds on edits rather than on a summary.
+func TestTailorPromptSpendsRoundsOnEditsNotSummaries(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+
+	if !strings.Contains(p, "cv_context") || !strings.Contains(p, "evidence") {
+		t.Error("the prompt must point the agent at the evidence cv_context already carries")
+	}
+	lower := strings.ToLower(p)
+	if !strings.Contains(lower, "do not restate") && !strings.Contains(lower, "not repeat") {
+		t.Error("the prompt must forbid restating the fit analysis — the candidate has it open beside the chat")
+	}
+	if !strings.Contains(lower, "as you go") && !strings.Contains(lower, "one requirement at a time") {
+		t.Error("the prompt must ask for edits as each requirement is closed, not after all the research")
+	}
+}

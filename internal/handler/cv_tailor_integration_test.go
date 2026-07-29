@@ -41,7 +41,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
-	h := &cvHandlers{queries: queries,
+	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
 		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
 		matchAnalysisCache: queries,

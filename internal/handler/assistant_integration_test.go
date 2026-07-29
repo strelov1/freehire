@@ -55,7 +55,7 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 		// The tailoring tools and the autopilot run reach the CV store, so the assistant
 		// under test carries the same CV service the HTTP surface uses.
 		cv: &cvHandlers{
-			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), queries: queries,
+			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), queries: queries, jobReader: queries,
 			// The run reads the cached fit analysis to lay down its plan, so the CV handlers
 			// under test carry the same cache the production wiring gives them.
 			matchAnalysisCache: queries,

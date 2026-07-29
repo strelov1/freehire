@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -35,7 +36,10 @@ type cvHandlers struct {
 	queries            *db.Queries
 	credits            *credits.Store
 	matchAnalysisCache matchAnalysisStore
-	match              *matchHandlers
+	// jobReader serves the vacancy a tailoring context is about. Narrow on purpose: the
+	// tailoring path reads one row by id and nothing else.
+	jobReader jobReader
+	match     *matchHandlers
 	// assistantSessions mints the conversation a tailoring workspace runs in.
 	// Assigned after construction (see withAssistantSessions).
 	assistantSessions *assistant.Store
@@ -44,9 +48,15 @@ type cvHandlers struct {
 	seeder cv.Seeder
 }
 
+// jobReader is the one vacancy read the tailoring context needs.
+type jobReader interface {
+	GetJob(ctx context.Context, id int64) (db.Job, error)
+}
+
 func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+		jobReader:          queries,
 		resume:             resumeStore,
 		seeder:             bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
 		queries:            queries,

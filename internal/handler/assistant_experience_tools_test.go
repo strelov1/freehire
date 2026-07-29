@@ -45,10 +45,12 @@ func TestExperienceToolsReportFailuresToTheModel(t *testing.T) {
 			want: "claim",
 		},
 		{
+			// The bank in this stand has no roles, so the refusal says that rather than
+			// pointing at a lookup that would come back empty.
 			name: "an employment id that is not an id",
 			tool: "experience_add",
 			args: `{"claim":"Did a thing","employment_id":"the sber one"}`,
-			want: "experience_employments",
+			want: "no roles on file",
 		},
 		{
 			name: "an unknown argument",
@@ -186,5 +188,40 @@ func TestExperienceSearchResultCarriesWhatTheAgentMustCite(t *testing.T) {
 	// The agent's own hypothesis is returned so it can ask about it — flagged, not hidden.
 	if decoded.Evidence[1].CanWriteCV {
 		t.Error("an agent_inferred entry was reported as usable on a CV")
+	}
+}
+
+// A wrong employment id used to cost a whole tool round: the model guessed, was told only
+// that it was wrong, spent a round on experience_employments, and retried. The refusal now
+// carries the ids it could have used, so the correction happens inside the same round.
+func TestARejectedEmploymentIdNamesTheValidOnes(t *testing.T) {
+	bank := newStubBank()
+	bank.employments = []experience.Employment{
+		{ID: uuid.MustParse("22222222-2222-4222-8222-222222222222"), Company: "RingCentral", Role: "Tech Lead"},
+		{ID: uuid.MustParse("33333333-3333-4333-8333-333333333333"), Company: "Acme", Role: "Engineer"},
+	}
+	reg, _ := experienceToolsFor(t, bank)
+
+	out := reg.Call(context.Background(), 1, "experience_add",
+		json.RawMessage(`{"claim":"Ran the Java containers","employment_id":"the ringcentral one"}`))
+	payload, _ := json.Marshal(out)
+
+	for _, want := range []string{"22222222-2222-4222-8222-222222222222", "RingCentral", "Acme"} {
+		if !strings.Contains(string(payload), want) {
+			t.Errorf("the refusal does not mention %q — the model has to spend a round finding it:\n%s", want, payload)
+		}
+	}
+}
+
+// A candidate with no roles on file gets a refusal that says so, rather than an empty list
+// that reads as "the ids exist, you just guessed wrong".
+func TestARejectedEmploymentIdWithNoRolesSaysSo(t *testing.T) {
+	reg, _ := experienceToolsFor(t, newStubBank())
+
+	out := reg.Call(context.Background(), 1, "experience_add",
+		json.RawMessage(`{"claim":"Did a thing","employment_id":"nope"}`))
+	payload, _ := json.Marshal(out)
+	if !strings.Contains(strings.ToLower(string(payload)), "no roles") {
+		t.Errorf("the refusal should say the bank holds no roles yet:\n%s", payload)
 	}
 }

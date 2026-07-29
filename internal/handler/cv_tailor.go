@@ -206,6 +206,20 @@ type tailorJob struct {
 	Description string `json:"description"`
 }
 
+// tailorDescriptionLimit bounds the posting inside a tailoring context. A recorded session
+// spent 11.4 KB of its opening round on one description in raw HTML — more than a third of the
+// whole conversation, before the agent had done anything.
+const tailorDescriptionLimit = 6000
+
+// clipRunes bounds a string on a rune boundary, so a multi-byte character is never cut in half.
+func clipRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return strings.TrimSpace(string(r[:max])) + "…"
+}
+
 // tailorContextResponse is the reasoning context the agent reads (freehire cv context): the
 // vacancy, the verdict and recommendation, per-dimension comments, and the requirement split
 // the honest wall turns on — missing_have (reframe existing evidence) vs missing_gap (ask first).
@@ -240,15 +254,11 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	analysis, err := h.cachedAnalysis(c, userID, rec.JobID)
+	ctx, err := h.tailoringContext(c.Context(), userID, rec.JobID)
 	if err != nil {
 		return err
 	}
-	job, err := h.queries.GetJob(c.Context(), rec.JobID)
-	if err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": tailorContext(analysis, job)})
+	return c.JSON(fiber.Map{"data": ctx})
 }
 
 // cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
@@ -290,10 +300,13 @@ func tailorContext(a *matchanalysis.Analysis, job db.Job) tailorContextResponse 
 	}
 	return tailorContextResponse{
 		Job: tailorJob{
-			Title:       job.Title,
-			Company:     job.Company,
-			Slug:        job.PublicSlug,
-			Description: job.Description,
+			Title:   job.Title,
+			Company: job.Company,
+			Slug:    job.PublicSlug,
+			// The posting is the largest thing in the turn and the least trusted: it reaches
+			// the model as words, bounded, the same way get_job already serves it. Sending
+			// markup spends the context window on tags and widens what there is to misread.
+			Description: clipRunes(formatDescription(job.Description, "markdown"), tailorDescriptionLimit),
 		},
 		Verdict:        a.Verdict,
 		OverallScore:   a.OverallScore,
@@ -304,6 +317,21 @@ func tailorContext(a *matchanalysis.Analysis, job db.Job) tailorContextResponse 
 		Strengths:      a.Strengths,
 		Gaps:           a.Gaps,
 	}
+}
+
+// tailoringContext assembles what a tailoring reader needs: the cached analysis, projected
+// over the vacancy it is about. Both the HTTP endpoint and the agent's tool go through here,
+// so neither can drift into reading a different analysis or a different vacancy.
+func (h *cvHandlers) tailoringContext(ctx context.Context, userID, jobID int64) (tailorContextResponse, error) {
+	analysis, err := h.cachedAnalysisCtx(ctx, userID, jobID)
+	if err != nil {
+		return tailorContextResponse{}, err
+	}
+	job, err := h.jobReader.GetJob(ctx, jobID)
+	if err != nil {
+		return tailorContextResponse{}, err
+	}
+	return tailorContext(analysis, job), nil
 }
 
 // tailoredCVTitle names a tailored copy from the vacancy title (bounded/defaulted like any CV

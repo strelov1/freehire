@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/experience"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 )
 
 // assistantCVTools are the tools a CV-tailoring session gets on top of the shared
@@ -106,17 +108,94 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			analysis, err := h.cv.cachedAnalysisCtx(ctx, userID, jobID)
+			base, err := h.cv.tailoringContext(ctx, userID, jobID)
 			if err != nil {
 				return nil, err
 			}
-			job, err := h.queries.GetJob(ctx, jobID)
-			if err != nil {
-				return nil, err
-			}
-			return tailorContext(analysis, job), nil
+			return h.withBankEvidence(ctx, userID, base), nil
 		},
 	}
+}
+
+// evidencedRequirement is a requirement plus what the candidate's own bank already holds for
+// it. The evidence is named, not inlined whole: the agent needs enough to decide "I can write
+// this" and the id to cite, and a tool result is replayed into its context on every later turn.
+type evidencedRequirement struct {
+	matchanalysis.Requirement
+	Evidence []requirementEvidence `json:"evidence"`
+}
+
+type requirementEvidence struct {
+	ID         string `json:"id"`
+	Claim      string `json:"claim"`
+	CanWriteCV bool   `json:"can_write_cv"`
+}
+
+// agentTailorContext is the tailoring context as the AGENT reads it — deliberately narrower
+// than what the endpoint serves the page.
+//
+// Measured on a recorded session, the served context was 11.4 KB: 4.2 KB of posting, 2.5 KB of
+// requirements, and 3 KB of dimension comments, strengths, gaps and recommendation. That last
+// 3 KB is the part the agent must NOT act on — it cannot edit a CV from a dimension comment,
+// and restating the verdict is exactly what it is told not to do. It is on the candidate's
+// screen already, in the panel beside the chat.
+//
+// So the agent gets what it works from: the vacancy, the score in one line for tone, and the
+// requirements with the bank's answer attached.
+type agentTailorContext struct {
+	Job          tailorJob              `json:"job"`
+	Verdict      string                 `json:"verdict"`
+	OverallScore int                    `json:"overall_score"`
+	MissingHave  []evidencedRequirement `json:"missing_have"`
+	MissingGap   []evidencedRequirement `json:"missing_gap"`
+}
+
+// evidencePerRequirement bounds what one requirement may carry. Three is enough to write a
+// bullet from and to see that the bank is not empty; the rest is one experience_search away.
+const evidencePerRequirement = 3
+
+// withBankEvidence answers, for every requirement, the question the agent would otherwise
+// spend a tool round on: does the bank hold anything for this?
+//
+// Retrieval is a linear scan over the caller's own atoms with no model call in it, so asking it
+// once per requirement here costs less than the single round it replaces. A recorded session
+// made TEN searches and never reached an edit; this is what those searches were asking for.
+//
+// A bank that cannot be read degrades to no evidence rather than to an error: the requirements
+// are worth reading either way, and an empty list already means "nothing found".
+func (h *assistantHandlers) withBankEvidence(ctx context.Context, userID int64, base tailorContextResponse) agentTailorContext {
+	return agentTailorContext{
+		Job:          base.Job,
+		Verdict:      base.Verdict,
+		OverallScore: base.OverallScore,
+		MissingHave:  h.evidenceFor(ctx, userID, base.MissingHave),
+		MissingGap:   h.evidenceFor(ctx, userID, base.MissingGap),
+	}
+}
+
+func (h *assistantHandlers) evidenceFor(ctx context.Context, userID int64, reqs []matchanalysis.Requirement) []evidencedRequirement {
+	out := make([]evidencedRequirement, 0, len(reqs))
+	for _, r := range reqs {
+		// Always a list, never nil: "looked and found nothing" is the answer that decides
+		// whether to ask the candidate, and an absent field reads as "did not look".
+		found := []requirementEvidence{}
+		if h.experience != nil {
+			matches, err := h.experience.Retrieve(ctx, userID,
+				experience.Query{Text: r.Text}, evidencePerRequirement)
+			if err != nil {
+				log.Printf("assistant: bank retrieval for %q: %v", r.Text, err)
+			}
+			for _, m := range matches {
+				found = append(found, requirementEvidence{
+					ID:         m.Atom.ID.String(),
+					Claim:      m.Atom.Claim,
+					CanWriteCV: m.Atom.Provenance.Publishable(),
+				})
+			}
+		}
+		out = append(out, evidencedRequirement{Requirement: r, Evidence: found})
+	}
+	return out
 }
 
 // cvGetTool reads the tailored CV document the session is editing, minus the contact
