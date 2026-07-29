@@ -49,6 +49,7 @@ import type {
   IncomingReferralRequest,
   Report,
   ReportInput,
+  GhostReportInput,
   Verdict,
   ATSResponse,
   JobMatchResult,
@@ -1169,6 +1170,21 @@ export function createApi(
     return requestData<Report>(`/api/v1/jobs/${slug}/reports`, jsonBody('POST', input));
   }
 
+  /** File a ghost-signal claim: applied on this date, never answered. Unlike
+   *  reportJob this reaches no moderator and closes nothing — it accumulates as
+   *  evidence, and `withdrawGhostReport` takes it back when an employer answers. */
+  async function reportGhostJob(slug: string, input: GhostReportInput): Promise<void> {
+    await call(`/api/v1/jobs/${slug}/ghost-report`, jsonBody('POST', input));
+  }
+
+  /** Withdraw this caller's ghost claim about a job (204, or 404 if there is none). */
+  async function withdrawGhostReport(slug: string): Promise<void> {
+    // call(), not request(): a 204 carries no body, and .json() on an empty one
+    // throws on a call that in fact succeeded — the mirror of why the endpoint
+    // answers 204 rather than a 200 whose body would read "OK".
+    await call(`/api/v1/jobs/${slug}/ghost-report`, { method: 'DELETE' });
+  }
+
   /** The moderator review queue: pending reports, with reporter email and job fields. */
   async function listPendingReports(): Promise<Report[]> {
     return requestData<Report[]>('/api/v1/reports');
@@ -1546,6 +1562,8 @@ export function createApi(
     approveSubmission,
     rejectSubmission,
     reportJob,
+    reportGhostJob,
+    withdrawGhostReport,
     listPendingReports,
     resolveReport,
     dismissReport,

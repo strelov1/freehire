@@ -39,9 +39,9 @@ has been landing in a queue whose only verdict is closing the job.
 
 - [x] 3b.1 Add a failing test in `internal/report` that a report with blank or absent `details` is accepted, and that over-long details are still refused. Then drop the required-details rule from `FileInput.validate`.
 - [x] 3b.2 Update `openspec` — done: `job-report` gains the optional-`details` requirement, `ghost-job-signal` gains the dialog-routing requirement.
-- [ ] 3b.3 In `ReportDialog.svelte`, route `no_response` to a date step that files a ghost report; leave the other four reasons on the moderation path.
+- [x] 3b.3 In `ReportDialog.svelte`, route `no_response` to a date step that files a ghost report; leave the other four reasons on the moderation path.
 - [x] 3b.4 Make "What's wrong?" optional in the dialog ("Tell us more"), drop its `*`, and remove the "Telegram for follow-up" field. The API keeps `contact_telegram` — it is documented and reachable by third-party clients, so it is not orphaned by the SPA dropping it.
-- [ ] 3b.5 `go test ./internal/report/... ./internal/handler/...` and `pnpm test && pnpm lint` in `web/` green.
+- [x] 3b.5 `go test ./internal/report/... ./internal/handler/...` and `pnpm test && pnpm lint` in `web/` green.
 
 ## 4. The ATS cross-check
 

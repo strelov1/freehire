@@ -86,3 +86,16 @@ export function decisionOutcome({
   const about = jobTitle ? ` about "${jobTitle}"` : '';
   return `The decision was recorded, but the email${who}${about} did not go out. Follow up by hand if it matters.`;
 }
+
+/** Whether a reason files EVIDENCE for the ghost signal rather than a moderation
+ *  report. Only `no_response` does: it describes an outcome the reporter lived
+ *  through, which accumulates and can be withdrawn, while the other four describe
+ *  the posting itself and need a moderator who can act on it.
+ *
+ *  It lives here rather than inline in the dialog so the split is pinned by a test.
+ *  Rerouting `no_response` back to the moderation queue would put it in front of a
+ *  reviewer whose only lever is closing the job — the thing this whole split exists
+ *  to stop — and nothing in the component would have noticed. */
+export function isEvidenceReason(reason: ReportReason): boolean {
+  return reason === 'no_response';
+}

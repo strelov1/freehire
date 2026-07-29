@@ -370,8 +370,17 @@ export interface Report {
 /** The content a user submits when reporting a job. */
 export interface ReportInput {
   reason: ReportReason;
-  details: string;
+  /** Optional elaboration. The reason vocabulary already says what is wrong. */
+  details?: string;
   contact_telegram?: string;
+}
+
+/** A ghost-signal claim: the caller applied to a job on `applied_on` and was
+ *  never answered. Distinct from a moderation Report — it accumulates as
+ *  evidence rather than reaching a moderator, and can be withdrawn. */
+export interface GhostReportInput {
+  /** Plain calendar date (YYYY-MM-DD): a day, not an instant. */
+  applied_on: string;
 }
 
 /** A signed-in user's interaction with one job: when they viewed it, saved it

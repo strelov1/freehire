@@ -4,9 +4,12 @@ import {
   decisionNotePlaceholder,
   decisionNotePrompt,
   decisionOutcome,
+  isEvidenceReason,
+  reportReasons,
   reportReasonLabel,
   type DecisionKind,
 } from './reports';
+import type { ReportReason } from './types';
 
 describe('reportReasonLabel', () => {
   it('labels a known reason and falls back to the raw value', () => {
@@ -68,5 +71,25 @@ describe('decisionOutcome', () => {
   it('never claims a notice was sent that was not', () => {
     const warning = decisionOutcome({ notifyRequested: true, notified: false });
     expect(warning).not.toMatch(/\bsent\b(?!.*(not|n't))/i);
+  });
+});
+
+describe('isEvidenceReason', () => {
+  it('routes no_response to the evidence channel', () => {
+    expect(isEvidenceReason('no_response')).toBe(true);
+  });
+
+  // The moderation queue's only verdict is closing the job. A reason routed there
+  // by mistake reaches a reviewer who cannot express "noted, counted".
+  it.each<ReportReason>(['not_relevant', 'spam', 'fraud', 'other'])(
+    'keeps %s on the moderation path',
+    (reason) => {
+      expect(isEvidenceReason(reason)).toBe(false);
+    },
+  );
+
+  it('classifies every reason in the vocabulary', () => {
+    const evidence = reportReasons.filter((r) => isEvidenceReason(r.value));
+    expect(evidence).toHaveLength(1);
   });
 });
