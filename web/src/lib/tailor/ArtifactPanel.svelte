@@ -9,7 +9,8 @@
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import TemplateGallery from './TemplateGallery.svelte';
-  import type { Analysis } from '$lib/generated/contracts';
+  import AutopilotReport from './AutopilotReport.svelte';
+  import type { Analysis, AutopilotEntry } from '$lib/generated/contracts';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
 
   type Tab = 'templates' | 'jd' | 'verdict';
@@ -24,6 +25,11 @@
     // at lg the aside is always shown regardless (lg:flex overrides the mobile hidden).
     tab = $bindable('templates'),
     mobileVisible = false,
+    autopilotReport = undefined,
+    autopilotRevertable = false,
+    autopilotBusy = false,
+    onRerunAutopilot,
+    onUndoAutopilot,
   }: {
     cvId: string;
     job: Job;
@@ -31,6 +37,13 @@
     onTemplateSelected: (id: string) => void;
     tab?: Tab;
     mobileVisible?: boolean;
+    /** The last unattended run's log, shown above the fit analysis. The analysis itself is
+     *  untouched by a run — it measures the base CV, not this tailored copy. */
+    autopilotReport?: AutopilotEntry[];
+    autopilotRevertable?: boolean;
+    autopilotBusy?: boolean;
+    onRerunAutopilot: () => void;
+    onUndoAutopilot: () => void;
   } = $props();
 
   const tabs: [Tab, string][] = [
@@ -115,6 +128,13 @@
       </div>
     {:else}
       <div class="p-4">
+        <AutopilotReport
+          report={autopilotReport}
+          revertable={autopilotRevertable}
+          busy={autopilotBusy}
+          onRerun={onRerunAutopilot}
+          onUndo={onUndoAutopilot}
+        />
         <MatchAnalysisFull {job} initial={fit} autoRun={false} stacked />
       </div>
     {/if}

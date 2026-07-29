@@ -21,8 +21,9 @@
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
+  import { undoRun, openingFor } from '$lib/tailor/autopilot';
   import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
-  import type { Analysis, Document } from '$lib/generated/contracts';
+  import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
@@ -47,6 +48,17 @@
   let saveError = $state('');
   // Bumped on every persisted change (autosave, agent turn, template switch) to cache-bust the PDF.
   let pdfVersion = $state(0);
+
+  // The last unattended run: its per-requirement log, whether it can still be undone, and
+  // whether one is in flight. A run holds the editor closed — it rewrites the same document
+  // the Editor tab holds in memory and saves on a debounce, so both writing at once loses one
+  // side's work silently.
+  let autopilotReport = $state<AutopilotEntry[] | undefined>(undefined);
+  let autopilotRevertable = $state(false);
+  let runActive = $state(false);
+  let undoing = $state(false);
+  // The chat owns starting a turn; "Run again" beside the report reaches it through here.
+  let chatRef = $state<AssistantChat>();
 
   // Left panel: which tab is shown, and its resizable width. The chat stays mounted across tab
   // switches (hidden, not unmounted) so its live session is never dropped.
@@ -95,8 +107,10 @@
   const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
-  const kickoff =
-    "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.";
+  // A fresh workspace opens on a choice rather than on the agent talking to itself; a resumed
+  // one opens on its own transcript. Both actions run the SAME method and differ only in
+  // rhythm — see openingFor, which is unit-tested.
+  const opening = $derived(openingFor(resuming));
   const sessionLabel = $derived(job ? `${job.title} · ${job.company}` : undefined);
 
   // Hydrate the page-owned CV state from a CV record (marking the snapshot as the persisted
@@ -105,6 +119,8 @@
     title = rec.title;
     templateId = rec.template_id;
     doc = toEditable(rec.document);
+    autopilotReport = rec.autopilot_report;
+    autopilotRevertable = rec.autopilot_revertable;
     lastSnapshot = snapshot();
     cvLoaded = true;
   }
@@ -203,16 +219,45 @@
   // After an agent turn the CV may have changed server-side: flush any pending human edit, then
   // refetch and replace the shared document so the Editor and preview reflect it.
   async function onTurnComplete() {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-      if (snapshot() !== lastSnapshot) await persist();
-    }
+    await flushPendingSave();
     try {
       await loadCv();
       pdfVersion += 1;
     } catch {
       /* best-effort refresh; the next edit or reload will reconcile */
+    }
+  }
+
+  // Write a pending human edit NOW rather than 800ms from now. Anything that changes the CV
+  // server-side has to do this first, or the debounce fires afterwards and overwrites it.
+  async function flushPendingSave() {
+    if (!saveTimer) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (snapshot() !== lastSnapshot) await persist();
+  }
+
+  // Undo a whole run. The ordering (flush → undo → re-read) is the unit-tested undoRun; doing
+  // it any other way lets the pending autosave resurrect the tailored text a second later.
+  async function undoAutopilot() {
+    if (undoing || runActive) return;
+    undoing = true;
+    try {
+      await undoRun({
+        flush: flushPendingSave,
+        undo: async () => {
+          await api.undoAutopilotRun(cvId);
+        },
+        refetch: async () => {
+          await loadCv();
+          pdfVersion += 1;
+        },
+      });
+    } catch (e) {
+      saveState = 'error';
+      saveError = e instanceof ApiError ? e.message : 'Could not undo the run.';
+    } finally {
+      undoing = false;
     }
   }
 
@@ -331,7 +376,16 @@
         </div>
         <div class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
-            <CvSectionForm bind:doc bind:title />
+            {#if runActive}
+              <p class="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                The agent is editing this CV. Editing is paused until the run finishes.
+              </p>
+            {/if}
+            <!-- A run rewrites this same document server-side while the form holds it in memory
+                 and saves on a debounce; letting both write means one side's work vanishes. -->
+            <fieldset disabled={runActive} class="contents">
+              <CvSectionForm bind:doc bind:title />
+            </fieldset>
           </div>
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'settings'}>
             <section class="space-y-3">
@@ -344,12 +398,14 @@
           </div>
           <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat
+              bind:this={chatRef}
               session={sessionId}
-              kickoff={resuming ? undefined : kickoff}
+              openingActions={opening}
               {sessionLabel}
               showSessionRail={false}
               requireBeta={false}
               {onTurnComplete}
+              onRunStateChange={(running) => (runActive = running)}
             />
           </div>
         </div>
@@ -403,6 +459,11 @@
         {cvId}
         job={job!}
         {analysis}
+        {autopilotReport}
+        autopilotRevertable={autopilotRevertable}
+        autopilotBusy={runActive || undoing}
+        onRerunAutopilot={() => chatRef?.startRun()}
+        onUndoAutopilot={undoAutopilot}
         {onTemplateSelected}
         bind:tab={artifactTab}
         mobileVisible={mobileView === 'templates' || mobileView === 'jd' || mobileView === 'verdict'}

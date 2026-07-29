@@ -13,6 +13,7 @@ import type {
   Project,
   Certification,
   Analysis,
+  AutopilotEntry,
 } from './generated/contracts';
 
 /** CV metadata (list rows and mutation responses). */
@@ -27,10 +28,17 @@ export interface CvMeta {
 }
 
 /** A CV with its full editable document. `agent_session_id` is the roy session bound to a
- *  tailored CV (empty when none) — the workspace resumes it. */
+ *  tailored CV (empty when none) — the workspace resumes it.
+ *
+ *  `autopilot_report` is the last unattended run's account of itself, one entry per
+ *  requirement; `autopilot_revertable` says whether the pre-run snapshot is still held. Both
+ *  ride on this read so the workspace panel renders from the CV it already re-fetches after
+ *  every turn, rather than by parsing the conversation. */
 export interface CvRecord extends CvMeta {
   agent_session_id: string;
   document: Document;
+  autopilot_report?: AutopilotEntry[];
+  autopilot_revertable: boolean;
 }
 
 /** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy (slug, title, company)

@@ -23,18 +23,48 @@ export interface Turn {
  * an error the user must act on.
  */
 export function sendTurn(sessionId: string, text: string, onEvent: (e: TurnEvent) => void): Turn {
+  return streamTurn(
+    `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    { text },
+    'could not send the message',
+    onEvent,
+  );
+}
+
+/**
+ * Start an unattended tailoring run on a tailoring conversation. It streams exactly like a
+ * message — same frames, same cancellation — but carries no text: the brief and the turn's
+ * ceiling are the server's, so there is nothing for a client to compose or to raise.
+ */
+export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+  return streamTurn(
+    `${BASE}/sessions/${encodeURIComponent(sessionId)}/autopilot`,
+    {},
+    'could not start the run',
+    onEvent,
+  );
+}
+
+/** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
+ *  and frame decoding have a single implementation. */
+function streamTurn(
+  url: string,
+  body: unknown,
+  failure: string,
+  onEvent: (e: TurnEvent) => void,
+): Turn {
   const controller = new AbortController();
 
   const done = (async () => {
-    const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
+    const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new Error(`could not send the message (${res.status})`);
+      throw new Error(`${failure} (${res.status})`);
     }
     if (!res.body) {
       throw new Error('the assistant returned no stream');

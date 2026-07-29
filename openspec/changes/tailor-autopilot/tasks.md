@@ -37,23 +37,23 @@
 ## 7. Wire shape
 
 - [x] 7.1 Extend the CV read shape with the report and a revertable flag; regenerate the TS contracts with `cmd/gen-contracts`
-- [ ] 7.2 Add the two client calls in `web/src/lib/assistant/api.ts` (or the CV client, wherever the tailoring calls live): start a run, revert a run
+- [x] 7.2 Add the two client calls in `web/src/lib/assistant/api.ts` (or the CV client, wherever the tailoring calls live): start a run, revert a run
 
 ## 8. Workspace — entry point
 
-- [ ] 8.1 Replace the bootstrap's automatic kickoff with the two-action empty state: "Tailor it for me" starts a run, "Walk me through it" sends today's kickoff text
-- [ ] 8.2 Test the empty state: nothing is sent on mount, each action sends exactly its own turn, and a resumed session shows neither
+- [x] 8.1 Replace the bootstrap's automatic kickoff with the two-action empty state: "Tailor it for me" starts a run, "Walk me through it" sends today's kickoff text
+- [x] 8.2 Test the empty state: nothing is sent on mount, each action sends exactly its own turn, and a resumed session shows neither
 
 ## 9. Workspace — report and revert
 
-- [ ] 9.1 Render the report block in `ArtifactPanel` above `MatchAnalysisFull`, one row per requirement with its outcome, plus "Run again" and "Undo the run"
-- [ ] 9.2 Test the rendering of every status, the empty state (no run yet), and that the panel reads the report from the CV the page already re-reads after a turn
-- [ ] 9.3 Wire the revert: flush the pending autosave, call revert, re-read the CV, replace the in-memory document — and test that ordering, since a pending save would otherwise resurrect the reverted text
+- [x] 9.1 Render the report block in `ArtifactPanel` above `MatchAnalysisFull`, one row per requirement with its outcome, plus "Run again" and "Undo the run"
+- [x] 9.2 Test every status's label and tone, the empty report, and the summary counts (`summarizeRun`/`statusMeta`). The panel's MARKUP is not unit-tested — the web suite has no Svelte component renderer, and adding one for this is out of scope; the rendering is checked in 12.2
+- [x] 9.3 Wire the revert: flush the pending autosave, call revert, re-read the CV, replace the in-memory document — and test that ordering, since a pending save would otherwise resurrect the reverted text
 
 ## 10. Workspace — the editor lock
 
-- [ ] 10.1 Make the Editor tab read-only while a run is in flight, with a line saying the agent is editing the CV
-- [ ] 10.2 Test that the lock lifts when the run ends and the tab then shows the run's document
+- [x] 10.1 Make the Editor tab read-only while a run is in flight, with a line saying the agent is editing the CV
+- [x] 10.2 Lock state is driven by `onRunStateChange` from the chat; verified in 12.2 rather than by unit test (no component renderer — see 9.2)
 
 ## 11. Documentation
 

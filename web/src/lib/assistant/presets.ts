@@ -11,6 +11,17 @@
  *  created by the tailoring page with those ids and can never be asked for by address. */
 export type ChatPreset = 'chat' | 'profile';
 
+/**
+ * One way to open a conversation that has not started yet: send a message we wrote, or start
+ * the unattended run — whose brief the server owns, so there is no text to carry.
+ *
+ * It lives here rather than in the chat component for the same reason `AssistantEntry` does:
+ * a surface decides what it offers, the chat only renders and runs it.
+ */
+export type OpeningAction =
+  | { label: string; hint?: string; kind: 'message'; text: string }
+  | { label: string; hint?: string; kind: 'autopilot' };
+
 export type AssistantEntry = {
   preset: ChatPreset;
   /** Sent as the caller's first message, into an empty session only. */
