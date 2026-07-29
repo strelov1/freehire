@@ -1308,7 +1308,7 @@ export function createApi(
     return requestData<EmailBody>(`/api/v1/me/emails/${id}/unlink`, { method: 'POST' });
   }
 
-  // --- CV builder (beta-gated on the server) ---
+  // --- CVs and tailoring (open to every signed-in user; credits meter the AI spend) ---
 
   /** List the available CV templates (id, label, style, ats_safe) for the gallery. */
   async function listCvTemplates(): Promise<CvTemplate[]> {

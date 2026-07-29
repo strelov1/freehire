@@ -18,8 +18,10 @@ export const accountNav = [
   // The agent: open to every signed-in user. It runs in our backend, and unlike the CV
   // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent' },
-  // CV builder + AI tailoring: open to every signed-in user (credits meter the AI spend).
-  { href: '/my/cvs', label: 'CV builder' },
+  // The tailoring workspace's re-open list: CVs already tailored to a vacancy. Open to every
+  // signed-in user (credits meter the AI spend). Named after what the section is FOR — a CV
+  // here is always aimed at one posting, and "CV builder" described the tool it grew out of.
+  { href: '/my/cvs', label: 'Tailor' },
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },

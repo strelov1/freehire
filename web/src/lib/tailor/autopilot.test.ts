@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { summarizeRun, statusMeta, undoRun, openingFor } from './autopilot';
+import { summarizeRun, statusMeta, undoRun, openingActions } from './autopilot';
 import type { AutopilotEntry } from '$lib/generated/contracts';
 
 const report: AutopilotEntry[] = [
@@ -75,25 +75,27 @@ describe('undoRun', () => {
   });
 });
 
-describe('openingFor', () => {
-  it('offers both rhythms to a workspace that has not started', () => {
-    const actions = openingFor(false);
+describe('openingActions', () => {
+  it('offers both rhythms of the same method', () => {
+    const actions = openingActions();
     expect(actions).toHaveLength(2);
-    expect(actions?.map((a) => a.kind)).toContain('autopilot');
+    expect(actions.map((a) => a.kind)).toContain('autopilot');
     // The conversational action carries the text it will send; the run carries none, because
     // its brief belongs to the server.
-    const walk = actions?.find((a) => a.kind === 'message');
+    const walk = actions.find((a) => a.kind === 'message');
     expect(walk && 'text' in walk && walk.text.length).toBeTruthy();
   });
 
-  it('offers nothing to a resumed conversation', () => {
-    expect(openingFor(true)).toBeUndefined();
+  it('offers them regardless of how the workspace was opened', () => {
+    // Keyed on an EMPTY conversation, not on a fresh one: a CV re-opened by id can carry a
+    // conversation nobody has spoken to, and that case read as lost history. The chat renders
+    // these only while there are no messages, so the decision lives there.
+    expect(openingActions()).toHaveLength(2);
   });
 
   it('never opens a turn by itself', () => {
     // The actions are data, not effects: nothing here sends anything until one is picked.
-    const actions = openingFor(false) ?? [];
-    for (const action of actions) {
+    for (const action of openingActions()) {
       expect(typeof action.label).toBe('string');
     }
   });

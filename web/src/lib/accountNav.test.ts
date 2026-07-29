@@ -29,16 +29,16 @@ describe('accountNav config', () => {
 });
 
 describe('visibleAccountNav', () => {
-  it('shows the Assistant, Inbox and CV builder to a plain user', () => {
+  it('shows the Agent, Inbox and Tailor sections to a plain user', () => {
     const hrefs = visibleAccountNav(false, false).map((i) => i.href);
     // The Assistant left its beta rollout: it runs on the user's own machine
     // with their own Claude, so there is nothing left to ration.
     expect(hrefs).toContain('/my/assistant');
     expect(hrefs).toContain('/my/inbox');
-    expect(hrefs).toContain('/my/cvs'); // CV builder is public now (credits meter the AI spend)
+    expect(hrefs).toContain('/my/cvs'); // the tailoring list is public now (credits meter the AI spend)
   });
 
-  it('shows the CV builder to every signed-in user, gate-free', () => {
+  it('shows the tailoring section to every signed-in user, gate-free', () => {
     for (const [mod, beta] of [
       [false, false],
       [true, false],
@@ -85,5 +85,14 @@ describe('isSectionActive', () => {
     // '/my/api-keys-extra' shares the '/my/api-keys' prefix but is a different
     // route — a segment boundary ('/') is required, not a bare string prefix.
     expect(isSectionActive('/my/api-keys-extra', '/my/api-keys')).toBe(false);
+  });
+});
+
+describe('the burger menu duplicates what is opened from anywhere', () => {
+  it('names the tailoring section after what it is for', () => {
+    // "CV builder" described the tool this grew out of; every CV in here is aimed at one
+    // vacancy, which is what the section is actually for.
+    const tailor = accountNav.find((i) => i.href === '/my/cvs');
+    expect(tailor?.label).toBe('Tailor');
   });
 });
