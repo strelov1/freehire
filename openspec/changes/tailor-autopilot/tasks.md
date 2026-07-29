@@ -1,14 +1,14 @@
 ## 1. Storage
 
-- [ ] 1.1 Add migration `0051_cvs_autopilot.sql`: `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`, both nullable, with a comment explaining that one is the run log and the other the pre-run document
-- [ ] 1.2 Add owner-scoped queries in `internal/db/queries`: snapshot the document into `autopilot_undo`, write `autopilot_report`, read both with the CV, restore from the snapshot clearing both columns; run `make sqlc`
-- [ ] 1.3 Cover the queries with the existing integration-test harness: snapshot writes only for the owner, restore returns the snapshot and leaves both columns null, restore on a CV with no snapshot reports nothing to revert
+- [x] 1.1 Add migration `0051_cvs_autopilot.sql`: `cvs.autopilot_report jsonb` and `cvs.autopilot_undo jsonb`, both nullable, with a comment explaining that one is the run log and the other the pre-run document
+- [x] 1.2 Add owner-scoped queries in `internal/db/queries`: snapshot the document into `autopilot_undo`, write `autopilot_report`, read both with the CV, restore from the snapshot clearing both columns; run `make sqlc`
+- [x] 1.3 Cover the queries with the existing integration-test harness: snapshot writes only for the owner, restore returns the snapshot and leaves both columns null, restore on a CV with no snapshot reports nothing to revert
 
 ## 2. Turn ceiling
 
-- [ ] 2.1 Add `TurnConfig{MaxSteps int}` to `internal/assistant` and take it in `Runner.Run`, treating zero as the runner's configured default
-- [ ] 2.2 Test both paths: a turn naming no ceiling loops up to the configured default (unchanged behaviour), a turn naming one loops up to that instead
-- [ ] 2.3 Update the existing `Runner.Run` call sites to pass the zero value
+- [x] 2.1 Add `TurnConfig{MaxSteps int}` to `internal/assistant` and take it in `Runner.Run`, treating zero as the runner's configured default
+- [x] 2.2 Test both paths: a turn naming no ceiling loops up to the configured default (unchanged behaviour), a turn naming one loops up to that instead
+- [x] 2.3 Update the existing `Runner.Run` call sites to pass the zero value
 
 ## 3. The report tool
 

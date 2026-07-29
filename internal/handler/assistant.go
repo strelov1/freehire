@@ -335,7 +335,7 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 			}
 		}()
 
-		err := h.runner.Run(ctx, sess, registry, system, prompt, func(e assistant.Event) {
+		err := h.runner.Run(ctx, sess, registry, system, prompt, assistant.TurnConfig{}, func(e assistant.Event) {
 			mu.Lock()
 			defer mu.Unlock()
 			if !write(string(e.Kind), e) {

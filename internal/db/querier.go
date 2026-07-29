@@ -599,6 +599,8 @@ type Querier interface {
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
 	// the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
+	// The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
+	// is a whole second document, and no caller needs its bytes — only whether one exists.
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
 	// Community discussion threads (see the add-community-threads change). Read paths
 	// join community_personas so a row carries the author's handle, never their user_id.
@@ -1530,6 +1532,11 @@ type Querier interface {
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
+	// Undo a whole autopilot run: restore the pre-run document and clear both autopilot columns.
+	// The report goes with the document because a report describing edits that no longer exist
+	// misdescribes the CV. A CV with no snapshot matches nothing and returns no row, which the
+	// handler maps to "nothing to revert" rather than silently rewriting the document with NULL.
+	RevertCVAutopilot(ctx context.Context, arg RevertCVAutopilotParams) (RevertCVAutopilotRow, error)
 	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
 	// True means the reward was already granted and must not be granted again (idempotency).
 	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)
@@ -1581,6 +1588,10 @@ type Querier interface {
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).
 	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) error
+	// Replace the run report on an owned CV. The agent writes the WHOLE report on every call —
+	// there is no partial update, so a requirement closed later from the candidate's own words
+	// arrives as the same list with one entry changed. Owner-scoped: 0 rows for a foreign id.
+	SetCVAutopilotReport(ctx context.Context, arg SetCVAutopilotReportParams) (int64, error)
 	// Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for
 	// a foreign or missing id (the handler maps that to 404).
 	SetCVSession(ctx context.Context, arg SetCVSessionParams) (int64, error)
@@ -1647,6 +1658,11 @@ type Querier interface {
 	// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 	// structure with an already-stale stamp (which Store.Structured would then hide forever).
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error
+	// Copy the tailored CV's current document into the autopilot snapshot, so the run about to
+	// start can be reverted in one move. Taken fresh on every run: a second run's snapshot is the
+	// document as the SECOND run found it, which is what "undo the run" means to whoever presses
+	// it. Owner-scoped: 0 affected rows for a foreign or missing id.
+	SnapshotCVForAutopilot(ctx context.Context, arg SnapshotCVForAutopilotParams) (int64, error)
 	// Soft-delete one message (hidden from the listing, retained for restore),
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
 	// caller's message (→ 404).

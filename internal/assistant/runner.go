@@ -75,6 +75,19 @@ type RunnerConfig struct {
 	HistoryLimit int
 }
 
+// TurnConfig bounds ONE turn, overriding the runner's own bounds where it is set.
+// It exists because turns are not all the same size: a question takes two tool
+// rounds, an unattended run over a vacancy's requirements takes dozens. A zero
+// field means "use the runner's configured bound", so the default applies to every
+// turn that does not ask for something else.
+//
+// The value is always chosen server-side. A ceiling is a spend limit on a metered
+// gateway, and a limit a client can raise is not a limit.
+type TurnConfig struct {
+	// MaxSteps overrides RunnerConfig.MaxSteps for this turn when positive.
+	MaxSteps int
+}
+
 // Runner executes turns: it owns the loop, its bounds, and the persistence of
 // everything the loop produces.
 type Runner struct {
@@ -121,7 +134,7 @@ func persisting(ctx context.Context) (context.Context, context.CancelFunc) {
 // A tool failure is not a turn failure — it goes back to the model as a result.
 // Only a model/transport failure returns an error, and even then the terminal
 // event has already been emitted.
-func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, prompt string, emit func(Event)) error {
+func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, prompt string, turn TurnConfig, emit func(Event)) error {
 	if err := r.recordPrompt(ctx, sess, prompt, emit); err != nil {
 		return err
 	}
@@ -131,7 +144,12 @@ func (r *Runner) Run(ctx context.Context, sess Session, reg *Registry, system, p
 		return r.fail(emit, err)
 	}
 
-	for step := 0; step < r.cfg.MaxSteps; step++ {
+	maxSteps := r.cfg.MaxSteps
+	if turn.MaxSteps > 0 {
+		maxSteps = turn.MaxSteps
+	}
+
+	for step := 0; step < maxSteps; step++ {
 		if ctx.Err() != nil {
 			return end(emit, StopCancelled)
 		}

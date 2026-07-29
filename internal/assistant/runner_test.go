@@ -58,7 +58,7 @@ func callReply(name, args string) *llms.ContentChoice {
 func collect(t *testing.T, r *Runner, sess Session, reg *Registry, prompt string) ([]Event, error) {
 	t.Helper()
 	var got []Event
-	err := r.Run(context.Background(), sess, reg, "system prompt", prompt, func(e Event) { got = append(got, e) })
+	err := r.Run(context.Background(), sess, reg, "system prompt", prompt, TurnConfig{}, func(e Event) { got = append(got, e) })
 	return got, err
 }
 
@@ -172,6 +172,53 @@ func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 	}
 }
 
+// A turn may raise its own ceiling: an unattended run walks a dozen requirements where a
+// question needs two rounds. The runner's configured default stands for every turn that names
+// none, so raising it for one workflow cannot quietly raise it for the chat.
+func TestAPerTurnCeilingReplacesTheRunnerDefault(t *testing.T) {
+	m := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("echo", `{"text":"1"}`),
+		callReply("echo", `{"text":"2"}`),
+		callReply("echo", `{"text":"3"}`),
+		callReply("echo", `{"text":"4"}`),
+		textReply("Done walking the list."),
+	}}
+	q := &fakeQueries{}
+	r := NewRunner(m, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
+
+	var events []Event
+	err := r.Run(context.Background(), Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()),
+		"system prompt", "go", TurnConfig{MaxSteps: 6}, func(e Event) { events = append(events, e) })
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res := lastResult(t, events); res.StopReason != StopEndTurn {
+		t.Errorf("stop reason = %q, want %q — four tool rounds fit under a ceiling of six", res.StopReason, StopEndTurn)
+	}
+	if m.calls != 5 {
+		t.Errorf("model called %d times, want 4 tool rounds plus the answer", m.calls)
+	}
+}
+
+func TestATurnNamingNoCeilingUsesTheConfiguredDefault(t *testing.T) {
+	m := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("echo", `{"text":"1"}`),
+		callReply("echo", `{"text":"2"}`),
+		callReply("echo", `{"text":"3"}`),
+		textReply("Alright."),
+	}}
+	q := &fakeQueries{}
+	r := NewRunner(m, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
+
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "go")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res := lastResult(t, events); res.StopReason != StopMaxSteps {
+		t.Errorf("stop reason = %q, want %q — an unnamed ceiling is the runner's own", res.StopReason, StopMaxSteps)
+	}
+}
+
 func TestAMalformedToolCallIsCorrectableInTheSameTurn(t *testing.T) {
 	m := &scriptedModel{replies: []*llms.ContentChoice{
 		callReply("echo", `{"txt":"typo"}`), // wrong field name
@@ -252,7 +299,7 @@ func TestCancellationStopsBeforeTheNextModelCall(t *testing.T) {
 	r := testRunner(m, q)
 
 	var events []Event
-	err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "sys", "go", func(e Event) { events = append(events, e) })
+	err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "sys", "go", TurnConfig{}, func(e Event) { events = append(events, e) })
 	if err != nil {
 		t.Fatalf("a cancelled turn is not a failure: %v", err)
 	}
@@ -341,7 +388,7 @@ func TestACancelledTurnStillPersistsWhatWasSaid(t *testing.T) {
 	q := &fakeQueries{}
 	r := testRunner(m, q)
 
-	err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(), "sys", "a question", func(Event) {})
+	err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(), "sys", "a question", TurnConfig{}, func(Event) {})
 	if err != nil {
 		t.Fatalf("a cancelled turn is not a failure: %v", err)
 	}
@@ -370,7 +417,7 @@ func TestACancelledToolRoundKeepsItsResults(t *testing.T) {
 	q := &fakeQueries{}
 	r := testRunner(m, q)
 
-	if err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "sys", "go", func(Event) {}); err != nil {
+	if err := r.Run(ctx, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "sys", "go", TurnConfig{}, func(Event) {}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	roles := make([]string, len(q.messages))
