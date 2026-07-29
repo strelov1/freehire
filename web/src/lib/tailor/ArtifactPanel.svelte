@@ -97,7 +97,7 @@
         onclick={() => (tab = id)}
         class={[
           'rounded px-2 py-1 transition-colors',
-          tab === id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
+          tab === id ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground',
         ]}
       >
         {label}

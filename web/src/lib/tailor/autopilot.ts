@@ -6,15 +6,17 @@ import type { AutopilotEntry, AutopilotStatus } from '$lib/generated/contracts';
 import type { OpeningAction } from '$lib/assistant/presets';
 
 /**
- * What a tailoring workspace offers before its first turn.
+ * What a tailoring workspace offers while its conversation is EMPTY.
  *
- * A resumed conversation offers nothing: it already has messages, and the way back in is the
- * composer. A fresh one offers both rhythms of the same method and sends NOTHING on its own —
- * the agent talking first is what left people staring at a three-column workspace they had
- * not asked anything of.
+ * Not "while it is fresh": a CV re-opened by id can have a conversation with nothing in it —
+ * bound at bootstrap, never spoken to — and keying the offer on "resuming" left exactly that
+ * case looking like a chat whose history had vanished. The chat itself only renders these while
+ * there are no messages, so handing them over always is both simpler and correct.
+ *
+ * Nothing is sent on its own either way: the agent talking first is what left people staring at
+ * a three-column workspace they had not asked anything of.
  */
-export function openingFor(resuming: boolean): OpeningAction[] | undefined {
-  if (resuming) return undefined;
+export function openingActions(): OpeningAction[] {
   return [
     {
       label: 'Tailor it for me',

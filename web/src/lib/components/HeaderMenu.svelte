@@ -15,6 +15,8 @@
     BellRing,
     KeyRound,
     Inbox,
+    Bot,
+    ScrollText,
     FileText,
     SquarePlus,
     ShieldCheck,
@@ -87,6 +89,10 @@
     { href: '/my/activity', label: 'Activity', icon: Activity },
     { href: '/my/tracking', label: 'Tracking', icon: ListChecks },
     { href: '/my/inbox', label: 'Inbox', icon: Inbox },
+    // The agent and the tailoring list are reached from anywhere, not only from the account
+    // shell, so they are duplicated here beside the inbox rather than left one level deeper.
+    { href: '/my/assistant', label: 'Agent', icon: Bot },
+    { href: '/my/cvs', label: 'Tailor', icon: ScrollText },
     { href: '/my/searches', label: 'Search notifications', icon: BellRing },
     { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
     { href: '/my/submissions', label: 'My submissions', icon: FileText },

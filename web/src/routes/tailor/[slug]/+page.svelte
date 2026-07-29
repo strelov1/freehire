@@ -22,7 +22,7 @@
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
-  import { undoRun, openingFor } from '$lib/tailor/autopilot';
+  import { undoRun, openingActions } from '$lib/tailor/autopilot';
   import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
@@ -110,10 +110,9 @@
   const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
-  // A fresh workspace opens on a choice rather than on the agent talking to itself; a resumed
-  // one opens on its own transcript. Both actions run the SAME method and differ only in
-  // rhythm — see openingFor, which is unit-tested.
-  const opening = $derived(openingFor(resuming));
+  // Offered whenever the conversation is empty — the chat renders them only then. A CV opened
+  // by id can carry a conversation nobody has spoken to, and that case looked like lost history.
+  const opening = openingActions();
   const sessionLabel = $derived(job ? `${job.title} · ${job.company}` : undefined);
 
   // Hydrate the page-owned CV state from a CV record (marking the snapshot as the persisted
@@ -358,21 +357,21 @@
             <button
               type="button"
               onclick={() => (leftTab = 'editor')}
-              class={['rounded px-2 py-1 transition-colors', leftTab === 'editor' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+              class={['rounded px-2 py-1 transition-colors', leftTab === 'editor' ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
             >
               Editor
             </button>
             <button
               type="button"
               onclick={() => (leftTab = 'settings')}
-              class={['rounded px-2 py-1 transition-colors', leftTab === 'settings' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+              class={['rounded px-2 py-1 transition-colors', leftTab === 'settings' ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
             >
               Settings
             </button>
             <button
               type="button"
               onclick={() => (leftTab = 'chat')}
-              class={['rounded px-2 py-1 transition-colors', leftTab === 'chat' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground']}
+              class={['rounded px-2 py-1 transition-colors', leftTab === 'chat' ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
             >
               Chat
             </button>
