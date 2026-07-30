@@ -1,68 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Generated design tokens — source of truth is design-system/tokens/*.tokens.json.
-   Built by `pnpm tokens:build` in design-system/ (Style Dictionary → CSS vars).
-   Do not edit these files directly; edit the .tokens.json source and rebuild. */
-@import "freehire-design-system/dist/tokens-light.css";
-@import "freehire-design-system/dist/tokens-dark.css";
-
-/* The design-system package is linked through node_modules, which Tailwind's
-   automatic source detection skips — without this the utilities used inside
-   design-system/src/*.svelte are never emitted and its primitives render
-   unstyled. Path is relative to this file. Components only: the .ts files
-   alongside them hold no classes, and the tests mention class names as
-   assertions, which would mint utilities nothing renders. */
-@source "../../design-system/src/**/*.svelte";
+/* Tokens, the design-system source scan, and the Tailwind theme bridge. Owned
+   by the package (design-system/src/theme.css) so Storybook and the app render
+   from one definition — see design-system/AGENTS.md. */
+@import "freehire-design-system/theme.css";
 
 /* Typography plugin: the `prose` classes style the mdsvex-rendered blog post body
    (web/src/routes/blog/[slug]). Opt-in, so no other page is affected. */
 @plugin "@tailwindcss/typography";
-
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  /* Brand accent (Granola "oats green"). One family: --brand is the solid CTA
-     fill, --brand-strong the readable text/link tone, --brand-muted the soft
-     tint for chips/badges, --brand-ring the focus outline. */
-  --color-brand: var(--brand);
-  --color-brand-foreground: var(--brand-foreground);
-  --color-brand-strong: var(--brand-strong);
-  --color-brand-muted: var(--brand-muted);
-  --color-brand-ring: var(--brand-ring);
-  --radius-sm: var(--radius-sm);
-  --radius-md: var(--radius-md);
-  --radius-lg: var(--radius-lg);
-  --radius-xl: var(--radius-xl);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  /* The z-index tokens ship as plain custom properties; Tailwind only mints
-     `z-<name>` utilities from the --z-index-* namespace. */
-  --z-index-dropdown: var(--z-dropdown);
-  --z-index-sticky: var(--z-sticky);
-  --z-index-modal: var(--z-modal);
-  --z-index-popover: var(--z-popover);
-  --z-index-toast: var(--z-toast);
-}
 
 @layer base {
   * {

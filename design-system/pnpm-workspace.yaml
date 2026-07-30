@@ -1,6 +1,10 @@
 allowBuilds:
-  esbuild: set this to true or false
-  svelte-preprocess: set this to true or false
+  esbuild: false
+  svelte-preprocess: false
 # pnpm 11 structural config — not a workspace definition (no packages: list).
-# esbuild build script is needed for vite/storybook.
+# Both build scripts stay skipped, which is what install already did while these
+# read `set this to true or false`: esbuild ships prebuilt per-platform binaries
+# through optional dependencies, so neither vite nor Storybook needs its
+# postinstall, and svelte-preprocess arrives transitively with nothing here
+# compiling through it. strictDepBuilds: false lets install proceed regardless.
 strictDepBuilds: false

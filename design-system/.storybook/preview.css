@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* The same contract web/src/app.css imports — tokens, the package's source
+   scan, the `@theme inline` bridge. Storybook renders the primitives through
+   Tailwind utilities, so without a Tailwind entry here every story renders as
+   unstyled markup while the build stays green. */
+@import "../src/theme.css";
+
+/* Stories carry classes of their own — Skeleton's dimensions, for one. They sit
+   outside the package's scan on purpose: the app must never ship a utility only
+   a story uses. Storybook does need them, so it asks for them here. */
+@source "../src/**/*.stories.ts";
+
+/* The canvas follows the tokens rather than a second, hand-copied set of hex
+   values, so the theme toolbar cannot leave the backdrop and the components
+   disagreeing about which theme is on. */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}

@@ -24,6 +24,10 @@
     "src/**/*.ts",
     "src/**/*.svelte",
     "scripts/**/*.mjs",
+    // The Storybook config is the only code here that talks to vite and the
+    // framework's own types; leaving it out of the check is how a preview that
+    // never loaded Tailwind still built green.
+    ".storybook/**/*.ts",
     "vitest.config.ts",
     "vitest.setup.ts"
   ]

@@ -88,6 +88,25 @@ jobs:
       - name: Build Storybook
         run: pnpm build-storybook
 
+      # Tailwind v4 discards classes it cannot find a source for, silently — a
+      # preview that lost its Tailwind entry or its @source scan still builds
+      # green and just renders every primitive unstyled. So assert the output
+      # positively: `animate-pulse` reaches the CSS only by way of the scan over
+      # src/*.svelte (Skeleton is its sole user), and a class selector count
+      # catches a Tailwind entry that vanished entirely.
+      - name: Assert Storybook emitted the primitives' utilities
+        run: |
+          css=$(find storybook-static/assets -name '*.css')
+          if [ -z "$css" ]; then
+            echo "No stylesheet in storybook-static/assets."
+            exit 1
+          fi
+          if ! grep -qF '.animate-pulse' $css; then
+            echo "Storybook CSS carries no utility from design-system/src/*.svelte."
+            echo "The preview lost its Tailwind entry or theme.css's @source scan."
+            exit 1
+          fi
+
   web:
     runs-on: ubuntu-latest
     # Not gated on design-system: web consumes the package's *source* (its
