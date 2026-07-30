@@ -1,0 +1,36 @@
+---
+title: One line for the inactivity warning
+date: 2026-07-30
+summary: The signs that a posting may not be getting filled now read as a small gauge under the title, with the criteria one click away instead of always open.
+type: changelog
+tags:
+  - ghost-jobs
+  - job-seekers
+---
+
+Some postings are not being worked on. freehire watches a few things it can actually
+check — how long a posting has behaved as evergreen, whether the employer's own careers
+board carries it, what happened to people who applied — and marks the ones where enough
+of that lines up.
+
+The mark used to state itself twice: a chip under the title, then a bordered panel
+listing all four criteria below it. Two of those four usually read "No data", so the
+loudest block on the page after the title was mostly saying nothing.
+
+Now it is one line: a small gauge, the wording, and how many criteria fired out of how
+many exist.
+
+Only the criteria that fired are coloured, and the tone climbs as more of them do — one
+is yellow, all four are red. The grey segments are deliberately grey rather than green:
+they mean we did not observe that criterion, never that we checked it and found the
+posting clean. That is also why the summary line now says **Not observed** instead of
+"No data" — for some criteria we do look every time, so claiming an absence of data
+would be untrue.
+
+Press **Details** and you get what the panel used to show, minus the repetition: the
+criteria that fired with the facts behind them, one line naming the rest, and a link to
+[how the whole thing works](/features/ghost-jobs) — including where it is blind, and why
+a staffing agency can trip a criterion honestly.
+
+The wording stays hedged everywhere. "Possibly inactive" is a claim about a posting; "not
+really hiring" would be a claim about somebody's intent, which nothing here can see.
