@@ -4,12 +4,29 @@
   import Seo from '$lib/components/Seo.svelte';
   import ActivityBars from '$lib/components/ActivityBars.svelte';
   import { api } from '$lib/api';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
   import type { ActivityGranularity, ActivityPoint } from '$lib/types';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
-  const canonical = $derived(`${page.url.origin}/trends`);
+  const origin = $derived(page.url.origin);
+  const canonical = $derived(`${origin}/trends`);
+  const description =
+    'How the freehire catalogue moves over time — new vacancies added versus postings removed, by day, week, or month.';
+  // A time series, not a page of prose: the Dataset names the endpoint the chart
+  // reads so an engine can fetch the series rather than infer it from the bars.
+  const jsonLd = $derived(
+    jsonLdScript([
+      datasetJsonLd('freehire job-posting activity over time', description, canonical, origin, [
+        { name: 'Jobs activity API', contentUrl: `${origin}/api/v1/stats/jobs-activity` },
+      ]),
+      breadcrumbJsonLd([
+        { name: 'freehire', url: `${origin}/` },
+        { name: 'Trends', url: canonical },
+      ]),
+    ]),
+  );
 
   const options: { value: ActivityGranularity; label: string }[] = [
     { value: 'day', label: 'Day' },
@@ -55,11 +72,12 @@
   }
 </script>
 
-<Seo
-  title="Trends · freehire"
-  description="How the freehire catalogue moves over time — new vacancies added versus postings removed, by day, week, or month."
-  {canonical}
-/>
+<Seo title="Trends · freehire" {description} {canonical} />
+
+<svelte:head>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
+  {@html jsonLd}
+</svelte:head>
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <div class="mb-4 flex flex-wrap items-end justify-between gap-3">

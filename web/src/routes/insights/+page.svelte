@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
+  import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -11,8 +11,25 @@
   const canonical = $derived(`${origin}/insights`);
   const description =
     'Aggregate job-market data from freehire: salaries, in-demand skills, and hiring demand for every tech category.';
+  // This hub exists so crawlers reach every category page from one indexable page
+  // (see +page.server.ts), so the ItemList names all three pages per covered
+  // category — the same links the cards render, in the same order.
+  const sections = [
+    { path: 'salary', label: 'salaries' },
+    { path: 'skills', label: 'skills' },
+    { path: 'roles', label: 'roles' },
+  ];
+  const items = $derived(
+    data.covered.flatMap((c) =>
+      sections.map((s) => ({
+        name: `${c.label} ${s.label}`,
+        url: `${origin}/insights/${s.path}/${c.category}`,
+      })),
+    ),
+  );
   const jsonLd = $derived(
     jsonLdScript([
+      collectionPageJsonLd('Job Market Insights', description, canonical, items),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Insights', url: canonical },

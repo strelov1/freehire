@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { articleJsonLd, collectionPageJsonLd, jobPostingJsonLd, organizationJsonLd } from './seo';
+import {
+  articleJsonLd,
+  collectionPageJsonLd,
+  companyListItems,
+  datasetJsonLd,
+  jobListItems,
+  jobPostingJsonLd,
+  organizationJsonLd,
+} from './seo';
 import { companyLogoUrl } from './logo';
 import type { PostMeta } from './blog';
 import type { Company, Job } from './types';
@@ -197,8 +205,10 @@ describe('collectionPageJsonLd', () => {
       'React jobs',
       'Every open React role.',
       URL,
-      [job('Senior React Engineer', 'senior-react-engineer-abc'), job('React Native Dev', 'react-native-dev-xyz')],
-      ORIGIN
+      jobListItems(
+        [job('Senior React Engineer', 'senior-react-engineer-abc'), job('React Native Dev', 'react-native-dev-xyz')],
+        ORIGIN
+      )
     );
 
     expect(ld['@type']).toBe('CollectionPage');
@@ -225,9 +235,64 @@ describe('collectionPageJsonLd', () => {
   });
 
   it('emits an empty ItemList for a collection with no jobs', () => {
-    const ld = collectionPageJsonLd('Empty', 'Nothing yet.', URL, [], ORIGIN);
+    const ld = collectionPageJsonLd('Empty', 'Nothing yet.', URL, []);
 
     expect(ld.mainEntity).toEqual({ '@type': 'ItemList', itemListElement: [] });
+  });
+
+  // The directory reuses the same CollectionPage with company items, so a company's
+  // ListItem must point at /companies/<slug>, never the job path.
+  it('wraps companies in the same CollectionPage shape', () => {
+    const ld = collectionPageJsonLd(
+      'Companies hiring in tech',
+      'Browse companies hiring in tech.',
+      'https://freehire.me/companies',
+      companyListItems(
+        [
+          { name: 'Acme', slug: 'acme' },
+          { name: 'Globex', slug: 'globex' },
+        ],
+        ORIGIN
+      )
+    );
+
+    expect(ld['@type']).toBe('CollectionPage');
+    expect(ld.mainEntity).toEqual({
+      '@type': 'ItemList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Acme', url: 'https://freehire.me/companies/acme' },
+        { '@type': 'ListItem', position: 2, name: 'Globex', url: 'https://freehire.me/companies/globex' },
+      ],
+    });
+  });
+});
+
+describe('datasetJsonLd', () => {
+  const URL = 'https://freehire.me/insights/salary/engineering';
+
+  // The insights pages are aggregate-only: an empty `distribution` array would be a
+  // dead end for a crawler, so the key must be absent rather than empty.
+  it('omits distribution when the page advertises no endpoint', () => {
+    const ld = datasetJsonLd('Engineering salaries', 'Bands by seniority.', URL, ORIGIN);
+
+    expect(ld['@type']).toBe('Dataset');
+    expect(ld.isAccessibleForFree).toBe(true);
+    expect(ld).not.toHaveProperty('distribution');
+  });
+
+  it('advertises each endpoint as a JSON DataDownload', () => {
+    const ld = datasetJsonLd('Live figures', 'Catalogue scale.', `${ORIGIN}/open`, ORIGIN, [
+      { name: 'Jobs API', contentUrl: `${ORIGIN}/api/v1/jobs` },
+    ]);
+
+    expect(ld.distribution).toEqual([
+      {
+        '@type': 'DataDownload',
+        name: 'Jobs API',
+        encodingFormat: 'application/json',
+        contentUrl: 'https://freehire.me/api/v1/jobs',
+      },
+    ]);
   });
 });
 

@@ -1,10 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { CLI_REPO, MCP_REPO } from '$lib/cliLinks';
   import { Button } from '$lib/ui';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
 
-  const CLI_REPO = 'https://github.com/strelov1/freehire-cli';
-  const MCP_REPO = 'https://github.com/strelov1/freehire-mcp';
   const SKILL_URL =
     'https://github.com/strelov1/freehire-cli/blob/main/skills/using-freehire/SKILL.md';
   const INSTALL = 'curl -fsSL https://freehire.me/install.sh | sh';
@@ -322,6 +321,7 @@ freehire jobs edit &lt;slug&gt; --title "Staff Go Developer"</pre>
   <section class="border-t border-border py-10">
     <p class="text-sm leading-relaxed text-muted-foreground">
       Free and open source — no tracking, no lock-in. Read every line of the
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URLs from $lib/cliLinks (shared with the JSON-LD's codeRepository), not SvelteKit routes -->
       <a
         href={CLI_REPO}
         target="_blank"
@@ -334,7 +334,7 @@ freehire jobs edit &lt;slug&gt; --title "Staff Go Developer"</pre>
         target="_blank"
         rel="noopener noreferrer"
         class="font-medium text-foreground underline-offset-4 hover:underline">MCP server ↗</a
-      > on GitHub.
+      ><!-- eslint-enable svelte/no-navigation-without-resolve --> on GitHub.
     </p>
   </section>
 </div>

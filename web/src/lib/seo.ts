@@ -258,17 +258,18 @@ export function breadcrumbJsonLd(items: { name: string; url: string }[]): Record
   };
 }
 
-/** schema.org CollectionPage wrapping an `ItemList` of the jobs rendered on a
- *  collection landing page. Each item is a summary `ListItem` (position + name +
- *  detail URL), not an embedded `JobPosting` — Google's recommended shape for a
- *  list page, and it keeps the payload small. An empty `jobs` yields an empty
- *  `itemListElement`, still valid JSON-LD. */
+/** schema.org CollectionPage wrapping an `ItemList` of whatever a list page
+ *  renders — jobs on a collection landing, companies on the directory. Each item is
+ *  a summary `ListItem` (position + name + detail URL), not an embedded entity —
+ *  Google's recommended shape for a list page, and it keeps the payload small.
+ *  Items arrive pre-resolved as `{name, url}` (the same shape `breadcrumbJsonLd`
+ *  takes) so this stays entity-agnostic; `jobListItems` builds them from jobs. An
+ *  empty `items` yields an empty `itemListElement`, still valid JSON-LD. */
 export function collectionPageJsonLd(
   title: string,
   description: string,
   url: string,
-  jobs: Job[],
-  origin: string
+  items: { name: string; url: string }[]
 ): Record<string, unknown> {
   return {
     '@context': 'https://schema.org',
@@ -278,27 +279,48 @@ export function collectionPageJsonLd(
     url,
     mainEntity: {
       '@type': 'ItemList',
-      itemListElement: jobs.map((job, i) => ({
+      itemListElement: items.map((item, i) => ({
         '@type': 'ListItem',
         position: i + 1,
-        name: job.title,
-        url: `${origin}/jobs/${job.public_slug}`,
+        name: item.name,
+        url: item.url,
       })),
     },
   };
 }
 
-/** schema.org Dataset descriptor for an insights page — tells search/AI engines
- *  the page presents an aggregate dataset (salary bands, demand rankings) free to
- *  access, published by freehire. Aggregate-only, so no distribution file is
- *  advertised. */
+/** `{name, url}` list items for jobs, for `collectionPageJsonLd`. */
+export function jobListItems(jobs: Job[], origin: string): { name: string; url: string }[] {
+  return jobs.map((job) => ({ name: job.title, url: `${origin}/jobs/${job.public_slug}` }));
+}
+
+/** `{name, url}` list items for companies, for `collectionPageJsonLd`. Takes the
+ *  name/slug pair structurally, so both `Company` and the lighter `CompanyListItem`
+ *  the directory lists fit without a cast. */
+export function companyListItems(
+  companies: { name: string; slug: string }[],
+  origin: string
+): { name: string; url: string }[] {
+  return companies.map((c) => ({ name: c.name, url: `${origin}/companies/${c.slug}` }));
+}
+
+/** schema.org Dataset descriptor for a page that presents aggregate figures
+ *  (insights salary bands and demand rankings; the live /open snapshot) — tells
+ *  search/AI engines the data is free to access and published by freehire.
+ *
+ *  `distributions` advertises the machine-readable endpoints the page's figures are
+ *  read from, and is omitted when there are none: the insights pages are
+ *  aggregate-only with no downloadable form, while /open cites the public JSON API
+ *  beside every number. An engine that can fetch the distribution can verify a
+ *  figure instead of merely quoting it. */
 export function datasetJsonLd(
   name: string,
   description: string,
   url: string,
-  origin: string
+  origin: string,
+  distributions: { name: string; contentUrl: string }[] = []
 ): Record<string, unknown> {
-  return {
+  const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
     name,
@@ -307,6 +329,15 @@ export function datasetJsonLd(
     isAccessibleForFree: true,
     creator: { '@type': 'Organization', name: SITE, url: `${origin}/` },
   };
+  if (distributions.length > 0) {
+    ld.distribution = distributions.map((d) => ({
+      '@type': 'DataDownload',
+      name: d.name,
+      encodingFormat: 'application/json',
+      contentUrl: d.contentUrl,
+    }));
+  }
+  return ld;
 }
 
 /** schema.org FAQPage. The questions must also appear as visible text on the page
@@ -319,6 +350,73 @@ export function faqPageJsonLd(faqs: FaqItem[]): Record<string, unknown> {
       '@type': 'Question',
       name: f.question,
       acceptedAnswer: { '@type': 'Answer', text: f.answer },
+    })),
+  };
+}
+
+/** schema.org WebAPI for the API reference — names the endpoint set as one entity
+ *  and points at the OpenAPI document, so an assistant can fetch the machine-readable
+ *  spec instead of scraping the prose it is rendered beside. */
+export function webApiJsonLd(origin: string): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebAPI',
+    name: 'freehire API',
+    description:
+      'A read-first, open HTTP API over the freehire job catalogue: query jobs by seniority, skills, region and salary, read companies, and track applications with an API key.',
+    url: `${origin}/docs/api`,
+    documentation: `${origin}/docs/api`,
+    termsOfService: `${origin}/privacy`,
+    provider: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+    // The OpenAPI document is the spec itself, not more prose about it.
+    potentialAction: {
+      '@type': 'ConsumeAction',
+      target: { '@type': 'EntryPoint', urlTemplate: `${origin}/openapi.yaml`, encodingType: 'application/yaml' },
+    },
+  };
+}
+
+/** schema.org SoftwareApplication for the CLI page. Free and open source, so the
+ *  zero-price `offers` is a fact rather than a marketing claim; `softwareHelp`
+ *  points back at the page that documents it. */
+export function cliApplicationJsonLd(
+  origin: string,
+  repositories: string[]
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'freehire CLI',
+    description:
+      'A small Go CLI and an MCP server over the freehire job API, so an AI agent or a script can search, open and track jobs without a browser. One API key drives both.',
+    url: `${origin}/cli`,
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'macOS, Linux',
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    softwareHelp: { '@type': 'CreativeWork', url: `${origin}/cli` },
+    publisher: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+    codeRepository: repositories,
+  };
+}
+
+/** schema.org Blog for the feed index, listing each post as a `BlogPosting`. A
+ *  `Blog` (rather than a bare CollectionPage) is what ties the index to the
+ *  `Article` on each post page, so engines read the feed as one publication.
+ *  Summary entries only — the post bodies live on their own pages. */
+export function blogJsonLd(posts: PostMeta[], origin: string): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Blog',
+    name: `${SITE} blog`,
+    url: `${origin}/blog`,
+    publisher: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+    blogPost: posts.map((post) => ({
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.summary,
+      datePublished: post.date,
+      url: `${origin}/blog/${post.slug}`,
     })),
   };
 }

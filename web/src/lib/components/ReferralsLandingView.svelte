@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { REFERRALS_FAQ } from '$lib/referralsFaq';
   import { Button } from '$lib/ui';
 
   // CTA destinations wired to the real feature (no invite-code program exists):
@@ -74,24 +75,6 @@
     'Reach out to the ones worth it',
   ];
 
-  const faqs = [
-    {
-      q: 'What does it cost?',
-      a: 'Nothing. freehire is a free, open-source aggregator — referrals included. No fees, no paywall.',
-    },
-    {
-      q: 'Will the referrer see my name?',
-      a: 'No. Referrers only see the CV, note and contact you attach. Your identity is never surfaced — they reach out only if they decide to take your request forward.',
-    },
-    {
-      q: 'How do I know a referrer actually works there?',
-      a: 'Anyone offering to refer uploads proof of employment, and a moderator reviews it before the company appears as referral-available.',
-    },
-    {
-      q: 'I work somewhere great — can I help people in?',
-      a: 'Yes. Offer to refer from your account, upload proof once, and approved requests for your company start reaching you. You stay anonymous throughout.',
-    },
-  ];
 </script>
 
 <div class="landing">
@@ -261,14 +244,14 @@
     </div>
   </section>
 
-  <!-- ── FAQ ──────────────────────────────────────────────────────────────── -->
+  <!-- FAQ. Visible answers and the FAQPage JSON-LD share REFERRALS_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// faq</p>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-      {#each faqs as f (f.q)}
+      {#each REFERRALS_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:p-7">
-          <dt class="text-lg font-semibold tracking-tight">{f.q}</dt>
-          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{f.a}</dd>
+          <dt class="text-lg font-semibold tracking-tight">{item.question}</dt>
+          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
         </div>
       {/each}
     </dl>

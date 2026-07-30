@@ -7,10 +7,21 @@
   import { FILTER_FACETS, FILTER_EXTRAS, FILTER_MODIFIERS, RECIPES } from '$lib/docs/filters';
   import { NAV, slugify } from '$lib/docs/nav';
   import { METHOD_TEXT, inlineCode } from '$lib/docs/format';
+  import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '$lib/seo';
 
   let { data } = $props();
 
-  const canonical = $derived(`${page.url.origin}/docs/api`);
+  const origin = $derived(page.url.origin);
+  const canonical = $derived(`${origin}/docs/api`);
+  const jsonLd = $derived(
+    jsonLdScript([
+      webApiJsonLd(origin),
+      breadcrumbJsonLd([
+        { name: 'freehire', url: `${origin}/` },
+        { name: 'API reference', url: canonical },
+      ]),
+    ])
+  );
 </script>
 
 <Seo
@@ -18,6 +29,11 @@
   description="The freehire HTTP API: a read-first, open endpoint set over the job catalogue. Search and filter jobs by seniority, skills, region, salary and more, read companies, and track applications with an API key."
   {canonical}
 />
+
+<svelte:head>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
+  {@html jsonLd}
+</svelte:head>
 
 <!-- Header. -->
 <header class="mb-14 border-b border-border pb-10">

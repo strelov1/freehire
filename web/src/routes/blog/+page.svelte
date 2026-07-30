@@ -2,12 +2,28 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
+  import { blogJsonLd, breadcrumbJsonLd, jsonLdScript } from '$lib/seo';
   import type { PostType } from '$lib/blog';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
-  const canonical = $derived(`${page.url.origin}/blog`);
+  const origin = $derived(page.url.origin);
+  const canonical = $derived(`${origin}/blog`);
+  const description =
+    'Product updates, changelog, and longer write-ups from the freehire team — new job sources, search improvements, and how the aggregator works.';
+  // Built from the full `data.posts`, not the filtered view: the type filter is a
+  // client-side affordance, so narrowing the schema to it would describe a
+  // transient UI state rather than the feed a crawler fetched.
+  const jsonLd = $derived(
+    jsonLdScript([
+      blogJsonLd(data.posts, origin),
+      breadcrumbJsonLd([
+        { name: 'freehire', url: `${origin}/` },
+        { name: 'Blog', url: canonical },
+      ]),
+    ]),
+  );
 
   // Client-side type filter over the already-loaded list — one feed, two tiers
   // (see design D6). No route/query round-trip; the default view shows everything.
@@ -28,11 +44,12 @@
   const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 </script>
 
-<Seo
-  title="Blog · freehire"
-  description="Product updates, changelog, and longer write-ups from the freehire team — new job sources, search improvements, and how the aggregator works."
-  {canonical}
-/>
+<Seo title="Blog · freehire" {description} {canonical} />
+
+<svelte:head>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
+  {@html jsonLd}
+</svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-4 py-6">
   <header class="mb-6">

@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '$lib/seo';
+  import { breadcrumbJsonLd, collectionPageJsonLd, jobListItems, jsonLdScript } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -30,8 +30,7 @@
         heading,
         data.collection.description,
         canonical,
-        data.initial.items,
-        origin
+        jobListItems(data.initial.items, origin)
       ),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },

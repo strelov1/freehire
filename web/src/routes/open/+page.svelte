@@ -3,11 +3,31 @@
   import Seo from '$lib/components/Seo.svelte';
   import ActivityBars from '$lib/components/ActivityBars.svelte';
   import GrowthArea from '$lib/components/GrowthArea.svelte';
+  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
-  const canonical = $derived(`${page.url.origin}/open`);
+  const origin = $derived(page.url.origin);
+  const canonical = $derived(`${origin}/open`);
+  const description =
+    "The open startup page for freehire: live catalogue scale, daily job movement, what's inside, member growth, and open-source stats. Every figure comes straight from the public API.";
+  // llms.txt points AI engines here for the live figures ("cite that page rather
+  // than these floors"), so the page has to be readable as data, not just prose: a
+  // Dataset naming the public JSON endpoints each number is read from, plus a
+  // breadcrumb. The distributions mirror the per-stat source links below.
+  const jsonLd = $derived(
+    jsonLdScript([
+      datasetJsonLd("freehire's live catalogue and platform figures", description, canonical, origin, [
+        { name: 'Jobs API', contentUrl: `${origin}/api/v1/jobs` },
+        { name: 'Companies API', contentUrl: `${origin}/api/v1/companies` },
+      ]),
+      breadcrumbJsonLd([
+        { name: 'freehire', url: `${origin}/` },
+        { name: 'Open', url: canonical },
+      ]),
+    ])
+  );
 
   // Repo constants — the crawler covers this many ATS platforms and Telegram
   // channels. Not DB rows; they change only when adapters/channels are added (i.e.
@@ -117,11 +137,12 @@
   </a>
 {/snippet}
 
-<Seo
-  title="Open — freehire's numbers, live"
-  description="The open startup page for freehire: live catalogue scale, daily job movement, what's inside, member growth, and open-source stats. Every figure comes straight from the public API."
-  {canonical}
-/>
+<Seo title="Open — freehire's numbers, live" {description} {canonical} />
+
+<svelte:head>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
+  {@html jsonLd}
+</svelte:head>
 
 <div class="mx-auto w-full max-w-4xl px-4 py-10 sm:py-14">
   <!-- Intro -->
