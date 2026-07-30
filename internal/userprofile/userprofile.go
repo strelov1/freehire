@@ -46,9 +46,15 @@ const maxSpecializations = 5
 // not just stored: the coverage verdict turns it into one `skills != "<skill>"` AND group per
 // element (see search.AndNotSkills), so an unbounded list would balloon that Meilisearch
 // filter on every later read of the profile — against the same index that serves public
-// search. It is the ceiling the stateless coverage endpoint already applies to a supplied
-// list; the migration's cardinality CHECK is the backstop.
-const maxSkills = 100
+// search. The migration's cardinality CHECK is the backstop.
+//
+// The number is set by what real profiles hold, not by symmetry with the stateless coverage
+// endpoint's 100. Measured on prod: of 131 profiles, 89% list 50 skills or fewer, but the
+// largest lists 90 — so a ceiling of 100 left a live user 10 of headroom, and the CV-autofill
+// path unions extracted skills into whatever is already in the form. 200 keeps that user
+// clear of the bound while still bounding the filter: 90 groups already run against prod's
+// index today, and the guard is against a list of 10^5, not against a long CV.
+const maxSkills = 200
 
 // maxSkillLen bounds one skill's length. The longest canonical form the skill dictionary can
 // emit is 30 characters, so this leaves generous room for a free-text entry while keeping a

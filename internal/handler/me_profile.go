@@ -136,7 +136,7 @@ func profileError(err error) error {
 	case errors.Is(err, userprofile.ErrEmptySkills):
 		return fiber.NewError(fiber.StatusBadRequest, "at least one skill is required")
 	case errors.Is(err, userprofile.ErrTooManySkills):
-		return fiber.NewError(fiber.StatusBadRequest, "too many skills (max 100)")
+		return fiber.NewError(fiber.StatusBadRequest, "too many skills (max 200)")
 	case errors.Is(err, userprofile.ErrInvalidWorkMode):
 		return fiber.NewError(fiber.StatusBadRequest, "work mode is not a known value")
 	case errors.Is(err, userprofile.ErrInvalidRegion):

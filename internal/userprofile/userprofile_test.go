@@ -163,7 +163,7 @@ func manySkills(n int) []string {
 func TestSave_RejectsTooManySkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(101), nil, nil)
+		[]string{"backend"}, manySkills(201), nil, nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
@@ -175,19 +175,19 @@ func TestSave_RejectsTooManySkills(t *testing.T) {
 func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
 	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, manySkills(100), nil, nil)
+		[]string{"backend"}, manySkills(200), nil, nil)
 	if err != nil {
 		t.Fatalf("Save at the cap: %v", err)
 	}
-	if len(repo.upserted.Skills) != 100 {
-		t.Errorf("persisted %d skills, want all 100 at the cap", len(repo.upserted.Skills))
+	if len(repo.upserted.Skills) != 200 {
+		t.Errorf("persisted %d skills, want all 200 at the cap", len(repo.upserted.Skills))
 	}
 }
 
 func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := userprofile.New(repo).Save(context.Background(), 7,
-		[]string{"backend"}, []string{"go"}, manySkills(101), nil)
+		[]string{"backend"}, []string{"go"}, manySkills(201), nil)
 	if !errors.Is(err, userprofile.ErrTooManySkills) {
 		t.Errorf("err = %v, want ErrTooManySkills", err)
 	}
