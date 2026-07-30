@@ -43,9 +43,11 @@ The system SHALL resolve an unqualified "Design Engineer" title to
 `engineering_design`, because that population is overwhelmingly mechanical and
 industrial in the catalogue. A product-engineering hybrid SHALL be recognized only
 through an explicit marker in the title — `product design engineer`,
-`design systems engineer`, `design engineer, product`, or a `UI/UX engineer` form
-— and those markers MUST be ordered ahead of the bare `design engineer` alias so
-the more specific title wins.
+`design system(s) engineer`, `ux`/`ui`/`ui-ux`/`web design engineer`,
+`design engineer, product` — and those markers MUST be ordered ahead of the bare
+`design engineer` alias so the more specific title wins. Titles naming a design
+discipline of their own (`service`, `experience`, `sound`, `game design engineer`)
+resolve to `design` for the same reason.
 
 #### Scenario: Unqualified title goes to engineering
 
@@ -61,17 +63,40 @@ the more specific title wins.
 
 The system SHALL emit no category for a title where a category alias appears but
 states no category of its own — "Software Design Engineer" is software engineering,
-where "design" qualifies what is engineered. Such phrases SHALL be masked before the
-category match, the same treatment a grade-blind phrase gets before the seniority
-match, so the category comes back empty rather than being routed to draughting. The
-tech-title detector SHALL still recognize the software forms, so `is_tech` stays
-`true` even though the sub-category is unresolved. A title that DOES have a better
-category SHALL be routed to it rather than masked.
+where "design" qualifies what is engineered.
+
+Such a phrase SHALL be an ORDERED TABLE ENTRY carrying a sentinel canonical, not a
+mask applied before the match. A mask fails twice over: cutting the span exposes
+whatever alias sits further down the table (the region below the design block is
+almost entirely the business categories, so "Software Design Engineer - Sales Tools"
+resolved to `sales` and lost its enrichment), and cutting is boundary-blind where
+every matcher is boundary-aware. As an entry it simply wins the first-match walk.
+Every exit that reads the table — the parsed category, the multi-category CV path,
+and the alias map feeding the generated web contracts — MUST translate the sentinel
+away, so it can never reach a column, an API response or a picker.
+
+The tech-title detector SHALL recognize the software forms, including the `-ing`
+spelling, so `is_tech` stays `true` even though the sub-category is unresolved. A
+title that DOES have a better category SHALL be routed to it rather than made blind,
+and the blind phrases MUST stay narrow: a qualified draughting title such as
+"HVAC Systems Design Engineer" must keep the placement that vetoes its deletion.
 
 #### Scenario: A software title keeps no category but stays technical
 
-- **WHEN** a job titled "Senior Software Design Engineer" is classified
+- **WHEN** a job titled "Senior Software Design Engineer" or
+  "Software Design Engineering Manager" is classified
 - **THEN** its category is empty, and its derived `is_tech` is `true`
+
+#### Scenario: The sentinel never reaches a consumer
+
+- **WHEN** the same title is parsed, run through the multi-category CV path, or
+  enumerated in the category alias map the web contracts are generated from
+- **THEN** none of them carries the sentinel value
+
+#### Scenario: A qualified draughting title is not made blind
+
+- **WHEN** a job titled "HVAC Systems Design Engineer" is classified
+- **THEN** its category is `engineering_design`, so the deletion veto still applies
 
 #### Scenario: A title with a better category is routed, not masked
 
@@ -133,9 +158,9 @@ posts, so a title does not collapse into the bare category role: on the product
 side `visual_designer`, `brand_designer`, `motion_designer`, `web_designer`,
 `ux_researcher`, `art_director`, `creative_director`, `design_ops`,
 `industrial_designer`, and `design_engineer`; on the engineering side
-`mechanical_designer`, `electrical_designer`, `civil_designer`, `pcb_designer`,
-and `chip_designer` (the last two sitting inside the `hardware` category, whose bare
-role would otherwise be all a silicon title gets). The `engineering_design` category SHALL also carry a role
+`mechanical_designer`, `electrical_designer`, `civil_designer`, `drafter` and
+`bim_specialist`, plus `pcb_designer` and `chip_designer` inside the `hardware`
+category, whose bare role would otherwise be all a silicon title gets. The `engineering_design` category SHALL also carry a role
 noun, so it yields a bare role and its seniority composites like every other
 decomposable category. Longest-alias-first resolution MUST make a qualified
 engineering title match its specific role rather than a shorter design alias
@@ -170,13 +195,22 @@ lowercase form is ordinary English, a person's name, an unrelated product, or a
 manual trade MUST NOT resolve on its own. Two remedies apply, and the choice
 depends on whether a real design posting would name a strong token beside it:
 
-- `sketch`, `maya`, `blender` and `accessibility` resolve ONLY when corroborated by
-  an unambiguous technical token in the same text;
+- `sketch`, `maya`, `lottie`, `blender`, `illustrator`, `canva`, `typography`,
+  `wireframes`, `prototyping`, `invision` and `accessibility` resolve ONLY when
+  corroborated by an unambiguous technical token in the same text;
 - `principle`, `eagle`, a bare `nx`, `framer` and `spline` resolve not at all —
   their other sense dominates even in corroborated text (`framer` is both a
   carpentry trade and a React animation library; `spline` is the splined shaft of
   the mechanical population this very split describes). A product excluded this way
   MAY still be reachable through an unambiguous phrase (`ptc creo`, `siemens nx`).
+
+A PHRASE always matches strongly — the corroboration gate keys single tokens — so a
+phrase whose ordinary-English reading is common MUST NOT be added at all: tagging it
+would both mislabel the posting and lift the gate off every gated word beside it.
+`design system(s)` ("you will design systems that scale"), `visual design`,
+`solid edge` and an unqualified `after effects` ("the after effects of anaesthesia")
+are excluded on that ground; the branded forms (`adobe after effects`, `ptc creo`)
+carry the product instead.
 
 #### Scenario: A design tool stated in the description is tagged
 
@@ -198,3 +232,10 @@ depends on whether a real design posting would name a strong token beside it:
 - **WHEN** a description states "Framer needed for residential construction" or
   "design splined shafts for gearboxes"
 - **THEN** no skill is derived from those words, in corroborated text or otherwise
+
+#### Scenario: An ordinary-English phrase neither tags nor corroborates
+
+- **WHEN** a description states "you will design systems that scale and sketch out
+  solutions with the team"
+- **THEN** no skill is derived from either phrase — the verb reading is not tagged,
+  and it does not lift the gate off the word beside it
