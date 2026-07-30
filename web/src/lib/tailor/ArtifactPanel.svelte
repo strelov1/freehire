@@ -10,8 +10,9 @@
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import TemplateGallery from './TemplateGallery.svelte';
   import AutopilotReport from './AutopilotReport.svelte';
+  import AtsDelta from './AtsDelta.svelte';
   import type { Analysis, AutopilotEntry } from '$lib/generated/contracts';
-  import type { Job, MatchAnalysisResponse } from '$lib/types';
+  import type { CvAtsDelta, Job, MatchAnalysisResponse } from '$lib/types';
 
   type Tab = 'templates' | 'jd' | 'verdict';
 
@@ -28,6 +29,7 @@
     autopilotReport = undefined,
     autopilotRevertable = false,
     autopilotBusy = false,
+    atsDelta = null,
     onRerunAutopilot,
     onUndoAutopilot,
   }: {
@@ -42,6 +44,9 @@
     autopilotReport?: AutopilotEntry[];
     autopilotRevertable?: boolean;
     autopilotBusy?: boolean;
+    /** What tailoring did to the CV's ATS readiness. Null renders nothing — an unavailable
+     *  delta is an absence, not an error state. */
+    atsDelta?: CvAtsDelta | null;
     onRerunAutopilot: () => void;
     onUndoAutopilot: () => void;
   } = $props();
@@ -128,6 +133,9 @@
       </div>
     {:else}
       <div class="p-4">
+        <!-- The run's outcome before the run's log: what tailoring did to the CV an ATS will
+             parse, then how it got there, then the fit analysis underneath. -->
+        <AtsDelta data={atsDelta} />
         <AutopilotReport
           report={autopilotReport}
           revertable={autopilotRevertable}

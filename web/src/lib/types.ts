@@ -7,6 +7,7 @@ import type {
   Blocker,
   Professional,
   Report as ATSReportContract,
+  Delta as AtsDeltaContract,
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
@@ -30,6 +31,21 @@ export type {
 export interface ATSResponse {
   has_cv: boolean;
   report: ATSReportContract | null;
+}
+
+// The two-report comparison behind the tailoring ATS delta.
+export type { Delta as AtsDelta, CategoryChange as AtsCategoryChange } from './generated/contracts';
+
+/** The tailoring ATS-delta response: what tailoring did to the CV's ATS readiness, measured
+ *  on the rendered artifact. `available` is false — with a `reason` and no `delta` — when the
+ *  comparison could not be made (no renderer, a failed compile), and the workspace then shows
+ *  nothing rather than an error. `base_cv_id` names the base CV compared against: the baseline
+ *  is that CV as it stands now, not a snapshot from when the copy was made. */
+export interface CvAtsDelta {
+  available: boolean;
+  reason?: string;
+  base_cv_id?: string;
+  delta?: AtsDeltaContract;
 }
 
 // The on-demand LLM job-fit analysis wire shapes (five scored dimensions + the

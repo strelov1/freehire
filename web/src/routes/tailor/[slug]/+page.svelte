@@ -25,7 +25,7 @@
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
   import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
-  import type { Job } from '$lib/types';
+  import type { CvAtsDelta, Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
@@ -56,6 +56,11 @@
   // side's work silently.
   let autopilotReport = $state<AutopilotEntry[] | undefined>(undefined);
   let autopilotRevertable = $state(false);
+  // What tailoring did to the CV's ATS readiness, refreshed at the two moments the document
+  // has just changed most: the workspace opening, and an agent turn finishing. Null until the
+  // first read, and after any failure — the panel renders it as an absence either way, so a
+  // score nobody can compute never becomes an error the candidate has to dismiss.
+  let atsDelta = $state<CvAtsDelta | null>(null);
   let runActive = $state(false);
   // Any turn, not just a run: "Run again" would silently do nothing while one is in flight.
   let turnActive = $state(false);
@@ -128,6 +133,17 @@
   }
   const loadCv = async () => hydrate(await api.getCv(cvId));
 
+  // Read the ATS delta for the current CV. Never throws: the workspace must load and edit
+  // whether or not the comparison is available, and a failed read is the same absence as an
+  // unavailable one.
+  async function refreshAtsDelta() {
+    try {
+      atsDelta = await api.getCvAtsDelta(cvId);
+    } catch {
+      atsDelta = null;
+    }
+  }
+
   onMount(async () => {
     try {
       if (cvParam) {
@@ -173,6 +189,9 @@
         });
       }
       status = 'ready';
+      // Not awaited: the workspace is usable before the comparison lands, and the comparison
+      // costs two renders.
+      void refreshAtsDelta();
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
@@ -235,6 +254,7 @@
     try {
       await loadCv();
       pdfVersion += 1;
+      void refreshAtsDelta();
     } catch {
       /* best-effort refresh; the next edit or reload will reconcile */
     }
@@ -263,6 +283,7 @@
         refetch: async () => {
           await loadCv();
           pdfVersion += 1;
+          void refreshAtsDelta();
         },
       });
     } catch (e) {
@@ -475,6 +496,7 @@
         {autopilotReport}
         autopilotRevertable={autopilotRevertable}
         autopilotBusy={turnActive || runActive || undoing}
+        {atsDelta}
         onRerunAutopilot={() => chatRef?.startRun()}
         onUndoAutopilot={undoAutopilot}
         {onTemplateSelected}

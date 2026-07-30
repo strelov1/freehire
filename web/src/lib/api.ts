@@ -11,6 +11,7 @@
 // requests from sharing (and racing on) a session.
 
 import type {
+  CvAtsDelta,
   CvMeta,
   CvRecord,
   CvTailoredItem,
@@ -1352,6 +1353,13 @@ export function createApi(
     return requestData<CvRecord>(`/api/v1/me/cvs/${id}`);
   }
 
+  /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
+   *  Cookie-only and recomputed per request. 409 for a CV that is not a tailored copy; the
+   *  response itself reports `available: false` when the comparison could not be made. */
+  async function getCvAtsDelta(id: string): Promise<CvAtsDelta> {
+    return requestData<CvAtsDelta>(`/api/v1/me/cvs/${id}/ats-delta`);
+  }
+
   /** Replace a CV's title, template, and document. */
   async function updateCv(id: string, input: UpdateCvInput): Promise<CvMeta> {
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
@@ -1587,6 +1595,7 @@ export function createApi(
     listCvTemplates,
     setCvTemplate,
     getCv,
+    getCvAtsDelta,
     updateCv,
     deleteCv,
     setCvSession,
