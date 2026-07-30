@@ -17,10 +17,16 @@ nothing but the URL. No network, no database.
   contribution and paid for, and board coverage finds no adapter to read it with. Factorial was
   exactly this: `<tenant>.factorialhr.<tld>` mapped to a `factorialhr` source that does not
   exist, while one adapter serves both domains as `factorial`.
-- **Adding an ATS is one row plus one test case.** Five extraction modes say where the tenant
-  sits: `path` (first path segment), `pathlocale` (same, skipping a leading `xx-XX` locale),
-  `subdomain` (leftmost DNS label), `host` (the whole careers host IS the tenant), `hostpath`
-  (host + first path segment, for Workday).
+- **Adding an ATS is one row plus one test case.** Extraction modes say where the tenant sits:
+  `path` (first path segment), `pathlocale` (same, skipping a leading `xx-XX` locale),
+  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs), `subdomain`
+  (leftmost DNS label), `subdomainchain` (every label under the apex, for a tenant nested under a
+  regional instance like `<tenant>.global.huntflow.io`), `host` (the whole careers host IS the
+  tenant), `hostpath` (host + first path segment, for Workday).
+- **The mode must match how the ingest adapter addresses the board**, not how the URL reads. The
+  board string is copied verbatim into `sources/<provider>.yml` and into the `external_id`
+  namespace, so a truncated one is a board that 404s every crawl: Huntflow's adapter fetches
+  `<board>.huntflow.io`, which is why a regional tenant's board keeps its `.global` label.
 - **Fail-safe by construction.** A wrong or missing entry makes a link *unrecognised*, never a
   false board: a bad apex or mode yields an empty board, which is declined. So a best-guess
   host is safe to add.

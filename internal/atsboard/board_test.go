@@ -50,6 +50,13 @@ func TestRecognize(t *testing.T) {
 		{"hibob careers subdomain", "https://qogita.careers.hibob.com/jobs/ceb6c947-c906-44d1-a56b-bb33ae5599fa", "hibob", "qogita", "https://qogita.careers.hibob.com", true},
 		{"hibob apply tail collapses to the same board", "https://unique.careers.hibob.com/jobs/f8d9a0bc/apply", "hibob", "unique", "https://unique.careers.hibob.com", true},
 
+		// subdomainchain — Huntflow nests its international tenants under a "global" label, and
+		// the adapter fetches <board>.huntflow.io, so the board must carry that label too;
+		// the leftmost label alone ("thefjx") is a host that 404s.
+		{"huntflow regional tenant keeps the region label", "https://thefjx.global.huntflow.io/vacancy/rust-developer-2", "huntflow", "thefjx.global", "https://thefjx.global.huntflow.io", true},
+		{"huntflow plain tenant", "https://flowwow.huntflow.io/vacancy/123", "huntflow", "flowwow", "https://flowwow.huntflow.io", true},
+		{"huntflow bare apex no tenant", "https://huntflow.io/", "", "", "", false},
+
 		// host mode — board is the whole careers host, regional TLD varies
 		{"zoho eu vacancy strips encoded path + query", "https://be-exec.zohorecruit.eu/jobs/Careers/73534000009044079/%D0%9F%D1%80%D0%BE?source=CareerSite", "zohorecruit", "be-exec.zohorecruit.eu", "https://be-exec.zohorecruit.eu", true},
 		{"zoho com host", "https://kaptiva.zohorecruit.com/jobs/Careers/568", "zohorecruit", "kaptiva.zohorecruit.com", "https://kaptiva.zohorecruit.com", true},

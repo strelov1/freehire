@@ -31,20 +31,26 @@ import (
 //     the same posting both bare (<company>/<posting>) and behind a portal segment
 //     (<portal>/<company>/<posting>). Taking the first segment reads the portal slug as a board.
 //   - subdomain: board = the leftmost DNS label under a fixed apex (<board>.recruitee.com).
+//   - subdomainchain: board = EVERY label under the apex, because the platform nests a tenant
+//     under a regional instance — Huntflow serves its international tenants at
+//     <tenant>.global.huntflow.io and its adapter fetches <board>.huntflow.io, so the board is
+//     "<tenant>.global"; taking the leftmost label alone yields a host that 404s.
 //   - host:      board = the whole careers host (the tenant identity IS the host, and the TLD
 //     varies by region, e.g. <tenant>.zohorecruit.eu / .com / .in).
 //   - hostpath:  board = "<host>/<first path segment>" (Workday: the tenant is the host, the
 //     site is the first path segment, e.g. acme.wd1.myworkdayjobs.com/Careers).
 //
-// For subdomain and host the board IS the host; for hostpath it is host + site. In all these the
-// canonical URL is stripped to that board, collapsing a vacancy URL and the board listing to one.
+// For subdomain, subdomainchain and host the board IS the host; for hostpath it is host + site.
+// In all these the canonical URL is stripped to that board, collapsing a vacancy URL and the
+// board listing to one.
 const (
-	modePath       = "path"
-	modePathLocale = "pathlocale"
-	modePathPortal = "pathportal"
-	modeSubdomain  = "subdomain"
-	modeHost       = "host"
-	modeHostPath   = "hostpath"
+	modePath           = "path"
+	modePathLocale     = "pathlocale"
+	modePathPortal     = "pathportal"
+	modeSubdomain      = "subdomain"
+	modeSubdomainChain = "subdomainchain"
+	modeHost           = "host"
+	modeHostPath       = "hostpath"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -82,7 +88,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"bamboohr.com", "bamboohr", modeSubdomain},
 	{"breezy.hr", "breezy", modeSubdomain},
 	{"freshteam.com", "freshteam", modeSubdomain},
-	{"huntflow.io", "huntflow", modeSubdomain},
 	{"peopleforce.io", "peopleforce", modeSubdomain},
 	{"jobs.personio.com", "personio", modeSubdomain},
 	{"jobs.personio.de", "personio", modeSubdomain}, // Personio DE regional host; board = same tenant subdomain
@@ -106,6 +111,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"vagas.solides.com.br", "solides", modeSubdomain},
 	{"softgarden.io", "softgarden", modeSubdomain},
 	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
+
+	// --- subdomainchain: board = every label under the apex (tenant nested under a region) ---
+	{"huntflow.io", "huntflow", modeSubdomainChain},
 
 	// --- host: board = the whole careers host (regional TLD varies) ---
 	{"zohorecruit", "zohorecruit", modeHost},
@@ -132,9 +140,11 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 	}
 
 	switch mode {
-	case modeSubdomain, modeHost:
+	case modeSubdomain, modeSubdomainChain, modeHost:
 		if mode == modeSubdomain {
 			board = subdomainLabel(host, apex)
+		} else if mode == modeSubdomainChain {
+			board = subdomainChain(host, apex)
 		} else if !platformHost(host) {
 			board = host // the whole careers host is the tenant identity
 		}
@@ -217,13 +227,20 @@ func matchHost(host string) (source, mode, apex string, ok bool) {
 	return "", "", "", false
 }
 
+// subdomainChain returns every DNS label of host under apex:
+// "thefjx.global.huntflow.io","huntflow.io" → "thefjx.global"; "huntflow.io",… → "" (no tenant).
+func subdomainChain(host, apex string) string {
+	sub := strings.TrimSuffix(host, "."+apex)
+	if sub == host {
+		return ""
+	}
+	return sub
+}
+
 // subdomainLabel returns the leftmost DNS label of host under apex:
 // "acme.recruitee.com","recruitee.com" → "acme"; "recruitee.com",… → "" (no tenant).
 func subdomainLabel(host, apex string) string {
-	sub := strings.TrimSuffix(host, "."+apex)
-	if sub == host || sub == "" {
-		return ""
-	}
+	sub := subdomainChain(host, apex)
 	if i := strings.IndexByte(sub, '.'); i >= 0 {
 		return sub[:i]
 	}
