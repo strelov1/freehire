@@ -120,11 +120,16 @@ func TestInstaffoFetchResolvesJobSitemapThenMaps(t *testing.T) {
 // Instaffo never retires a posting from its sitemap, so the unseen sweep can never close
 // one — age is the only staleness signal there is, and it is applied on the way in.
 func TestInstaffoDropsPostingsOlderThanMaxAge(t *testing.T) {
+	// The date is stamped in UTC because that is how the adapter reads a bare "2006-01-02"
+	// datePosted back. Formatting it in the local zone instead makes the test fail west of
+	// Greenwich whenever the local date still lags UTC's: the local calendar day is one earlier,
+	// the parsed midnight lands a day further back, and the "fresh" posting ages past the window.
+	// CI runs in UTC, so this only ever broke on developer machines.
 	postingAged := func(d time.Duration) string {
 		return `<html><head><script type="application/ld+json">
 {"@context":"https://schema.org","@type":"JobPosting","title":"Entwickler",
 "hiringOrganization":{"@type":"Organization","name":"Acme GmbH"},
-"datePosted":"` + time.Now().Add(-d).Format("2006-01-02") + `"}
+"datePosted":"` + time.Now().UTC().Add(-d).Format("2006-01-02") + `"}
 </script></head><body></body></html>`
 	}
 
