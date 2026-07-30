@@ -17,6 +17,20 @@ describe('isCrawler', () => {
     }
   });
 
+  // The UAs an AI assistant sends when it opens a link on a person's behalf. None
+  // carries "bot", and their fetch is the one that ends up quoted in an answer, so
+  // they must read the canonical homepage rather than the default filter slice.
+  it('flags the AI assistant fetchers that carry no "bot" in their UA', () => {
+    for (const ua of [
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36; compatible; Perplexity-User/1.0; +https://perplexity.ai/perplexity-user',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude-User/1.0; +Claude-User@anthropic.com',
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0',
+      'meta-externalagent/1.1',
+    ]) {
+      expect(isCrawler(ua)).toBe(true);
+    }
+  });
+
   it('treats a real browser UA as not a crawler', () => {
     expect(
       isCrawler(

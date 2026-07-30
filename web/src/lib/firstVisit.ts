@@ -13,7 +13,15 @@ import { DEFAULT_JOB_FILTERS } from './filterStorage';
 // the UA string; the cost of a miss is only that a bot gets the default slice, and
 // the cost of a false positive is only that a rare human keeps the full feed — so a
 // broad, maintenance-light pattern beats an exhaustive list.
-const CRAWLER_UA = /bot|crawl|spider|slurp|mediapartners|facebookexternalhit|embedly|quora|bitlybot|whatsapp|telegram|discord|preview|scanner|archiver/i;
+//
+// `bot` alone covers the indexers (Googlebot, GPTBot, PerplexityBot, ClaudeBot,
+// OAI-SearchBot). It does NOT cover the fetchers an AI assistant uses when it opens a
+// link *for a person* — Perplexity-User, Claude-User, ChatGPT-User, meta-externalagent
+// — and those are the requests whose content gets quoted in an answer. A miss there
+// costs more than a slice: the page the assistant reads, and cites, becomes the
+// filtered variant rather than the homepage.
+const CRAWLER_UA =
+  /bot|crawl|spider|slurp|mediapartners|facebookexternalhit|embedly|quora|bitlybot|whatsapp|telegram|discord|preview|scanner|archiver|perplexity|claude|chatgpt|externalagent/i;
 
 /** True when the User-Agent looks like a crawler/link-preview bot rather than a
  *  human browser. A missing UA reads as human — the bots we care about all send one,

@@ -2,11 +2,19 @@
   import { page } from '$app/state';
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import { jsonLdScript, siteOrganizationJsonLd, websiteJsonLd } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
-  const canonical = $derived(`${page.url.origin}/`);
+  const origin = $derived(page.url.origin);
+  const canonical = $derived(`${origin}/`);
+  // What the site is (WebSite + the search action that names our own query
+  // parameter) and who publishes it (Organization). These describe the site as a
+  // whole, so they belong on the URL search engines treat as the site — the
+  // homepage. /about carries the same pair plus its FAQPage, because the visible FAQ
+  // lives there; a repeated site-level entity is expected, an absent one is not.
+  const jsonLd = $derived(jsonLdScript([websiteJsonLd(origin), siteOrganizationJsonLd(origin)]));
 </script>
 
 <Seo
@@ -14,6 +22,11 @@
   description="Search 3M+ tech jobs indexed straight from company career boards — deduplicated and tagged by stack, seniority and location. Free, open source, no walls."
   {canonical}
 />
+
+<svelte:head>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
+  {@html jsonLd}
+</svelte:head>
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <!-- Primary heading kept for search engines and assistive tech, but visually

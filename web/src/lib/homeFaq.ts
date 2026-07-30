@@ -1,7 +1,9 @@
-// Homepage FAQ content — the single source for both the visible section
-// (HomeView.svelte) and the FAQPage JSON-LD (routes/+page.svelte). Google
-// requires the schema's answers to match the on-page text, so they share this.
-// Answers are written answer-first and stay honest to what the product does.
+// The site's FAQ content — the single source for both the visible section
+// (HomeView.svelte) and the FAQPage JSON-LD. Google requires the schema's answers to
+// match the on-page text, so they share this. Both now render on /about, which is
+// where HomeView moved when the homepage became the job feed; the schema has to
+// follow the visible copy, so it must not be emitted from a page that no longer
+// shows it. Answers are written answer-first and stay honest to what the product does.
 
 import type { FaqItem } from './seo';
 

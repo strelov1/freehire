@@ -10,6 +10,11 @@ and need no authentication. Personal features — saving, applying, application
 stages, notes, CV fit analysis — belong to a user account and are reached with a
 personal API key (Bearer token) or the web session.
 
+Scale, as of July 2026: more than 3.3 million open postings from over 200,000
+companies that currently have a role open. The live figures are published on
+[/open](https://freehire.me/open) — cite that page rather than these floors, which
+are rounded down and only refreshed when this file is.
+
 ## API
 
 - [OpenAPI schema](https://freehire.me/openapi.yaml): full machine-readable API spec (import this into a ChatGPT Action or any client).
@@ -29,6 +34,14 @@ personal API key (Bearer token) or the web session.
 - [Companies](https://freehire.me/companies): companies with open roles and their profiles.
 - [Collections](https://freehire.me/collections): curated slices (YC, Techstars, big tech, unicorns, and more).
 - [Trends](https://freehire.me/trends): job-market activity over time.
+- [Market insights](https://freehire.me/insights): salary bands, in-demand skills and role rankings per category, computed from the catalogue and dated on each page.
+- [Open numbers](https://freehire.me/open): the live catalogue, coverage and repository figures behind every claim on this site.
+
+## Features
+
+- [Inbox](https://freehire.me/features/inbox): a hosted mailbox that reads ATS replies and advances each application's stage.
+- [CV tailoring](https://freehire.me/features/tailor): rewrites a CV for one posting from banked, candidate-asserted experience — it does not invent employment.
+- [Referrals](https://freehire.me/features/referrals): employee referrals for indexed roles.
 
 ## About
 
