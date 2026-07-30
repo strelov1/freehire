@@ -93,6 +93,13 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		}
 		// A background context: the fiber request ctx is gone by now, and each LLM call
 		// is already bounded by the client's per-call timeout.
+		//
+		// A client that disconnects therefore does NOT abort the chain, and that is on
+		// purpose. The run is nearly always one an AI credit was just spent on, so finishing
+		// it puts the analysis in the cache for when the reader comes back, where aborting
+		// would charge them for nothing. What bounds the spend is the per-user rate limit on
+		// the routes that reach here (matchAnalysisLimiter), not the lifetime of a TCP
+		// connection — a limit a reload could reset would bound nothing at all.
 		ctx := context.Background()
 		events := 0
 
