@@ -25,6 +25,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"sort"
 
@@ -117,26 +118,49 @@ func boardProviders(reg map[string]sources.Source) []string {
 	return out
 }
 
-// crosscheckAll pages through candidate postings by keyset, batching each company's
-// postings together so its board is read once rather than once per posting.
+// croscheckAll walks each aggregator source separately, paging by keyset within it, and
+// batches each company's postings so its board is read once rather than once per posting.
+//
+// Per SOURCE rather than across all of them: a single `source = ANY(...) ORDER BY id LIMIT n`
+// defeats its own keyset — the planner answers it with a bitmap scan over every aggregator's
+// postings plus a sort, so every page re-scans the whole set (measured: 28s per page on
+// prod). One source at a time walks jobs_source_id_open_idx in id order and stops at LIMIT.
+//
+// Progress is logged per source. A run over a large catalogue takes long enough that a
+// worker which printed nothing until the end could not be told from one that had hung.
 func crosscheckAll(ctx context.Context, q *db.Queries, aggregators, boards []string, rep *report) error {
+	for i, source := range aggregators {
+		seen, err := crosscheckSource(ctx, q, source, boards, rep)
+		if err != nil {
+			return fmt.Errorf("source %s: %w", source, err)
+		}
+		log.Printf("ghost-crosscheck: [%d/%d] %s — %d postings considered (running totals: %d stamped, %d cleared, %d skipped)",
+			i+1, len(aggregators), source, seen, rep.stamped, rep.cleared, rep.skipped)
+	}
+	return nil
+}
+
+// crosscheckSource pages through one source's open postings and returns how many it read.
+func crosscheckSource(ctx context.Context, q *db.Queries, source string, boards []string, rep *report) (int, error) {
 	var afterID int64
+	var seen int
 	pending := map[string][]ghost.Posting{}
 
 	for {
-		rows, err := q.ListAggregatorJobsForCrosscheck(ctx, db.ListAggregatorJobsForCrosscheckParams{
-			AggregatorSources: aggregators,
-			AfterID:           afterID,
-			PageSize:          pageSize,
+		rows, err := q.ListAggregatorJobsForCrosscheckBySource(ctx, db.ListAggregatorJobsForCrosscheckBySourceParams{
+			Source:   source,
+			AfterID:  afterID,
+			PageSize: pageSize,
 		})
 		if err != nil {
-			return err
+			return seen, err
 		}
 		if len(rows) == 0 {
 			break
 		}
 		for _, r := range rows {
 			afterID = r.ID
+			seen++
 			pending[r.CompanySlug] = append(pending[r.CompanySlug], ghost.Posting{
 				ID:          r.ID,
 				CompanySlug: r.CompanySlug,
@@ -144,15 +168,15 @@ func crosscheckAll(ctx context.Context, q *db.Queries, aggregators, boards []str
 				Stamped:     r.AtsAbsentAt.Valid,
 			})
 		}
-		// Postings arrive by id, so one company's can straddle pages. Flushing only
-		// at the end would hold the whole catalogue in memory; flushing per page
-		// would read a straddling company's board twice. Keeping the last company
-		// back until the next page is the cheap middle.
+		// Postings arrive by id, so one company's can straddle pages. Flushing only at
+		// the end would hold a whole source in memory; flushing per page would read a
+		// straddling company's board twice. Keeping the last company back until the
+		// next page is the cheap middle.
 		if err := flush(ctx, q, boards, pending, rep, len(rows) == pageSize); err != nil {
-			return err
+			return seen, err
 		}
 	}
-	return flush(ctx, q, boards, pending, rep, false)
+	return seen, flush(ctx, q, boards, pending, rep, false)
 }
 
 // flush cross-checks the companies buffered so far. When more pages follow, the

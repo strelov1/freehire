@@ -36,13 +36,13 @@ func TestGhostCrosscheck_CandidatesAreOpenAggregatorPostings(t *testing.T) {
 		t.Fatalf("close job: %v", err)
 	}
 
-	rows, err := q.ListAggregatorJobsForCrosscheck(ctx, ListAggregatorJobsForCrosscheckParams{
-		AggregatorSources: []string{"jobstash"},
-		AfterID:           0,
-		PageSize:          100,
+	rows, err := q.ListAggregatorJobsForCrosscheckBySource(ctx, ListAggregatorJobsForCrosscheckBySourceParams{
+		Source:   "jobstash",
+		AfterID:  0,
+		PageSize: 100,
 	})
 	if err != nil {
-		t.Fatalf("ListAggregatorJobsForCrosscheck: %v", err)
+		t.Fatalf("ListAggregatorJobsForCrosscheckBySource: %v", err)
 	}
 	if len(rows) != 1 || rows[0].ID != wanted {
 		t.Fatalf("rows = %+v, want only the open jobstash posting %d", rows, wanted)
@@ -110,8 +110,8 @@ func TestGhostCrosscheck_StampAndClearRoundTrip(t *testing.T) {
 	if err := q.StampJobATSAbsent(ctx, []int64{id}); err != nil {
 		t.Fatalf("StampJobATSAbsent: %v", err)
 	}
-	rows, err := q.ListAggregatorJobsForCrosscheck(ctx, ListAggregatorJobsForCrosscheckParams{
-		AggregatorSources: []string{"jobstash"}, AfterID: 0, PageSize: 100,
+	rows, err := q.ListAggregatorJobsForCrosscheckBySource(ctx, ListAggregatorJobsForCrosscheckBySourceParams{
+		Source: "jobstash", AfterID: 0, PageSize: 100,
 	})
 	if err != nil {
 		t.Fatalf("read back: %v", err)
@@ -123,8 +123,8 @@ func TestGhostCrosscheck_StampAndClearRoundTrip(t *testing.T) {
 	if err := q.ClearJobATSAbsent(ctx, []int64{id}); err != nil {
 		t.Fatalf("ClearJobATSAbsent: %v", err)
 	}
-	rows, err = q.ListAggregatorJobsForCrosscheck(ctx, ListAggregatorJobsForCrosscheckParams{
-		AggregatorSources: []string{"jobstash"}, AfterID: 0, PageSize: 100,
+	rows, err = q.ListAggregatorJobsForCrosscheckBySource(ctx, ListAggregatorJobsForCrosscheckBySourceParams{
+		Source: "jobstash", AfterID: 0, PageSize: 100,
 	})
 	if err != nil {
 		t.Fatalf("read back after clear: %v", err)

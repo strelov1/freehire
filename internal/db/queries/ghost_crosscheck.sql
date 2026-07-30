@@ -1,16 +1,18 @@
--- name: ListAggregatorJobsForCrosscheck :many
--- Keyset page of open aggregator postings to cross-check, ordered by id so the scan
--- resumes exactly where it stopped. The worker buffers a page and groups it by company
--- itself, so a company's board is read once rather than once per posting; ordering by
--- company instead would make the keyset cursor non-unique and risk skipping rows.
+-- name: ListAggregatorJobsForCrosscheckBySource :many
+-- Keyset page of one AGGREGATOR SOURCE's open postings.
 --
--- The caller passes the aggregator provider names (sources.AggregatorProviders): the
--- provider taxonomy lives in Go adapter markers, not in the database, and copying it
--- into SQL would leave two lists to keep in step.
+-- Scoped to a single source on purpose. The earlier `source = ANY(...)` form defeated its
+-- own keyset: measured on prod, the planner answered it with a Bitmap Heap Scan over every
+-- posting of all 42 aggregators followed by a Sort — so each 2000-row page re-scanned and
+-- re-sorted the whole set, at 28 seconds a page. One source at a time lets the index walk
+-- in id order and stop at LIMIT, which is what keyset pagination is for.
+--
+-- Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
+-- restricted to one source.
 SELECT j.id, j.company_slug, j.title, j.ats_absent_at
 FROM jobs j
 WHERE j.closed_at IS NULL
-  AND j.source = ANY(sqlc.arg(aggregator_sources)::text[])
+  AND j.source = sqlc.arg(source)
   AND j.id > sqlc.arg(after_id)
 ORDER BY j.id
 LIMIT sqlc.arg(page_size);

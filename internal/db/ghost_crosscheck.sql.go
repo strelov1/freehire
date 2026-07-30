@@ -23,46 +23,48 @@ func (q *Queries) ClearJobATSAbsent(ctx context.Context, jobIds []int64) error {
 	return err
 }
 
-const listAggregatorJobsForCrosscheck = `-- name: ListAggregatorJobsForCrosscheck :many
+const listAggregatorJobsForCrosscheckBySource = `-- name: ListAggregatorJobsForCrosscheckBySource :many
 SELECT j.id, j.company_slug, j.title, j.ats_absent_at
 FROM jobs j
 WHERE j.closed_at IS NULL
-  AND j.source = ANY($1::text[])
+  AND j.source = $1
   AND j.id > $2
 ORDER BY j.id
 LIMIT $3
 `
 
-type ListAggregatorJobsForCrosscheckParams struct {
-	AggregatorSources []string `json:"aggregator_sources"`
-	AfterID           int64    `json:"after_id"`
-	PageSize          int32    `json:"page_size"`
+type ListAggregatorJobsForCrosscheckBySourceParams struct {
+	Source   string `json:"source"`
+	AfterID  int64  `json:"after_id"`
+	PageSize int32  `json:"page_size"`
 }
 
-type ListAggregatorJobsForCrosscheckRow struct {
+type ListAggregatorJobsForCrosscheckBySourceRow struct {
 	ID          int64              `json:"id"`
 	CompanySlug string             `json:"company_slug"`
 	Title       string             `json:"title"`
 	AtsAbsentAt pgtype.Timestamptz `json:"ats_absent_at"`
 }
 
-// Keyset page of open aggregator postings to cross-check, ordered by id so the scan
-// resumes exactly where it stopped. The worker buffers a page and groups it by company
-// itself, so a company's board is read once rather than once per posting; ordering by
-// company instead would make the keyset cursor non-unique and risk skipping rows.
+// Keyset page of one AGGREGATOR SOURCE's open postings.
 //
-// The caller passes the aggregator provider names (sources.AggregatorProviders): the
-// provider taxonomy lives in Go adapter markers, not in the database, and copying it
-// into SQL would leave two lists to keep in step.
-func (q *Queries) ListAggregatorJobsForCrosscheck(ctx context.Context, arg ListAggregatorJobsForCrosscheckParams) ([]ListAggregatorJobsForCrosscheckRow, error) {
-	rows, err := q.db.Query(ctx, listAggregatorJobsForCrosscheck, arg.AggregatorSources, arg.AfterID, arg.PageSize)
+// Scoped to a single source on purpose. The earlier `source = ANY(...)` form defeated its
+// own keyset: measured on prod, the planner answered it with a Bitmap Heap Scan over every
+// posting of all 42 aggregators followed by a Sort — so each 2000-row page re-scanned and
+// re-sorted the whole set, at 28 seconds a page. One source at a time lets the index walk
+// in id order and stop at LIMIT, which is what keyset pagination is for.
+//
+// Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
+// restricted to one source.
+func (q *Queries) ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error) {
+	rows, err := q.db.Query(ctx, listAggregatorJobsForCrosscheckBySource, arg.Source, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAggregatorJobsForCrosscheckRow{}
+	items := []ListAggregatorJobsForCrosscheckBySourceRow{}
 	for rows.Next() {
-		var i ListAggregatorJobsForCrosscheckRow
+		var i ListAggregatorJobsForCrosscheckBySourceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CompanySlug,
