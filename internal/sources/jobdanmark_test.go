@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -22,6 +23,10 @@ type jobdanmarkHTTP struct {
 	failPage   map[int]bool      // a specific page's POST fails
 	failDetail map[string]bool   // a specific slug's detail GET fails
 	gotPages   []int
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu         sync.Mutex
 	gotDetails []string
 }
 
@@ -45,7 +50,9 @@ func (f *jobdanmarkHTTP) PostJSON(_ context.Context, url string, _ any, v any) e
 
 func (f *jobdanmarkHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
 	slug := url[strings.LastIndex(url, "/")+1:]
+	f.mu.Lock()
 	f.gotDetails = append(f.gotDetails, slug)
+	f.mu.Unlock()
 	if f.failDetail[slug] {
 		return nil, errors.New("jobdanmarkHTTP: detail boom")
 	}

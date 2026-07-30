@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -13,9 +14,13 @@ import (
 // and GetJSONWithHeaders (the authed company-name + job detail). It serves a canned body per
 // URL substring and records the Authorization header it last saw.
 type paycomFake struct {
-	pages  map[string]string // GetText: url-substr -> html
-	posts  map[string]string // PostJSON: url-substr -> json
-	gets   map[string]string // GetJSON: url-substr -> json
+	pages map[string]string // GetText: url-substr -> html
+	posts map[string]string // PostJSON: url-substr -> json
+	gets  map[string]string // GetJSON: url-substr -> json
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu     sync.Mutex
 	lastAu string
 }
 
@@ -43,7 +48,9 @@ func (f *paycomFake) match(m map[string]string, url string) (string, bool) {
 }
 
 func (f *paycomFake) GetJSONWithHeaders(_ context.Context, url string, h map[string]string, v any) error {
+	f.mu.Lock()
 	f.lastAu = h["Authorization"]
+	f.mu.Unlock()
 	body, ok := f.match(f.gets, url)
 	if !ok {
 		return fmt.Errorf("paycomFake: no GET for %s", url)
@@ -52,7 +59,9 @@ func (f *paycomFake) GetJSONWithHeaders(_ context.Context, url string, h map[str
 }
 
 func (f *paycomFake) PostJSONWithHeaders(_ context.Context, url string, h map[string]string, _, v any) error {
+	f.mu.Lock()
 	f.lastAu = h["Authorization"]
+	f.mu.Unlock()
 	body, ok := f.match(f.posts, url)
 	if !ok {
 		return fmt.Errorf("paycomFake: no POST for %s", url)

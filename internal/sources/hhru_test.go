@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -20,7 +21,11 @@ type hhFake struct {
 	detailByID   map[string]string   // vacancy id -> ld+json description
 	detailErr    map[string]bool     // vacancy id -> GetHTML returns an error
 	searchPages  []int               // search pages requested, in order
-	detailHits   []string            // vacancy ids whose detail page was fetched, in order
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu         sync.Mutex
+	detailHits []string // vacancy ids whose detail page was fetched, in order
 }
 
 func (f *hhFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
@@ -34,7 +39,9 @@ func (f *hhFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 		return html.Parse(strings.NewReader(hhSearchHTML(f.searchByPage[page])))
 	}
 	id := pu.Path[strings.LastIndex(pu.Path, "/")+1:]
+	f.mu.Lock()
 	f.detailHits = append(f.detailHits, id)
+	f.mu.Unlock()
 	if f.detailErr[id] {
 		return nil, errors.New("detail boom")
 	}

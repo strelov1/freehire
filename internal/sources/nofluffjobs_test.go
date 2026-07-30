@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -15,6 +16,10 @@ type nofluffjobsFake struct {
 	listing     string
 	detailByURL map[string]string
 	detailErr   map[string]bool
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu          sync.Mutex
 	detailSlugs []string
 }
 
@@ -24,7 +29,9 @@ func (f *nofluffjobsFake) GetStream(_ context.Context, _ string, _ string, fn fu
 
 func (f *nofluffjobsFake) GetJSON(_ context.Context, url string, v any) error {
 	slug := url[strings.LastIndex(url, "/")+1:]
+	f.mu.Lock()
 	f.detailSlugs = append(f.detailSlugs, slug)
+	f.mu.Unlock()
 	if f.detailErr[slug] {
 		return errors.New("detail boom")
 	}

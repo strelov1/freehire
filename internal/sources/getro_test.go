@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -20,7 +21,11 @@ type getroFake struct {
 	labelErr   bool              // metadata lookup fails
 	detailHTML map[string]string // job slug -> detail page HTML
 	detailErr  map[string]bool   // job slug -> detail fetch fails
-	detailURLs []string          // detail URLs fetched, for asserting new-only hydration
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu         sync.Mutex
+	detailURLs []string // detail URLs fetched, for asserting new-only hydration
 }
 
 func (f *getroFake) PostJSON(_ context.Context, _ string, body, v any) error {
@@ -36,7 +41,9 @@ func (f *getroFake) GetJSON(_ context.Context, _ string, v any) error {
 }
 
 func (f *getroFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
 	f.detailURLs = append(f.detailURLs, url)
+	f.mu.Unlock()
 	slug := url[strings.LastIndex(url, "/")+1:]
 	if f.detailErr[slug] {
 		return nil, errors.New("detail boom")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -21,7 +22,11 @@ type fakeMTS struct {
 	detail     map[string]string // id -> canned detail payload
 	failIDs    map[string]bool   // ids whose detail GET errors
 
-	listKey   string // x-api-key seen on the list POST
+	listKey string // x-api-key seen on the list POST
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu        sync.Mutex
 	detailKey string // x-api-key seen on a detail GET
 }
 
@@ -30,7 +35,9 @@ func (f *fakeMTS) GetHTML(_ context.Context, _ string) (*html.Node, error) {
 }
 
 func (f *fakeMTS) GetJSONWithHeaders(_ context.Context, url string, headers map[string]string, v any) error {
+	f.mu.Lock()
 	f.detailKey = headers["x-api-key"]
+	f.mu.Unlock()
 	id := url[strings.LastIndex(url, "/")+1:]
 	if f.failIDs[id] {
 		return errors.New("fakeMTS: detail boom for " + id)

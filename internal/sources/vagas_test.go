@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -15,11 +16,17 @@ import (
 type vagasHTTP struct {
 	pages    map[string]string
 	failURLs map[string]bool
-	got      []string
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu  sync.Mutex
+	got []string
 }
 
 func (f *vagasHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
 	f.got = append(f.got, url)
+	f.mu.Unlock()
 	if f.failURLs[url] {
 		return nil, errors.New("vagasHTTP: boom")
 	}

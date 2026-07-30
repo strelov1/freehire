@@ -6,6 +6,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -19,7 +20,14 @@ type appleFake struct {
 	details   map[string]string // positionId -> /api/v1/jobDetails response JSON
 	postFail  bool
 	postCalls int
-	getURLs   []string
+
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. Without it an append is
+	// simply lost and the "one detail per distinct position" count fails at random — it did
+	// in CI on 2026-07-29, on a frontend-only PR that touched no Go at all. The assertions
+	// read it after Fetch has joined the pool, which is already ordered.
+	mu      sync.Mutex
+	getURLs []string
 }
 
 var appleDetailRE = regexp.MustCompile(`jobDetails/([^?]+)`)
@@ -38,7 +46,9 @@ func (f *appleFake) PostJSON(_ context.Context, _ string, body, v any) error {
 }
 
 func (f *appleFake) GetJSON(_ context.Context, url string, v any) error {
+	f.mu.Lock()
 	f.getURLs = append(f.getURLs, url)
+	f.mu.Unlock()
 	id := ""
 	if m := appleDetailRE.FindStringSubmatch(url); m != nil {
 		id = m[1]

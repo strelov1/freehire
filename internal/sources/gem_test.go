@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -19,11 +20,17 @@ type gqlHTTP struct {
 	list       string            // canned JobBoardList response
 	detail     map[string]string // extId -> canned ExternalJobPostingQuery response
 	failExtIDs map[string]bool   // extIds whose detail request errors
-	gotURL     string
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu     sync.Mutex
+	gotURL string
 }
 
 func (f *gqlHTTP) PostJSON(_ context.Context, url string, body, v any) error {
+	f.mu.Lock()
 	f.gotURL = url
+	f.mu.Unlock()
 	req, ok := body.(gemRequest)
 	if !ok {
 		return errors.New("gqlHTTP: body is not a gemRequest")

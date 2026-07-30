@@ -132,8 +132,15 @@ func TestInstaffoDropsPostingsOlderThanMaxAge(t *testing.T) {
 	stale := "https://jobs.instaffo.com/de/job/stale-bbbbbbbbbbbb"
 	undated := "https://jobs.instaffo.com/de/job/undated-cccccccccccc"
 
+	// The fresh fixture sits a week inside the window, not an hour. `datePosted` is
+	// date-only, so formatting truncates it back to midnight and the posting reads as up to
+	// a day older than asked — and in a negative-offset timezone `Format` picks the local
+	// date while `Parse` reads it as UTC, adding the offset on top. At maxAge-24h that put
+	// it 16 minutes past a 365-day limit here (UTC-03:00, late evening) while still passing
+	// in CI's UTC by a few minutes. The test is about either side of the window, not its
+	// exact edge, so it takes a margin wider than any timezone.
 	fake := (&routedHTTP{}).
-		route("/de/job/fresh-aaaaaaaaaaaa", postingAged(instaffoMaxAge-24*time.Hour)).
+		route("/de/job/fresh-aaaaaaaaaaaa", postingAged(instaffoMaxAge-7*24*time.Hour)).
 		route("/de/job/stale-bbbbbbbbbbbb", postingAged(instaffoMaxAge+24*time.Hour)).
 		route("/de/job/undated-cccccccccccc", `<html><head><script type="application/ld+json">
 {"@context":"https://schema.org","@type":"JobPosting","title":"Entwickler",

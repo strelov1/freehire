@@ -5,6 +5,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -122,9 +123,13 @@ func TestFirstByID(t *testing.T) {
 // detail URL returns its mapped body (or an error), and records whether the XHR header was
 // sent so the test can assert the detail fetch is a plain GET.
 type neogovFakeHTTP struct {
-	listing    string
-	details    map[string]string
-	detailErr  map[string]bool
+	listing   string
+	details   map[string]string
+	detailErr map[string]bool
+	// The adapter fans its detail fetches out across a worker pool, so this recorder is
+	// written from several goroutines at once and needs the lock. The assertions read it
+	// after Fetch has joined the pool, which is already ordered.
+	mu         sync.Mutex
 	detailXHR  map[string]bool // id -> whether X-Requested-With was sent on its detail call
 	listingXHR bool
 }
@@ -142,10 +147,12 @@ func (f *neogovFakeHTTP) GetTextWithHeaders(_ context.Context, url string, heade
 	if m != nil {
 		id = m[1]
 	}
+	f.mu.Lock()
 	if f.detailXHR == nil {
 		f.detailXHR = map[string]bool{}
 	}
 	f.detailXHR[id] = xhr
+	f.mu.Unlock()
 	if f.detailErr[id] {
 		return "", errors.New("neogovFakeHTTP: detail boom")
 	}
