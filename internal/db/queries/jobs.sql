@@ -476,7 +476,9 @@ WITH ats AS (
            btrim(regexp_replace(lower(jobs.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
-               regexp_replace(jobs.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               regexp_replace(
+                 regexp_replace(jobs.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+                 '^(.*?):.+$', '\1'),
                '^(.*)\s[-|—]\s.+$', '\1')
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            jobs.countries
@@ -490,7 +492,9 @@ agg AS (
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
-               regexp_replace(a.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+               regexp_replace(
+                 regexp_replace(a.title, '&[a-zA-Z0-9#]+;', ' ', 'g'),
+                 '^(.*?):.+$', '\1'),
                '^(.*)\s[-|—]\s.+$', '\1')
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            a.countries
@@ -509,8 +513,13 @@ agg AS (
 ),
 matches AS (
     -- Two match paths: the exact key (ntitle) and the entity-decoded, suffix-stripped key
-    -- (ntitle2), which catches an ATS title that only appends " - <suffix>" or carries an
-    -- undecoded HTML entity. Each path is a SEPARATE single-equality hash join (O(agg + ats))
+    -- (ntitle2), which catches a title that only appends a trailing " - <suffix>" or
+    -- ": <suffix>" clause, or carries an undecoded HTML entity. The colon clause is stripped
+    -- INSIDE the dash strip so a title carrying both ("Engineer: Go, K8s - Remote") reduces all
+    -- the way. Only those two clauses are decoration: measured on prod, also stripping a
+    -- parenthetical produced 39 wrong pairs out of 55 — one company's "…, Backend (Traffic)"
+    -- matching its "(Payments)", "(Identity)" and "(Infrastructure)" roles — and a comma clause
+    -- fails the same way ("…, Backend" vs "…, Fullstack"). Each path is a SEPARATE single-equality hash join (O(agg + ats))
     -- and the two are UNION ALL-ed — an OR of the two equalities in one ON would defeat the
     -- hash join and go quadratic on a big company (the hotel-chain case). UNION ALL, not
     -- UNION: a row matched by both paths appears twice, but the downstream MIN(ats_id)
