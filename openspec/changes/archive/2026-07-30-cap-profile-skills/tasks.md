@@ -17,4 +17,5 @@
 ## 3. Rollout
 
 - [x] 3.1 `0056` applied to prod by `release.sh` during the release of the change that introduced it (`migrate: 72 file(s) on disk, 0 baselined, 1 applied`).
-- [ ] 3.2 `0057` applies on the next release — `release.sh` runs the migration runner before starting the new colour, and widening a bound cannot fail on existing data.
+- [x] 3.2 `0057` applied to prod; verified directly, both constraints now read `cardinality(...) <= 200 NOT VALID`, and the serving binary carries `too many skills (max 200)` with the old `max 100` string gone.
+- [x] 3.3 The rollout cost an incident worth recording: the first attempt landed inside the nightly `pg_dump` window (03:00 UTC), where the dump holds `ACCESS SHARE` on every table, so this change's `ALTER TABLE` queued for `ACCESS EXCLUSIVE` — and because Postgres orders the lock queue, seven live `GetUserProfile` reads piled up behind it for up to twelve minutes. Cancelling the ALTER drained the queue; `release.sh` had already aborted, so no bad code was served. Fixed generally rather than in this migration: the runner now sets a 5s `lock_timeout` (freehire#1284), which bounds the wait without bounding how long a statement may hold a lock.
