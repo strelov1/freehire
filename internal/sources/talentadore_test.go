@@ -107,6 +107,33 @@ func TestTalentAdoreFetch(t *testing.T) {
 	}
 }
 
+// The description_text fallback is feed-controlled like description_html, so it must go
+// through the same sanitizer: it reaches the SPA through {@html}, where an <img> is a
+// tracking pixel fired against every viewer and an <iframe> is third-party content.
+func TestTalentAdoreSanitizesTextFallback(t *testing.T) {
+	fake := &fakeHTTP{body: `{"jobs":[{
+		"job_token": "t1",
+		"name": "Designer",
+		"link": "https://ats.talentadore.com/apply/designer/t1",
+		"description_html": "",
+		"description_text": "Design things. <img src=\"https://tracker.example/p.gif\"><iframe src=\"https://evil.example\"></iframe>"
+	}]}`}
+
+	jobs, err := NewTalentAdore(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "b"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if got := jobs[0].Description; strings.Contains(got, "<img") || strings.Contains(got, "<iframe") {
+		t.Errorf("description_text fallback not sanitized: %q", got)
+	}
+	if !strings.Contains(jobs[0].Description, "Design things.") {
+		t.Errorf("Description lost real content: %q", jobs[0].Description)
+	}
+}
+
 func TestTalentAdoreSkipsMissingToken(t *testing.T) {
 	fake := &fakeHTTP{body: `{"jobs":[
 		{"job_token":"","name":"No Token","link":"x"},

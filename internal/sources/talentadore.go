@@ -71,7 +71,9 @@ func (s talentadore) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		location := joinNonEmpty(j.City, j.County, j.Country)
 		description := sanitizeHTML(j.DescriptionHTML)
 		if description == "" {
-			description = strings.TrimSpace(j.DescriptionText)
+			// The text field is feed-controlled too, and nothing guarantees it is free of
+			// markup — it goes through the same sanitizer as the HTML one.
+			description = strings.TrimSpace(sanitizeHTML(j.DescriptionText))
 		}
 		jobs = append(jobs, Job{
 			ExternalID:  token,

@@ -101,6 +101,35 @@ func TestAlignerrDropsInactiveAndMissingDetail(t *testing.T) {
 	}
 }
 
+// shortDescription is feed-controlled like htmlLongDescription, so the fallback must go
+// through the same sanitizer — the description is rendered with {@html}, where an <img> is
+// a tracking pixel fired against every viewer and an <iframe> is third-party content.
+func TestAlignerrSanitizesShortDescriptionFallback(t *testing.T) {
+	detail := `<script id="__NEXT_DATA__" type="application/json">` +
+		`{"props":{"pageProps":{"job":{"id":"aaa","name":"Task Author",` +
+		`"htmlLongDescription":"",` +
+		`"shortDescription":"Write tasks. <img src=\"https://tracker.example/p.gif\"><iframe src=\"https://evil.example\"></iframe>",` +
+		`"isActive":true,"jobType":"CONTRACT","location":"United States"}}}}` +
+		`</script>`
+	fake := (&routedHTTP{}).
+		route("/jobs/aaa", detail).
+		route("alignerr.com/jobs", alignerrListingJSON("aaa"))
+
+	jobs, err := NewAlignerr(fake).Fetch(context.Background(), CompanyEntry{Company: "Alignerr"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if got := jobs[0].Description; strings.Contains(got, "<img") || strings.Contains(got, "<iframe") {
+		t.Errorf("shortDescription fallback not sanitized: %q", got)
+	}
+	if !strings.Contains(jobs[0].Description, "Write tasks.") {
+		t.Errorf("Description lost real content: %q", jobs[0].Description)
+	}
+}
+
 func TestAlignerrEmploymentType(t *testing.T) {
 	cases := map[string]string{
 		"CONTRACT": "contract", "FULL_TIME": "full_time",

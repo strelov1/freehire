@@ -111,7 +111,9 @@ func (a alignerr) detail(ctx context.Context, e CompanyEntry, it alignerrListIte
 
 	description := sanitizeHTML(j.HTMLLongDescription)
 	if description == "" {
-		description = strings.TrimSpace(j.ShortDescription)
+		// The short field is feed-controlled too, and nothing guarantees it is free of
+		// markup — it goes through the same sanitizer as the long one.
+		description = strings.TrimSpace(sanitizeHTML(j.ShortDescription))
 	}
 	// The listing presents every posting's location as "Remote"; the detail's own location is
 	// the fallback when the listing item is absent.
