@@ -200,6 +200,7 @@ var namedRoleTable = []struct {
 		// needs its own alias — the same trap the classify table documents.
 		"mixed-signal design engineer", "rf design engineer", "rfic design engineer",
 		"analogue design engineer", "silicon design engineer", "memory design engineer",
+		"standard cell design engineer",
 	}},
 
 	// Non-software professions the catalogue carries (broad scope).

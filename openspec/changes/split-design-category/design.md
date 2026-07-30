@@ -269,6 +269,13 @@ retire.
 - **Enrichment/embedding queues drop these jobs; already-enriched ones keep their
   LLM payload.** → Harmless: served facets are dict-only, so the stale
   `enrichment.category` is never surfaced.
+- **Recall lost to precision, stated plainly.** Dropping a phrase costs the honest
+  spelling too: an unqualified "After Effects" and "Solid Edge" in a real design or
+  CAD posting now tag nothing (Adobe's product stays reachable through
+  "Adobe After Effects", PTC's through "PTC Creo"/"Creo Parametric"). The
+  design-systems practice is only reachable through the job title. This is the trade
+  the corroboration gate cannot make for us: `ambiguousWords` keys single tokens, and
+  a phrase always matches strong, so a risky phrase can only be kept or dropped.
 - **A homonym slips through corroboration** (a mechanical description that mentions
   "sketch" next to `autocad`). → Acceptable: the tag would be wrong but not
   misleading, and corroboration already gates the worst cases. Tests cover the

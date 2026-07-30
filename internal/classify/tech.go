@@ -26,8 +26,10 @@ var techTitleTerms = []string{
 	// "software design engineer" (and the SDET form spelled out) is not adjacent to
 	// "software engineer", so it needs its own term: the design-category split made the
 	// title category-less, leaving this detector as the only thing that reads it as
-	// technical.
-	"software design engineer",
+	// technical. The "-ing" spelling needs a term of its own too — boundaries mean
+	// "engineer" cannot see "engineering", and "Software Design Engineering Manager"
+	// would otherwise be unknown, which is prune's ruleUnknown bucket.
+	"software design engineer", "software design engineering",
 	"site reliability engineer", "platform engineer",
 	"backend engineer", "back-end engineer", "frontend engineer", "front-end engineer",
 	"fullstack engineer", "full stack engineer", "full-stack engineer",

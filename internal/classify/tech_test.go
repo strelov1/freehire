@@ -69,6 +69,11 @@ func TestIsTech_SoftwareDesignEngineer(t *testing.T) {
 		"Software Design Engineer",
 		"Senior Software Design Engineer",
 		"Software Design Engineer in Test",
+		// The "-ing" spelling needs its own term: wordmatch is boundary-aware, so
+		// "engineer" cannot see "engineering", and these titles carry no category at
+		// all — this detector is the only thing left to read them as technical.
+		"Software Design Engineering Manager",
+		"Director, Software Design Engineering",
 	} {
 		if !IsTech(title) {
 			t.Errorf("IsTech(%q) = false, want true", title)
