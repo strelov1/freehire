@@ -40,6 +40,21 @@ const noTxMarker = "migrate: no-transaction"
 // other advisory-lock users, and the project has none.
 const advisoryLockKey int64 = 728391
 
+// lockTimeout bounds how long a migration may WAIT for a lock. It does not bound how long a
+// statement may hold one, so a long index build is unaffected — only the wait is.
+//
+// Without it a schema change does not merely stall itself, it stalls the table. Postgres
+// queues lock requests, so an `ALTER TABLE` waiting for ACCESS EXCLUSIVE sits ahead of every
+// reader that arrives after it, and those readers wait too. That is how one bounded migration
+// took out signed-in profile reads on 2026-07-30: a release landed inside the nightly
+// pg_dump window, the dump holds ACCESS SHARE on every table for the length of the dump, and
+// the ALTER queued behind it with live reads piling up behind the ALTER.
+//
+// Five seconds is far longer than an uncontended DDL lock takes and far shorter than anything
+// worth stalling a table for. Failing is the right outcome: release.sh aborts the release with
+// the live colour untouched, and the operator retries outside the window.
+const lockTimeout = "5s"
+
 // Migration is one migrations/*.sql file. Version is the filename — unique by
 // construction, so the historical duplicate number prefixes (0009_job_daily_stats
 // vs 0009_user_job_analysis) need no renumbering.
@@ -154,6 +169,13 @@ func (r *Runner) Run(ctx context.Context, migs []Migration, forceBaseline bool) 
 			log.Printf("migrate: advisory unlock: %v", err)
 		}
 	}()
+
+	// Set after the advisory lock deliberately: a second concurrent run should still WAIT its
+	// turn for that (it is not a table lock and blocks nobody), while every table lock taken
+	// below is bounded. Session-level, so it covers the no-transaction files too.
+	if _, err := conn.Exec(ctx, "SET lock_timeout = '"+lockTimeout+"'"); err != nil {
+		return nil, nil, fmt.Errorf("set lock_timeout: %w", err)
+	}
 
 	if _, err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS public.schema_migrations (
     version text PRIMARY KEY,

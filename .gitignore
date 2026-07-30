@@ -7,28 +7,34 @@ hire
 # #1212) blocks `git pull` on every deploy host that already has its own build sitting
 # there. Named individually rather than by a glob: these are real, expected artifacts,
 # and a blanket rule would also swallow a source file someone adds with the same name.
-backfill-company-info
-backfill-company-names
-backfill-derive
-backfill-descriptions
-backfill-experience
-backfill-resume-structured
-backfill-semantic-vectors
-classify-mail
-embed
-enrich
-gmail-sync
-hire-api
-ingest
-liveness
-mail-ingest
-migrate
-mine-titles
-notify
-prune
-recount-companies
-reindex
-remind
+#
+# Each pattern is ANCHORED with a leading slash. Unanchored, a bare name matches that name
+# at ANY depth — including the package directory of the same name, so `migrate` silently
+# ignored every new file under internal/migrate/, and `enrich`/`embed`/`ingest` did the same
+# to theirs. 26 package directories were shadowed this way; a new source file in one of them
+# would simply never be committed.
+/backfill-company-info
+/backfill-company-names
+/backfill-derive
+/backfill-descriptions
+/backfill-experience
+/backfill-resume-structured
+/backfill-semantic-vectors
+/classify-mail
+/embed
+/enrich
+/gmail-sync
+/hire-api
+/ingest
+/liveness
+/mail-ingest
+/migrate
+/mine-titles
+/notify
+/prune
+/recount-companies
+/reindex
+/remind
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive
