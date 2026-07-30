@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -144,6 +145,69 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 				t.Error("repo.Upsert should not be called on empty skills")
 			}
 		})
+	}
+}
+
+// manySkills builds n distinct skills, enough to cross a cardinality cap.
+func manySkills(n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = "skill" + strconv.Itoa(i)
+	}
+	return out
+}
+
+// The saved skill list becomes one `skills != "…"` AND group per element in the coverage
+// verdict's Meilisearch filter, so an unbounded list is a stored amplification of every
+// later read against the index that also serves public search.
+func TestSave_RejectsTooManySkills(t *testing.T) {
+	repo := &fakeRepo{}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, manySkills(101), nil, nil)
+	if !errors.Is(err, userprofile.ErrTooManySkills) {
+		t.Errorf("err = %v, want ErrTooManySkills", err)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert should not be called past the skill cap")
+	}
+}
+
+func TestSave_AcceptsSkillsAtTheCap(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, manySkills(100), nil, nil)
+	if err != nil {
+		t.Fatalf("Save at the cap: %v", err)
+	}
+	if len(repo.upserted.Skills) != 100 {
+		t.Errorf("persisted %d skills, want all 100 at the cap", len(repo.upserted.Skills))
+	}
+}
+
+func TestSave_RejectsTooManyExcludedSkills(t *testing.T) {
+	repo := &fakeRepo{}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go"}, manySkills(101), nil)
+	if !errors.Is(err, userprofile.ErrTooManySkills) {
+		t.Errorf("err = %v, want ErrTooManySkills", err)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert should not be called past the excluded-skill cap")
+	}
+}
+
+// A value far longer than any canonical skill is junk, not a skill, and is dropped the way
+// blanks and duplicates already are — a per-value problem does not fail the whole save.
+func TestSave_DropsOverlongSkills(t *testing.T) {
+	repo := &fakeRepo{upsertRet: userprofile.Profile{UserID: 7}}
+	_, err := userprofile.New(repo).Save(context.Background(), 7,
+		[]string{"backend"}, []string{"go", strings.Repeat("x", 200)}, nil, nil)
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	want := []string{"go"}
+	if strings.Join(repo.upserted.Skills, ",") != strings.Join(want, ",") {
+		t.Errorf("Skills = %v, want the overlong value dropped %v", repo.upserted.Skills, want)
 	}
 }
 

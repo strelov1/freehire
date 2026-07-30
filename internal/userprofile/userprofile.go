@@ -2,7 +2,7 @@
 // their professional self — a non-empty set of specializations (job categories) and a
 // non-empty set of skills — and can fetch, save (create-or-replace), and clear that one
 // profile. It owns validation (the specialization vocabulary and cap, skill
-// normalization); the Repository owns persistence and maps the no-row condition onto
+// normalization and cap); the Repository owns persistence and maps the no-row condition onto
 // ErrNotFound. There is at most one profile per user (keyed by user_id), so there is no
 // name, no id, and no cap. How a profile is consumed (match scoring, ranked feeds,
 // notifications) lives outside this package.
@@ -31,6 +31,8 @@ var (
 	ErrTooManySpecializations = errors.New("userprofile: too many specializations")
 	// ErrEmptySkills is a profile whose skills are empty after normalization (mapped to 400).
 	ErrEmptySkills = errors.New("userprofile: at least one skill is required")
+	// ErrTooManySkills is a wanted or avoided skill set past maxSkills (mapped to 400).
+	ErrTooManySkills = errors.New("userprofile: too many skills")
 	// ErrNotFound is the caller having no profile yet (mapped to a null payload on GET,
 	// 404 on the verdict/ATS sub-resources).
 	ErrNotFound = errors.New("userprofile: not found")
@@ -39,6 +41,19 @@ var (
 // maxSpecializations caps how many specializations one profile may combine; the
 // migration's cardinality CHECK is the backstop.
 const maxSpecializations = 5
+
+// maxSkills caps how many skills one profile may list, wanted or avoided. The wanted set is
+// not just stored: the coverage verdict turns it into one `skills != "<skill>"` AND group per
+// element (see search.AndNotSkills), so an unbounded list would balloon that Meilisearch
+// filter on every later read of the profile — against the same index that serves public
+// search. It is the ceiling the stateless coverage endpoint already applies to a supplied
+// list; the migration's cardinality CHECK is the backstop.
+const maxSkills = 100
+
+// maxSkillLen bounds one skill's length. The longest canonical form the skill dictionary can
+// emit is 30 characters, so this leaves generous room for a free-text entry while keeping a
+// single value from reaching the search filter as a multi-kilobyte literal.
+const maxSkillLen = 64
 
 // Profile is the user's saved professional profile: their specializations (job
 // categories) and skills, plus optional location preferences kept as raw JSON
@@ -96,7 +111,11 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return Profile{}, err
 	}
-	excluded := subtractSkills(normalizeExcludedSkills(excludedSkills), normalized)
+	avoided, err := normalizeSkillList(excludedSkills)
+	if err != nil {
+		return Profile{}, err
+	}
+	excluded := subtractSkills(avoided, normalized)
 	locJSON, err := normalizeLocationPreferences(loc)
 	if err != nil {
 		return Profile{}, err
@@ -141,27 +160,32 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 	return out, nil
 }
 
-// normalizeSkills lowercases, trims, and deduplicates the skills (preserving first-seen
-// order), dropping blanks. It returns ErrEmptySkills if nothing remains — a profile without
-// skills has no meaning.
+// normalizeSkills normalizes the wanted skills and additionally requires the set to be
+// non-empty — a profile without skills has no meaning.
 func normalizeSkills(skills []string) ([]string, error) {
-	out := normalizeExcludedSkills(skills)
+	out, err := normalizeSkillList(skills)
+	if err != nil {
+		return nil, err
+	}
 	if len(out) == 0 {
 		return nil, ErrEmptySkills
 	}
 	return out, nil
 }
 
-// normalizeExcludedSkills lowercases, trims, and deduplicates a skill list (preserving
-// first-seen order), dropping blanks. Unlike normalizeSkills it never errors: an empty set
-// is valid (the user need not avoid anything). It always returns a non-nil slice so the
-// value persists as an empty array, not NULL.
-func normalizeExcludedSkills(skills []string) []string {
+// normalizeSkillList lowercases, trims, and deduplicates a skill list (preserving first-seen
+// order), and caps it at maxSkills. A per-value problem drops that value: blanks, and anything
+// past maxSkillLen — a string that long is not a skill, and losing one junk entry beats
+// failing an otherwise valid save. A whole-list problem errors: a set past the cardinality cap
+// returns ErrTooManySkills, mirroring normalizeSpecializations. An empty result is valid here
+// (the user need not avoid anything), and the slice is always non-nil so the value persists as
+// an empty array, not NULL.
+func normalizeSkillList(skills []string) ([]string, error) {
 	out := make([]string, 0, len(skills))
 	seen := make(map[string]struct{}, len(skills))
 	for _, raw := range skills {
 		skill := strings.ToLower(strings.TrimSpace(raw))
-		if skill == "" {
+		if skill == "" || len(skill) > maxSkillLen {
 			continue
 		}
 		if _, dup := seen[skill]; dup {
@@ -170,7 +194,10 @@ func normalizeExcludedSkills(skills []string) []string {
 		seen[skill] = struct{}{}
 		out = append(out, skill)
 	}
-	return out
+	if len(out) > maxSkills {
+		return nil, ErrTooManySkills
+	}
+	return out, nil
 }
 
 // subtractSkills returns the values in a that are not in remove, preserving a's order. It
