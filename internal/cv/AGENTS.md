@@ -32,6 +32,33 @@ Fonts: the Typst binary embeds no proportional sans, so Liberation Sans (SIL OFL
 under `fonts/`, staged into the sandbox, and exposed via `--font-path`. A template that wants
 sans uses `#set text(font: "Liberation Sans")`.
 
+## What makes a CV tailored (`cvs.is_tailored`)
+
+A CV is a tailored copy because it was **created** as one, not because it still points at a vacancy.
+`cvs_job_id_fkey` is `ON DELETE SET NULL`, and `cmd/prune` deletes vacancies by design — the prune
+query states that nulling references is "an accepted cost of the campaign". Inferring tailored-ness
+from `job_id IS NOT NULL` therefore meant that pruning one junk vacancy turned its copy into a plain
+CV, and since the base lookup takes the **newest** plain CV, the freshly-edited orphan beat the real
+one. It would then seed the next tailored copy and back the ATS delta's baseline.
+
+Three things that follow, and are easy to get backwards:
+
+- **`is_tailored` does not track `job_id`.** An orphaned copy is `is_tailored = true, job_id = NULL`.
+  Any new reader that wants "is this a tailored copy" must ask the flag; `job_id` answers a different
+  question ("which vacancy", and only while the vacancy exists).
+- **There is no `is_base`, and no uniqueness.** A user may own several plain CVs (`cv-builder`:
+  create/list/update/delete multiple CVs), so "the base" is derived — the most recently edited
+  non-tailored CV — and `GetBaseCVByUser` does that choosing. An earlier draft added
+  `UNIQUE (user_id) WHERE is_base` and broke creating a second CV; `TestBaseCVAndTailoredCopy` caught
+  it.
+- **The ATS delta's 409 splits on the flag.** A base CV is refused with "this is a base CV"; a
+  tailored copy whose vacancy is gone is refused with "the vacancy … no longer exists". They are
+  different situations, and `job_id == 0` alone cannot tell them apart.
+
+Backfill caveat: `0058` reads `job_id` to set the flag, so it is right about every row only because
+no prune had orphaned one yet. A row orphaned before that migration would stay marked non-tailored
+and would need a heuristic repair.
+
 ## ATS delta (tailored vs base)
 
 `GET /me/cvs/:id/ats-delta` reports what tailoring did to a CV's ATS readiness. The scoring

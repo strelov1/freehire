@@ -37,8 +37,13 @@ type Meta struct {
 // Record is a CV with its full document body.
 type Record struct {
 	Meta
-	// JobID is the vacancy a tailored CV is bound to, or 0 for a base CV (job_id NULL).
+	// JobID is the vacancy a tailored CV is bound to, or 0 — for a base CV, and also for a
+	// tailored copy whose vacancy was pruned (the FK nulls the link). IsTailored is what tells
+	// those two apart.
 	JobID int64
+	// IsTailored records what the row was CREATED as. It does not follow JobID: a pruned vacancy
+	// takes the link away but leaves the copy a tailored copy.
+	IsTailored bool
 	// AgentSessionID is the roy session bound to a tailored CV (empty when none).
 	AgentSessionID string
 	Document       Document
@@ -136,6 +141,7 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID, userID int64) (Record, er
 	return Record{
 		Meta:                Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
 		JobID:               int8Value(row.JobID),
+		IsTailored:          row.IsTailored,
 		AgentSessionID:      textValue(row.AgentSessionID),
 		Document:            doc,
 		AutopilotReport:     decodeAutopilotReport(row.AutopilotReport),

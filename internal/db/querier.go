@@ -321,9 +321,10 @@ type Querier interface {
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
 	CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error)
-	// Insert a new CV for a user. data is the sanitized structured document (JSON). job_id
-	// defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
-	// and detail responses need.
+	// Insert a new CV for a user. data is the sanitized structured document (JSON). This is the
+	// user's own CV, not a copy made for a vacancy, so is_tailored is stated false rather than left to
+	// be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
+	// these. Returns the metadata the list and detail responses need.
 	CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow, error)
 	// Record a contribution of a novel company board. The unique index on (source, board) over the
 	// live statuses (migration 0049) rejects a second contribution of a board already queued or
@@ -379,7 +380,9 @@ type Querier interface {
 	// UNIQUE constraint (surfaced as a 409). Returns the created row.
 	CreateSubscription(ctx context.Context, arg CreateSubscriptionParams) (Subscription, error)
 	// Insert a CV bound to a vacancy (job_id set) — the per-vacancy tailored copy. data is the
-	// sanitized document copied from the base CV. Returns the metadata the detail response needs.
+	// sanitized document copied from the base CV. is_tailored is stated, not inferred: if this vacancy
+	// is ever pruned the row loses its job_id, and the flag is what keeps it a tailored copy instead of
+	// joining the pool the base is chosen from. Returns the metadata the detail response needs.
 	CreateTailoredCV(ctx context.Context, arg CreateTailoredCVParams) (CreateTailoredCVRow, error)
 	// Register a new account. email is stored as given (the handler lowercases it);
 	// the unique index on lower(email) rejects duplicates regardless of case. role is
@@ -639,9 +642,15 @@ type Querier interface {
 	// the row exists, so this never returns no-rows on the debit path; the lock serializes
 	// concurrent debits for the same user so the balance can never be oversold.
 	GetBalanceForUpdate(ctx context.Context, userID int64) (GetBalanceForUpdateRow, error)
-	// The user's base CV (job_id IS NULL) — their non-tailored résumé, newest edit first. Used
-	// as the seed source when tailoring; returns no row when the user has only tailored CVs or
-	// none at all (the caller then seeds a base from the extracted résumé).
+	// The user's base CV — their non-tailored résumé. Used as the seed source when tailoring;
+	// returns no row when the user has only tailored CVs or none at all (the caller then seeds a base
+	// from the extracted résumé), INCLUDING when their only vacancy-less CV is a tailored copy whose
+	// vacancy was pruned. Excluding on is_tailored rather than requiring `job_id IS NULL` is the whole
+	// point: the absence of a vacancy link is something cmd/prune creates, so it cannot mean "not
+	// tailored".
+	//
+	// "The base" stays a derived notion — the most recently edited non-tailored CV. Users may own
+	// several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
 	GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVByUserRow, error)
 	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
 	// which the caller treats as "never seen, eligible".

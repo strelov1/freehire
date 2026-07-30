@@ -1,9 +1,10 @@
 -- name: CreateCV :one
--- Insert a new CV for a user. data is the sanitized structured document (JSON). job_id
--- defaults NULL (the tailoring seam is unused in phase 1). Returns the metadata the list
--- and detail responses need.
-INSERT INTO cvs (user_id, title, template_id, data)
-VALUES ($1, $2, $3, $4)
+-- Insert a new CV for a user. data is the sanitized structured document (JSON). This is the
+-- user's own CV, not a copy made for a vacancy, so is_tailored is stated false rather than left to
+-- be inferred from a NULL job_id — an absence cmd/prune also produces. Users may own several of
+-- these. Returns the metadata the list and detail responses need.
+INSERT INTO cvs (user_id, title, template_id, data, is_tailored)
+VALUES ($1, $2, $3, $4, false)
 RETURNING id, title, template_id, created_at, updated_at;
 
 -- name: ListCVsByUser :many
@@ -30,7 +31,7 @@ ORDER BY c.updated_at DESC;
 -- the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
 -- The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
 -- is a whole second document, and no caller needs its bytes — only whether one exists.
-SELECT id, title, template_id, data, job_id, agent_session_id,
+SELECT id, title, template_id, data, job_id, is_tailored, agent_session_id,
        autopilot_report, (autopilot_undo IS NOT NULL)::boolean AS autopilot_revertable,
        created_at, updated_at
 FROM cvs
@@ -65,20 +66,28 @@ DELETE FROM cvs
 WHERE id = $1 AND user_id = $2;
 
 -- name: GetBaseCVByUser :one
--- The user's base CV (job_id IS NULL) — their non-tailored résumé, newest edit first. Used
--- as the seed source when tailoring; returns no row when the user has only tailored CVs or
--- none at all (the caller then seeds a base from the extracted résumé).
+-- The user's base CV — their non-tailored résumé. Used as the seed source when tailoring;
+-- returns no row when the user has only tailored CVs or none at all (the caller then seeds a base
+-- from the extracted résumé), INCLUDING when their only vacancy-less CV is a tailored copy whose
+-- vacancy was pruned. Excluding on is_tailored rather than requiring `job_id IS NULL` is the whole
+-- point: the absence of a vacancy link is something cmd/prune creates, so it cannot mean "not
+-- tailored".
+--
+-- "The base" stays a derived notion — the most recently edited non-tailored CV. Users may own
+-- several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
 SELECT id, title, template_id, data, created_at, updated_at
 FROM cvs
-WHERE user_id = $1 AND job_id IS NULL
+WHERE user_id = $1 AND NOT is_tailored
 ORDER BY updated_at DESC, id DESC
 LIMIT 1;
 
 -- name: CreateTailoredCV :one
 -- Insert a CV bound to a vacancy (job_id set) — the per-vacancy tailored copy. data is the
--- sanitized document copied from the base CV. Returns the metadata the detail response needs.
-INSERT INTO cvs (user_id, title, template_id, data, job_id)
-VALUES ($1, $2, $3, $4, $5)
+-- sanitized document copied from the base CV. is_tailored is stated, not inferred: if this vacancy
+-- is ever pruned the row loses its job_id, and the flag is what keeps it a tailored copy instead of
+-- joining the pool the base is chosen from. Returns the metadata the detail response needs.
+INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored)
+VALUES ($1, $2, $3, $4, $5, true)
 RETURNING id, title, template_id, created_at, updated_at;
 
 -- name: SnapshotCVForAutopilot :execrows

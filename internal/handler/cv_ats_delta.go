@@ -52,8 +52,13 @@ func (h *cvHandlers) GetCVATSDelta(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
+	// Two different reasons a CV has no comparison, and the caller cannot act on the wrong one.
+	// A pruned vacancy leaves a tailored copy with no job_id, so JobID alone cannot tell them apart.
+	if !tailored.IsTailored {
+		return fiber.NewError(fiber.StatusConflict, "this is a base CV: there is nothing to compare it against")
+	}
 	if tailored.JobID == 0 {
-		return fiber.NewError(fiber.StatusConflict, "not a tailored CV: there is no base to compare against")
+		return fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
 	}
 	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
 	if err != nil {

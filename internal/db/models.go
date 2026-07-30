@@ -130,6 +130,7 @@ type Cv struct {
 	ID              uuid.UUID          `json:"id"`
 	AutopilotReport []byte             `json:"autopilot_report"`
 	AutopilotUndo   []byte             `json:"autopilot_undo"`
+	IsTailored      bool               `json:"is_tailored"`
 }
 
 type Email struct {

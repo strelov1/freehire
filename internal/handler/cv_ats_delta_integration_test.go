@@ -124,6 +124,52 @@ func (f atsDeltaFixture) get(t *testing.T, id string) (atsDeltaResponse, int) {
 	return body.Data, resp.StatusCode
 }
 
+// getErr reads the refusal message alongside the status, so a test can pin which of the two
+// no-comparison cases the caller was told about.
+func (f atsDeltaFixture) getErr(t *testing.T, id string) (string, int) {
+	t.Helper()
+	resp := doCV(t, f.app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/ats-delta", f.token, nil)
+	defer resp.Body.Close()
+	var body struct {
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	return body.Error, resp.StatusCode
+}
+
+// TestATSDelta_RefusalNamesWhichCaseItIs pins the two ways a CV can have no comparison apart. A
+// base CV has nothing to compare against; a tailored copy whose vacancy was pruned is still a
+// tailored copy, and telling its owner "not a tailored CV" describes the wrong situation.
+func TestATSDelta_RefusalNamesWhichCaseItIs(t *testing.T) {
+	pool := startPostgres(t)
+	f := newATSDeltaFixture(t, pool)
+
+	baseMsg, baseStatus := f.getErr(t, f.base.ID.String())
+	if baseStatus != fiber.StatusConflict {
+		t.Fatalf("base cv status = %d, want 409", baseStatus)
+	}
+	if !strings.Contains(strings.ToLower(baseMsg), "base") {
+		t.Errorf("base cv refusal = %q, want it to say this is the base CV", baseMsg)
+	}
+
+	// Prune the vacancy out from under the tailored copy: the FK nulls its link.
+	if _, err := pool.Exec(context.Background(),
+		`DELETE FROM jobs WHERE id = (SELECT job_id FROM cvs WHERE id = $1)`, f.tailored.ID); err != nil {
+		t.Fatalf("prune vacancy: %v", err)
+	}
+
+	orphanMsg, orphanStatus := f.getErr(t, f.tailored.ID.String())
+	if orphanStatus != fiber.StatusConflict {
+		t.Fatalf("orphan status = %d, want 409", orphanStatus)
+	}
+	if !strings.Contains(strings.ToLower(orphanMsg), "vacancy") {
+		t.Errorf("orphan refusal = %q, want it to say the vacancy no longer exists", orphanMsg)
+	}
+	if orphanMsg == baseMsg {
+		t.Errorf("both refusals say %q; want the message to distinguish a base CV from an orphaned copy", orphanMsg)
+	}
+}
+
 func TestATSDelta_ComparesTheTailoredCopyAgainstTheBase(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 
