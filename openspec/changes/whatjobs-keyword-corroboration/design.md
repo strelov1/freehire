@@ -74,8 +74,15 @@ magnitude smaller regardless.
 - **The 50% threshold is calibrated on one keyword's cliff.** → The cliff is steep enough that the
   exact value is not load-bearing; the log line reports why a crawl stopped, so a misfire is visible
   in one run rather than silent.
-- **Yield may not justify the CPC integration at all.** → That is now a business call with honest
-  numbers behind it, which is the point of measuring: pre-fix estimates were built on `total`.
+- **Yield.** Measured after the fix: ~3200 corroborated postings across the ten keywords, none
+  failing corroboration and no rate limiting. That is well above the ~50–90 per keyword this design
+  first predicted — the collapse point varies from page 2 (`rust developer`) to page 32
+  (`backend engineer`), so a broad keyword stays honest much longer than the `rust developer` sample
+  suggested. The prediction was wrong in the safe direction, but it was still a prediction from one
+  sample: the corroborated counts now live in the board file, and they are the numbers to reason from.
+- **`backend engineer` collapses at page 32, close to the 40-page budget.** → If it grows past the
+  budget the crawl becomes bounded again and the log says so. Worth splitting into narrower keywords
+  at that point rather than raising the budget, since deeper pages are where padding lives.
 
 ## Migration Plan
 

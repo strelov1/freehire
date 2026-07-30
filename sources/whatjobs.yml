@@ -12,31 +12,28 @@
 # `country`, `locale` and `geo` query parameters are ignored, so another market needs its own
 # account and its own registration.
 #
-# Keywords are chosen NARROW on purpose. A crawl reads at most 40 pages (2000 postings) of a
-# keyword, so a keyword whose total exceeds that is only ever read as a bounded slice — its deeper
-# postings drift in and out of view between runs. Every keyword below was measured to sit inside the
-# budget, which keeps each crawl complete. Live totals at the time of writing are in the comments;
-# they grow, so re-measure before adding a broad term. Deliberately NOT listed (measured far beyond
-# the budget): data engineer 44k, machine learning engineer 34k, data scientist 33k,
-# software engineer 11.5k, devops engineer 10k, security engineer 8k, site reliability engineer 5k,
-# platform engineer 4.8k, qa automation engineer 3k, java developer 3k.
+# Keyword volumes below are CORROBORATED counts measured live on 2026-07-30 — the number of postings
+# that actually name the keyword's terms. Do NOT use the feed's own `total`: it ranks rather than
+# filters and pads a thin result set with unrelated inventory, so `total` describes the padding too
+# (it claimed 307 for "rust developer", of which ~51 are real). A crawl now ends when a page stops
+# corroborating; the page where that happened is noted, since it shows how far the honest run goes.
 - company: WhatJobs — Backend engineers
-  board: "backend engineer" # ~1.9k
+  board: "backend engineer" # ~1270 corroborated, collapses at page 32
 - company: WhatJobs — Frontend engineers
-  board: "frontend engineer" # ~1.2k
+  board: "frontend engineer" # ~139, collapses at page 4
 - company: WhatJobs — React developers
-  board: "react developer" # ~1.2k
+  board: "react developer" # ~124, collapses at page 4
 - company: WhatJobs — Python developers
-  board: "python developer" # ~1.0k
+  board: "python developer" # ~668, collapses at page 17
 - company: WhatJobs — Kubernetes engineers
-  board: "kubernetes engineer" # ~690
+  board: "kubernetes engineer" # ~350, collapses at page 10
 - company: WhatJobs — iOS developers
-  board: "ios developer" # ~510
+  board: "ios developer" # ~212, collapses at page 6
 - company: WhatJobs — Android developers
-  board: "android developer" # ~445
+  board: "android developer" # ~171, collapses at page 5
 - company: WhatJobs — Node.js developers
-  board: "node.js developer" # ~440
+  board: "node.js developer" # ~136, collapses at page 5
 - company: WhatJobs — Rust developers
-  board: "rust developer" # ~307
+  board: "rust developer" # ~51, collapses at page 2
 - company: WhatJobs — Go developers
-  board: "golang" # ~107
+  board: "golang" # ~86, feed runs dry (no padding at all)

@@ -50,6 +50,11 @@ Both have the same cure. Stopping a keyword once its results stop corroborating 
 
 - **Touched:** `internal/sources/whatjobs.go` (+ test), `internal/sources/pacer.go` (in-flight cap for
   the provider), `internal/sources/registry.go` (wire the cap), `sources/whatjobs.yml` (comments).
-- **Behavioural:** the source yields far fewer postings than the pre-flight numbers suggested —
-  roughly 50–90 per keyword rather than the hundreds `total` implied. That is the real inventory.
+- **Behavioural:** measured live across all ten keywords after the fix — **~3200 corroborated
+  postings, none failing corroboration, and no rate limiting**. Per keyword the honest inventory
+  varies far more than expected: `backend engineer` 1270 (collapses at page 32), `python developer`
+  668 (page 17), `kubernetes engineer` 350, `ios developer` 212, `android developer` 171,
+  `frontend engineer` 139, `node.js developer` 136, `react developer` 124, `golang` 86 (the feed runs
+  dry with no padding at all), `rust developer` 51 (page 2). So the padding is not uniform: a broad
+  keyword stays honest for dozens of pages while a thin one collapses immediately.
 - **No schema, API, or web changes.**
