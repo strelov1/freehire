@@ -37,6 +37,12 @@ func GetOrCreate(ctx context.Context, s Store, userID int64, email, domain strin
 
 	base := Handle(email)
 	for n := 1; n <= maxAllocAttempts; n++ {
+		// A reserved handle is skipped rather than claimed, so a user whose own local-part
+		// is an operational name gets the next suffix instead. Only the bare form is ever
+		// reserved, so this costs at most one attempt.
+		if isReserved(Candidate(base, n)) {
+			continue
+		}
 		addr := Address(base, n, domain)
 		err := s.Insert(ctx, userID, addr)
 		if err == nil {
