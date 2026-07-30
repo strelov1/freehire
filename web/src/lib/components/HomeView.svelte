@@ -121,6 +121,12 @@
       body: 'Ask an employee inside the company to put your name forward — anonymously and for free — instead of applying cold.',
       cta: 'How referrals work',
     },
+    {
+      href: resolve('/features/ghost-jobs'),
+      title: 'Ghost jobs',
+      body: 'Some postings are not being filled at all. freehire marks the ones whose behaviour and applicant outcomes say so, and shows you every fact behind the warning.',
+      cta: 'How the signal works',
+    },
   ];
 
   const steps = [

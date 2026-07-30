@@ -23,6 +23,7 @@ export const STATIC_PATHS = [
   '/features/inbox',
   '/features/referrals',
   '/features/tailor',
+  '/features/ghost-jobs',
 ];
 
 /** The curated collection landing pages (`/collections/:slug`), one per collection.

@@ -28,12 +28,16 @@ export interface GhostChecklistRow {
 
 /** The criteria in the order the classifier reports them: structural first, then
  *  outcome. Mirrors internal/ghost's constants — a code here with no counterpart
- *  there renders a row that can never fire. */
-const CRITERIA: { code: string; label: string }[] = [
-  { code: 'evergreen_posting', label: 'Posting behaves as evergreen' },
-  { code: 'ats_absent', label: "Not on the company's own careers board" },
-  { code: 'silent_applications', label: 'Applications here went unanswered' },
-  { code: 'user_reports', label: 'People reported no response' },
+ *  there renders a row that can never fire.
+ *
+ *  Exported because the /features/ghost-jobs landing explains them from this same
+ *  array, and a test fails if a criterion joins the vocabulary without being
+ *  explained there. A marketing page a test keeps honest. */
+export const CRITERIA: { code: string; label: string; tier: 'structural' | 'outcome' }[] = [
+  { code: 'evergreen_posting', label: 'Posting behaves as evergreen', tier: 'structural' },
+  { code: 'ats_absent', label: "Not on the company's own careers board", tier: 'structural' },
+  { code: 'silent_applications', label: 'Applications here went unanswered', tier: 'outcome' },
+  { code: 'user_reports', label: 'People reported no response', tier: 'outcome' },
 ];
 
 const LABELS: Record<string, { tone: 'warn' | 'muted'; label: string }> = {

@@ -22,6 +22,7 @@
         { label: 'Inbox', href: resolve('/features/inbox') },
         { label: 'CV tailoring', href: resolve('/features/tailor') },
         { label: 'Referrals', href: resolve('/features/referrals') },
+        { label: 'Ghost jobs', href: resolve('/features/ghost-jobs') },
       ],
     },
     {
