@@ -14,9 +14,17 @@ empty. The ATS posting SHALL remain canonical (its `duplicate_of` stays NULL); t
 aggregator posting SHALL become the duplicate. A source is an aggregator when its
 provider is in `sources.AggregatorProviders()`.
 
-Normalized title equality is lowercase with runs of non-alphanumeric characters collapsed
-to a single space (the same normalization the role-cluster pass uses), with no suffix
-stripping and no HTML-entity decoding.
+Titles match on either of two keys. The **plain key** is lowercase with runs of
+non-alphanumeric characters collapsed to a single space. The **decorated key** additionally
+decodes HTML entities and drops a trailing clause introduced by ` - `, ` — `, ` | ` or `:` —
+the ways an aggregator appends technologies or a team to an otherwise identical title. A
+posting matches when either key is equal and non-empty.
+
+The decorated key MUST NOT strip a parenthetical group or a clause after a comma. Both carry
+meaning rather than decoration: at one company `Senior Software Engineer, Backend (Traffic)`,
+`(Payments)`, `(Identity)` and `(Infrastructure)` are separate roles, as are
+`Senior Software Engineer, Backend` and `Senior Software Engineer, Fullstack`. Stripping
+either would merge distinct jobs.
 
 #### Scenario: Aggregator copy of an ATS job is suppressed
 
@@ -24,6 +32,24 @@ stripping and no HTML-entity decoding.
   normalized title and overlapping (or empty) countries
 - **THEN** the aggregator posting's `duplicate_of` points to the ATS posting, and the ATS
   posting stays canonical
+
+#### Scenario: A trailing colon clause is decoration
+
+- **WHEN** an aggregator posting is titled `Senior Software Engineer: Full-Stack with TypeScript`
+  and the company has an ATS posting titled `Senior Software Engineer`
+- **THEN** the aggregator posting is suppressed as a duplicate of it
+
+#### Scenario: A parenthetical distinguishes roles and is kept
+
+- **WHEN** an aggregator posting titled `Senior Software Engineer, Backend (Traffic)` and an ATS
+  posting titled `Senior Software Engineer, Backend (Payments)` exist at one company
+- **THEN** neither is suppressed by this pass
+
+#### Scenario: A clause after a comma distinguishes roles and is kept
+
+- **WHEN** an aggregator posting titled `Senior Software Engineer, Backend` and an ATS posting
+  titled `Senior Software Engineer, Fullstack` exist at one company
+- **THEN** neither is suppressed by this pass
 
 #### Scenario: Same title in a different country is not suppressed
 
