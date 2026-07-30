@@ -1,7 +1,7 @@
 // The tailoring ATS delta as the workspace shows it: signed numbers, and — when readability
 // fell — a warning that names the category responsible. Kept out of the component so the
 // wording and the sign handling are unit-tested rather than eyeballed in a browser.
-import type { CvAtsDelta } from '$lib/types';
+import type { CvAtsDelta } from '$lib/cv';
 
 export interface AtsDeltaRow {
   id: string;

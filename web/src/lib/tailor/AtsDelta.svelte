@@ -11,7 +11,7 @@
   // teaches the candidate to ignore the panel; an absence teaches nothing.
   import { TrendingDown, TrendingUp, Minus } from '@lucide/svelte';
   import { viewAtsDelta, toneOf, type AtsDeltaTone } from './atsdelta';
-  import type { CvAtsDelta } from '$lib/types';
+  import type { CvAtsDelta } from '$lib/cv';
 
   let { data }: { data: CvAtsDelta | null | undefined } = $props();
 

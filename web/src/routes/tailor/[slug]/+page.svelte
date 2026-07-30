@@ -23,9 +23,9 @@
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
-  import { toEditable, emptyDocument, type CvRecord } from '$lib/cv';
+  import { toEditable, emptyDocument, type CvRecord, type CvAtsDelta } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
-  import type { CvAtsDelta, Job } from '$lib/types';
+  import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));

@@ -12,7 +12,8 @@
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
   import type { Analysis, AutopilotEntry } from '$lib/generated/contracts';
-  import type { CvAtsDelta, Job, MatchAnalysisResponse } from '$lib/types';
+  import type { Job, MatchAnalysisResponse } from '$lib/types';
+  import type { CvAtsDelta } from '$lib/cv';
 
   type Tab = 'templates' | 'jd' | 'verdict';
 

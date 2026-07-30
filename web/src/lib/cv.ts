@@ -4,6 +4,7 @@
 // unit-testable.
 
 import type {
+  Delta as AtsDeltaWire,
   Document,
   Margins,
   ExperienceItem,
@@ -74,6 +75,21 @@ export const DEFAULT_TEMPLATE_ID = 'classic-ats';
 
 /** A CV template the user can pick in the gallery. `ats_safe` is false for richer layouts
  *  (e.g. the sidebar) that may not parse cleanly in some ATS. Mirrors cv.TemplateInfo. */
+// The two-report comparison behind the tailoring ATS delta.
+export type { Delta as AtsDelta, CategoryChange as AtsCategoryChange } from './generated/contracts';
+
+/** The tailoring ATS-delta response: what tailoring did to the CV's ATS readiness, measured on
+ *  the rendered artifact. `available` is false — with a `reason` and no `delta` — when the
+ *  comparison could not be made (no renderer, a failed compile), and the workspace then shows
+ *  nothing rather than an error. `base_cv_id` names the base CV compared against: the baseline is
+ *  that CV as it stands now, not a snapshot from when the copy was made. */
+export interface CvAtsDelta {
+  available: boolean;
+  reason?: string;
+  base_cv_id?: string;
+  delta?: AtsDeltaWire;
+}
+
 export interface CvTemplate {
   id: string;
   label: string;
