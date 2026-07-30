@@ -60,13 +60,22 @@ export function viewAtsDelta(resp: CvAtsDelta | null | undefined): AtsDeltaView 
   };
 
   if (delta.regressed) {
-    const worst = rows.find((r) => r.id === delta.worst_category);
     const points = Math.abs(delta.change);
-    // The server names the worst category by id; an id this client does not know (an older
-    // SPA against a newer API) drops the clause rather than rendering 'undefined'.
-    view.warning = worst
-      ? `Tailoring lowered ATS readability by ${points} ${points === 1 ? 'point' : 'points'}, most of it in ${worst.label}.`
-      : `Tailoring lowered ATS readability by ${points} ${points === 1 ? 'point' : 'points'}.`;
+    // The server names the worst category by id; an id this client does not know (an older SPA
+    // against a newer API) drops the clause rather than rendering 'undefined'.
+    const worst = rows.find((r) => r.id === delta.worst_category);
+    const where = worst ? `, most of it in ${worst.label}` : '';
+    view.warning = `Tailoring lowered ATS readability by ${points} ${points === 1 ? 'point' : 'points'}${where}.`;
   }
   return view;
+}
+
+/** Which direction a change points, for the caller to map to its own styling. A regression is
+ *  its own tone rather than plain 'down': the overall score can fall while some category rose. */
+export type AtsDeltaTone = 'down' | 'up' | 'flat';
+
+export function toneOf(change: number, regressed = false): AtsDeltaTone {
+  if (regressed || change < 0) return 'down';
+  if (change > 0) return 'up';
+  return 'flat';
 }

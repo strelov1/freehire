@@ -10,28 +10,29 @@
   // An unavailable delta renders nothing at all. A workspace that says "ATS score unavailable"
   // teaches the candidate to ignore the panel; an absence teaches nothing.
   import { TrendingDown, TrendingUp, Minus } from '@lucide/svelte';
-  import { viewAtsDelta } from './atsdelta';
+  import { viewAtsDelta, toneOf, type AtsDeltaTone } from './atsdelta';
   import type { CvAtsDelta } from '$lib/types';
 
   let { data }: { data: CvAtsDelta | null | undefined } = $props();
 
   const view = $derived(viewAtsDelta(data));
+
+  const toneClass: Record<AtsDeltaTone, string> = {
+    down: 'text-amber-600 dark:text-amber-400',
+    up: 'text-emerald-600 dark:text-emerald-400',
+    flat: 'text-muted-foreground',
+  };
+  const overallTone = $derived(view ? toneOf(view.overall.change, view.regressed) : 'flat');
 </script>
 
 {#if view}
   <section class="mb-4 rounded-xl border border-border bg-muted/30 p-3">
     <header class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-sm font-semibold text-foreground">ATS readability</h3>
-      <span
-        class="inline-flex items-center gap-1 text-sm font-semibold {view.regressed
-          ? 'text-amber-600 dark:text-amber-400'
-          : view.overall.change > 0
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : 'text-muted-foreground'}"
-      >
-        {#if view.regressed}
+      <span class="inline-flex items-center gap-1 text-sm font-semibold {toneClass[overallTone]}">
+        {#if overallTone === 'down'}
           <TrendingDown class="size-4" aria-hidden="true" />
-        {:else if view.overall.change > 0}
+        {:else if overallTone === 'up'}
           <TrendingUp class="size-4" aria-hidden="true" />
         {:else}
           <Minus class="size-4" aria-hidden="true" />
@@ -54,13 +55,7 @@
       {#each view.rows as row (row.id)}
         <li class="flex items-center justify-between gap-2 text-xs">
           <span class="text-muted-foreground">{row.label}</span>
-          <span
-            class="tabular-nums {row.change < 0
-              ? 'text-amber-600 dark:text-amber-400'
-              : row.change > 0
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-muted-foreground'}"
-          >
+          <span class="tabular-nums {toneClass[toneOf(row.change)]}">
             {row.base} → {row.tailored}
             <span class="text-muted-foreground">({row.text})</span>
           </span>

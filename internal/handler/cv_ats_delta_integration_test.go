@@ -16,7 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
@@ -110,7 +109,7 @@ func newATSDeltaFixture(t *testing.T, pool *pgxpool.Pool) atsDeltaFixture {
 		base: base, tailored: tailored, store: store, userID: userID}
 }
 
-func (f atsDeltaFixture) get(t *testing.T, id string) (*fiber.Ctx, atsDeltaResponse, int) {
+func (f atsDeltaFixture) get(t *testing.T, id string) (atsDeltaResponse, int) {
 	t.Helper()
 	resp := doCV(t, f.app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/ats-delta", f.token, nil)
 	defer resp.Body.Close()
@@ -122,13 +121,13 @@ func (f atsDeltaFixture) get(t *testing.T, id string) (*fiber.Ctx, atsDeltaRespo
 			t.Fatalf("decode: %v", err)
 		}
 	}
-	return nil, body.Data, resp.StatusCode
+	return body.Data, resp.StatusCode
 }
 
 func TestATSDelta_ComparesTheTailoredCopyAgainstTheBase(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 
-	_, got, status := f.get(t, f.tailored.ID.String())
+	got, status := f.get(t, f.tailored.ID.String())
 
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
@@ -153,7 +152,7 @@ func TestATSDelta_ComparesTheTailoredCopyAgainstTheBase(t *testing.T) {
 func TestATSDelta_RendersBothSidesWithTheTailoredCopysTemplateAndMargins(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 
-	if _, _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
+	if _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 
@@ -181,7 +180,7 @@ func TestATSDelta_LeavesTheBaseCVUntouched(t *testing.T) {
 		t.Fatalf("read base before: %v", err)
 	}
 
-	if _, _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
+	if _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 
@@ -210,12 +209,12 @@ func TestATSDelta_ForeignCVIsNotFoundAndABaseCVIsAConflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create foreign cv: %v", err)
 	}
-	if _, _, status := f.get(t, other.ID.String()); status != fiber.StatusNotFound {
+	if _, status := f.get(t, other.ID.String()); status != fiber.StatusNotFound {
 		t.Errorf("foreign cv = %d, want 404", status)
 	}
 
 	// A base CV has no baseline of its own.
-	if _, _, status := f.get(t, f.base.ID.String()); status != fiber.StatusConflict {
+	if _, status := f.get(t, f.base.ID.String()); status != fiber.StatusConflict {
 		t.Errorf("base cv = %d, want 409", status)
 	}
 }
@@ -224,7 +223,7 @@ func TestATSDelta_WithoutARendererDegradesInsteadOfFailing(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 	f.h.cvRenderer = nil
 
-	_, got, status := f.get(t, f.tailored.ID.String())
+	got, status := f.get(t, f.tailored.ID.String())
 
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 — an accessory read must not fail the workspace", status)
@@ -247,7 +246,7 @@ func TestATSDelta_ComparesAgainstTheCurrentBase(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 	ctx := context.Background()
 
-	_, first, _ := f.get(t, f.tailored.ID.String())
+	first, _ := f.get(t, f.tailored.ID.String())
 
 	// Rewrite the base so it now renders the same text as the tailored copy.
 	if _, err := f.store.Update(ctx, f.base.ID, f.userID, "Base", "centered", cv.Document{
@@ -258,7 +257,7 @@ func TestATSDelta_ComparesAgainstTheCurrentBase(t *testing.T) {
 		t.Fatalf("update base: %v", err)
 	}
 
-	_, second, _ := f.get(t, f.tailored.ID.String())
+	second, _ := f.get(t, f.tailored.ID.String())
 
 	if first.Delta == nil || second.Delta == nil {
 		t.Fatalf("deltas = %v, %v, want both available", first.Delta, second.Delta)
@@ -271,6 +270,3 @@ func TestATSDelta_ComparesAgainstTheCurrentBase(t *testing.T) {
 			first.Delta.Change)
 	}
 }
-
-// atscheck is imported for its Delta type in the response shape assertions above.
-var _ = atscheck.Delta{}
