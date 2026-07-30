@@ -55,7 +55,7 @@
 
 ## 5. Close out
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...`; web lint and build.
-- [ ] 5.2 Document the delta in the CV/tailoring reference material that names the ATS report today,
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...`; web lint and build.
+- [x] 5.2 Document the delta in the CV/tailoring reference material that names the ATS report today,
       including the one trade-off a reader would otherwise trip on: the baseline is the base CV as it
       stands now, not a snapshot from when the copy was made.

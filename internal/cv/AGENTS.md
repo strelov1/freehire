@@ -32,6 +32,36 @@ Fonts: the Typst binary embeds no proportional sans, so Liberation Sans (SIL OFL
 under `fonts/`, staged into the sandbox, and exposed via `--font-path`. A template that wants
 sans uses `#set text(font: "Liberation Sans")`.
 
+## ATS delta (tailored vs base)
+
+`GET /me/cvs/:id/ats-delta` reports what tailoring did to a CV's ATS readiness. The scoring
+input is the **rendered PDF's text layer**, not the stored document: the orchestration lives in
+`internal/handler/cv_ats_delta.go` (render → `resume.ExtractPDFText` → `skilltag.Parse` →
+`atscheck.Score`), and the two-report comparison is `atscheck.Compare`. A document field the
+active template never renders therefore earns nothing — `sidebar` has no certifications block,
+and the handler test pins exactly that.
+
+Four things the code decides and a reader would otherwise have to infer:
+
+- **The comparison holds everything but content constant.** The base CV is rendered with the
+  *tailored copy's* template and margins (an in-memory copy — the stored base is never touched),
+  and both sides are scored against one keyword baseline: the bound vacancy's canonical
+  `jobs.skills`. Not the role facet's top skills, and not the LLM's requirement match, whose
+  drift would move the delta while the CV stood still.
+- **The baseline is the base CV as it stands NOW.** There is one base CV per user
+  (`cv.Store.BaseCV`), not a snapshot taken when the copy was made, so editing the base moves
+  the delta. Deliberate — a snapshot would mean storing a second document per tailored CV —
+  and pinned by `TestATSDelta_ComparesAgainstTheCurrentBase`.
+- **The route is cookie-only, and that is the enforcement.** The tailoring agent authenticates
+  with a CLI credential, so the gate is what keeps the score away from the thing being measured.
+  Widening it to `mw.key` hands the agent a metric to optimise; `TestCVRegister_ATSDeltaIsCookieOnly`
+  is the tripwire.
+- **Unavailable is a 200, not a 501.** No renderer or a failed compile answers
+  `available: false` with a reason. `RenderCVPDF` 501s for the same condition because rendering
+  is what that caller asked for; the delta is an accessory read on a page that must keep working.
+
+Nothing is stored: it is recomputed per request, so a scoring-rule change needs no migration.
+
 ## Autopilot runs
 
 A tailored CV carries what the last unattended run left behind: `autopilot_report` (one entry
