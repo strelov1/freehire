@@ -46,6 +46,9 @@ type cvHandlers struct {
 	// seeder answers what a new CV starts from: the banked work history plus the sections
 	// the stored structure still owns.
 	seeder cv.Seeder
+	// extractPDFText reads a rendered CV's text layer the way an ATS parser would. A field
+	// rather than a direct call so a test can state the text layer without a poppler binary.
+	extractPDFText func([]byte) (string, error)
 }
 
 // jobReader is the one vacancy read the tailoring context needs.
@@ -63,6 +66,7 @@ func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Sto
 		credits:            creditsStore,
 		matchAnalysisCache: queries,
 		match:              match,
+		extractPDFText:     resume.ExtractPDFText,
 	}
 	// The renderer is enabled only when a typst binary was resolved (assign only a
 	// non-nil renderer so the interface stays nil when disabled — a typed-nil would

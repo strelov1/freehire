@@ -12,14 +12,14 @@
 
 ## 2. Scoring one CV from its rendered artifact
 
-- [ ] 2.1 Add `internal/handler/cv_ats_delta.go` with the single-side scorer: render a `cv.Document`
+- [x] 2.1 Add `internal/handler/cv_ats_delta.go` with the single-side scorer: render a `cv.Document`
       with a given template and margins through `cvHandlers.cvRenderer`, extract the text layer with
       `resume.ExtractPDFText`, parse the CV's own skills from that text with
       `skilltag.Parse(..., skilltag.WithResumeAcronyms())`, and score with `atscheck.Score` against a
       supplied keyword baseline. Tests use a fake `cv.Renderer` returning fixture PDF bytes and cover:
       the score is computed from the extracted text; a render error and an extraction error are both
       reported as unavailable-with-reason rather than as failures.
-- [ ] 2.2 Assert the anti-regression the design turns on: a document field the active template does
+- [x] 2.2 Assert the anti-regression the design turns on: a document field the active template does
       not render contributes nothing to the score (score the same document under two templates that
       differ in what they render).
 
