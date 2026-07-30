@@ -7626,3 +7626,93 @@
 # --- contributed boards ---
 - company: Passage Health
   board: passagehealth
+- company: Zafran
+  board: zafran-security
+- company: Plancraft
+  board: plancraft
+- company: Almetra
+  board: almetra
+- company: "EyeTell, Inc."
+  board: eyetell
+- company: Comand AI
+  board: comand-ai
+- company: Redpanda Data
+  board: redpanda-data
+- company: Pogo
+  board: joinpogo
+- company: Geordie
+  board: geordieai
+- company: Noïa Labs
+  board: noialabs
+- company: Apiphany AI
+  board: apiphany
+- company: Dream Three
+  board: dreamthree
+- company: Logiqal
+  board: logiqal
+- company: Extropic
+  board: extropic
+- company: Kairos
+  board: kairos-project
+- company: Ollama
+  board: ollama
+- company: Northflank
+  board: northflank.com
+- company: Trovy
+  board: trovy
+- company: Gigaton
+  board: gigaton
+- company: OKTOBER
+  board: oktoberagency
+- company: BeyondMath
+  board: beyondmath
+- company: HTTPie
+  board: httpie
+- company: Melius
+  board: melius
+- company: EducationSuperHighway
+  board: educationsuperhighway
+- company: Furo
+  board: furo
+- company: Mirai Robotics
+  board: mirai-robotics
+- company: Mycroft
+  board: mycroft
+- company: Simply Wall St.
+  board: simply-wall-st
+- company: Kunin
+  board: kunin
+- company: Bolna AI
+  board: bolna
+- company: Frontier Health
+  board: frontier-health
+- company: Infera
+  board: infera
+- company: Vigil Markets
+  board: vigil-markets
+- company: Porters
+  board: porters
+- company: IMU Biosciences
+  board: imubiosciences
+- company: Nucleus Health
+  board: nucleus
+- company: Pathwork
+  board: pathwork
+- company: Attention Engineering
+  board: attention
+- company: Fazeshift
+  board: fazeshift
+- company: Compresr
+  board: compresr
+- company: Opus1
+  board: Opus1
+- company: BEAVR
+  board: beavr
+- company: Climatiq
+  board: climatiq
+- company: Cosmic Robotics
+  board: cosmic-robotics
+- company: Lark Health
+  board: lark
+- company: Meliora Academy
+  board: meliora-academy

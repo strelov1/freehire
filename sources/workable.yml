@@ -1414,3 +1414,117 @@
 # --- contributed boards ---
 - company: Pion
   board: wearepion
+- company: Esevel
+  board: lovebonito
+- company: Exponent Energy
+  board: exponent-energy
+- company: Rapyuta Robotics
+  board: rapyuta-robotics
+- company: Modash
+  board: modash
+- company: First Circle
+  board: first-circle
+- company: Hourly
+  board: hourly
+- company: Cowboy
+  board: cowboy
+- company: Povio
+  board: povio
+- company: Halo Industries
+  board: halo-industries
+- company: Ikerian
+  board: retinai
+- company: GroundTruth
+  board: groundtruth
+- company: Manna
+  board: manna-1
+- company: Extreme Reach
+  board: extremereach
+- company: Tutored by Teachers
+  board: tutoredbyteachers
+- company: Andromeda Robotics Operations
+  board: andromeda-robotics
+- company: TIN Capital
+  board: breachlock
+- company: Fundcraft
+  board: fundcraft
+- company: Yapily
+  board: yapily
+- company: Syntiant
+  board: syntiant
+- company: Flyability
+  board: flyability
+- company: Basetwo AI
+  board: basetwo
+- company: Fenergo
+  board: fenergocareers
+- company: Capital Factory
+  board: capital-factory
+- company: Cresilon
+  board: cresilon
+- company: Skimlinks
+  board: connexity
+- company: Eden GeoPower
+  board: eden-geopower
+- company: Palm Venture Studio
+  board: palm-venture-studios
+- company: Rise Robotics
+  board: rise-robotics
+- company: Nile
+  board: nile-fresh-pty-ltd
+- company: Owlet Baby Care
+  board: owlet-baby-care-1
+- company: SPOTIO
+  board: spotio
+- company: Connected Kerb
+  board: connected-kerb
+- company: Contrarian Ventures
+  board: zoomo
+- company: C4T (Customs4Trade)
+  board: customs4trade
+- company: Up Learn
+  board: uplearn
+- company: Cledara
+  board: cledara
+- company: Simple Mills
+  board: simple-mills-9
+- company: Screencastify
+  board: screencastify
+- company: Sapi
+  board: sapigroup
+- company: Lithos Carbon
+  board: lithos
+- company: Ofload
+  board: ofload
+- company: PastureMap
+  board: grassrootscarbon
+- company: Blackbird.AI
+  board: blackbirdai
+- company: Flowerbx
+  board: flowerbx
+- company: Bloomlife
+  board: bloomlife
+- company: Campus Ink
+  board: campusink
+- company: Workbox
+  board: workbox-company
+- company: Circonomit
+  board: circonomit
+- company: Genus AI
+  board: genus-ai
+- company: Little Journey
+  board: little-journey
+- company: CancerIQ
+  board: canceriq
+- company: Progressive Robotics
+  board: progressive-robotics
+- company: Station A
+  board: stationa
+- company: Convergent Energy + Power
+  board: convergent-careers
+- company: Lantum
+  board: lantum
+- company: Satellite Vu
+  board: satellitevu
+- company: DeepMirror
+  board: deepmirror
