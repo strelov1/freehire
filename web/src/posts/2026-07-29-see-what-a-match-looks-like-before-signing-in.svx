@@ -1,0 +1,30 @@
+---
+title: See what a match looks like before signing in
+date: 2026-07-29
+summary: Job cards now show a blurred preview of the profile match — built from that job's real skills, not a stock example.
+type: changelog
+tags:
+  - profile-match
+  - job-seekers
+---
+
+If you are signed in with skills on your profile, every job card shows how much of the
+posting you already cover: a green-and-red bar and a percentage. Signed out, that corner
+of the card was simply empty — you had no way to tell the feature existed, let alone
+whether it was worth an account.
+
+Now it shows a blurred preview. The skills in it are the ones the posting actually asks
+for, tinted as "you have this" or "you don't", with a coverage bar above them. The
+numbers are a placeholder — nobody can compute your match before you have a profile —
+so they are blurred, and the same preview sits on the job page under **Profile match**
+with a way in.
+
+The salary stays sharp. So do the skill names, near enough to read: the blur is there to
+mark the figures as not-yours-yet, not to hide what the job wants.
+
+The **Analyze match** offer under it is visible too now — the deeper read of your CV
+against the role, with gaps and ATS flags. Pressing it asks you to sign in first, since
+it needs a CV to read.
+
+Sign in and the preview is replaced by the real thing — your skills against that
+posting's, counted exactly, with the ones you are missing named.

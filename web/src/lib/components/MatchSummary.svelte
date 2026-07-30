@@ -3,6 +3,7 @@
   import { ArrowRight, FileText, ScanSearch } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -10,7 +11,15 @@
   // A compact fit summary in the Profile-match sidebar: the overall %, verdict, and the
   // single biggest gap when an analysis is cached, with a link to the full-page analysis
   // (which runs the live streaming compute). It never computes inline.
+  //
+  // A guest sees the same pitch and button — the offer is the point of showing it to them —
+  // but the button opens sign-in instead of the analysis page. That page streams an
+  // authenticated compute client-side, so a guest landing there would 401 on every visit,
+  // and repeated 401/403s from one address on the shared access log are what got real
+  // users fail2banned once already.
   let { slug }: { slug: string } = $props();
+
+  const guest = $derived(!isAuthenticated());
 
   let data = $state<MatchAnalysisResponse | null>(null);
 
@@ -72,14 +81,20 @@
     <Button
       variant="primary"
       size="lg"
-      href={resolve('/match/[slug]', { slug })}
+      href={guest ? undefined : resolve('/match/[slug]', { slug })}
+      onclick={guest ? () => openAuthDialog('login') : undefined}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       Analyze match
       <ScanSearch class="size-[1.15rem]" aria-hidden="true" />
     </Button>
+    <!-- The line under the button says what happens next: for a signed-in viewer that's
+         the credit it will spend, for a guest that it runs on a CV they haven't given us
+         yet. A guest has no credits to report, so the two never both apply. -->
     {#if credits}
       <p class="text-xs text-muted-foreground">{credits.remaining} AI credits left this month</p>
+    {:else if guest}
+      <p class="text-xs text-muted-foreground">Sign in and add a CV to run it.</p>
     {/if}
   {/if}
 </section>

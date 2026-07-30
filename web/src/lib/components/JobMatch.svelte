@@ -146,6 +146,15 @@
         <Button variant="primary" size="sm" href={profileHref}>Upload CV</Button>
       {/if}
     </div>
+
+    {#if blockState === 'guest'}
+      <!-- The deep-dive offer stands on its own for a guest: it needs no match to make
+           sense, and it is the stronger pitch of the two. Its button opens sign-in rather
+           than the analysis page — MatchSummary handles that. Withheld from the no-profile
+           state, whose own "Upload CV" call-to-action sits directly above and would simply
+           be repeated. -->
+      <MatchSummary slug={job.public_slug} />
+    {/if}
   {:else if blockState === 'ready' && match}
     <!-- Real match: percent + two-colour bar + three skill groups. -->
     <div class="flex items-baseline justify-between gap-2">
