@@ -50,7 +50,7 @@
       category that fell. An unavailable delta renders as an absence, with no error state.
 - [x] 4.2 Request the delta when the workspace opens and again when an autopilot run completes, so a
       regression reaches the candidate without them asking for a check.
-- [ ] 4.3 Verify visually at desktop and mobile widths (the workspace collapses to a tabbed view on
+- [x] 4.3 Verify visually at desktop and mobile widths (the workspace collapses to a tabbed view on
       mobile — the delta must have a home there too, not overflow the column).
 
 ## 5. Close out
