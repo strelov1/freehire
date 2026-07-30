@@ -327,7 +327,7 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	referralPinger := referral.NewChannelPinger(referralEmail, cfg.NotifyEmailFrom, referralTelegram)
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
-	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger,
+	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
 	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore)
 

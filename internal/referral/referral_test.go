@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"io"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/blobstore"
 )
 
 // --- fakes ---------------------------------------------------------------
@@ -24,6 +27,9 @@ type fakeRepo struct {
 	createErr    error
 	resolveErr   error
 	deleteErr    error
+	getOffer     Offer
+	getOfferOK   bool
+	getOfferErr  error
 
 	createdReq *RequestInput
 	createdOff *OfferInput
@@ -93,7 +99,7 @@ func (f *fakeRepo) UserHasResume(context.Context, int64) (bool, error) {
 	return f.hasResume, nil
 }
 func (f *fakeRepo) GetOffer(context.Context, uuid.UUID) (Offer, bool, error) {
-	return Offer{}, false, nil
+	return f.getOffer, f.getOfferOK, f.getOfferErr
 }
 func (f *fakeRepo) DeleteOffer(_ context.Context, offerID uuid.UUID, userID int64) error {
 	f.deleted = &deletedOffer{offerID, userID}
@@ -138,8 +144,34 @@ func (p *fakePinger) PingReferrer(_ context.Context, r Recipient, _ string) erro
 	return p.err
 }
 
+// fakeBlobs is an in-memory blobstore.Store recording the keys it was asked to delete. Only
+// Delete is exercised here — the service never reads or writes an object.
+type fakeBlobs struct {
+	deleted []string
+	err     error
+}
+
+func (f *fakeBlobs) Put(context.Context, string, string, io.Reader, int64) error { return nil }
+func (f *fakeBlobs) Get(context.Context, string) (io.ReadCloser, error)          { return nil, nil }
+func (f *fakeBlobs) Delete(_ context.Context, key string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.deleted = append(f.deleted, key)
+	return nil
+}
+
 func newService(repo *fakeRepo, pinger *fakePinger) *Service {
-	return New(repo, pinger, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
+	return newServiceWithBlobs(repo, pinger, nil)
+}
+
+func newServiceWithBlobs(repo *fakeRepo, pinger *fakePinger, blobs blobstore.Store) *Service {
+	return New(repo, pinger, blobs, Config{DailyRequestCap: 3, CabinetURL: "https://freehire.me/my/referrals"})
+}
+
+// ownedOffer is a stored offer belonging to userID, carrying a proof object.
+func ownedOffer(userID int64, proofKey string) Offer {
+	return Offer{ID: testOfferID, UserID: userID, CompanySlug: "acme", ProofKey: proofKey, Status: OfferApproved}
 }
 
 func cvID(n uuid.UUID) *uuid.UUID { return &n }
@@ -217,7 +249,7 @@ func TestDecideOfferMapsApproveReject(t *testing.T) {
 }
 
 func TestWithdrawOfferIsOwnerScoped(t *testing.T) {
-	repo := &fakeRepo{}
+	repo := &fakeRepo{getOffer: ownedOffer(42, ""), getOfferOK: true}
 	s := newService(repo, &fakePinger{})
 	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); err != nil {
 		t.Fatalf("withdraw: %v", err)
@@ -228,10 +260,63 @@ func TestWithdrawOfferIsOwnerScoped(t *testing.T) {
 }
 
 func TestWithdrawOfferPropagatesNotFound(t *testing.T) {
-	repo := &fakeRepo{deleteErr: ErrOfferNotFound}
+	repo := &fakeRepo{getOffer: ownedOffer(42, ""), getOfferOK: true, deleteErr: ErrOfferNotFound}
 	s := newService(repo, &fakePinger{})
 	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); !errors.Is(err, ErrOfferNotFound) {
 		t.Errorf("err = %v, want ErrOfferNotFound", err)
+	}
+}
+
+// Withdrawing hard-deletes the offer row, and that row is the ONLY thing that names the
+// proof object: accountdelete finds a member's objects by reading these very rows
+// (ListUserBlobKeys), so a row deleted without its object leaves a CV in the bucket that
+// nothing can ever reach again — including the member's own account deletion.
+func TestWithdrawOfferDeletesTheProofObject(t *testing.T) {
+	repo := &fakeRepo{getOffer: ownedOffer(42, "referral-proofs/42/proof.pdf"), getOfferOK: true}
+	blobs := &fakeBlobs{}
+	s := newServiceWithBlobs(repo, &fakePinger{}, blobs)
+
+	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	if len(blobs.deleted) != 1 || blobs.deleted[0] != "referral-proofs/42/proof.pdf" {
+		t.Errorf("deleted objects = %v, want the offer's proof key", blobs.deleted)
+	}
+	if repo.deleted == nil {
+		t.Error("the offer row was not deleted")
+	}
+}
+
+// Objects go before rows, the same order accountdelete uses and for the same reason: if the
+// object cannot be erased, leaving the row means the member can simply retry, whereas
+// deleting it first would strand the object with no key left to find it by.
+func TestWithdrawOfferKeepsTheOfferWhenTheProofCannotBeDeleted(t *testing.T) {
+	repo := &fakeRepo{getOffer: ownedOffer(42, "referral-proofs/42/proof.pdf"), getOfferOK: true}
+	blobs := &fakeBlobs{err: errors.New("s3 down")}
+	s := newServiceWithBlobs(repo, &fakePinger{}, blobs)
+
+	err := s.WithdrawOffer(context.Background(), testOfferID, 42)
+	if !errors.Is(err, ErrProofStorageUnavailable) {
+		t.Fatalf("err = %v, want ErrProofStorageUnavailable", err)
+	}
+	if repo.deleted != nil {
+		t.Error("the offer row must survive a storage failure so the withdrawal can be retried")
+	}
+}
+
+func TestWithdrawOfferRefusesAnotherMembersOffer(t *testing.T) {
+	repo := &fakeRepo{getOffer: ownedOffer(7, "referral-proofs/7/proof.pdf"), getOfferOK: true}
+	blobs := &fakeBlobs{}
+	s := newServiceWithBlobs(repo, &fakePinger{}, blobs)
+
+	if err := s.WithdrawOffer(context.Background(), testOfferID, 42); !errors.Is(err, ErrOfferNotFound) {
+		t.Errorf("err = %v, want ErrOfferNotFound", err)
+	}
+	if len(blobs.deleted) != 0 {
+		t.Errorf("deleted %v — a non-owner must not reach another member's proof", blobs.deleted)
+	}
+	if repo.deleted != nil {
+		t.Error("a non-owner must not delete the row")
 	}
 }
 

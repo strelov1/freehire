@@ -154,6 +154,9 @@ func referralError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "this offer is not pending")
 	case errors.Is(err, referral.ErrOfferNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "offer not found")
+	case errors.Is(err, referral.ErrProofStorageUnavailable):
+		// Nothing was deleted — the offer stands and the same request can be retried.
+		return fiber.NewError(fiber.StatusServiceUnavailable, "could not erase the proof CV; the offer was kept, please try again")
 	case errors.Is(err, referral.ErrAlreadyRequested):
 		return fiber.NewError(fiber.StatusConflict, "you already have an active request for this company")
 	case errors.Is(err, referral.ErrRequestNotOpen):

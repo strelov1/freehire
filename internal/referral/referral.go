@@ -10,11 +10,15 @@ package referral
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
+	"fmt"
 	"log"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/blobstore"
 )
 
 // Offer status vocabulary: an offer waits pending until a moderator approves or rejects
@@ -62,6 +66,11 @@ var (
 	// ErrOfferNotFound is returned when withdrawing an offer that does not exist or is
 	// not owned by the caller — the two are indistinguishable on purpose (no IDOR probe).
 	ErrOfferNotFound = errors.New("referral: offer not found")
+	// ErrProofStorageUnavailable reports that a withdrawal's proof CV could not be erased,
+	// so the offer was left standing and the member can simply retry (503). It mirrors
+	// accountdelete.ErrStorageUnavailable, and for the same reason: the alternative is
+	// deleting the row that names the object and losing the object forever.
+	ErrProofStorageUnavailable = errors.New("referral: proof storage unavailable")
 	// ErrNoContact is a request with neither a Telegram handle nor an email (422).
 	ErrNoContact = errors.New("referral: at least one contact required")
 	// ErrInvalidCVChoice is a CV choice that violates the kind/id invariant: an original
@@ -208,16 +217,19 @@ type Config struct {
 
 // Service implements the referral use cases over a Repository and a Pinger.
 type Service struct {
-	repo       Repository
-	pinger     Pinger
+	repo   Repository
+	pinger Pinger
+	// blobs erases a withdrawn offer's proof CV. Nil where object storage is unconfigured,
+	// in which case there is no object to erase — which must not stop a withdrawal.
+	blobs      blobstore.Store
 	dailyCap   int
 	cabinetURL string
 	now        func() time.Time
 }
 
 // New builds a Service. A zero DailyRequestCap falls back to DefaultDailyRequestCap and a
-// nil Now to time.Now.
-func New(repo Repository, pinger Pinger, cfg Config) *Service {
+// nil Now to time.Now; a nil blobs is a deployment without object storage.
+func New(repo Repository, pinger Pinger, blobs blobstore.Store, cfg Config) *Service {
 	cap := cfg.DailyRequestCap
 	if cap <= 0 {
 		cap = DefaultDailyRequestCap
@@ -226,7 +238,7 @@ func New(repo Repository, pinger Pinger, cfg Config) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{repo: repo, pinger: pinger, dailyCap: cap, cabinetURL: cfg.CabinetURL, now: now}
+	return &Service{repo: repo, pinger: pinger, blobs: blobs, dailyCap: cap, cabinetURL: cfg.CabinetURL, now: now}
 }
 
 // SubmitOffer records a member's offer to refer into a company, awaiting moderation. It
@@ -260,7 +272,30 @@ func (s *Service) GetOffer(ctx context.Context, offerID uuid.UUID) (Offer, bool,
 // WithdrawOffer lets a member stop being a referrer: it hard-deletes their own offer,
 // owner-scoped by userID. A missing offer or one owned by someone else returns
 // ErrOfferNotFound. Deleting frees the (user, company) slot so they can offer again later.
+//
+// The offer's proof CV is erased with it, and that is not housekeeping. The offer row is the
+// only thing that names the object: accountdelete finds a member's stored objects by reading
+// these rows (see its BlobKeys), so a row deleted on its own leaves a CV in the bucket that
+// nothing can reach again — not a later withdrawal, not the member's own account deletion.
+//
+// The object goes BEFORE the row, the order accountdelete uses and for its reason: if the
+// object cannot be erased the offer stands, so the member simply retries, whereas deleting
+// the row first would strand the object with no key left to find it by. The read that learns
+// the key is also what enforces ownership, so a non-owner never reaches another member's
+// proof. Object deletes are idempotent, so a retry after a partial run is safe.
 func (s *Service) WithdrawOffer(ctx context.Context, offerID uuid.UUID, userID int64) error {
+	offer, ok, err := s.repo.GetOffer(ctx, offerID)
+	if err != nil {
+		return err
+	}
+	if !ok || offer.UserID != userID {
+		return ErrOfferNotFound
+	}
+	if s.blobs != nil && offer.ProofKey != "" {
+		if err := s.blobs.Delete(ctx, offer.ProofKey); err != nil {
+			return fmt.Errorf("%w: delete %q: %v", ErrProofStorageUnavailable, offer.ProofKey, err)
+		}
+	}
 	return s.repo.DeleteOffer(ctx, offerID, userID)
 }
 
