@@ -363,6 +363,49 @@ export interface Report {
   suggestions?: string[];
 }
 
+//////////
+// source: delta.go
+
+/**
+ * Delta is the change one CV's ATS readiness shows against another's: the overall
+ * move plus one entry per category, and — only when the overall fell — the category
+ * that fell furthest. It compares two Reports and computes nothing itself, so the
+ * five categories, their labels and their weights stay the scorer's business.
+ * JSON is the wire contract shared with the frontend (see cmd/gen-contracts).
+ */
+export interface Delta {
+  base: number /* int */; // the baseline CV's overall score
+  tailored: number /* int */; // the compared CV's overall score
+  change: number /* int */; // Tailored − Base, signed
+  /**
+   * Categories reports only the categories present in BOTH reports: a category on
+   * one side alone is not a difference, and reporting it against an implied zero
+   * would invent a change nobody made.
+   */
+  categories: CategoryChange[];
+  /**
+   * Regressed is true when the overall score fell. A category may fall while the
+   * overall holds; that is not a regression, and WorstCategory stays empty for it.
+   */
+  regressed: boolean;
+  /**
+   * WorstCategory is the id of the category with the most negative change, set only
+   * when Regressed. An equal drop resolves to the earlier of the two in the compared
+   * report's own order, so the answer never depends on map iteration.
+   */
+  worst_category?: string;
+}
+/**
+ * CategoryChange is one scoring category's move between the two reports.
+ */
+export interface CategoryChange {
+  id: string;
+  label: string;
+  base: number /* int */;
+  tailored: number /* int */;
+  change: number /* int */; // Tailored − Base, signed
+}
+
 /**
  * AdjacentSkill is a job skill the profile does not hold exactly but for which it
  * holds a substitutable neighbour; Via names that held neighbour.

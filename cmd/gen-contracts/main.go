@@ -101,11 +101,12 @@ func genStructs() (string, error) {
 				TypeMappings: map[string]string{"skillbundle.Bundle": "Bundle"},
 			},
 			{
-				// The CV ATS-readiness report wire shape (Report + Check + Status).
-				// Self-contained — only primitives and []Check.
+				// The CV ATS-readiness report wire shape (Report + Check + Status) and the
+				// two-report comparison (Delta + CategoryChange). Self-contained — only
+				// primitives, []Check and []CategoryChange.
 				Path:         "github.com/strelov1/freehire/internal/atscheck",
 				OutputPath:   atscheckTS,
-				IncludeFiles: []string{"atscheck.go"},
+				IncludeFiles: []string{"atscheck.go", "delta.go"},
 			},
 			{
 				// The per-job profile-match wire shape (JobMatch + AdjacentSkill).

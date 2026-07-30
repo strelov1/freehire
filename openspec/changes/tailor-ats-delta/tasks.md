@@ -1,12 +1,12 @@
 ## 1. The comparison (pure, no I/O)
 
-- [ ] 1.1 Add `internal/atscheck/delta.go`: the wire type (overall base/tailored/delta, one entry per
+- [x] 1.1 Add `internal/atscheck/delta.go`: the wire type (overall base/tailored/delta, one entry per
       category with the same ids and labels the report uses, a regression flag, and the worst-drop
       category id) plus `Compare(base, tailored Report) Delta`. Table tests cover: every category's
       delta equals tailored minus base; identical reports yield all-zero deltas and no regression; a
       lower tailored overall sets the regression flag and names the most negative category; equal
       overalls are not a regression; a tie on the worst drop resolves deterministically.
-- [ ] 1.2 Add `delta.go` to the atscheck entry in `cmd/gen-contracts/main.go` `IncludeFiles` and
+- [x] 1.2 Add `delta.go` to the atscheck entry in `cmd/gen-contracts/main.go` `IncludeFiles` and
       regenerate, so `web/src/lib/generated/contracts.ts` carries the new type. Verify the type is
       present in the generated file — codegen omission here is silent.
 
