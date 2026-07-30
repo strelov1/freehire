@@ -39,6 +39,12 @@ const (
 	// and kept narrow in the board file instead. When the budget is what ended a crawl the adapter
 	// says so in the log: a bounded slice must never read as full coverage.
 	whatjobsMaxPages = 40
+	// whatjobsMinCorroboratedPct is the share of a page's postings that must name the keyword's terms
+	// for the crawl to continue. The feed's keyword RANKS rather than filters and pads a thin result
+	// set with unrelated inventory: measured on "rust developer", page 1 corroborated 47/47 and page 2
+	// only 4/26. Any threshold inside that gap behaves the same, so this sits plainly in the middle
+	// rather than being tuned to one sample.
+	whatjobsMinCorroboratedPct = 50
 	// whatjobsCrawlIP is the mandatory user_ip. A crawl is not a user viewing a page, so sending
 	// a real visitor address would fabricate an impression: the feed ignores tracking for an
 	// address it does not accept as a viewer but still serves the results, which is exactly the
@@ -105,8 +111,10 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if keyword == "" {
 		return nil, fmt.Errorf("whatjobs: company %q has a blank keyword board", e.Company)
 	}
+	terms := whatjobsCorroborationTerms(keyword)
 	var jobs []Job
 	seen := make(map[string]bool)
+	stopped := ""
 	page := 1
 	for ; page <= whatjobsMaxPages; page++ {
 		var resp struct {
@@ -116,15 +124,20 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %w", keyword, page, err)
 		}
 		if len(resp.Data) == 0 {
+			stopped = "feed ran dry"
 			break
 		}
-		var usable int
+		var usable, corroborated int
 		for _, p := range resp.Data {
 			job, ok := p.toJob()
 			if !ok {
 				continue
 			}
 			usable++
+			if !p.corroborates(terms) {
+				continue
+			}
+			corroborated++
 			if seen[job.ExternalID] {
 				continue
 			}
@@ -139,12 +152,58 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return nil, fmt.Errorf("whatjobs: keyword %q page %d: %d postings, none carrying a %s id — tracked URL shape changed?",
 				keyword, page, len(resp.Data), whatjobsTrackedID)
 		}
+		// Relevance does not taper, it falls off a cliff — measured 100% on page 1 and 15% on page 2.
+		// A corroborated share under the minimum means the feed has started padding the result set, so
+		// every further page is mostly waste. Stopping here is what keeps the request volume (and the
+		// rate limiting it caused) down; the page's corroborated postings are real and are kept.
+		if len(terms) > 0 && corroborated*100 < usable*whatjobsMinCorroboratedPct {
+			stopped = fmt.Sprintf("relevance collapsed to %d/%d on page %d", corroborated, usable, page)
+			break
+		}
 	}
 	if page > whatjobsMaxPages {
-		log.Printf("whatjobs: keyword %q hit the %d-page budget with %d postings — slice is bounded, not exhausted",
-			keyword, whatjobsMaxPages, len(jobs))
+		stopped = fmt.Sprintf("hit the %d-page budget", whatjobsMaxPages)
 	}
+	log.Printf("whatjobs: keyword %q returned %d corroborated postings (%s)", keyword, len(jobs), stopped)
 	return jobs, nil
+}
+
+// whatjobsGenericRoleWords are the keyword words that corroborate nothing: they appear in nearly
+// every technical posting, so requiring them would wave through the unrelated inventory the feed pads
+// a thin keyword with, exactly as readily as a real match.
+var whatjobsGenericRoleWords = map[string]bool{
+	"developer": true, "engineer": true, "programmer": true,
+	"dev": true, "specialist": true, "architect": true,
+}
+
+// whatjobsCorroborationTerms reduces a keyword to the terms a posting must actually name to prove it
+// belongs to that keyword. Returns nil for a keyword that is entirely generic — there is nothing to
+// corroborate on, so such a board filters nothing rather than dropping everything.
+func whatjobsCorroborationTerms(keyword string) []string {
+	var out []string
+	for _, w := range strings.Fields(strings.ToLower(keyword)) {
+		if !whatjobsGenericRoleWords[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// corroborates reports whether a posting names every one of the keyword's terms. The match is a
+// case-insensitive substring rather than a word-boundary match: the feed writes "iOS" and "Node.JS",
+// which tokenization would fail to line up with "ios" and "node.js". A substring can false-positive
+// ("rust" inside "trust"), which is the cheap direction — the alternative drops real matches.
+func (p whatjobsPosting) corroborates(terms []string) bool {
+	if len(terms) == 0 {
+		return true
+	}
+	hay := strings.ToLower(p.Title + " " + p.Snippet)
+	for _, t := range terms {
+		if !strings.Contains(hay, t) {
+			return false
+		}
+	}
+	return true
 }
 
 // whatjobsTrackedID matches the native posting id in a tracked click-through URL

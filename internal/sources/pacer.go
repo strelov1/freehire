@@ -114,6 +114,19 @@ func limitedTrudvsemGetter(c JSONGetter) JSONGetter {
 	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, trudvsemMaxInFlight)}
 }
 
+// The WhatJobs feed serves sequential requests happily — a dozen back-to-back from one IP never
+// tripped anything — but the pipeline crawls board files in parallel, and on the provider's first
+// production run 8 of its 10 keyword boards failed with HTTP 429. So the trigger is simultaneity, not
+// rate. Two in flight is gentle enough to clear it, and cheap now that a keyword crawl ends when its
+// relevance collapses (typically 2 pages, not 40) rather than walking the page budget.
+const whatjobsMaxInFlight = 2
+
+// limitedWhatJobsGetter wraps a getter with a fresh semaphore shared across one registry build, so
+// every keyword board in a run competes for the same small number of in-flight requests.
+func limitedWhatJobsGetter(c JSONGetter) JSONGetter {
+	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, whatjobsMaxInFlight)}
+}
+
 // hh.ru egresses through the single proxy IP (its detail pages 403 the direct datacenter IP), and
 // its per-vacancy detail fan-out is large — thousands of ~1 MB pages across the seeded roles. Fired
 // unpaced at defaultDetailWorkers concurrency, that burst 429s the proxy IP and ~2/3 of details

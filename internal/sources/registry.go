@@ -276,8 +276,15 @@ func All(c HTTPClient) map[string]Source {
 	// than an API key — but it is registered the same way: only when configured, so an environment
 	// without it does not list a provider whose every board would 410. The id is per-country; this
 	// account serves US inventory.
+	// Its requests go through a shared in-flight cap: the feed rate-limits the pipeline's parallel
+	// board crawl (8 of 10 boards 429'd on the first prod run) though it serves sequential requests
+	// fine. On the transport-free listing path (c == nil) there is nothing to wrap.
 	if id := os.Getenv("WHATJOBS_PUBLISHER_ID"); id != "" {
-		registry["whatjobs"] = NewWhatJobs(c, id)
+		if c == nil {
+			registry["whatjobs"] = NewWhatJobs(nil, id)
+		} else {
+			registry["whatjobs"] = NewWhatJobs(limitedWhatJobsGetter(c), id)
+		}
 	}
 	// taleo needs a cookie-persisting client (its searchjobs POST requires the session cookie
 	// a careersection GET sets), so it cannot use the shared jar-less client. Build a dedicated

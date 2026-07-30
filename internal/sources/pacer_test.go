@@ -92,6 +92,22 @@ func TestConcurrencyLimitedJSONGetter_AcquiresThenDelegates(t *testing.T) {
 	}
 }
 
+// The WhatJobs feed rate-limited 8 of 10 boards on the first production run: sequential requests are
+// served fine, so the trigger is the pipeline crawling boards in parallel. One semaphore shared by
+// every board of the run is what bounds it.
+func TestLimitedWhatJobsGetter_SharesOneGentleCap(t *testing.T) {
+	g, ok := limitedWhatJobsGetter(&recordingJSONGetter{}).(concurrencyLimitedJSONGetter)
+	if !ok {
+		t.Fatal("limitedWhatJobsGetter should wrap the getter in a concurrency limiter")
+	}
+	if got := cap(g.sem); got != whatjobsMaxInFlight {
+		t.Errorf("cap = %d, want whatjobsMaxInFlight (%d)", got, whatjobsMaxInFlight)
+	}
+	if whatjobsMaxInFlight < 1 || whatjobsMaxInFlight > 4 {
+		t.Errorf("whatjobsMaxInFlight = %d, want a gentle few", whatjobsMaxInFlight)
+	}
+}
+
 func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T) {
 	inner := &recordingJSONGetter{}
 	sem := make(chan struct{}, 1)
