@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert, X } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { isEvidenceReason, reportReasons } from '$lib/reports';
+  import { appliedOnError, isEvidenceReason, reportReasons } from '$lib/reports';
   import type { ReportReason } from '$lib/types';
   import { Button } from '$lib/ui';
   import { focusTrap } from '$lib/actions/focusTrap';
@@ -25,6 +25,10 @@
   let appliedOn = $state('');
   let submitting = $state(false);
   let error = $state<string | null>(null);
+
+  // The element itself, because a malformed entry never reaches `appliedOn`: the
+  // input clears its value and records the fact in `validity.badInput`.
+  let appliedInput = $state<HTMLInputElement | null>(null);
 
   // A claim needs a date we can measure silence from, and no date can be in the
   // future. The server re-checks both — this is the affordance, not the guard.
@@ -82,7 +86,15 @@
 
   async function submitApplied(e: SubmitEvent) {
     e.preventDefault();
-    if (!appliedOn) return;
+    const problem = appliedOnError({
+      value: appliedOn,
+      badInput: appliedInput?.validity.badInput ?? false,
+      today,
+    });
+    if (problem) {
+      error = problem;
+      return;
+    }
     await send(() => api.reportGhostJob(slug, { applied_on: appliedOn }));
   }
 </script>
@@ -160,7 +172,7 @@
         </label>
 
         {#if error}
-          <p class="text-sm text-destructive">{error}</p>
+          <p role="alert" class="text-sm text-destructive">{error}</p>
         {/if}
 
         <Button type="submit" variant="primary" disabled={submitting}>
@@ -168,7 +180,10 @@
         </Button>
       </form>
     {:else if step === 'applied'}
-      <form class="flex flex-col gap-4" onsubmit={submitApplied}>
+      <!-- novalidate: the browser's own refusal for an impossible date is a tooltip
+           that never says which part is wrong, and it fires before submit, so the
+           dialog would never get to explain itself. -->
+      <form class="flex flex-col gap-4" novalidate onsubmit={submitApplied}>
         <button
           type="button"
           onclick={() => (step = 'reason')}
@@ -185,7 +200,9 @@
           </span>
           <input
             type="date"
+            bind:this={appliedInput}
             bind:value={appliedOn}
+            oninput={() => (error = null)}
             required
             max={today}
             class="mt-1 rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -193,10 +210,13 @@
         </label>
 
         {#if error}
-          <p class="text-sm text-destructive">{error}</p>
+          <p role="alert" class="text-sm text-destructive">{error}</p>
         {/if}
 
-        <Button type="submit" variant="primary" disabled={submitting || !appliedOn}>
+        <!-- Never disabled on an empty date: an impossible entry empties the value
+             while the field still reads as filled in, and a dead button is the one
+             thing that cannot say why. -->
+        <Button type="submit" variant="primary" disabled={submitting}>
           {submitting ? 'Sending…' : 'Send report'}
         </Button>
       </form>

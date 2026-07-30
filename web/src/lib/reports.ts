@@ -99,3 +99,32 @@ export function decisionOutcome({
 export function isEvidenceReason(reason: ReportReason): boolean {
   return reason === 'no_response';
 }
+
+interface AppliedOnInput {
+  /** The input's value: an ISO `YYYY-MM-DD` day, or empty. */
+  value: string;
+  /** The input's `validity.badInput` — what the browser typed but could not read. */
+  badInput: boolean;
+  /** Today as an ISO day, in the reporter's own timezone. */
+  today: string;
+}
+
+/**
+ * Why the stated apply date cannot be filed, or null when it can.
+ *
+ * A date input reports an impossible entry (30 February, a year still being typed)
+ * by clearing its value, so an empty string means either "nothing entered" or
+ * "entered something that does not exist" — indistinguishable without `badInput`.
+ * Blocking the submit button on the empty value alone therefore reads, to someone
+ * looking at a filled-in field, as a button that simply does not work.
+ *
+ * The server checks the date again and answers 400. That answer says nothing the
+ * reporter can act on, which is what this exists to say instead.
+ */
+export function appliedOnError({ value, badInput, today }: AppliedOnInput): string | null {
+  if (badInput) return "That date doesn't exist — check the day and the month.";
+  if (!value) return 'Pick the date you applied.';
+  // Both sides are ISO days, so lexical order is calendar order.
+  if (value > today) return 'That date is in the future — pick the day you applied.';
+  return null;
+}

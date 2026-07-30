@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appliedOnError,
   decisionLabel,
   decisionNotePlaceholder,
   decisionNotePrompt,
@@ -91,5 +92,30 @@ describe('isEvidenceReason', () => {
   it('classifies every reason in the vocabulary', () => {
     const evidence = reportReasons.filter((r) => isEvidenceReason(r.value));
     expect(evidence).toHaveLength(1);
+  });
+});
+
+describe('appliedOnError', () => {
+  const today = '2026-07-30';
+
+  it('accepts a past date and today itself', () => {
+    expect(appliedOnError({ value: '2026-06-01', badInput: false, today })).toBeNull();
+    expect(appliedOnError({ value: today, badInput: false, today })).toBeNull();
+  });
+
+  // A date input answers an impossible entry — 30 February, a half-typed year —
+  // by clearing its value, so the empty string alone cannot say whether the user
+  // typed nothing or typed something that does not exist. Only badInput can, and
+  // the two deserve different sentences.
+  it('separates an impossible date from an empty field', () => {
+    const impossible = appliedOnError({ value: '', badInput: true, today });
+    const empty = appliedOnError({ value: '', badInput: false, today });
+    expect(impossible).toMatch(/exist/i);
+    expect(empty).not.toBeNull();
+    expect(empty).not.toBe(impossible);
+  });
+
+  it('rejects a date in the future', () => {
+    expect(appliedOnError({ value: '2026-07-31', badInput: false, today })).toMatch(/future/i);
   });
 });
