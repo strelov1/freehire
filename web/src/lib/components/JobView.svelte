@@ -16,7 +16,6 @@
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
   import { supersedesReality } from '$lib/ghost';
-  import GhostBadge from './GhostBadge.svelte';
   import GhostChecklist from './GhostChecklist.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
@@ -253,11 +252,15 @@
       {@render applyCta('md', 'hidden shrink-0 lg:inline-flex')}
     </div>
 
-    <!-- The ghost chip supersedes the reality chip (see JobRow); the full
-         justification sits in the checklist further down the page, so the chip here
-         stays compact. -->
+    <!-- The ghost row supersedes the reality chip (see JobRow). It states the signal
+         once for the whole page: a gauge and the hedged wording here, the criteria and
+         a link to the full explanation behind its own disclosure. Placed above the
+         description, so somebody deciding whether this is worth an hour of unpaid work
+         meets the hedge before the pitch rather than after they have already invested
+         the reading. The caveat itself now lives on /features/ghost-jobs — the row
+         carries the ceiling on the claim ("possibly", two of four), not the essay. -->
     {#if supersedesReality(job.ghost)}
-      <GhostBadge ghost={job.ghost} />
+      <GhostChecklist ghost={job.ghost} />
     {:else}
       <RealityBadge reality={job.reality} postedAt={job.posted_at} detailed />
     {/if}
@@ -441,11 +444,6 @@
         <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
       </section>
     {/if}
-
-    <!-- Placed BEFORE the description, not after: somebody deciding whether this is
-         worth an hour of unpaid work should meet the caveat before reading the pitch,
-         not once they have already invested the reading. -->
-    <GhostChecklist ghost={job.ghost} />
 
     <JobDescription html={job.description} />
   </div>

@@ -5,8 +5,10 @@
 // vocabulary without an explanation here. A marketing page a test keeps honest — the
 // same trick the inbox landing uses for its status list.
 //
-// `fact` is what the interface actually shows beside a fired criterion; `why` is what
-// makes it evidence. Both are written from the code, not from the pitch: nothing here
+// `fact` is an example of the observations that make a criterion fire; `why` is what
+// makes it evidence. `fact` is deliberately NOT a transcript of the interface — the job
+// page prints only what the payload carries, which for `evergreen_posting` is nothing
+// beyond the tick. Both are written from the code, not from the pitch: nothing here
 // claims the system knows an employer's intent, because it does not.
 
 import { CRITERIA } from './ghost';
@@ -17,7 +19,7 @@ export interface SignalExplainer {
   label: string;
   /** structural = the shape of the posting; outcome = what happened to an applicant. */
   tier: 'structural' | 'outcome';
-  /** An example of the facts shown beside it. */
+  /** An example of the observations behind it — illustrative, not a transcript of the UI. */
   fact: string;
   /** Why this is evidence, and what it is not. */
   why: string;

@@ -17,11 +17,35 @@ export interface GhostBadge {
   tooltip: string;
 }
 
+/** A rendered gauge: how many segments to draw, how many to fill, and how loudly.
+ *
+ *  The gauge fills with risk rather than draining like a battery, and only fired
+ *  criteria are coloured. The served payload distinguishes a criterion that fired
+ *  from one that did not, and never a criterion checked and found clear from one with
+ *  no data at all — so an unfilled segment means "not observed" and must not be drawn
+ *  in a tone that reads as reassurance. */
+export interface GhostGauge {
+  segments: number;
+  filled: number;
+  tone: GhostGaugeTone;
+}
+
+/** The escalation ladder, low to severe. Four rungs where the wording has two levels:
+ *  the gauge is what tells one-of-four from three-of-four at a glance. */
+export type GhostGaugeTone = 'low' | 'elevated' | 'high' | 'severe';
+
 /** One row of the checklist: a criterion, whether it fired, and the facts behind it
- *  (or an explicit "no data" when it did not). */
+ *  where the payload carries any — `detail` is empty for a criterion whose firing IS
+ *  the fact, and for every criterion that did not fire.
+ *
+ *  `short` names the criterion for a list, where `label` states it as a sentence. A
+ *  fired criterion earns its own row and reads as the sentence; the unfired ones
+ *  collapse into one summary line, and four sentences do not survive being joined by
+ *  commas. */
 export interface GhostChecklistRow {
   code: string;
   label: string;
+  short: string;
   detail: string;
   fired: boolean;
 }
@@ -33,11 +57,36 @@ export interface GhostChecklistRow {
  *  Exported because the /features/ghost-jobs landing explains them from this same
  *  array, and a test fails if a criterion joins the vocabulary without being
  *  explained there. A marketing page a test keeps honest. */
-export const CRITERIA: { code: string; label: string; tier: 'structural' | 'outcome' }[] = [
-  { code: 'evergreen_posting', label: 'Posting behaves as evergreen', tier: 'structural' },
-  { code: 'ats_absent', label: "Not on the company's own careers board", tier: 'structural' },
-  { code: 'silent_applications', label: 'Applications here went unanswered', tier: 'outcome' },
-  { code: 'user_reports', label: 'People reported no response', tier: 'outcome' },
+export const CRITERIA: {
+  code: string;
+  label: string;
+  short: string;
+  tier: 'structural' | 'outcome';
+}[] = [
+  {
+    code: 'evergreen_posting',
+    label: 'Posting behaves as evergreen',
+    short: 'how the posting behaves',
+    tier: 'structural',
+  },
+  {
+    code: 'ats_absent',
+    label: "Not on the company's own careers board",
+    short: "the company's own board",
+    tier: 'structural',
+  },
+  {
+    code: 'silent_applications',
+    label: 'Applications here went unanswered',
+    short: 'applications here',
+    tier: 'outcome',
+  },
+  {
+    code: 'user_reports',
+    label: 'People reported no response',
+    short: 'reports from people',
+    tier: 'outcome',
+  },
 ];
 
 const LABELS: Record<string, { tone: 'warn' | 'muted'; label: string }> = {
@@ -66,6 +115,35 @@ export function ghostBadge(ghost?: Ghost | null): GhostBadge | null {
   };
 }
 
+/** ghostGauge projects the signal onto the segmented gauge the job page renders, or
+ *  null wherever the chip itself would show nothing.
+ *
+ *  The tone comes from the SHARE of criteria that fired, not from `level` and not from
+ *  the raw count. Not `level`, because it has two values where the gauge has four
+ *  states worth telling apart. Not the raw count, because the denominator is served:
+ *  the day the classifier gains a fifth criterion, thresholds pinned to absolute
+ *  counts would read three-of-five as loudly as three-of-four. `level` keeps driving
+ *  the wording, which stays the authoritative claim — a strongly toned gauge under
+ *  "Possibly inactive" is three criteria firing, not a stronger accusation. */
+export function ghostGauge(ghost?: Ghost | null): GhostGauge | null {
+  if (!ghost || !ghostBadge(ghost)) return null;
+
+  const segments = ghost.criteria_total;
+  // A payload claiming more fired criteria than the scale's denominator must not
+  // paint segments that do not exist.
+  const filled = Math.min(ghost.criteria.length, segments);
+  if (segments < 1 || filled < 1) return null;
+
+  return { segments, filled, tone: toneFor(filled / segments) };
+}
+
+function toneFor(share: number): GhostGaugeTone {
+  if (share >= 1) return 'severe';
+  if (share > 0.5) return 'high';
+  if (share > 0.25) return 'elevated';
+  return 'low';
+}
+
 /** supersedesReality reports whether the ghost badge replaces the reality badge.
  *
  *  `evergreen_posting` IS the reality verdict, so rendering both shows one fact
@@ -75,36 +153,58 @@ export function supersedesReality(ghost?: Ghost | null): boolean {
   return ghostBadge(ghost) !== null;
 }
 
-/** ghostChecklist renders every criterion the classifier considers — including the
- *  ones with nothing behind them.
+/** ghostChecklist projects every criterion the classifier considers — including the
+ *  ones that did not fire.
  *
- *  Showing the unfired rows is the point rather than clutter: "no data" beside the
- *  outcome criteria tells the reader WHY the level is not higher, instead of leaving
- *  them to guess how serious this is. */
+ *  Accounting for the unfired ones is the point rather than clutter: it tells the
+ *  reader WHY the level is not higher, instead of leaving them to guess how serious
+ *  this is. The interface renders the fired ones as rows and hands the rest to
+ *  ghostUnobserved, which names them in a single line. */
 export function ghostChecklist(ghost: Ghost): GhostChecklistRow[] {
   const fired = new Set(ghost.criteria);
-  return CRITERIA.map(({ code, label }) => ({
+  return CRITERIA.map(({ code, label, short }) => ({
     code,
     label,
+    short,
     fired: fired.has(code),
     detail: detailFor(code, ghost, fired.has(code)),
   }));
 }
 
+/** ghostUnobserved names the criteria that did not fire, in one line, or '' when they
+ *  all did.
+ *
+ *  It claims an absence of OBSERVATION and never an absence of data, because the
+ *  payload cannot tell those apart. `evergreen_posting` is derived from a reality class
+ *  computed for every job, and `ats_absent` not firing can mean the role IS on the
+ *  employer's board — both are criteria checked and found clear, and calling them "no
+ *  data" would be simply false. The gauge takes the same care with its unfilled
+ *  segments; a line of prose beside it must not give away what the colour withholds. */
+export function ghostUnobserved(ghost: Ghost): string {
+  const missing = ghostChecklist(ghost).filter((r) => !r.fired);
+  if (!missing.length) return '';
+  return `Not observed: ${missing.map((r) => r.short).join(', ')}.`;
+}
+
+// A fired criterion's fact rides on the criterion's own line, so it is phrased as a
+// continuation — lower case, no leading capital. A criterion whose firing IS the whole
+// fact gets none: the tick beside it already said "yes", and a second line reading
+// "Yes" was type carrying nothing. An unfired criterion gets none either — the row is
+// never rendered, and ghostUnobserved names it instead.
 function detailFor(code: string, ghost: Ghost, fired: boolean): string {
-  if (!fired) return 'No data';
+  if (!fired) return '';
   switch (code) {
     case 'ats_absent': {
       const ago = ghost.ats_checked_at ? timeAgo(ghost.ats_checked_at) : '';
-      return ago ? `Checked ${ago}` : 'Checked against the company board';
+      return ago ? `checked ${ago}` : 'checked against the company board';
     }
     case 'silent_applications':
     case 'user_reports':
       // The contributor count is served only above the anonymity gate, and the UI
       // must not invent one below it: a count of one identifies that applicant to
       // the employer. Absent means absent.
-      return ghost.contributors ? `From ${ghost.contributors} people` : 'Reported';
+      return ghost.contributors ? `from ${ghost.contributors} people` : 'reported';
     default:
-      return 'Yes';
+      return '';
   }
 }

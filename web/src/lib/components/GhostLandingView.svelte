@@ -1,10 +1,13 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Check, Minus } from '@lucide/svelte';
   import { Button } from '$lib/ui';
+  import GhostBadge from '$lib/components/GhostBadge.svelte';
+  import GhostChecklist from '$lib/components/GhostChecklist.svelte';
   import NumberedGrid from '$lib/components/NumberedGrid.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import type { Ghost } from '$lib/generated/contracts';
   import { GHOST_FAQ } from '$lib/ghostFaq';
+  import { ghostBadge } from '$lib/ghost';
   import { CONVERGENCE, GHOST_SIGNALS, WITNESS_GATE } from '$lib/ghostSignals';
 
   // The signals render from the same array the checklist reads, so this page cannot
@@ -13,43 +16,43 @@
   const structural = $derived(GHOST_SIGNALS.filter((s) => s.tier === 'structural'));
   const outcome = $derived(GHOST_SIGNALS.filter((s) => s.tier === 'outcome'));
 
-  // Previews are MARKUP, never screenshots: a screenshot is light-theme, carries a
-  // real employer's name, and freezes a UI that changes. These are the real
-  // components' shapes, built from illustrative data.
-  const demoChecklist = [
-    {
-      label: 'Posting behaves as evergreen',
-      detail: 'Open 240 days · reposted 13× · 7 copies open at once',
-      fired: true,
-    },
-    {
-      label: "Not on the company's own careers board",
-      detail: 'Checked 2 days ago',
-      fired: true,
-    },
-    { label: 'Applications here went unanswered', detail: 'No data', fired: false },
-    { label: 'People reported no response', detail: 'No data', fired: false },
-  ];
+  // Previews are the REAL components fed illustrative payloads, never screenshots and
+  // no longer hand-copied markup. A screenshot is light-theme, carries a real
+  // employer's name, and freezes a UI that changes; a copy of the markup goes stale
+  // the first time the component is redesigned, which is exactly what happened when
+  // the checklist panel became a gauge row. Rendering the components means this page
+  // cannot describe an interface that no longer exists.
+  const checkedAt = new Date(Date.now() - 2 * 86_400_000).toISOString();
 
+  const possible: Ghost = {
+    level: 'possible',
+    criteria: ['evergreen_posting', 'ats_absent'],
+    criteria_total: 4,
+    ats_checked_at: checkedAt,
+  };
+
+  const likely: Ghost = {
+    level: 'likely',
+    criteria: ['evergreen_posting', 'ats_absent', 'silent_applications'],
+    criteria_total: 4,
+    contributors: WITNESS_GATE,
+    ats_checked_at: checkedAt,
+  };
+
+  // The prose names each level by asking the projection, so the page cannot caption a
+  // chip with wording the product has since changed.
   const levels = [
     {
-      chip: 'Possibly inactive',
-      scale: '2/4',
-      tone: 'muted' as const,
+      chip: ghostBadge(possible)!.label,
       when: `${CONVERGENCE} criteria fired, but nobody who applied has told us anything`,
+      ghost: possible,
     },
     {
-      chip: 'Likely inactive',
-      scale: '3/4',
-      tone: 'warn' as const,
+      chip: ghostBadge(likely)!.label,
       when: `at least ${WITNESS_GATE} different people who applied went unanswered, and something else fired too`,
+      ghost: likely,
     },
   ];
-
-  const toneClass = {
-    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-    muted: 'border-border text-muted-foreground',
-  };
 </script>
 
 <article class="flex flex-col gap-14">
@@ -127,7 +130,7 @@
     </div>
   </section>
 
-  <!-- The UI, as markup. -->
+  <!-- The UI, rendered by the components that render it in the product. -->
   <section class="flex flex-col gap-6">
     <SectionLabel text="what you actually see" />
 
@@ -137,14 +140,7 @@
       </p>
       <div class="flex flex-wrap items-center gap-3 rounded-lg border border-border p-4">
         {#each levels as l (l.chip)}
-          <span
-            class="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium {toneClass[
-              l.tone
-            ]}"
-          >
-            {l.chip}
-            <span class="tabular-nums opacity-70">{l.scale}</span>
-          </span>
+          <GhostBadge ghost={l.ghost} />
         {/each}
       </div>
       <ul class="flex flex-col gap-1.5 text-sm text-muted-foreground">
@@ -156,36 +152,16 @@
 
     <div class="flex flex-col gap-3">
       <p class="text-sm text-muted-foreground">
-        On the job page — the full checklist, <strong class="font-medium text-foreground"
-          >including what we do not know</strong
-        >. The empty rows are the point: they tell you why the warning is not stronger.
+        On the job page — a gauge you can read without reading, and the criteria one click
+        away, <strong class="font-medium text-foreground">including what we do not know</strong>.
+        What is missing is the point: it tells you why the warning is not stronger.
       </p>
-      <section class="rounded-lg border border-border p-4">
-        <div class="mb-3 flex items-baseline justify-between gap-4">
-          <h3 class="text-sm font-semibold tracking-tight">
-            Signs this posting may be inactive
-          </h3>
-          <span class="text-xs tabular-nums text-muted-foreground">2 / 4</span>
-        </div>
-        <ul class="flex flex-col gap-2">
-          {#each demoChecklist as row (row.label)}
-            <li class="flex items-start gap-2.5 text-sm">
-              {#if row.fired}
-                <Check class="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              {:else}
-                <Minus class="mt-0.5 size-4 shrink-0 text-muted-foreground/50" />
-              {/if}
-              <span class="flex min-w-0 flex-col">
-                <span class={row.fired ? '' : 'text-muted-foreground'}>{row.label}</span>
-                <span class="text-xs text-muted-foreground">{row.detail}</span>
-              </span>
-            </li>
-          {/each}
-        </ul>
-        <p class="mt-3 text-xs text-muted-foreground">
-          These are observations about the posting, not a claim about the employer.
-        </p>
-      </section>
+      <div class="rounded-lg border border-border p-4">
+        <GhostChecklist ghost={possible} />
+      </div>
+      <p class="text-xs text-muted-foreground">
+        These are observations about the posting, not a claim about the employer.
+      </p>
     </div>
   </section>
 
