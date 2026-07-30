@@ -21,4 +21,4 @@
 - [x] 4.1 `go build ./... && go vet ./... && gofmt -l . && go test ./...` all clean
 - [x] 4.2 Live-run two keywords against the real feed; confirm pages requested drops and every returned posting names its term
 - [x] 4.3 Re-annotate `sources/whatjobs.yml` volumes from corroborated counts, replacing the feed's inflated `total`
-- [ ] 4.4 Deploy, run the board on prod, verify the rows are relevant before considering cron
+- [x] 4.4 Deploy, run the board on prod, verify the rows are relevant before considering cron
