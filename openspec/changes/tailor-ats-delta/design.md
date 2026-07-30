@@ -119,6 +119,16 @@ contract that simply lacks the type.
   document per tailored CV, contradicting recompute-on-read for a case (editing the base mid-tailor)
   we have no evidence of. Accepted and documented; the response names which base CV it compared
   against so the number is never anonymous.
+- **A pruned vacancy can promote an orphan to "the base CV"** → Pre-existing, found while reviewing
+  this change, and NOT fixed here. `cvs_job_id_fkey` is `ON DELETE SET NULL`, so when `cmd/prune`
+  hard-deletes a job, its tailored copy keeps existing with `job_id` NULL — and
+  `GetBaseCVByUser` defines the base as the newest `job_id IS NULL` row. A recently-tailored
+  orphan therefore outranks the real base and becomes the baseline for every other tailored CV's
+  delta: wrong numbers, silently, with no crash. The orphan itself cannot be compared (its NULL
+  `job_id` is the 409 path), and it can never be its own baseline, so the damage is bounded to a
+  misleading comparison. The root cause is shared with `cv.Store.Tailor`, which seeds new copies
+  from that same query, so this predates the delta and fixing it properly means schema work (an
+  explicit `is_base` flag, or an FK that does not orphan) — its own change, not a rider on this one.
 - **A template switch is attributed to tailoring** → Prevented by design: the base is rendered with
   the tailored copy's template and margins, so a switch moves both sides together.
 - **Two renders on every workspace open** → Measured cheap (30–90 ms per compile). Watch the tailor

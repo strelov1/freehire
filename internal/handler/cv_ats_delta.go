@@ -13,8 +13,9 @@ import (
 	"github.com/strelov1/freehire/internal/skilltag"
 )
 
-// errNoRenderer is scoring's own missing-renderer error. The PDF endpoint answers 501 for
-// the same condition because rendering is what that caller asked for; the delta is an
+// errNoRenderer is scoring's own missing-renderer error, covering both halves of the
+// toolchain: the Typst renderer and the PDF text extractor. The PDF endpoint answers 501 for
+// the renderer half because rendering is what that caller asked for; the delta is an
 // accessory read, so it reports the score as unavailable instead (see the handler).
 var errNoRenderer = errors.New("cv renderer is not configured")
 
@@ -117,7 +118,10 @@ func (h *cvHandlers) atsDeltaUnavailable(c *fiber.Ctx, err error) error {
 // strength of JSON nobody will parse. The CV's own skill set is parsed from that same text
 // for the same reason.
 func (h *cvHandlers) scoreRenderedCV(ctx context.Context, doc cv.Document, tmpl cv.Template, keywords []string) (atscheck.Report, error) {
-	if h.cvRenderer == nil {
+	// Both halves are checked, because a handler assembled with one and not the other exists:
+	// an unchecked extractor call turns a misassembled handler into a 500 rather than the
+	// unavailable delta every other missing-toolchain case yields.
+	if h.cvRenderer == nil || h.extractPDFText == nil {
 		return atscheck.Report{}, errNoRenderer
 	}
 	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl)

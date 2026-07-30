@@ -306,3 +306,16 @@ func TestScoreRenderedCV_NoRendererIsAnError(t *testing.T) {
 		t.Error("err = nil, want an error when no renderer is configured")
 	}
 }
+
+// TestScoreRenderedCV_NoExtractorIsAnError guards the asymmetry that would otherwise be a
+// panic: a handler assembled with a renderer but no text extractor exists today
+// (cv_integration_test.go sets cvRenderer on a struct literal), so calling the extractor
+// unchecked turns a misassembled handler into a 500 instead of an unavailable delta.
+func TestScoreRenderedCV_NoExtractorIsAnError(t *testing.T) {
+	h := &cvHandlers{cvRenderer: &fakeCVRenderer{pdf: []byte(scorableCV)}}
+	tmpl, _ := cv.ResolveTemplate("classic-ats")
+
+	if _, err := h.scoreRenderedCV(context.Background(), cv.Document{}, tmpl, nil); err == nil {
+		t.Error("err = nil, want an error when no text extractor is configured")
+	}
+}
