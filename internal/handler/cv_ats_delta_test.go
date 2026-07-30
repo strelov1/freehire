@@ -3,10 +3,17 @@ package handler
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/resume"
 )
@@ -14,24 +21,27 @@ import (
 // fakeCVRenderer stands in for the Typst renderer: it records what it was asked to
 // render and returns canned bytes, so a scorer test needs no typst binary.
 type fakeCVRenderer struct {
-	pdf      []byte
-	err      error
-	gotDoc   cv.Document
-	gotTmpl  cv.Template
-	calls    int
-	perCall  [][]byte // when set, the bytes returned for call i
-	docsSeen []cv.Document
+	pdf []byte
+	err error
+	// renderFn, when set, derives the bytes from the document, so a test can tell the two
+	// sides of a comparison apart by content rather than by call order.
+	renderFn  func(cv.Document) []byte
+	gotTmpl   cv.Template
+	calls     int
+	docsSeen  []cv.Document
+	tmplsSeen []cv.Template
 }
 
 func (f *fakeCVRenderer) Render(_ context.Context, doc cv.Document, tmpl cv.Template) ([]byte, error) {
 	f.calls++
-	f.gotDoc, f.gotTmpl = doc, tmpl
+	f.gotTmpl = tmpl
 	f.docsSeen = append(f.docsSeen, doc)
+	f.tmplsSeen = append(f.tmplsSeen, tmpl)
 	if f.err != nil {
 		return nil, f.err
 	}
-	if len(f.perCall) >= f.calls {
-		return f.perCall[f.calls-1], nil
+	if f.renderFn != nil {
+		return f.renderFn(doc), nil
 	}
 	return f.pdf, nil
 }
@@ -183,6 +193,99 @@ func TestScoreRenderedCV_AFieldTheTemplateDropsDoesNotScore(t *testing.T) {
 	if containsFold(withoutCerts.StrongKeywords, "kubernetes") {
 		t.Errorf("sidebar strong = %v, want kubernetes absent — the template drops the certification that carries it",
 			withoutCerts.StrongKeywords)
+	}
+}
+
+// TestCVRegister_ATSDeltaIsCookieOnly pins the gate on the delta read against the real
+// register(). Cookie-only is the enforcement, not a preference: the tailoring agent
+// authenticates with a CLI credential, so a cookie-only route is what keeps the score away
+// from the thing being measured. Widening this to `key` or `cvKey` hands the agent a metric
+// to optimise, and this test is the tripwire.
+func TestCVRegister_ATSDeltaIsCookieOnly(t *testing.T) {
+	app := fiber.New()
+	api := app.Group("/api/v1")
+	(&cvHandlers{}).register(api, middleware{
+		key:    namedGate("key"),
+		cvKey:  namedGate("cvKey"),
+		cookie: namedGate("cookie"),
+	})
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/me/cvs/"+uuid.New().String()+"/ats-delta", nil))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if got := string(body); got != "cookie" {
+		t.Errorf("GET /me/cvs/:id/ats-delta is gated by %q, want %q", got, "cookie")
+	}
+}
+
+// TestScoreRenderedCV_RealToolchainDelta is the only test that exercises the whole scoring
+// path with the real binaries: two documents through typst and pdftotext into Compare. It
+// checks both directions the pipeline can be broken in — identical documents must yield a
+// zero delta (a nondeterministic render or a truncated extraction would not), and a document
+// that gains the vacancy's evidence must score above the one that lacks it (an extraction
+// that silently returned nothing would score both the same). Skips without the binaries.
+func TestScoreRenderedCV_RealToolchainDelta(t *testing.T) {
+	bin, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("typst not installed; skipping real-toolchain delta")
+	}
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		t.Skip("pdftotext not installed; skipping real-toolchain delta")
+	}
+	h := &cvHandlers{cvRenderer: cv.NewTypstRenderer(bin), extractPDFText: resume.ExtractPDFText}
+	tmpl, err := cv.ResolveTemplate("classic-ats")
+	if err != nil {
+		t.Fatalf("resolve template: %v", err)
+	}
+	keywords := []string{"go", "kafka"}
+
+	base := cv.Document{
+		Margins: cv.DefaultMargins(),
+		Header:  cv.Header{FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+1 415 555 0134"},
+		Summary: "Backend engineer.",
+		Experience: []cv.ExperienceItem{
+			{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+				Bullets: []string{"Built Go services."}},
+		},
+		Education: []cv.EducationItem{{Degree: "BSc Mathematics", Institution: "Cambridge", Start: "2010", End: "2014"}},
+		Skills:    []cv.SkillGroup{{Group: "Languages", Items: []string{"Go"}}},
+	}
+	tailored := base
+	tailored.Summary = "Backend engineer. Core stack: Go, Kafka."
+	tailored.Experience = []cv.ExperienceItem{
+		{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present",
+			Bullets: []string{"Built Go services handling 2M requests/day.", "Ran Kafka pipelines for 4 teams."}},
+	}
+	tailored.Skills = []cv.SkillGroup{{Group: "Languages", Items: []string{"Go", "Kafka"}}}
+
+	baseReport, err := h.scoreRenderedCV(context.Background(), base, tmpl, keywords)
+	if err != nil {
+		t.Fatalf("score base: %v", err)
+	}
+	tailoredReport, err := h.scoreRenderedCV(context.Background(), tailored, tmpl, keywords)
+	if err != nil {
+		t.Fatalf("score tailored: %v", err)
+	}
+
+	if d := atscheck.Compare(baseReport, baseReport); d.Change != 0 || len(d.Categories) == 0 {
+		t.Errorf("self-comparison = change %d over %d categories, want 0 over the scorer's categories",
+			d.Change, len(d.Categories))
+	}
+	d := atscheck.Compare(baseReport, tailoredReport)
+	if d.Change <= 0 {
+		t.Errorf("change = %d (base %d → tailored %d), want positive: the tailored document adds the vacancy's evidence",
+			d.Change, d.Base, d.Tailored)
+	}
+	if d.Regressed {
+		t.Errorf("regressed = true with change %d, want false", d.Change)
+	}
+	for _, c := range d.Categories {
+		if c.Change != c.Tailored-c.Base {
+			t.Errorf("category %s: change %d != tailored %d − base %d", c.ID, c.Change, c.Tailored, c.Base)
+		}
 	}
 }
 

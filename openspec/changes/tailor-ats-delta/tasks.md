@@ -25,21 +25,21 @@
 
 ## 3. The delta endpoint
 
-- [ ] 3.1 Register `GET /me/cvs/:id/ats-delta` with `mw.cookie` in `internal/handler/cv.go`. Test that
+- [x] 3.1 Register `GET /me/cvs/:id/ats-delta` with `mw.cookie` in `internal/handler/cv.go`. Test that
       a full-scope Bearer key is refused — the cookie-only route is what keeps the tailoring agent
       from reading the score, so it needs a test that fails if someone widens it to `mw.key`.
-- [ ] 3.2 Implement the handler: resolve the tailored CV owner-scoped (another account's id is the
+- [x] 3.2 Implement the handler: resolve the tailored CV owner-scoped (another account's id is the
       same not-found as a missing id), resolve its base CV and bound vacancy, refuse a CV that is not
       a tailored copy with a conflict naming the reason, read the vacancy's canonical `Skills` through
       `jobReader.GetJob`, score both sides with the **tailored copy's** template and margins, and
       return `Compare`'s result. Tests cover the owner-scoping, the not-a-tailored-copy conflict, and
       that both sides were rendered with the tailored copy's template even when the base CV's stored
       template differs.
-- [ ] 3.3 Test the degrade path end to end: with `cvRenderer` nil the response is a success status
+- [x] 3.3 Test the degrade path end to end: with `cvRenderer` nil the response is a success status
       carrying `available: false` and a reason — not the 501 `RenderCVPDF` returns.
-- [ ] 3.4 Test that scoring leaves the base CV untouched: its stored document, template and margins
+- [x] 3.4 Test that scoring leaves the base CV untouched: its stored document, template and margins
       are identical after a delta read.
-- [ ] 3.5 Add a renderer-backed test that skips when typst or pdftotext is absent (the skip pattern in
+- [x] 3.5 Add a renderer-backed test that skips when typst or pdftotext is absent (the skip pattern in
       `internal/cv/renderer_test.go`), asserting a real render of two documents produces a coherent
       delta — this is the only test that proves the real toolchain path works.
 

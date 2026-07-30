@@ -122,6 +122,10 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// Undo a whole autopilot run. Cookie-only: it rewrites the document, and the browser
 	// is where the candidate saw the run happen.
 	api.Post("/me/cvs/:id/autopilot/undo", mw.cookie, h.UndoAutopilotRun)
+	// What tailoring did to the CV's ATS readiness. Cookie-only, and deliberately so: the
+	// tailoring agent authenticates with a CLI credential, so this gate is what keeps the
+	// score out of the reach of the thing being measured.
+	api.Get("/me/cvs/:id/ats-delta", mw.cookie, h.GetCVATSDelta)
 }
 
 const maxCVTitleRunes = 200
