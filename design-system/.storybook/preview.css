@@ -6,10 +6,12 @@
    unstyled markup while the build stays green. */
 @import "../src/theme.css";
 
-/* Stories carry classes of their own — Skeleton's dimensions, for one. They sit
-   outside the package's scan on purpose: the app must never ship a utility only
-   a story uses. Storybook does need them, so it asks for them here. */
+/* Stories and their demo components carry classes of their own — Skeleton's
+   dimensions, the demos' layout padding. Both sit outside the package's own scan
+   on purpose: the app must never ship a utility only a story uses, which is also
+   why the demos live here and not in src/. Storybook does need them. */
 @source "../src/**/*.stories.ts";
+@source "./demos/**/*.svelte";
 
 /* The canvas follows the tokens rather than a second, hand-copied set of hex
    values, so the theme toolbar cannot leave the backdrop and the components

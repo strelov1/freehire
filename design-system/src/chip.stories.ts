@@ -16,5 +16,6 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = { args: { variant: 'default', children: text('Chip') } };
 export const Primary: Story = { args: { variant: 'primary', children: text('Active') } };
+export const Secondary: Story = { args: { variant: 'secondary', children: text('Remote') } };
 export const Brand: Story = { args: { variant: 'brand', children: text('Verified') } };
 export const Destructive: Story = { args: { variant: 'destructive', children: text('Rejected') } };

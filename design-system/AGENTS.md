@@ -52,16 +52,28 @@ unfinished phase, not breakage.
 ## Storybook
 
 `pnpm storybook` (port 6006) / `pnpm build-storybook`. Stories are CSF in
-`src/*.stories.ts`; `src/story-text.ts` wraps a plain string in the snippet Svelte 5 needs
-for a component's `children`.
+`src/*.stories.ts`, one file per primitive, and all 15 are covered.
+
+**Two ways to give a story its `children`, and the choice is not taste.** For a primitive
+whose children are just text, `src/story-text.ts` wraps a string in the snippet Svelte 5
+requires. For one whose children compose *other primitives* or take snippet parameters —
+`Dialog` needs a trigger, `FormField` hands its control `{ id, describedBy, required,
+invalid }`, `Table` leaves rows to the caller, `Tooltip` wires `aria-describedby` onto the
+first focusable child — a raw HTML string would mean hand-copying the markup of `Input` or
+`Button`, and the story would drift from the component silently. Those get a real component
+in **`.storybook/demos/`**, named in the story's `component`.
+
+The demos live there and not in `src/` for two reasons: `src/*` is the package's public
+export surface (`"./*": "./src/*"`), and `theme.css`'s `@source "./**/*.svelte"` would mint
+their layout utilities into the *app's* bundle. `preview.css` scans them separately.
+(`@storybook/addon-svelte-csf` would be the tidier answer, but 5.1.2 peers `@storybook/svelte`
+at `^10.4.0-0` and we are on 10.5.4.)
 
 `docgen: false` in `.storybook/main.ts` — the svelte docgen plugin hands raw `.svelte` source
 to the bundler's JS parser and dies on the markup. The cost is the autodocs prop tables, so
 the Docs tab renders thin, and `argTypes` are hand-maintained: they drift from a component's
-actual variants with nothing to catch it.
+actual variants with nothing to catch it. `Button`'s list already did, losing `destructive`.
 
 ## Limitations
 
-- Five primitives have no stories — `Dialog`, `FormField`, `Table`, `Tabs`, `Tooltip` — and
-  neither do `Button`'s `destructive` variant and `icon` size, nor `Chip`'s `secondary`.
 - The DSDS docs site is not configured yet.

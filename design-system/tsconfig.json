@@ -28,6 +28,7 @@
     // framework's own types; leaving it out of the check is how a preview that
     // never loaded Tailwind still built green.
     ".storybook/**/*.ts",
+    ".storybook/**/*.svelte",
     "vitest.config.ts",
     "vitest.setup.ts"
   ]
