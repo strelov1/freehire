@@ -226,9 +226,16 @@ type Querier interface {
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
 	CompanyJobCountBySlug(ctx context.Context, slug string) (int32, error)
-	// The slug ending every full chunk of `chunk_size` companies (ordered by slug),
-	// excluding the final row, so the sitemap index can list each company sub-sitemap's
-	// keyset cursor.
+	// The slug ending every full chunk of `chunk_size` hiring companies (ordered by
+	// slug), excluding the final row, so the sitemap index can list each company
+	// sub-sitemap's keyset cursor. Same `job_count > 0` scope as ListCompanySitemap, or
+	// the cursors would not line up with the chunks they open.
+	//
+	// The last-row guard is a max(slug) probe, not the `count(*) OVER ()` this query
+	// used to compare `rn` against: that count is exact only by materializing every row
+	// of the walk in a tuplestore, while max(slug) over the same partial index is one
+	// backward index probe. Both exclude exactly the row whose rn = total — the maximum
+	// slug — whose cursor would open an empty trailing chunk.
 	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
 	// Whether a company with this slug exists — the cheap existence check the vote
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
@@ -962,6 +969,13 @@ type Querier interface {
 	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
+	//
+	// Scoped to hiring companies (job_count > 0), the same scope the /companies catalog
+	// lists: a company with no open role has nothing on its page for a crawler to rank,
+	// and ~90k of the ~299k rows are job-less reference imports (YC, company-info), so
+	// listing them spends crawl budget on thin pages. Rides companies_sitemap_hiring_idx
+	// (0057), which covers the predicate, the order and updated_at — without it the
+	// predicate alone sends every candidate row to the heap.
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
 	// Drives the sync worker: every connection still authorized.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)

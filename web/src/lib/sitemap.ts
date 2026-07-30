@@ -5,10 +5,12 @@
 
 import { collectionSlugs } from './collections';
 
-// Must equal the backend's sitemapMaxURLs — the chunk size the boundary cursors
-// are computed with — so each sub-sitemap holds exactly one keyset chunk and
-// never exceeds the protocol limit.
-export const SITEMAP_CHUNK = 50000;
+// Must equal the backend's companySitemapChunk — the chunk size the boundary
+// cursors are computed with — so each sub-sitemap holds exactly one keyset chunk.
+// Well under the protocol's 50,000-URL cap on purpose: these reads compete with the
+// ingest for Postgres' buffer cache, and a 50k chunk measured both 0.9s warm and
+// past the 60s proxy timeout during an ingest run (see internal/handler/sitemap.go).
+export const SITEMAP_CHUNK = 10000;
 
 /** The site's static, always-present pages (relative paths). */
 export const STATIC_PATHS = [
@@ -17,13 +19,23 @@ export const STATIC_PATHS = [
   '/companies',
   '/collections',
   '/for-companies',
-  '/cli',
-  '/chatgpt',
   '/recruiters',
   '/features/inbox',
   '/features/referrals',
   '/features/tailor',
   '/features/ghost-jobs',
+  // The data and API surfaces. Indexable pages that carry the site's most citable
+  // material — live catalogue figures (/open), market rollups (/trends), the API
+  // reference — so they belong in the sitemap even though nothing links to some of
+  // them from the feed.
+  '/open',
+  '/trends',
+  '/docs/api',
+  '/cli',
+  '/chatgpt',
+  '/contribute',
+  '/status',
+  '/privacy',
 ];
 
 /** The curated collection landing pages (`/collections/:slug`), one per collection.

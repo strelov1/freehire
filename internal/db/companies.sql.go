@@ -43,17 +43,25 @@ func (q *Queries) CompanyJobCountBySlug(ctx context.Context, slug string) (int32
 const companySitemapBoundaries = `-- name: CompanySitemapBoundaries :many
 SELECT slug FROM (
   SELECT slug,
-         row_number() OVER (ORDER BY slug) AS rn,
-         count(*) OVER () AS total
+         row_number() OVER (ORDER BY slug) AS rn
   FROM companies
+  WHERE job_count > 0
 ) t
-WHERE rn % $1::bigint = 0 AND rn < total
+WHERE rn % $1::bigint = 0
+  AND slug < (SELECT max(slug) FROM companies WHERE job_count > 0)
 ORDER BY slug
 `
 
-// The slug ending every full chunk of `chunk_size` companies (ordered by slug),
-// excluding the final row, so the sitemap index can list each company sub-sitemap's
-// keyset cursor.
+// The slug ending every full chunk of `chunk_size` hiring companies (ordered by
+// slug), excluding the final row, so the sitemap index can list each company
+// sub-sitemap's keyset cursor. Same `job_count > 0` scope as ListCompanySitemap, or
+// the cursors would not line up with the chunks they open.
+//
+// The last-row guard is a max(slug) probe, not the `count(*) OVER ()` this query
+// used to compare `rn` against: that count is exact only by materializing every row
+// of the walk in a tuplestore, while max(slug) over the same partial index is one
+// backward index probe. Both exclude exactly the row whose rn = total — the maximum
+// slug — whose cursor would open an empty trailing chunk.
 func (q *Queries) CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error) {
 	rows, err := q.db.Query(ctx, companySitemapBoundaries, chunkSize)
 	if err != nil {
@@ -473,7 +481,7 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 const listCompanySitemap = `-- name: ListCompanySitemap :many
 SELECT slug, updated_at
 FROM companies
-WHERE slug > $1
+WHERE slug > $1 AND job_count > 0
 ORDER BY slug
 LIMIT $2
 `
@@ -490,6 +498,13 @@ type ListCompanySitemapRow struct {
 
 // Slim keyset page of companies for the sitemap, cursored by the slug primary key
 // (first chunk keyed by the empty string, which sorts before every slug).
+//
+// Scoped to hiring companies (job_count > 0), the same scope the /companies catalog
+// lists: a company with no open role has nothing on its page for a crawler to rank,
+// and ~90k of the ~299k rows are job-less reference imports (YC, company-info), so
+// listing them spends crawl budget on thin pages. Rides companies_sitemap_hiring_idx
+// (0057), which covers the predicate, the order and updated_at — without it the
+// predicate alone sends every candidate row to the heap.
 func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error) {
 	rows, err := q.db.Query(ctx, listCompanySitemap, arg.AfterSlug, arg.BatchSize)
 	if err != nil {

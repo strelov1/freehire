@@ -44,6 +44,12 @@ func TestSitemapEndpoints(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		seedSitemapJob(t, q, i) // also upserts company co-0i
 	}
+	// The company sitemap lists only companies with an open job, and that count lives
+	// in the denormalized companies.job_count recomputed by cmd/recount-companies — so
+	// the seeded companies are not hiring until the recount runs.
+	if _, err := q.RefreshCompanyFacets(context.Background()); err != nil {
+		t.Fatalf("RefreshCompanyFacets: %v", err)
+	}
 
 	h := &sitemapHandlers{queries: q}
 	jh := &jobsHandlers{queries: q}
