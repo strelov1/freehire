@@ -144,7 +144,7 @@ order mattered). Only the titles the bare alias cannot see are listed.
 `hardware design engineer` and `firmware design engineer` need no entry either: the
 `hardware`/`embedded` aliases already precede the design block.
 
-### 2b. `categoryBlindPhrases` for the titles that name no category at all
+### 2b. A blind table entry for the titles that name no category at all
 
 "Software Design Engineer" is software engineering — "design" qualifies what is
 engineered. There is no honest category for it in this vocabulary (a bare "Staff
@@ -152,19 +152,34 @@ Software Engineer" resolves none either), so routing it anywhere is worse than
 emitting nothing: as draughting it left the technical catalogue entirely, losing
 enrichment, embeddings and its `is_tech`.
 
-The fix mirrors a mechanism the package already has. `gradeBlindPhrases` masks phrases
-that contain a grade word without stating a grade ("Member of Technical Staff");
-`categoryBlindPhrases` masks phrases that contain a category alias without naming a
-category — `software design engineer`, `systems design engineer`,
-`system design engineer`. Each is replaced by a space before the category match, so
-the surrounding boundaries survive and the category comes back empty. `is_tech` is
-then supplied by the tech-title detector, which gains `software design engineer` as a
-term (it is not adjacent to the existing `software engineer`, so `wordmatch` could not
-see it).
+The first attempt copied `gradeBlindPhrases` — mask the phrase before the match — and
+that was wrong twice over, which review caught:
 
-Only phrases with no better category belong there. Where one exists, the title is
-routed in `categoryTable` instead — that is why `cloud design engineer` → `devops` and
-`service design engineer` → `design` are aliases rather than masks.
+- cutting the span exposes whatever alias sits FURTHER DOWN the table, and the aliases
+  below the design block are almost exactly the business categories. "Software Design
+  Engineer - Sales Tools" resolved to `sales` and lost its enrichment;
+- a mask is boundary-blind where every matcher here is boundary-aware, so
+  "Software Design Engineering Manager" became `"  ing manager"` → `management`.
+
+It also over-reached: `systems design engineer` was on the mask list, which blanked the
+category of every "HVAC / Mechanical Systems Design Engineer" — and with it the
+placement that vetoes deletion, so those postings became rejectable at ingest and
+hard-deletable by prune. Exactly the defect §1 exists to prevent.
+
+The shipped shape is a table entry carrying the `categoryNone` sentinel. It wins the
+first-match walk like any other alias, so nothing below it is exposed; `matchCategory`
+translates the sentinel to `""`. Three exits need the same translation, and each has a
+test: `Parse`, `Categories` (the CV path, which would otherwise put `-` in a profile)
+and `CategoryAliases` (which feeds the generated web contracts, where `-` would ship as
+a pickable value). `is_tech` comes from the tech-title detector, which gains
+`software design engineer` as a term — it is not adjacent to the existing
+`software engineer`, so `wordmatch` could not see it.
+
+Only phrases with no better category belong there, and they must be narrow. Where a
+category exists, route the title to it: `cloud design engineer` → `devops`,
+`solution(s) design engineer` → `solutions_engineering`,
+`(software) design engineer in test` → `qa`,
+`service`/`experience`/`sound`/`game design engineer` → `design`.
 
 ### 3. Named roles on both sides; longest-alias-first does the disambiguation
 

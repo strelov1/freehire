@@ -37,24 +37,34 @@ named design roles, so 85% of the sampled titles fall through to the bare
   (`mechanical_designer`, `electrical_designer`, `civil_designer`, and — inside the
   `hardware` category — `pcb_designer` and `chip_designer`), plus a role noun for the
   new category.
-- Extend `skilltag` with the design tool and practice vocabulary (~25 canonicals:
-  `illustrator`, `indesign`, `after-effects`, `adobe-xd`, `webflow`, `invision`,
-  `zeplin`, `lottie`, `prototyping`, `wireframing`, `design-systems`, `user-research`,
-  `usability-testing`, `interaction-design`, `design-thinking`, `typography`,
-  `motion-graphics`, …) and the CAD/EDA stack the engineering side needs
+- Extend `skilltag` with the design tool and practice vocabulary (`illustrator`,
+  `indesign`, `after-effects`, `adobe-xd`, `webflow`, `invision`, `zeplin`, `lottie`,
+  `prototyping`, `wireframing`, `user-research`, `usability-testing`,
+  `interaction-design`, `design-thinking`, `typography`, `motion-design`,
+  `motion-graphics`, `user-flows`, …) and the CAD/EDA stack the engineering side needs
   (`solidworks`, `catia`, `creo`, `sketchup`, `altium`, `kicad`, `ansys`,
-  `autodesk-inventor`, `fusion-360`, `3ds-max`, …).
-- Keep the two deletion paths off the new category: a resolved `engineering_design`
-  vetoes `ConfirmedNonTech`, so the ingest catalogue filter and the prune title rule
-  no longer remove an "HVAC Designer" the category dictionary just placed. While
-  these titles lived in `design`, `TechCategories` supplied that veto for free.
-- Homonyms are handled by degree, not by a blanket rule: `sketch`, `maya`, `blender`
-  and `accessibility` go behind the existing corroboration gate (`ambiguousWords`),
-  while `principle`, `eagle`, a bare `nx`, `framer` and `spline` are excluded
-  outright — the carpentry trade, the Framer Motion library, and the splined shafts
-  of the very mechanical population being split out would each tag a posting with a
-  tool it never mentions. `creo` resolves only through `ptc creo`/`creo parametric`
-  ("creo" is Spanish for "I think").
+  `autodesk-inventor`, `fusion-360`, `3ds-max`, `civil-3d`, `cadence-virtuoso`, …).
+- Keep every deletion path off the new category. A resolved `engineering_design`
+  vetoes `ConfirmedNonTech`, which covers the ingest catalogue filter, the liveness
+  refresh and prune's title rule; prune's business rule reads the category set
+  directly, so it gets its own exclusion (`isBusinessCategory`). While these titles
+  lived in `design`, `TechCategories` supplied all of that for free — and without it an
+  "HVAC Designer", an alias this change ADDS, was rejected at ingest and hard-deletable.
+- Mask the titles where "design" names no craft at all (`software design engineer`)
+  with a blind table entry, so they resolve to no category instead of being filed as
+  draughting — and route the ones that DO have a category (`cloud design engineer` →
+  devops, `design engineer in test` → qa, `service`/`sound`/`game design engineer` →
+  design). Silicon design goes to the existing `hardware`, not to the new category.
+- Homonyms are handled by degree, not by a blanket rule. Behind the existing
+  corroboration gate (`ambiguousWords`), so they resolve only next to a strong token:
+  `sketch`, `maya`, `lottie`, `blender`, `illustrator`, `canva`, `typography`,
+  `wireframes`, `prototyping`, `invision`, `accessibility`. Excluded outright:
+  `principle`, `eagle`, a bare `nx`, `framer` (the carpentry trade AND Framer Motion),
+  `spline` (the splined shafts of the mechanical population being split out), and the
+  phrases `design system(s)`, `visual design`, `solid edge` and bare `after effects` —
+  each is ordinary prose, and a phrase always matches STRONG, which would also lift
+  the gate off every weak word beside it. `creo` resolves only through
+  `ptc creo`/`creo parametric` ("creo" is Spanish for "I think").
 
 ## Capabilities
 
@@ -73,9 +83,18 @@ named design roles, so 85% of the sampled titles fall through to the bare
 
 - `internal/vocab/vocab.go` — `CategoryValues` + `NonTechCategories` (a partition
   test forces the membership choice).
-- `internal/classify/dictionaries.go` — new aliases, ordered before bare `design`.
+- `internal/classify/dictionaries.go` — new aliases, ordered before bare `design`,
+  plus the `categoryNone` sentinel for the blind ones.
+- `internal/classify/classify.go` — `matchCategory` translates the sentinel to ""; the
+  same translation guards `Categories()` (the CV path) and `CategoryAliases()` (the
+  generated web contracts).
+- `internal/classify/tech.go` — `software design engineer` joins the tech-title terms,
+  so a masked software title still reads as technical.
 - `internal/classify/nontech.go` — `ConfirmedNonTech` gains the category veto, which
-  covers all three deletion callers at once (ingest filter, liveness refresh, prune).
+  covers three deletion callers at once (ingest filter, liveness refresh, prune title
+  rule).
+- `cmd/prune/rule.go` — `isBusinessCategory` keeps the fourth path, the business rule,
+  off the new category.
 - `internal/roletag/roletag.go` — `categoryNoun` entry + named roles.
 - `internal/skilltag/dictionaries.go` — design and CAD/EDA canonicals.
 - `cmd/gen-contracts` output (`web/src/lib/generated/contracts.ts`), the full

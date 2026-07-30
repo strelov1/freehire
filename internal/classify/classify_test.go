@@ -210,9 +210,36 @@ func TestCanonicalValuesAreInVocabulary(t *testing.T) {
 		}
 	}
 	for _, e := range categoryTable {
+		// categoryNone is the one canonical outside the vocabulary: a blind alias uses
+		// it to say "this title names no category", and matchCategory serves it as "".
+		if e.canonical == categoryNone {
+			continue
+		}
 		if !slices.Contains(vocab.CategoryValues, e.canonical) {
 			t.Errorf("category alias %q -> %q not in CategoryValues", e.alias, e.canonical)
 		}
+	}
+}
+
+// A blind alias must never leak its sentinel to a caller — Parse and Categories both
+// have to translate it, or "-" would be written into jobs.category and served as a
+// facet value.
+func TestCategoryNoneNeverEscapes(t *testing.T) {
+	for _, title := range []string{
+		"Software Design Engineer",
+		"Senior Software Design Engineer",
+		"Software Design Engineering Manager",
+	} {
+		if got := Parse(title).Category; got == categoryNone {
+			t.Errorf("Parse(%q).Category leaked the sentinel", title)
+		}
+		if got := Categories(title); slices.Contains(got, categoryNone) {
+			t.Errorf("Categories(%q) = %v leaked the sentinel", title, got)
+		}
+	}
+	// The alias map feeds cmd/gen-contracts, so a leak there reaches the web picker.
+	if _, ok := CategoryAliases()[categoryNone]; ok {
+		t.Error("CategoryAliases() carries the sentinel; it would ship as a pickable value")
 	}
 }
 
@@ -350,6 +377,8 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"BIM Designer", "engineering_design"},
 		{"Revit Designer", "engineering_design"},
 		{"Senior BIM Coordinator", "engineering_design"},
+		{"BIM Specialist", "engineering_design"},
+		{"Die Designer", "engineering_design"},
 		{"Tool Designer", "engineering_design"},
 		// Print and magazine layout is the product-design craft, so no bare
 		// "layout designer" alias: the phrase names both trades.
@@ -401,11 +430,20 @@ func TestParse_DesignSplit(t *testing.T) {
 
 		// Software-anchored forms: "design" here qualifies the engineering, it is not
 		// the craft. They must not be filed as draughting — that would take a software
-		// job out of the technical catalogue entirely.
+		// job out of the technical catalogue entirely — and they must not fall through
+		// to the business aliases further down the table either.
 		{"Software Design Engineer", ""},
 		{"Senior Software Design Engineer", ""},
-		{"Software Design Engineer in Test", ""},
-		{"Systems Design Engineer", ""},
+		{"Software Design Engineer - Sales Tools", ""},
+		{"Software Design Engineer, Support Platform", ""},
+		{"Software Design Engineering Manager", ""},
+		// SDET spelled out has a category of its own.
+		{"Software Design Engineer in Test", "qa"},
+		// "Systems Design Engineer" is NOT masked: a qualifier makes it draughting, and
+		// blanking the category would strip the placement that vetoes deletion.
+		{"HVAC Systems Design Engineer", "engineering_design"},
+		{"Mechanical Systems Design Engineer", "engineering_design"},
+		{"Systems Design Engineer", "engineering_design"},
 		// Where a better category exists, say so rather than emitting nothing.
 		{"Cloud Design Engineer", "devops"},
 		{"Solution Design Engineer", "solutions_engineering"},
@@ -425,6 +463,15 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"Mixed Signal Design Engineer", "hardware"},
 		{"DFT Design Engineer", "hardware"},
 		{"Semiconductor Design Engineer", "hardware"},
+		// The hyphenated spelling is the industry's own, and a hyphen is a word
+		// boundary — so it needs its own alias, like "middle-east" and "ai-product".
+		{"Mixed-Signal Design Engineer", "hardware"},
+		{"Analog/Mixed-Signal Design Engineer", "hardware"},
+		{"RF Design Engineer", "hardware"},
+		{"RFIC Design Engineer", "hardware"},
+		{"Analogue Design Engineer", "hardware"},
+		{"Silicon Design Engineer", "hardware"},
+		{"Memory Design Engineer", "hardware"},
 
 		// precision — the neighbours of the inserted block must not shift
 		{"Hardware Design Engineer", "hardware"},        // hardware precedes the design block

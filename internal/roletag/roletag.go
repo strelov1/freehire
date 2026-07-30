@@ -196,6 +196,10 @@ var namedRoleTable = []struct {
 		"analog design engineer", "mixed signal design engineer", "digital design engineer",
 		"chip design engineer", "asic design engineer", "soc design engineer",
 		"ic design engineer", "semiconductor design engineer", "dft design engineer",
+		// A hyphen is a word boundary, so the industry's own "mixed-signal" spelling
+		// needs its own alias — the same trap the classify table documents.
+		"mixed-signal design engineer", "rf design engineer", "rfic design engineer",
+		"analogue design engineer", "silicon design engineer", "memory design engineer",
 	}},
 
 	// Non-software professions the catalogue carries (broad scope).

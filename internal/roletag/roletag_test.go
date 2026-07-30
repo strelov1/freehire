@@ -213,6 +213,8 @@ func TestDerive_DesignRoles(t *testing.T) {
 		{"chip designer via physical design", "", "hardware", "Physical Design Engineer", []string{"hardware", "chip_designer"}},
 		{"chip designer via asic", "", "hardware", "ASIC Design Engineer", []string{"hardware", "chip_designer"}},
 		{"chip designer via chip design", "", "hardware", "Chip Design Engineer", []string{"hardware", "chip_designer"}},
+		{"chip designer hyphenated mixed signal", "", "hardware", "Mixed-Signal Design Engineer", []string{"hardware", "chip_designer"}},
+		{"chip designer via rf", "", "hardware", "RF Design Engineer", []string{"hardware", "chip_designer"}},
 		{"pcb layout designer", "", "hardware", "PCB Layout Designer", []string{"hardware", "pcb_designer"}},
 
 		// Product-side specializations stop collapsing into the bare "Designer".

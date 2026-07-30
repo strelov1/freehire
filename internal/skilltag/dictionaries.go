@@ -726,9 +726,13 @@ var ambiguousWords = map[string]bool{
 	// weak word in the same text, so leaving them strong would have made the gate on
 	// sketch/maya/blender decorative — "Typography of the shelf labels … sketch out
 	// ideas" tagged both.
-	"sketch":        true,
-	"maya":          true,
-	"blender":       true,
+	"sketch":  true,
+	"maya":    true,
+	"blender": true,
+	// "invision" is how half the postings misspell "envision"; "prototyping" is what a
+	// line cook does with a menu.
+	"invision":      true,
+	"prototyping":   true,
 	"accessibility": true,
 	"typography":    true,
 	"illustrator":   true,
@@ -990,7 +994,9 @@ var engineeringPhraseAliases = []phraseAlias{
 	// "adobe illustrator"/"adobe indesign" need no phrase: the word pass already sees
 	// the product name inside them. "xd" alone is far too short to be safe.
 	{"adobe xd", "adobe-xd"},
-	{"after effects", "after-effects"},
+	// "adobe after effects" only: bare "after effects" is clinical prose, and
+	// healthcare is the largest non-technical mass this dictionary runs over.
+	{"adobe after effects", "after-effects"},
 	// No "design system"/"design systems": that is the ordinary verb phrase of every
 	// backend, embedded and architecture posting ("you will design systems that scale",
 	// "design system architecture"). A phrase match is always strong, so tagging it
@@ -1002,7 +1008,8 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"user research", "user-research"}, {"ux research", "user-research"},
 	{"usability testing", "usability-testing"},
 	{"interaction design", "interaction-design"},
-	{"visual design", "visual-design"},
+	// No "visual design" either: "visual design of the store" is retail prose, and a
+	// phrase always matches strong, so it would corroborate the gated words beside it.
 	{"motion design", "motion-design"},
 	{"motion graphics", "motion-graphics"},
 	{"user flows", "user-flows"},
@@ -1010,9 +1017,9 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"3ds max", "3ds-max"},
 	{"fusion 360", "fusion-360"},
 	{"civil 3d", "civil-3d"},
-	{"solid edge", "solid-edge"},
+	// No "solid edge": "a solid edge over the competition" is sales prose, and the
+	// CAD product is rare enough here that the phrase costs more than it recalls.
 	{"autodesk inventor", "autodesk-inventor"},
-	{"siemens nx", "siemens-nx"},
 	{"ptc creo", "creo"}, {"creo parametric", "creo"},
 	{"cadence virtuoso", "cadence-virtuoso"},
 }

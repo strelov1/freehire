@@ -706,15 +706,32 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 		{"adobe suite", "You will work in Figma and Adobe Illustrator, with InDesign for print.",
 			[]string{"figma", "illustrator", "indesign"}, nil},
 		{"bare illustrator", "Strong Illustrator and Photoshop skills.", []string{"illustrator", "photoshop"}, nil},
-		{"after effects", "Motion work in After Effects and Premiere Pro.", []string{"after-effects", "premiere-pro"}, nil},
+		{"after effects", "Motion work in Adobe After Effects and Premiere Pro.", []string{"after-effects", "premiere-pro"}, nil},
+		// "after effects" unqualified is clinical prose, and healthcare is the largest
+		// non-technical mass this catalogue filters. A false STRONG token would also
+		// have lifted the gate off the weak words beside it — and HasEngineering would
+		// have read a nursing board as having posted engineering work.
+		{"after effects of anaesthesia",
+			"Registered Nurse. Monitor patients for the after effects of anaesthesia; sketch out care plans.",
+			nil, []string{"after-effects", "sketch"}},
+		{"a solid edge over the competition",
+			"Account Executive. Our platform gives clients a solid edge over the competition. Sketch out the territory plan.",
+			nil, []string{"solid-edge", "sketch"}},
+		{"invision as a misspelling of envision",
+			"We invision a workplace where everyone belongs. Sketch out your growth plan.",
+			nil, []string{"invision", "sketch"}},
+		{"menu prototyping in a kitchen",
+			"Line Cook. Menu prototyping with the chef; sketch out plating ideas.",
+			nil, []string{"prototyping", "sketch"}},
 		{"adobe xd", "Wireframes in Adobe XD.", []string{"adobe-xd", "wireframing"}, nil},
 		{"no-code design", "Ship marketing pages in Webflow.", []string{"webflow"}, nil},
-		{"handoff tools", "Design handoff through InVision and Zeplin.", []string{"invision", "zeplin"}, nil},
+		{"handoff tools", "Design handoff through InVision and Zeplin, source in Figma.",
+			[]string{"invision", "zeplin", "figma"}, nil},
 		{"3d design", "3D assets in Blender, animations with Lottie built in Figma.",
 			[]string{"blender", "lottie", "figma"}, nil},
 		// design practices
 		{"practices", "You will own prototyping and wireframing in Figma.",
-			[]string{"prototyping", "wireframing"}, nil},
+			[]string{"prototyping", "wireframing", "figma"}, nil},
 		// "design system(s)" is NOT a canonical: it is also the ordinary verb phrase
 		// every backend and embedded posting writes ("you will design systems that
 		// scale"). A phrase match is always strong, so tagging it would ALSO lift the
@@ -728,8 +745,8 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 			"You will design system architecture for our microservices.", nil, []string{"design-systems"}},
 		{"research practices", "Run user research and usability testing with our PMs.",
 			[]string{"user-research", "usability-testing"}, nil},
-		{"craft practices", "Interaction design, visual design and typography matter here.",
-			[]string{"interaction-design", "visual-design", "typography"}, nil},
+		{"craft practices", "Interaction design and typography matter here, alongside Figma.",
+			[]string{"interaction-design", "typography", "figma"}, nil},
 		{"design thinking", "We practise design thinking end to end.", []string{"design-thinking"}, nil},
 		{"motion", "Motion design and motion graphics for product launches.",
 			[]string{"motion-design", "motion-graphics"}, nil},
@@ -807,11 +824,12 @@ func TestParse_DesignAndCADVocabTail(t *testing.T) {
 		{"Social assets in Canva, source files in Figma.", "canva"},
 		{"Workshops run in FigJam.", "figjam"},
 		{"We hold ourselves to a11y standards with Figma.", "accessibility"},
-		{"Sheet metal work in Solid Edge.", "solid-edge"},
 		{"Assemblies modelled in Siemens NX.", "siemens-nx"},
 		{"Analog layout in Cadence Virtuoso.", "cadence-virtuoso"},
+		{"Parametric modelling in Creo Parametric.", "creo"},
+		{"You will run ux research sessions with Figma prototypes.", "user-research"},
 		{"You will map user flows before building.", "user-flows"},
-		{"Rapid prototyping of new concepts.", "prototyping"},
+		{"Rapid prototyping of new concepts in Figma.", "prototyping"},
 	}
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {

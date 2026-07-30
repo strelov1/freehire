@@ -8,6 +8,7 @@
 package classify
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/wordmatch"
@@ -34,17 +35,14 @@ func Parse(title string) Classification {
 	}
 }
 
-// matchCategory resolves the role category of an already-lowercased title, first
-// cutting out every categoryBlindPhrases occurrence — the phrases where a category
-// alias appears but names no category of its own ("software design engineer" is
-// software engineering, not the design craft). Each phrase is replaced by a space so
-// the surrounding word boundaries survive, the same treatment matchSeniority gives a
-// grade-blind phrase.
+// matchCategory resolves the role category of an already-lowercased title. It is the
+// ordered table walk plus one translation: categoryNone, the sentinel a blind alias
+// carries, is served as "" (see the categoryNone doc comment).
 func matchCategory(lower string) string {
-	for _, phrase := range categoryBlindPhrases {
-		lower = strings.ReplaceAll(lower, phrase, " ")
+	if c := matchOrdered(lower, categoryTable); c != categoryNone {
+		return c
 	}
-	return matchOrdered(lower, categoryTable)
+	return ""
 }
 
 // matchSeniority resolves the grade of an already-lowercased title, first cutting
@@ -65,8 +63,12 @@ func matchSeniority(lower string) string {
 // Parse, which keeps only the single strongest category, this surfaces the full set a
 // résumé spans (a backend engineer who also does ML). Empty when nothing resolves; it
 // never guesses.
+//
+// A blind alias contributes nothing here either: categoryNone is not a category, so it
+// is dropped rather than surfaced as a value in a CV profile.
 func Categories(text string) []string {
-	return matchAllOrdered(strings.ToLower(text), categoryTable)
+	out := matchAllOrdered(strings.ToLower(text), categoryTable)
+	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
 }
 
 // matchAllOrdered returns the distinct canonical values of every alias (in priority
@@ -91,7 +93,15 @@ func matchAllOrdered(title string, table []aliasEntry) []string {
 // for grades. Exposed so the web role picker can search roles by shorthand — the
 // same curated EN+RU terms used to tag titles, so "sre"/"sysadmin"/"sr" find their
 // role rather than only its display label.
-func CategoryAliases() map[string][]string  { return invertAliases(categoryTable) }
+//
+// The blind aliases are omitted: their sentinel is not a category, and it feeds the
+// generated web contracts, where it would show up as a pickable value.
+func CategoryAliases() map[string][]string {
+	out := invertAliases(categoryTable)
+	delete(out, categoryNone)
+	return out
+}
+
 func SeniorityAliases() map[string][]string { return invertAliases(seniorityTable) }
 
 func invertAliases(table []aliasEntry) map[string][]string {
