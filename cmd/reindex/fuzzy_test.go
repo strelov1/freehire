@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobhash"
 )
 
@@ -95,5 +96,54 @@ func TestClusterBucket_IsIdempotent(t *testing.T) {
 func TestClusterBucket_SingletonIsNoop(t *testing.T) {
 	if got := clusterBucket([]fuzzyPosting{posting(1, bodyA)}, fuzzyThreshold); len(got) != 0 {
 		t.Errorf("clusterBucket = %v, want empty", got)
+	}
+}
+
+// Bucketing reuses jobhash.RoleKey, the same normalization the rest of the codebase groups roles
+// by, so a city suffix or a parenthesised qualifier lands in the bucket it belongs to.
+func TestBucketByRole_GroupsOnNormalizedTitle(t *testing.T) {
+	got := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
+		{ID: 1, Title: "Senior Fullstack Engineer"},
+		{ID: 2, Title: "senior fullstack engineer - Kraków"},
+		{ID: 3, Title: "Data Specialist"},
+	})
+
+	// One bucket survives: the two fullstack rows. "Data Specialist" is a singleton with nothing
+	// to compare against, so it is dropped by the same filter that drops oversized buckets.
+	if len(got) != 1 {
+		t.Fatalf("got %d buckets, want 1: %v", len(got), got)
+	}
+	for key, ids := range got {
+		if !reflect.DeepEqual(ids, []int64{1, 2}) {
+			t.Errorf("bucket %q = %v, want [1 2] (the city suffix normalizes onto the base role)", key, ids)
+		}
+	}
+}
+
+// Only buckets worth comparing survive: a singleton has nothing to merge with, and a bucket past
+// the cap is generic-title-by-location, which must not collapse and would cost 92% of the run.
+func TestBucketByRole_DropsSingletonsAndOversizedBuckets(t *testing.T) {
+	rows := []db.FuzzyDedupCandidateTitlesForCompanyRow{{ID: 1, Title: "Solo Role"}}
+	for i := 0; i < fuzzyMaxBucket+1; i++ {
+		rows = append(rows, db.FuzzyDedupCandidateTitlesForCompanyRow{ID: int64(100 + i), Title: "Customer Service Associate"})
+	}
+
+	got := bucketByRole(rows)
+
+	if len(got) != 0 {
+		t.Errorf("got %d buckets, want 0 (singleton dropped, oversized bucket skipped): %v", len(got), got)
+	}
+}
+
+// A title that normalizes to nothing is not a bucket key — every blank title would otherwise
+// group together and merge unrelated postings.
+func TestBucketByRole_IgnoresTitlesThatNormalizeToNothing(t *testing.T) {
+	got := bucketByRole([]db.FuzzyDedupCandidateTitlesForCompanyRow{
+		{ID: 1, Title: "   "},
+		{ID: 2, Title: "!!!"},
+	})
+
+	if len(got) != 0 {
+		t.Errorf("got %v, want no buckets for unnormalizable titles", got)
 	}
 }

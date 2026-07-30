@@ -9,13 +9,13 @@
 ## 2. Similarity + query layer
 
 - [x] 2.1 Implement the normalized-description word-signature (distinct lowercase tokens len>2) + within-bucket pairwise Jaccard as a pure, unit-tested function (no LSH — see D6).
-- [ ] 2.2 Add SQL to stream `(company_slug, normalized-title)` buckets of exact-pass leftover canons with their descriptions, skipping buckets above the size cap and rows with an empty `company_slug` (D6, D7).
-- [ ] 2.3 Reuse/extend the `duplicate_of` writer (idempotent `IS DISTINCT FROM`), mirroring the exact pass.
+- [x] 2.2 Add SQL to stream `(company_slug, normalized-title)` buckets of exact-pass leftover canons with their descriptions, skipping buckets above the size cap and rows with an empty `company_slug` (D6, D7).
+- [x] 2.3 Reuse/extend the `duplicate_of` writer (idempotent `IS DISTINCT FROM`), mirroring the exact pass.
 
 ## 3. Dedup pass
 
 - [x] 3.1 Per-bucket clustering (similarity >= T -> same cluster, `min(id)` canon), unit-tested. The seniority-grade guard turned out unnecessary — the bucket key is the whole normalized title, so grades are already separate buckets (design D5).
-- [ ] 3.2 Wire into `cmd/reindex` AFTER `recomputeRoleDuplicates`/`suppressAggregatorDuplicates` (or a dedicated worker), over leftover canons only.
+- [x] 3.2 Wire into `cmd/reindex` AFTER `recomputeRoleDuplicates`/`suppressAggregatorDuplicates` (or a dedicated worker), over leftover canons only.
 - [x] 3.3 Unit tests: near-identical merges; distinct-job (amazon-style) stays split; mixed-specialty (speechify-style) stays split; grade guard; idempotent re-run.
 
 ## 4. Verification

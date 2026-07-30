@@ -197,6 +197,15 @@ type Querier interface {
 	// The subset of the given company slugs that are referral-eligible — for annotating a
 	// job/company list in one round-trip instead of a query per row.
 	CompaniesWithApprovedReferrer(ctx context.Context, slugs []string) ([]string, error)
+	// Company slugs worth running the fuzzy-description pass over: a company that still has more
+	// than one open CANONICAL posting after the exact role-cluster and aggregator passes, so there
+	// is something left that byte-exact matching did not collapse. Rows without a company_slug are
+	// excluded: the pass buckets by (company, title) and relies on that bucket to keep unrelated
+	// roles apart, and an empty slug is not a company boundary — measured on prod, 105 212 such rows
+	// fall into 20 126 same-title buckets spanning up to four different employers.
+	// The pass then processes these ONE COMPANY AT A TIME, like the other duplicate passes, so it
+	// never holds a lock wide enough to stall a concurrent ingest crawl.
+	CompaniesWithFuzzyDedupCandidates(ctx context.Context) ([]string, error)
 	// Company slugs whose role-duplicate markers may need recomputing: a company with an
 	// open role cluster (>1 posting sharing a fingerprint) to collapse, OR one still
 	// carrying an open marker that may need clearing (its cluster shrank). The recompute
@@ -632,6 +641,13 @@ type Querier interface {
 	// collapsed), so a canonical row wins over a duplicate, then the most recently confirmed,
 	// with id as the deterministic tiebreak.
 	FindOpenJobByURL(ctx context.Context, url string) (string, error)
+	// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
+	// description. The caller groups these into buckets with the same normalized-title function the
+	// rest of the codebase uses (jobhash.RoleKey), then loads descriptions for the buckets that
+	// survive the size filter via GetJobDescriptionsByIDs. Normalizing here in SQL instead would
+	// duplicate that logic in a second language and let the two drift apart; titles are cheap to
+	// ship, descriptions are not.
+	FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error)
 	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 	// which the handler maps to 404 — so a probe cannot tell the two apart.
 	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)
@@ -1319,6 +1335,12 @@ type Querier interface {
 	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
+	// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
+	// one company's whole assignment lands in a single statement rather than a round trip per row.
+	// Scoped to the company and to still-canonical open rows, so a row the exact pass claimed in the
+	// meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
+	// recompute reverses everything here by recomputing duplicate_of from scratch.
+	MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error)
 	// Mark a job as applied for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or updates applied_at in place, and
 	// seeds stage='applied' only when the stage is unset (an advanced stage survives

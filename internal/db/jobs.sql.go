@@ -199,6 +199,42 @@ func (q *Queries) CompaniesWithAggregatorPostings(ctx context.Context, aggregato
 	return items, nil
 }
 
+const companiesWithFuzzyDedupCandidates = `-- name: CompaniesWithFuzzyDedupCandidates :many
+SELECT company_slug
+FROM jobs
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
+GROUP BY company_slug
+HAVING COUNT(*) > 1
+`
+
+// Company slugs worth running the fuzzy-description pass over: a company that still has more
+// than one open CANONICAL posting after the exact role-cluster and aggregator passes, so there
+// is something left that byte-exact matching did not collapse. Rows without a company_slug are
+// excluded: the pass buckets by (company, title) and relies on that bucket to keep unrelated
+// roles apart, and an empty slug is not a company boundary — measured on prod, 105 212 such rows
+// fall into 20 126 same-title buckets spanning up to four different employers.
+// The pass then processes these ONE COMPANY AT A TIME, like the other duplicate passes, so it
+// never holds a lock wide enough to stall a concurrent ingest crawl.
+func (q *Queries) CompaniesWithFuzzyDedupCandidates(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, companiesWithFuzzyDedupCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const companiesWithRoleClusters = `-- name: CompaniesWithRoleClusters :many
 SELECT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> '' AND role_fingerprint IS NOT NULL AND role_fingerprint <> ''
@@ -427,6 +463,44 @@ func (q *Queries) FindOpenJobByURL(ctx context.Context, url string) (string, err
 	var public_slug string
 	err := row.Scan(&public_slug)
 	return public_slug, err
+}
+
+const fuzzyDedupCandidateTitlesForCompany = `-- name: FuzzyDedupCandidateTitlesForCompany :many
+SELECT id, title
+FROM jobs
+WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL
+ORDER BY id
+`
+
+type FuzzyDedupCandidateTitlesForCompanyRow struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+// The (id, title) of one company's open canonical postings — deliberately WITHOUT the
+// description. The caller groups these into buckets with the same normalized-title function the
+// rest of the codebase uses (jobhash.RoleKey), then loads descriptions for the buckets that
+// survive the size filter via GetJobDescriptionsByIDs. Normalizing here in SQL instead would
+// duplicate that logic in a second language and let the two drift apart; titles are cheap to
+// ship, descriptions are not.
+func (q *Queries) FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error) {
+	rows, err := q.db.Query(ctx, fuzzyDedupCandidateTitlesForCompany, company)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FuzzyDedupCandidateTitlesForCompanyRow{}
+	for rows.Next() {
+		var i FuzzyDedupCandidateTitlesForCompanyRow
+		if err := rows.Scan(&i.ID, &i.Title); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getJob = `-- name: GetJob :one
@@ -1428,6 +1502,39 @@ func (q *Queries) ListRoleClusterCopies(ctx context.Context, arg ListRoleCluster
 		return nil, err
 	}
 	return items, nil
+}
+
+const markFuzzyDuplicatesForCompany = `-- name: MarkFuzzyDuplicatesForCompany :execrows
+UPDATE jobs j
+SET duplicate_of = m.canon_id,
+    updated_at   = now()
+FROM (
+    SELECT unnest($2::bigint[]) AS id,
+           unnest($3::bigint[]) AS canon_id
+) m
+WHERE j.id = m.id
+  AND j.company_slug = $1
+  AND j.closed_at IS NULL
+  AND j.duplicate_of IS DISTINCT FROM m.canon_id
+`
+
+type MarkFuzzyDuplicatesForCompanyParams struct {
+	Company string  `json:"company"`
+	Ids     []int64 `json:"ids"`
+	Canons  []int64 `json:"canons"`
+}
+
+// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
+// one company's whole assignment lands in a single statement rather than a round trip per row.
+// Scoped to the company and to still-canonical open rows, so a row the exact pass claimed in the
+// meantime is left alone. The IS DISTINCT FROM guard makes a re-run free, and the standard
+// recompute reverses everything here by recomputing duplicate_of from scratch.
+func (q *Queries) MarkFuzzyDuplicatesForCompany(ctx context.Context, arg MarkFuzzyDuplicatesForCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markFuzzyDuplicatesForCompany, arg.Company, arg.Ids, arg.Canons)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markJobDuplicateOf = `-- name: MarkJobDuplicateOf :execrows

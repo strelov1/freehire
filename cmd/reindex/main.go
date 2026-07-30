@@ -135,6 +135,16 @@ func run() int {
 		} else if n > 0 {
 			log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 		}
+
+		// Finally collapse reposts whose descriptions are near-identical but not byte-identical —
+		// a role reposted per city with a localized salary or legal block, which the exact passes
+		// leave split. Runs LAST so it only ever claims what they did not, and shares their
+		// per-company, best-effort discipline.
+		if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
+			log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
+		} else if n > 0 {
+			log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
+		}
 	}
 
 	// The rebuild optionally scopes to a fresh posting window (--posted-within); every
