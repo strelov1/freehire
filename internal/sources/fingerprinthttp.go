@@ -92,7 +92,7 @@ func (c *fingerprintHTTP) get(ctx context.Context, url string) ([]byte, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("sources: GET %s: status %d", url, resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
+	body, err := io.ReadAll(newCappedReader(resp.Body, url, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("sources: read %s: %w", url, err)
 	}

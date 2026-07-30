@@ -106,16 +106,66 @@ type HTTPClient interface {
 	HeaderJSONPoster
 }
 
-// maxResponseBody caps how many bytes a decoder reads from any response. ATS list
-// feeds run to a few MB at most; this generous ceiling bounds a hostile or buggy
-// endpoint returning a multi-GB body (or a gzip bomb the transport transparently
-// inflates) so it cannot exhaust the worker's memory.
-const maxResponseBody = 32 << 20 // 32 MiB
+// maxResponseBody caps how many bytes a decoder reads from any response. It bounds a
+// hostile or buggy endpoint returning a multi-GB body (or a gzip bomb the transport
+// transparently inflates) so it cannot exhaust the worker's memory. The ceiling sits
+// well past the largest real feed: measured 2026-07-30, the biggest list bodies were
+// Lever jobgether 36.8 MiB, Greenhouse pulse 35.5 MiB and Anduril 34.6 MiB — a list
+// endpoint that inlines every description (`?content=true`) reaches tens of MiB at a
+// few thousand postings. The previous 32 MiB ceiling sat just under that, silently
+// truncating five of the largest boards; those now fetch, and a board that ever does
+// outgrow this one says so through BodyTooLargeError instead of looking transient.
+const maxResponseBody = 64 << 20 // 64 MiB
 
-// limitedBody caps how many bytes a decoder reads from a response while preserving
-// the original Closer, so the connection is still released after the bounded read.
-type limitedBody struct {
-	io.Reader
+// BodyTooLargeError is a response whose body ran past the size cap and was therefore
+// truncated mid-stream. It is NOT transient — the same board returns the same oversized
+// body on every run — so callers must not treat it as a fetch that might recover. A bare
+// io.LimitReader used to cap the read, which handed the decoder a truncated stream that
+// was indistinguishable from a dropped connection; Anduril's Greenhouse board then spent
+// six weeks reporting "unexpected EOF" and cooling down as if the network were at fault.
+type BodyTooLargeError struct {
+	URL   string
+	Limit int64
+}
+
+func (e *BodyTooLargeError) Error() string {
+	return fmt.Sprintf("sources: GET %s: body exceeds %d bytes", e.URL, e.Limit)
+}
+
+// cappedReader bounds how many bytes are read from a response body and names the cap when
+// it trips. The read window is limit+1 bytes: a body of exactly limit bytes is complete,
+// and only the sentinel byte past it proves truncation.
+type cappedReader struct {
+	r     io.Reader
+	url   string
+	limit int64
+	read  int64
+}
+
+func newCappedReader(r io.Reader, url string, limit int64) *cappedReader {
+	return &cappedReader{r: r, url: url, limit: limit}
+}
+
+func (b *cappedReader) Read(p []byte) (int, error) {
+	room := b.limit + 1 - b.read
+	if room <= 0 {
+		return 0, &BodyTooLargeError{URL: b.url, Limit: b.limit}
+	}
+	if int64(len(p)) > room {
+		p = p[:room]
+	}
+	n, err := b.r.Read(p)
+	b.read += int64(n)
+	if b.read > b.limit {
+		return n, &BodyTooLargeError{URL: b.url, Limit: b.limit}
+	}
+	return n, err
+}
+
+// cappedBody is a cappedReader that still closes the response body it wraps, so the
+// connection is released after the bounded read.
+type cappedBody struct {
+	*cappedReader
 	io.Closer
 }
 
@@ -131,6 +181,17 @@ type Client struct {
 	userAgent    string
 	maxRetries   int
 	retryDelay   time.Duration
+	// maxBody overrides maxResponseBody; zero means the default. Only tests set it, so a
+	// cap-trip case need not stream tens of MiB through the loopback.
+	maxBody int64
+}
+
+// bodyLimit is the response-size cap in effect for this client.
+func (c *Client) bodyLimit() int64 {
+	if c.maxBody > 0 {
+		return c.maxBody
+	}
+	return maxResponseBody
 }
 
 // NewClient builds the default ingest HTTP client.
@@ -427,7 +488,10 @@ func (c *Client) do(ctx context.Context, r request) error {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
 			// Bound the read so a pathological body cannot OOM the worker; Close still
 			// runs on the underlying body to release the connection.
-			resp.Body = limitedBody{Reader: io.LimitReader(resp.Body, maxResponseBody), Closer: resp.Body}
+			resp.Body = cappedBody{
+				cappedReader: newCappedReader(resp.Body, r.url, c.bodyLimit()),
+				Closer:       resp.Body,
+			}
 			err := r.decode(resp)
 			resp.Body.Close()
 			if err != nil {

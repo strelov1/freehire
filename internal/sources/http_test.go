@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -252,5 +253,58 @@ func TestClientDoesNotRetryWAFChallenge(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Errorf("attempts = %d, want 1 (a challenge is not a transient failure)", attempts)
+	}
+}
+
+// A body past the size cap must name itself. Capping with a bare io.LimitReader hands the
+// decoder a truncated stream, which is indistinguishable from a dropped connection — that
+// is how a permanently oversized Greenhouse board (Anduril, 34.6 MiB against the old
+// 32 MiB cap) spent weeks reporting "unexpected EOF" and cooling down as if transient.
+func TestClientGetJSONSurfacesOversizedBodyAsTypedError(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"content":%q}`, strings.Repeat("x", 4096))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxRetries: 2, maxBody: 512}
+
+	var out struct {
+		Content string `json:"content"`
+	}
+	err := c.GetJSON(context.Background(), srv.URL, &out)
+	var tooLarge *BodyTooLargeError
+	if !errors.As(err, &tooLarge) {
+		t.Fatalf("GetJSON error = %v, want a *BodyTooLargeError", err)
+	}
+	if tooLarge.Limit != 512 {
+		t.Errorf("reported limit = %d, want 512", tooLarge.Limit)
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (an oversized body will not shrink on a retry)", attempts)
+	}
+}
+
+// The cap is inclusive: a body of exactly maxBody bytes is complete, not truncated.
+func TestClientGetJSONAcceptsBodyExactlyAtCap(t *testing.T) {
+	body := `{"content":"acme"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client(), maxBody: int64(len(body))}
+
+	var out struct {
+		Content string `json:"content"`
+	}
+	if err := c.GetJSON(context.Background(), srv.URL, &out); err != nil {
+		t.Fatalf("GetJSON: %v", err)
+	}
+	if out.Content != "acme" {
+		t.Errorf("decoded content = %q, want %q", out.Content, "acme")
 	}
 }
