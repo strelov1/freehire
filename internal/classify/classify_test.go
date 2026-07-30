@@ -350,8 +350,10 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"BIM Designer", "engineering_design"},
 		{"Revit Designer", "engineering_design"},
 		{"Senior BIM Coordinator", "engineering_design"},
-		{"Layout Designer", "engineering_design"},
 		{"Tool Designer", "engineering_design"},
+		// Print and magazine layout is the product-design craft, so no bare
+		// "layout designer" alias: the phrase names both trades.
+		{"Magazine Layout Designer", "design"},
 		{"Mold Designer", "engineering_design"},
 		{"Draftsman", "engineering_design"},
 		{"CAD Drafter", "engineering_design"},
@@ -396,6 +398,33 @@ func TestParse_DesignSplit(t *testing.T) {
 		// the hyphen is a word boundary so the compound form resolves through it.
 		{"Инженер-конструктор", "engineering_design"},
 		{"Конструктор металлоконструкций", "engineering_design"},
+
+		// Software-anchored forms: "design" here qualifies the engineering, it is not
+		// the craft. They must not be filed as draughting — that would take a software
+		// job out of the technical catalogue entirely.
+		{"Software Design Engineer", ""},
+		{"Senior Software Design Engineer", ""},
+		{"Software Design Engineer in Test", ""},
+		{"Systems Design Engineer", ""},
+		// Where a better category exists, say so rather than emitting nothing.
+		{"Cloud Design Engineer", "devops"},
+		{"Solution Design Engineer", "solutions_engineering"},
+		{"Solutions Design Engineer", "solutions_engineering"},
+		// These name design disciplines of their own and stay on the product side.
+		{"Service Design Engineer", "design"},
+		{"Experience Design Engineer", "design"},
+		{"Sound Design Engineer", "design"},
+		{"Game Design Engineer", "design"},
+
+		// The rest of the silicon family rides with `hardware` too — the first pass
+		// covered only six phrases and left these as draughting.
+		{"ASIC Design Engineer", "hardware"},
+		{"SoC Design Engineer", "hardware"},
+		{"IC Design Engineer", "hardware"},
+		{"Digital Design Engineer", "hardware"},
+		{"Mixed Signal Design Engineer", "hardware"},
+		{"DFT Design Engineer", "hardware"},
+		{"Semiconductor Design Engineer", "hardware"},
 
 		// precision — the neighbours of the inserted block must not shift
 		{"Hardware Design Engineer", "hardware"},        // hardware precedes the design block

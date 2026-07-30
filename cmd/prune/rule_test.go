@@ -36,6 +36,16 @@ func TestMatchRule(t *testing.T) {
 			want: ruleBusiness,
 		},
 		{
+			// The business rule reads NonTechCategories directly, so engineering_design
+			// joining that set opened a hard-delete path the ConfirmedNonTech veto never
+			// sees. Draughting is not a business role: an engineering employer whose
+			// board was retired would have had its whole catalogue removed.
+			name: "engineering design is not a business role",
+			c:    candidate{CompanySlug: "acme", Title: "Mechanical Design Engineer", Category: "engineering_design", IsTech: techPtr(false)},
+			ev:   evidence{},
+			want: "",
+		},
+		{
 			name:    "the same business role is kept where the company has posted technical work",
 			c:       candidate{CompanySlug: "acme", Title: "Account Manager", Category: "sales", IsTech: techPtr(false)},
 			ev:      evidence{anyTech: true},

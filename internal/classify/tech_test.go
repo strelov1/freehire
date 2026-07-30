@@ -59,3 +59,19 @@ func TestIsTech(t *testing.T) {
 		})
 	}
 }
+
+// A software title that spells "design" in the middle must still read as technical.
+// "software design engineer" is not adjacent to any techTitleTerms entry — wordmatch
+// needs adjacency — so without its own term it fell through to unknown once the
+// category stopped being `design`.
+func TestIsTech_SoftwareDesignEngineer(t *testing.T) {
+	for _, title := range []string{
+		"Software Design Engineer",
+		"Senior Software Design Engineer",
+		"Software Design Engineer in Test",
+	} {
+		if !IsTech(title) {
+			t.Errorf("IsTech(%q) = false, want true", title)
+		}
+	}
+}

@@ -89,13 +89,25 @@ func matchRule(c candidate, ev evidence, knownProvider, boardCrawled bool) (stri
 	if c.CompanySlug == "" {
 		return "", false
 	}
-	if !ev.anyTech && slices.Contains(vocab.NonTechCategories, c.Category) {
+	if !ev.anyTech && isBusinessCategory(c.Category) {
 		return ruleBusiness, true
 	}
 	if !ev.anyTech && !ev.anySkills && c.IsTech == nil {
 		return ruleUnknown, true
 	}
 	return "", false
+}
+
+// isBusinessCategory reports whether a category names the back-office and go-to-market
+// work ruleBusiness deletes at a company with no technical history. It is
+// vocab.NonTechCategories minus `engineering_design`: that category is non-technical
+// because an IT job board is not where a mechanical draughtsman looks for work, not
+// because the posting is a business role at a software employer. Deleting it here would
+// take out an engineering employer's whole catalogue the moment its board is retired —
+// the same defect the ConfirmedNonTech veto fixes on the title path, which this rule
+// does not go through.
+func isBusinessCategory(category string) bool {
+	return category != "engineering_design" && slices.Contains(vocab.NonTechCategories, category)
 }
 
 // companyScoped reports whether a rule depends on the company's history rather than on

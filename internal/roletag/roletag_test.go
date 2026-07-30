@@ -211,6 +211,9 @@ func TestDerive_DesignRoles(t *testing.T) {
 		// one — the named role is what keeps the specific title pickable inside it.
 		{"pcb designer", "", "hardware", "PCB Design Engineer", []string{"hardware", "pcb_designer"}},
 		{"chip designer via physical design", "", "hardware", "Physical Design Engineer", []string{"hardware", "chip_designer"}},
+		{"chip designer via asic", "", "hardware", "ASIC Design Engineer", []string{"hardware", "chip_designer"}},
+		{"chip designer via chip design", "", "hardware", "Chip Design Engineer", []string{"hardware", "chip_designer"}},
+		{"pcb layout designer", "", "hardware", "PCB Layout Designer", []string{"hardware", "pcb_designer"}},
 
 		// Product-side specializations stop collapsing into the bare "Designer".
 		{"visual designer graded", "senior", "design", "Senior Visual Designer",
@@ -232,6 +235,18 @@ func TestDerive_DesignRoles(t *testing.T) {
 		// Directorial titles state their level already — they do not compose.
 		{"art director does not compose", "lead", "design", "Art Director", []string{"lead", "design", "lead_design", "art_director"}},
 		{"creative director does not compose", "c_level", "design", "Creative Director", []string{"c_level", "design", "c_level_design", "creative_director"}},
+
+		// The alias spellings of each new role, so none ships unwitnessed.
+		{"designops one word", "", "design", "DesignOps Lead", []string{"design", "design_ops"}},
+		{"branding designer", "", "design", "Branding Designer", []string{"design", "brand_designer"}},
+		{"motion graphics designer", "", "design", "Motion Graphics Designer", []string{"design", "motion_designer"}},
+		{"user experience researcher", "", "design", "User Experience Researcher", []string{"design", "ux_researcher"}},
+		// The draughting professions are roles of their own — the bare category noun is
+		// all they would otherwise get.
+		{"bim modeler", "", "engineering_design", "BIM Modeler", []string{"engineering_design", "bim_specialist"}},
+		{"bim coordinator", "", "engineering_design", "Senior BIM Coordinator", []string{"engineering_design", "bim_specialist"}},
+		{"draughtsman spelling", "", "engineering_design", "Draughtsman", []string{"engineering_design", "drafter"}},
+		{"cad drafter", "", "engineering_design", "CAD Drafter", []string{"engineering_design", "drafter"}},
 
 		// The existing design roles keep winning where they already did.
 		{"product designer still wins", "senior", "design", "Senior Product Designer",

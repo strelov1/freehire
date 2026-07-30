@@ -185,8 +185,18 @@ var namedRoleTable = []struct {
 	{"mechanical_designer", "Mechanical Designer", []string{"mechanical design engineer", "mechanical designer"}},
 	{"electrical_designer", "Electrical Designer", []string{"electrical design engineer", "electrical designer"}},
 	{"civil_designer", "Civil Designer", []string{"civil design engineer", "civil designer", "structural designer"}},
-	{"pcb_designer", "PCB Designer", []string{"pcb design engineer", "pcb designer", "pcb layout engineer"}},
-	{"chip_designer", "Chip Designer", []string{"physical design engineer", "vlsi design engineer", "rtl design engineer", "analog design engineer"}},
+	{"drafter", "Drafter", []string{"drafter", "draftsman", "draughtsman", "design drafter", "design draftsman", "cad drafter"}},
+	{"bim_specialist", "BIM Specialist", []string{"bim modeler", "bim coordinator", "bim designer", "bim specialist", "revit designer"}},
+	{"pcb_designer", "PCB Designer", []string{"pcb design engineer", "pcb designer", "pcb layout engineer", "pcb layout designer"}},
+	// The silicon family has many spellings and they all name one role. Whatever is
+	// missing here falls back to the generic design_engineer, which is why the list
+	// mirrors the categoryTable block that routes these titles to `hardware`.
+	{"chip_designer", "Chip Designer", []string{
+		"physical design engineer", "vlsi design engineer", "rtl design engineer",
+		"analog design engineer", "mixed signal design engineer", "digital design engineer",
+		"chip design engineer", "asic design engineer", "soc design engineer",
+		"ic design engineer", "semiconductor design engineer", "dft design engineer",
+	}},
 
 	// Non-software professions the catalogue carries (broad scope).
 	{"electrical_engineer", "Electrical Engineer", []string{"electrical engineer"}},

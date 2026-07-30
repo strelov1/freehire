@@ -713,8 +713,19 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 		{"3d design", "3D assets in Blender, animations with Lottie built in Figma.",
 			[]string{"blender", "lottie", "figma"}, nil},
 		// design practices
-		{"practices", "You will own prototyping, wireframing and our design system.",
-			[]string{"prototyping", "wireframing", "design-systems"}, nil},
+		{"practices", "You will own prototyping and wireframing in Figma.",
+			[]string{"prototyping", "wireframing"}, nil},
+		// "design system(s)" is NOT a canonical: it is also the ordinary verb phrase
+		// every backend and embedded posting writes ("you will design systems that
+		// scale"). A phrase match is always strong, so tagging it would ALSO lift the
+		// corroboration gate off the weak words beside it.
+		{"design systems as a verb", "You will design systems that scale to millions of requests.",
+			nil, []string{"design-systems"}},
+		{"design systems verb does not lift the gate",
+			"Backend engineer: you will design systems and sketch out solutions with the team.",
+			nil, []string{"design-systems", "sketch"}},
+		{"design systems architecture is still not it",
+			"You will design system architecture for our microservices.", nil, []string{"design-systems"}},
 		{"research practices", "Run user research and usability testing with our PMs.",
 			[]string{"user-research", "usability-testing"}, nil},
 		{"craft practices", "Interaction design, visual design and typography matter here.",
@@ -753,6 +764,19 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 		{"maya and blender corroborated", "Character rigging in Maya and Blender, textures in Photoshop.",
 			[]string{"maya", "blender", "photoshop"}, nil},
 		{"gated words alone stay silent", "Sculpting in Maya and Blender.", nil, []string{"maya", "blender"}},
+		// A design word that is ALSO ordinary prose cannot be a strong token either —
+		// otherwise it corroborates the gated words and the gate is decorative. These
+		// four join the gate for that reason, each probed in its real false context.
+		{"typography in retail prose", "Retail assistant. Typography of the shelf labels matters; sketch out ideas for displays.",
+			nil, []string{"typography", "sketch"}},
+		{"illustrator the occupation", "Hiring an Illustrator for our children's book imprint.",
+			nil, []string{"illustrator"}},
+		{"canva in a store posting", "Store manager. Use Canva for posters. Accessibility of the entrance is your duty.",
+			nil, []string{"canva", "accessibility"}},
+		{"lottie the given name", "You will report to Lottie, our head of retail operations. Sketch out weekly rotas.",
+			nil, []string{"lottie", "sketch"}},
+		{"wireframes in cad prose", "CNC operator: read wireframes and 2D drawings before fabrication.",
+			nil, []string{"wireframing"}},
 		// accessibility is a broad word, so it needs corroboration too
 		{"accessibility alone", "An accessibility ramp is available at the entrance.", nil, []string{"accessibility"}},
 		{"accessibility corroborated", "Accessibility work in Figma, meeting WCAG 2.2.",
@@ -780,7 +804,7 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 func TestParse_DesignAndCADVocabTail(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Interactive prototypes in ProtoPie.", "protopie"},
-		{"Quick social assets in Canva.", "canva"},
+		{"Social assets in Canva, source files in Figma.", "canva"},
 		{"Workshops run in FigJam.", "figjam"},
 		{"We hold ourselves to a11y standards with Figma.", "accessibility"},
 		{"Sheet metal work in Solid Edge.", "solid-edge"},

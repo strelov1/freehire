@@ -23,6 +23,11 @@ import (
 var techTitleTerms = []string{
 	// Software engineer forms (never bare "engineer")
 	"software engineer", "software development engineer", "devops engineer",
+	// "software design engineer" (and the SDET form spelled out) is not adjacent to
+	// "software engineer", so it needs its own term: the design-category split made the
+	// title category-less, leaving this detector as the only thing that reads it as
+	// technical.
+	"software design engineer",
 	"site reliability engineer", "platform engineer",
 	"backend engineer", "back-end engineer", "frontend engineer", "front-end engineer",
 	"fullstack engineer", "full stack engineer", "full-stack engineer",

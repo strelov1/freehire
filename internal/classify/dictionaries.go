@@ -40,6 +40,24 @@ var gradeBlindPhrases = []string{
 	"lead-generation",
 }
 
+// categoryBlindPhrases is the category counterpart of gradeBlindPhrases: titles that
+// CONTAIN a categoryTable alias while naming no category of its own. "Software Design
+// Engineer" is software engineering — the word "design" qualifies what is engineered,
+// it is not the craft — so leaving it exposed filed a canonical software title under
+// engineering draughting, and (since that category is non-technical) took it out of the
+// enrichment and embedding budgets and out of the technical catalogue. Emitting nothing
+// is the honest answer: the tech-title detector still reads these as technical, so
+// is_tech stays true while the sub-category remains unresolved.
+//
+// Only phrases with no better category belong here. Where one exists, the title is
+// routed to it in categoryTable instead ("cloud design engineer" → devops,
+// "service design engineer" → design).
+var categoryBlindPhrases = []string{
+	"software design engineer",
+	"systems design engineer",
+	"system design engineer",
+}
+
 // seniorityTable lists seniority aliases in precedence order (most specific /
 // highest rank first), each paired with its vocab.SeniorityValues canonical.
 var seniorityTable = []aliasEntry{
@@ -245,18 +263,30 @@ var categoryTable = []aliasEntry{
 	// First, the titles that state a craft of their own and must NOT go to the
 	// engineering-design bucket the next block builds.
 	{"network design engineer", "network_engineering"},
+	{"cloud design engineer", "devops"},
+	{"solution design engineer", "solutions_engineering"},
+	{"solutions design engineer", "solutions_engineering"},
 	// Silicon and board design belong to `hardware`, which already owns the rest of
 	// that team through the earlier "hardware"/"fpga" aliases. Routing them to
 	// engineering draughting would split one discipline across two facets and drop
 	// them out of the technical treatment (enrichment, embeddings) they have today.
+	// The list has to name the whole family: whatever is missing here falls through to
+	// the bare "design engineer" at the bottom of the block and lands in draughting.
 	{"pcb design", "hardware"},
 	{"pcb designer", "hardware"},
 	{"pcb layout", "hardware"},
 	{"physical design engineer", "hardware"},
 	{"analog design engineer", "hardware"},
 	{"rtl design engineer", "hardware"},
+	{"mixed signal design engineer", "hardware"},
+	{"digital design engineer", "hardware"},
+	{"dft design engineer", "hardware"},
 	{"vlsi design", "hardware"},
 	{"chip design", "hardware"},
+	{"asic design", "hardware"},
+	{"soc design", "hardware"},
+	{"ic design", "hardware"},
+	{"semiconductor design", "hardware"},
 	{"product design engineer", "design"},
 	{"design systems engineer", "design"},
 	{"design system engineer", "design"},
@@ -265,6 +295,11 @@ var categoryTable = []aliasEntry{
 	{"ui/ux design engineer", "design"},
 	{"web design engineer", "design"},
 	{"design engineer, product", "design"},
+	// Design disciplines of their own, on the product side of the split.
+	{"service design engineer", "design"},
+	{"experience design engineer", "design"},
+	{"sound design engineer", "design"},
+	{"game design engineer", "design"},
 	// Then engineering design. The bare "design engineer" closes the block, and it
 	// carries every qualified "<discipline> design engineer" form with it — those need
 	// no entry of their own, since they resolve to the same category. Only the titles
@@ -289,7 +324,8 @@ var categoryTable = []aliasEntry{
 	{"bim coordinator", "engineering_design"},
 	{"bim modeler", "engineering_design"},
 	{"revit designer", "engineering_design"},
-	{"layout designer", "engineering_design"},
+	// No bare "layout designer": magazine and print layout is the product-design craft,
+	// and the phrase names both.
 	{"tool designer", "engineering_design"},
 	{"mold designer", "engineering_design"},
 	{"die designer", "engineering_design"},

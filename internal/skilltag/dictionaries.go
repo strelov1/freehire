@@ -714,15 +714,27 @@ var ambiguousWords = map[string]bool{
 	"rancher":   true,
 	"postman":   true,
 	"braze":     true,
-	// design words whose lowercase form is ordinary English, a person's name or a
-	// kitchen appliance: a retail posting "sketches out ideas", a manager is called
-	// Maya, a line cook runs the "industrial blender", a building has an "accessibility
-	// ramp". A real design posting names Figma, Photoshop or Illustrator beside them, so
-	// corroboration costs nothing and drops the false ones.
+	// design words whose lowercase form is ordinary English, a person's name, an
+	// occupation or a kitchen appliance: a retail posting "sketches out ideas", managers
+	// called Maya and Lottie, a line cook's "industrial blender", a building's
+	// "accessibility ramp", the "typography of the shelf labels", a book imprint hiring
+	// an "Illustrator", a store using "Canva" for posters, a CNC operator reading
+	// "wireframes". A real design posting names Figma, Photoshop or a CAD product beside
+	// them, so corroboration costs nothing and drops the false ones.
+	//
+	// The last five matter for a second reason: a STRONG match lifts the gate off every
+	// weak word in the same text, so leaving them strong would have made the gate on
+	// sketch/maya/blender decorative — "Typography of the shelf labels … sketch out
+	// ideas" tagged both.
 	"sketch":        true,
 	"maya":          true,
 	"blender":       true,
 	"accessibility": true,
+	"typography":    true,
+	"illustrator":   true,
+	"canva":         true,
+	"lottie":        true,
+	"wireframes":    true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -979,7 +991,13 @@ var engineeringPhraseAliases = []phraseAlias{
 	// the product name inside them. "xd" alone is far too short to be safe.
 	{"adobe xd", "adobe-xd"},
 	{"after effects", "after-effects"},
-	{"design system", "design-systems"}, {"design systems", "design-systems"},
+	// No "design system"/"design systems": that is the ordinary verb phrase of every
+	// backend, embedded and architecture posting ("you will design systems that scale",
+	// "design system architecture"). A phrase match is always strong, so tagging it
+	// would not merely mislabel those postings — it would lift the corroboration gate
+	// off every weak word beside it, which is how a maintenance posting once came back
+	// tagged {react, sap}. The practice is still reachable through the job title
+	// ("Design Systems Engineer" → the design category and the design_engineer role).
 	{"design thinking", "design-thinking"},
 	{"user research", "user-research"}, {"ux research", "user-research"},
 	{"usability testing", "usability-testing"},

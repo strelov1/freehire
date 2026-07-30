@@ -57,11 +57,41 @@ the more specific title wins.
 - **WHEN** a job titled "Product Design Engineer" or "Design Systems Engineer" is classified
 - **THEN** its category is `design`
 
+### Requirement: A title whose "design" names no craft resolves to no category
+
+The system SHALL emit no category for a title where a category alias appears but
+states no category of its own — "Software Design Engineer" is software engineering,
+where "design" qualifies what is engineered. Such phrases SHALL be masked before the
+category match, the same treatment a grade-blind phrase gets before the seniority
+match, so the category comes back empty rather than being routed to draughting. The
+tech-title detector SHALL still recognize the software forms, so `is_tech` stays
+`true` even though the sub-category is unresolved. A title that DOES have a better
+category SHALL be routed to it rather than masked.
+
+#### Scenario: A software title keeps no category but stays technical
+
+- **WHEN** a job titled "Senior Software Design Engineer" is classified
+- **THEN** its category is empty, and its derived `is_tech` is `true`
+
+#### Scenario: A title with a better category is routed, not masked
+
+- **WHEN** a job titled "Cloud Design Engineer" or "Solution Design Engineer" is classified
+- **THEN** its category is `devops` and `solutions_engineering` respectively
+
+#### Scenario: Design disciplines of their own stay on the product side
+
+- **WHEN** a job titled "Service Design Engineer", "Sound Design Engineer" or
+  "Game Design Engineer" is classified
+- **THEN** its category is `design`
+
 ### Requirement: A resolved engineering-design category vetoes deletion
 
 A title the category dictionary places in `engineering_design` SHALL NOT be deleted
 on the strength of the non-technical title dictionary — neither rejected by the
-ingest catalogue filter nor hard-deleted by the prune title rule. The two
+ingest catalogue filter or the liveness refresh, nor hard-deleted by either prune
+rule that reads the non-technical category set (the title rule, which goes through
+the shared veto, and the business rule, which reads the category set directly and
+therefore needs its own exclusion). The two
 vocabularies describe the same physical trades from opposite sides (the non-tech
 list anchors "hvac", "sheet metal", "machinist"; the category resolves the
 draughting titles those employers post), so a word match between them is not the
@@ -81,6 +111,14 @@ deliberate placement: the posting is kept and surfaced under its facet, and only
 - **WHEN** the prune worker evaluates a stored "Sheet Metal Design Engineer" on a
   crawled board
 - **THEN** the title rule does not match, so the row is not hard-deleted
+
+#### Scenario: The prune business rule spares it too
+
+- **WHEN** the prune worker evaluates a stored "Mechanical Design Engineer" at a
+  company with no technical evidence, whose board has been retired
+- **THEN** the business rule does not match — draughting is not a business role at a
+  software employer, and matching would remove an engineering employer's whole
+  catalogue
 
 #### Scenario: The veto does not widen to other non-technical titles
 

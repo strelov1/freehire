@@ -19,14 +19,30 @@ The list holds only phrases that shadow a `seniorityTable` alias; the category m
 ## The two design crafts
 
 `design` means product/visual/experience design. Engineering draughting —
-mechanical, electrical, civil, chip — is the separate `engineering_design`
-category, a `vocab.NonTechCategories` member (surfaced as a facet, off the LLM and
-embedding budgets). Its aliases, plus the markers that keep a title OUT of it
-(`product design engineer`, `design systems engineer`, `network design engineer`),
-are ordered **before** the bare `designer`/`design` entries — otherwise the word
-`design` alone claims every "… Design Engineer". The unqualified `design engineer`
-closes that block and resolves to `engineering_design`: on this catalogue that
-population is overwhelmingly mechanical.
+mechanical, electrical, civil, and the architectural/BIM family — is the separate
+`engineering_design` category, a `vocab.NonTechCategories` member (surfaced as a
+facet, off the LLM and embedding budgets). Silicon design is neither: it resolves to
+`hardware`, where the rest of that team already sits.
+
+Three groups sit **before** the bare `designer`/`design` entries, because the word
+`design` alone would otherwise claim every "… Design Engineer": the titles that name
+another craft (`network design engineer`, `cloud design engineer`, the silicon
+block), the product-side markers (`product design engineer`, `ux/ui/web design
+engineer`, `design engineer, product`, `service/experience/sound/game design
+engineer`), and then the draughting aliases themselves. The unqualified `design
+engineer` closes the block and resolves to `engineering_design`: on this catalogue
+that population is overwhelmingly mechanical.
+
+`categoryBlindPhrases` handles the titles where a category alias appears but names no
+category at all — "Software Design Engineer" is software engineering. They are masked
+before the category match, exactly as `gradeBlindPhrases` masks a grade word, so the
+category comes back empty and the tech-title detector supplies `is_tech` instead.
+
+Two consumers of `vocab.TechCategories` DELETE — the ingest catalogue filter and the
+prune title rule, both through `ConfirmedNonTech`, plus prune's business rule which
+reads `NonTechCategories` directly. A resolved `engineering_design` vetoes all of
+them: this dictionary and the non-tech title list describe the same physical trades,
+so a match between them is not the accidental kind the veto was built for.
 
 ## Serving: dict-only
 

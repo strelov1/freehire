@@ -30,8 +30,21 @@ func Parse(title string) Classification {
 		// be mistaken for the grade itself. The category reads the untouched title:
 		// no categoryTable alias hides inside those phrases.
 		Seniority: matchSeniority(lower),
-		Category:  matchOrdered(lower, categoryTable),
+		Category:  matchCategory(lower),
 	}
+}
+
+// matchCategory resolves the role category of an already-lowercased title, first
+// cutting out every categoryBlindPhrases occurrence — the phrases where a category
+// alias appears but names no category of its own ("software design engineer" is
+// software engineering, not the design craft). Each phrase is replaced by a space so
+// the surrounding word boundaries survive, the same treatment matchSeniority gives a
+// grade-blind phrase.
+func matchCategory(lower string) string {
+	for _, phrase := range categoryBlindPhrases {
+		lower = strings.ReplaceAll(lower, phrase, " ")
+	}
+	return matchOrdered(lower, categoryTable)
 }
 
 // matchSeniority resolves the grade of an already-lowercased title, first cutting

@@ -52,9 +52,10 @@ func TestTechCategoriesExcludesNonTech(t *testing.T) {
 }
 
 // TestEngineeringDesignIsNonTech pins the split of the design craft: engineering
-// draughting (mechanical, electrical, civil, chip) is its own category and counts as
-// non-technical, so it is surfaced as a facet while staying off the LLM enrichment
-// and embedding budgets. `design` keeps meaning product/visual design only.
+// draughting (mechanical, electrical, civil, architectural) is its own category and
+// counts as non-technical, so it is surfaced as a facet while staying off the LLM
+// enrichment and embedding budgets. `design` keeps meaning product/visual design only,
+// and silicon design stays in `hardware`.
 func TestEngineeringDesignIsNonTech(t *testing.T) {
 	if !slices.Contains(CategoryValues, "engineering_design") {
 		t.Fatal("CategoryValues must contain engineering_design")

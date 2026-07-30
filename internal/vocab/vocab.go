@@ -55,9 +55,13 @@ var (
 	// dictionary could not place is never silently skipped. The back-office IT-company
 	// roles (recruiting/hr/finance/legal/operations/customer_success) join this set:
 	// surfaced as facets but kept out of the LLM enrich budget, like marketing/sales.
-	// `engineering_design` — mechanical, electrical, civil and chip draughting — joins
-	// them for the same reason: it is engineering, but not the IT work this catalogue
-	// serves, so it is filterable without spending LLM or embedding budget on it.
+	// `engineering_design` — mechanical, electrical, civil and architectural draughting
+	// — joins them for the same reason: it is engineering, but not the IT work this
+	// catalogue serves, so it is filterable without spending LLM or embedding budget on
+	// it. Note that two DELETE paths read TechCategories as a veto over the non-tech
+	// title dictionary; `classify.ConfirmedNonTech` and `prune`'s business rule spare
+	// this category explicitly, so membership here does not make its postings
+	// removable.
 	NonTechCategories = []string{
 		"marketing", "sales", "support", "management",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
