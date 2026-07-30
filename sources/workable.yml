@@ -1410,3 +1410,7 @@
   board: futureplc
 - company: Base.
   board: base-com
+
+# --- contributed boards ---
+- company: Pion
+  board: wearepion

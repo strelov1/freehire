@@ -7622,3 +7622,7 @@
   board: walrus
 - company: XMTP Labs
   board: XMTP Labs
+
+# --- contributed boards ---
+- company: Passage Health
+  board: passagehealth

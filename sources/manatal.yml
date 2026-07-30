@@ -43,3 +43,7 @@
   board: zarego
 - company: Alcor
   board: alcor
+
+# --- contributed boards ---
+- company: Tidal
+  board: hiretidal

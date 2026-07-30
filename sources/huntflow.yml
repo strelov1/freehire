@@ -13,6 +13,10 @@
   board: coffeemaniahr
 - company: Flowwow
   board: flowwow
+# FJX Group hosts its board on Huntflow's international instance, so the board carries the
+# ".global" label too (thefjx.global.huntflow.io); the bare subdomain 404s.
+- company: FJX Group
+  board: thefjx.global
 - company: Huntflow Opportunities
   board: opportunities
 - company: itoolabs
