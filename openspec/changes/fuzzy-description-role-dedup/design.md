@@ -68,10 +68,44 @@ description similarity.
 - **Threshold drift** → single conservative global threshold first; the spike shows the gap is
   company-independent so far.
 
+## Sizing spike (2026-07-30) — answers D4 and adds a guard the design was missing
+
+Measured over open canonical rows on prod, bucketing by `(company_slug, normalized title)`:
+
+```
+buckets with >1 canon    210 319        median bucket size     2
+rows in them             851 920        p99                   27
+largest bucket            16 745        naive pairwise    165.4M
+```
+
+| bucket size | buckets | rows | pairwise comparisons |
+|---|---|---|---|
+| 2–10 | 201 211 | 572 598 | 772 221 |
+| 11–50 | 8 345 | 156 209 | 1 685 087 |
+| 51–200 | 685 | 57 596 | 2 777 596 |
+| 201–1000 | 87 | 33 935 | 8 294 788 |
+| >1000 | **11** | 31 661 | **151 889 885** |
+
+**D6 — Cap the bucket size instead of reaching for MinHash/LSH.** Eleven buckets carry 92% of the
+cost. Skipping buckets above ~200 rows drops 0.05% of buckets and 97% of the work, leaving ~5.2M
+comparisons over 787k rows — naive pairwise per bucket, no LSH, no `pg_trgm`, no new index.
+
+The cap is not only a cost trade: a bucket that large is generic-title-by-location, which the design
+already says must NOT collapse. The largest are `dollar-tree` "customer service associate i" (16 745),
+"assistant manager i" (1 843), "part time sales teammate" (1 780) — one role across thousands of
+stores. Skipping them is the same verdict the threshold would reach, reached for free.
+
+**D7 — Empty `company_slug` breaks the bucket guard; exclude it.** 154 900 open canonical rows
+(5.7%) have no `company_slug`, and 105 212 of them fall into 20 126 same-title buckets — grouped
+ACROSS employers, with up to 4 distinct companies in one bucket. The design treats the bucket as the
+thing that "prevents cross-role merges", but with an empty slug it stops being a company boundary at
+all. Rows without a `company_slug` are therefore excluded from the pass entirely: they are exactly
+where a boilerplate-driven high similarity would merge two different employers' jobs.
+
 ## Open Questions
 
-- Similarity impl: MinHash/LSH vs `pg_trgm` vs precomputed shingle signature — sized by the
-  implementation spike (bucket-size distribution).
-- Exact threshold (0.85 vs 0.9 vs 0.95) — tune on a labelled prod sample; measure recall/FP.
+- Exact threshold (0.85 vs 0.9 vs 0.95) — the original spike put true dupes ≥0.95 and distinct roles
+  ≤0.5, so anything in the gap works; ≥0.9 stays the candidate, to be confirmed on the labelled
+  sample during implementation.
 - How many cards this actually collapses — a real count (within-bucket ≥T pairs), NOT the
   misleading 849k stripped-title figure (which counted distinct jobs too).
