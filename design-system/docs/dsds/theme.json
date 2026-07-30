@@ -5,9 +5,9 @@
       "id": "theme.dark",
       "type": "theme",
       "name": "Dark",
-      "description": "Dark-mode color overrides — same token paths as light, different values for all 23 color tokens.",
+      "description": "Dark-mode color overrides — same token paths as light, different values for all 24 color tokens.",
       "source": {
-        "file": "../tokens/color-dark.tokens.json",
+        "file": "../../tokens/color-dark.tokens.json",
         "path": ""
       },
       "mode": "dark",

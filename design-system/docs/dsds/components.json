@@ -5,16 +5,19 @@
       "id": "component.button",
       "type": "component",
       "name": "Button",
-      "description": "Action button with variant (primary/secondary/outline/ghost) and size (sm/md/lg/icon) props. Supports href for link rendering.",
+      "description": "Action button with variant (primary/secondary/outline/ghost/destructive) and size (sm/md/lg/icon) props. Supports href for link rendering.",
       "source": { "file": "../../src/button.svelte" },
       "props": [
-        { "name": "variant", "type": "ButtonVariant", "default": "secondary", "values": ["primary", "secondary", "outline", "ghost"] },
+        { "name": "variant", "type": "ButtonVariant", "default": "secondary", "values": ["primary", "secondary", "outline", "ghost", "destructive"], "description": "destructive is filled, for the action that cannot be undone; a ghost button with destructive text is the right weight for reversible ones." },
         { "name": "size", "type": "ButtonSize", "default": "md", "values": ["sm", "md", "lg", "icon"] },
         { "name": "href", "type": "string", "default": "undefined", "description": "If set, renders an <a> instead of a <button>." },
         { "name": "class", "type": "string", "default": "undefined" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/button.stories.ts" }
+      "stories": [
+        { "file": "../../src/button.stories.ts" },
+        { "file": "../../src/button-icon.stories.ts" }
+      ]
     },
     {
       "id": "component.badge",
@@ -27,7 +30,7 @@
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/badge.stories.ts" }
+      "stories": [{ "file": "../../src/badge.stories.ts" }]
     },
     {
       "id": "component.input",
@@ -37,9 +40,10 @@
       "source": { "file": "../../src/input.svelte" },
       "props": [
         { "name": "value", "type": "string", "bindable": true },
-        { "name": "class", "type": "string" }
+        { "name": "class", "type": "string" },
+        { "name": "...rest", "type": "HTMLInputAttributes", "description": "Spread onto the <input>, so type, placeholder, disabled and the rest go straight through." }
       ],
-      "story": { "file": "../../src/input.stories.ts" }
+      "stories": [{ "file": "../../src/input.stories.ts" }]
     },
     {
       "id": "component.card",
@@ -51,13 +55,13 @@
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/card.stories.ts" }
+      "stories": [{ "file": "../../src/card.stories.ts" }]
     },
     {
       "id": "component.dialog",
       "type": "component",
       "name": "Dialog",
-      "description": "Modal with backdrop, Escape to close, and focus-visible close button. Uses z-modal/z-popover tokens.",
+      "description": "Native <dialog> opened with showModal(), so the browser supplies the top layer, focus trap, inert background and Escape-to-close. Adds the backdrop styling, a scroll lock and a close button. Stacks without a z-index — the top layer is above every one of them.",
       "source": { "file": "../../src/dialog.svelte" },
       "props": [
         { "name": "open", "type": "boolean", "bindable": true, "default": false },
@@ -66,7 +70,7 @@
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/dialog.stories.ts" }
+      "stories": [{ "file": "../../src/dialog.stories.ts" }]
     },
     {
       "id": "component.tabs",
@@ -79,7 +83,8 @@
         { "name": "tabs", "type": "{ value: string; label: string }[]", "required": true },
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
-      ]
+      ],
+      "stories": [{ "file": "../../src/tabs.stories.ts" }]
     },
     {
       "id": "component.tooltip",
@@ -92,7 +97,8 @@
         { "name": "side", "type": "'top' | 'right' | 'bottom' | 'left'", "default": "top" },
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
-      ]
+      ],
+      "stories": [{ "file": "../../src/tooltip.stories.ts" }]
     },
     {
       "id": "component.alert",
@@ -105,7 +111,7 @@
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/alert.stories.ts" }
+      "stories": [{ "file": "../../src/alert.stories.ts" }]
     },
     {
       "id": "component.chip",
@@ -118,7 +124,7 @@
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
       ],
-      "story": { "file": "../../src/chip.stories.ts" }
+      "stories": [{ "file": "../../src/chip.stories.ts" }]
     },
     {
       "id": "component.avatar",
@@ -132,13 +138,13 @@
         { "name": "size", "type": "'sm' | 'md' | 'lg'", "default": "md" },
         { "name": "class", "type": "string" }
       ],
-      "story": { "file": "../../src/avatar.stories.ts" }
+      "stories": [{ "file": "../../src/avatar.stories.ts" }]
     },
     {
       "id": "component.empty-state",
       "type": "component",
       "name": "EmptyState",
-      "description": "Loading/empty placeholder with optional icon, description, and action slot.",
+      "description": "Empty-result placeholder with optional icon, description, and action slot.",
       "source": { "file": "../../src/empty-state.svelte" },
       "props": [
         { "name": "title", "type": "string", "default": "Nothing here yet" },
@@ -147,7 +153,7 @@
         { "name": "action", "type": "Snippet" },
         { "name": "class", "type": "string" }
       ],
-      "story": { "file": "../../src/empty-state.stories.ts" }
+      "stories": [{ "file": "../../src/empty-state.stories.ts" }]
     },
     {
       "id": "component.skeleton",
@@ -158,7 +164,7 @@
       "props": [
         { "name": "class", "type": "string" }
       ],
-      "story": { "file": "../../src/skeleton.stories.ts" }
+      "stories": [{ "file": "../../src/skeleton.stories.ts" }]
     },
     {
       "id": "component.pagination",
@@ -170,9 +176,10 @@
         { "name": "page", "type": "number", "bindable": true, "default": 1 },
         { "name": "total", "type": "number", "required": true },
         { "name": "perPage", "type": "number", "default": 20 },
-        { "name": "class", "type": "string" }
+        { "name": "class", "type": "string" },
+        { "name": "children", "type": "Snippet", "description": "Rendered between the prev and next controls, in place of the default page count." }
       ],
-      "story": { "file": "../../src/pagination.stories.ts" }
+      "stories": [{ "file": "../../src/pagination.stories.ts" }]
     },
     {
       "id": "component.form-field",
@@ -186,8 +193,9 @@
         { "name": "hint", "type": "string" },
         { "name": "required", "type": "boolean", "default": false },
         { "name": "class", "type": "string" },
-        { "name": "children", "type": "Snippet", "required": true }
-      ]
+        { "name": "children", "type": "Snippet<[{ id: string; describedBy: string | undefined; required: boolean; invalid: boolean }]>", "required": true, "description": "The field owns the label and the message and hands the control everything it needs to announce itself — render it as {@render children({ id, describedBy, required, invalid })}." }
+      ],
+      "stories": [{ "file": "../../src/form-field.stories.ts" }]
     },
     {
       "id": "component.table",
@@ -199,7 +207,8 @@
         { "name": "header", "type": "Snippet" },
         { "name": "class", "type": "string" },
         { "name": "children", "type": "Snippet", "required": true }
-      ]
+      ],
+      "stories": [{ "file": "../../src/table.stories.ts" }]
     }
   ]
 }

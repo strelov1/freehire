@@ -81,12 +81,18 @@ actual variants with nothing to catch it. `Button`'s list already did, losing `d
 its `.dark` selector), `components.json` (one entity per primitive — props, defaults, and
 links to its source and story).
 
-`pnpm validate:docs` (`scripts/validate-docs.mjs`, run in CI) parses every file and checks
-that each entity carries `id`, `type` and `name`. **That is structure only — nothing compares
-an entity against the component or token it claims to describe.** A variant added to a `tv()`
-call, a token added to `tokens/*.tokens.json`, or a story file added under `src/` leaves the
-JSON stale and CI green, the same way hand-maintained `argTypes` drift. Touch a primitive or a
-token family, update its entity in the same commit.
+`pnpm validate:docs` (`scripts/validate-docs.mjs`, run in CI) checks structure — every entity
+carries `id`, `type`, `name` — and then the two things that actually rot: every `source.file`
+and `stories[].file` resolves, a foundation entity's `tokens` list matches the keys of the
+token file it names **in both directions**, and no `src/*.stories.ts` goes unclaimed. Phase 6
+shipped with all three broken (every foundation path off by a directory, `destructive-foreground`
+undocumented, five story files orphaned) and the structural check passed, which is why they are
+checked now.
+
+**What is still hand-maintained: `props`, their `values`, and every `description`.** A variant
+added to a `tv()` call leaves the entity stale with CI green — the same drift that costs
+`argTypes` their accuracy, and for the same reason: the values live inside a Svelte module
+script that only a compiler can read. Touch a primitive, update its entity in the same commit.
 
 ## Limitations
 
