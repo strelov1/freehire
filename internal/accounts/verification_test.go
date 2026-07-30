@@ -186,12 +186,75 @@ func TestConfirmVerificationBurnsTheCodeAfterTooManyAttempts(t *testing.T) {
 	if err := s.ConfirmVerification(context.Background(), 5, "999999"); !errors.Is(err, ErrInvalidCode) {
 		t.Fatalf("err = %v, want ErrInvalidCode", err)
 	}
-	if _, err := codes.Code(context.Background(), 5, PurposeVerifyEmail); !errors.Is(err, ErrNoCode) {
-		t.Error("the code must be burnt once the attempt ceiling is reached")
-	}
 	// Even the right code no longer works: the guesser must request a new one.
 	if err := s.ConfirmVerification(context.Background(), 5, "123456"); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("err = %v, want ErrInvalidCode after the code was burnt", err)
+	}
+	// The row survives on purpose — it carries the resend cooldown, so burning the code is
+	// not a way to skip it. Only a successful consume deletes.
+	c, err := codes.Code(context.Background(), 5, PurposeVerifyEmail)
+	if err != nil {
+		t.Fatalf("a burnt code must keep its row: %v", err)
+	}
+	if c.Attempts < maxCodeAttempts {
+		t.Errorf("attempts = %d, want the ceiling recorded on the row", c.Attempts)
+	}
+	if len(codes.deleted) != 0 {
+		t.Errorf("deleted %v, want nothing deleted by a burn", codes.deleted)
+	}
+}
+
+// The attempt ceiling is only a real bound if it cannot be reset on demand. Burning a code
+// must therefore leave the cooldown standing: otherwise the ceiling costs a guesser one
+// round-trip instead of a minute, and five guesses per code becomes an unbounded rate
+// against a six-digit secret.
+func TestBurningACodeDoesNotLiftTheResendCooldown(t *testing.T) {
+	codes := newFakeCodes()
+	now := time.Now()
+	codes.put(5, PurposeVerifyEmail, StoredCode{
+		Hash: "hashed:123456", ExpiresAt: now.Add(codeTTL), IssuedAt: now, Attempts: maxCodeAttempts - 1,
+	})
+	mailer := &fakeMailer{}
+	s := verifyService(&fakeRepo{}, codes, mailer, now)
+
+	// Spend the last attempt; the code is dead from here on.
+	if err := s.ConfirmVerification(context.Background(), 5, "999999"); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("err = %v, want ErrInvalidCode", err)
+	}
+	if err := s.IssueVerificationCode(context.Background(), 5, "new@example.test"); !errors.Is(err, ErrResendTooSoon) {
+		t.Errorf("err = %v, want ErrResendTooSoon — burning a code must not reset the cooldown", err)
+	}
+	if len(mailer.verification) != 0 {
+		t.Errorf("mailed %d codes inside the cooldown, want 0", len(mailer.verification))
+	}
+}
+
+// Once the cooldown has passed, a fresh code is issued normally and starts with a clean
+// attempt budget — the burnt row must not outlive its own cooldown.
+func TestABurntCodeIsReplacedAfterTheCooldown(t *testing.T) {
+	codes := newFakeCodes()
+	now := time.Now()
+	codes.put(5, PurposeVerifyEmail, StoredCode{
+		Hash:      "hashed:123456",
+		ExpiresAt: now.Add(codeTTL),
+		IssuedAt:  now.Add(-2 * resendCooldown),
+		Attempts:  maxCodeAttempts,
+	})
+	mailer := &fakeMailer{}
+	s := verifyService(&fakeRepo{}, codes, mailer, now)
+
+	if err := s.IssueVerificationCode(context.Background(), 5, "new@example.test"); err != nil {
+		t.Fatalf("IssueVerificationCode: %v", err)
+	}
+	if len(mailer.verification) != 1 {
+		t.Fatalf("mailed %d codes, want 1", len(mailer.verification))
+	}
+	c, err := codes.Code(context.Background(), 5, PurposeVerifyEmail)
+	if err != nil {
+		t.Fatalf("Code: %v", err)
+	}
+	if c.Attempts != 0 {
+		t.Errorf("attempts = %d, want 0 — a re-issued code starts with a fresh budget", c.Attempts)
 	}
 }
 

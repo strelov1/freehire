@@ -24,7 +24,8 @@ const (
 
 	// maxCodeAttempts is how many wrong guesses a code survives. Six digits is a million
 	// possibilities; five tries makes online guessing hopeless without frustrating a human
-	// who mistyped.
+	// who mistyped. It bounds the guessing rate only together with resendCooldown, which is
+	// why a burnt code keeps its row (see consumeCode).
 	maxCodeAttempts = 5
 
 	// resendCooldown keeps the endpoint from being used to flood an address with mail.
@@ -130,10 +131,17 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 }
 
 // consumeCode checks a presented code against the outstanding one and, on success, deletes
-// it so it cannot be replayed. A wrong guess counts toward the ceiling; reaching the
-// ceiling burns the code, so even the right value stops working until a new one is issued.
+// it so it cannot be replayed. A wrong guess counts toward the ceiling; a code that has spent
+// its budget is dead, so even the right value stops working until a new one is issued.
 // Absent, burnt, and wrong all surface as ErrInvalidCode — the caller learns only that this
 // code does not work.
+//
+// A burnt code keeps its row rather than being deleted. That row is what issueCode reads the
+// resend cooldown off, and deleting it made burning the code the cheapest way to get a fresh
+// one: the ceiling then cost a guesser one round-trip instead of a minute, so five guesses
+// per code was not a rate limit at all. Keeping the row makes the two bounds compose — a
+// guesser gets maxCodeAttempts tries per resendCooldown against a six-digit secret — and
+// costs nothing, since UpsertEmailCode resets attempts when the next code is issued.
 func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presented string) error {
 	stored, err := s.codes.Code(ctx, userID, purpose)
 	if errors.Is(err, ErrNoCode) {
@@ -142,18 +150,15 @@ func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presen
 	if err != nil {
 		return err
 	}
+	if stored.Attempts >= maxCodeAttempts {
+		return ErrInvalidCode
+	}
 	if s.now().After(stored.ExpiresAt) {
 		return ErrCodeExpired
 	}
 	if s.hasher.Check(stored.Hash, presented) != nil {
-		attempts, err := s.codes.BumpAttempts(ctx, userID, purpose)
-		if err != nil {
+		if _, err := s.codes.BumpAttempts(ctx, userID, purpose); err != nil {
 			return err
-		}
-		if attempts >= maxCodeAttempts {
-			if err := s.codes.DeleteCode(ctx, userID, purpose); err != nil {
-				return err
-			}
 		}
 		return ErrInvalidCode
 	}
