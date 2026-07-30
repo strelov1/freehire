@@ -1,0 +1,32 @@
+---
+title: 3,300 US engineering jobs from WhatJobs
+date: 2026-07-30
+summary: WhatJobs is now one of the sources feeding the catalogue, adding around 3,300 US engineering vacancies — with one difference worth knowing about before you click apply.
+type: changelog
+tags:
+  - sources
+  - united-states
+draft: false
+---
+
+[WhatJobs](/?source=whatjobs) now feeds the catalogue. That is roughly **3,300 more US
+engineering vacancies** — backend, frontend, mobile, Python, Go, Rust, Kubernetes — from
+employers including Roblox, Revolut, ByteDance, Coupang and LangChain, alongside a long tail
+of smaller companies.
+
+**One difference from every other source, and it matters.** For a vacancy from an employer's
+own careers site, **Apply** takes you to that employer. For a WhatJobs vacancy it takes you
+to WhatJobs, which then forwards you to wherever the role actually lives. One extra hop, and
+a page that is not the company's. Nothing else about the listing changes — title, employer,
+location and the full description are all here on the vacancy page, so you can read the
+whole thing and decide before that hop.
+
+Two smaller things, in the interest of not surprising you:
+
+- **No posting date.** This feed reports when *it* first saw a role, not when the employer
+  published it, and those are not the same number — so we do not show a date rather than
+  show a wrong one. Sorting by freshness puts these where we first saw them.
+- **US only.** Every one of these vacancies is in the United States.
+
+You can see them on their own with the [WhatJobs source filter](/?source=whatjobs), or leave
+your filters alone and they will simply appear in the results they belong in.
