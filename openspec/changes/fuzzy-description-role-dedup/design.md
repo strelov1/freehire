@@ -55,9 +55,12 @@ signature: MinHash/LSH banding, a shingle simhash, or a `pg_trgm` GIN with `simi
 Pick during implementation after the spike sizes bucket distribution. Conservative threshold
 ≥0.9 (well inside the ≥0.95 true-dupe band, far above ≤0.5 distinct).
 
-### D5 — Grade guard
-Reuse the seniority-grade guard so senior/staff/etc. of one title are not merged even at high
-description similarity.
+### D5 — Grade guard — NOT NEEDED, the bucket already is one
+
+Superseded during implementation. The bucket key is the whole normalized title, and a grade word is
+part of the title, so `senior software engineer` and `software engineer` are different buckets before
+any description is read. The explicit guard the SQL subset arm needs exists because that arm compares
+ACROSS titles; this pass never does. Adding it here would be a check that can never fire.
 
 ## Risks / Trade-offs
 

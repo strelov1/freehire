@@ -14,9 +14,9 @@
 
 ## 3. Dedup pass
 
-- [ ] 3.1 Per-bucket clustering (similarity ≥ T → same cluster, `min(id)` canon) with the seniority-grade guard, unit-tested.
+- [x] 3.1 Per-bucket clustering (similarity >= T -> same cluster, `min(id)` canon), unit-tested. The seniority-grade guard turned out unnecessary — the bucket key is the whole normalized title, so grades are already separate buckets (design D5).
 - [ ] 3.2 Wire into `cmd/reindex` AFTER `recomputeRoleDuplicates`/`suppressAggregatorDuplicates` (or a dedicated worker), over leftover canons only.
-- [ ] 3.3 Unit tests: near-identical merges; distinct-job (amazon-style) stays split; mixed-specialty (speechify-style) stays split; grade guard; idempotent re-run.
+- [x] 3.3 Unit tests: near-identical merges; distinct-job (amazon-style) stays split; mixed-specialty (speechify-style) stays split; grade guard; idempotent re-run.
 
 ## 4. Verification
 
