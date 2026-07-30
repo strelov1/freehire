@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { FOR_COMPANIES_FAQ } from '$lib/forCompaniesFaq';
   import { Button } from '$lib/ui';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
@@ -188,6 +189,19 @@ curl -X POST https://freehire.me/api/v1/submissions \
         <p class="text-sm leading-relaxed text-muted-foreground">{b.body}</p>
       </div>
     {/each}
+  </section>
+
+  <!-- FAQ. Visible answers and the FAQPage JSON-LD share FOR_COMPANIES_FAQ. -->
+  <section class="flex flex-col gap-6">
+    <h2 class="text-2xl font-semibold tracking-tight">Questions</h2>
+    <dl class="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+      {#each FOR_COMPANIES_FAQ as item (item.question)}
+        <div class="flex flex-col gap-2 bg-background p-5">
+          <dt class="text-base font-semibold tracking-tight">{item.question}</dt>
+          <dd class="text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
+        </div>
+      {/each}
+    </dl>
   </section>
 
   <!-- Closing CTA -->

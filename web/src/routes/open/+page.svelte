@@ -3,7 +3,8 @@
   import Seo from '$lib/components/Seo.svelte';
   import ActivityBars from '$lib/components/ActivityBars.svelte';
   import GrowthArea from '$lib/components/GrowthArea.svelte';
-  import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
+  import { OPEN_FAQ } from '$lib/openFaq';
+  import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -22,6 +23,7 @@
         { name: 'Jobs API', contentUrl: `${origin}/api/v1/jobs` },
         { name: 'Companies API', contentUrl: `${origin}/api/v1/companies` },
       ]),
+      faqPageJsonLd(OPEN_FAQ),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Open', url: canonical },
@@ -299,5 +301,20 @@
         >.
       </p>
     </div>
+  </section>
+
+  <!-- E. FAQ. Visible answers and the FAQPage JSON-LD share OPEN_FAQ; the schema is
+       only honest while this section renders. Kept last so the numbers stay the
+       page's opening subject. -->
+  <section class="mt-14">
+    <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// about these numbers</p>
+    <dl class="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+      {#each OPEN_FAQ as item (item.question)}
+        <div class="bg-background p-5 sm:p-6">
+          <dt class="text-base font-semibold tracking-tight">{item.question}</dt>
+          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
+        </div>
+      {/each}
+    </dl>
   </section>
 </div>
