@@ -207,8 +207,10 @@ func TestDerive_DesignRoles(t *testing.T) {
 			[]string{"senior", "engineering_design", "senior_engineering_design", "mechanical_designer", "senior_mechanical_designer"}},
 		{"electrical designer", "", "engineering_design", "Electrical Designer", []string{"engineering_design", "electrical_designer"}},
 		{"civil designer", "", "engineering_design", "Civil Designer", []string{"engineering_design", "civil_designer"}},
-		{"pcb designer", "", "engineering_design", "PCB Design Engineer", []string{"engineering_design", "pcb_designer"}},
-		{"chip designer via physical design", "", "engineering_design", "Physical Design Engineer", []string{"engineering_design", "chip_designer"}},
+		// Silicon and board design carry the `hardware` category, not the draughting
+		// one — the named role is what keeps the specific title pickable inside it.
+		{"pcb designer", "", "hardware", "PCB Design Engineer", []string{"hardware", "pcb_designer"}},
+		{"chip designer via physical design", "", "hardware", "Physical Design Engineer", []string{"hardware", "chip_designer"}},
 
 		// Product-side specializations stop collapsing into the bare "Designer".
 		{"visual designer graded", "senior", "design", "Senior Visual Designer",
@@ -220,6 +222,12 @@ func TestDerive_DesignRoles(t *testing.T) {
 		{"ux researcher", "", "design", "UX Researcher", []string{"design", "ux_researcher"}},
 		{"user researcher alias", "", "design", "User Researcher", []string{"design", "ux_researcher"}},
 		{"design ops", "", "design", "Design Ops Manager", []string{"design", "design_ops"}},
+		// "design operations" (17 chars) outranks the pre-existing "head of design"
+		// (14) in the length ordering, so this title reads as the ops role rather than
+		// the head-of-function one. That is the better label for it, but it is a
+		// behaviour change worth pinning.
+		{"design operations beats head of design", "", "design", "Head of Design Operations",
+			[]string{"design", "design_ops"}},
 
 		// Directorial titles state their level already — they do not compose.
 		{"art director does not compose", "lead", "design", "Art Director", []string{"lead", "design", "lead_design", "art_director"}},

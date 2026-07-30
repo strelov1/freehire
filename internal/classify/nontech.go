@@ -188,8 +188,22 @@ var nonTechTitleTerms = []string{
 // written on the contract stated above — consulted only after the tech check. Callers
 // that DELETE on this signal (the ingest filter, the prune rule) must go through here,
 // so the precedence cannot be forgotten in one of them and not the other.
+//
+// `engineering_design` vetoes deletion on its own, without technical evidence. That
+// category and this dictionary describe the same physical trades from two sides — the
+// list anchors "hvac", "sheet metal", "machinist"; the category resolves the draughting
+// titles those same employers post — so a word match here is not the accidental kind
+// the veto was built for. What is decisive is that a resolved category is a DELIBERATE
+// placement: the title named a discipline, the catalogue keeps the posting under the
+// `engineering_design` facet, and only `is_tech=false` follows from it. While these
+// titles lived in `design`, TechCategories supplied this veto for free; splitting them
+// out would otherwise turn an "HVAC Designer" away at ingest and hard-delete the
+// stored rows through prune.
 func ConfirmedNonTech(title string, hasTechEvidence bool) bool {
-	return !hasTechEvidence && IsNonTech(title)
+	if hasTechEvidence || Parse(title).Category == "engineering_design" {
+		return false
+	}
+	return IsNonTech(title)
 }
 
 // NonTechTerms returns the curated non-tech title terms. Exposed so the catalogue

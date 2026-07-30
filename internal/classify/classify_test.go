@@ -343,12 +343,33 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"Civil Designer", "engineering_design"},
 		{"CAD Designer", "engineering_design"},
 		{"Design Drafter", "engineering_design"},
-		// chip and board design ride the same category
-		{"PCB Design Engineer", "engineering_design"},
-		{"Physical Design Engineer", "engineering_design"},
-		{"Analog Design Engineer", "engineering_design"},
-		{"RTL Design Engineer", "engineering_design"},
-		{"VLSI Design Engineer", "engineering_design"},
+		// The BIM / architectural-draughting family. It is the largest population still
+		// left in `design` after the first pass — `revit` alone tags 2846 of those jobs —
+		// and the bare "design engineer" alias cannot see any of these titles.
+		{"Architectural Designer", "engineering_design"},
+		{"BIM Designer", "engineering_design"},
+		{"Revit Designer", "engineering_design"},
+		{"Senior BIM Coordinator", "engineering_design"},
+		{"Layout Designer", "engineering_design"},
+		{"Tool Designer", "engineering_design"},
+		{"Mold Designer", "engineering_design"},
+		{"Draftsman", "engineering_design"},
+		{"CAD Drafter", "engineering_design"},
+		{"Design Technician", "engineering_design"},
+		// Silicon and board design stay with `hardware`, which already owns the rest of
+		// that team: "Hardware Design Engineer" and "FPGA Design Engineer" resolve there
+		// through the earlier hardware aliases, so filing their colleagues under
+		// draughting would split one discipline across two facets — and cost them the
+		// technical treatment (enrichment, embeddings) they have today.
+		{"PCB Design Engineer", "hardware"},
+		{"PCB Layout Designer", "hardware"},
+		{"Physical Design Engineer", "hardware"},
+		{"Analog Design Engineer", "hardware"},
+		{"RTL Design Engineer", "hardware"},
+		{"VLSI Design Engineer", "hardware"},
+		{"Senior VLSI Design Lead", "hardware"},
+		{"Hardware Design Engineer", "hardware"},
+		{"FPGA Design Engineer", "hardware"},
 		// the bare title resolves to the engineering side
 		{"Design Engineer", "engineering_design"},
 		{"Senior Design Engineer", "engineering_design"},
@@ -357,6 +378,13 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"Design Systems Engineer", "design"},
 		{"UI Engineer", "design"},
 		{"UX Engineer", "design"},
+		// The interface-design hybrids: the marker must be read BEFORE the bare
+		// "design engineer" below, which would otherwise file them as draughting.
+		{"UX Design Engineer", "design"},
+		{"UI Design Engineer", "design"},
+		{"UI/UX Design Engineer", "design"},
+		{"Web Design Engineer", "design"},
+		{"Design Engineer, Product", "design"},
 		// product / visual design is untouched
 		{"Senior Product Designer", "design"},
 		{"UX Designer", "design"},

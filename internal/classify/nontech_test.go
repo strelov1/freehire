@@ -69,3 +69,37 @@ func TestIsNonTech(t *testing.T) {
 		})
 	}
 }
+
+// A title the category dictionary places in engineering_design must never be deleted
+// on the non-tech dictionary's word match. The two vocabularies overlap by design —
+// the physical trades the non-tech list anchors ("hvac", "sheet metal", "machinist")
+// are the same trades that post draughting work — and engineering_design is a
+// deliberate placement, not the absence of a signal. Without this veto, splitting the
+// category out of `design` (where TechCategories supplied the veto for free) turns an
+// "HVAC Designer" away at ingest and hard-deletes the stored rows through prune.
+func TestConfirmedNonTech_EngineeringDesignIsVetoed(t *testing.T) {
+	vetoed := []string{
+		"HVAC Design Engineer",
+		"HVAC Designer",
+		"Sheet Metal Design Engineer",
+		"Design Engineer - Heavy Equipment",
+		"CAD Designer - Manufacturing Engineer",
+		"Электрик-конструктор",
+	}
+	for _, title := range vetoed {
+		if !IsNonTech(title) {
+			t.Fatalf("precondition: %q must match the non-tech dictionary for this test to mean anything", title)
+		}
+		if ConfirmedNonTech(title, false) {
+			t.Errorf("ConfirmedNonTech(%q, false) = true, want false (engineering_design vetoes deletion)", title)
+		}
+	}
+
+	// The veto is scoped to that one category: a genuinely non-technical title with no
+	// category, and one in another non-tech category, are still confirmed.
+	for _, title := range []string{"HVAC Technician", "Warehouse Janitorial Cleaner", "Registered Nurse"} {
+		if !ConfirmedNonTech(title, false) {
+			t.Errorf("ConfirmedNonTech(%q, false) = false, want true — the veto must not widen", title)
+		}
+	}
+}

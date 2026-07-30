@@ -43,7 +43,8 @@ constraint, so no migration is needed. The archived change
   A bare "Mechanical Engineer" or "Civil Engineer" stays unresolved — it is not
   polluting the design facet, and pulling the whole non-IT engineering world into
   the taxonomy is a separate, much larger question.
-- Splitting chip design out as its own technical category. One new value only.
+- A new vocab value for silicon design. It routes to the existing `hardware`
+  category instead; only one value is added by this change.
 - Touching `NonTechFromDescription` (the description-level non-tech detector).
   The title carries the signal for these roles.
 - Changing how `prune`'s board shield reads skills (see Risks).
@@ -53,10 +54,9 @@ constraint, so no migration is needed. The archived change
 ### 1. One new category, `engineering_design`, in `NonTechCategories`
 
 Alternatives considered: (a) route the engineering titles into existing
-`hardware`/`other` — no vocab growth, but `other` is a landfill for 20k+ jobs and
-`hardware` would mix silicon with plumbing; (b) two values, `chip_design` (tech) +
-`engineering_design` (non-tech) — most accurate, but doubles the alias-routing rules
-and the labels for a distinction our audience does not filter on.
+`hardware`/`other` — no vocab growth, but `other` is a landfill for 20k+ jobs; (b) two
+values, `chip_design` (tech) + `engineering_design` (non-tech) — accurate, but a new
+vocab value for a distinction `hardware` already expresses.
 
 Chosen: one value, non-technical. An engineer who designs mining wear liners is
 not the audience of an IT job board, and `NonTechCategories` is exactly the
@@ -64,8 +64,27 @@ not the audience of an IT job board, and `NonTechCategories` is exactly the
 `enrichment_outbox` and `semantic_outbox` enqueues). Consequence: `is_tech` flips
 `true → false` for these jobs, which the `tech-classification` delta records.
 
-If chip design later deserves technical treatment, it is a five-alias move into
-`hardware` — no schema or contract change.
+Silicon is the exception, and it goes the (a) way: `pcb design`, `pcb layout`,
+`physical design engineer`, `analog design engineer`, `rtl design engineer`,
+`vlsi design` and `chip design` resolve to the existing **`hardware`** category. That
+was not the first cut — they were filed as draughting — but review showed the line was
+incoherent: `hardware design engineer` and `fpga design engineer` resolve to
+`hardware` through earlier aliases, so their own colleagues would have landed in a
+non-technical facet and lost enrichment and embeddings they have today. No new vocab
+value is needed to fix it.
+
+`TechCategories` has two consumers beyond `is_tech`, and both DELETE: the ingest
+catalogue filter and the prune title rule, which read it through
+`jobderive.TechEvidence` as the veto over the non-technical title dictionary.
+Leaving `design` therefore removed that veto from a population the non-tech
+dictionary already anchors by trade name (`hvac`, `sheet metal`, `machinist`), so an
+"HVAC Designer" would have been turned away at ingest and hard-deleted by prune.
+The veto is restored inside `ConfirmedNonTech` — a resolved `engineering_design`
+blocks deletion on its own — which fixes all three callers in one place and leaves
+`is_tech` untouched. Scoped to that one category: widening it to "any resolved
+category" would change the catalogue filter for `marketing`/`sales`/`support` too,
+which is outside this change.
+
 
 ### 2. Bare `design engineer` → `engineering_design`, product hybrids by explicit marker
 
@@ -76,24 +95,37 @@ catalogue, not a guess about the word.
 
 The product-engineering hybrid is recognized only through markers that cannot be
 read any other way: `product design engineer`, `design systems engineer`,
-`design system engineer`, `ui engineer`, `ux engineer`. Ordered ahead of the bare
-alias, so the specific title wins the first-match table.
+`design system engineer`, `ux design engineer`, `ui design engineer`,
+`ui/ux design engineer`, `web design engineer`, `design engineer, product`. Ordered
+ahead of the bare alias, so the specific title wins the first-match table. A bare
+"UI Engineer"/"UX Engineer" needs no marker — it never reaches the block, since the
+pre-existing `ui`/`ux` aliases below already resolve it to `design`.
 
 Alias order inside the table (engineering block placed immediately **before** the
-existing `designer`/`design` entries, itself preceded by the product-marker block):
+existing `designer`/`design` entries, itself preceded by the marker block):
 
-1. product markers → `design`
-2. `mechanical design engineer`, `mechanical designer`, `electrical design engineer`,
-   `electrical designer`, `civil design engineer`, `civil designer`,
-   `structural designer`, `piping designer`, `plumbing designer`, `hvac designer`,
-   `process design engineer`, `tool design engineer`, `packaging design engineer`,
-   `pcb design`, `pcb designer`, `physical design engineer`, `analog design engineer`,
-   `rtl design engineer`, `vlsi design`, `chip design`, `cad designer`,
-   `design draftsman`, `design drafter`, `design engineer` → `engineering_design`
+1. markers that must NOT reach the engineering bucket: `network design engineer` →
+   `network_engineering`; the silicon block (`pcb design`, `pcb layout`,
+   `physical/analog/rtl design engineer`, `vlsi design`, `chip design`) → `hardware`;
+   `product design engineer`, `design system(s) engineer`,
+   `ux design engineer`, `ui design engineer`, `ui/ux design engineer`,
+   `web design engineer`, `design engineer, product` → `design`
+2. `engineering_design`: the `…designer` nouns (`mechanical`, `electrical`, `civil`,
+   `structural`, `piping`, `plumbing`, `hvac`, `pcb`, `cad`, `layout`, `tool`,
+   `mold`, `die`, `architectural`, `bim`, `revit`), the design-less phrases
+   the draughting professions
+   (`drafter`, `draftsman`, `draughtsman`, `design drafter`, `design draftsman`,
+   `design technician`, `bim coordinator`, `bim modeler`, `конструктор`), and the
+   closing bare `design engineer`
 3. existing `designer` / `design` / `ux` / `ui` → `design`
 
-`hardware design engineer` needs no entry: the `hardware` alias already precedes
-the design block, so it keeps resolving to `hardware`.
+Every qualified `<discipline> design engineer` form is left OUT of that list: the
+closing bare alias already resolves it to the same category, so an explicit entry
+would be dead weight in an ordered table (where a redundant row reads as if the
+order mattered). Only the titles the bare alias cannot see are listed.
+
+`hardware design engineer` and `firmware design engineer` need no entry either: the
+`hardware`/`embedded` aliases already precede the design block.
 
 ### 3. Named roles on both sides; longest-alias-first does the disambiguation
 
@@ -111,8 +143,10 @@ Product roles: `visual_designer`, `brand_designer`, `motion_designer`,
 slug — one alias family, one picker entry.
 
 Engineering roles: `mechanical_designer`, `electrical_designer`, `civil_designer`,
-`pcb_designer`, `chip_designer` (`physical design engineer`, `vlsi design`,
-`rtl design engineer`, `analog design engineer`).
+`pcb_designer` and `chip_designer` (`physical design engineer`,
+`vlsi design engineer`, `rtl design engineer`, `analog design engineer`) — the last
+two name specializations INSIDE `hardware`, where the bare "Hardware Engineer" role
+is otherwise all a silicon title gets.
 
 `categoryNoun["engineering_design"] = "Engineering Designer"` gives the new category
 its bare role and seniority composites, matching every other decomposable category.
@@ -123,25 +157,34 @@ state their level — they join `nonGradeable` so we do not mint
 ### 4. Skills: add the design and CAD vocabulary, route homonyms through `ambiguousWords`
 
 Single tokens (`wordAliases`): `illustrator`, `indesign`, `webflow`, `invision`,
-`blender`, `framer`, `zeplin`, `protopie`, `canva`, `figjam`, `lottie`, `spline`,
-`prototyping`, `wireframing`, `wireframes`, `typography`, `accessibility`, `a11y`,
-`solidworks`, `catia`, `creo`, `sketchup`, `altium`, `kicad`, `ansys`.
+`zeplin`, `protopie`, `canva`, `figjam`, `lottie`, `prototyping`, `wireframing`,
+`wireframes`, `typography`, `a11y`, `solidworks`, `catia`, `sketchup`, `altium`,
+`kicad`, `ansys` — plus `sketch`, `maya`, `blender` and `accessibility` behind the
+gate below.
 
-Phrases (`engineeringPhraseAliases`): `adobe illustrator`, `adobe indesign`,
-`after effects`, `adobe xd`, `design system(s)`, `design thinking`,
-`user research`, `ux research`, `usability testing`, `interaction design`,
-`visual design`, `motion design`, `motion graphics`, `user flows`, `3ds max`,
-`fusion 360`, `civil 3d`, `solid edge`, `autodesk inventor`, `cadence virtuoso`.
+Phrases (`engineeringPhraseAliases`): `after effects`, `adobe xd`,
+`design system(s)`, `design thinking`, `user research`, `ux research`,
+`usability testing`, `interaction design`, `visual design`, `motion design`,
+`motion graphics`, `user flows`, `3ds max`, `fusion 360`, `civil 3d`, `solid edge`,
+`autodesk inventor`, `siemens nx`, `ptc creo`, `creo parametric`,
+`cadence virtuoso`. `adobe illustrator`/`adobe indesign` need no phrase — the word
+pass already sees the product name inside them.
 
-Homonyms are not dropped wholesale — the dictionary already has a mechanism for
-them. `sketch` and `maya` go into `wordAliases` **and** `ambiguousWords`, so they
-only resolve when a strong token (figma, photoshop, solidworks, …) corroborates
-them in the same description. `principle`, `eagle` and `nx` get no entry at all:
-their ordinary-English (`principle`) and unrelated-product (Autodesk Eagle vs. the
-bird; Siemens NX vs. the Nx JS monorepo tool) senses dominate even in corroborated
-text. The product is still reachable through the unambiguous `siemens nx` phrase.
+Homonyms are handled by degree. Behind the existing corroboration gate
+(`wordAliases` **and** `ambiguousWords`, so they resolve only next to a strong
+token): `sketch` ("sketch out ideas"), `maya` (a person's name), `blender` (a line
+cook's appliance) and `accessibility` (a broad concept word, and a ramp at the
+entrance). Excluded outright, because the other sense dominates even in corroborated
+text: `principle`, `eagle` (the bird; "eagle-eyed" is posting boilerplate), a bare
+`nx` (the Nx JS monorepo tool), `framer` (the carpentry trade AND Framer Motion) and
+`spline` (the splined shafts of the mechanical population this split is about).
+`creo` is Spanish for "I think", so it resolves through its phrases only. Where a
+real product is excluded, the unambiguous phrase keeps it reachable (`siemens nx`,
+`ptc creo`).
 
-`accessibility` is a broad concept word, so it joins `ambiguousWords` too.
+Note that two gated words do not corroborate each other — the gate demands a
+*strong* token — so "Sculpting in Maya and Blender" tags neither. That is the
+intended conservatism: a 3D posting names a strong tool too.
 
 ### 5. Where the new skill canonicals live w.r.t. `HasEngineering`
 
@@ -175,15 +218,19 @@ retire.
 ## Migration Plan
 
 1. Ship the code change (no DB migration — `jobs.category` has no CHECK).
-2. Regenerate contracts (`cmd/gen-contracts`) and add the label
-   `engineering_design: 'Engineering Design'` to `web/src/lib/labels.ts` and
-   `web/src/lib/insights.ts`.
+2. Regenerate contracts (`cmd/gen-contracts`), add
+   `engineering_design: 'Engineering Design'` to the full `CATEGORY_LABELS` map in
+   `web/src/lib/insights.ts`, and map the value in `CATEGORY_GROUP`
+   (`web/src/lib/filterSections.ts`) so it appears in the Specialization pane.
+   Verify with `svelte-check`, not only lint+build: the group map is the one place
+   the omission surfaces, and only as a type error.
 3. Deploy.
 4. On prod: `cmd/backfill-derive` (re-derives category, skills, is_tech,
    role_fingerprint), then `make reindex` — a full swap, and **not** stacked with
    `reindex-companies`.
 5. Verify on the live API: `category=design` skill facet no longer shows
-   `autocad`/`revit`/`verilog` in the top ranks, and `category=engineering_design`
+   `autocad`/`revit` in the top ranks (`verilog`/`tcl` move to `hardware`, not out of
+   the technical catalogue), and `category=engineering_design`
    returns the expected population.
 
 Rollback: revert the commit and re-run `backfill-derive` + `reindex`. The category

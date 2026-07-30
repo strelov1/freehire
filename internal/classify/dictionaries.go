@@ -245,9 +245,26 @@ var categoryTable = []aliasEntry{
 	// First, the titles that state a craft of their own and must NOT go to the
 	// engineering-design bucket the next block builds.
 	{"network design engineer", "network_engineering"},
+	// Silicon and board design belong to `hardware`, which already owns the rest of
+	// that team through the earlier "hardware"/"fpga" aliases. Routing them to
+	// engineering draughting would split one discipline across two facets and drop
+	// them out of the technical treatment (enrichment, embeddings) they have today.
+	{"pcb design", "hardware"},
+	{"pcb designer", "hardware"},
+	{"pcb layout", "hardware"},
+	{"physical design engineer", "hardware"},
+	{"analog design engineer", "hardware"},
+	{"rtl design engineer", "hardware"},
+	{"vlsi design", "hardware"},
+	{"chip design", "hardware"},
 	{"product design engineer", "design"},
 	{"design systems engineer", "design"},
 	{"design system engineer", "design"},
+	{"ux design engineer", "design"},
+	{"ui design engineer", "design"},
+	{"ui/ux design engineer", "design"},
+	{"web design engineer", "design"},
+	{"design engineer, product", "design"},
 	// Then engineering design. The bare "design engineer" closes the block, and it
 	// carries every qualified "<discipline> design engineer" form with it — those need
 	// no entry of their own, since they resolve to the same category. Only the titles
@@ -262,13 +279,23 @@ var categoryTable = []aliasEntry{
 	{"piping designer", "engineering_design"},
 	{"plumbing designer", "engineering_design"},
 	{"hvac designer", "engineering_design"},
-	{"pcb design", "engineering_design"},
-	{"pcb designer", "engineering_design"},
-	{"vlsi design", "engineering_design"},
-	{"chip design", "engineering_design"},
 	{"cad designer", "engineering_design"},
-	{"design draftsman", "engineering_design"},
-	{"design drafter", "engineering_design"},
+	{"design technician", "engineering_design"},
+	// The BIM / architectural-draughting family. "architectural" does not contain the
+	// whole word "architect", so it cannot reach the software-architecture category
+	// below. Bare "drafter"/"draftsman" is the profession itself, in any discipline.
+	{"architectural designer", "engineering_design"},
+	{"bim designer", "engineering_design"},
+	{"bim coordinator", "engineering_design"},
+	{"bim modeler", "engineering_design"},
+	{"revit designer", "engineering_design"},
+	{"layout designer", "engineering_design"},
+	{"tool designer", "engineering_design"},
+	{"mold designer", "engineering_design"},
+	{"die designer", "engineering_design"},
+	{"drafter", "engineering_design"},
+	{"draftsman", "engineering_design"},
+	{"draughtsman", "engineering_design"},
 	// Russian: the draughting profession. "инженер-конструктор" needs no entry of its
 	// own — the hyphen is a word boundary, so the bare form resolves it.
 	{"конструктор", "engineering_design"},

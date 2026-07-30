@@ -52,6 +52,7 @@ export const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   qa: 'Quality & Security',
   security: 'Quality & Security',
   design: 'Design',
+  engineering_design: 'Design',
   product: 'Product & Management',
   project_management: 'Product & Management',
   management: 'Product & Management',

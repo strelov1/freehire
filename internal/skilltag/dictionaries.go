@@ -343,28 +343,34 @@ var wordAliases = map[string]string{
 	// "eagle" (Autodesk EAGLE) collides with the bird and with "eagle-eyed" boilerplate.
 	"solidworks": "solidworks",
 	"catia":      "catia",
-	"creo":       "creo",
 	"sketchup":   "sketchup",
 	"altium":     "altium",
 	"kicad":      "kicad",
 	"ansys":      "ansys",
-	// design tools — brand tokens, unambiguous on their own. "sketch" and "maya" are
-	// listed too but gated by ambiguousWords (ordinary English / a person's name).
+	// design tools — brand tokens, unambiguous on their own. "sketch", "maya" and
+	// "blender" are listed too but gated by ambiguousWords (ordinary English, a person's
+	// name, a kitchen appliance).
+	//
+	// Two products are absent because their token belongs to someone else: "framer" is
+	// the carpentry trade AND the Framer Motion React library, and "spline" is the
+	// splined shaft of the very mechanical population this dictionary now describes —
+	// both would tag a posting with a design tool it never mentions. "creo" is Spanish
+	// for "I think", so it resolves only through the "ptc creo"/"creo parametric" phrase.
 	"illustrator": "illustrator",
 	"indesign":    "indesign",
 	"webflow":     "webflow",
-	"framer":      "framer",
 	"invision":    "invision",
 	"zeplin":      "zeplin",
 	"protopie":    "protopie",
 	"canva":       "canva",
 	"figjam":      "figjam",
-	"blender":     "blender",
-	"spline":      "spline",
 	"lottie":      "lottie",
+	"blender":     "blender",
 	"sketch":      "sketch",
 	"maya":        "maya",
-	// design practices — the craft, not the tool.
+	// design practices — the craft, not the tool. The singular "wireframe" is left out:
+	// it is also CAD prose ("wireframe model", "wireframe view"), and the plural and
+	// gerund carry the intent a posting actually states.
 	"prototyping":   "prototyping",
 	"wireframing":   "wireframing",
 	"wireframes":    "wireframing",
@@ -708,12 +714,14 @@ var ambiguousWords = map[string]bool{
 	"rancher":   true,
 	"postman":   true,
 	"braze":     true,
-	// design words whose lowercase form is ordinary English or a person's name: a
-	// retail posting "sketches out ideas", a manager is called Maya, a building has an
-	// "accessibility ramp". A real design posting names Figma, Photoshop or Blender
-	// beside them, so corroboration costs nothing and drops the false ones.
+	// design words whose lowercase form is ordinary English, a person's name or a
+	// kitchen appliance: a retail posting "sketches out ideas", a manager is called
+	// Maya, a line cook runs the "industrial blender", a building has an "accessibility
+	// ramp". A real design posting names Figma, Photoshop or Illustrator beside them, so
+	// corroboration costs nothing and drops the false ones.
 	"sketch":        true,
 	"maya":          true,
+	"blender":       true,
 	"accessibility": true,
 }
 
@@ -987,6 +995,7 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"solid edge", "solid-edge"},
 	{"autodesk inventor", "autodesk-inventor"},
 	{"siemens nx", "siemens-nx"},
+	{"ptc creo", "creo"}, {"creo parametric", "creo"},
 	{"cadence virtuoso", "cadence-virtuoso"},
 }
 

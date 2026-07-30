@@ -708,11 +708,10 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 		{"bare illustrator", "Strong Illustrator and Photoshop skills.", []string{"illustrator", "photoshop"}, nil},
 		{"after effects", "Motion work in After Effects and Premiere Pro.", []string{"after-effects", "premiere-pro"}, nil},
 		{"adobe xd", "Wireframes in Adobe XD.", []string{"adobe-xd", "wireframing"}, nil},
-		{"no-code design", "Ship marketing pages in Webflow and prototypes in Framer.",
-			[]string{"webflow", "framer"}, nil},
+		{"no-code design", "Ship marketing pages in Webflow.", []string{"webflow"}, nil},
 		{"handoff tools", "Design handoff through InVision and Zeplin.", []string{"invision", "zeplin"}, nil},
-		{"3d design", "3D assets in Blender and Spline, animations with Lottie.",
-			[]string{"blender", "spline", "lottie"}, nil},
+		{"3d design", "3D assets in Blender, animations with Lottie built in Figma.",
+			[]string{"blender", "lottie", "figma"}, nil},
 		// design practices
 		{"practices", "You will own prototyping, wireframing and our design system.",
 			[]string{"prototyping", "wireframing", "design-systems"}, nil},
@@ -724,7 +723,7 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 		{"motion", "Motion design and motion graphics for product launches.",
 			[]string{"motion-design", "motion-graphics"}, nil},
 		// CAD / EDA
-		{"mechanical cad", "3D modelling in SolidWorks and Creo, drawings in AutoCAD.",
+		{"mechanical cad", "3D modelling in SolidWorks and PTC Creo, drawings in AutoCAD.",
 			[]string{"solidworks", "creo", "autocad"}, nil},
 		{"more cad", "Experience with CATIA, SketchUp and Autodesk Inventor.",
 			[]string{"catia", "sketchup", "autodesk-inventor"}, nil},
@@ -732,14 +731,28 @@ func TestParse_DesignAndCADVocab(t *testing.T) {
 			[]string{"altium", "kicad", "ansys"}, nil},
 		{"cad phrases", "Drafting in 3ds Max, Fusion 360 and Civil 3D.",
 			[]string{"3ds-max", "fusion-360", "civil-3d"}, nil},
+		// Trade and prose collisions that keep whole products out of the dictionary.
+		// A carpentry "framer", the Spanish "creo que", and the splined shafts of the
+		// very mechanical population this change splits out would each have tagged a
+		// posting with a design tool it never mentions — and a false STRONG token also
+		// lifts the corroboration gate off every weak word beside it.
+		{"framer the carpenter", "Framer needed for residential construction crews.", nil, []string{"framer"}},
+		{"framer motion is not the design tool", "Frontend dev: animate with Framer Motion.", nil, []string{"framer"}},
+		{"creo in spanish prose", "Creo que este puesto es para ti.", nil, []string{"creo"}},
+		{"splined shafts", "Design splined shafts and spline broaching fixtures for gearboxes.", nil, []string{"spline"}},
 		// homonyms: uncorroborated prose must stay silent
+		{"blender in a kitchen", "Line cook: operate the industrial blender and mixer.", nil, []string{"blender"}},
 		{"sketch verb", "You will sketch out ideas with the team each morning.", nil, []string{"sketch"}},
 		{"principle noun", "Our guiding principle is respect for the customer.", nil, []string{"principle"}},
 		{"eagle-eyed", "We need an eagle-eyed proofreader for our brochures.", nil, []string{"eagle"}},
 		{"maya the person", "You will report to Maya, our store manager.", nil, []string{"maya"}},
 		// homonyms: corroborated by a strong design token → tagged
 		{"sketch corroborated", "Our team designs in Figma and Sketch.", []string{"figma", "sketch"}, nil},
-		{"maya corroborated", "Character rigging in Maya and Blender.", []string{"maya", "blender"}, nil},
+		// Two gated words do NOT corroborate each other — a strong token has to be
+		// present, exactly as for the broad concepts.
+		{"maya and blender corroborated", "Character rigging in Maya and Blender, textures in Photoshop.",
+			[]string{"maya", "blender", "photoshop"}, nil},
+		{"gated words alone stay silent", "Sculpting in Maya and Blender.", nil, []string{"maya", "blender"}},
 		// accessibility is a broad word, so it needs corroboration too
 		{"accessibility alone", "An accessibility ramp is available at the entrance.", nil, []string{"accessibility"}},
 		{"accessibility corroborated", "Accessibility work in Figma, meeting WCAG 2.2.",

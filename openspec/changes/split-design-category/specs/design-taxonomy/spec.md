@@ -3,24 +3,28 @@
 ### Requirement: Engineering design is a category of its own, distinct from product design
 
 The system SHALL resolve engineering draughting and design work — mechanical,
-electrical, civil/structural, and chip design — to a dedicated
+electrical, civil/structural, and the architectural/BIM family — to a dedicated
 `engineering_design` category, and SHALL reserve the `design` category for
-product, visual, and experience design. The engineering aliases MUST be ordered
-ahead of the bare `design` alias in the title dictionary, so a qualified title
-resolves to the engineering category rather than to `design` by virtue of
-containing the word "design". `engineering_design` MUST be a member of the
-non-technical category set, so it is surfaced as a facet but consumes no LLM
-enrichment or embedding budget.
+product, visual, and experience design. Silicon and board design is NOT part of
+either: it resolves to the existing `hardware` category, which already owns the rest
+of that team. The engineering aliases MUST be ordered ahead of the bare `design`
+alias in the title dictionary, so a qualified title resolves to the engineering
+category rather than to `design` by virtue of containing the word "design".
+`engineering_design` MUST be a member of the non-technical category set, so it is
+surfaced as a facet but consumes no LLM enrichment or embedding budget.
 
 #### Scenario: A qualified engineering-design title leaves the design category
 
 - **WHEN** a job titled "Senior Mechanical Design Engineer" is classified
 - **THEN** its category is `engineering_design`, not `design`
 
-#### Scenario: Chip and board design resolve to engineering design
+#### Scenario: Chip and board design resolve to hardware, not draughting
 
-- **WHEN** a job titled "Physical Design Engineer" or "PCB Design Engineer" is classified
-- **THEN** its category is `engineering_design`
+- **WHEN** a job titled "Physical Design Engineer", "VLSI Design Engineer" or
+  "PCB Design Engineer" is classified
+- **THEN** its category is `hardware` — the same category "Hardware Design Engineer"
+  and "FPGA Design Engineer" already resolve to, so one silicon discipline is not
+  split across two facets and keeps its technical treatment
 
 #### Scenario: Product design keeps the design category
 
@@ -53,6 +57,37 @@ the more specific title wins.
 - **WHEN** a job titled "Product Design Engineer" or "Design Systems Engineer" is classified
 - **THEN** its category is `design`
 
+### Requirement: A resolved engineering-design category vetoes deletion
+
+A title the category dictionary places in `engineering_design` SHALL NOT be deleted
+on the strength of the non-technical title dictionary — neither rejected by the
+ingest catalogue filter nor hard-deleted by the prune title rule. The two
+vocabularies describe the same physical trades from opposite sides (the non-tech
+list anchors "hvac", "sheet metal", "machinist"; the category resolves the
+draughting titles those employers post), so a word match between them is not the
+accidental kind the deletion veto exists to catch. A resolved category is a
+deliberate placement: the posting is kept and surfaced under its facet, and only
+`is_tech=false` follows from it. Non-technical categories other than
+`engineering_design` MUST keep their current behaviour.
+
+#### Scenario: An engineering-design title survives the ingest filter
+
+- **WHEN** a crawled board lists "HVAC Designer", whose title also matches the
+  non-technical dictionary, and which carries no technical evidence
+- **THEN** the posting is admitted to the catalogue, not rejected
+
+#### Scenario: The prune title rule spares it
+
+- **WHEN** the prune worker evaluates a stored "Sheet Metal Design Engineer" on a
+  crawled board
+- **THEN** the title rule does not match, so the row is not hard-deleted
+
+#### Scenario: The veto does not widen to other non-technical titles
+
+- **WHEN** the same paths evaluate "HVAC Technician" or "Warehouse Janitorial Cleaner",
+  which resolve no category
+- **THEN** they are still confirmed non-technical and removed as before
+
 ### Requirement: Named roles cover both design crafts
 
 The system SHALL expose named roles for the design specializations the catalogue
@@ -61,7 +96,8 @@ side `visual_designer`, `brand_designer`, `motion_designer`, `web_designer`,
 `ux_researcher`, `art_director`, `creative_director`, `design_ops`,
 `industrial_designer`, and `design_engineer`; on the engineering side
 `mechanical_designer`, `electrical_designer`, `civil_designer`, `pcb_designer`,
-and `chip_designer`. The `engineering_design` category SHALL also carry a role
+and `chip_designer` (the last two sitting inside the `hardware` category, whose bare
+role would otherwise be all a silicon title gets). The `engineering_design` category SHALL also carry a role
 noun, so it yields a bare role and its seniority composites like every other
 decomposable category. Longest-alias-first resolution MUST make a qualified
 engineering title match its specific role rather than a shorter design alias
@@ -89,10 +125,20 @@ description — the Adobe suite beyond Photoshop, the interface-design and
 prototyping tools, and the named practices (prototyping, wireframing, design
 systems, user research, usability testing, interaction design, design thinking,
 typography, accessibility) — and the CAD/EDA stack the engineering side states
-(SolidWorks, CATIA, Creo, SketchUp, Altium, ANSYS, and their peers). Aliases whose
-lowercase form is ordinary English or an unrelated product — `sketch`,
-`principle`, `eagle`, a bare `maya` — MUST NOT be added: in long prose they
-resolve falsely, and these dictionaries are precision-first.
+(SolidWorks, CATIA, Creo, SketchUp, Altium, ANSYS, and their peers).
+
+Because this dictionary runs over the description of EVERY posting, an alias whose
+lowercase form is ordinary English, a person's name, an unrelated product, or a
+manual trade MUST NOT resolve on its own. Two remedies apply, and the choice
+depends on whether a real design posting would name a strong token beside it:
+
+- `sketch`, `maya`, `blender` and `accessibility` resolve ONLY when corroborated by
+  an unambiguous technical token in the same text;
+- `principle`, `eagle`, a bare `nx`, `framer` and `spline` resolve not at all —
+  their other sense dominates even in corroborated text (`framer` is both a
+  carpentry trade and a React animation library; `spline` is the splined shaft of
+  the mechanical population this very split describes). A product excluded this way
+  MAY still be reachable through an unambiguous phrase (`ptc creo`, `siemens nx`).
 
 #### Scenario: A design tool stated in the description is tagged
 
@@ -101,10 +147,16 @@ resolve falsely, and these dictionaries are precision-first.
 
 #### Scenario: A CAD tool stated in the description is tagged
 
-- **WHEN** a description states "3D modelling in SolidWorks and Creo"
+- **WHEN** a description states "3D modelling in SolidWorks and PTC Creo"
 - **THEN** the derived skills include `solidworks` and `creo`
 
-#### Scenario: A homonym does not resolve
+#### Scenario: A gated word needs corroboration
 
-- **WHEN** a description states "sketch out ideas quickly" or "the guiding principle is simplicity"
-- **THEN** no skill is derived from those words
+- **WHEN** a description states "sketch out ideas each morning" with no technical token
+- **THEN** no skill is derived from it; the same word beside "Figma" does resolve to `sketch`
+
+#### Scenario: An excluded homonym never resolves
+
+- **WHEN** a description states "Framer needed for residential construction" or
+  "design splined shafts for gearboxes"
+- **THEN** no skill is derived from those words, in corroborated text or otherwise
