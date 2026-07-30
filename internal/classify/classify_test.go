@@ -320,3 +320,65 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_DesignSplit covers the split of the design craft: engineering
+// draughting (mechanical, electrical, civil, chip) resolves to engineering_design,
+// while `design` keeps meaning product, visual and experience design. The bare
+// "Design Engineer" goes to the engineering side — that population is
+// overwhelmingly mechanical in the catalogue — so a product hybrid has to state a
+// marker of its own. The guards at the end pin the neighbouring aliases that the
+// inserted block sits next to.
+func TestParse_DesignSplit(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// engineering design — the qualified forms
+		{"Mechanical Design Engineer", "engineering_design"},
+		{"Senior Electrical Design Engineer", "engineering_design"},
+		{"Civil Design Engineer", "engineering_design"},
+		{"Structural Designer", "engineering_design"},
+		{"Piping Designer", "engineering_design"},
+		{"Plumbing Designer / Drafter", "engineering_design"},
+		{"Process Design Engineer", "engineering_design"},
+		{"Packaging Design Engineer", "engineering_design"},
+		{"Electrical Designer", "engineering_design"},
+		{"Civil Designer", "engineering_design"},
+		{"CAD Designer", "engineering_design"},
+		{"Design Drafter", "engineering_design"},
+		// chip and board design ride the same category
+		{"PCB Design Engineer", "engineering_design"},
+		{"Physical Design Engineer", "engineering_design"},
+		{"Analog Design Engineer", "engineering_design"},
+		{"RTL Design Engineer", "engineering_design"},
+		{"VLSI Design Engineer", "engineering_design"},
+		// the bare title resolves to the engineering side
+		{"Design Engineer", "engineering_design"},
+		{"Senior Design Engineer", "engineering_design"},
+		// product hybrids keep `design`, but only with an explicit marker
+		{"Product Design Engineer", "design"},
+		{"Design Systems Engineer", "design"},
+		{"UI Engineer", "design"},
+		{"UX Engineer", "design"},
+		// product / visual design is untouched
+		{"Senior Product Designer", "design"},
+		{"UX Designer", "design"},
+		{"UI/UX Designer", "design"},
+		{"Visual Designer", "design"},
+		{"Graphic Designer", "design"},
+		{"Дизайнер интерфейсов", "design"},
+		// Russian: "конструктор" is the draughting profession, not a UI designer, and
+		// the hyphen is a word boundary so the compound form resolves through it.
+		{"Инженер-конструктор", "engineering_design"},
+		{"Конструктор металлоконструкций", "engineering_design"},
+
+		// precision — the neighbours of the inserted block must not shift
+		{"Hardware Design Engineer", "hardware"},        // hardware precedes the design block
+		{"Content Designer", "technical_writing"},       // technical_writing still wins
+		{"UX Writer", "technical_writing"},              // ditto
+		{"Senior Firmware Design Engineer", "embedded"}, // embedded precedes the design block
+		{"Network Design Engineer", "network_engineering"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}

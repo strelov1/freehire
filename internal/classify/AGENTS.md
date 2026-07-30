@@ -16,6 +16,18 @@ Ordering alone could not fix this: `staff` outranks `senior`, so "Senior Member 
 
 The list holds only phrases that shadow a `seniorityTable` alias; the category match reads the untouched title.
 
+## The two design crafts
+
+`design` means product/visual/experience design. Engineering draughting —
+mechanical, electrical, civil, chip — is the separate `engineering_design`
+category, a `vocab.NonTechCategories` member (surfaced as a facet, off the LLM and
+embedding budgets). Its aliases, plus the markers that keep a title OUT of it
+(`product design engineer`, `design systems engineer`, `network design engineer`),
+are ordered **before** the bare `designer`/`design` entries — otherwise the word
+`design` alone claims every "… Design Engineer". The unqualified `design engineer`
+closes that block and resolves to `engineering_design`: on this catalogue that
+population is overwhelmingly mechanical.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

@@ -235,6 +235,44 @@ var categoryTable = []aliasEntry{
 	{"разработчик документации", "technical_writing"},
 	{"специалист по документации", "technical_writing"},
 	{"ux-редактор", "technical_writing"},
+	// The word "design" names two unrelated crafts. Everything below down to the
+	// engineering block is a title whose "… design …" is NOT product design: it is
+	// engineering draughting (mechanical/electrical/civil), chip and board design, or
+	// a network role. They must precede the bare "designer"/"design" entries, which
+	// would otherwise claim them by virtue of the word alone — the defect this split
+	// fixes (a mining-equipment "Design Engineer" filed under product design).
+	//
+	// First, the titles that state a craft of their own and must NOT go to the
+	// engineering-design bucket the next block builds.
+	{"network design engineer", "network_engineering"},
+	{"product design engineer", "design"},
+	{"design systems engineer", "design"},
+	{"design system engineer", "design"},
+	// Then engineering design. The bare "design engineer" closes the block, and it
+	// carries every qualified "<discipline> design engineer" form with it — those need
+	// no entry of their own, since they resolve to the same category. Only the titles
+	// the bare alias CANNOT see are listed: the "…designer" nouns, the design-less
+	// phrases ("pcb design"), and the draughting words. The bare form routes here
+	// because that population is overwhelmingly mechanical and industrial in this
+	// catalogue — a product hybrid has to state one of the markers above.
+	{"mechanical designer", "engineering_design"},
+	{"electrical designer", "engineering_design"},
+	{"civil designer", "engineering_design"},
+	{"structural designer", "engineering_design"},
+	{"piping designer", "engineering_design"},
+	{"plumbing designer", "engineering_design"},
+	{"hvac designer", "engineering_design"},
+	{"pcb design", "engineering_design"},
+	{"pcb designer", "engineering_design"},
+	{"vlsi design", "engineering_design"},
+	{"chip design", "engineering_design"},
+	{"cad designer", "engineering_design"},
+	{"design draftsman", "engineering_design"},
+	{"design drafter", "engineering_design"},
+	// Russian: the draughting profession. "инженер-конструктор" needs no entry of its
+	// own — the hyphen is a word boundary, so the bare form resolves it.
+	{"конструктор", "engineering_design"},
+	{"design engineer", "engineering_design"},
 	{"designer", "design"},
 	{"design", "design"},
 	{"ux", "design"},

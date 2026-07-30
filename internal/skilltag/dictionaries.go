@@ -338,6 +338,39 @@ var wordAliases = map[string]string{
 	"cad":     "cad",
 	"fpga":    "fpga",
 	"verilog": "verilog",
+	// mechanical CAD and EDA — the stack the engineering-design category states.
+	// "nx" (Siemens NX) is NOT here: it collides with the Nx JS monorepo tool, and
+	// "eagle" (Autodesk EAGLE) collides with the bird and with "eagle-eyed" boilerplate.
+	"solidworks": "solidworks",
+	"catia":      "catia",
+	"creo":       "creo",
+	"sketchup":   "sketchup",
+	"altium":     "altium",
+	"kicad":      "kicad",
+	"ansys":      "ansys",
+	// design tools — brand tokens, unambiguous on their own. "sketch" and "maya" are
+	// listed too but gated by ambiguousWords (ordinary English / a person's name).
+	"illustrator": "illustrator",
+	"indesign":    "indesign",
+	"webflow":     "webflow",
+	"framer":      "framer",
+	"invision":    "invision",
+	"zeplin":      "zeplin",
+	"protopie":    "protopie",
+	"canva":       "canva",
+	"figjam":      "figjam",
+	"blender":     "blender",
+	"spline":      "spline",
+	"lottie":      "lottie",
+	"sketch":      "sketch",
+	"maya":        "maya",
+	// design practices — the craft, not the tool.
+	"prototyping":   "prototyping",
+	"wireframing":   "wireframing",
+	"wireframes":    "wireframing",
+	"typography":    "typography",
+	"accessibility": "accessibility",
+	"a11y":          "accessibility",
 	// web3 / crypto (mined from enrichment->skills; the long tail sits below the
 	// freq-500 floor). Distinctive tokens only — the ambiguous ones are NOT added:
 	// "cosmos" (↔ Azure Cosmos DB), "foundry" (↔ Palantir/Cloud Foundry),
@@ -675,6 +708,13 @@ var ambiguousWords = map[string]bool{
 	"rancher":   true,
 	"postman":   true,
 	"braze":     true,
+	// design words whose lowercase form is ordinary English or a person's name: a
+	// retail posting "sketches out ideas", a manager is called Maya, a building has an
+	// "accessibility ramp". A real design posting names Figma, Photoshop or Blender
+	// beside them, so corroboration costs nothing and drops the false ones.
+	"sketch":        true,
+	"maya":          true,
+	"accessibility": true,
 }
 
 // phraseAlias is a punctuated or multi-word term matched against the normalized
@@ -923,6 +963,31 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"structured authoring", "structured-authoring"},
 	{"information architecture", "information-architecture"},
 	{"madcap flare", "madcap-flare"},
+	// design — the multi-word tools and the named practices. They sit with the
+	// engineering vocabulary (not the professional one) for the same reason technical
+	// writing does: design is craft a technical employer posts, and HasEngineering must
+	// not read a design-only board as "never posted anything technical".
+	// "adobe illustrator"/"adobe indesign" need no phrase: the word pass already sees
+	// the product name inside them. "xd" alone is far too short to be safe.
+	{"adobe xd", "adobe-xd"},
+	{"after effects", "after-effects"},
+	{"design system", "design-systems"}, {"design systems", "design-systems"},
+	{"design thinking", "design-thinking"},
+	{"user research", "user-research"}, {"ux research", "user-research"},
+	{"usability testing", "usability-testing"},
+	{"interaction design", "interaction-design"},
+	{"visual design", "visual-design"},
+	{"motion design", "motion-design"},
+	{"motion graphics", "motion-graphics"},
+	{"user flows", "user-flows"},
+	// mechanical CAD phrases (the single-token products live in wordAliases).
+	{"3ds max", "3ds-max"},
+	{"fusion 360", "fusion-360"},
+	{"civil 3d", "civil-3d"},
+	{"solid edge", "solid-edge"},
+	{"autodesk inventor", "autodesk-inventor"},
+	{"siemens nx", "siemens-nx"},
+	{"cadence virtuoso", "cadence-virtuoso"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role

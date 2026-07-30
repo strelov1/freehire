@@ -678,3 +678,113 @@ func TestAmbiguousWordsSubsetOfAliases(t *testing.T) {
 		}
 	}
 }
+
+// The design craft's toolchain and the CAD/EDA stack the engineering-design side
+// states. Both were nearly absent: the dictionary knew figma, photoshop and autocad
+// and little else, so a designer's description came back with one tag or none.
+//
+// Three aliases stay OUT deliberately — "principle" (ordinary English), "eagle"
+// (the bird, and "eagle-eyed" is posting boilerplate) and "nx" (Siemens NX vs. the
+// Nx JS monorepo tool). Two go in behind the corroboration gate instead of being
+// dropped: "sketch" ("sketch out ideas") and "maya" (a person's name).
+func TestParse_DesignAndCADVocab(t *testing.T) {
+	contains := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		// design tools
+		{"adobe suite", "You will work in Figma and Adobe Illustrator, with InDesign for print.",
+			[]string{"figma", "illustrator", "indesign"}, nil},
+		{"bare illustrator", "Strong Illustrator and Photoshop skills.", []string{"illustrator", "photoshop"}, nil},
+		{"after effects", "Motion work in After Effects and Premiere Pro.", []string{"after-effects", "premiere-pro"}, nil},
+		{"adobe xd", "Wireframes in Adobe XD.", []string{"adobe-xd", "wireframing"}, nil},
+		{"no-code design", "Ship marketing pages in Webflow and prototypes in Framer.",
+			[]string{"webflow", "framer"}, nil},
+		{"handoff tools", "Design handoff through InVision and Zeplin.", []string{"invision", "zeplin"}, nil},
+		{"3d design", "3D assets in Blender and Spline, animations with Lottie.",
+			[]string{"blender", "spline", "lottie"}, nil},
+		// design practices
+		{"practices", "You will own prototyping, wireframing and our design system.",
+			[]string{"prototyping", "wireframing", "design-systems"}, nil},
+		{"research practices", "Run user research and usability testing with our PMs.",
+			[]string{"user-research", "usability-testing"}, nil},
+		{"craft practices", "Interaction design, visual design and typography matter here.",
+			[]string{"interaction-design", "visual-design", "typography"}, nil},
+		{"design thinking", "We practise design thinking end to end.", []string{"design-thinking"}, nil},
+		{"motion", "Motion design and motion graphics for product launches.",
+			[]string{"motion-design", "motion-graphics"}, nil},
+		// CAD / EDA
+		{"mechanical cad", "3D modelling in SolidWorks and Creo, drawings in AutoCAD.",
+			[]string{"solidworks", "creo", "autocad"}, nil},
+		{"more cad", "Experience with CATIA, SketchUp and Autodesk Inventor.",
+			[]string{"catia", "sketchup", "autodesk-inventor"}, nil},
+		{"eda", "PCB layout in Altium and KiCad; simulation in ANSYS.",
+			[]string{"altium", "kicad", "ansys"}, nil},
+		{"cad phrases", "Drafting in 3ds Max, Fusion 360 and Civil 3D.",
+			[]string{"3ds-max", "fusion-360", "civil-3d"}, nil},
+		// homonyms: uncorroborated prose must stay silent
+		{"sketch verb", "You will sketch out ideas with the team each morning.", nil, []string{"sketch"}},
+		{"principle noun", "Our guiding principle is respect for the customer.", nil, []string{"principle"}},
+		{"eagle-eyed", "We need an eagle-eyed proofreader for our brochures.", nil, []string{"eagle"}},
+		{"maya the person", "You will report to Maya, our store manager.", nil, []string{"maya"}},
+		// homonyms: corroborated by a strong design token → tagged
+		{"sketch corroborated", "Our team designs in Figma and Sketch.", []string{"figma", "sketch"}, nil},
+		{"maya corroborated", "Character rigging in Maya and Blender.", []string{"maya", "blender"}, nil},
+		// accessibility is a broad word, so it needs corroboration too
+		{"accessibility alone", "An accessibility ramp is available at the entrance.", nil, []string{"accessibility"}},
+		{"accessibility corroborated", "Accessibility work in Figma, meeting WCAG 2.2.",
+			[]string{"accessibility", "figma", "wcag"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
+
+// The tail of the design/CAD vocabulary: the tools and phrases the first batch of
+// cases did not reach, kept as their own case list so each alias has a witness.
+func TestParse_DesignAndCADVocabTail(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"Interactive prototypes in ProtoPie.", "protopie"},
+		{"Quick social assets in Canva.", "canva"},
+		{"Workshops run in FigJam.", "figjam"},
+		{"We hold ourselves to a11y standards with Figma.", "accessibility"},
+		{"Sheet metal work in Solid Edge.", "solid-edge"},
+		{"Assemblies modelled in Siemens NX.", "siemens-nx"},
+		{"Analog layout in Cadence Virtuoso.", "cadence-virtuoso"},
+		{"You will map user flows before building.", "user-flows"},
+		{"Rapid prototyping of new concepts.", "prototyping"},
+	}
+	for _, c := range cases {
+		t.Run(c.want, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, g := range got {
+				if g == c.want {
+					return
+				}
+			}
+			t.Errorf("Parse(%q) = %v, missing %q", c.in, got, c.want)
+		})
+	}
+}

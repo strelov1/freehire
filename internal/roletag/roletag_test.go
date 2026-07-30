@@ -185,3 +185,58 @@ func TestCatalogLabelsAreNonEmpty(t *testing.T) {
 		}
 	}
 }
+
+// TestDerive_DesignRoles covers both sides of the design split. The engineering
+// roles and design_engineer share the substring "design engineer", so this pins the
+// longest-alias-first ordering that keeps a qualified title off the generic role.
+func TestDerive_DesignRoles(t *testing.T) {
+	cases := []struct {
+		name      string
+		seniority string
+		category  string
+		title     string
+		want      []string
+	}{
+		// The new category decomposes like every other one: bare role + composite.
+		{"engineering design bare", "", "engineering_design", "Design Engineer", []string{"engineering_design", "design_engineer"}},
+		{"engineering design graded", "senior", "engineering_design", "Senior Design Engineer", []string{"senior", "engineering_design", "senior_engineering_design", "design_engineer", "senior_design_engineer"}},
+
+		// A qualified engineering title takes its specific role, not the generic one:
+		// "mechanical design engineer" is the longer alias, so it wins the ordering.
+		{"mechanical designer beats design_engineer", "senior", "engineering_design", "Senior Mechanical Design Engineer",
+			[]string{"senior", "engineering_design", "senior_engineering_design", "mechanical_designer", "senior_mechanical_designer"}},
+		{"electrical designer", "", "engineering_design", "Electrical Designer", []string{"engineering_design", "electrical_designer"}},
+		{"civil designer", "", "engineering_design", "Civil Designer", []string{"engineering_design", "civil_designer"}},
+		{"pcb designer", "", "engineering_design", "PCB Design Engineer", []string{"engineering_design", "pcb_designer"}},
+		{"chip designer via physical design", "", "engineering_design", "Physical Design Engineer", []string{"engineering_design", "chip_designer"}},
+
+		// Product-side specializations stop collapsing into the bare "Designer".
+		{"visual designer graded", "senior", "design", "Senior Visual Designer",
+			[]string{"senior", "design", "senior_design", "visual_designer", "senior_visual_designer"}},
+		{"brand designer", "", "design", "Brand Designer", []string{"design", "brand_designer"}},
+		{"motion designer", "", "design", "Motion Designer", []string{"design", "motion_designer"}},
+		{"web designer", "", "design", "Web Designer", []string{"design", "web_designer"}},
+		{"industrial designer", "", "design", "Industrial Designer", []string{"design", "industrial_designer"}},
+		{"ux researcher", "", "design", "UX Researcher", []string{"design", "ux_researcher"}},
+		{"user researcher alias", "", "design", "User Researcher", []string{"design", "ux_researcher"}},
+		{"design ops", "", "design", "Design Ops Manager", []string{"design", "design_ops"}},
+
+		// Directorial titles state their level already — they do not compose.
+		{"art director does not compose", "lead", "design", "Art Director", []string{"lead", "design", "lead_design", "art_director"}},
+		{"creative director does not compose", "c_level", "design", "Creative Director", []string{"c_level", "design", "c_level_design", "creative_director"}},
+
+		// The existing design roles keep winning where they already did.
+		{"product designer still wins", "senior", "design", "Senior Product Designer",
+			[]string{"senior", "design", "senior_design", "product_designer", "senior_product_designer"}},
+		{"ux designer still wins", "", "design", "UX Designer", []string{"design", "ux_designer"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(tc.seniority, tc.category, tc.title)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Derive(%q,%q,%q) = %v, want %v", tc.seniority, tc.category, tc.title, got, tc.want)
+			}
+		})
+	}
+}

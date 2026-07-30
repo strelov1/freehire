@@ -39,7 +39,7 @@ var (
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
-		"design", "product", "project_management", "management",
+		"design", "engineering_design", "product", "project_management", "management",
 		"marketing", "sales", "support",
 		// IT-company roles added by expand-role-taxonomy (4 technical, 6 business)
 		"business_analysis", "solutions_engineering", "developer_relations", "technical_writing",
@@ -55,9 +55,13 @@ var (
 	// dictionary could not place is never silently skipped. The back-office IT-company
 	// roles (recruiting/hr/finance/legal/operations/customer_success) join this set:
 	// surfaced as facets but kept out of the LLM enrich budget, like marketing/sales.
+	// `engineering_design` — mechanical, electrical, civil and chip draughting — joins
+	// them for the same reason: it is engineering, but not the IT work this catalogue
+	// serves, so it is filterable without spending LLM or embedding budget on it.
 	NonTechCategories = []string{
 		"marketing", "sales", "support", "management",
 		"recruiting", "hr", "finance", "legal", "operations", "customer_success",
+		"engineering_design",
 	}
 	// TechCategories are the CategoryValues for recognized technical roles: every
 	// category that is neither a NonTechCategories member nor the residual "other".

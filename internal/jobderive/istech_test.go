@@ -53,6 +53,19 @@ func TestDerive_IsTech(t *testing.T) {
 			in:   Input{Title: "Drainage Engineer"},
 			want: nil,
 		},
+		{
+			// Engineering draughting is its own non-technical category, so it reads
+			// false where it used to inherit true from the `design` category.
+			name: "engineering design category → false",
+			in:   Input{Title: "Mechanical Design Engineer"},
+			want: boolp(false),
+		},
+		{
+			// The product-design side of the split stays technical.
+			name: "product design category → true",
+			in:   Input{Title: "Senior Product Designer"},
+			want: boolp(true),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
