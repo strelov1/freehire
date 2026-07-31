@@ -28,6 +28,25 @@ export function chasedLabel(item: MyJob, now: Date = new Date()): string | null 
   return days <= 0 ? 'chased today' : `chased ${days}d ago`;
 }
 
+/** How the card reports that somebody opened a CV sent for this application, or null when none
+ *  was, or when the timestamp will not parse.
+ *
+ *  A third reading beside the silence badge and the chase, and like them it neither replaces nor
+ *  softens them: `cv_opened_at` is outside the server's last-activity derivation on purpose (see
+ *  migration 0060), because a recruiter reading a CV is not a reply. "24d" and "CV opened 2d ago"
+ *  on one card is the useful pair — they read it and still said nothing.
+ *
+ *  Whole days, floored at zero, matching the unit of the badge beside it. */
+export function cvOpenedLabel(item: MyJob, now: Date = new Date()): string | null {
+  if (!item.cv_opened_at) return null;
+  const at = new Date(item.cv_opened_at);
+  if (Number.isNaN(at.getTime())) return null;
+  const days = Math.floor((now.getTime() - at.getTime()) / 86_400_000);
+  if (days <= 0) return 'CV opened today';
+  if (days === 1) return 'CV opened yesterday';
+  return `CV opened ${days}d ago`;
+}
+
 /** The draft as one pasteable block. The subject is labelled rather than merged
  *  into the body: a mail client keeps them in separate fields, and an unlabelled
  *  first line silently becomes part of the message. The recipient is prefixed only

@@ -74,9 +74,9 @@
 
 ## 8. Web
 
-- [ ] 8.1 CV editor: the toggle with its plain-language explanation of what gets recorded, and
+- [x] 8.1 CV editor: the toggle with its plain-language explanation of what gets recorded, and
       the per-link panel with the "include likely bots" switch
-- [ ] 8.2 Tracking board: the CV-opened marker beside the existing state, worded as evidence
+- [x] 8.2 Tracking board: the CV-opened marker beside the existing state, worded as evidence
       rather than proof
 - [ ] 8.3 Verify both visually in a real browser
 

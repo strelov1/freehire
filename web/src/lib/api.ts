@@ -19,6 +19,7 @@ import type {
   CvTailoredItem,
   CvTemplate,
   CvFont,
+  CvTracerLink,
   UpdateCvInput,
   TailorResult,
 } from './cv';
@@ -1458,6 +1459,18 @@ export function createApi(
   }
 
 
+  /** Turn link tracing on or off for one CV. 409 when the deployment has no visitor salt: there
+   *  is then no honest way to count visitors, so the consent is refused rather than accepted and
+   *  quietly under-recorded. Turning it OFF is never refused. */
+  async function setCvTracerLinks(id: string, enabled: boolean): Promise<void> {
+    await call(`/api/v1/me/cvs/${id}/tracer-links`, jsonBody('PUT', { enabled }));
+  }
+
+  /** What is known about each of a CV's traced links. Empty for a CV that was never traced. */
+  async function listCvTracerLinks(id: string): Promise<CvTracerLink[]> {
+    return requestData<CvTracerLink[]>(`/api/v1/me/cvs/${id}/tracer-links`);
+  }
+
   /** Delete a CV. */
   async function deleteCv(id: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}`, { method: 'DELETE' });
@@ -1691,6 +1704,8 @@ export function createApi(
     getCvAtsDelta,
     getCvJobMatch,
     updateCv,
+    setCvTracerLinks,
+    listCvTracerLinks,
     deleteCv,
     setCvSession,
     cvPdfUrl,

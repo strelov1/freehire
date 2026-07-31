@@ -3,7 +3,7 @@
   import CompanyLogo from './CompanyLogo.svelte';
   import { Badge } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
-  import { canFollowUp, chasedLabel } from '$lib/followup';
+  import { canFollowUp, chasedLabel, cvOpenedLabel } from '$lib/followup';
   import { canRehearse } from '$lib/rehearsal';
   import type { MyJob } from '$lib/types';
 
@@ -28,6 +28,9 @@
   // waiting on a scheduled call that has gone quiet offers a chase AND a rehearsal. The
   // row wraps, and the rehearsal is listed first because it is the one with a date on it.
   const offersRehearsal = $derived(canRehearse(item));
+  // A further reading, and like the chase it sits beside the silence badge rather than instead
+  // of it: they read the CV and still have not answered.
+  const cvOpened = $derived(cvOpenedLabel(item));
 </script>
 
 <!-- The card is a div, not a button: the follow-up action is a second control, and a
@@ -77,6 +80,12 @@
     {/if}
     {#if chased}
       <span class="text-xs text-muted-foreground">{chased}</span>
+    {/if}
+    {#if cvOpened}
+      <span
+        class="text-xs text-muted-foreground"
+        title="A link in the CV you sent was opened. Company mail scanners follow links automatically, so this is a hint rather than proof someone read it."
+      >{cvOpened}</span>
     {/if}
     {#if item.email_count > 0}
       <span

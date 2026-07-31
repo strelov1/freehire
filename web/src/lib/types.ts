@@ -429,6 +429,9 @@ export interface MyJob {
    *  chase is not a reply, so a chased application keeps counting its silence and
    *  the card shows both readings. */
   followed_up_at: string | null;
+  /** When somebody last opened a CV sent for this application. Outside the silence derivation:
+   *  a recruiter reading a CV is not a reply. */
+  cv_opened_at: string | null;
 }
 
 /** The account-level saved-job reminder rule: whether reminders are on, the
@@ -481,6 +484,9 @@ export interface TrackedApplication {
   notes?: string;
   /** When the caller last recorded chasing this application, or null for never. */
   followed_up_at: string | null;
+  /** When somebody last opened a CV sent for this application. Outside the silence derivation:
+   *  a recruiter reading a CV is not a reply. */
+  cv_opened_at: string | null;
   emails: ApplicationEmail[];
 }
 

@@ -20,6 +20,7 @@
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
+  import TracerLinksSettings from '$lib/components/cv/TracerLinksSettings.svelte';
   import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
@@ -43,6 +44,9 @@
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
   let cvId = $state('');
+  // The CV's own consent flag, read with the document and written by its own endpoint — it is
+  // not part of the document, so autosave neither carries nor overwrites it.
+  let tracerLinksEnabled = $state(false);
   let analysis = $state<Analysis | null>(null);
   let job = $state<Job | null>(null);
 
@@ -165,6 +169,7 @@
     templateId = rec.template_id;
     doc = toEditable(rec.document);
     autopilotReport = rec.autopilot_report;
+    tracerLinksEnabled = rec.tracer_links_enabled;
     lastSnapshot = snapshot();
     cvLoaded = true;
   }
@@ -544,6 +549,13 @@
                   Page margins <span class="font-normal normal-case tracking-normal">(inches)</span>
                 </h2>
                 <MarginSettings bind:margins={doc.margins} />
+              </section>
+              <!-- Not a presentation choice, and deliberately last: consent to track whoever opens
+                   this CV is a different kind of decision from a font size, and it writes on its
+                   own rather than riding the document's autosave. -->
+              <section class="space-y-2">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Link tracking</h2>
+                <TracerLinksSettings {cvId} bind:enabled={tracerLinksEnabled} />
               </section>
             </div>
           </div>

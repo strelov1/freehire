@@ -42,6 +42,22 @@ export interface CvRecord extends CvMeta {
   agent_session_id: string;
   document: Document;
   autopilot_report?: AutopilotEntry[];
+  /** Whether this CV's links are traced when it is rendered. Off unless the candidate asked. */
+  tracer_links_enabled: boolean;
+}
+
+/** One traced link of a CV, as its owner reads it.
+ *
+ *  `distinct_visitors` is absent — not zero — when the deployment cannot identify visitors at
+ *  all. Rendering an absent count as 0 would say "nobody" about any number of people. */
+export interface CvTracerLink {
+  source_path: string;
+  destination_url: string;
+  traced_url: string;
+  clicks: number;
+  bot_clicks: number;
+  distinct_visitors?: number;
+  last_click_at?: string;
 }
 
 /** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy (slug, title, company)
