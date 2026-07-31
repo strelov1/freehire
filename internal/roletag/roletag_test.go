@@ -266,3 +266,138 @@ func TestDerive_DesignRoles(t *testing.T) {
 		})
 	}
 }
+
+// TestDerive_SEOCluster covers the search-optimization disciplines the coarse
+// `seo_specialist` role flattened. The longest-alias-first ordering is what keeps
+// "Technical SEO Specialist" off the shorter "seo specialist" alias, so each
+// qualified form needs its own entry rather than a prefix rule.
+func TestDerive_SEOCluster(t *testing.T) {
+	cases := []struct {
+		name                       string
+		seniority, category, title string
+		want                       []string
+	}{
+		{"technical seo beats bare seo", "", "marketing", "Technical SEO Specialist", []string{"marketing", "technical_seo_specialist"}},
+		{"technical seo engineer is the same role", "", "marketing", "Technical SEO Engineer", []string{"marketing", "technical_seo_specialist"}},
+		{"content seo", "", "marketing", "Content SEO Specialist", []string{"marketing", "content_seo_specialist"}},
+		{"link building", "", "marketing", "Link Building Specialist", []string{"marketing", "link_building_specialist"}},
+		{"outreach specialist is link building", "", "marketing", "SEO Outreach Specialist", []string{"marketing", "link_building_specialist"}},
+		{"seo analyst", "", "marketing", "SEO Analyst", []string{"marketing", "seo_analyst"}},
+		{"graded technical seo composes", "senior", "marketing", "Senior Technical SEO Specialist", []string{"senior", "marketing", "senior_marketing", "technical_seo_specialist", "senior_technical_seo_specialist"}},
+
+		// the coarse role still resolves for the unqualified titles
+		{"bare seo specialist unchanged", "", "marketing", "SEO Specialist", []string{"marketing", "seo_specialist"}},
+		{"seo manager unchanged", "", "marketing", "SEO Manager", []string{"marketing", "seo_specialist"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(tc.seniority, tc.category, tc.title)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Derive(%q,%q,%q) = %v, want %v", tc.seniority, tc.category, tc.title, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDerive_GEOCluster covers generative-engine optimization. The industry names
+// one job three ways — GEO, AEO and GSO — so they collapse to a single slug rather
+// than fragmenting the facet three ways. The abbreviation is the whole risk here:
+// "geo" is geography everywhere else in this codebase, so only the spelled-out
+// forms and the bound "geo specialist"/"geo manager" resolve.
+func TestDerive_GEOCluster(t *testing.T) {
+	cases := []struct {
+		name                       string
+		seniority, category, title string
+		want                       []string
+	}{
+		{"spelled out", "", "marketing", "Generative Engine Optimization Specialist", []string{"marketing", "geo_specialist"}},
+		{"answer engine variant", "", "marketing", "Answer Engine Optimization Manager", []string{"marketing", "geo_specialist"}},
+		{"generative search variant", "", "marketing", "Generative Search Optimization Lead", []string{"marketing", "geo_specialist"}},
+		{"bound abbreviation", "", "marketing", "GEO Specialist", []string{"marketing", "geo_specialist"}},
+		{"aeo abbreviation", "", "marketing", "AEO Manager", []string{"marketing", "geo_specialist"}},
+
+		// the bare token is geography — these must stay untouched
+		{"geospatial analyst untouched", "", "data_analytics", "Geo Data Analyst", []string{"data_analytics"}},
+		{"geospatial engineer untouched", "", "", "Geospatial Engineer", nil},
+		{"geo targeting manager untouched", "", "marketing", "Geo Targeting Manager", []string{"marketing"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(tc.seniority, tc.category, tc.title)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Derive(%q,%q,%q) = %v, want %v", tc.seniority, tc.category, tc.title, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDerive_SMMCluster covers the social-media disciplines. The manager is a
+// generalist bundle; community management, paid social and content creation are
+// the function specialists a manager coordinates, so they get their own slugs
+// rather than folding into the manager role.
+func TestDerive_SMMCluster(t *testing.T) {
+	cases := []struct {
+		name                       string
+		seniority, category, title string
+		want                       []string
+	}{
+		{"paid social", "", "marketing", "Paid Social Specialist", []string{"marketing", "paid_social_specialist"}},
+		{"paid social manager", "", "marketing", "Paid Social Manager", []string{"marketing", "paid_social_specialist"}},
+		{"content creator", "", "marketing", "Content Creator", []string{"marketing", "content_creator"}},
+		{"ugc creator", "", "marketing", "UGC Creator", []string{"marketing", "content_creator"}},
+		{"smm abbreviation resolves the manager", "", "marketing", "SMM Manager", []string{"marketing", "social_media_manager"}},
+
+		// already-resolving roles must not shift
+		{"social media manager unchanged", "", "marketing", "Social Media Manager", []string{"marketing", "social_media_manager"}},
+		{"community manager unchanged", "", "marketing", "Community Manager", []string{"marketing", "community_manager"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(tc.seniority, tc.category, tc.title)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Derive(%q,%q,%q) = %v, want %v", tc.seniority, tc.category, tc.title, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDerive_CommercialMarketingCluster covers the funnel-owning marketing
+// functions plus GTM engineering. CRM marketing folds into lifecycle rather than
+// getting a slug of its own: an unqualified "CRM Manager" is as often a Salesforce
+// administrator as a lifecycle marketer, so only the qualified phrases resolve.
+func TestDerive_CommercialMarketingCluster(t *testing.T) {
+	cases := []struct {
+		name                       string
+		seniority, category, title string
+		want                       []string
+	}{
+		{"gtm engineer", "", "sales", "GTM Engineer", []string{"sales", "gtm_engineer"}},
+		{"go to market engineer", "", "sales", "Go-To-Market Engineer", []string{"sales", "gtm_engineer"}},
+		{"demand generation", "", "marketing", "Demand Generation Manager", []string{"marketing", "demand_generation_manager"}},
+		{"lifecycle marketing", "", "marketing", "Lifecycle Marketing Manager", []string{"marketing", "lifecycle_marketing_manager"}},
+		{"crm marketing folds into lifecycle", "", "marketing", "CRM Marketing Manager", []string{"marketing", "lifecycle_marketing_manager"}},
+		{"retention marketing folds into lifecycle", "", "marketing", "Retention Marketing Lead", []string{"marketing", "lifecycle_marketing_manager"}},
+		{"performance marketing", "", "marketing", "Performance Marketing Manager", []string{"marketing", "performance_marketer"}},
+		{"marketing operations", "", "marketing", "Marketing Operations Manager", []string{"marketing", "marketing_operations_manager"}},
+		{"brand manager", "", "marketing", "Brand Manager", []string{"marketing", "brand_manager"}},
+		{"pr manager", "", "marketing", "PR Manager", []string{"marketing", "pr_manager"}},
+		{"influencer marketing", "", "marketing", "Influencer Marketing Manager", []string{"marketing", "influencer_marketing_manager"}},
+		{"copywriter", "", "marketing", "Copywriter", []string{"marketing", "copywriter"}},
+		{"marketing analyst", "", "marketing", "Marketing Analyst", []string{"marketing", "marketing_analyst"}},
+
+		// an unqualified CRM title is not claimed
+		{"bare crm manager unclaimed", "", "marketing", "CRM Manager", []string{"marketing"}},
+		// the existing growth and product marketing roles must not shift
+		{"growth marketer unchanged", "", "marketing", "Growth Marketing Manager", []string{"marketing", "growth_marketer"}},
+		{"pmm unchanged", "", "marketing", "Product Marketing Manager", []string{"marketing", "product_marketing_manager"}},
+		{"growth engineer stays technical", "", "", "Growth Engineer", []string{"growth_engineer"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Derive(tc.seniority, tc.category, tc.title)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Derive(%q,%q,%q) = %v, want %v", tc.seniority, tc.category, tc.title, got, tc.want)
+			}
+		})
+	}
+}

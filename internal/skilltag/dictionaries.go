@@ -559,12 +559,15 @@ var wordAliases = map[string]string{
 	"webhooks":    "webhooks",
 	"yaml":        "yaml",
 	// saas / business apps / eng tools
-	"okta":       "okta",
-	"wordpress":  "wordpress",
-	"shopify":    "shopify",
-	"marketo":    "marketo",
-	"firebase":   "firebase",
-	"mixpanel":   "mixpanel",
+	"okta":      "okta",
+	"wordpress": "wordpress",
+	"shopify":   "shopify",
+	"marketo":   "marketo",
+	"firebase":  "firebase",
+	"mixpanel":  "mixpanel",
+	// Product-analytics platform whose name is also a physics noun ("the amplitude of
+	// demand"). Gated in ambiguousWords, so it tags only in a concrete tech context.
+	"amplitude":  "amplitude",
 	"braze":      "braze",
 	"miro":       "miro",
 	"alteryx":    "alteryx",
@@ -656,28 +659,29 @@ var wordAliases = map[string]string{
 // stack is never gated. Membership is per-alias, not per-canonical; value is unused.
 var ambiguousWords = map[string]bool{
 	// English-word collisions
-	"react":   true,
-	"swift":   true,
-	"rust":    true,
-	"spring":  true,
-	"express": true,
-	"ruby":    true,
-	"dart":    true,
-	"gin":     true,
-	"fiber":   true,
-	"ember":   true,
-	"elixir":  true,
-	"rails":   true,
-	"groovy":  true,
-	"gorilla": true,
-	"koa":     true,
-	"remix":   true,
-	"astro":   true,
-	"shell":   true,
-	"apex":    true,
-	"julia":   true,
-	"maven":   true,
-	"1c":      true,
+	"react":     true,
+	"swift":     true,
+	"rust":      true,
+	"spring":    true,
+	"express":   true,
+	"ruby":      true,
+	"dart":      true,
+	"gin":       true,
+	"fiber":     true,
+	"ember":     true,
+	"elixir":    true,
+	"rails":     true,
+	"groovy":    true,
+	"gorilla":   true,
+	"koa":       true,
+	"remix":     true,
+	"astro":     true,
+	"shell":     true,
+	"apex":      true,
+	"julia":     true,
+	"maven":     true,
+	"1c":        true,
+	"amplitude": true,
 	// broad concepts (batch 3) — tag only in a concrete tech context
 	"ai":         true,
 	"automation": true,
@@ -1078,6 +1082,77 @@ var professionalPhraseAliases = []phraseAlias{
 	{"churn prevention", "churn-prevention"},
 	{"customer health score", "customer-health-score"},
 	{"gainsight", "gainsight"}, {"churnzero", "churnzero"},
+	// marketing — search optimization tooling. These are unambiguous product names,
+	// so they are strong matches, which also makes them corroborators for the gated
+	// `seo` canonical: before this block a posting could name its whole toolchain and
+	// still lose the `seo` tag for want of an engineering token to corroborate it.
+	{"semrush", "semrush"}, {"ahrefs", "ahrefs"},
+	{"screaming frog", "screaming-frog"},
+	{"google search console", "google-search-console"}, {"search console", "google-search-console"},
+	// marketing — lifecycle, email and advertising platforms. The ad platforms are
+	// phrases rather than bare vendor names on purpose: "meta", "google" and
+	// "linkedin" alone name the company, not the ad product.
+	{"klaviyo", "klaviyo"}, {"mailchimp", "mailchimp"}, {"customer.io", "customer-io"},
+	{"google ads", "google-ads"}, {"google adwords", "google-ads"}, {"adwords", "google-ads"},
+	{"meta ads", "meta-ads"}, {"facebook ads", "meta-ads"}, {"meta ads manager", "meta-ads"},
+	{"tiktok ads", "tiktok-ads"}, {"linkedin ads", "linkedin-ads"},
+	// marketing — measurement and social tooling. Segment, Buffer and Later are
+	// missing on purpose: each is an ordinary English word in exactly the postings
+	// this block serves ("the customer segment", "a content buffer", "apply later"),
+	// and a strong alias would tag the corpus rather than describe the job.
+	{"looker studio", "looker-studio"}, {"data studio", "looker-studio"},
+	{"hootsuite", "hootsuite"}, {"sprout social", "sprout-social"},
+	{"contentful", "contentful"},
+	// marketing — the disciplines themselves, so a search can combine "does technical
+	// SEO" with "uses Ahrefs". All multi-word, hence strong without gating. "SEM" is
+	// absent by design: it is a Portuguese and Spanish preposition ("sem experiência")
+	// and this catalogue carries that population in bulk.
+	{"technical seo", "technical-seo"},
+	{"link building", "link-building"}, {"linkbuilding", "link-building"},
+	{"paid social", "paid-social"},
+	{"paid search", "ppc"}, {"ppc campaigns", "ppc"}, {"ppc management", "ppc"},
+	{"ppc specialist", "ppc"}, {"ppc manager", "ppc"}, {"pay-per-click", "ppc"},
+	{"demand generation", "demand-generation"}, {"demand gen", "demand-generation"},
+	{"lifecycle marketing", "lifecycle-marketing"}, {"crm marketing", "lifecycle-marketing"},
+	{"marketing automation", "marketing-automation"},
+	{"generative engine optimization", "generative-engine-optimization"},
+	{"answer engine optimization", "generative-engine-optimization"},
+	{"generative search optimization", "generative-engine-optimization"},
+	{"content marketing", "content-marketing"},
+	{"email marketing", "email-marketing"},
+	{"influencer marketing", "influencer-marketing"},
+	{"copywriting", "copywriting"},
+	// GTM is go-to-market in a posting far more often than it is Google Tag Manager:
+	// "GTM strategy" and "GTM motion" are the common forms, while the tag manager is
+	// spelled out or named as a container. So the abbreviation belongs to this
+	// canonical, and the product keeps its full name (declared with the other Google
+	// products above) plus the container form.
+	{"go-to-market", "go-to-market"}, {"go to market", "go-to-market"},
+	{"gtm strategy", "go-to-market"}, {"gtm motion", "go-to-market"},
+	{"gtm plan", "go-to-market"}, {"gtm execution", "go-to-market"},
+	{"gtm container", "google-tag-manager"},
+}
+
+// nonCorroboratingPhrases are the phrase canonicals that tag on their own but do NOT
+// vouch for the gated single-word canonicals in ambiguousWords. Every phrase match is
+// otherwise a strong match, and a strong match rescues a weak one — which is right for
+// a named product ("Ahrefs" genuinely evidences an SEO role) and wrong for a
+// discipline. "AI-powered marketing automation" is marketing prose, not an AI
+// requirement, and marketing postings carry that phrasing at scale.
+var nonCorroboratingPhrases = map[string]bool{
+	"technical-seo":                  true,
+	"link-building":                  true,
+	"paid-social":                    true,
+	"ppc":                            true,
+	"demand-generation":              true,
+	"lifecycle-marketing":            true,
+	"marketing-automation":           true,
+	"generative-engine-optimization": true,
+	"content-marketing":              true,
+	"email-marketing":                true,
+	"influencer-marketing":           true,
+	"copywriting":                    true,
+	"go-to-market":                   true,
 }
 
 // nonEngineeringCanonicals is derived from professionalPhraseAliases, never written by

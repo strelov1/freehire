@@ -95,3 +95,30 @@ func showBoolp(b *bool) string {
 	}
 	return "false"
 }
+
+// TestDerive_IsTech_MarketingAliasesDoNotClaimTech pins the technical titles that
+// the marketing title aliases sit next to. A bare discipline noun added to the
+// category dictionary ("growth", "content", "geo") would resolve these to
+// `marketing` — a NonTechCategories member — flipping is_tech to false and taking
+// them off the enrichment and embedding budgets. Every marketing alias is a phrase
+// so that cannot happen; this test is the tripwire.
+func TestDerive_IsTech_MarketingAliasesDoNotClaimTech(t *testing.T) {
+	tests := []struct {
+		title string
+		want  *bool
+	}{
+		{"Growth Engineer", nil},
+		{"Content Platform Engineer", boolp(true)},
+		{"Geo Data Analyst", boolp(true)},
+		{"Geospatial Engineer", nil},
+		// the marketing titles themselves stay non-tech, as they always were
+		{"Growth Marketing Manager", boolp(false)},
+		{"Community Manager", boolp(false)},
+	}
+	for _, tt := range tests {
+		got := Derive(Input{Title: tt.title}).IsTech
+		if showBoolp(got) != showBoolp(tt.want) {
+			t.Errorf("Derive(%q).IsTech = %s, want %s", tt.title, showBoolp(got), showBoolp(tt.want))
+		}
+	}
+}

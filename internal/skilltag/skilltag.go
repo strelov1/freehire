@@ -163,6 +163,10 @@ func Parse(text string, opts ...Option) []string {
 	}
 	strong := map[string]struct{}{}
 	weak := map[string]struct{}{}
+	// Emitted unconditionally, but NOT counted as corroboration. A discipline phrase
+	// is certain enough to tag on its own, yet it is a concept rather than a named
+	// technology, so it cannot vouch for the gated single-word canonicals.
+	standalone := map[string]struct{}{}
 
 	// Acronym pass: case-sensitive whole-word match over case-preserved text, so an
 	// UPPERCASE acronym resolves while its ambiguous lowercase form does not. Uses a
@@ -177,7 +181,14 @@ func Parse(text string, opts ...Option) []string {
 	norm := normalize(text)
 	for _, m := range phraseMatchers {
 		if m.matches(norm) {
-			strong[m.canonical] = struct{}{}
+			// A phrase that names a discipline rather than a technology tags itself
+			// but must not rescue the gated single-word canonicals: "AI-powered
+			// content marketing" describes the prose, not an AI requirement.
+			if nonCorroboratingPhrases[m.canonical] {
+				standalone[m.canonical] = struct{}{}
+			} else {
+				strong[m.canonical] = struct{}{}
+			}
 		}
 	}
 	for _, tok := range wordTokens(norm) {
@@ -190,11 +201,15 @@ func Parse(text string, opts ...Option) []string {
 		}
 	}
 	// A weak (ambiguous-word) match survives only when corroborated by a strong tech
-	// token in the same text; alone it is English-word noise and is dropped.
+	// token in the same text; alone it is English-word noise and is dropped. The
+	// standalone set is added afterwards, so it can never act as that corroborator.
 	if len(strong) > 0 {
 		for c := range weak {
 			strong[c] = struct{}{}
 		}
+	}
+	for c := range standalone {
+		strong[c] = struct{}{}
 	}
 	return stringset.Sorted(strong)
 }

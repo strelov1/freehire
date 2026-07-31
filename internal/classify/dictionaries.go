@@ -391,6 +391,40 @@ var categoryTable = []aliasEntry{
 	{"content writer", "marketing"},
 	{"brand manager", "marketing"},
 	{"public relations", "marketing"},
+	// The disciplines the coarse block did not name. Most were not merely unresolved
+	// — the generic "manager" alias further down claimed them for `management`. Each
+	// is a phrase on purpose: the bare nouns ("growth", "content", "performance",
+	// "geo") name technical roles too, and a standalone alias would take "Growth
+	// Engineer" out of the tech categories and off the enrichment budget.
+	{"demand generation", "marketing"},
+	{"growth marketer", "marketing"},
+	{"paid social", "marketing"},
+	{"paid media", "marketing"},
+	{"paid search", "marketing"},
+	{"media buyer", "marketing"},
+	{"pr manager", "marketing"},
+	{"pr specialist", "marketing"},
+	{"link building", "marketing"},
+	{"content creator", "marketing"},
+	// Generative-engine optimization: the industry names one job three ways. Only the
+	// spelled-out forms and the bound abbreviation resolve — a bare "geo" is
+	// geography, and "Geo Data Analyst" must stay with the analysts.
+	{"generative engine optimization", "marketing"},
+	{"answer engine optimization", "marketing"},
+	{"generative search optimization", "marketing"},
+	{"geo specialist", "marketing"},
+	{"geo manager", "marketing"},
+	{"aeo specialist", "marketing"},
+	{"aeo manager", "marketing"},
+	// Russian marketing titles, as full surface forms — the matcher needs word
+	// boundaries, so a stem would not match. The hyphenated compounds were claimed
+	// by the bare "менеджер" alias before this block existed.
+	{"таргетолог", "marketing"},
+	{"контент-менеджер", "marketing"},
+	{"бренд-менеджер", "marketing"},
+	{"пиар-менеджер", "marketing"},
+	{"пиар-специалист", "marketing"},
+	{"копирайтер", "marketing"},
 	// solutions_engineering (technical pre-sales) before bare "sales" so "Sales
 	// Engineer" wins over sales. "solutions architect" stays in architecture (above).
 	{"solutions engineer", "solutions_engineering"},
@@ -404,6 +438,13 @@ var categoryTable = []aliasEntry{
 	{"forward deployed engineer", "solutions_engineering"},
 	{"пресейл", "solutions_engineering"},
 	{"пресейл-инженер", "solutions_engineering"},
+	// GTM engineering builds the outbound data pipeline rather than selling, but the
+	// split from RevOps is not title-separable, so it rides with the rest of that
+	// cluster. Only the phrase resolves — the bare "gtm" names Google Tag Manager in
+	// a requirements list, and that meaning belongs to the skill dictionary.
+	{"gtm engineer", "sales"},
+	{"go-to-market engineer", "sales"},
+	{"go to market engineer", "sales"},
 	{"sales", "sales"},
 	{"account executive", "sales"},
 	{"business development", "sales"},
@@ -569,6 +610,12 @@ var categoryTable = []aliasEntry{
 	{"developer community manager", "developer_relations"},
 	{"деврел", "developer_relations"},
 	{"технический евангелист", "developer_relations"},
+	// Community management is marketing's, but only once developer relations has had
+	// its say: a "Community Manager, Developer Relations" runs a developer community,
+	// not a brand's social presence. Sits below the DevRel block for that reason and
+	// above the bare "manager" so the unqualified title still resolves.
+	{"community manager", "marketing"},
+	{"комьюнити-менеджер", "marketing"},
 	// Bare "manager" resolves last so a functional prefix wins ("Sales Manager"
 	// → sales, "Operations Manager" → operations, "Finance Manager" → finance); a
 	// manager title with no recognized function falls through to management.

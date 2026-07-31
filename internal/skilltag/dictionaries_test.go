@@ -111,3 +111,18 @@ func TestNonEngineeringCanonicalsAreReal(t *testing.T) {
 		}
 	}
 }
+
+// nonCorroboratingPhrases names canonicals by hand, so it can drift away from the
+// phrase list it describes: a renamed canonical would silently start corroborating
+// again, and nothing else would fail. This pins the two together.
+func TestNonCorroboratingPhrasesAllExist(t *testing.T) {
+	declared := make(map[string]bool, len(phraseAliases))
+	for _, p := range phraseAliases {
+		declared[p.canonical] = true
+	}
+	for c := range nonCorroboratingPhrases {
+		if !declared[c] {
+			t.Errorf("nonCorroboratingPhrases names %q, which no phrase alias emits", c)
+		}
+	}
+}

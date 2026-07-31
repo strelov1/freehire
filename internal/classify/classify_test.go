@@ -486,3 +486,95 @@ func TestParse_DesignSplit(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_GTMEngineering pins the go-to-market engineering family to `sales`,
+// where revenue-operations titles already sit. The role builds the outbound data
+// pipeline rather than selling, but the split is not title-separable from RevOps,
+// and the granularity that matters lives in the role dictionary, not here. The
+// block sits before the bare `sales` alias, so the guards pin the neighbours it
+// must not disturb.
+func TestParse_GTMEngineering(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		{"GTM Engineer", "sales"},
+		{"Go-To-Market Engineer", "sales"},
+		{"Go To Market Engineer", "sales"},
+		{"Senior GTM Engineer", "sales"},
+
+		// precision — the neighbours of the inserted block must not shift
+		{"Sales Engineer", "solutions_engineering"},
+		{"Sales Manager", "sales"},
+		{"Revenue Operations Manager", "sales"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// TestParse_MarketingDisciplines covers the marketing disciplines the category
+// dictionary did not name. Most did not merely resolve to nothing — the generic
+// "manager" alias further down the table claimed them for `management`, so this
+// block corrects wrong data, not just missing data. Every alias is a phrase: the
+// bare discipline nouns ("growth", "content", "performance") also occur in
+// technical titles, and the guards at the end pin the ones they must not claim.
+func TestParse_MarketingDisciplines(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// were claimed by the generic "manager" alias
+		{"Demand Generation Manager", "marketing"},
+		{"Paid Media Manager", "marketing"},
+		{"Community Manager", "marketing"},
+		{"PR Manager", "marketing"},
+		{"Answer Engine Optimization Manager", "marketing"},
+		// resolved to nothing
+		{"Growth Marketer", "marketing"},
+		{"Paid Social Specialist", "marketing"},
+		{"Paid Search Manager", "marketing"},
+		{"Media Buyer", "marketing"},
+		{"Link Building Specialist", "marketing"},
+		{"Content Creator", "marketing"},
+		{"Generative Engine Optimization Specialist", "marketing"},
+		{"GEO Specialist", "marketing"},
+
+		// precision — a marketing word inside a technical title must not claim it
+		{"Growth Engineer", ""},
+		{"Content Platform Engineer", "devops"},
+		{"Geo Data Analyst", "data_analytics"},
+		{"Community Manager, Developer Relations", "developer_relations"},
+		// already-resolving marketing titles must not shift
+		{"Growth Marketing Manager", "marketing"},
+		{"Product Marketing Manager", "marketing"},
+		{"Content Designer", "technical_writing"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
+// TestParse_MarketingDisciplinesRU covers the Russian marketing titles. As
+// elsewhere in this dictionary they are listed as full surface forms rather than
+// stems, because the matcher requires word boundaries. Most were claimed by the
+// bare "менеджер" alias before this block existed.
+func TestParse_MarketingDisciplinesRU(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		{"Таргетолог", "marketing"},
+		{"Контент-менеджер", "marketing"},
+		{"Бренд-менеджер", "marketing"},
+		{"Пиар-менеджер", "marketing"},
+		{"Копирайтер", "marketing"},
+		{"Комьюнити-менеджер", "marketing"},
+		{"SMM-менеджер", "marketing"},
+
+		// already resolving — must not shift
+		{"Интернет-маркетолог", "marketing"},
+		{"Менеджер по персоналу", "hr"},
+		{"Менеджер по продажам", "sales"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}

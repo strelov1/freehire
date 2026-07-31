@@ -225,10 +225,48 @@ var namedRoleTable = []struct {
 	// Marketing (granular names the coarse "marketing" category flattens).
 	{"product_marketing_manager", "Product Marketing Manager", []string{"product marketing manager", "pmm"}},
 	{"growth_marketer", "Growth Marketer", []string{"growth marketer", "growth marketing manager"}},
+	// Search optimization split into its four working disciplines. The ordering is by
+	// alias LENGTH, not specificity, so the qualified spellings that contain a
+	// shorter rival alias need their own entry: "technical seo" (13) loses to "seo
+	// specialist" (14) and would hand "Technical SEO Specialist" to the coarse role.
+	// The unqualified spellings ("Technical SEO Engineer") ride the short alias.
+	{"technical_seo_specialist", "Technical SEO Specialist", []string{"technical seo", "technical seo specialist", "technical seo manager"}},
+	{"content_seo_specialist", "Content SEO Specialist", []string{"content seo", "content seo specialist", "content seo manager"}},
+	{"link_building_specialist", "Link Building Specialist", []string{"link building", "linkbuilding", "seo outreach"}},
+	{"seo_analyst", "SEO Analyst", []string{"seo analyst"}},
+	// Generative-engine optimization. GEO, AEO and GSO name the same job, so they
+	// collapse to one slug instead of splitting the facet three ways. Only the
+	// spelled-out forms and the bound abbreviation resolve: a bare "geo" is
+	// geography, and "Geo Data Analyst" must stay with the analysts.
+	{"geo_specialist", "Generative Engine Optimization Specialist", []string{
+		"generative engine optimization", "answer engine optimization",
+		"generative search optimization", "geo specialist", "geo manager",
+		"aeo specialist", "aeo manager",
+	}},
 	{"seo_specialist", "SEO Specialist", []string{"seo specialist", "seo manager"}},
 	{"content_strategist", "Content Strategist", []string{"content strategist", "content marketer"}},
 	{"community_manager", "Community Manager", []string{"community manager"}},
-	{"social_media_manager", "Social Media Manager", []string{"social media manager"}},
+	{"social_media_manager", "Social Media Manager", []string{"social media manager", "smm manager", "smm specialist"}},
+	// The function specialists a social media manager coordinates. They are peers of
+	// the community manager, not rungs under the manager, so each keeps its own slug.
+	{"paid_social_specialist", "Paid Social Specialist", []string{"paid social"}},
+	{"content_creator", "Content Creator", []string{"content creator", "ugc creator", "content producer"}},
+	// The funnel-owning functions. CRM and retention marketing fold into lifecycle:
+	// they name the same post-conversion work, and an unqualified "CRM Manager" is as
+	// often a Salesforce administrator, so only the qualified phrases resolve.
+	{"demand_generation_manager", "Demand Generation Manager", []string{"demand generation", "demand gen"}},
+	{"lifecycle_marketing_manager", "Lifecycle Marketing Manager", []string{"lifecycle marketing", "crm marketing", "retention marketing"}},
+	{"performance_marketer", "Performance Marketer", []string{"performance marketing", "paid media", "media buyer"}},
+	{"marketing_operations_manager", "Marketing Operations Manager", []string{"marketing operations", "marketing ops"}},
+	{"brand_manager", "Brand Manager", []string{"brand manager", "brand marketing manager"}},
+	{"pr_manager", "PR Manager", []string{"pr manager", "pr specialist", "public relations manager"}},
+	{"influencer_marketing_manager", "Influencer Marketing Manager", []string{"influencer marketing"}},
+	{"copywriter", "Copywriter", []string{"copywriter"}},
+	{"marketing_analyst", "Marketing Analyst", []string{"marketing analyst"}},
+	// GTM engineering builds the outbound revenue pipeline. It sits with the sales
+	// category (see internal/classify) but is its own craft. Only the phrase resolves:
+	// a bare "gtm" names the go-to-market discipline, which is a skill, not this role.
+	{"gtm_engineer", "GTM Engineer", []string{"gtm engineer", "go-to-market engineer", "go to market engineer"}},
 
 	// Sales & customer success.
 	{"sdr", "Sales Development Representative", []string{"sales development representative", "sdr"}},
