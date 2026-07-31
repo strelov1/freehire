@@ -84,8 +84,10 @@
 
 ## 8. Finish
 
-- [ ] 8.1 `requesting-code-review` on the whole diff; act on Critical and Important via
-      `receiving-code-review`.
+- [x] 8.1 Reviewed the whole diff (inline, not via subagent — this session forbids dispatching
+      one). Two real defects found and fixed: repoRelative keyed baselines off a substring
+      match, and a stray root pnpm-lock.yaml. A third surfaced on rebase: main had moved and
+      both baselines were stale.
 - [ ] 8.2 `finishing-a-development-branch` — integrate the branch.
 - [ ] 8.3 `/opsx:archive` then `/opsx:sync`.
 - [ ] 8.4 Internal-only change — no changelog entry. Confirm that call rather than assuming it.
