@@ -15,8 +15,8 @@ import (
 
 // Presets a session can run under. The preset selects the system prompt and the
 // registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048 and 0049), so a
-// new preset is a migration and not only a constant.
+// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049 and 0062), so
+// a new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
 	PresetTailor = "tailor"
@@ -26,6 +26,10 @@ const (
 	// PresetBrowse is a conversation held from the browser extension's side panel.
 	// It is the only preset whose agent can see the page the candidate is on.
 	PresetBrowse = "browse"
+	// PresetInterview is the mock interview held against one application. Like a
+	// tailoring session it is bound to a vacancy, but to no CV: it reads the CV and
+	// the fit analysis and edits neither.
+	PresetInterview = "interview"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that

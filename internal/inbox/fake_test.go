@@ -16,16 +16,18 @@ var errNoRows = errors.New("no rows in result set")
 // matters here (a link left alone, a classification not written).
 type fakeQueries struct {
 	// reads
-	list  []db.ListEmailsRow
-	total int64
-	state []db.CountEmailsByStateRow
-	email db.GetEmailRow
-	job   db.Job
+	list       []db.ListEmailsRow
+	total      int64
+	state      []db.CountEmailsByStateRow
+	email      db.GetEmailRow
+	job        db.Job
+	invitation db.GetInterviewInvitationRow
 
 	// failures to inject
-	jobErr     error
-	stageErr   error
-	advanceErr error
+	invitationErr error
+	jobErr        error
+	stageErr      error
+	advanceErr    error
 	// noRows makes every mutation match nothing, as it would for another user's mail.
 	noRows bool
 
@@ -59,6 +61,10 @@ func (f *fakeQueries) CountEmailsByState(context.Context, int64) ([]db.CountEmai
 
 func (f *fakeQueries) GetEmail(context.Context, db.GetEmailParams) (db.GetEmailRow, error) {
 	return f.email, nil
+}
+
+func (f *fakeQueries) GetInterviewInvitation(context.Context, db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error) {
+	return f.invitation, f.invitationErr
 }
 
 func (f *fakeQueries) GetJobBySlug(context.Context, string) (db.Job, error) {

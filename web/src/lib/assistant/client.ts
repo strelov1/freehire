@@ -45,6 +45,23 @@ export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => voi
   );
 }
 
+/**
+ * Speak first in a rehearsal. The candidate opened it from an application and has nothing
+ * to type, so the opening turn carries a brief the server chose — this call has no text for
+ * the same reason the autopilot's does not.
+ *
+ * The backend refuses a rehearsal that already has a transcript, so a reload replays the
+ * conversation instead of restarting the interview.
+ */
+export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+  return streamTurn(
+    `${BASE}/sessions/${encodeURIComponent(sessionId)}/opening`,
+    {},
+    'could not open the rehearsal',
+    onEvent,
+  );
+}
+
 /** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
  *  and frame decoding have a single implementation. */
 function streamTurn(

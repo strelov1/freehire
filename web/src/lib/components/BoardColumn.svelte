@@ -12,6 +12,7 @@
     onfinalize,
     onopen,
     onfollowup,
+    onrehearse,
   }: {
     id: BoardColumnId;
     label: string;
@@ -22,6 +23,7 @@
     // which satisfies MyJob. The parent can widen back to BoardItem via cast.
     onopen: (item: MyJob) => void;
     onfollowup: (item: MyJob) => void;
+    onrehearse: (item: MyJob) => void;
   } = $props();
 
   // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
@@ -48,7 +50,7 @@
   >
     {#each items as item (item.id)}
       <div>
-        <BoardCard {item} {onopen} {onfollowup} />
+        <BoardCard {item} {onopen} {onfollowup} {onrehearse} />
       </div>
     {/each}
   </div>

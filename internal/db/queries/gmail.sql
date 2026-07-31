@@ -154,6 +154,40 @@ WHERE user_id = $1
     OR body_text ILIKE '%' || sqlc.arg(q) || '%'
   );
 
+-- name: GetInterviewInvitation :one
+-- The employer's own description of an upcoming interview, for the rehearsal context:
+-- the most recent message classified as an invitation and linked to this application.
+--
+-- It is a query rather than a tool over ListEmails for two reasons. ListEmails cannot
+-- express "for this vacancy" — it filters by link STATE, not by which job — and
+-- filtering its page in Go would break pagination. And unlike GetEmail, this reads
+-- without marking: read_at means a human opened the message, so an agent that consumed
+-- it here would zero its owner's unread count.
+--
+-- Both bodies are returned, not just the text one: ATS senders routinely mail HTML
+-- with no text/plain part, so body_text is empty exactly where an invitation is most
+-- likely to come from. The caller renders one down to the other.
+--
+-- Only a CONFIRMED link counts: job_id is set by the deterministic matcher, while a
+-- model's confident guess waits in suggested_job_id for the candidate to accept. An
+-- unconfirmed guess putting another employer's interview into the rehearsal's context
+-- is worse than the rehearsal having no invitation at all.
+--
+-- The signal is spelled here and as mailclassify.SignalInterviewInvitation in Go;
+-- renaming the vocabulary term means changing both, and this side fails by matching
+-- nothing rather than by failing to compile.
+--
+-- Owner-scoped like every other mail query, and soft-deleted mail is invisible.
+SELECT id, from_addr, from_name, subject, body_text, body_html, received_at,
+    (read_at IS NOT NULL)::boolean AS read
+FROM emails
+WHERE user_id = $1
+  AND job_id = sqlc.arg(job_id)::bigint
+  AND status_signal = 'interview_invitation'
+  AND deleted_at IS NULL
+ORDER BY received_at DESC, id DESC
+LIMIT 1;
+
 -- name: GetEmail :one
 SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
     emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,

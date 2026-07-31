@@ -40,6 +40,7 @@ func TestOnlyTheChatPresetOffersTheMailTools(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 		{UserID: 3, Preset: assistant.PresetProfile},
 		{UserID: 3, Preset: assistant.PresetBrowse},
+		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
 	} {
 		reg := presetAPI().registry(sess, uuid.New())
 		for _, name := range reg.Names() {
@@ -87,6 +88,7 @@ func TestPromptOnlyNamesToolsThePresetHas(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetProfile},
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
 	} {
 		registered := presetAPI().registry(sess, uuid.New()).Names()
 		// Only names that are tools SOMEWHERE can be judged; a backticked word that
@@ -112,6 +114,10 @@ func allRegisteredToolNames(t *testing.T) []string {
 		{UserID: 3, Preset: assistant.PresetChat},
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+		// Every preset that registers a tool of its own belongs here, or the guard above
+		// cannot see that tool at all: a name no session offers is not in `everywhere`,
+		// so a prompt naming it passes unchallenged.
+		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
 	} {
 		all = append(all, presetAPI().registry(sess, uuid.New()).Names()...)
 	}

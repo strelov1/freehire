@@ -40,6 +40,7 @@ type Queries interface {
 	CountEmails(ctx context.Context, arg db.CountEmailsParams) (int64, error)
 	CountEmailsByState(ctx context.Context, userID int64) ([]db.CountEmailsByStateRow, error)
 	GetEmail(ctx context.Context, arg db.GetEmailParams) (db.GetEmailRow, error)
+	GetInterviewInvitation(ctx context.Context, arg db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error)
 	GetJobBySlug(ctx context.Context, publicSlug string) (db.Job, error)
 	AgentTriageEmail(ctx context.Context, arg db.AgentTriageEmailParams) (int64, error)
 	LinkEmailToJob(ctx context.Context, arg db.LinkEmailToJobParams) (int64, error)
@@ -264,6 +265,34 @@ func (s *Service) Get(ctx context.Context, userID, id int64) (Message, error) {
 		LinkedCompany:    pgStr(row.LinkedCompany),
 		SuggestedSlug:    pgStr(row.SuggestedSlug),
 		SuggestedCompany: pgStr(row.SuggestedCompany),
+	}, nil
+}
+
+// InterviewInvitation reads the employer's most recent invitation to interview for
+// one application, so a rehearsal can open on what the employer actually said about
+// the format rather than on a guess.
+//
+// It lives here rather than in the caller for the reason the package doc gives: the
+// rule that this read leaves read_at alone is the mail store's rule, and a second
+// reader reaching past this package would not meet it. A candidate with no such mail
+// gets the store's no-rows error — an ordinary answer, since plenty of interviews are
+// arranged where we cannot see them.
+//
+// The Message it returns is a projection, not a full one: the query selects what a
+// rehearsal reads, so Source, ExternalID and the linked/suggested slugs are empty.
+func (s *Service) InterviewInvitation(ctx context.Context, userID, jobID int64) (Message, error) {
+	row, err := s.q.GetInterviewInvitation(ctx, db.GetInterviewInvitationParams{UserID: userID, JobID: jobID})
+	if err != nil {
+		return Message{}, err
+	}
+	return Message{
+		ID: row.ID, FromAddr: row.FromAddr, FromName: row.FromName,
+		Subject: row.Subject, ReceivedAt: row.ReceivedAt.Time, Read: row.Read,
+		// The readable body, not the raw column: an invitation usually comes from an
+		// ATS, and an ATS routinely mails HTML with no text/plain part at all.
+		BodyText:     maillink.ReadableBody(row.BodyText, row.BodyHtml),
+		StatusSignal: string(mailclassify.SignalInterviewInvitation),
+		LinkState:    LinkStateLinked,
 	}, nil
 }
 

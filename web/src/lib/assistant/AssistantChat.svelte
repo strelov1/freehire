@@ -9,7 +9,7 @@
     deleteSession,
     SessionNotFound,
   } from '$lib/assistant/api';
-  import { sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
+  import { openRehearsal, sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { splitPresentingCalls } from '$lib/assistant/deck';
   import { renderMarkdown } from '$lib/assistant/markdown';
@@ -97,6 +97,10 @@
   // disables the composer and list while a session load is in flight.
   let sessions = $state<SessionItem[]>([]);
   let activeId = $state<string | null>(null);
+  // The open conversation's preset, as the SERVER records it — not the one this arrival
+  // asked for. A rehearsal is reached by its own address as often as it is created, and
+  // only the server knows which kind of conversation an id names.
+  let activePreset = $state<string | null>(null);
   let switching = $state(false);
   // Creating a chat is a round trip before `switching` is ever set, and each
   // click landing in that window would create a real session on the server.
@@ -149,13 +153,13 @@
    */
   export function startRun() {
     if (!canStartTurn()) return;
-    void dispatch(undefined);
+    void dispatch({ kind: 'autopilot' });
   }
 
   /** Run an opening action — the first turn of a conversation nobody has typed into yet. */
   function runOpening(action: OpeningAction) {
     if (!canStartTurn()) return;
-    void dispatch(action.kind === 'message' ? action.text : undefined);
+    void dispatch(action.kind === 'message' ? { kind: 'message', text: action.text } : { kind: 'autopilot' });
   }
 
   /** The conversation the host is currently being navigated to, or null. Held until the
@@ -252,7 +256,13 @@
       if (arrival.kickoff && chat.messages.length === 0) {
         const opening = arrival.kickoff;
         arrival.kickoff = undefined;
-        void dispatch(opening);
+        void dispatch({ kind: 'message', text: opening });
+      } else if (activePreset === 'interview' && chat.messages.length === 0) {
+        // A rehearsal speaks first. There is no kickoff text to carry because the brief
+        // is the server's — the candidate came here from an application, and the agent
+        // opens by reading its context. The empty-transcript guard is the client half of
+        // the backend's: a reload replays the conversation rather than restarting it.
+        void dispatch({ kind: 'opening' });
       }
     } catch (err) {
       report(err, 'Could not reach the assistant.');
@@ -323,6 +333,7 @@
       chat = initChat();
       queue = [];
       activeId = id;
+      activePreset = null;
       // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
       // the moment activeId changes, which is during the await — set it late and the
       // effect has already reopened the conversation we just left.
@@ -336,6 +347,7 @@
         notFound = true;
         return;
       }
+      activePreset = meta.preset;
       let next = initChat();
       for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
       chat = next;
@@ -444,7 +456,7 @@
     if (queue.length > 0) {
       const [next, ...rest] = queue;
       queue = rest;
-      if (next) void dispatch(next.text);
+      if (next) void dispatch({ kind: 'message', text: next.text });
     }
   }
 
@@ -479,12 +491,15 @@
       void scrollToBottom();
       return;
     }
-    void dispatch(text);
+    void dispatch({ kind: 'message', text });
   }
 
-  // `text` undefined means the unattended run: the same turn, streamed the same way, but
-  // opened by the server's brief rather than by anything typed here.
-  async function dispatch(text: string | undefined) {
+  // The three ways a turn begins. Two of them carry no text, because their brief is the
+  // server's: the unattended tailoring run, and a rehearsal's opening — the candidate
+  // arrived from an application with nothing to type.
+  type TurnStart = { kind: 'message'; text: string } | { kind: 'autopilot' } | { kind: 'opening' };
+
+  async function dispatch(start: TurnStart) {
     const id = activeId;
     if (!id) return;
     error = null;
@@ -500,12 +515,14 @@
       }
     }
     let started: Turn;
-    if (text === undefined) {
+    if (start.kind === 'autopilot') {
       runActive = true;
       onRunStateChange?.(true);
       started = startAutopilot(id, (event) => onEvent(id, event));
+    } else if (start.kind === 'opening') {
+      started = openRehearsal(id, (event) => onEvent(id, event));
     } else {
-      started = sendTurn(id, text, (event) => onEvent(id, event));
+      started = sendTurn(id, start.text, (event) => onEvent(id, event));
     }
     turn = started;
     void scrollToBottom();

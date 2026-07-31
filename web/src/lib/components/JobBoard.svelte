@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { pushState } from '$app/navigation';
+  import { goto, pushState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import type { MyJob } from '$lib/types';
   import { BOARD_COLUMNS, columnOf, type BoardColumnId, type BoardItem, type ClosedOutcome } from '$lib/board';
+  import { createRehearsal } from '$lib/assistant/api';
   import BoardColumn from './BoardColumn.svelte';
   import JobDrawer from './JobDrawer.svelte';
   import FollowUpDialog from './FollowUpDialog.svelte';
@@ -35,6 +36,10 @@
   // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
   // the card's silence badge and closes back to the board.
   let followUpItem = $state.raw<BoardItem | null>(null);
+  // A rehearsal is one round trip before the navigation, so a second click in that
+  // window would mint a second conversation for the same interview.
+  let rehearsing = $state(false);
+  let rehearsalError = $state<string | null>(null);
 
   // Lay the fetched rows out into the columns and open the deep-linked drawer once.
   // The 'board' filter returns saved ∪ applied ∪ stage; saved-only rows are dropped
@@ -219,6 +224,22 @@
     followUpItem = item as BoardItem;
   }
 
+  // Start a rehearsal and hand the conversation over to the assistant page, which opens
+  // it — the agent speaks first, so there is nothing to type on the way in. The board
+  // does not wait for the turn: creating the session is the whole of its job here.
+  async function startRehearsal(item: MyJob) {
+    if (rehearsing) return;
+    rehearsing = true;
+    try {
+      const session = await createRehearsal(item.job.public_slug);
+      await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
+    } catch {
+      rehearsalError = 'Could not start the rehearsal.';
+    } finally {
+      rehearsing = false;
+    }
+  }
+
   // Stamp the recorded chase onto the card in place. The board holds the only copy
   // of the row, and reloading the whole listing to learn one timestamp is noise —
   // the same optimistic treatment stage moves already get.
@@ -239,6 +260,10 @@
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your board." />
 {:else}
+  {#if rehearsalError}
+    <!-- The board is still usable, so this reports beside it rather than replacing it. -->
+    <p class="mb-2 text-sm text-warning-strong" role="alert">{rehearsalError}</p>
+  {/if}
   <div class="flex gap-3 overflow-x-auto pb-2">
     {#each BOARD_COLUMNS as col (col.id)}
       <BoardColumn
@@ -249,6 +274,7 @@
         {onfinalize}
         onopen={openDrawer}
         onfollowup={openFollowUp}
+        onrehearse={startRehearsal}
       />
     {/each}
   </div>

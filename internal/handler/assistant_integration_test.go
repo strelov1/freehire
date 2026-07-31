@@ -54,6 +54,10 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 	queries := db.New(pool)
 	h := &assistantHandlers{
 		store: assistant.NewStore(queries), queries: queries,
+		// A rehearsal resolves its application through the same store the production
+		// wiring gives it; without this the ownership check reports the assistant
+		// unavailable and the 404 under test would never be reached.
+		stages: queries,
 		// The evidence gate answers from the bank, and the production wiring attaches it in
 		// newAssistantHandlers. Without it here the run could write an unevidenced claim and
 		// the test that says it cannot would pass for the wrong reason.
@@ -326,6 +330,14 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create tailoring session: %v", err)
 	}
+	// A rehearsal is bound to a vacancy, but unlike a tailoring session it needs nothing
+	// but itself to continue: the interview is days away, the candidate closes the tab,
+	// and the conversation has to be somewhere they can find it.
+	jobID := seedApplication(t, pool, userID, "rail-rehearsal", "interview")
+	rehearsal, err := h.store.CreateSession(context.Background(), userID, assistant.PresetInterview, nil, &jobID)
+	if err != nil {
+		t.Fatalf("create rehearsal session: %v", err)
+	}
 
 	resp := assistantRequest(t, app, fiber.MethodGet, "/api/v1/assistant/sessions", cookie, nil)
 	var list struct {
@@ -337,10 +349,13 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	var sawBrowsing bool
+	var sawBrowsing, sawRehearsal bool
 	for _, s := range list.Data {
 		if s.ID == browsing.ID.String() {
 			sawBrowsing = true
+		}
+		if s.ID == rehearsal.ID.String() {
+			sawRehearsal = true
 		}
 		if s.ID == tailoring.ID.String() {
 			t.Errorf("the rail contains the tailoring session %s; it is reached through its CV, not here", tailoring.ID)
@@ -348,6 +363,9 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	}
 	if !sawBrowsing {
 		t.Errorf("the rail = %+v, want it to contain the browsing session %s", list.Data, browsing.ID)
+	}
+	if !sawRehearsal {
+		t.Errorf("the rail = %+v, want it to contain the rehearsal %s", list.Data, rehearsal.ID)
 	}
 }
 

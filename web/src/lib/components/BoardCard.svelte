@@ -1,22 +1,32 @@
 <script lang="ts">
-  import { Clock, Mail, MessageSquare, Send } from '@lucide/svelte';
+  import { Clock, Mail, MessageSquare, Mic, Send } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { Badge } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
   import { canFollowUp, chasedLabel } from '$lib/followup';
+  import { canRehearse } from '$lib/rehearsal';
   import type { MyJob } from '$lib/types';
 
   let {
     item,
     onopen,
     onfollowup,
-  }: { item: MyJob; onopen: (item: MyJob) => void; onfollowup: (item: MyJob) => void } = $props();
+    onrehearse,
+  }: {
+    item: MyJob;
+    onopen: (item: MyJob) => void;
+    onfollowup: (item: MyJob) => void;
+    onrehearse: (item: MyJob) => void;
+  } = $props();
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // Both readings of a chased application, side by side: the badge says the employer
   // is still quiet, the label says we already prodded them. Neither replaces the other.
   const offersFollowUp = $derived(canFollowUp(item));
   const chased = $derived(chasedLabel(item));
+  // The two actions never appear together: a follow-up is offered on silence, a
+  // rehearsal once an employer has engaged, and an application is not both.
+  const offersRehearsal = $derived(canRehearse(item));
 </script>
 
 <!-- The card is a div, not a button: the follow-up action is a second control, and a
@@ -92,6 +102,16 @@
         <title>Has notes</title>
         <path d="M8 7h8M8 12h8M8 17h5" />
       </svg>
+    {/if}
+    {#if offersRehearsal}
+      <button
+        type="button"
+        onclick={() => onrehearse(item)}
+        class="relative z-10 ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Mic class="size-3 shrink-0" aria-hidden="true" />
+        Rehearse
+      </button>
     {/if}
     {#if offersFollowUp}
       <button

@@ -366,6 +366,12 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	if preset == assistant.PresetChat {
 		tools = append(tools, h.assistantInboxTools()...)
 	}
+	// A rehearsal is bound to a vacancy and to no CV. Without the binding it has nothing
+	// to rehearse against, so it degrades to a plain chat rather than registering a
+	// context tool pointed at nothing — the same rule a CV-less tailoring session follows.
+	if preset == assistant.PresetInterview && sess.JobID != nil {
+		tools = append(tools, h.assistantInterviewTools(*sess.JobID)...)
+	}
 	// Only a browsing session has a browser on the other end of the relay. Offering
 	// the page tool anywhere else would give the model a call that can only fail.
 	if preset == assistant.PresetBrowse {

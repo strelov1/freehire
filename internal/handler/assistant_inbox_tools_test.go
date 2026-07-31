@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -38,6 +39,12 @@ func (m *mailStore) CountEmailsByState(context.Context, int64) ([]db.CountEmails
 }
 func (m *mailStore) GetEmail(context.Context, db.GetEmailParams) (db.GetEmailRow, error) {
 	return db.GetEmailRow{ID: 812, Subject: "Interview with Acme"}, nil
+}
+
+// No invitation is the honest default for a mailbox nothing seeded: most applications
+// never carry one, and a blank row would read as "there is an invitation, it is empty".
+func (m *mailStore) GetInterviewInvitation(context.Context, db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error) {
+	return db.GetInterviewInvitationRow{}, pgx.ErrNoRows
 }
 func (m *mailStore) GetJobBySlug(context.Context, string) (db.Job, error) {
 	return db.Job{ID: 42}, nil

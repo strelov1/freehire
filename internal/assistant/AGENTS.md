@@ -62,7 +62,7 @@ refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
 rather than an echo (a tool result is replayed into context on every later turn).
 
-**Presets.** A session records `chat`, `tailor`, `profile` or `browse`. The vocabulary
+**Presets.** A session records `chat`, `tailor`, `profile`, `browse` or `interview`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
 schema change and not just a Go constant. The preset selects the system prompt and the
 registered tools and nothing else, which is why one chat component serves
@@ -79,6 +79,35 @@ would have been instructed at length about tools it had not been given.
 `TestPromptOnlyNamesToolsThePresetHas` is the other half of that guard: every tool a
 preset's prompt backticks must be registered for that preset. The reverse is not
 required — a tool may go unnamed, its own description is what the model reads.
+
+**Interview rehearsal** (`handler/assistant_interview_tools.go`) is a mock interview against
+one application. It is minted from `POST /assistant/sessions?preset=interview&job=<slug>`,
+binds to a vacancy and to NO CV, and opens itself: `POST /assistant/sessions/:id/opening`
+runs one turn under a server-side brief, the way autopilot does, because the candidate
+arrived from an application with nothing to type. That endpoint refuses a session that
+already has a transcript — a reload replays the conversation rather than restarting the
+interview.
+
+Three decisions carry it:
+
+- **The application row is the authorisation.** `user_jobs` holds one row per (user,
+  vacancy), so its absence answers "not yours" and "no such thing" with the same 404. The
+  same read supplies the stage.
+- **The invitation is placed by the server, not fetched by the agent.** `interview_context`
+  carries the employer's most recent `interview_invitation` for the application, flagged
+  untrusted in the payload itself. Registering the seven inbox tools to retrieve one
+  predictable fact would be paid for on every turn — and `inbox.Service.InterviewInvitation`
+  keeps the read inside the package whose rule it is, so `read_at` stays untouched.
+- **The bank gate is a prompt rule, deliberately.** `experience_add` takes `said` as a
+  string and stamps `stated_in_chat` whoever composed it, so the service cannot tell the
+  candidate's words from the model's paraphrase. The prompt requires their explicit
+  agreement before recording anything; what makes that checkable is the transcript, where
+  both the offer and the "yes" are visible. A rehearsal is where people improvise, and an
+  improvisation banked as evidence is a claim they never made.
+
+The preset carries the discovery, tracking and bank tools plus `interview_context`, and
+NOT the CV tools, the mail tools or `read_current_page`. It runs on the ordinary step
+ceiling: a rehearsal is a dialogue, not an unattended pass.
 
 `browse` is the one preset whose prompt **overrides** the one it extends, rather
 than only adding to it. The chat playbook opens with `get_profile` and a question
