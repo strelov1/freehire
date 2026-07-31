@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accountdelete"
@@ -364,8 +365,16 @@ func Register(app *fiber.App, cfg Config) {
 	//
 	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
 	// and excluded, and a leaked API key must not be able to attribute or hide one.
+	//
+	// Rate-limited because it is the only unauthenticated WRITE in the app: one visit is one
+	// click row plus a stamp on the CV. Two things it bounds. Anyone holding a PDF can loop its
+	// link and fabricate the one number the feature exists to report — a count nobody can forge
+	// is the whole point. And the token is a public company slug plus five random characters, so
+	// the space is small enough that an unthrottled guesser would find live links and be handed a
+	// candidate's personal URL, one 302 at a time.
 	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
-	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+	tracerLimiter := limiter.New(limiter.Config{Max: 60, Expiration: time.Minute})
+	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
 	api := app.Group("/api/v1")
 	// optionalAuth attaches the caller when signed in (cookie or key) but never

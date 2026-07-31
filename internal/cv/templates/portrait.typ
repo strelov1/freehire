@@ -192,7 +192,7 @@
   if projects.len() > 0 {
     section("Projects")
     list(..projects.enumerate().map(entry => {
-    let (i, p) = entry
+      let (i, p) = entry
       let name = s(p, "name")
       let lnk = s(p, "link")
       let bl = arr(p, "bullets")

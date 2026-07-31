@@ -36,9 +36,10 @@ INSERT INTO cv_link_clicks (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: TouchCVLastClick :exec
--- Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Runs in the same
--- transaction as the click insert and only for a countable one — automated traffic and the owner's
--- own clicks are excluded by the caller, not here, so this statement stays a plain stamp.
+-- Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Issued right after
+-- the click insert, as a separate statement rather than in one transaction with it: both writes are
+-- best-effort behind a redirect that must happen regardless, so there is nothing for a rollback to
+-- protect. Whether a click counts is decided by the caller, not here, so this stays a plain stamp.
 --
 -- GREATEST guards against an out-of-order write moving the marker backwards.
 UPDATE cvs c

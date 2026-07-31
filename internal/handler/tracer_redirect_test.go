@@ -241,3 +241,22 @@ func TestARequestWithoutAUserAgentIsAutomated(t *testing.T) {
 		t.Errorf("status = %d — a flagged visitor is still sent on their way", resp.StatusCode)
 	}
 }
+
+// A database blip is not a deleted CV. Collapsing every lookup error into 410 would tell a
+// recruiter the candidate removed their CV — a false statement about a person — and 410 means
+// "gone for good", so a well-behaved gateway would stop retrying a link that is perfectly alive.
+func TestATransientLookupFailureIsNotReportedAsDeletion(t *testing.T) {
+	links := &fakeTracerLinks{lookupErr: errors.New("connection refused")}
+	resp, err := redirectApp(t, links, 0).Test(humanGet("/cv/acme-x7abc"))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode == fiber.StatusGone {
+		t.Error("a transient failure was reported as the CV having been deleted")
+	}
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want %d — transient and retryable", resp.StatusCode, fiber.StatusInternalServerError)
+	}
+}

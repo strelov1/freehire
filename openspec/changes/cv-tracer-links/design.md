@@ -90,7 +90,7 @@ in the render payload (task 5.1b), not in six copies of Typst string handling.
 
 ### `last_click_at` is denormalised onto `cvs`
 
-The click write stamps it in the same transaction, for countable clicks only. The board then
+The click write stamps it immediately after, for countable clicks only — a separate statement, not one transaction: both writes sit behind a redirect that happens either way, so there is nothing for a rollback to protect. The board then
 reads one column instead of a fifth correlated subquery joining three tables.
 
 *Alternative A:* read the event table from the listing. Rejected: `ListUserJobs` is
@@ -203,6 +203,15 @@ is not warranted.
   gated by registration, not the absence of one, and it is what a reputation service will see.
   Mitigated by what is stored, not by the endpoint: destinations must be `http(s)`, must carry
   no embedded credentials, and are recorded against the account that minted them.
+- **The token is guessable in bulk, not one at a time.** `<company-slug>-<5 chars>` is ~25 bits
+  over a prefix anyone can read off the public company directory, so the length argument above —
+  which is about collisions — says nothing about an attacker walking the space. A hit discloses a
+  candidate's personal URL and nothing else, but it is disclosure all the same → the redirect is
+  rate-limited per IP, which is what makes walking 33 million tokens impractical rather than
+  merely tedious.
+- **The redirect is the only unauthenticated write in the app** — one visit is one click row plus
+  a stamp. Anyone holding a PDF can loop its link and fabricate the single number the feature
+  reports → same rate limit; a count nobody can forge is the point of having one.
 - **Visible text that does not match the target is itself a phishing signal** → accepted
   deliberately in exchange for a CV that looks normal.
 - **`ON DELETE CASCADE` kills links in already-sent PDFs** → accepted: erasing one's own data

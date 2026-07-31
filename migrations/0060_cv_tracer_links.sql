@@ -12,7 +12,8 @@
 ALTER TABLE public.cvs ADD COLUMN tracer_links_enabled boolean NOT NULL DEFAULT false;
 
 -- The last time a countable visitor opened a link in this CV. Denormalised from cv_link_clicks and
--- written in the same transaction as the click.
+-- stamped right after the click is recorded — a separate statement, not one transaction: both writes
+-- sit behind a redirect that must happen either way, so there is nothing for a rollback to protect.
 --
 -- ListUserJobs already carries four correlated subqueries per row and is server-rendered; reading
 -- the click history there would add a fifth, joining three tables, because only cvs.job_id connects

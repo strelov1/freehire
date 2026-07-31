@@ -173,7 +173,8 @@ const noCompanyPrefix = "cv"
 // recruiter sees it on hover and in the address bar during the redirect, and their own company's
 // name reads less alarmingly there than an opaque string.
 //
-// Uniqueness is the database's to enforce — the caller retries on the token's unique index — so
+// Uniqueness is the database's to enforce, through the token's unique index. Nothing retries: a
+// collision leaves that one link untraced for this download and mints cleanly on the next one. So
 // this only has to make a collision rare, not impossible.
 func Token(prefix string) string {
 	// crypto/rand.Text draws from the base32 alphabet and cannot fail, so there is no error path

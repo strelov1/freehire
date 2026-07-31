@@ -4,9 +4,11 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/url"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
@@ -49,8 +51,15 @@ const goneBody = `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
 // neither see nor fix.
 func (h *tracerHandlers) Redirect(c *fiber.Ctx) error {
 	link, err := h.links.TracerLinkByToken(c.Context(), c.Params("token"))
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return c.Status(fiber.StatusGone).Type("html").SendString(goneBody)
+	}
+	if err != nil {
+		// Only a token that genuinely is not there earns the 410. A pool timeout or a failover
+		// blip must not tell a recruiter the candidate deleted their CV — that is a false
+		// statement about a person, and 410 means "gone for good", so a well-behaved gateway
+		// would stop retrying a link that is perfectly alive.
+		return err
 	}
 
 	ua := string(c.Request().Header.UserAgent())

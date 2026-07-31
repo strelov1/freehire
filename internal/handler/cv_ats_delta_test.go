@@ -33,13 +33,10 @@ type fakeCVRenderer struct {
 	// photosSeen records the headshot handed to each call, so a test can assert that the
 	// text-only scoring path asks for none.
 	photosSeen [][]byte
-	// hrefsSeen records the link targets each call was asked to substitute, so a test can
-	// assert that an untraced render asks for none.
-	hrefsSeen []cv.LinkHrefs
 }
 
 func (f *fakeCVRenderer) Render(_ context.Context, doc cv.Document, tmpl cv.Template, photo []byte, hrefs cv.LinkHrefs) ([]byte, error) {
-	f.hrefsSeen = append(f.hrefsSeen, hrefs)
+	_ = hrefs
 	f.calls++
 	f.gotTmpl = tmpl
 	f.docsSeen = append(f.docsSeen, doc)

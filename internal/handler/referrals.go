@@ -474,7 +474,11 @@ func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID i
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, ownerID, tmpl), cv.LinkHrefs{})
+	// Untraced on purpose, even for a CV whose owner has tracing on: this PDF is read inside the
+	// product by someone the candidate already shared it with, so a click here says nothing about
+	// an employer opening an application and would only pollute the count.
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl,
+		headshotForTemplate(c.Context(), h.photos, ownerID, tmpl), cv.LinkHrefs{})
 	if err != nil {
 		return err
 	}
