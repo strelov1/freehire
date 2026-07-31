@@ -1,0 +1,38 @@
+---
+title: Design jobs stopped meaning two different jobs
+date: 2026-07-30
+summary: The Design filter held UX designers and mechanical engineers at the same time, because both titles say "design". Draughting now has its own filter, and the design craft finally has roles and skills of its own.
+type: changelog
+tags:
+  - filters
+  - design
+draft: false
+---
+
+If you filtered by **Design**, you got Figma alongside AutoCAD. A product designer, an
+engineer drawing wear liners for mining equipment, and someone laying out a chip all
+landed in the same place — because every one of those titles contains the word "design",
+and that was all the filter was reading.
+
+**Engineering draughting now has its own filter.**
+[Engineering Design](/jobs?category=engineering_design) holds the mechanical, electrical,
+civil and architectural side — around 10,000 open roles that were sitting in your design
+results. [Design](/jobs?category=design) means product, visual and experience design.
+Silicon work went where it belongs, to [Hardware](/jobs?category=hardware), next to the
+hardware and FPGA roles it shares a team with.
+
+The design craft also got the vocabulary it never had:
+
+- **Roles instead of a single "Designer".** Visual Designer, Brand Designer, Motion
+  Designer, Web Designer, UX Researcher, Art Director, Creative Director, Design Ops — and
+  on the engineering side Mechanical, Electrical and Civil Designer, Drafter, BIM
+  Specialist. Before this, five titles out of six collapsed into the one generic role.
+- **Skills the postings actually name.** Illustrator, InDesign, After Effects, Webflow,
+  prototyping, wireframing, user research, usability testing, interaction design,
+  typography, accessibility — plus the CAD and EDA stack on the other side: SolidWorks,
+  CATIA, Creo, Revit, Civil 3D, Altium, KiCad.
+
+One caveat worth stating: a title that says only "Senior Designer" is genuinely ambiguous,
+and we read the title, not the description. Some CAD work still shows up under Design for
+that reason. We would rather leave it than guess — nothing here is inferred, every tag
+comes from a curated dictionary that stays silent when it does not know.
