@@ -25,11 +25,19 @@ outside it: nobody edited them, and they would read as nonsense in a feed of edi
 is still in hand. `Apply` is all-or-nothing: a refused batch leaves the state untouched, so a
 rejected edit is never a partial one.
 
-What a revision STORES, though, is `Diff(sanitized-after, before)` — derived from what will
-actually be written, not from what `Apply` produced. The sanitizer runs afterwards and drops
-entries with nothing in them and bullets that were only whitespace; every index after such a
-drop shifts, and an inverse computed a moment earlier then removes the wrong element. That cost
-a real experience entry in the test that found it.
+Which inverse a revision STORES depends on whether the sanitizer moved anything:
+
+- **It did not** (the overwhelming majority) — `Apply`'s inverse is stored. It reverses each
+  operation in kind, so undoing a reorder is one `move` back.
+- **It did** — `Diff(sanitized-after, before)` is stored instead. The sanitizer drops empty
+  entries and whitespace-only bullets, every index after such a drop shifts, and an inverse
+  computed a moment earlier removes the wrong element. That cost a real experience entry in the
+  test that found it.
+
+Storing the diff unconditionally was the first attempt, and it broke reorders: the differ has no
+`move` in its vocabulary, so a reorder's inverse came back as field-by-field rewrites of every
+entry the move touched — and applying those overwrote whatever had been edited since, which is
+exactly the promise undo makes and must not break.
 
 An absent list and an empty one are the same stored state (the json tags omit both). Both
 `Apply` and `Diff` treat them as one; keeping them distinct had the differ reporting operations

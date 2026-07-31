@@ -93,18 +93,38 @@ type EvidenceGate interface {
 	Publishable(ctx context.Context, userID int64, evidenceID string) error
 }
 
-// claimShapes are the places where writing means asserting something about the candidate.
-// The gate is keyed on these rather than on operation names, which is what closes a hole the
-// old vocabulary had: only two of its eight operations required evidence, so a technology
-// written into a stack line or a skill group arrived uncited while the same claim as a bullet
-// was refused. Same assertion, different syntax.
-var claimShapes = map[string]bool{
-	"summary":                true,
-	"experience[].summary":   true,
-	"experience[].bullets[]": true,
-	"experience[].stack[]":   true,
-	"projects[].bullets[]":   true,
-	"skills[].items[]":       true,
+// presentationShapes are the places that assert NOTHING about the candidate: how the CV
+// looks, and what it is called. Everything else in the document is a claim.
+//
+// The list is inverted on purpose, and the earlier version — a list of the places that DO
+// carry a claim — is why. It named summary, bullets, stack and skills, so a degree nobody
+// earned, a certification nobody holds and a job title nobody had all landed uncited. They
+// are the larger lie: a recruiter checks a diploma, not a bullet's phrasing.
+//
+// Listing what is exempt makes the default safe. A field added to the document is a claim
+// until someone says otherwise, which is the direction this has to fail in.
+var presentationShapes = map[string]bool{
+	"title":             true,
+	"template_id":       true,
+	"style":             true,
+	"style.font_family": true,
+	"style.font_size":   true,
+	"style.line_height": true,
+	"margins":           true,
+	"margins.top":       true,
+	"margins.right":     true,
+	"margins.bottom":    true,
+	"margins.left":      true,
+	// The header is the candidate's identity rather than a claim about their career, and the
+	// agent is denied most of it by policy anyway. What it may still write — the location —
+	// is the candidate's own to state and is not evidenced in the bank.
+	"header":           true,
+	"header.full_name": true,
+	"header.email":     true,
+	"header.phone":     true,
+	"header.location":  true,
+	"header.links":     true,
+	"header.links[]":   true,
 }
 
 var pathIndex = regexp.MustCompile(`\[\d+\]`)
@@ -113,27 +133,17 @@ var pathIndex = regexp.MustCompile(`\[\d+\]`)
 // are recognised as the same kind of place.
 func shapeOf(p Path) string { return pathIndex.ReplaceAllString(string(p), "[]") }
 
-// assertsAClaim reports whether an operation puts a new claim about the candidate on the
-// page. Removing and moving assert nothing: they rearrange or delete what was already said.
+// assertsAClaim reports whether an operation puts a claim about the candidate on the page.
+// Removing and moving assert nothing: they rearrange or delete what was already said.
 //
-// A container counts. Writing `experience[0]` writes the bullets inside it, and `skills[0]`
-// writes the items — so an operation is gated when its shape IS a claim shape or when a claim
-// shape sits inside it. Checking only for an exact match reopened, one level up, exactly the
-// hole this gate was moved onto paths to close.
+// Anything that is not presentation is a claim, INCLUDING a container: writing `experience[0]`
+// writes the bullets inside it, and writing `education` replaces the whole section. A write to
+// a container of presentation — `style` — is exempt only because everything inside it is.
 func assertsAClaim(op Op) bool {
 	if op.Kind != OpSet && op.Kind != OpInsert {
 		return false
 	}
-	shape := shapeOf(op.Path)
-	if claimShapes[shape] {
-		return true
-	}
-	for claim := range claimShapes {
-		if nests(claim, shape) {
-			return true
-		}
-	}
-	return false
+	return !presentationShapes[shapeOf(op.Path)]
 }
 
 // requireEvidence holds the rule the whole tailoring capability exists to keep: a sentence

@@ -217,3 +217,39 @@ func TestUndoingARevisionOfAnotherCVIsRefused(t *testing.T) {
 		t.Fatalf("the wrong document was rewritten: %q", repo.state.Summary)
 	}
 }
+
+// Undoing a reorder must reverse the reorder and nothing else. Deriving the inverse from a
+// diff cannot express that: the differ has no `move` in its vocabulary, so a reorder's inverse
+// came back as field-by-field rewrites of every entry the move touched — and applying those
+// overwrote whatever had been edited since.
+func TestUndoingAMoveLeavesLaterEditsAlone(t *testing.T) {
+	repo := newFakeRepo()
+	e, c := newEditor(repo, nil)
+	to := 1
+
+	_, reorder, err := e.Commit(context.Background(), repo.cvID, 1, Change{
+		Actor: ActorCandidate, Origin: OriginEditor,
+		Ops: []Op{{Kind: OpMove, Path: mustParse(t, "experience[0]"), To: &to}},
+	})
+	if err != nil {
+		t.Fatalf("Commit(move): %v", err)
+	}
+	if repo.state.Experience[0].Company != "Initech" {
+		t.Fatalf("the move did not happen: %+v", repo.state.Experience)
+	}
+
+	// A later edit to the entry that moved.
+	c.at = c.at.Add(2 * time.Minute)
+	commitSet(t, e, repo, ActorCandidate, OriginEditor, "experience[1].role", "Staff Engineer")
+
+	if _, _, err := e.Revert(context.Background(), repo.cvID, 1, reorder.ID); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+
+	if repo.state.Experience[0].Company != "Acme" {
+		t.Fatalf("the reorder was not undone: %+v", repo.state.Experience)
+	}
+	if got := repo.state.Experience[0].Role; got != "Staff Engineer" {
+		t.Fatalf("role = %q, want the later edit to have survived the undo", got)
+	}
+}

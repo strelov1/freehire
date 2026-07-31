@@ -171,20 +171,32 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
-	after, _, err := Apply(before, ch.Ops)
+	applied, applyInverse, err := Apply(before, ch.Ops)
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
 
 	// Sanitize after applying and before storing, exactly as the whole-document path always
 	// has: a change states what was asked for, and the sanitizer decides what is kept.
+	after := applied
 	after.Document.Sanitize()
 
-	// The inverse is derived from what will actually be STORED, not from what Apply produced.
-	// The sanitizer drops entries with nothing in them and bullets that were only whitespace,
-	// and every index after such a drop shifts — so an inverse computed a moment earlier
-	// removes the wrong element. It cost a real experience entry in the test that found this.
-	inverse := Diff(after, before)
+	// Which inverse to store depends on whether the sanitizer moved anything.
+	//
+	// Apply's inverse is the precise one: it reverses each operation in kind, so undoing a
+	// reorder is one `move` back rather than a rewrite of every entry it touched. But it was
+	// computed against the pre-sanitized result, and the sanitizer drops empty entries and
+	// whitespace-only bullets — every index after such a drop shifts, and the inverse then
+	// removes the wrong element.
+	//
+	// So: keep Apply's inverse when the sanitizer changed nothing (the overwhelming majority,
+	// and the only case where a `move` survives at all — the differ has no move in its
+	// vocabulary). Fall back to the diff when it did, where precision is already lost but
+	// correctness is not.
+	inverse := applyInverse
+	if !Equal(applied, after) {
+		inverse = Diff(after, before)
+	}
 
 	// An operation that changes nothing files nothing. Picking the template already in use
 	// is a click the gallery allows, and "switched to the Sidebar template" under a CV that

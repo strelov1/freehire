@@ -261,3 +261,62 @@ func TestWritingAContainerOfClaimsNeedsEvidence(t *testing.T) {
 		})
 	}
 }
+
+// A degree nobody earned is a bigger lie than a bullet nobody wrote, and it was landing
+// uncited: the gate listed the places that carry a claim, and education, certifications and
+// languages were simply not on the list. Nor were an entry's own identity fields — the role,
+// the employer, the dates.
+func TestFabricatedCredentialsNeedEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		op    Op
+		value any
+	}{
+		{"a degree", Op{Kind: OpInsert, Path: "education[0]"},
+			map[string]any{"institution": "Stanford", "degree": "PhD"}},
+		{"the whole education section", Op{Kind: OpSet, Path: "education"},
+			[]map[string]any{{"institution": "MIT", "degree": "MSc"}}},
+		{"a certification", Op{Kind: OpInsert, Path: "certifications[0]"},
+			map[string]any{"name": "AWS Solutions Architect Professional"}},
+		{"a language", Op{Kind: OpInsert, Path: "languages[0]"},
+			map[string]any{"name": "Japanese", "level": "native"}},
+		{"an inflated job title", Op{Kind: OpSet, Path: "experience[0].role"}, "VP of Engineering"},
+		{"an employer never worked for", Op{Kind: OpSet, Path: "experience[0].company"}, "Google"},
+		{"a papered-over gap", Op{Kind: OpSet, Path: "experience[0].start"}, "2015"},
+		{"a skill group's name", Op{Kind: OpSet, Path: "skills[0].group"}, "Distributed Systems"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			e, _ := newEditor(repo, &bank{})
+
+			op := tc.op
+			op.Value = tc.value
+			if err := agentEdit(t, e, op); !errors.Is(err, ErrEvidenceRequired) {
+				t.Fatalf("uncited write to %s returned %v, want ErrEvidenceRequired", op.Path, err)
+			}
+			if repo.saves != 0 {
+				t.Fatal("an uncited claim was written")
+			}
+		})
+	}
+}
+
+// Presentation is not a claim: the candidate's own layout choices assert nothing about their
+// career, and gating them would leave the agent unable to fit a CV onto one page.
+func TestPresentationNeedsNoEvidence(t *testing.T) {
+	repo := newFakeRepo()
+	b := &bank{}
+	e, _ := newEditor(repo, b)
+
+	for _, op := range []Op{
+		{Kind: OpSet, Path: "style.font_size", Value: 11.0},
+		{Kind: OpSet, Path: "margins.left", Value: 0.75},
+	} {
+		if err := agentEdit(t, e, op); err != nil {
+			t.Fatalf("%s was gated: %v", op.Path, err)
+		}
+	}
+	if b.calls != 0 {
+		t.Fatalf("the bank was asked %d times about presentation", b.calls)
+	}
+}

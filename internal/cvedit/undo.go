@@ -89,19 +89,22 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, err
 	}
 
-	after, _, err := Apply(before, inverse)
+	applied, applyRedo, err := Apply(before, inverse)
 	if err != nil {
 		// The place the inverse would restore is gone. This is a fact about the document as
 		// it stands, not a malformed request — and it cannot be known without trying, which
 		// is why the control is offered and the failure explained.
 		return cv.Meta{}, Revision{}, fmt.Errorf("%w: %s", ErrCannotUndo, err)
 	}
+	after := applied
 	after.Document.Sanitize()
 
-	// Derived from the sanitized result, exactly as a commit's inverse is: undoing an undo has
-	// to return to what was stored, not to what Apply produced a moment before the sanitizer
-	// looked at it.
-	redo := Diff(after, before)
+	// Same rule as a commit: the precise inverse unless the sanitizer moved something, in
+	// which case the diff against what was stored is the only one that applies cleanly.
+	redo := applyRedo
+	if !Equal(applied, after) {
+		redo = Diff(after, before)
+	}
 
 	meta, err := tx.Save(ctx, after)
 	if err != nil {

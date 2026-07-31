@@ -65,11 +65,13 @@ type TailoredItem struct {
 
 // Repository persists CVs. Every read/update/delete is owner-scoped by (id, userID); a
 // foreign or missing id yields pgx.ErrNoRows (Get/Update) or a zero delete count.
+// Repository deliberately has NO method that writes a CV's document. internal/cvedit owns
+// that, and one declared here — even unused — is an invitation to write a document with no
+// revision, no policy and no evidence gate behind it.
 type Repository interface {
 	Create(ctx context.Context, userID int64, title, templateID string, data []byte) (db.CreateCVRow, error)
 	List(ctx context.Context, userID int64) ([]db.ListCVsByUserRow, error)
 	Get(ctx context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error)
-	Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error)
 	Delete(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
 	GetBase(ctx context.Context, userID int64) (db.GetBaseCVByUserRow, error)
 	CreateTailored(ctx context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error)
@@ -349,10 +351,6 @@ func (r queriesRepository) List(ctx context.Context, userID int64) ([]db.ListCVs
 
 func (r queriesRepository) Get(ctx context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
 	return r.q.GetCVByID(ctx, db.GetCVByIDParams{ID: id, UserID: userID})
-}
-
-func (r queriesRepository) Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
-	return r.q.UpdateCV(ctx, db.UpdateCVParams{ID: id, UserID: userID, Title: title, TemplateID: templateID, Data: data})
 }
 
 func (r queriesRepository) Delete(ctx context.Context, id uuid.UUID, userID int64) (int64, error) {
