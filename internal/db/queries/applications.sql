@@ -71,3 +71,53 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
    AND a.job_id IS NULL
  ORDER BY a.applied_at DESC NULLS LAST, a.id DESC
  LIMIT $2;
+
+-- name: TrackApplicationByID :one
+-- Set an application's stage and/or notes, naming the application itself.
+--
+-- The slug-addressed TrackJob cannot serve an application whose posting cmd/prune
+-- removed: it upserts through `jobs`, and there is no row left to join. That is not a
+-- corner case on the board — the card is there, and dragging it is the ordinary act
+-- that had no working write path.
+--
+-- Partial update and the stage_set ledger event on a real transition, both exactly as
+-- TrackJob does them: `prior` reads the pre-update value, so re-setting the stage a row
+-- already carries, or a notes-only call, records nothing.
+WITH prior AS (
+    SELECT a.stage FROM applications a
+     WHERE a.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id)
+), upd AS (
+    UPDATE applications
+       SET stage = COALESCE(sqlc.narg(stage), applications.stage),
+           notes = COALESCE(sqlc.narg(notes), applications.notes)
+     WHERE applications.id = sqlc.arg(id) AND applications.user_id = sqlc.arg(user_id)
+    RETURNING *
+), event AS (
+    -- job_id and company_slug come off the application, not off a posting: this row may
+    -- have no posting at all, and the employer is denormalised here for that reason.
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT sqlc.arg(user_id), u.id, u.job_id, u.company_slug, 'stage_set', u.stage, now(), sqlc.arg(event_source)::text
+      FROM upd u
+     WHERE u.stage IS NOT NULL
+       AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
+)
+SELECT u.job_id, u.applied_at, u.stage, u.notes, u.followed_up_at FROM upd u;
+
+-- name: ClearApplicationProgressByID :one
+-- Drop an application's pipeline progress while keeping the record — the notes are the
+-- candidate's own text, and reconsidering is not a claim the process never happened.
+-- Clearing both stage and applied_at is what takes it off the board (see columnOf).
+UPDATE applications
+   SET stage = NULL, applied_at = NULL
+ WHERE applications.id = sqlc.arg(id) AND applications.user_id = sqlc.arg(user_id)
+RETURNING job_id, applied_at, stage, notes, followed_up_at;
+
+-- name: UntrackApplicationByID :one
+-- Take an application off the board outright, naming the application itself.
+--
+-- Deletes the record, matching UntrackJob: this is the candidate saying it is not a
+-- thing they are pursuing, which is a claim about their own record and theirs alone to
+-- make. cmd/prune has no such standing, which is why it may not do this.
+DELETE FROM applications
+ WHERE applications.id = sqlc.arg(id) AND applications.user_id = sqlc.arg(user_id)
+RETURNING job_id, applied_at, stage, notes, followed_up_at;

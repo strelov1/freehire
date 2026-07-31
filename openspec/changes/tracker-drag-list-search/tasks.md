@@ -5,12 +5,12 @@
 
 ## 2. Writes addressed by the row the listing served
 
-- [ ] 2.1 Add the id decoder to `internal/handler`, with the doc comment that says why two forms exist and where they come from (`internal/jobtracking/repository.go:209` and `:243`)
-- [ ] 2.2 Register `PATCH /api/v1/me/applications/:id` reusing the existing track validation — the stage vocabulary, the partial update, the `400` on an unknown stage and on an empty body
-- [ ] 2.3 Register `DELETE /api/v1/me/applications/:id` and `DELETE /api/v1/me/applications/:id/stage`
-- [ ] 2.4 Make every one of the three answer `404` with the body a missing row produces, for a malformed id and for another user's row alike — one answer, not two
-- [ ] 2.5 Integration test: a stage change on an application whose posting was pruned is recorded. This is the case the slug-addressed route cannot serve, and the reason these routes exist
-- [ ] 2.6 Integration test: the slug-addressed `PATCH /api/v1/jobs/:slug/track` still behaves exactly as before — the CLI and MCP address postings and must not move
+- [x] 2.1 Add the id decoder to `internal/handler`, with the doc comment that says why two forms exist and where they come from (`internal/jobtracking/repository.go:209` and `:243`)
+- [x] 2.2 Register `PATCH /api/v1/me/applications/:id` reusing the existing track validation — the stage vocabulary, the partial update, the `400` on an unknown stage and on an empty body
+- [x] 2.3 Register `DELETE /api/v1/me/applications/:id` and `DELETE /api/v1/me/applications/:id/stage`
+- [x] 2.4 Make every one of the three answer `404` with the body a missing row produces, for a malformed id and for another user's row alike — one answer, not two
+- [x] 2.5 Integration test: a stage change on an application whose posting was pruned is recorded. This is the case the slug-addressed route cannot serve, and the reason these routes exist
+- [x] 2.6 Integration test: the slug-addressed `PATCH /api/v1/jobs/:slug/track` still behaves exactly as before — the CLI and MCP address postings and must not move
 
 ## 3. The card carries no controls
 
