@@ -205,6 +205,7 @@ func main() {
 		Search:            searchClient,
 		Blob:              blobStore,
 		TypstBin:          cfg.TypstBin,
+		TracerLinkSalt:    cfg.TracerLinkSalt,
 		LLM:               llmClient,
 		AssistantLLM:      assistantLLM,
 		AssistantMaxSteps: cfg.AssistantMaxSteps,
