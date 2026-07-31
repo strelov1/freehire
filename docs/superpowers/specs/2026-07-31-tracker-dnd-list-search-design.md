@@ -44,6 +44,19 @@ Falsifiable prediction, and the cheapest confirmation: the card can still be
 dragged by its badge row, which sits on `relative z-10`, above the overlay, and
 whose `<span>` passes the guard.
 
+**Confirmed by spike**, against the real `dist/index.mjs` driven in a browser —
+`dndzone` is a plain action, so the whole experiment was one HTML page with no
+build and no database:
+
+| grab point | event target | `value` | drag |
+|---|---|---|---|
+| card body, button overlay | `<button>` | `""` | **refused** |
+| badge row (`z-10`) | `<span>` | `undefined` | **starts** |
+| card with no button at all | `<span>` | `undefined` | **starts** |
+
+The middle row is the one that matters: it rules out "the library is broken" and
+pins the cause on the element under the pointer.
+
 ## Design
 
 ### 1. Writes addressed by the row the listing served
@@ -83,18 +96,30 @@ A counting id is right here. Applications never cross an ownership boundary —
 every read and write is scoped to the calling user — so the UUID rule, which
 exists for resources served to somebody else, does not apply. No migration.
 
-### 2. A drag handle on the card
+### 2. A card carries no buttons
 
-`BoardCard` grows a grip column on its leading edge. `BoardColumn` holds
-`dragDisabled: true` and clears it on `mousedown` over a handle, restoring it on
-`finalize`/`dragend`.
+The card is a card, not a control panel: it drags, and clicking it opens the
+application. Every action moves into the opened application (§5).
 
-This is chosen over deleting the stretched overlay because it also ends the
-standing ambiguity between "click to open" and "drag to move", and makes the
-board's central gesture visible. The overlay stays: nothing drags by it any more.
+So `BoardCard` loses its `<button>` elements — the stretched open overlay, the
+follow-up button and the rehearse button alike — and becomes one
+`role="button" tabindex="0"` element with a click and a keyboard handler. The
+badges stay: `Interview`, `24d`, the mail count and the notes mark are
+indicators, not controls, and none of them is a `<button>`.
 
-The handle needs a touch target with vertical room; on a card two lines tall it
-runs the full height rather than sitting as a small icon.
+That alone repairs the drag, as the spike measured: with no button under the
+pointer the event target is a `<span>` or the card element itself, and the
+library's guard passes everywhere on the card. **No drag handle is needed** —
+an earlier draft of this design added one, and the spike showed it would have
+been solving a problem that the button removal already solves.
+
+`role="button"` is an attribute, not an element, so the node has no `value`
+property and cannot re-trigger the guard. The library suppresses the click that
+ends a real drag, so opening and dragging do not collide.
+
+The silence badge is the one loss to weigh: it is currently the entry point to
+the follow-up dialog (#1312 made it "a next step"). It reverts to a plain
+indicator, and the chase is reached by opening the application.
 
 ### 3. A list view
 
@@ -121,20 +146,25 @@ a slug.
 
 ### 5. The application's actions
 
-A row of three in `JobDrawer`'s header, below the meta pills, above the tabs — so
-it shows on every tab and does not fight `View job` for the corner.
+A row in `JobDrawer`'s header, below the meta pills, above the tabs — so it shows
+on every tab and does not fight `View job` for the corner.
 
-- **Rehearse** moves off the card (`BoardCard` loses `onrehearse`) and is offered
-  at any stage. The stage gate in `web/src/lib/rehearsal.ts` existed because a
-  card carries few controls; an opened application does not have that problem,
-  and the server has never gated a rehearsal.
+- **Rehearse** moves off the card and is offered at any stage. The stage gate in
+  `web/src/lib/rehearsal.ts` existed because a card carries few controls; an
+  opened application does not have that problem, and the server has never gated a
+  rehearsal.
+- **Follow up** moves off the card too, and keeps its own gate
+  (`canFollowUp` in `web/src/lib/followup.ts`) — chasing an employer who answered
+  yesterday is not an offer worth making. It opens the existing `FollowUpDialog`.
 - **Analyze** switches to the existing Job Match tab, which already renders
   `JobMatch` + `MatchAnalysisFull`. It does not navigate: leaving the drawer to
   show something the drawer contains would be a strange trade.
 - **Tailor CV** navigates to `/tailor/[slug]`.
 
-All three need a posting. With `item.job === null` they are absent, not disabled
-— the same treatment `View job` already gets two lines above.
+Rehearse, Analyze and Tailor CV need a posting. With `item.job === null` they are
+absent, not disabled — the same treatment `View job` already gets two lines
+above. Follow up does not need one: the chase is addressed to the employer, which
+the application knows by itself.
 
 ## Out of scope
 
@@ -148,6 +178,6 @@ belongs to the mail cutover in `applications-outlive-jobs` group 6, not here.
 - Unit: the search predicate, over rows with and without a posting.
 - Unit: the id decoder, both forms plus a malformed id.
 - Integration: a stage change on a posting-less application persists.
-- By hand, in a browser: a card drags by its handle and not by its body; a click
-  on the body still opens the application. The defect was invisible to every
-  existing test and has to be confirmed the way it was found.
+- By hand, in a browser: a card drags from anywhere on it, and a click still
+  opens the application. The defect was invisible to every existing test and has
+  to be confirmed the way it was found.
