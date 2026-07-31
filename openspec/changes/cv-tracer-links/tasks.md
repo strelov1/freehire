@@ -8,7 +8,7 @@
 - [x] 1.3 Regenerate the gallery previews with `make cv-previews` and commit the changed SVGs
 - [x] 1.4 Install the prod-pinned typst in CI, so the registry guard runs instead of skipping —
       a guard that skips is not a guard
-- [ ] 1.5 The requirement's "so that a reader can follow them" is only satisfied once 5.1b
+- [x] 1.5 The requirement's "so that a reader can follow them" is only satisfied once 5.1b
       lands; group 1 is not shippable on its own
 
 ## 2. Domain package `internal/tracerlink`
@@ -41,15 +41,15 @@
 
 ## 5. Traced rendering
 
-- [ ] 5.1 `renderPayload` carries `link_hrefs` for header links and projects; a CV with tracing
+- [x] 5.1 `renderPayload` carries `link_hrefs` for header links and projects; a CV with tracing
       off renders visually unchanged (compare SVG — a Typst PDF embeds a timestamp)
-- [ ] 5.1b The href is absolute even when tracing is off: links are stored scheme-less
+- [x] 5.1b The href is absolute even when tracing is off: links are stored scheme-less
       (`github.com/ada`), so today every template — `classic-ats` included, since long before
       this change — emits a relative URI that no PDF reader can follow. Normalise in the
       payload, not in six copies of Typst string handling
-- [ ] 5.2 `RenderCVPDF` mints tokens and passes the traced hrefs when the CV has tracing on,
+- [x] 5.2 `RenderCVPDF` mints tokens and passes the traced hrefs when the CV has tracing on,
       leaving `cvs.data` untouched
-- [ ] 5.3 Test that the extracted text layer still carries the candidate's own link text
+- [x] 5.3 Test that the extracted text layer still carries the candidate's own link text
 
 ## 6. Redirect endpoint
 

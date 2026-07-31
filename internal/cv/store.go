@@ -46,7 +46,12 @@ type Record struct {
 	IsTailored bool
 	// AgentSessionID is the roy session bound to a tailored CV (empty when none).
 	AgentSessionID string
-	Document       Document
+	// TracerLinksEnabled is the candidate's consent for this CV's links to be traced.
+	TracerLinksEnabled bool
+	// CompanySlug is the vacancy's company, used as the tracer token's readable prefix. Empty
+	// for a base CV and for a tailored copy whose vacancy was pruned.
+	CompanySlug string
+	Document    Document
 	// AutopilotReport is the last unattended run's account of itself, one entry per
 	// requirement it considered. Empty when no run has happened (or the last was reverted).
 	AutopilotReport []AutopilotEntry
@@ -136,12 +141,14 @@ func (s *Store) Get(ctx context.Context, id uuid.UUID, userID int64) (Record, er
 		return Record{}, err
 	}
 	return Record{
-		Meta:            Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
-		JobID:           int8Value(row.JobID),
-		IsTailored:      row.IsTailored,
-		AgentSessionID:  textValue(row.AgentSessionID),
-		Document:        doc,
-		AutopilotReport: decodeAutopilotReport(row.AutopilotReport),
+		Meta:               Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID, CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time},
+		JobID:              int8Value(row.JobID),
+		IsTailored:         row.IsTailored,
+		AgentSessionID:     textValue(row.AgentSessionID),
+		TracerLinksEnabled: row.TracerLinksEnabled,
+		CompanySlug:        row.CompanySlug,
+		Document:           doc,
+		AutopilotReport:    decodeAutopilotReport(row.AutopilotReport),
 	}, nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/strelov1/freehire/internal/tracerlink"
 )
 
 // Renderer turns a CV Document into PDF bytes using a resolved template. It is an
@@ -19,7 +21,7 @@ import (
 // image is a profile asset: the document is client-writable and travels into tailoring
 // prompts, and an image belongs in neither.
 type Renderer interface {
-	Render(ctx context.Context, doc Document, tmpl Template, photo []byte) ([]byte, error)
+	Render(ctx context.Context, doc Document, tmpl Template, photo []byte, hrefs LinkHrefs) ([]byte, error)
 }
 
 // defaultRenderTimeout bounds a single compile so a pathological input can never hang a
@@ -47,8 +49,12 @@ func NewTypstRenderer(bin string) *TypstRenderer {
 
 // Render compiles the template against the document and returns the PDF bytes. photo is
 // composed in by the templates that print one; it is ignored by the rest.
-func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template, photo []byte) ([]byte, error) {
-	return r.compile(ctx, doc, tmpl, "pdf", photo)
+//
+// hrefs supplies a link target per position, overriding the absolute URL the payload derives from
+// the document itself. A zero value is the ordinary render: the links still resolve absolutely,
+// they just point where the candidate wrote them.
+func (r *TypstRenderer) Render(ctx context.Context, doc Document, tmpl Template, photo []byte, hrefs LinkHrefs) ([]byte, error) {
+	return r.compile(ctx, doc, tmpl, "pdf", photo, hrefs)
 }
 
 // photoFile is the staged headshot's name inside the sandbox. The templates hardcode it,
@@ -60,7 +66,7 @@ const photoFile = "photo.jpg"
 // typst, returning the output in the requested format ("pdf" for live rendering, "svg" for
 // preview generation). Shared by Render and GeneratePreviews so both use the exact same font
 // staging and sandbox flags.
-func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template, format string, photo []byte) ([]byte, error) {
+func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template, format string, photo []byte, hrefs LinkHrefs) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "cv-render-*")
 	if err != nil {
 		return nil, err
@@ -87,7 +93,7 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 			return nil, err
 		}
 	}
-	data, err := renderPayload(doc, withPhoto)
+	data, err := renderPayload(doc, withPhoto, hrefs)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +129,63 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 	return os.ReadFile(outPath)
 }
 
+// LinkHrefs carries one link target per link in the document, aligned by index with
+// Header.Links and with Projects. An empty entry means "use what the payload derived".
+//
+// It rides on the render payload and never on the Document: cvs.data is what the candidate edits
+// and the tailoring agent patches, and a link target chosen at render time is neither.
+type LinkHrefs struct {
+	Header   []string `json:"header,omitempty"`
+	Projects []string `json:"projects,omitempty"`
+}
+
 // renderPayload marshals what the template reads back as json("data.json"): the document's
-// own fields plus has_photo. The embedding inlines Document's fields, so the templates keep
-// reading cv.header — and because the flag lives only on this render-time wrapper, it is
-// neither settable by a client nor persisted with the CV.
-func renderPayload(doc Document, hasPhoto bool) ([]byte, error) {
+// own fields plus has_photo and the resolved link targets. The embedding inlines Document's
+// fields, so the templates keep reading cv.header — and because the extras live only on this
+// render-time wrapper, they are neither settable by a client nor persisted with the CV.
+func renderPayload(doc Document, hasPhoto bool, hrefs LinkHrefs) ([]byte, error) {
 	return json.Marshal(struct {
 		Document
-		HasPhoto bool `json:"has_photo"`
-	}{Document: doc, HasPhoto: hasPhoto})
+		HasPhoto  bool      `json:"has_photo"`
+		LinkHrefs LinkHrefs `json:"link_hrefs"`
+	}{Document: doc, HasPhoto: hasPhoto, LinkHrefs: resolveHrefs(doc, hrefs)})
+}
+
+// resolveHrefs fills in a target for every link position: the caller's, when it supplied one, and
+// otherwise the document's own link made absolute.
+//
+// The normalisation is not part of tracing and applies to every render. CVs store links as a
+// candidate writes them on paper — "github.com/ada" — and a PDF annotation carrying that verbatim
+// is a relative URI that no reader can follow. Every template had that defect long before this
+// feature; the payload is the one place to fix it, rather than six copies of Typst string handling.
+func resolveHrefs(doc Document, supplied LinkHrefs) LinkHrefs {
+	projectLinks := make([]string, len(doc.Projects))
+	for i, p := range doc.Projects {
+		projectLinks[i] = p.Link
+	}
+	out := LinkHrefs{
+		Header:   make([]string, len(doc.Header.Links)),
+		Projects: make([]string, len(projectLinks)),
+	}
+	for _, t := range tracerlink.Targets(nil, doc.Header.Links, projectLinks) {
+		switch t.Section {
+		case tracerlink.SectionHeaderLinks:
+			out.Header[t.Index] = t.URL
+		case tracerlink.SectionProjectLink:
+			out.Projects[t.Index] = t.URL
+		}
+	}
+	overlay(out.Header, supplied.Header)
+	overlay(out.Projects, supplied.Projects)
+	return out
+}
+
+// overlay writes the caller's non-empty entries over the derived ones, position by position. A
+// supplied slice shorter than the document's is not an error: it simply names fewer links.
+func overlay(dst, src []string) {
+	for i := 0; i < len(src) && i < len(dst); i++ {
+		if src[i] != "" {
+			dst[i] = src[i]
+		}
+	}
 }

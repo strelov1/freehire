@@ -8,6 +8,14 @@
 #let cv = json("data.json")
 #let s(d, k) = d.at(k, default: "")
 #let arr(d, k) = d.at(k, default: ())
+#let linkHrefs = cv.at("link_hrefs", default: (:))
+// Where a link at this position should point. The payload resolves every link to an absolute
+// URL, and to our own redirect when the candidate has tracing on; the printed text is the
+// candidate's own either way, so a missing entry falls back to it.
+#let hrefAt(kind, i, shown) = {
+  let a = linkHrefs.at(kind, default: ())
+  if i < a.len() and a.at(i) != "" { a.at(i) } else { shown }
+}
 
 #set document(title: s(cv.header, "full_name"))
 // Per-side page margins (inches) from the document; any missing or non-positive side
@@ -49,8 +57,8 @@
     let v = s(hd, k)
     if v != "" { parts.push([#v]) }
   }
-  for l in arr(hd, "links") {
-    if l != "" { parts.push(link(l)[#l]) }
+  for (i, l) in arr(hd, "links").enumerate() {
+    if l != "" { parts.push(link(hrefAt("header", i, l))[#l]) }
   }
   parts
 }
@@ -94,11 +102,12 @@
 #let projects = arr(cv, "projects")
 #if projects.len() > 0 {
   sectionLabel("Projects")
-  list(..projects.map(p => {
+  list(..projects.enumerate().map(entry => {
+    let (i, p) = entry
     let name = s(p, "name")
     let lnk = s(p, "link")
     let bl = arr(p, "bullets")
-    [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(lnk)[#lnk])]]
+    [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(hrefAt("projects", i, lnk))[#lnk])]]
   }))
   rule
 }

@@ -8,6 +8,14 @@
 #let cv = json("data.json")
 #let s(d, k) = d.at(k, default: "")
 #let arr(d, k) = d.at(k, default: ())
+#let linkHrefs = cv.at("link_hrefs", default: (:))
+// Where a link at this position should point. The payload resolves every link to an absolute
+// URL, and to our own redirect when the candidate has tracing on; the printed text is the
+// candidate's own either way, so a missing entry falls back to it.
+#let hrefAt(kind, i, shown) = {
+  let a = linkHrefs.at(kind, default: ())
+  if i < a.len() and a.at(i) != "" { a.at(i) } else { shown }
+}
 #let daterange(a, b) = if a != "" and b != "" { a + " – " + b } else { a + b }
 
 #set document(title: s(cv.header, "full_name"))
@@ -69,10 +77,12 @@
     for l in contactLines { l; linebreak() }
   }
   // Links
-  let links = arr(hd, "links").filter(l => l != "")
-  if links.len() > 0 {
+  let links = arr(hd, "links")
+  if links.filter(l => l != "").len() > 0 {
     section("Links")
-    for l in links { link(l)[#l]; linebreak() }
+    for (i, l) in links.enumerate() {
+      if l != "" { link(hrefAt("header", i, l))[#l]; linebreak() }
+    }
   }
   // Skills
   let allSkills = arr(cv, "skills").map(g => arr(g, "items")).flatten()
@@ -137,11 +147,12 @@
   let projects = arr(cv, "projects")
   if projects.len() > 0 {
     section("Projects")
-    list(..projects.map(p => {
+    list(..projects.enumerate().map(entry => {
+    let (i, p) = entry
       let name = s(p, "name")
       let lnk = s(p, "link")
       let bl = arr(p, "bullets")
-      [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(lnk)[#lnk])]]
+      [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(hrefAt("projects", i, lnk))[#lnk])]]
     }))
   }
 }

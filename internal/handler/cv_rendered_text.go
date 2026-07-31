@@ -34,7 +34,7 @@ func (h *cvHandlers) renderedCVText(ctx context.Context, doc cv.Document, tmpl c
 	}
 	// No headshot: this render exists to be read as text, and a portrait contributes none.
 	// Fetching it would cost a bucket round trip per scored template.
-	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl, nil)
+	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl, nil, cv.LinkHrefs{})
 	if err != nil {
 		return "", fmt.Errorf("render cv for scoring: %w", err)
 	}

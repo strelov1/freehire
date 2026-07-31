@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/tracerlink"
 )
 
 // CV-builder HTTP surface: per-user structured CVs (CRUD + seed) and on-demand PDF
@@ -39,7 +40,11 @@ type cvHandlers struct {
 	// tracerSalt keys the visitor hash of a traced click. Empty means the deployment cannot
 	// identify visitors at all, which is why enabling tracing is refused without it.
 	tracerSalt string
-	resume     *resume.Store
+	// tracerMinter issues the tokens a traced render substitutes in; nil disables tracing.
+	tracerMinter *tracerlink.Minter
+	// tracerBaseURL is the public origin a traced link points at, e.g. "https://freehire.me".
+	tracerBaseURL string
+	resume        *resume.Store
 	// photos serves the headshot the photo-bearing templates print. Nil-safe: an
 	// unconfigured bucket, like a member with no photo, means the placeholder.
 	photos             *headshot.Store
@@ -70,10 +75,18 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:    cv.NewStore(cv.NewQueriesRepository(queries)),
 		tracerSalt: tracerSalt,
+		tracerMinter: tracerlink.NewMinter(tracerlink.NewRepository(
+			func(ctx context.Context, cvID uuid.UUID, userID int64, token, sourcePath, destURL, destHash string) (string, error) {
+				return queries.UpsertTracerLink(ctx, db.UpsertTracerLinkParams{
+					CvID: cvID, UserID: userID, Token: token, SourcePath: sourcePath,
+					DestinationUrl: destURL, DestinationHash: destHash,
+				})
+			}), servedHosts),
+		tracerBaseURL: baseURL,
 		// The editor is the only thing that writes a stored CV. The evidence gate is
 		// attached later (withExperienceBank) because the bank is wired after this.
 		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
@@ -385,6 +398,28 @@ func (h *cvHandlers) SetCVTracerLinks(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": fiber.Map{"tracer_links_enabled": in.Enabled}})
 }
 
+// tracedHrefs mints a token for each of this CV's traceable links and returns where each should
+// point, or nothing at all when the candidate has not asked for tracing.
+//
+// It runs on every download because the PDF is never stored, so the minting underneath must be
+// idempotent — otherwise three downloads would leave three tokens for one link and scatter the
+// counts across them.
+//
+// A zero value is the ordinary render: the links still resolve absolutely, they just point where
+// the candidate wrote them.
+func (h *cvHandlers) tracedHrefs(ctx context.Context, rec cv.Record, userID int64) cv.LinkHrefs {
+	if !rec.TracerLinksEnabled || h.tracerMinter == nil || h.tracerBaseURL == "" {
+		return cv.LinkHrefs{}
+	}
+	projectLinks := make([]string, len(rec.Document.Projects))
+	for i, p := range rec.Document.Projects {
+		projectLinks[i] = p.Link
+	}
+	minted := h.tracerMinter.Mint(ctx, rec.ID, userID, h.tracerBaseURL,
+		rec.CompanySlug, rec.Document.Header.Links, projectLinks)
+	return cv.LinkHrefs{Header: minted.Header, Projects: minted.Projects}
+}
+
 // DeleteCV removes an owned CV.
 func (h *cvHandlers) DeleteCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
@@ -489,7 +524,9 @@ func (h *cvHandlers) RenderCVPDF(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, userID, tmpl))
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl,
+		headshotForTemplate(c.Context(), h.photos, userID, tmpl),
+		h.tracedHrefs(c.Context(), rec, userID))
 	if err != nil {
 		return err
 	}

@@ -161,11 +161,16 @@ func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVB
 }
 
 const getCVByID = `-- name: GetCVByID :one
-SELECT id, title, template_id, data, job_id, is_tailored, agent_session_id,
-       autopilot_report,
-       created_at, updated_at
-FROM cvs
-WHERE id = $1 AND user_id = $2
+SELECT c.id, c.title, c.template_id, c.data, c.job_id, c.is_tailored, c.agent_session_id,
+       c.autopilot_report, c.tracer_links_enabled,
+       -- The company this copy was tailored for, which is what a tracer token is prefixed with:
+       -- the recruiter reads it on hover, and their own company's name alarms less than an
+       -- opaque string. Empty for a base CV, and for a tailored copy whose vacancy was pruned.
+       coalesce(j.company_slug, '') AS company_slug,
+       c.created_at, c.updated_at
+FROM cvs c
+LEFT JOIN jobs j ON j.id = c.job_id
+WHERE c.id = $1 AND c.user_id = $2
 `
 
 type GetCVByIDParams struct {
@@ -174,16 +179,18 @@ type GetCVByIDParams struct {
 }
 
 type GetCVByIDRow struct {
-	ID              uuid.UUID          `json:"id"`
-	Title           string             `json:"title"`
-	TemplateID      string             `json:"template_id"`
-	Data            []byte             `json:"data"`
-	JobID           pgtype.Int8        `json:"job_id"`
-	IsTailored      bool               `json:"is_tailored"`
-	AgentSessionID  pgtype.Text        `json:"agent_session_id"`
-	AutopilotReport []byte             `json:"autopilot_report"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID                 uuid.UUID          `json:"id"`
+	Title              string             `json:"title"`
+	TemplateID         string             `json:"template_id"`
+	Data               []byte             `json:"data"`
+	JobID              pgtype.Int8        `json:"job_id"`
+	IsTailored         bool               `json:"is_tailored"`
+	AgentSessionID     pgtype.Text        `json:"agent_session_id"`
+	AutopilotReport    []byte             `json:"autopilot_report"`
+	TracerLinksEnabled bool               `json:"tracer_links_enabled"`
+	CompanySlug        string             `json:"company_slug"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 // One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
@@ -203,6 +210,8 @@ func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByID
 		&i.IsTailored,
 		&i.AgentSessionID,
 		&i.AutopilotReport,
+		&i.TracerLinksEnabled,
+		&i.CompanySlug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -31,11 +31,16 @@ ORDER BY c.updated_at DESC;
 -- the vacancy id for a tailored copy; agent_session_id is the bound roy session (or NULL).
 -- The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
 -- is a whole second document, and no caller needs its bytes — only whether one exists.
-SELECT id, title, template_id, data, job_id, is_tailored, agent_session_id,
-       autopilot_report,
-       created_at, updated_at
-FROM cvs
-WHERE id = $1 AND user_id = $2;
+SELECT c.id, c.title, c.template_id, c.data, c.job_id, c.is_tailored, c.agent_session_id,
+       c.autopilot_report, c.tracer_links_enabled,
+       -- The company this copy was tailored for, which is what a tracer token is prefixed with:
+       -- the recruiter reads it on hover, and their own company's name alarms less than an
+       -- opaque string. Empty for a base CV, and for a tailored copy whose vacancy was pruned.
+       coalesce(j.company_slug, '') AS company_slug,
+       c.created_at, c.updated_at
+FROM cvs c
+LEFT JOIN jobs j ON j.id = c.job_id
+WHERE c.id = $1 AND c.user_id = $2;
 
 -- name: SetCVSession :execrows
 -- Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for

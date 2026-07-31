@@ -56,7 +56,7 @@ func GeneratePreviews(ctx context.Context, r *TypstRenderer, outDir string) ([]s
 		}
 		// No photo: the sample document belongs to nobody, so a photo-bearing template
 		// draws its placeholder — which is what the gallery should advertise anyway.
-		svg, err := r.compile(ctx, doc, tmpl, "svg", nil)
+		svg, err := r.compile(ctx, doc, tmpl, "svg", nil, LinkHrefs{})
 		if err != nil {
 			return written, err
 		}

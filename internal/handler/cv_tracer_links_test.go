@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -121,5 +122,30 @@ func TestDisablingTracingIsAllowedWithoutASalt(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode == fiber.StatusConflict {
 		t.Error("withdrawing consent was refused for want of a salt")
+	}
+}
+
+// A CV with tracing off must ask the renderer to substitute nothing. This is the default state of
+// every CV, so a regression here would quietly trace everybody.
+func TestAnUntracedCVSubstitutesNoLinks(t *testing.T) {
+	rec := cv.Record{Document: cv.Document{Header: cv.Header{Links: []string{"github.com/ada"}}}}
+	h := &cvHandlers{tracerBaseURL: "https://freehire.me"}
+
+	if got := h.tracedHrefs(context.Background(), rec, 7); len(got.Header) != 0 || len(got.Projects) != 0 {
+		t.Errorf("tracedHrefs of an untraced CV = %+v, want nothing", got)
+	}
+}
+
+// Consent alone is not enough: without a configured public origin there is nowhere for a traced
+// link to point, and half a URL in a PDF is worse than the candidate's own link.
+func TestTracingIsInertWithoutAPublicOrigin(t *testing.T) {
+	rec := cv.Record{
+		TracerLinksEnabled: true,
+		Document:           cv.Document{Header: cv.Header{Links: []string{"github.com/ada"}}},
+	}
+	h := &cvHandlers{tracerBaseURL: ""}
+
+	if got := h.tracedHrefs(context.Background(), rec, 7); len(got.Header) != 0 {
+		t.Errorf("tracedHrefs without a base URL = %+v, want nothing", got)
 	}
 }
