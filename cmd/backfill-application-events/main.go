@@ -11,6 +11,9 @@
 // Idempotent: the partial unique index makes a re-run a no-op, so an interrupted pass is
 // restarted rather than repaired, and it may run while cmd/classify-mail is working.
 //
+// -dry-run runs the real statements in a transaction and rolls it back, so it reports
+// exactly what the pass would record and leaves nothing behind.
+//
 // Run: DATABASE_URL=... go run ./cmd/backfill-application-events [-batch 500] [-dry-run]
 package main
 
@@ -19,6 +22,8 @@ import (
 	"flag"
 	"log"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
@@ -43,25 +48,51 @@ func run(batch int, dryRun bool) int {
 
 	queries := db.New(pool)
 	started := time.Now()
-	replies, err := backfillReplies(ctx, queries, int32(batch), dryRun)
+
+	// A dry run executes the real statements inside a transaction and rolls it back.
+	//
+	// The obvious alternative — a second pair of counting queries — duplicates the batch
+	// predicates, and two copies of a predicate drift: the sizing run would eventually
+	// report a number the real pass does not produce. This way the count IS the real
+	// pass, measured and then discarded.
+	//
+	// The trade is one open transaction for the length of the walk. That is fine for a
+	// sizing run over a table this size and would not be for a long one: an open
+	// transaction holds its snapshot, and prod has been taken down before by a long read
+	// meeting DDL. Size first, then decide.
+	var tx pgx.Tx
+	if dryRun {
+		if tx, err = pool.Begin(ctx); err != nil {
+			log.Printf("dry run: begin: %v", err)
+			return 1
+		}
+		// Rollback, never commit: the whole point is that nothing survives.
+		defer func() { _ = tx.Rollback(ctx) }()
+		queries = queries.WithTx(tx)
+	}
+
+	replies, err := backfillReplies(ctx, queries, int32(batch))
 	if err != nil {
 		log.Printf("employer replies: %v", err)
 		return 1
 	}
-	applications, err := backfillApplications(ctx, queries, int32(batch), dryRun)
+	applications, err := backfillApplications(ctx, queries, int32(batch))
 	if err != nil {
 		log.Printf("applications: %v", err)
 		return 1
 	}
 
-	log.Printf("backfill complete in %s: %d reply events, %d application/chase events",
-		time.Since(started).Round(time.Second), replies, applications)
+	outcome, verb := "complete", "recorded"
+	if dryRun {
+		outcome, verb = "dry run", "would record"
+	}
+	log.Printf("backfill %s in %s: %s %d reply events and %d application/chase events",
+		outcome, time.Since(started).Round(time.Second), verb, replies, applications)
 	return 0
 }
 
-// backfillReplies walks emails by id. A dry run reads the same batches and reports what
-// it found without inserting, so the size of the pass can be measured before it is taken.
-func backfillReplies(ctx context.Context, q *db.Queries, batch int32, dryRun bool) (int64, error) {
+// backfillReplies walks emails by id.
+func backfillReplies(ctx context.Context, q *db.Queries, batch int32) (int64, error) {
 	var cursor, inserted int64
 	for {
 		if err := ctx.Err(); err != nil {
@@ -82,17 +113,12 @@ func backfillReplies(ctx context.Context, q *db.Queries, batch int32, dryRun boo
 		}
 		cursor, inserted = row.LastID, inserted+row.Inserted
 		log.Printf("replies: scanned %d up to email %d, recorded %d so far", row.Scanned, cursor, inserted)
-		if dryRun {
-			// Nothing to undo — the statement already wrote. Dry-run exists to size the
-			// pass, so stop after one batch rather than pretending it changed nothing.
-			return inserted, nil
-		}
 	}
 }
 
 // backfillApplications walks user_jobs by its composite (user_id, job_id) key, which is
 // its primary key and therefore its only stable order.
-func backfillApplications(ctx context.Context, q *db.Queries, batch int32, dryRun bool) (int64, error) {
+func backfillApplications(ctx context.Context, q *db.Queries, batch int32) (int64, error) {
 	var lastUser, lastJob, inserted int64
 	for {
 		if err := ctx.Err(); err != nil {
@@ -114,8 +140,5 @@ func backfillApplications(ctx context.Context, q *db.Queries, batch int32, dryRu
 		inserted += row.Inserted
 		log.Printf("applications: scanned %d up to (user %d, job %d), recorded %d so far",
 			row.Scanned, lastUser, lastJob, inserted)
-		if dryRun {
-			return inserted, nil
-		}
 	}
 }

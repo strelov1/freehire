@@ -1000,9 +1000,6 @@ type Querier interface {
 	// Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 	// restricted to one source.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
-	// Every non-retracted event recorded against one application, oldest first. The follow-up
-	// history a single overwritten column used to destroy is readable here.
-	ListApplicationEventsForUserJob(ctx context.Context, arg ListApplicationEventsForUserJobParams) ([]ApplicationEvent, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
@@ -1645,19 +1642,6 @@ type Querier interface {
 	// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
 	// idempotent, and a closed canon fails over to the next min(id) on the next run.
 	RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error)
-	// Append one application event.
-	//
-	// Idempotent for mail-derived events by constraint rather than by coordination: the
-	// partial unique index on (user_id, kind, source_ref) makes emission and backfill the
-	// same operation, so cmd/classify-mail and cmd/backfill-application-events can meet on
-	// the same email in any order and produce one row. Manual events pass source_ref NULL
-	// and fall outside the index — two consecutive follow-ups are two facts, not a
-	// duplicate.
-	//
-	// occurred_at is the caller's to supply and is never now() for mail: it is the message's
-	// own received_at, so importing a year of ATS mail on the day a mailbox is connected
-	// does not report a year of replies arriving that day.
-	RecordApplicationEvent(ctx context.Context, arg RecordApplicationEventParams) error
 	// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
 	// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
 	// just overwrites the timestamp with a later one rather than erroring.
@@ -1860,18 +1844,6 @@ type Querier interface {
 	// Undo a soft-delete, scoped to the caller and idempotent. Returns 0 rows only
 	// when it is not the caller's message (→ 404).
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
-	// Retract the events a source record produced, because the fact turned out to belong to
-	// a different employer.
-	//
-	// Only a link correction calls this. Deleting the message must NOT: the two actions look
-	// alike and mean opposite things — deletion says the candidate does not want to see the
-	// message, re-linking says the fact belongs elsewhere. A wrong link left standing poisons
-	// a named company's public response rate permanently.
-	//
-	// The row survives, stamped rather than deleted: an event recorded in error is itself a
-	// fact, and this table is append-only. Already-retracted rows are skipped so a repeated
-	// correction cannot move the stamp forward.
-	RetractApplicationEventsBySourceRef(ctx context.Context, arg RetractApplicationEventsBySourceRefParams) (int64, error)
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
