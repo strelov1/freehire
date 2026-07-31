@@ -1,0 +1,33 @@
+---
+title: Set the type on your CV
+date: 2026-07-31
+summary: Pick the typeface, nudge the size half a point at a time, and loosen or tighten the line spacing — the three adjustments that decide whether your CV ends on one page or spills onto two.
+type: changelog
+tags:
+  - cv
+draft: false
+---
+
+Until now a CV's look came almost entirely from the template you picked. The only thing you could
+change was the page margins. So when a CV ran three lines onto a second page, the fix was to
+switch templates and lose the layout you wanted.
+
+The Settings tab in the [CV workspace](/features/tailor) now has a Typography block with the three
+adjustments people actually reach for:
+
+- **Font** — Libertinus Serif, or one of three faces matched to what recruiters and CV-scanning
+  software expect: Tinos (Times New Roman), Liberation Sans (Arial), Carlito (Calibri).
+- **Font size** — 8.5 to 12 points, half a point at a time. Headings and your name scale with it,
+  so the CV keeps its shape.
+- **Line height** — Compact, Standard, Relaxed, or Loose.
+
+Each one is optional. Leave it on **Template default** and the template decides, exactly as before —
+so nothing about your existing CVs has changed, and switching templates still changes everything you
+have not set yourself. One button clears all three.
+
+The preview in the middle re-paginates as you go, so you can watch that second page disappear
+rather than guessing and downloading a PDF to check.
+
+The margin controls got rebuilt in the same pass. They link the two axes — side margins,
+top-and-bottom — with the four individual sides one click away, and they no longer overflow their
+column when the panel is narrow.
