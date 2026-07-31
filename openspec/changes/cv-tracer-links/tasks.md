@@ -53,14 +53,14 @@
 
 ## 6. Redirect endpoint
 
-- [ ] 6.1 `GET /cv/:token` beside `/health`: resolve, record, `302`; unknown or deleted token
+- [x] 6.1 `GET /cv/:token` beside `/health`: resolve, record, `302`; unknown or deleted token
       yields `410` with an explanatory page
-- [ ] 6.2 The destination comes only from the stored token — no query parameter, path remainder
+- [x] 6.2 The destination comes only from the stored token — no query parameter, path remainder
       or header can influence it
-- [ ] 6.3 A failing click write still redirects
-- [ ] 6.4 A click carrying a valid session for the CV's owner is marked as the owner's own and
+- [x] 6.3 A failing click write still redirects
+- [x] 6.4 A click carrying a valid session for the CV's owner is marked as the owner's own and
       excluded from counts and from `cvs.last_click_at`
-- [ ] 6.5 `location /cv/ { proxy_pass $backend; }` in `web/nginx.conf`
+- [x] 6.5 `location /cv/ { proxy_pass $backend; }` in `web/nginx.conf`
 
 ## 7. Read surfaces
 

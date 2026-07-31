@@ -358,6 +358,15 @@ func Register(app *fiber.App, cfg Config) {
 
 	app.Get("/health", a.Health)
 
+	// The public side of CV link tracing. It sits beside /health rather than under /api/v1
+	// because it lives inside a PDF a recruiter opens by hand: "freehire.me/cv/acme-x7abc" is a
+	// URL a person may read off a hover tooltip, and "/api/v1/..." would not be.
+	//
+	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
+	// and excluded, and a leaked API key must not be able to attribute or hide one.
+	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
+	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+
 	api := app.Group("/api/v1")
 	// optionalAuth attaches the caller when signed in (cookie or key) but never
 	// rejects, so these public detail reads can overlay the caller's own vote
