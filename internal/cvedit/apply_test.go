@@ -1,0 +1,224 @@
+package cvedit
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/cv"
+)
+
+// sample is the state every apply test starts from: two entries, so an operation on one can
+// be seen not to touch the other.
+func sample() State {
+	return State{
+		Title:      "Backend Engineer",
+		TemplateID: "classic-ats",
+		Document: cv.Document{
+			Margins: cv.DefaultMargins(),
+			Style:   cv.Style{FontSize: 10.5},
+			Header:  cv.Header{FullName: "Ada Lovelace", Email: "ada@example.com"},
+			Summary: "Ten years of Go",
+			Experience: []cv.ExperienceItem{
+				{Role: "Engineer", Company: "Acme", Bullets: []string{"Shipped it", "Twice"}, Stack: []string{"Go"}},
+				{Role: "Junior", Company: "Initech", Bullets: []string{"Learned"}},
+			},
+			Skills: []cv.SkillGroup{{Group: "Languages", Items: []string{"Go", "SQL"}}},
+		},
+	}
+}
+
+func mustParse(t *testing.T, s string) Path {
+	t.Helper()
+	p, err := ParsePath(s)
+	if err != nil {
+		t.Fatalf("ParsePath(%q): %v", s, err)
+	}
+	return p
+}
+
+// applyAndUndo is the invariant the whole feature rests on: applying a batch and then
+// applying the inverses it produced returns the state exactly as it was.
+func applyAndUndo(t *testing.T, ops []Op) (after State) {
+	t.Helper()
+	before := sample()
+
+	after, inverse, err := Apply(before, ops)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if reflect.DeepEqual(before, after) {
+		t.Fatalf("Apply changed nothing")
+	}
+
+	undone, _, err := Apply(after, inverse)
+	if err != nil {
+		t.Fatalf("Apply(inverse): %v", err)
+	}
+	if !reflect.DeepEqual(before, undone) {
+		t.Fatalf("apply → inverse did not return the original:\n before %+v\n after  %+v", before, undone)
+	}
+	return after
+}
+
+func TestApplySetRoundTrips(t *testing.T) {
+	after := applyAndUndo(t, []Op{{Kind: OpSet, Path: mustParse(t, "experience[0].bullets[1]"), Value: "Shipped it again"}})
+
+	if got := after.Experience[0].Bullets[1]; got != "Shipped it again" {
+		t.Fatalf("bullet = %q, want the new text", got)
+	}
+	if got := after.Experience[1].Bullets[0]; got != "Learned" {
+		t.Fatalf("the other entry changed: %q", got)
+	}
+}
+
+func TestApplySetReachesScalarsTheOldVocabularyCouldNot(t *testing.T) {
+	after := applyAndUndo(t, []Op{
+		{Kind: OpSet, Path: mustParse(t, "style.font_size"), Value: 11.0},
+		{Kind: OpSet, Path: mustParse(t, "margins.left"), Value: 0.75},
+		{Kind: OpSet, Path: mustParse(t, "template_id"), Value: "sidebar"},
+		{Kind: OpSet, Path: mustParse(t, "header.email"), Value: "ada@lovelace.dev"},
+	})
+
+	if after.Style.FontSize != 11.0 || after.Margins.Left != 0.75 {
+		t.Fatalf("typography or margins unchanged: %+v %+v", after.Style, after.Margins)
+	}
+	if after.TemplateID != "sidebar" || after.Header.Email != "ada@lovelace.dev" {
+		t.Fatalf("template or contact unchanged: %+v", after)
+	}
+}
+
+func TestApplyInsertRoundTrips(t *testing.T) {
+	after := applyAndUndo(t, []Op{{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[0]"), Value: "Led the rewrite"}})
+
+	want := []string{"Led the rewrite", "Shipped it", "Twice"}
+	if !reflect.DeepEqual(after.Experience[0].Bullets, want) {
+		t.Fatalf("bullets = %v, want %v", after.Experience[0].Bullets, want)
+	}
+}
+
+func TestApplyInsertAtTheEndIsAllowed(t *testing.T) {
+	after := applyAndUndo(t, []Op{{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[2]"), Value: "And again"}})
+
+	if got := after.Experience[0].Bullets; len(got) != 3 || got[2] != "And again" {
+		t.Fatalf("bullets = %v, want the new one appended", got)
+	}
+}
+
+func TestApplyInsertBuildsAWholeEntry(t *testing.T) {
+	entry := cv.ExperienceItem{Role: "Staff", Company: "Globex", Bullets: []string{"Ran it"}}
+	after := applyAndUndo(t, []Op{{Kind: OpInsert, Path: mustParse(t, "experience[2]"), Value: entry}})
+
+	if len(after.Experience) != 3 || after.Experience[2].Company != "Globex" {
+		t.Fatalf("experience = %+v, want the new entry appended", after.Experience)
+	}
+}
+
+func TestApplyRemoveRoundTrips(t *testing.T) {
+	after := applyAndUndo(t, []Op{{Kind: OpRemove, Path: mustParse(t, "experience[0].bullets[0]")}})
+
+	want := []string{"Twice"}
+	if !reflect.DeepEqual(after.Experience[0].Bullets, want) {
+		t.Fatalf("bullets = %v, want %v", after.Experience[0].Bullets, want)
+	}
+}
+
+func TestApplyMoveRoundTrips(t *testing.T) {
+	to := 0
+	after := applyAndUndo(t, []Op{{Kind: OpMove, Path: mustParse(t, "experience[0].bullets[1]"), To: &to}})
+
+	want := []string{"Twice", "Shipped it"}
+	if !reflect.DeepEqual(after.Experience[0].Bullets, want) {
+		t.Fatalf("bullets = %v, want %v", after.Experience[0].Bullets, want)
+	}
+}
+
+func TestApplyMixedBatchRoundTrips(t *testing.T) {
+	to := 0
+	applyAndUndo(t, []Op{
+		{Kind: OpSet, Path: mustParse(t, "summary"), Value: "Distributed systems"},
+		{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[2]"), Value: "Mentored two juniors"},
+		{Kind: OpRemove, Path: mustParse(t, "experience[1].bullets[0]")},
+		{Kind: OpMove, Path: mustParse(t, "skills[0].items[1]"), To: &to},
+		{Kind: OpSet, Path: mustParse(t, "style.line_height"), Value: 0.6},
+	})
+}
+
+func TestApplyIsAllOrNothing(t *testing.T) {
+	before := sample()
+	ops := []Op{
+		{Kind: OpSet, Path: mustParse(t, "summary"), Value: "Distributed systems"},
+		{Kind: OpSet, Path: mustParse(t, "experience[0].bullets[0]"), Value: "Rewrote it"},
+		{Kind: OpSet, Path: mustParse(t, "experience[9].bullets[0]"), Value: "Never happened"},
+		{Kind: OpSet, Path: mustParse(t, "title"), Value: "Staff Engineer"},
+	}
+
+	after, inverse, err := Apply(before, ops)
+	if err == nil {
+		t.Fatal("Apply succeeded, want a refusal on the third operation")
+	}
+	if !strings.Contains(err.Error(), "experience[9]") {
+		t.Fatalf("error %q does not name the failing address", err)
+	}
+	if inverse != nil {
+		t.Fatalf("a refused batch returned inverses: %+v", inverse)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("a refused batch changed the state")
+	}
+	// The caller's own value is untouched too — Apply works on its own copy.
+	if before.Summary != "Ten years of Go" {
+		t.Fatalf("Apply mutated the caller's state: %q", before.Summary)
+	}
+}
+
+func TestApplyRefusesAnOperationItCannotCarryOut(t *testing.T) {
+	past := 9
+	for _, tc := range []struct {
+		name string
+		op   Op
+	}{
+		{"set past the end", Op{Kind: OpSet, Path: mustParse(t, "experience[0].bullets[9]"), Value: "x"}},
+		{"insert past the end", Op{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[9]"), Value: "x"}},
+		{"remove past the end", Op{Kind: OpRemove, Path: mustParse(t, "experience[9]")}},
+		{"move past the end", Op{Kind: OpMove, Path: mustParse(t, "experience[0].bullets[0]"), To: &past}},
+		{"move without a destination", Op{Kind: OpMove, Path: mustParse(t, "experience[0].bullets[0]")}},
+		{"insert into something that is not a list", Op{Kind: OpInsert, Path: mustParse(t, "summary"), Value: "x"}},
+		{"remove something that is not a list entry", Op{Kind: OpRemove, Path: mustParse(t, "summary")}},
+		{"a value of the wrong shape", Op{Kind: OpSet, Path: mustParse(t, "style.font_size"), Value: "large"}},
+		{"an unknown kind", Op{Kind: "replace", Path: mustParse(t, "summary"), Value: "x"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := sample()
+			after, _, err := Apply(before, []Op{tc.op})
+			if err == nil {
+				t.Fatalf("Apply(%s) succeeded, want a refusal", tc.name)
+			}
+			if !reflect.DeepEqual(before, after) {
+				t.Fatal("a refused operation changed the state")
+			}
+		})
+	}
+}
+
+func TestApplyInversesUndoInReverseOrder(t *testing.T) {
+	before := sample()
+	// Two operations on the same list where order matters: undoing them in the order they
+	// were applied would leave the bullet in the wrong place.
+	ops := []Op{
+		{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[0]"), Value: "First"},
+		{Kind: OpRemove, Path: mustParse(t, "experience[0].bullets[2]")},
+	}
+
+	after, inverse, err := Apply(before, ops)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	undone, _, err := Apply(after, inverse)
+	if err != nil {
+		t.Fatalf("Apply(inverse): %v", err)
+	}
+	if !reflect.DeepEqual(before.Experience, undone.Experience) {
+		t.Fatalf("undo out of order: %+v, want %+v", undone.Experience, before.Experience)
+	}
+}

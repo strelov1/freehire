@@ -32,6 +32,10 @@ type Querier interface {
 	// argument unconditionally left rows reading link_source='agent' with a NULL
 	// confidence after a caller merely re-labelled the message.
 	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
+	// Fold a follow-on edit into the newest revision: replace what it does and restate its
+	// description, but LEAVE inverse alone. The inverse still leads back to the state before the
+	// first of the coalesced edits, which is what makes undo mean something for typed text.
+	AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (AmendCVRevisionRow, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
@@ -695,6 +699,14 @@ type Querier interface {
 	// The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
 	// is a whole second document, and no caller needs its bytes — only whether one exists.
 	GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByIDRow, error)
+	// Read an owned CV's editable state and lock the row for the rest of the transaction, so a
+	// commit reads, applies and records against a document nobody else is changing underneath it.
+	// The lock is what serialises edits to one CV: two agent turns arriving together used to
+	// interleave, and the pre-run snapshot each took was of a half-edited document. Owner-scoped:
+	// no row for a foreign or missing id.
+	GetCVForEdit(ctx context.Context, arg GetCVForEditParams) (GetCVForEditRow, error)
+	// One revision, owner-scoped — what undo reads to find the inverse it must apply.
+	GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (GetCVRevisionRow, error)
 	// Community discussion threads (see the add-community-threads change). Read paths
 	// join community_personas so a row carries the author's handle, never their user_id.
 	// Every such join is a LEFT JOIN: content outlives its author (a deleted account
@@ -882,6 +894,11 @@ type Querier interface {
 	// already reported the job.
 	GhostReportRefusalReason(ctx context.Context, arg GhostReportRefusalReasonParams) (GhostReportRefusalReasonRow, error)
 	IncrementThreadReplyCount(ctx context.Context, id int64) error
+	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
+	// which entry point, and the document version it was computed against. Written in the same
+	// transaction as the document it changed — a change without its revision, or a revision
+	// without its change, would make the feed lie.
+	InsertCVRevision(ctx context.Context, arg InsertCVRevisionParams) (InsertCVRevisionRow, error)
 	// Mint a persona. ON CONFLICT (user_id) DO NOTHING makes a concurrent same-user mint
 	// return no row (the repository re-reads the winner); a handle-unique violation is a
 	// different collision the repository maps to a retry.
@@ -975,6 +992,11 @@ type Querier interface {
 	// A session's whole transcript in order. It is both what the client replays and what the
 	// model's history is rebuilt from, so tool calls and tool results are included.
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
+	// The feed, newest first.
+	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]ListCVRevisionsRow, error)
+	// Every revision of one agent turn or autopilot run that is still standing, newest first —
+	// the order a whole-run revert must undo them in.
+	ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]ListCVRevisionsInBatchRow, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
@@ -1357,6 +1379,9 @@ type Querier interface {
 	// listing, so "mark all read" means "everything currently shown". Only unread,
 	// live rows are touched; returns how many it marked.
 	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
+	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
+	// and the caller can tell the difference without a second read.
+	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
 	// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
@@ -1421,6 +1446,9 @@ type Querier interface {
 	// Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
 	// is a no-op, so the file is never double-applied.
 	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
+	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
+	// coalescing into anything older would reorder the log.
+	NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (NewestCVRevisionRow, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
@@ -1946,6 +1974,10 @@ type Querier interface {
 	// column unchanged (COALESCE keeps the existing value), so the caller can set the
 	// stage, the notes, or both in one call. Returns the row.
 	TrackJob(ctx context.Context, arg TrackJobParams) (UserJob, error)
+	// Keep only the newest $2 revisions of a CV. A revision log is an aid to the candidate's
+	// current work, not an archive, and each row carries two operation documents on the table
+	// behind every CV page.
+	TrimCVRevisions(ctx context.Context, arg TrimCVRevisionsParams) (int64, error)
 	// Clear a job's dismissed mark without deleting the interaction row, so view/
 	// apply/save history survives. No interaction row -> pgx.ErrNoRows; the handler
 	// treats that as "already not dismissed", never as a failure. This is the undo
