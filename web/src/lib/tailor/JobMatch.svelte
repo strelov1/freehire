@@ -16,12 +16,12 @@
 
   const toneText: Record<JobMatchTone, string> = {
     strong: 'text-brand-strong',
-    moderate: 'text-amber-600 dark:text-amber-500',
+    moderate: 'text-warning-strong',
     poor: 'text-destructive',
   };
   const toneBar: Record<JobMatchTone, string> = {
     strong: 'bg-brand',
-    moderate: 'bg-amber-500',
+    moderate: 'bg-warning',
     poor: 'bg-destructive',
   };
   const tone = $derived(view ? scoreTone(view.overall) : 'moderate');
@@ -62,14 +62,14 @@
     </div>
 
     {#if view.missingSkills.length}
-      <div class="mt-3 rounded-lg bg-amber-500/10 px-2 py-1.5">
-        <p class="mb-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+      <div class="mt-3 rounded-lg bg-warning/10 px-2 py-1.5">
+        <p class="mb-1 text-xs font-medium text-warning-strong">
           Skills this vacancy names that your CV does not
         </p>
         <ul class="flex flex-wrap gap-1">
           {#each view.missingSkills as skill, i (i)}
             <li
-              class="rounded border border-amber-500/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-300"
+              class="rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-warning-strong"
             >
               {skill}
             </li>
@@ -86,7 +86,7 @@
         <ul class="space-y-1 text-xs text-muted-foreground">
           {#each view.requirements.missing as req, i (i)}
             <li class="flex items-start gap-1.5">
-              <span class="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true"></span>
+              <span class="mt-1 size-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true"></span>
               <span>{req.text}</span>
             </li>
           {/each}

@@ -32,7 +32,7 @@
 
   const itemTone: Record<string, string> = {
     pass: 'text-emerald-600 dark:text-emerald-400',
-    warn: 'text-amber-600 dark:text-amber-400',
+    warn: 'text-warning-strong',
     fail: 'text-destructive',
   };
 </script>
