@@ -17,9 +17,10 @@
   import { Paginator } from '$lib/paginated.svelte';
   import { Badge, Button } from '$lib/ui';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
+  import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
-  import { Mail, AtSign, Copy, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
+  import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
   import { timeAgo, errorMessage } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
@@ -53,7 +54,6 @@
   );
 
   let syncing = $state(false);
-  let claiming = $state(false);
   let refreshing = $state(false);
   let markingAll = $state(false);
 
@@ -421,17 +421,6 @@
     }
   }
 
-  async function disconnectGmail() {
-    if (!confirm('Disconnect Gmail and remove its synced mail?')) return;
-    try {
-      await api.disconnectGmail();
-      gmail = { connected: false, available: gmail?.available };
-      if (source === 'gmail') source = '';
-      await refresh();
-    } catch (e) {
-      error = errorMessage(e, 'Failed to disconnect.');
-    }
-  }
 
   // Deep link to a Gmail message in Gmail's web UI (the Gmail API id is the URL id).
   const gmailUrl = (externalId: string) =>
@@ -439,33 +428,15 @@
 
   // --- Hosted mailbox source ---
 
-  async function claimMailbox() {
-    if (claiming) return;
-    claiming = true;
-    error = null;
-    try {
-      mailbox = await api.claimMailbox();
-      await refresh();
-    } catch (e) {
-      error = errorMessage(e, 'Failed to create a mailbox.');
-    } finally {
-      claiming = false;
-    }
-  }
 
-  async function releaseMailbox() {
-    if (!confirm('Release your freehire mailbox and delete its received mail?')) return;
-    try {
-      mailbox = await api.releaseMailbox();
-      if (source === 'hosted') source = '';
-      await refresh();
-    } catch (e) {
-      error = errorMessage(e, 'Failed to release the mailbox.');
-    }
-  }
 
-  function copyAddress() {
-    if (mailbox?.address) navigator.clipboard?.writeText(mailbox.address);
+
+  // A source was added or removed in the Settings pane. A filter pointing at an
+  // account that no longer exists would render an empty list that looks like "no
+  // mail" rather than "no such account", so clear it before reloading.
+  async function onSourceChanged(removed: InboxSource | null) {
+    if (removed && source === removed) source = '';
+    await refresh();
   }
 
   // Refresh the listing after a source is added/removed; empties it when none left.
@@ -511,61 +482,16 @@
     </div>
 
     {#if tab === 'settings'}
-      <!-- Sources: the two ways to get mail in — connect Gmail and/or claim a mailbox. -->
-      <div class="grid gap-3 sm:grid-cols-2">
-        <!-- Gmail -->
-        <div class="rounded-xl border border-border bg-card p-4">
-          <div class="flex items-center gap-2 text-sm font-medium">
-            <Mail class="h-4 w-4 text-muted-foreground" /> Gmail
-          </div>
-          {#if hasGmail}
-            <p class="mt-1 truncate text-xs text-muted-foreground">{gmail?.email}</p>
-            {#if gmail?.status === 'needs_reconsent'}
-              <Badge variant="outline" class="mt-2 border-destructive/40 text-destructive">Reconnect needed</Badge>
-            {/if}
-            <div class="mt-3 flex flex-wrap gap-2">
-              {#if gmail?.status === 'needs_reconsent'}
-                <Button variant="secondary" size="sm" onclick={connectGmail}>Reconnect</Button>
-              {/if}
-              <Button variant="secondary" size="sm" disabled={syncing} onclick={sync}>
-                {syncing ? 'Syncing…' : 'Sync'}
-              </Button>
-              <Button variant="outline" size="sm" onclick={disconnectGmail}>Disconnect</Button>
-            </div>
-          {:else if gmail?.available}
-            <p class="mt-1 text-xs text-muted-foreground">Pull replies from your own Gmail (needs Google sign-in).</p>
-            <Button variant="primary" size="sm" class="mt-3" onclick={() => (showConnectDialog = true)}>
-              Connect Gmail <Mail class="h-4 w-4" />
-            </Button>
-          {:else}
-            <p class="mt-1 text-xs text-muted-foreground">Not available yet.</p>
-          {/if}
-        </div>
-
-        <!-- Hosted mailbox -->
-        <div class="rounded-xl border border-border bg-card p-4">
-          <div class="flex items-center gap-2 text-sm font-medium">
-            <AtSign class="h-4 w-4 text-muted-foreground" /> freehire mailbox
-          </div>
-          {#if hasMailbox}
-            <div class="mt-1 flex items-center gap-1">
-              <code class="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{mailbox?.address}</code>
-              <button type="button" onclick={copyAddress} title="Copy address" class="shrink-0 text-muted-foreground hover:text-foreground">
-                <Copy class="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <p class="mt-2 text-xs text-muted-foreground">Use this address when you apply — replies land here.</p>
-            <Button variant="outline" size="sm" class="mt-3" onclick={releaseMailbox}>Release</Button>
-          {:else if mailbox?.available}
-            <p class="mt-1 text-xs text-muted-foreground">Get an address on our domain — no Google needed.</p>
-            <Button variant="primary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
-              {claiming ? 'Creating…' : 'Get a freehire mailbox'} <AtSign class="h-4 w-4" />
-            </Button>
-          {:else}
-            <p class="mt-1 text-xs text-muted-foreground">Not available yet.</p>
-          {/if}
-        </div>
-      </div>
+      <InboxSettings
+        bind:gmail
+        bind:mailbox
+        {syncing}
+        onSync={sync}
+        onConnect={() => (showConnectDialog = true)}
+        onReconnect={connectGmail}
+        onSourceChanged={onSourceChanged}
+        onError={(m) => (error = m)}
+      />
     {:else if !hasAnySource}
       <p class="py-8 text-center text-sm text-muted-foreground">
         No mail source yet —
