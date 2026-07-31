@@ -3,7 +3,7 @@
 - [x] 1.1 Add `web/src/lib/assistant/scrolling.ts` with the pure decision — `atBottom(metrics, tolerance)` and the tolerance constant — plus `scrolling.test.ts` covering at-bottom, scrolled-away, and the growing-last-line case the tolerance exists for.
 - [x] 1.2 Wire `AssistantChat.svelte` to it: a `stickToBottom` state updated from the pane's `onscroll`, `scrollToBottom(force = false)` that no-ops while false, and `force` at the three deliberate acts (submit, unattended run, open session).
 - [x] 1.3 Add the "jump to latest" control, shown only while not following; activating it scrolls to the bottom and resumes following.
-- [ ] 1.4 Verify in a browser against a long streaming answer: scroll up mid-turn and confirm position holds, the control appears, and both the control and scrolling back restore following.
+- [x] 1.4 Verify in a browser against a long streaming answer: scroll up mid-turn and confirm position holds, the control appears, and both the control and scrolling back restore following.
 
 ## 2. Transcription backend
 
@@ -19,7 +19,7 @@
 - [x] 3.2 Add `web/src/lib/assistant/VoiceInput.svelte`: idle / recording / transcribing states, elapsed time, cancel, the ceiling, wake lock acquire-and-release, and track teardown on every exit path.
 - [x] 3.3 Add the transcription call to `web/src/lib/assistant/api.ts` and mount `VoiceInput` in `Composer.svelte`, appending its result to `draft`; hide the control where `canRecord` is false or the endpoint reported `501`.
 - [x] 3.4 Surface denied permission, capture failure and transcription failure as messages the caller can act on, leaving the composer typable.
-- [ ] 3.5 Verify in a browser: record, cancel, deny permission, and reach the ceiling.
+- [x] 3.5 Verify in a browser: record, cancel, deny permission, and reach the ceiling.
 
 ## 4. Follow-ups backend
 
@@ -33,11 +33,11 @@
 - [x] 5.1 Add `web/src/lib/assistant/followups.ts` with `shouldRequest(result, text)` and the display truncation, plus tests for `end_turn` with text, errored, cancelled, ceiling-stopped, and empty-text turns.
 - [x] 5.2 Request follow-ups from `AssistantChat.svelte` when the reducer settles a qualifying turn; clear them when the next turn starts and never request them on transcript replay.
 - [x] 5.3 Render the strip beneath the last assistant message as text nodes only, with a click that goes through `submitText`.
-- [ ] 5.4 Verify in a browser that the strip appears after an answer, clears on the next turn, and is absent after an error and on reopening a conversation.
+- [x] 5.4 Verify in a browser that the strip appears after an answer, clears on the next turn, and is absent after an error and on reopening a conversation.
 
 ## 6. Close out
 
 - [x] 6.1 Update `internal/assistant/AGENTS.md` (the follow-up endpoint and its "failure is invisible" rule) and add `internal/speech/AGENTS.md` plus its row in the root `CLAUDE.md` table.
 - [x] 6.2 Document `STT_MODEL` wherever the other LLM environment variables are documented.
-- [ ] 6.3 Run `go build ./... && go vet ./... && go test ./...` and the web checks; verify against the acceptance scenarios in the three spec files.
+- [x] 6.3 Run `go build ./... && go vet ./... && go test ./...` and the web checks; verify against the acceptance scenarios in the three spec files.
 - [ ] 6.4 Offer a `/blog` changelog entry for the shipped voice input and follow-ups.
