@@ -12,6 +12,7 @@
 
 import type {
   CvAtsDelta,
+  CvJobMatch,
   CvMeta,
   CvRecord,
   CvTailoredItem,
@@ -1418,6 +1419,13 @@ export function createApi(
     return requestData<CvAtsDelta>(`/api/v1/me/cvs/${id}/ats-delta`);
   }
 
+  /** How well a tailored CV matches its vacancy, scored on the current document. Cookie-only
+   *  and recomputed per request. 409 for a CV bound to no vacancy; the response itself reports
+   *  `available: false` when no score could be produced. */
+  async function getCvJobMatch(id: string): Promise<CvJobMatch> {
+    return requestData<CvJobMatch>(`/api/v1/me/cvs/${id}/job-match`);
+  }
+
   /** Replace a CV's title, template, and document. */
   async function updateCv(id: string, input: UpdateCvInput): Promise<CvMeta> {
     return requestData<CvMeta>(`/api/v1/me/cvs/${id}`, jsonBody('PUT', input));
@@ -1660,6 +1668,7 @@ export function createApi(
     setCvTemplate,
     getCv,
     getCvAtsDelta,
+    getCvJobMatch,
     updateCv,
     deleteCv,
     setCvSession,

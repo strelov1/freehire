@@ -5,6 +5,7 @@
 
 import type {
   Delta as AtsDeltaWire,
+  Score as JobMatchScore,
   Document,
   Margins,
   Style,
@@ -91,6 +92,17 @@ export interface CvAtsDelta {
   reason?: string;
   base_cv_id?: string;
   delta?: AtsDeltaWire;
+}
+
+/** How well a tailored CV matches the vacancy it was written for, measured on that document
+ *  alone — no base CV, no banked profile. `available` is false, with a `reason` and no
+ *  `score`, when the score could not be produced (no renderer, a failed compile, or a vacancy
+ *  nothing could be matched against), and the workspace then shows nothing rather than an
+ *  error. Deterministic and free, so the workspace refreshes it after every saved edit. */
+export interface CvJobMatch {
+  available: boolean;
+  reason?: string;
+  score?: JobMatchScore;
 }
 
 export interface CvTemplate {

@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,12 +11,6 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/skilltag"
 )
-
-// errNoRenderer is scoring's own missing-renderer error, covering both halves of the
-// toolchain: the Typst renderer and the PDF text extractor. The PDF endpoint answers 501 for
-// the renderer half because rendering is what that caller asked for; the delta is an
-// accessory read, so it reports the score as unavailable instead (see the handler).
-var errNoRenderer = errors.New("cv renderer is not configured")
 
 // atsDeltaResponse is the wire shape for the tailoring ATS delta. Available is false — with
 // a short reason and no Delta — when the comparison could not be made for an environmental
@@ -118,31 +111,13 @@ func (h *cvHandlers) atsDeltaUnavailable(c *fiber.Ctx, err error) error {
 	return c.JSON(fiber.Map{"data": atsDeltaResponse{Available: false, Reason: reason}})
 }
 
-// scoreRenderedCV renders a CV document and scores the text layer of the PDF it produced,
-// against `keywords` as the keyword baseline.
-//
-// The rendered text — not the document — is the scoring input, and that is the whole point:
-// a document field the active template never renders contributes nothing, a template that
-// buries the contact block scores its reading order as an ATS would read it, and a render
-// that yields no extractable text fails machine-readability instead of passing on the
-// strength of JSON nobody will parse. The CV's own skill set is parsed from that same text
-// for the same reason.
+// scoreRenderedCV scores a CV's rendered text layer for ATS readability, against `keywords`
+// as the keyword baseline. The CV's own skill set is parsed from that same text, so the
+// score describes the rendered artifact and nothing outside it.
 func (h *cvHandlers) scoreRenderedCV(ctx context.Context, doc cv.Document, tmpl cv.Template, keywords []string) (atscheck.Report, error) {
-	// Both halves are checked, because a handler assembled with one and not the other exists:
-	// an unchecked extractor call turns a misassembled handler into a 500 rather than the
-	// unavailable delta every other missing-toolchain case yields.
-	if h.cvRenderer == nil || h.extractPDFText == nil {
-		return atscheck.Report{}, errNoRenderer
-	}
-	// No headshot: this render exists to be read as text, and a portrait contributes
-	// none. Fetching it would cost a bucket round trip per scored template.
-	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl, nil)
+	text, err := h.renderedCVText(ctx, doc, tmpl)
 	if err != nil {
-		return atscheck.Report{}, fmt.Errorf("render cv for scoring: %w", err)
-	}
-	text, err := h.extractPDFText(pdf)
-	if err != nil {
-		return atscheck.Report{}, fmt.Errorf("extract rendered cv text: %w", err)
+		return atscheck.Report{}, err
 	}
 	return atscheck.Score(text, skilltag.Parse(text, skilltag.WithResumeAcronyms()), keywords), nil
 }

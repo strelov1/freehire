@@ -11,6 +11,7 @@
   // teaches the candidate to ignore the panel; an absence teaches nothing.
   import { TrendingDown, TrendingUp, Minus } from '@lucide/svelte';
   import { viewAtsDelta, toneOf, type AtsDeltaTone } from './atsdelta';
+  import ScoreCategoryRow from './ScoreCategoryRow.svelte';
   import type { CvAtsDelta } from '$lib/cv';
 
   let { data }: { data: CvAtsDelta | null | undefined } = $props();
@@ -51,17 +52,20 @@
       </p>
     {/if}
 
-    <ul class="space-y-1">
+    <!-- Each category expands to the checks behind its score. The scorer has been computing
+         them all along; a row that reports only a number tells the candidate what changed
+         and never why. -->
+    <div class="border-t border-border/60">
       {#each view.rows as row (row.id)}
-        <li class="flex items-center justify-between gap-2 text-xs">
-          <span class="text-muted-foreground">{row.label}</span>
-          <span class="tabular-nums {toneClass[toneOf(row.change)]}">
-            {row.base} → {row.tailored}
-            <span class="text-muted-foreground">({row.text})</span>
-          </span>
-        </li>
+        <ScoreCategoryRow
+          id="ats-delta-{row.id}"
+          label={row.label}
+          value="{row.base} → {row.tailored} ({row.text})"
+          valueClass={toneClass[toneOf(row.change)]}
+          items={row.items}
+        />
       {/each}
-    </ul>
+    </div>
 
     <p class="mt-2 text-[11px] leading-snug text-muted-foreground">
       Measured on the rendered PDF, against your base CV as it stands now.

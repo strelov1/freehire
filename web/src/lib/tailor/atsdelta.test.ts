@@ -107,3 +107,41 @@ describe('viewAtsDelta', () => {
     expect(rows.map((r) => r.text)).toEqual(['+8', '+1']);
   });
 });
+
+describe('viewAtsDelta line items', () => {
+  it('carries the checks behind each row so it can expand', () => {
+    const v = viewAtsDelta(
+      resp({
+        delta: {
+          base: 70,
+          tailored: 78,
+          change: 8,
+          regressed: false,
+          categories: [
+            {
+              id: 'keyword_strength',
+              label: 'Keyword Strength',
+              base: 20,
+              tailored: 28,
+              change: 8,
+              items: [
+                { points: 28, text: '5 of 6 in-demand role keywords present', status: 'pass' },
+                { points: 12, text: 'Add the recommended keywords', status: 'warn' },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    const items = v?.rows[0]?.items ?? [];
+    expect(items).toHaveLength(2);
+    expect(items[0]?.text).toBe('5 of 6 in-demand role keywords present');
+    expect(items[1]?.status).toBe('warn');
+  });
+
+  it('gives a row with no items an empty list rather than undefined', () => {
+    // The score omits an empty items array; a row the panel cannot destructure would
+    // crash the whole panel over a category that simply had nothing to say.
+    expect(viewAtsDelta(resp())?.rows.every((r) => Array.isArray(r.items))).toBe(true);
+  });
+});
