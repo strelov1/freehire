@@ -33,6 +33,11 @@ import (
 type assistantHandlers struct {
 	store  *assistant.Store
 	runner *assistant.Runner
+	// followUps suggests what to ask next, on the CHEAP model rather than the agent's
+	// own: it is a three-line task, and spending the tool-calling model on it would
+	// undo the only reason it is a separate call. Nil when unconfigured, which the
+	// endpoint answers as an empty list.
+	followUps *assistant.FollowUps
 
 	queries  *db.Queries
 	search   *searchHandlers
@@ -112,6 +117,7 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, h.PostAssistantMessage)
 	api.Post("/assistant/sessions/:id/opening", mw.key, h.PostAssistantOpening)
+	api.Post("/assistant/sessions/:id/followups", mw.key, h.PostAssistantFollowUps)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, h.PostAssistantAutopilot)
@@ -586,6 +592,14 @@ func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.S
 	if err := h.cv.cvStore.SetAutopilotReport(ctx, *sess.CVID, sess.UserID, plan); err != nil {
 		log.Printf("assistant: could not lay down the run plan cv=%s: %v", sess.CVID, err)
 	}
+}
+
+// withFollowUps gives the assistant the model its suggestions run on. Separate from
+// the constructor because it is a DIFFERENT model from the agent's — the cheap
+// general-purpose one — and threading a second client through an already long
+// parameter list would invite passing the wrong one.
+func (h *assistantHandlers) withFollowUps(model *llm.Client) {
+	h.followUps = assistant.NewFollowUps(model)
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.

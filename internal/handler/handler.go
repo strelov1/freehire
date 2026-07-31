@@ -323,6 +323,9 @@ func Register(app *fiber.App, cfg Config) {
 	// hub, which a browsing session reads the caller's open page through.
 	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH)
 	cvH.withAssistantSessions(assistantH.store)
+	// Suggestions run on LLM (cheap, one-shot) rather than on AssistantLLM: the whole
+	// argument for generating them outside the turn is that they cost almost nothing.
+	assistantH.withFollowUps(cfg.LLM)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil

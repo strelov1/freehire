@@ -231,6 +231,7 @@ func TestAssistantSessionsAreOwnerScoped(t *testing.T) {
 		{fiber.MethodGet, "/api/v1/assistant/sessions/" + id},
 		{fiber.MethodDelete, "/api/v1/assistant/sessions/" + id},
 		{fiber.MethodPost, "/api/v1/assistant/sessions/" + id + "/messages"},
+		{fiber.MethodPost, "/api/v1/assistant/sessions/" + id + "/followups"},
 	} {
 		resp := assistantRequest(t, app, tc.method, tc.path, other, map[string]string{"text": "hi"})
 		if resp.StatusCode != fiber.StatusNotFound {

@@ -23,16 +23,16 @@
 
 ## 4. Follow-ups backend
 
-- [ ] 4.1 Add follow-up generation to `internal/assistant` (prompt + `llm.WithSchema` shape), returning at most three items and discarding over-length ones; unit-test the caps and the discard-not-truncate rule against a fake model.
-- [ ] 4.2 Add `internal/handler/assistant_followups.go`: `POST /api/v1/assistant/sessions/:id/followups`, owner-scoped, reading only the most recent exchange, answering an empty list on every failure path.
-- [ ] 4.3 Add handler tests: owned session returns items, another caller's session is 404, no credential is 401, an unconfigured or failing model returns an empty list with 200.
-- [ ] 4.4 Register the route and wire the cheap model client.
+- [x] 4.1 Add follow-up generation to `internal/assistant` (prompt + `llm.WithSchema` shape), returning at most three items and discarding over-length ones; unit-test the caps and the discard-not-truncate rule against a fake model.
+- [x] 4.2 Add `internal/handler/assistant_followups.go`: `POST /api/v1/assistant/sessions/:id/followups`, owner-scoped, reading only the most recent exchange, answering an empty list on every failure path.
+- [x] 4.3 Add handler tests: owned session returns items, another caller's session is 404, no credential is 401, an unconfigured or failing model returns an empty list with 200.
+- [x] 4.4 Register the route and wire the cheap model client.
 
 ## 5. Follow-ups UI
 
-- [ ] 5.1 Add `web/src/lib/assistant/followups.ts` with `shouldRequest(result, text)` and the display truncation, plus tests for `end_turn` with text, errored, cancelled, ceiling-stopped, and empty-text turns.
-- [ ] 5.2 Request follow-ups from `AssistantChat.svelte` when the reducer settles a qualifying turn; clear them when the next turn starts and never request them on transcript replay.
-- [ ] 5.3 Render the strip beneath the last assistant message as text nodes only, with a click that goes through `submitText`.
+- [x] 5.1 Add `web/src/lib/assistant/followups.ts` with `shouldRequest(result, text)` and the display truncation, plus tests for `end_turn` with text, errored, cancelled, ceiling-stopped, and empty-text turns.
+- [x] 5.2 Request follow-ups from `AssistantChat.svelte` when the reducer settles a qualifying turn; clear them when the next turn starts and never request them on transcript replay.
+- [x] 5.3 Render the strip beneath the last assistant message as text nodes only, with a click that goes through `submitText`.
 - [ ] 5.4 Verify in a browser that the strip appears after an answer, clears on the next turn, and is absent after an error and on reopening a conversation.
 
 ## 6. Close out

@@ -7,8 +7,10 @@
     listSessions,
     getSession,
     deleteSession,
+    suggestFollowUps,
     SessionNotFound,
   } from '$lib/assistant/api';
+  import { forDisplay, shouldRequest } from '$lib/assistant/followups';
   import { openRehearsal, sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { splitPresentingCalls } from '$lib/assistant/deck';
@@ -122,6 +124,12 @@
   // following with no further ceremony.
   let stickToBottom = $state(true);
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
+
+  // What the caller might ask next, offered under the newest answer only. Cleared the
+  // moment anything else starts, and never requested on replay — a suggestion is about
+  // the present moment, and paying a model call to reconstruct it for history is spend
+  // with no reader.
+  let followUps = $state<string[]>([]);
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
   let queue = $state<{ id: string; text: string }[]>([]);
@@ -358,6 +366,7 @@
     try {
       chat = initChat();
       queue = [];
+      followUps = [];
       activeId = id;
       activePreset = null;
       // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
@@ -502,8 +511,32 @@
       sessions = setLabel(sessions, sessionId, labelFromMessage(event.text));
     }
     chat = reduceTurnEvent(chat, event);
-    if (event.type === 'result') endTurn();
+    if (event.type === 'result') {
+      endTurn();
+      void askForFollowUps(sessionId, event);
+    }
     void scrollToBottom();
+  }
+
+  /**
+   * Fetch the "what now?" strip for a turn that just settled.
+   *
+   * Every failure is silence. The strip is decoration, the answer the caller came for
+   * is already on screen, and an error about a suggestion is a problem they cannot act
+   * on. The server says the same thing from its side, answering an empty list rather
+   * than a status for anything that goes wrong there.
+   */
+  async function askForFollowUps(sessionId: string, result: Extract<TurnEvent, { type: 'result' }>) {
+    const last = chat.messages[chat.messages.length - 1];
+    if (!shouldRequest(result, last?.role === 'assistant' ? last.text : '')) return;
+    try {
+      const got = await suggestFollowUps(sessionId);
+      // The caller may have switched conversations while this was in flight, and
+      // suggestions drawn from one chat must never appear under another.
+      if (sessionId === activeId) followUps = got;
+    } catch {
+      /* decoration: a suggestion that cannot be fetched is simply not offered */
+    }
   }
 
   // Composer submit: while a turn is in flight the message is queued and drained
@@ -514,6 +547,7 @@
     draft = '';
     if (turnActive || queue.length > 0) {
       enqueue(text);
+      followUps = [];
       void scrollToBottom(true);
       return;
     }
@@ -530,6 +564,9 @@
     if (!id) return;
     error = null;
     turnActive = true;
+    // The strip belongs to the answer above it. Once anything new is running, the
+    // questions it offered are about a moment that has passed.
+    followUps = [];
     onTurnStateChange?.(true);
     // Before anything reaches the server: the host may be holding an edit on a timer, and
     // the run is about to snapshot and rewrite the very document that edit belongs to.
@@ -772,6 +809,29 @@
               {/if}
             {/if}
           {/each}
+
+          <!-- What to ask next. Rendered as TEXT NODES, never through renderMarkdown:
+               the model that wrote these has read job descriptions and browsed pages,
+               so a suggestion may carry an attacker's words — and activating one speaks
+               them in the caller's own voice. What they agree to has to be exactly what
+               they can see, with nothing able to style, link or hide part of itself. -->
+          {#if followUps.length > 0 && !turnActive}
+            <div class="mt-1 flex flex-col items-start gap-1 self-start">
+              <span class="px-1 text-xs font-medium text-muted-foreground">Ask next</span>
+              {#each followUps as suggestion (suggestion)}
+                <!-- Sent as displayed, not as received: the caller agreed to the words
+                     in front of them, so those are the words that go. -->
+                <button
+                  type="button"
+                  onclick={() => submitText(forDisplay(suggestion))}
+                  disabled={switching}
+                  class="max-w-full rounded-lg border border-border/60 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-50"
+                >
+                  {forDisplay(suggestion)}
+                </button>
+              {/each}
+            </div>
+          {/if}
 
           {#if turnActive}
             <div class="self-start inline-flex items-baseline gap-2 px-2 py-1 text-xs text-muted-foreground">

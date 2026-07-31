@@ -68,6 +68,21 @@ export function getSession(id: string): Promise<SessionTranscript> {
   return request<SessionTranscript>(`/sessions/${encodeURIComponent(id)}`);
 }
 
+/** Up to three questions the caller might ask next, drawn from the conversation's most
+ *  recent exchange.
+ *
+ *  A POST despite reading nothing: it spends a model call, and a GET is the one method
+ *  every prefetcher and browser feels free to issue twice. The server answers an empty
+ *  list rather than an error for everything that can go wrong on its side, so a
+ *  rejection here means the request itself failed — and the caller's answer to that is
+ *  silence, not a message. */
+export function suggestFollowUps(id: string): Promise<string[]> {
+  return request<{ followups: string[] }>(`/sessions/${encodeURIComponent(id)}/followups`, {
+    method: 'POST',
+    body: '{}',
+  }).then((d) => d.followups ?? []);
+}
+
 /** Delete one of the caller's conversations. */
 export function deleteSession(id: string): Promise<void> {
   return request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
