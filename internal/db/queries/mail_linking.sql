@@ -1,8 +1,26 @@
 -- name: GetUserApplication :one
 -- The caller's interaction row for one job (the application-detail header).
-SELECT viewed_at, saved_at, applied_at, stage, notes
-FROM user_jobs
-WHERE user_id = $1 AND job_id = $2;
+-- last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+-- must reach the same silence verdict as the badge on the board, and two derivations of one rule
+-- drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
+SELECT uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes, uj.followed_up_at,
+       (CASE WHEN uj.applied_at IS NOT NULL THEN
+          GREATEST(uj.applied_at,
+                   (SELECT max(e.received_at)
+                      FROM emails e
+                     WHERE e.user_id = uj.user_id
+                       AND e.job_id = uj.job_id
+                       AND e.deleted_at IS NULL))
+        END)::timestamptz AS last_activity_at,
+       (uj.applied_at IS NOT NULL AND EXISTS (
+          SELECT 1
+            FROM emails e
+           WHERE e.user_id = uj.user_id
+             AND e.suggested_job_id = uj.job_id
+             AND e.job_id IS NULL
+             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+FROM user_jobs uj
+WHERE uj.user_id = $1 AND uj.job_id = $2;
 
 -- name: ListJobEmails :many
 -- The emails linked to one of the caller's applications, newest first, for the

@@ -16,7 +16,7 @@ import (
 
 // backdate moves a seeded message's received_at into the past, so the recorded
 // application's date can be told apart from now().
-func (f *agentInboxFixture) backdate(emailID int64, at time.Time) {
+func (f *harnessInboxFixture) backdate(emailID int64, at time.Time) {
 	f.t.Helper()
 	if _, err := f.pool.Exec(context.Background(),
 		`UPDATE emails SET received_at = $1 WHERE id = $2`, at, emailID); err != nil {
@@ -25,7 +25,7 @@ func (f *agentInboxFixture) backdate(emailID int64, at time.Time) {
 }
 
 // insertJobOnly seeds a catalog job the caller has no interaction with.
-func (f *agentInboxFixture) insertJobOnly(slug string) int64 {
+func (f *harnessInboxFixture) insertJobOnly(slug string) int64 {
 	f.t.Helper()
 	var id int64
 	if err := f.pool.QueryRow(context.Background(),
@@ -38,7 +38,7 @@ func (f *agentInboxFixture) insertJobOnly(slug string) int64 {
 }
 
 // application reads the caller's interaction with a job.
-func (f *agentInboxFixture) application(jobID int64) (appliedAt time.Time, stage string, found bool) {
+func (f *harnessInboxFixture) application(jobID int64) (appliedAt time.Time, stage string, found bool) {
 	f.t.Helper()
 	var st *string
 	var at *time.Time
@@ -57,7 +57,7 @@ func (f *agentInboxFixture) application(jobID int64) (appliedAt time.Time, stage
 	return appliedAt, stage, true
 }
 
-func (f *agentInboxFixture) appliedCount(jobID int64) int {
+func (f *harnessInboxFixture) appliedCount(jobID int64) int {
 	f.t.Helper()
 	var n int
 	if err := f.pool.QueryRow(context.Background(),
@@ -75,7 +75,7 @@ func applicationPath(emailID int64) string {
 // application the caller never recorded becomes a tracked, linked application
 // dated by that mail.
 func TestApplicationFromMailRecordsAndLinks(t *testing.T) {
-	f := newAgentInboxFixture(t, "fromMail@example.test")
+	f := newHarnessInboxFixture(t, "fromMail@example.test")
 	jobID := f.insertJobOnly("acme-from-mail")
 
 	when := time.Now().Add(-21 * 24 * time.Hour).UTC().Truncate(time.Second)
@@ -115,7 +115,7 @@ func TestApplicationFromMailRecordsAndLinks(t *testing.T) {
 // TestApplicationFromMailKeepsAnEarlierDate asserts a second recording neither
 // rewrites the original application date nor counts a second application.
 func TestApplicationFromMailKeepsAnEarlierDate(t *testing.T) {
-	f := newAgentInboxFixture(t, "fromMailKeep@example.test")
+	f := newHarnessInboxFixture(t, "fromMailKeep@example.test")
 	jobID := f.applyToJob("acme-already", "applied")
 	original, _, _ := f.application(jobID)
 	// The fixture seeds user_jobs directly and so never touched the counter;
@@ -139,7 +139,7 @@ func TestApplicationFromMailKeepsAnEarlierDate(t *testing.T) {
 
 // TestApplicationFromMailIsIdempotent asserts repeating the call changes nothing.
 func TestApplicationFromMailIsIdempotent(t *testing.T) {
-	f := newAgentInboxFixture(t, "fromMailIdem@example.test")
+	f := newHarnessInboxFixture(t, "fromMailIdem@example.test")
 	jobID := f.insertJobOnly("acme-idem")
 	emailID := f.seedEmail(f.userID, "hosted", "fm-3", "Invite", "body")
 
@@ -157,7 +157,7 @@ func TestApplicationFromMailIsIdempotent(t *testing.T) {
 // already proposed an answer for must be confirmed or rejected first, so the
 // resulting link's provenance is never ambiguous.
 func TestApplicationFromMailRefusesPendingSuggestion(t *testing.T) {
-	f := newAgentInboxFixture(t, "fromMailSuggested@example.test")
+	f := newHarnessInboxFixture(t, "fromMailSuggested@example.test")
 	suggestedJob := f.applyToJob("acme-suggested", "applied")
 	f.insertJobOnly("acme-other")
 
@@ -183,7 +183,7 @@ func TestApplicationFromMailRefusesPendingSuggestion(t *testing.T) {
 
 // TestApplicationFromMailRefusals covers the scoping and validation failures.
 func TestApplicationFromMailRefusals(t *testing.T) {
-	f := newAgentInboxFixture(t, "fromMailRefuse@example.test")
+	f := newHarnessInboxFixture(t, "fromMailRefuse@example.test")
 	f.insertJobOnly("acme-refuse")
 	emailID := f.seedEmail(f.userID, "hosted", "fm-5", "Mine", "body")
 

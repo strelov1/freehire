@@ -28,6 +28,18 @@ func (q *Queries) BumpUserTokenVersion(ctx context.Context, id int64) (int32, er
 	return token_version, err
 }
 
+const clearUserPhoto = `-- name: ClearUserPhoto :exec
+UPDATE users
+SET photo_object_key = NULL, photo_uploaded_at = NULL
+WHERE id = $1
+`
+
+// Clear the user's headshot pointer, after deleting the object from storage.
+func (q *Queries) ClearUserPhoto(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, clearUserPhoto, id)
+	return err
+}
+
 const clearUserResume = `-- name: ClearUserResume :exec
 UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
@@ -203,6 +215,26 @@ func (q *Queries) GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Tex
 	return password_hash, err
 }
 
+const getUserPhoto = `-- name: GetUserPhoto :one
+SELECT photo_object_key, photo_uploaded_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserPhotoRow struct {
+	PhotoObjectKey  pgtype.Text        `json:"photo_object_key"`
+	PhotoUploadedAt pgtype.Timestamptz `json:"photo_uploaded_at"`
+}
+
+// The authenticated user's headshot pointer (object key + upload time), or NULLs when
+// no headshot is stored. The image lives in S3 under the key; this is just the pointer.
+func (q *Queries) GetUserPhoto(ctx context.Context, id int64) (GetUserPhotoRow, error) {
+	row := q.db.QueryRow(ctx, getUserPhoto, id)
+	var i GetUserPhotoRow
+	err := row.Scan(&i.PhotoObjectKey, &i.PhotoUploadedAt)
+	return i, err
+}
+
 const getUserResume = `-- name: GetUserResume :one
 SELECT resume_object_key, resume_uploaded_at
 FROM users
@@ -309,6 +341,9 @@ const listUserBlobKeys = `-- name: ListUserBlobKeys :many
 SELECT u.resume_object_key AS key FROM users u
 WHERE u.id = $1 AND u.resume_object_key IS NOT NULL AND u.resume_object_key <> ''
 UNION
+SELECT u.photo_object_key FROM users u
+WHERE u.id = $1 AND u.photo_object_key IS NOT NULL AND u.photo_object_key <> ''
+UNION
 SELECT o.proof_object_key FROM referral_offers o
 WHERE o.user_id = $1 AND o.proof_object_key <> ''
 UNION
@@ -316,8 +351,8 @@ SELECT e.s3_key FROM emails e
 WHERE e.user_id = $1 AND e.s3_key IS NOT NULL AND e.s3_key <> ''
 `
 
-// Every object-storage key the account owns, in one read: the stored CV, each
-// referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+// Every object-storage key the account owns, in one read: the stored CV, the headshot,
+// each referral-proof PDF, and the raw MIME of each hosted email. Account deletion
 // collects these BEFORE deleting any row — the mail and proof keys live in the rows
 // themselves, so once those are gone the objects are unreachable and would sit in
 // the bucket forever. Empty keys are filtered out so a caller never asks storage to
@@ -451,6 +486,25 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 	var token_version int32
 	err := row.Scan(&token_version)
 	return token_version, err
+}
+
+const setUserPhoto = `-- name: SetUserPhoto :exec
+UPDATE users
+SET photo_object_key = $2, photo_uploaded_at = now()
+WHERE id = $1
+`
+
+type SetUserPhotoParams struct {
+	ID             int64       `json:"id"`
+	PhotoObjectKey pgtype.Text `json:"photo_object_key"`
+}
+
+// Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
+// by id; the object key is derived from the id, never client input. Nothing derived hangs
+// off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
+func (q *Queries) SetUserPhoto(ctx context.Context, arg SetUserPhotoParams) error {
+	_, err := q.db.Exec(ctx, setUserPhoto, arg.ID, arg.PhotoObjectKey)
+	return err
 }
 
 const setUserResume = `-- name: SetUserResume :exec

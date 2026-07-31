@@ -42,6 +42,13 @@ func ResumeKey(userID int64) string {
 	return fmt.Sprintf("resumes/%d", userID)
 }
 
+// PhotoKey is the per-user object key for a stored headshot. Like ResumeKey it is
+// derived from the authenticated user id, never from client input; the distinct
+// prefix keeps the two per-user objects apart in the shared bucket.
+func PhotoKey(userID int64) string {
+	return fmt.Sprintf("photos/%d", userID)
+}
+
 // New builds an S3-backed Store from the config, or returns (nil, nil) when the
 // settings are incomplete (storage disabled). minio.New does not dial here — the
 // first network call happens on Put/Get/Delete.

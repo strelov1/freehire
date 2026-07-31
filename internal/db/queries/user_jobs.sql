@@ -148,6 +148,7 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
+       uj.followed_up_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
@@ -311,3 +312,16 @@ FROM user_jobs
 WHERE user_id = $1
   AND (applied_at IS NOT NULL OR stage IS NOT NULL)
 GROUP BY stage;
+
+-- name: RecordApplicationFollowUp :one
+-- Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
+-- matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
+-- just overwrites the timestamp with a later one rather than erroring.
+--
+-- Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
+-- applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
+-- comment in 0059 for why a chase must not clear the silence it was a response to.
+UPDATE user_jobs
+SET followed_up_at = now()
+WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
+RETURNING followed_up_at;

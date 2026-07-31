@@ -30,13 +30,17 @@ type fakeCVRenderer struct {
 	calls     int
 	docsSeen  []cv.Document
 	tmplsSeen []cv.Template
+	// photosSeen records the headshot handed to each call, so a test can assert that the
+	// text-only scoring path asks for none.
+	photosSeen [][]byte
 }
 
-func (f *fakeCVRenderer) Render(_ context.Context, doc cv.Document, tmpl cv.Template) ([]byte, error) {
+func (f *fakeCVRenderer) Render(_ context.Context, doc cv.Document, tmpl cv.Template, photo []byte) ([]byte, error) {
 	f.calls++
 	f.gotTmpl = tmpl
 	f.docsSeen = append(f.docsSeen, doc)
 	f.tmplsSeen = append(f.tmplsSeen, tmpl)
+	f.photosSeen = append(f.photosSeen, photo)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -73,6 +77,13 @@ func TestScoreRenderedCV_ScoresTheRenderedTextLayer(t *testing.T) {
 	}
 	if r.gotTmpl.ID != "classic-ats" {
 		t.Errorf("rendered with template %q, want classic-ats", r.gotTmpl.ID)
+	}
+	// The score is read off the text layer, where a portrait contributes nothing — so
+	// this path must not pay for a headshot fetch, whatever template is being scored.
+	for i, photo := range r.photosSeen {
+		if photo != nil {
+			t.Errorf("render call %d was handed a %d-byte headshot; ATS scoring is text-only", i, len(photo))
+		}
 	}
 }
 

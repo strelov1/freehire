@@ -26,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/gmailsync"
+	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/matchanalysis"
@@ -241,6 +242,9 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
+	// The headshot rides the same bucket and the same nil-degradation: no Blob means the
+	// photo endpoints 501 while the photo-bearing CV templates still render a placeholder.
+	photoStore := headshot.New(cfg.Blob, headshot.NewQueriesRepository(queries))
 	// The profile read serves the structured résumé beside the profile, so it needs the
 	// résumé store — hence constructed after it.
 	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
@@ -267,7 +271,7 @@ func Register(app *fiber.App, cfg Config) {
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
-	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, creditsStore, matchH)
+	cvH := newCVHandlers(queries, cfg.TypstBin, resumeStore, photoStore, creditsStore, matchH)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
@@ -288,12 +292,13 @@ func Register(app *fiber.App, cfg Config) {
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
+	photoH := newPhotoHandlers(photoStore)
 	// The in-app agent is a facade over the feature handlers above: its tools call
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools)
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH)
 	cvH.withAssistantSessions(assistantH.store)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
@@ -329,7 +334,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore, photoStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -438,6 +443,8 @@ func Register(app *fiber.App, cfg Config) {
 	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
 	// (see resumeHandlers).
 	resumeH.register(api, mw)
+	// The headshot the photo-bearing CV templates print (see photoHandlers).
+	photoH.register(api, mw)
 	assistantH.register(api, mw)
 
 	// Filter subscriptions (see subscriptionHandlers).

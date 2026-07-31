@@ -134,6 +134,27 @@ SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = N
     resume_structured_uploaded_at = NULL
 WHERE id = $1;
 
+-- name: GetUserPhoto :one
+-- The authenticated user's headshot pointer (object key + upload time), or NULLs when
+-- no headshot is stored. The image lives in S3 under the key; this is just the pointer.
+SELECT photo_object_key, photo_uploaded_at
+FROM users
+WHERE id = $1;
+
+-- name: SetUserPhoto :exec
+-- Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
+-- by id; the object key is derived from the id, never client input. Nothing derived hangs
+-- off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
+UPDATE users
+SET photo_object_key = $2, photo_uploaded_at = now()
+WHERE id = $1;
+
+-- name: ClearUserPhoto :exec
+-- Clear the user's headshot pointer, after deleting the object from storage.
+UPDATE users
+SET photo_object_key = NULL, photo_uploaded_at = NULL
+WHERE id = $1;
+
 -- name: SetUserResumeEmbedding :exec
 -- Persist the user's derived CV embedding vector plus the identity of the embedder
 -- that produced it (so a model change can mark the vector stale). Never the raw CV text.
@@ -192,14 +213,17 @@ FROM users
 WHERE id = $1;
 
 -- name: ListUserBlobKeys :many
--- Every object-storage key the account owns, in one read: the stored CV, each
--- referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+-- Every object-storage key the account owns, in one read: the stored CV, the headshot,
+-- each referral-proof PDF, and the raw MIME of each hosted email. Account deletion
 -- collects these BEFORE deleting any row — the mail and proof keys live in the rows
 -- themselves, so once those are gone the objects are unreachable and would sit in
 -- the bucket forever. Empty keys are filtered out so a caller never asks storage to
 -- delete "".
 SELECT u.resume_object_key AS key FROM users u
 WHERE u.id = $1 AND u.resume_object_key IS NOT NULL AND u.resume_object_key <> ''
+UNION
+SELECT u.photo_object_key FROM users u
+WHERE u.id = $1 AND u.photo_object_key IS NOT NULL AND u.photo_object_key <> ''
 UNION
 SELECT o.proof_object_key FROM referral_offers o
 WHERE o.user_id = $1 AND o.proof_object_key <> ''

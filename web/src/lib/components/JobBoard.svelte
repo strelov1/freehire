@@ -7,6 +7,7 @@
   import { BOARD_COLUMNS, columnOf, type BoardColumnId, type BoardItem, type ClosedOutcome } from '$lib/board';
   import BoardColumn from './BoardColumn.svelte';
   import JobDrawer from './JobDrawer.svelte';
+  import FollowUpDialog from './FollowUpDialog.svelte';
   import States from './States.svelte';
 
   // initialSlug (from /my/tracking/[slug]) opens that application's drawer once the
@@ -31,6 +32,9 @@
   // Drawer state. A Closed drop opens the drawer requiring an outcome choice.
   let openItem = $state.raw<BoardItem | null>(null);
   let pendingOutcome = $state(false);
+  // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
+  // the card's silence badge and closes back to the board.
+  let followUpItem = $state.raw<BoardItem | null>(null);
 
   // Lay the fetched rows out into the columns and open the deep-linked drawer once.
   // The 'board' filter returns saved ∪ applied ∪ stage; saved-only rows are dropped
@@ -211,6 +215,17 @@
     pushState(resolve('/my/tracking'), {}); // drop the per-application slug from the URL
   }
 
+  function openFollowUp(item: MyJob) {
+    followUpItem = item as BoardItem;
+  }
+
+  // Stamp the recorded chase onto the card in place. The board holds the only copy
+  // of the row, and reloading the whole listing to learn one timestamp is noise —
+  // the same optimistic treatment stage moves already get.
+  function markChased(at: string) {
+    if (followUpItem) followUpItem.followed_up_at = at;
+  }
+
   function openDrawer(item: MyJob) {
     openItem = item as BoardItem;
     pendingOutcome = false;
@@ -233,6 +248,7 @@
         {onconsider}
         {onfinalize}
         onopen={openDrawer}
+        onfollowup={openFollowUp}
       />
     {/each}
   </div>
@@ -248,6 +264,17 @@
       onchooseoutcome={chooseOutcome}
       onremove={remove}
       onclose={closeDrawer}
+    />
+  {/key}
+{/if}
+
+{#if followUpItem}
+  {#key followUpItem.job.public_slug}
+    <FollowUpDialog
+      slug={followUpItem.job.public_slug}
+      company={followUpItem.job.company}
+      onclose={() => (followUpItem = null)}
+      onrecorded={markChased}
     />
   {/key}
 {/if}

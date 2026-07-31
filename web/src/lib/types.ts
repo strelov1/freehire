@@ -424,6 +424,11 @@ export interface MyJob {
    *  say otherwise. Null means nothing is owed here (viewed/saved only, or a
    *  settled application), which is not the same as owed-and-answered-promptly. */
   silence_state: 'active' | 'silent' | 'unconfirmed' | null;
+  /** When the candidate last recorded chasing this application (RFC3339), or null
+   *  for one never chased. Deliberately independent of the silence fields above: a
+   *  chase is not a reply, so a chased application keeps counting its silence and
+   *  the card shows both readings. */
+  followed_up_at: string | null;
 }
 
 /** The account-level saved-job reminder rule: whether reminders are on, the
@@ -474,7 +479,21 @@ export interface TrackedApplication {
   applied_at: string | null;
   stage?: string;
   notes?: string;
+  /** When the caller last recorded chasing this application, or null for never. */
+  followed_up_at: string | null;
   emails: ApplicationEmail[];
+}
+
+/** The assembled follow-up message for a silent application. Deterministic and
+ *  template-built server-side — no model, no credits. `recipient` is present only
+ *  when linked mail supplied an address; an unanswered application (the commonest
+ *  silent one) has nobody to address, and the draft is issued without one. */
+export interface FollowUpDraft {
+  subject: string;
+  body: string;
+  recipient?: string;
+  recipient_name?: string;
+  days_silent: number;
 }
 
 /** Per-tab row counts for the my-jobs page, from the listing's meta. `viewed`
@@ -708,6 +727,17 @@ export interface ResumeMeta {
   present: boolean;
   uploaded_at: string | null;
   structured: import('./generated/contracts').Structured | null;
+}
+
+/** The caller's profile headshot: `enabled` is false when object storage is unconfigured
+ *  (the upload control is then not offered at all), `present` says whether one is stored,
+ *  and `uploaded_at` doubles as the cache buster on the image URL. */
+export interface PhotoMeta {
+  enabled: boolean;
+  present: boolean;
+  // Omitted by the server when there is no headshot, so `undefined` — not null — is the
+  // absent case.
+  uploaded_at?: string;
 }
 
 /** A community discussion thread (see the add-community-threads change). The author

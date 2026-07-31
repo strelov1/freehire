@@ -206,3 +206,22 @@ WHERE id = $1 AND user_id = $2;
 -- when it is not the caller's message (→ 404).
 UPDATE emails SET deleted_at = NULL
 WHERE id = $1 AND user_id = $2;
+
+-- name: CountEmailsByState :many
+-- The mailbox's shape in one pass: one row per classification label (the empty
+-- label being mail nothing has judged yet), carrying that label's total plus how
+-- many of it are unread, unclassified, linked to an application, or carrying a
+-- pending suggestion. The caller sums the rows for the mailbox-wide totals — the
+-- alternative, a FILTER column per label, would restate mailclassify's vocabulary
+-- in SQL, where it would silently fall behind the Go one.
+--
+-- Soft-deleted mail is excluded, so these counts and the listing's agree.
+SELECT coalesce(status_signal, '')::text AS label,
+    count(*)::bigint AS n,
+    count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
+    count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
+    count(*) FILTER (WHERE job_id IS NOT NULL)::bigint AS linked,
+    count(*) FILTER (WHERE job_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
+FROM emails
+WHERE user_id = $1 AND deleted_at IS NULL
+GROUP BY 1;

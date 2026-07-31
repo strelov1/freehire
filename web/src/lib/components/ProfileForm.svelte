@@ -12,6 +12,7 @@
   import { profileStore } from '$lib/profile.svelte';
   import type { LocationPreferences, UserProfile } from '$lib/types';
   import { Button, Input } from '$lib/ui';
+  import HeadshotField from './HeadshotField.svelte';
   import RemoteSearchSelect from './facets/RemoteSearchSelect.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
   import TabRow, { tabId } from './TabRow.svelte';
@@ -396,6 +397,10 @@
       <p class="text-xs text-muted-foreground">{resumeNote}</p>
     {/if}
   </div>
+
+  <!-- Your photo: one headshot per member, printed by the CV templates that show one.
+       Renders nothing when object storage is unconfigured. -->
+  <HeadshotField />
 
   <!-- Skills -->
   <div class="flex flex-col gap-2">

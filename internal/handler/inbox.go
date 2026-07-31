@@ -8,26 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/mailclassify"
-	"github.com/strelov1/freehire/internal/maillink"
+	"github.com/strelov1/freehire/internal/inbox"
 )
 
-// inboxSources is the account-switcher vocabulary: "" means all accounts.
-// 'external' is mail the caller's own agent harness pushed; it reads like any
-// other source, it is simply never classified server-side.
-var inboxSources = map[string]bool{"": true, "gmail": true, "hosted": true, "external": true}
-
-// inboxLinkStates is the link-state vocabulary: "" means no filter, and the three
-// named values partition the caller's mail — 'linked' is attached to an
-// application, 'suggested' carries a pending suggestion awaiting the caller's
-// confirmation, 'unlinked' has neither. 'suggested' is the confirmation queue;
-// 'unlinked' is the queue for mail with nowhere to go yet.
-var inboxLinkStates = map[string]bool{"": true, "linked": true, "suggested": true, "unlinked": true}
-
-// agentPageMax caps a listing that carries bodies. Bodies are the one listing
+// harnessPageMax caps a listing that carries bodies. Bodies are the one listing
 // payload heavy enough to matter, and an agent sweeping its backlog has no reason
 // to pull an unbounded page.
-const agentPageMax = 50
+//
+// The assistant's own listing tool caps itself far lower (see
+// assistantInboxBodyMax): a harness reads a page once, while a tool result is
+// replayed into the model's context on every later turn of the session.
+const harnessPageMax = 50
 
 // emailLinking is the classification/link overlay carried by every inbox message
 // shape: the classified status and, when resolved, the linked application (slug +
@@ -39,6 +30,18 @@ type emailLinking struct {
 	LinkedCompany    string `json:"linked_company,omitempty"`
 	SuggestedSlug    string `json:"suggested_slug,omitempty"`
 	SuggestedCompany string `json:"suggested_company,omitempty"`
+}
+
+// linkingOf projects the service's message onto the wire overlay.
+func linkingOf(m inbox.Message) emailLinking {
+	return emailLinking{
+		StatusSignal:     m.StatusSignal,
+		LinkSource:       m.LinkSource,
+		LinkedSlug:       m.LinkedSlug,
+		LinkedCompany:    m.LinkedCompany,
+		SuggestedSlug:    m.SuggestedSlug,
+		SuggestedCompany: m.SuggestedCompany,
+	}
 }
 
 // pgStr unwraps a nullable text column to a plain string ("" when NULL).
@@ -83,43 +86,30 @@ type emailBody struct {
 	emailLinking
 }
 
-// inboxFilters are the shared listing filters carried by the query string:
-// ?source=(gmail|hosted|external), ?unread=1, ?status=<signal>, ?q=<term>,
-// ?unclassified=1.
-type inboxFilters struct {
-	Source string
-	// IsUnread hides mail the reader has already opened.
-	IsUnread bool
-	Status   string
-	Q        string
-	// IsUnclassified narrows to mail carrying no classification stamp — the agent's
-	// work queue. It is distinct from IsUnread: read_at tracks a human's attention,
-	// classified_at tracks whether anything has judged the message yet.
-	IsUnclassified bool
-	// Link narrows to one link state (see inboxLinkStates); "" is no filter.
-	Link string
+// bodyOf projects the service's message onto the single-message wire shape.
+func bodyOf(m inbox.Message) emailBody {
+	return emailBody{
+		ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+		FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
+		BodyText: m.BodyText, BodyHTML: m.BodyHTML,
+		ReceivedAt: m.ReceivedAt, Read: m.Read,
+		emailLinking: linkingOf(m),
+	}
 }
 
-// parseInboxFilters reads and validates the inbox filter query params. Source and
-// status are validated against their vocabularies; an unknown value is a 400
-// rather than a silently empty listing.
-func parseInboxFilters(c *fiber.Ctx) (inboxFilters, error) {
-	src := c.Query("source")
-	if !inboxSources[src] {
-		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown source")
+// parseInboxQuery reads the listing filters off the query string:
+// ?source=(gmail|hosted|external), ?unread=1, ?status=<signal>, ?q=<term>,
+// ?unclassified=1, ?link=<state>. The vocabularies are checked by the service, so
+// an unknown value is one 400 wherever it arrives from.
+func parseInboxQuery(c *fiber.Ctx) inbox.Query {
+	return inbox.Query{
+		Source:       c.Query("source"),
+		Status:       c.Query("status"),
+		Link:         c.Query("link"),
+		Q:            c.Query("q"),
+		Unread:       c.QueryBool("unread"),
+		Unclassified: c.QueryBool("unclassified"),
 	}
-	status := c.Query("status")
-	if status != "" && !mailclassify.IsValidSignal(status) {
-		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown label")
-	}
-	link := c.Query("link")
-	if !inboxLinkStates[link] {
-		return inboxFilters{}, fiber.NewError(fiber.StatusBadRequest, "unknown link state")
-	}
-	return inboxFilters{
-		Source: src, IsUnread: c.QueryBool("unread"), Status: status, Q: c.Query("q"),
-		IsUnclassified: c.QueryBool("unclassified"), Link: link,
-	}, nil
 }
 
 // GetInbox returns the caller's mail as a flat list, newest first, excluding
@@ -132,64 +122,44 @@ func parseInboxFilters(c *fiber.Ctx) (inboxFilters, error) {
 // ?body=1 additionally returns each message's readable body. That is the agent's
 // read path: it triages a page in one request, and — unlike GetEmail — marks
 // nothing read, so a harness sweeping the backlog never zeroes its owner's unread
-// count. Pages carrying bodies are capped at agentPageMax.
+// count. Pages carrying bodies are capped at harnessPageMax.
 func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	f, err := parseInboxFilters(c)
-	if err != nil {
-		return err
-	}
-	withBody := c.QueryBool("body")
+	q := parseInboxQuery(c)
+	q.WithBody = c.QueryBool("body")
 	ceiling := maxLimit
-	if withBody {
-		ceiling = agentPageMax
+	if q.WithBody {
+		ceiling = harnessPageMax
 	}
 	limit, offset := pageParamsMax(c, ceiling)
-	rows, err := h.queries.ListEmails(c.Context(), db.ListEmailsParams{
-		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
-		Unclassified: f.IsUnclassified, Link: f.Link, WithBody: withBody,
-		Lim: int32(limit), Off: int32(offset),
-	})
+	q.Limit, q.Offset = limit, offset
+
+	page, err := h.inbox.Search(c.Context(), userID, q)
 	if err != nil {
 		return err
 	}
-	total, err := h.queries.CountEmails(c.Context(), db.CountEmailsParams{
-		UserID: userID, Src: f.Source, Unread: f.IsUnread, Status: f.Status, Q: f.Q,
-		Unclassified: f.IsUnclassified, Link: f.Link,
-	})
-	if err != nil {
-		return err
+	out := make([]inboxMessage, 0, len(page.Messages))
+	for _, m := range page.Messages {
+		out = append(out, inboxMessage{
+			ID: m.ID, Source: m.Source, ExternalID: m.ExternalID,
+			FromAddr: m.FromAddr, FromName: m.FromName, Subject: m.Subject,
+			Snippet: m.Snippet, BodyText: m.BodyText,
+			ReceivedAt: m.ReceivedAt, Read: m.Read,
+			emailLinking: linkingOf(m),
+		})
 	}
-	out := make([]inboxMessage, 0, len(rows))
-	for _, r := range rows {
-		m := inboxMessage{
-			ID: r.ID, Source: r.Source, ExternalID: r.ExternalID,
-			FromAddr: r.FromAddr, FromName: r.FromName, Subject: r.Subject,
-			Snippet: r.Snippet, ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
-			emailLinking: emailLinking{
-				StatusSignal:     pgStr(r.StatusSignal),
-				LinkSource:       pgStr(r.LinkSource),
-				LinkedSlug:       pgStr(r.LinkedSlug),
-				LinkedCompany:    pgStr(r.LinkedCompany),
-				SuggestedSlug:    pgStr(r.SuggestedSlug),
-				SuggestedCompany: pgStr(r.SuggestedCompany),
-			},
-		}
-		if withBody {
-			// The same body the classification worker reads, so what our LLM judges
-			// and what a caller's agent judges cannot drift.
-			m.BodyText = maillink.ReadableBody(r.BodyText, r.BodyHtml)
-		}
-		out = append(out, m)
-	}
-	return listResponse(c, out, total, limit, offset)
+	return listResponse(c, out, page.Total, limit, offset)
 }
 
 // GetEmail returns one message body, scoped to the caller (404 for another user's),
 // and marks it read on open (best-effort — a failed mark never blocks reading).
+//
+// Marking read is why this path is not part of internal/inbox and is not offered to
+// the assistant: read_at means "a human saw this", and a reader sweeping a backlog
+// through here would zero its owner's unread count. Sweeping goes through GetInbox.
 func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -199,27 +169,14 @@ func (h *inboxHandlers) GetEmail(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
+	msg, err := h.inbox.Get(c.Context(), userID, int64(id))
 	if err != nil {
 		return err // pgx.ErrNoRows → 404 via the central error handler
 	}
-	if err := h.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: row.ID, UserID: userID}); err != nil {
-		log.Printf("inbox: mark read user=%d email=%d: %v", userID, row.ID, err)
+	if err := h.queries.MarkEmailRead(c.Context(), db.MarkEmailReadParams{ID: msg.ID, UserID: userID}); err != nil {
+		log.Printf("inbox: mark read user=%d email=%d: %v", userID, msg.ID, err)
 	}
-	return c.JSON(fiber.Map{"data": emailBody{
-		ID: row.ID, Source: row.Source, ExternalID: row.ExternalID,
-		FromAddr: row.FromAddr, FromName: row.FromName, Subject: row.Subject,
-		BodyText: row.BodyText, BodyHTML: row.BodyHtml,
-		ReceivedAt: row.ReceivedAt.Time, Read: row.Read,
-		emailLinking: emailLinking{
-			StatusSignal:     pgStr(row.StatusSignal),
-			LinkSource:       pgStr(row.LinkSource),
-			LinkedSlug:       pgStr(row.LinkedSlug),
-			LinkedCompany:    pgStr(row.LinkedCompany),
-			SuggestedSlug:    pgStr(row.SuggestedSlug),
-			SuggestedCompany: pgStr(row.SuggestedCompany),
-		},
-	}})
+	return c.JSON(fiber.Map{"data": bodyOf(msg)})
 }
 
 // MarkAllReadInbox marks every unread message matching the caller's active
@@ -230,12 +187,12 @@ func (h *inboxHandlers) MarkAllReadInbox(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	f, err := parseInboxFilters(c)
-	if err != nil {
+	q := parseInboxQuery(c)
+	if err := q.Validate(); err != nil {
 		return err
 	}
 	marked, err := h.queries.MarkAllEmailsRead(c.Context(), db.MarkAllEmailsReadParams{
-		UserID: userID, Src: f.Source, Status: f.Status, Q: f.Q, Link: f.Link,
+		UserID: userID, Src: q.Source, Status: q.Status, Q: q.Q, Link: q.Link,
 	})
 	if err != nil {
 		return err

@@ -1,0 +1,39 @@
+---
+title: Ask the assistant about your application mail
+date: 2026-07-31
+summary: The assistant can now read the labels already on your inbox, so "what's happening with my interview invitations?" is a question you can just ask instead of scrolling.
+type: changelog
+tags:
+  - assistant
+  - inbox
+draft: false
+---
+
+Your [inbox](/my/inbox) has been sorting itself for a while: every message that arrives gets
+a label — interview invitation, rejection, offer, assessment — and the ones we can match get
+attached to the application they belong to. Until now you could only see that by opening the
+inbox and scrolling.
+
+The [assistant](/my/assistant) can read it now. Ask **"what's happening with my
+applications?"** and it answers from the labels rather than by reading your mail to you: how
+many invitations are waiting, how much has been rejected, what nothing has judged yet. Then
+you can narrow it — "show me the interview invitations" — and it lists them with who wrote,
+when, and which application each belongs to.
+
+It can also do the tidying that piles up:
+
+- **Work through the suggestions.** Mail is only attached automatically when the match is
+  unambiguous; everything else waits for you to confirm. The assistant can walk that queue.
+- **Fix a link**, or attach a message to the right application.
+- **Record an application from a message.** When an employer writes about something you
+  never tracked, it can create that application and attach the mail in one step — dated by
+  the message, not by today, so the elapsed-silence count stays honest.
+
+Two things it deliberately cannot do. It **never marks your mail read** — the unread count
+is yours, and an assistant sweeping the backlog would quietly zero it. And it **cannot send
+mail**, from here or anywhere else. That second one is not an oversight: a recruiter's email
+is text written by someone else, and the safest answer to a message that tries to instruct
+the assistant is that there is nowhere for it to send anything.
+
+Available to everyone signed in, wherever your mail comes from — Gmail, your freehire
+mailbox, or pushed in by your own mail client.

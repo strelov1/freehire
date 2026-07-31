@@ -9,6 +9,8 @@ import (
 )
 
 type fakeStore struct {
+	appsReads   int
+	threadReads int
 	apps        []Application
 	threadLinks map[string]int64
 	stage       string
@@ -26,8 +28,12 @@ func (s *fakeStore) ClaimBatch(context.Context, int, int) ([]Claimed, error) {
 	s.claimedOnce = true
 	return s.claimed, nil
 }
-func (s *fakeStore) Applications(context.Context, int64) ([]Application, error) { return s.apps, nil }
+func (s *fakeStore) Applications(context.Context, int64) ([]Application, error) {
+	s.appsReads++
+	return s.apps, nil
+}
 func (s *fakeStore) ThreadLinks(context.Context, int64) (map[string]int64, error) {
+	s.threadReads++
 	return s.threadLinks, nil
 }
 func (s *fakeStore) CurrentStage(context.Context, int64, int64) (string, error) { return s.stage, nil }
@@ -181,5 +187,38 @@ func TestRunnerAmbiguousMatchOffersLLMSuggestion(t *testing.T) {
 	}
 	if cls.gotCandCnt != 2 {
 		t.Errorf("classifier got %d candidates, want 2 (disambiguation)", cls.gotCandCnt)
+	}
+}
+
+// The caller's applications and their thread links are per-user, and a wave is
+// mostly one user's mail — but only ONE of the two may be cached.
+//
+// Applications is stable for the length of a run: membership is "applied, saved or
+// staged", and the only write a run makes to it is a forward stage move on a row
+// that is already a member. ThreadLinks is NOT: Save writes job_id onto the email
+// it just linked, so a later message in the same thread must be able to see that
+// link and continue it. Caching both looks like the same optimisation and quietly
+// costs thread continuity within a wave.
+func TestRunnerReadsApplicationsOncePerUserButThreadLinksEveryTime(t *testing.T) {
+	store := &fakeStore{
+		claimed: []Claimed{
+			{OutboxID: 1, EmailID: 11, UserID: 7, Subject: "Thanks for applying to Acme"},
+			{OutboxID: 2, EmailID: 12, UserID: 7, Subject: "Thanks for applying to Acme"},
+			{OutboxID: 3, EmailID: 13, UserID: 9, Subject: "Thanks for applying to Acme"},
+		},
+		apps: []Application{{JobID: 42, Company: "Acme"}},
+	}
+	r := New(store, &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalAcknowledgement}}, "test-model")
+
+	if err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if store.appsReads != 2 {
+		t.Errorf("Applications read %d times for 2 users over 3 emails, want 2", store.appsReads)
+	}
+	if store.threadReads != 3 {
+		t.Errorf("ThreadLinks read %d times for 3 emails, want 3 — a link written mid-wave must be visible to the rest of it",
+			store.threadReads)
 	}
 }

@@ -1,7 +1,15 @@
-// Presentation for the classified email status signal (mailclassify vocabulary):
-// a short human label and an outline-badge colour class. `other` renders nothing.
+// Presentation for the classified email status signal: a short human label and an
+// outline-badge colour class. `other` renders nothing.
+//
+// Both maps are keyed by the GENERATED vocabulary, not by `string`. Go owns which
+// signals exist (`mailclassify.SignalValues` → `EMAIL_STATUS_SIGNAL_VALUES` via
+// `make gen-contracts`); before that, a signal added there rendered as a blank chip
+// here with every test still green. `Record<EmailStatusSignal, …>` turns the same
+// omission into a `pnpm check` failure.
 
-export const STATUS_LABELS: Record<string, string> = {
+import type { EmailStatusSignal } from '$lib/generated/contracts';
+
+export const STATUS_LABELS: Record<EmailStatusSignal, string> = {
   acknowledgement: 'Received',
   screening: 'Screening',
   interview_invitation: 'Interview',
@@ -13,7 +21,7 @@ export const STATUS_LABELS: Record<string, string> = {
   other: '',
 };
 
-export const STATUS_CLASSES: Record<string, string> = {
+export const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
   acknowledgement: 'border-border text-muted-foreground',
   screening: 'border-blue-400/40 text-blue-600 dark:text-blue-400',
   interview_invitation: 'border-emerald-400/50 text-emerald-600 dark:text-emerald-400',
@@ -25,12 +33,16 @@ export const STATUS_CLASSES: Record<string, string> = {
   other: '',
 };
 
-/** The label for a status signal, or '' when unknown/other (renders nothing). */
+/**
+ * The label for a status signal, or '' when the signal is unknown or `other`
+ * (both render nothing). The argument stays `string`: it arrives from the API, and
+ * a server ahead of this build may name a signal this one has never heard of.
+ */
 export function statusLabel(signal?: string): string {
-  return signal ? (STATUS_LABELS[signal] ?? '') : '';
+  return signal ? (STATUS_LABELS[signal as EmailStatusSignal] ?? '') : '';
 }
 
 /** The badge colour class for a status signal. */
 export function statusClass(signal?: string): string {
-  return signal ? (STATUS_CLASSES[signal] ?? '') : '';
+  return signal ? (STATUS_CLASSES[signal as EmailStatusSignal] ?? '') : '';
 }
