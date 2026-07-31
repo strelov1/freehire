@@ -1,0 +1,82 @@
+## ADDED Requirements
+
+### Requirement: The workspace links to the vacancy it is tailoring for
+
+The workspace SHALL offer a link to the vacancy's own public page from its right-hand context
+panel, so a candidate reading the job description can reach the posting, its company, its
+application link and its fit analysis without navigating away by hand or editing the address bar.
+
+The link SHALL open the vacancy's page rather than the outbound apply URL: the workspace's job is
+to get the candidate back to what freehire knows about the role, not to send them to the employer
+mid-tailoring. It SHALL be absent when the vacancy no longer exists, rather than rendering a link
+to a dead page.
+
+#### Scenario: The vacancy is one click away
+
+- **WHEN** the workspace renders its context panel for a tailored CV bound to a live vacancy
+- **THEN** a link to that vacancy's public page is shown, and following it lands on the job page
+
+#### Scenario: A pruned vacancy shows no link
+
+- **WHEN** the tailored CV's vacancy no longer exists
+- **THEN** no vacancy link is rendered
+
+## MODIFIED Requirements
+
+### Requirement: The workspace is a three-column surface
+
+The workspace SHALL lay out its ready state in three columns: a left panel tabbed between the CV
+editor and the chat, a centre column showing the live CV preview, and a right panel tabbed
+between templates, the job description, the job match, and the score. The left and right panels
+SHALL be width-adjustable via draggable splitters clamped to a sensible range, with the centre
+column taking the remaining width.
+
+The right panel's tabs SHALL be divided by what each one measures, and no tab SHALL mix
+measurements taken against different baselines:
+
+- **Job Match** — the live job-anchored score of the tailored document against this vacancy, with
+  the cached fit analysis beneath it labelled as a snapshot of the base profile;
+- **Score** — the ATS-readability delta of the tailored document against the base CV, and the log
+  of the last autopilot run;
+- **Job description** and **Templates** — unchanged.
+
+#### Scenario: The three columns render
+
+- **WHEN** the workspace ready state renders on a wide viewport
+- **THEN** the left tabbed panel (Editor/Chat), the centre CV preview, and the right tabbed panel (Templates/Job description/Job Match/Score) are all visible side by side
+
+#### Scenario: A side panel resizes and clamps
+
+- **WHEN** the user drags a side-panel splitter beyond the allowed range
+- **THEN** the panel width is clamped to the minimum/maximum rather than collapsing or overflowing, and the centre column absorbs the change
+
+#### Scenario: Each tab holds one baseline
+
+- **WHEN** the user opens the Job Match tab
+- **THEN** it shows the score measured against the vacancy, and the ATS-readability delta measured against the base CV is not shown there
+
+### Requirement: The workspace collapses to a single tabbed view on mobile
+
+The workspace SHALL, below the `lg` breakpoint, collapse its three columns into
+a single full-screen view selected by one flat, horizontally-scrollable tab bar
+offering every view: Chat, Editor, Settings, Preview, Templates, Job, Job Match,
+and Score. Selecting a tab SHALL show that view full-width and hide the others.
+At `lg` and up the workspace SHALL render all three columns side by side as
+before, and the flat mobile tab bar SHALL NOT be shown. The per-column tab bars
+(Editor/Chat/Settings, Templates/Job/Job Match/Score) SHALL be desktop-only so
+mobile navigation is not duplicated.
+
+#### Scenario: The flat tab bar switches views on mobile
+
+- **WHEN** the workspace renders on a narrow (below `lg`) viewport and the user taps a tab (e.g. Preview or Job Match)
+- **THEN** that single view fills the screen and the other views are hidden, with the tab bar offering Chat, Editor, Settings, Preview, Templates, Job, Job Match, and Score
+
+#### Scenario: Mobile selection stays consistent with the columns
+
+- **WHEN** the user taps a mobile tab that corresponds to a column sub-tab (Editor, Chat, Settings, Templates, Job, Job Match, or Score)
+- **THEN** the matching column's own tab is selected too, so switching to a wide viewport shows the same content selected
+
+#### Scenario: The desktop layout is unchanged at lg
+
+- **WHEN** the workspace renders at `lg` or wider
+- **THEN** the three columns show side by side with their own tab bars and splitters, and the flat mobile tab bar is not shown
