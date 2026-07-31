@@ -5,19 +5,19 @@ import (
 	"testing"
 )
 
-func available(id string, earned, weight int) Category {
-	return Category{ID: id, Earned: earned, Weight: weight, Available: true}
+func available(id string, earned, weight int) ScoredCategory {
+	return ScoredCategory{ID: id, Earned: earned, Weight: weight, Available: true}
 }
 
-func unavailable(id string, weight int) Category {
-	return Category{ID: id, Weight: weight, Available: false, Reason: "not evaluable"}
+func unavailable(id string, weight int) ScoredCategory {
+	return ScoredCategory{ID: id, Weight: weight, Available: false, Reason: "not evaluable"}
 }
 
 // The overall is earned ÷ possible over the AVAILABLE categories, expressed out of 100.
 // One formula covers every degraded state, so there is no branch for "some categories are
 // missing" to get wrong.
 func TestOverallIsEarnedOverAvailableWeight(t *testing.T) {
-	s := aggregate([]Category{
+	s := aggregate([]ScoredCategory{
 		unavailable(CategoryRequirements, WeightRequirements),
 		available(CategoryKeyword, 20, WeightKeyword),
 		available(CategoryTitle, 20, WeightTitle),
@@ -37,7 +37,7 @@ func TestOverallIsEarnedOverAvailableWeight(t *testing.T) {
 // An input we cannot check is not a failure the candidate caused. Scoring it zero at full
 // weight would tell them to rewrite a CV that was fine.
 func TestUnavailableCategoryIsNotAZero(t *testing.T) {
-	cats := []Category{
+	cats := []ScoredCategory{
 		available(CategoryKeyword, 30, WeightKeyword),
 		available(CategoryTitle, 20, WeightTitle),
 		available(CategorySeniority, 10, WeightSeniority),
@@ -57,7 +57,7 @@ func TestUnavailableCategoryIsNotAZero(t *testing.T) {
 // With every category available the denominator is 100, so the overall is the plain sum
 // and no rounding can drift it.
 func TestAllAvailableIsThePlainSum(t *testing.T) {
-	s := aggregate([]Category{
+	s := aggregate([]ScoredCategory{
 		available(CategoryRequirements, 31, WeightRequirements),
 		available(CategoryKeyword, 17, WeightKeyword),
 		available(CategoryTitle, 12, WeightTitle),
@@ -73,7 +73,7 @@ func TestAllAvailableIsThePlainSum(t *testing.T) {
 
 // Nothing evaluable means no score at all, not a zero. The caller renders the absence.
 func TestNoAvailableCategoryYieldsNoScore(t *testing.T) {
-	s := aggregate([]Category{
+	s := aggregate([]ScoredCategory{
 		unavailable(CategoryRequirements, WeightRequirements),
 		unavailable(CategoryKeyword, WeightKeyword),
 		unavailable(CategoryTitle, WeightTitle),
@@ -89,7 +89,7 @@ func TestNoAvailableCategoryYieldsNoScore(t *testing.T) {
 
 func TestOverallRoundsRatherThanTruncates(t *testing.T) {
 	// 7 of 10 available weight is 70; 2 of 3 categories' worth (17/30) rounds to 57, not 56.
-	s := aggregate([]Category{
+	s := aggregate([]ScoredCategory{
 		available(CategoryKeyword, 17, WeightKeyword),
 		unavailable(CategoryRequirements, WeightRequirements),
 		unavailable(CategoryTitle, WeightTitle),

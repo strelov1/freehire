@@ -23,7 +23,7 @@ func fullInput() cvmatch.Input {
 	}
 }
 
-func categoryByID(t *testing.T, s cvmatch.Score, id string) cvmatch.Category {
+func categoryByID(t *testing.T, s cvmatch.Score, id string) cvmatch.ScoredCategory {
 	t.Helper()
 	for _, c := range s.Categories {
 		if c.ID == id {
@@ -31,7 +31,7 @@ func categoryByID(t *testing.T, s cvmatch.Score, id string) cvmatch.Category {
 		}
 	}
 	t.Fatalf("score carries no %q category", id)
-	return cvmatch.Category{}
+	return cvmatch.ScoredCategory{}
 }
 
 func TestComputeScoresAllFourCategories(t *testing.T) {

@@ -15,7 +15,7 @@ import "math"
 //
 // No available category means no score: Overall is 0 and Contributing is empty, and the
 // caller renders the absence rather than a zero nobody earned.
-func aggregate(categories []Category) Score {
+func aggregate(categories []ScoredCategory) Score {
 	s := Score{Categories: categories}
 	earned, possible := 0, 0
 	for _, c := range categories {

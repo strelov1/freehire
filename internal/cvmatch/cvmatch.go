@@ -10,15 +10,6 @@
 // category is computable from any text, and none of these four are.
 package cvmatch
 
-// Status is a check outcome inside a category.
-type Status string
-
-const (
-	StatusPass Status = "pass"
-	StatusWarn Status = "warn"
-	StatusFail Status = "fail"
-)
-
 // Coverage is a requirement's re-derived outcome. Unverifiable is not a middle grade
 // between the other two: it means the requirement named no canonical skill, so the
 // document cannot be checked against it either way.
@@ -48,31 +39,9 @@ const (
 	WeightSeniority    = 10
 )
 
-// LineItem is one attributed reason inside a category: the points it awarded when the
-// check passed, or the points still recoverable when it did not.
-type LineItem struct {
-	Points int    `json:"points"`
-	Text   string `json:"text"`
-	Status Status `json:"status"`
-}
-
-// tallyStatus grades a "got of wanted" count, the shape both counted categories report in.
-// Nothing matched is a failure rather than a warning: a CV sharing no vocabulary at all
-// with its vacancy is the one case worth alarming about.
-func tallyStatus(got, want int) Status {
-	switch {
-	case got == want:
-		return StatusPass
-	case got == 0:
-		return StatusFail
-	default:
-		return StatusWarn
-	}
-}
-
-// Category is one weighted scoring dimension. An unavailable category carries a reason and
+// ScoredCategory is one weighted scoring dimension. An unavailable category carries a reason and
 // no items, and is excluded from both sides of the overall — see Score.
-type Category struct {
+type ScoredCategory struct {
 	ID        string     `json:"id"`
 	Label     string     `json:"label"`
 	Earned    int        `json:"earned"`
@@ -104,8 +73,8 @@ type RequirementCheck struct {
 
 // Score is the full job-match result.
 type Score struct {
-	Overall    int        `json:"overall"`
-	Categories []Category `json:"categories"`
+	Overall    int              `json:"overall"`
+	Categories []ScoredCategory `json:"categories"`
 	// Contributing names the categories the overall was computed over, so a score taken
 	// across three categories is never mistaken for one taken across four.
 	Contributing  []string           `json:"contributing"`

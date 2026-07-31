@@ -22,8 +22,8 @@ const (
 // Normalization is lowercasing plus whitespace collapse, deliberately not the role
 // fingerprint used elsewhere: that machinery exists to make two POSTINGS comparable and
 // strips parenthetical and comma decorations a CV legitimately carries.
-func titleCategory(jobTitle, cvText string) Category {
-	c := Category{ID: CategoryTitle, Label: "Job Title Match"}
+func titleCategory(jobTitle, cvText string) ScoredCategory {
+	c := ScoredCategory{ID: CategoryTitle, Label: "Job Title Match"}
 
 	title := normalizeText(jobTitle)
 	if title == "" {
@@ -61,7 +61,7 @@ func titleCategory(jobTitle, cvText string) Category {
 // unverifiable design turn on in one place: a check that CAN be evaluated always joins the
 // denominator, and joins the numerator only when it passed. A check that cannot be
 // evaluated is simply never added, so it costs nothing.
-func addCheck(c *Category, ok bool, points int, passText, failText string) {
+func addCheck(c *ScoredCategory, ok bool, points int, passText, failText string) {
 	c.Weight += points
 	if ok {
 		c.Earned += points

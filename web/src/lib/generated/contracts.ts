@@ -407,6 +407,111 @@ export interface CategoryChange {
 }
 
 /**
+ * Coverage is a requirement's re-derived outcome. Unverifiable is not a middle grade
+ * between the other two: it means the requirement named no canonical skill, so the
+ * document cannot be checked against it either way.
+ */
+export type Coverage = string;
+export const Covered: Coverage = "covered";
+export const Missing: Coverage = "missing";
+export const Unverifiable: Coverage = "unverifiable";
+/**
+ * Category IDs. Exported: the SPA keys its rows by them.
+ */
+export const CategoryRequirements = "requirements_coverage";
+/**
+ * Category IDs. Exported: the SPA keys its rows by them.
+ */
+export const CategoryKeyword = "keyword_match";
+/**
+ * Category IDs. Exported: the SPA keys its rows by them.
+ */
+export const CategoryTitle = "job_title_match";
+/**
+ * Category IDs. Exported: the SPA keys its rows by them.
+ */
+export const CategorySeniority = "seniority_fit";
+/**
+ * Category weights, out of 100. They travel in the response rather than being re-declared
+ * by the client, so a re-weighting is a server change and the panel's impact labelling can
+ * never disagree with the score it labels.
+ */
+export const WeightRequirements = 40;
+/**
+ * Category weights, out of 100. They travel in the response rather than being re-declared
+ * by the client, so a re-weighting is a server change and the panel's impact labelling can
+ * never disagree with the score it labels.
+ */
+export const WeightKeyword = 30;
+/**
+ * Category weights, out of 100. They travel in the response rather than being re-declared
+ * by the client, so a re-weighting is a server change and the panel's impact labelling can
+ * never disagree with the score it labels.
+ */
+export const WeightTitle = 20;
+/**
+ * Category weights, out of 100. They travel in the response rather than being re-declared
+ * by the client, so a re-weighting is a server change and the panel's impact labelling can
+ * never disagree with the score it labels.
+ */
+export const WeightSeniority = 10;
+/**
+ * ScoredCategory is one weighted scoring dimension. An unavailable category carries a reason and
+ * no items, and is excluded from both sides of the overall — see Score.
+ */
+export interface ScoredCategory {
+  id: string;
+  label: string;
+  earned: number /* int */;
+  weight: number /* int */;
+  available: boolean;
+  reason?: string;
+  items?: LineItem[];
+}
+/**
+ * RequirementCheck is one posting requirement re-derived against the current document.
+ * Text and Priority come from the cached fit analysis — they describe the posting and do
+ * not depend on any CV. Coverage does not: it is recomputed here, because the cached
+ * status was determined against the candidate's base profile.
+ */
+export interface RequirementCheck {
+  text: string;
+  priority: string; // required | preferred
+  coverage: Coverage;
+  /**
+   * Skills are the canonical skills the requirement's own text yielded. Empty means the
+   * requirement is unverifiable.
+   */
+  skills?: string[];
+  /**
+   * Missing are the Skills the document does not contain.
+   */
+  missing?: string[];
+  /**
+   * CachedStatus is the status the earlier analysis recorded, carried ONLY for an
+   * unverifiable requirement so the panel can show it labelled as coming from that
+   * analysis. A re-derived requirement never carries it: a stale verdict beside a live
+   * one is worse than no verdict.
+   */
+  cached_status?: string;
+}
+/**
+ * Score is the full job-match result.
+ */
+export interface Score {
+  overall: number /* int */;
+  categories: ScoredCategory[];
+  /**
+   * Contributing names the categories the overall was computed over, so a score taken
+   * across three categories is never mistaken for one taken across four.
+   */
+  contributing: string[];
+  matched_skills?: string[];
+  missing_skills?: string[];
+  requirements?: RequirementCheck[];
+}
+
+/**
  * AdjacentSkill is a job skill the profile does not hold exactly but for which it
  * holds a substitutable neighbour; Via names that held neighbour.
  */
@@ -2134,7 +2239,7 @@ export const ROLE_ALIASES = {
   'business_analyst': ['business analyst'],
   'c_level': ['ceo', 'chief', 'cpo', 'cto', 'head of', 'vice president', 'vp', 'директор', 'руководитель'],
   'chief_of_staff': ['chief of staff'],
-  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'vlsi design engineer'],
+  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'standard cell design engineer', 'vlsi design engineer'],
   'civil_designer': ['civil design engineer', 'civil designer', 'structural designer'],
   'cloud_architect': ['cloud architect'],
   'cloud_engineer': ['cloud engineer'],

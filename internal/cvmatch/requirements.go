@@ -35,8 +35,8 @@ const maxRequirementGram = 3
 //
 // It never copies the cached statuses: those were reached against the base profile, and the
 // whole point of this panel is that the document has since been edited.
-func requirementsCategory(reqs []Requirement, hasAnalysis bool, cvSkills, jobSkills []string) (Category, []RequirementCheck) {
-	c := Category{ID: CategoryRequirements, Label: "Requirements Coverage", Weight: WeightRequirements}
+func requirementsCategory(reqs []Requirement, hasAnalysis bool, cvSkills, jobSkills []string) (ScoredCategory, []RequirementCheck) {
+	c := ScoredCategory{ID: CategoryRequirements, Label: "Requirements Coverage", Weight: WeightRequirements}
 	if !hasAnalysis {
 		c.Reason = "run the fit analysis to check this vacancy's requirements"
 		return c, nil

@@ -33,7 +33,7 @@ func Compute(in Input) Score {
 	requirements, checks := requirementsCategory(in.Requirements, in.HasAnalysis, in.CVSkills, in.JobSkills)
 	keyword, matched, missing := keywordCategory(in.CVSkills, in.JobSkills)
 
-	s := aggregate([]Category{
+	s := aggregate([]ScoredCategory{
 		requirements,
 		keyword,
 		titleCategory(in.JobTitle, in.CVText),

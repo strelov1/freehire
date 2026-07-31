@@ -67,6 +67,7 @@ func genStructs() (string, error) {
 	bundleTS := filepath.Join(tmp, "bundle.ts")
 	verdictTS := filepath.Join(tmp, "verdict.ts")
 	atscheckTS := filepath.Join(tmp, "atscheck.ts")
+	cvmatchTS := filepath.Join(tmp, "cvmatch.ts")
 	jobmatchTS := filepath.Join(tmp, "jobmatch.ts")
 	hardconstraintTS := filepath.Join(tmp, "hardconstraint.ts")
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
@@ -107,6 +108,15 @@ func genStructs() (string, error) {
 				Path:         "github.com/strelov1/freehire/internal/atscheck",
 				OutputPath:   atscheckTS,
 				IncludeFiles: []string{"atscheck.go", "delta.go"},
+			},
+			{
+				// The tailoring job-match wire shape (Score + Category + RequirementCheck +
+				// Coverage). lineitem.go is deliberately excluded: its LineItem and Status are
+				// the same shape atscheck already emitted, and the panel renders both scorers'
+				// rows through one component, so the generated LineItem is shared.
+				Path:         "github.com/strelov1/freehire/internal/cvmatch",
+				OutputPath:   cvmatchTS,
+				IncludeFiles: []string{"cvmatch.go"},
 			},
 			{
 				// The per-job profile-match wire shape (JobMatch + AdjacentSkill).
@@ -174,6 +184,10 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	cvmatchBody, err := readBody(cvmatchTS)
+	if err != nil {
+		return "", err
+	}
 	jobmatchBody, err := readBody(jobmatchTS)
 	if err != nil {
 		return "", err
@@ -194,7 +208,7 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

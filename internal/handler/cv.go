@@ -126,6 +126,10 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// tailoring agent authenticates with a CLI credential, so this gate is what keeps the
 	// score out of the reach of the thing being measured.
 	api.Get("/me/cvs/:id/ats-delta", mw.cookie, h.GetCVATSDelta)
+	// How well the tailored CV matches the vacancy it was written for. Cookie-only for the
+	// same reason as the delta: the tailoring agent authenticates with a CLI credential, and
+	// this gate is what keeps the score out of the reach of the thing being measured.
+	api.Get("/me/cvs/:id/job-match", mw.cookie, h.GetCVJobMatch)
 }
 
 const maxCVTitleRunes = 200

@@ -10,12 +10,12 @@
 
 ## 2. The endpoint — `GET /me/cvs/:id/job-match`
 
-- [ ] 2.1 Split `cvHandlers.scoreRenderedCV` into a shared `renderedCVText(ctx, doc, tmpl) (string, error)` carrying the missing-toolchain check, and re-point the ATS-delta handler at it with its tests still green.
-- [ ] 2.2 Add the handler: owner-scoped read, 409 naming which case when the CV is the base copy or its vacancy was pruned, and the `{available, reason?, score?}` envelope.
-- [ ] 2.3 Read the requirement ledger through the existing `cachedAnalysisCtx`; a pair with no cached analysis degrades Requirements Coverage to unavailable rather than failing the request.
-- [ ] 2.4 Degrade to `available: false` with a reason and a success status when the renderer or the text extractor is missing, or a render fails.
-- [ ] 2.5 Register the route under `mw.cookie` beside the ats-delta route, and cover the endpoint with an integration test in the `cv_ats_delta` harness's style.
-- [ ] 2.6 Generate the TS contract via `cmd/gen-contracts` and verify the shape lands in `web/src/lib/generated/contracts.ts`.
+- [x] 2.1 Split `cvHandlers.scoreRenderedCV` into a shared `renderedCVText(ctx, doc, tmpl) (string, error)` carrying the missing-toolchain check, and re-point the ATS-delta handler at it with its tests still green.
+- [x] 2.2 Add the handler: owner-scoped read, 409 naming which case when the CV is the base copy or its vacancy was pruned, and the `{available, reason?, score?}` envelope.
+- [x] 2.3 Read the requirement ledger through the existing `cachedAnalysisCtx`; a pair with no cached analysis degrades Requirements Coverage to unavailable rather than failing the request.
+- [x] 2.4 Degrade to `available: false` with a reason and a success status when the renderer or the text extractor is missing, or a render fails.
+- [x] 2.5 Register the route under `mw.cookie` beside the ats-delta route, and cover the endpoint with an integration test in the `cv_ats_delta` harness's style.
+- [x] 2.6 Generate the TS contract via `cmd/gen-contracts` and verify the shape lands in `web/src/lib/generated/contracts.ts`.
 
 ## 3. Line items reach the Score tab
 
@@ -30,6 +30,7 @@
 - [ ] 4.4 Rework `AtsDelta.svelte` to render its rows through `ScoreCategoryRow`, preserving the regression warning and the "measured on the rendered PDF" footnote.
 - [ ] 4.5 Split `ArtifactPanel`'s tabs to `templates | jd | jobmatch | score`: Job Match carries `JobMatch` plus the labelled `MatchAnalysisFull` snapshot; Score carries `AtsDelta` plus `AutopilotReport`.
 - [ ] 4.6 Add the View Job link to the panel header, linking to `resolve('/jobs/[slug]', { slug })` and omitted when there is no job.
+- [ ] 4.7 Add collapse toggles to both side panels: the left panel and the right context panel each fold to a thin rail with a button that restores them, so the centre CV preview can take the full width. Desktop-only (below `lg` the columns are already one at a time), and the collapsed state must not be reachable in a way that hides the panel's tab bar with no way back.
 
 ## 5. The workspace wiring
 

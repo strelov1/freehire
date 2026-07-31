@@ -13,8 +13,8 @@ import (
 //
 // Results keep the vacancy's own order: it is the employer's ordering of what matters, and
 // re-sorting it would invent a priority we do not have.
-func keywordCategory(cvSkills, jobSkills []string) (c Category, matched, missing []string) {
-	c = Category{ID: CategoryKeyword, Label: "Keyword Match", Weight: WeightKeyword}
+func keywordCategory(cvSkills, jobSkills []string) (c ScoredCategory, matched, missing []string) {
+	c = ScoredCategory{ID: CategoryKeyword, Label: "Keyword Match", Weight: WeightKeyword}
 
 	// A vacancy whose skills the dictionary never resolved is a gap on our side. Awarding
 	// full marks would flatter the CV and awarding none would libel it.

@@ -19,8 +19,8 @@ import (
 // A title that states no grade is not a junior one, and this is the lightest-weighted
 // category precisely because it barely moves under tailoring: the candidate should not be
 // pushed to chase it by inflating a title.
-func seniorityCategory(jobTitle, cvText string) Category {
-	c := Category{ID: CategorySeniority, Label: "Seniority Fit", Weight: WeightSeniority}
+func seniorityCategory(jobTitle, cvText string) ScoredCategory {
+	c := ScoredCategory{ID: CategorySeniority, Label: "Seniority Fit", Weight: WeightSeniority}
 
 	want := gradeRank(classify.Parse(jobTitle).Seniority)
 	if want < 0 {

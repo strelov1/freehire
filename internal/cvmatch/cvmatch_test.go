@@ -23,7 +23,7 @@ func TestCategoryWeightsSumTo100(t *testing.T) {
 func TestScoreWireShape(t *testing.T) {
 	s := cvmatch.Score{
 		Overall: 75,
-		Categories: []cvmatch.Category{
+		Categories: []cvmatch.ScoredCategory{
 			{
 				ID:        cvmatch.CategoryKeyword,
 				Label:     "Keyword Match",
