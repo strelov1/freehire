@@ -86,7 +86,11 @@ vacancies with keyword and facet filters (`search_jobs`), reading one vacancy
 (`market_fit`), saving, unsaving and applying to a vacancy, setting an
 application stage or note (`track_job`), listing the caller's tracked jobs
 (`my_jobs`), and — in a tailoring session — reading the tailoring context and CV
-document and applying a CV patch. It SHALL additionally be given `present_jobs`,
+document and applying a CV patch. In a general chat session it SHALL additionally
+be given the mail tools, which cover the CLI's `inbox` commands: the mailbox's
+label counts, the filtered listing, classification, suggestion resolution,
+linking and unlinking, and recording an application from a message. It SHALL
+additionally be given `present_jobs`,
 the one tool whose purpose is presentation rather than retrieval or state change:
 it is how a vacancy reaches the user's screen. Rendering the CV SHALL NOT be a
 tool: the workspace already previews the document beside the chat, so a render
@@ -95,6 +99,12 @@ screen. Each tool SHALL declare a
 JSON schema for its arguments and return structured data, not human-formatted
 text. Moderator-only operations (job authoring, submission review) SHALL NOT be
 exposed.
+
+Where a tool and an HTTP endpoint perform the same operation, they SHALL reach it
+through one service rather than two implementations. A rule enforced in a Fiber
+handler is a rule keyed on the transport, and the in-process agent issues no HTTP
+request — such a rule would go silently unenforced for it, which is how the
+CV-tailoring contact-block guard was once lost.
 
 #### Scenario: Search results carry the data needed to recommend
 
@@ -115,6 +125,11 @@ exposed.
 
 - **WHEN** a session is created for a user who is also a moderator
 - **THEN** no job-authoring or submission-review tool is offered to the model
+
+#### Scenario: A mail tool and its endpoint cannot disagree
+
+- **WHEN** the model classifies a message through a tool and a harness classifies one through the HTTP endpoint
+- **THEN** both take the same validation, write the same columns and advance the application's stage by the same rules, because both call the same service
 
 ### Requirement: The agent reads the saved profile instead of interrogating the user
 
@@ -213,10 +228,18 @@ persisted so the session is resumable.
 ### Requirement: A session's preset selects its prompt and its tools
 
 A session SHALL record a preset. The general-chat preset SHALL offer the
-discovery and tracking tools; the CV-tailoring preset SHALL additionally offer
-the CV tools and SHALL be bound to the tailored CV and its vacancy. The preset
+discovery, tracking and mail tools; the CV-tailoring preset SHALL additionally offer
+the CV tools and SHALL be bound to the tailored CV and its vacancy, and SHALL NOT
+offer the mail tools. The preset
 SHALL select the system prompt. No other behaviour SHALL differ between presets,
 so the same chat surface serves both.
+
+A preset's prompt and its tool set SHALL be chosen from one shared decision, so an
+unrecognised preset cannot resolve to one preset's prompt and another's tools. Each
+prompt SHALL name only tools its own preset registers: a prompt that names a tool the
+session does not carry teaches the model to spend a round on a call that can only come
+back unknown. The reverse SHALL NOT be required — a tool may go unnamed by the prompt,
+because its own description is what the model reads to decide whether to call it.
 
 #### Scenario: A chat session has no CV tools
 
@@ -227,6 +250,16 @@ so the same chat surface serves both.
 
 - **WHEN** a tailoring session runs a turn
 - **THEN** the CV tools are offered and operate on the CV the session is bound to, and the tailoring context for its vacancy is available to the model
+
+#### Scenario: An unrecognised preset resolves consistently
+
+- **WHEN** a session records a preset the system does not recognise
+- **THEN** it runs under the general-chat prompt and the general-chat tool set — never one preset's prompt with another's tools
+
+#### Scenario: Every tool a prompt names is registered
+
+- **WHEN** a preset's system prompt names a tool
+- **THEN** that tool is registered for that preset
 
 ### Requirement: A resumed session continues the model's history
 
