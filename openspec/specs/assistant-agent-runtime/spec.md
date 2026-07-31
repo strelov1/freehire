@@ -230,7 +230,9 @@ persisted so the session is resumable.
 A session SHALL record a preset. The general-chat preset SHALL offer the
 discovery, tracking and mail tools; the CV-tailoring preset SHALL additionally offer
 the CV tools and SHALL be bound to the tailored CV and its vacancy, and SHALL NOT
-offer the mail tools. The preset
+offer the mail tools; the interview-rehearsal preset SHALL be bound to a vacancy
+alone, SHALL additionally offer the rehearsal context tool for that vacancy, and SHALL
+offer neither the CV tools nor the mail tools nor the page tool. The preset
 SHALL select the system prompt. No other behaviour SHALL differ between presets,
 so the same chat surface serves both.
 
@@ -241,6 +243,9 @@ session does not carry teaches the model to spend a round on a call that can onl
 back unknown. The reverse SHALL NOT be required — a tool may go unnamed by the prompt,
 because its own description is what the model reads to decide whether to call it.
 
+The preset vocabulary SHALL be pinned in the database, so a session can never record a
+preset the application does not implement.
+
 #### Scenario: A chat session has no CV tools
 
 - **WHEN** a general chat session runs a turn
@@ -250,6 +255,11 @@ because its own description is what the model reads to decide whether to call it
 
 - **WHEN** a tailoring session runs a turn
 - **THEN** the CV tools are offered and operate on the CV the session is bound to, and the tailoring context for its vacancy is available to the model
+
+#### Scenario: A rehearsal session edits no CV and reads no mail
+
+- **WHEN** an interview-rehearsal session runs a turn
+- **THEN** the rehearsal context for its vacancy is offered, and no CV-editing tool, no mail tool and no page tool is offered
 
 #### Scenario: An unrecognised preset resolves consistently
 
