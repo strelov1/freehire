@@ -61,7 +61,8 @@ INSERT INTO application_events (
     user_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
 )
 VALUES ($1, $7, $2, $3, $4, $5, $6, $8)
-ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL DO NOTHING
+ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
+DO NOTHING
 `
 
 type RecordApplicationEventParams struct {
@@ -101,6 +102,42 @@ func (q *Queries) RecordApplicationEvent(ctx context.Context, arg RecordApplicat
 	return err
 }
 
+const recordEmailApplicationEvent = `-- name: RecordEmailApplicationEvent :exec
+INSERT INTO application_events (
+    user_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
+)
+SELECT em.user_id, em.job_id, j.company_slug, 'employer_reply',
+       COALESCE(em.status_signal, ''), em.received_at, $3::text, em.id
+  FROM emails em JOIN jobs j ON j.id = em.job_id
+ WHERE em.id      = $1
+   AND em.user_id = $2
+   AND em.job_id IS NOT NULL
+   AND COALESCE(em.status_signal, '') <> ''
+ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
+DO NOTHING
+`
+
+type RecordEmailApplicationEventParams struct {
+	ID          int64  `json:"id"`
+	UserID      int64  `json:"user_id"`
+	EventSource string `json:"event_source"`
+}
+
+// Step 2: record the event when the message is both linked and classified and no live
+// event exists for it. Run RetractSupersededEmailEvent first.
+//
+// The message's own received_at is the date. now() would compress a year of imported
+// history into the day a mailbox was connected.
+//
+// Idempotent by the partial unique index, so the classification worker, the manual link
+// paths and the backfill can all call it in any order and produce one row.
+// `event_source` is derived from the message's store by the caller, keeping that
+// vocabulary in Go where a pin test guards it.
+func (q *Queries) RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error {
+	_, err := q.db.Exec(ctx, recordEmailApplicationEvent, arg.ID, arg.UserID, arg.EventSource)
+	return err
+}
+
 const retractApplicationEventsBySourceRef = `-- name: RetractApplicationEventsBySourceRef :execrows
 UPDATE application_events
 SET retracted_at = now()
@@ -129,6 +166,44 @@ type RetractApplicationEventsBySourceRefParams struct {
 // correction cannot move the stamp forward.
 func (q *Queries) RetractApplicationEventsBySourceRef(ctx context.Context, arg RetractApplicationEventsBySourceRefParams) (int64, error) {
 	result, err := q.db.Exec(ctx, retractApplicationEventsBySourceRef, arg.UserID, arg.Kind, arg.SourceRef)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const retractSupersededEmailEvent = `-- name: RetractSupersededEmailEvent :execrows
+UPDATE application_events ae
+SET retracted_at = now()
+FROM emails em
+WHERE em.id            = $1
+  AND em.user_id       = $2
+  AND ae.user_id       = em.user_id
+  AND ae.kind          = 'employer_reply'
+  AND ae.source_ref    = em.id
+  AND ae.retracted_at IS NULL
+  AND ae.job_id IS DISTINCT FROM em.job_id
+`
+
+type RetractSupersededEmailEventParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// Step 1 of reconciling one email with the ledger: retract the live event when the
+// message is no longer linked, or is now linked to a different application.
+//
+// Deleting or hiding the message is NOT one of those conditions and is deliberately not
+// consulted: deletion says the reader does not want to see it, re-linking says the fact
+// belongs to another employer. Only the second is a claim about who replied.
+//
+// This is a separate statement from RecordEmailApplicationEvent, and must run first.
+// Folding both into one statement with data-modifying CTEs looks tidier and is wrong:
+// CTEs all read the same pre-statement snapshot, so the insert's ON CONFLICT would still
+// see the row this retracts as live, conflict with it, and silently record nothing — the
+// correction would appear to succeed while leaving the wrong company credited.
+func (q *Queries) RetractSupersededEmailEvent(ctx context.Context, arg RetractSupersededEmailEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, retractSupersededEmailEvent, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}

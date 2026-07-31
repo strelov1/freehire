@@ -35,6 +35,30 @@ type fakeQueries struct {
 	triaged    int
 	stage      string
 	advancedTo string
+	// synced records the ledger reconciles asked for, so a test can assert that every
+	// link mutation ends with one.
+	synced   []db.RecordEmailApplicationEventParams
+	retracts int
+	// recordedBeforeRetract catches the ordering bug that CTE-based reconciliation had:
+	// recording before retracting leaves the superseded row live, so the insert conflicts
+	// with it and the correction silently does nothing.
+	recordedBeforeRetract bool
+}
+
+// RetractSupersededEmailEvent is step 1 of the reconcile; the fake counts it so a test
+// can assert it ran BEFORE the record — the order is the whole correctness of a re-link.
+func (f *fakeQueries) RetractSupersededEmailEvent(_ context.Context, _ db.RetractSupersededEmailEventParams) (int64, error) {
+	f.retracts++
+	return 0, nil
+}
+
+// RecordEmailApplicationEvent is step 2.
+func (f *fakeQueries) RecordEmailApplicationEvent(_ context.Context, arg db.RecordEmailApplicationEventParams) error {
+	if f.retracts == 0 {
+		f.recordedBeforeRetract = true
+	}
+	f.synced = append(f.synced, arg)
+	return nil
 }
 
 func (f *fakeQueries) rows() int64 {

@@ -64,8 +64,15 @@ CREATE INDEX IF NOT EXISTS application_events_user_occurred_idx
 -- same operation, so cmd/classify-mail and cmd/backfill-application-events can meet on the
 -- same email in any order and produce one row. Manual events carry no source_ref and sit
 -- outside the index — two consecutive follow-ups are two facts, not a duplicate.
+--
+-- Uniqueness holds among LIVE events only. A retracted row must not keep occupying the
+-- slot: re-linking a message to the right employer retracts the old event and records a
+-- new one for the same message, and an index blind to retraction would reject the
+-- correction — leaving the wrong company's rate permanently poisoned, which is the exact
+-- failure the retraction path exists to fix.
 CREATE UNIQUE INDEX IF NOT EXISTS application_events_source_ref_key
-    ON application_events (user_id, kind, source_ref) WHERE source_ref IS NOT NULL;
+    ON application_events (user_id, kind, source_ref)
+    WHERE source_ref IS NOT NULL AND retracted_at IS NULL;
 
 -- "Did this application ever get a reply?" — the aggregate's per-application question.
 CREATE INDEX IF NOT EXISTS application_events_app_idx

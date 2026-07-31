@@ -48,6 +48,8 @@ type Queries interface {
 	RejectEmailLink(ctx context.Context, arg db.RejectEmailLinkParams) (int64, error)
 	GetUserJobStage(ctx context.Context, arg db.GetUserJobStageParams) (string, error)
 	AdvanceUserJobStage(ctx context.Context, arg db.AdvanceUserJobStageParams) error
+	RetractSupersededEmailEvent(ctx context.Context, arg db.RetractSupersededEmailEventParams) (int64, error)
+	RecordEmailApplicationEvent(ctx context.Context, arg db.RecordEmailApplicationEventParams) error
 }
 
 // Applications records an application reconstructed from mail. The mail surface

@@ -19,12 +19,12 @@
 - [x] 2.3 Emit `applied` from `jobtracking.MarkApplied`, inside the existing `LockJobForApply`
   transaction, only when `applied_at` was newly set.
 - [x] 2.4 Emit `stage_set` from `jobtracking.TrackJob`, only when the stage actually changed.
-- [ ] 2.5 Emit `follow_up_sent` from the follow-up record action, one row per chase.
-- [ ] 2.6 Emit `employer_reply` from `internal/maillink` when a message is both linked and
+- [x] 2.5 Emit `follow_up_sent` from the follow-up record action, one row per chase.
+- [x] 2.6 Emit `employer_reply` from `internal/maillink` when a message is both linked and
   classified.
-- [ ] 2.7 Emit `employer_reply` from the `internal/inbox` paths that link outside the worker:
+- [x] 2.7 Emit `employer_reply` from the `internal/inbox` paths that link outside the worker:
   suggestion confirmation, manual link, application-from-mail, external triage.
-- [ ] 2.8 Retract on re-link: correcting an email's application retracts the prior event and
+- [x] 2.8 Retract on re-link: correcting an email's application retracts the prior event and
   records a new one at the same `occurred_at`.
 
 ## 3. Backfill

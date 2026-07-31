@@ -1633,6 +1633,12 @@ type Querier interface {
 	// Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
 	// applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
 	// comment in 0059 for why a chase must not clear the silence it was a response to.
+	// The ledger records one `follow_up_sent` event per chase, which is what the single
+	// column above cannot do: it holds the latest chase only, so the first is erased by the
+	// second even though a second chase is the candidate's deliberate decision.
+	// The column's own idempotence is the reason for the hour: a double submit arrives
+	// seconds apart, a genuine second chase days apart, so any threshold between them is
+	// safe. An hour is the smallest that sits comfortably above a retry.
 	RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
@@ -1641,6 +1647,17 @@ type Querier interface {
 	// A successful crawl clears the failure state and stamps freshness. Upsert so a
 	// first-ever crawl creates the row.
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
+	// Step 2: record the event when the message is both linked and classified and no live
+	// event exists for it. Run RetractSupersededEmailEvent first.
+	//
+	// The message's own received_at is the date. now() would compress a year of imported
+	// history into the day a mailbox was connected.
+	//
+	// Idempotent by the partial unique index, so the classification worker, the manual link
+	// paths and the backfill can all call it in any order and produce one row.
+	// `event_source` is derived from the message's store by the caller, keeping that
+	// vocabulary in Go where a pin test guards it.
+	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the
@@ -1819,6 +1836,19 @@ type Querier interface {
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
+	// Step 1 of reconciling one email with the ledger: retract the live event when the
+	// message is no longer linked, or is now linked to a different application.
+	//
+	// Deleting or hiding the message is NOT one of those conditions and is deliberately not
+	// consulted: deletion says the reader does not want to see it, re-linking says the fact
+	// belongs to another employer. Only the second is a claim about who replied.
+	//
+	// This is a separate statement from RecordEmailApplicationEvent, and must run first.
+	// Folding both into one statement with data-modifying CTEs looks tidier and is wrong:
+	// CTEs all read the same pre-statement snapshot, so the insert's ON CONFLICT would still
+	// see the row this retracts as live, conflict with it, and silently record nothing — the
+	// correction would appear to succeed while leaving the wrong company credited.
+	RetractSupersededEmailEvent(ctx context.Context, arg RetractSupersededEmailEventParams) (int64, error)
 	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
 	// True means the reward was already granted and must not be granted again (idempotency).
 	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)

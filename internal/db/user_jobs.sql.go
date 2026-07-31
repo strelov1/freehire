@@ -628,15 +628,31 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 }
 
 const recordApplicationFollowUp = `-- name: RecordApplicationFollowUp :one
-UPDATE user_jobs
-SET followed_up_at = now()
-WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
-RETURNING followed_up_at
+WITH prior AS (
+    SELECT uj.followed_up_at FROM user_jobs uj
+     WHERE uj.user_id = $1 AND uj.job_id = $2 AND uj.applied_at IS NOT NULL
+), upd AS (
+    UPDATE user_jobs
+    SET followed_up_at = now()
+    WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
+    RETURNING followed_up_at
+), event AS (
+    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT $1, $2, j.company_slug, 'follow_up_sent', u.followed_up_at, $3::text
+      FROM upd u JOIN jobs j ON j.id = $2
+     WHERE NOT EXISTS (
+         SELECT 1 FROM prior
+          WHERE prior.followed_up_at IS NOT NULL
+            AND prior.followed_up_at > now() - interval '1 hour'
+     )
+)
+SELECT followed_up_at FROM upd
 `
 
 type RecordApplicationFollowUpParams struct {
-	UserID int64 `json:"user_id"`
-	JobID  int64 `json:"job_id"`
+	UserID      int64  `json:"user_id"`
+	JobID       int64  `json:"job_id"`
+	EventSource string `json:"event_source"`
 }
 
 // Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
@@ -646,8 +662,14 @@ type RecordApplicationFollowUpParams struct {
 // Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
 // applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
 // comment in 0059 for why a chase must not clear the silence it was a response to.
+// The ledger records one `follow_up_sent` event per chase, which is what the single
+// column above cannot do: it holds the latest chase only, so the first is erased by the
+// second even though a second chase is the candidate's deliberate decision.
+// The column's own idempotence is the reason for the hour: a double submit arrives
+// seconds apart, a genuine second chase days apart, so any threshold between them is
+// safe. An hour is the smallest that sits comfortably above a retry.
 func (q *Queries) RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, recordApplicationFollowUp, arg.UserID, arg.JobID)
+	row := q.db.QueryRow(ctx, recordApplicationFollowUp, arg.UserID, arg.JobID, arg.EventSource)
 	var followed_up_at pgtype.Timestamptz
 	err := row.Scan(&followed_up_at)
 	return followed_up_at, err

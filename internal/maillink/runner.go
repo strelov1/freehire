@@ -27,6 +27,9 @@ type Claimed struct {
 	OutboxID int64
 	EmailID  int64
 	UserID   int64
+	// Source is the message's store (see inbox.Sources). It rides along so the
+	// ledger event Save writes can name which mailbox observed the reply.
+	Source   string
 	ThreadID string
 	FromAddr string
 	FromName string
@@ -50,6 +53,9 @@ type Result struct {
 	Confidence     float64
 	Signal         mailclassify.StatusSignal
 	AdvanceStageTo string // non-empty → move the linked application forward
+	// MailSource is the message's store, carried through so the ledger event
+	// records the mailbox that observed the reply rather than guessing.
+	MailSource string
 }
 
 // Store is the persistence port.
@@ -211,6 +217,7 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 		Confidence:     conf,
 		Signal:         cls.Signal,
 		AdvanceStageTo: advanceTo,
+		MailSource:     c.Source,
 	}, r.model); err != nil {
 		return err
 	}

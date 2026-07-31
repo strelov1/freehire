@@ -227,6 +227,138 @@ func TestMarkJobApplied_DatedRecordingCarriesItsDateIntoTheLedger(t *testing.T) 
 	}
 }
 
+// The single followed_up_at column cannot tell a resubmit from a real second chase — it
+// just overwrites. The ledger can, and must: the first chase is a fact the board's own
+// documentation calls a deliberate decision.
+func TestRecordApplicationFollowUp_SuppressesAResubmitButNotASecondChase(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "followup@example.test", true)
+	job := seedResponseJob(t, q, "followup-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	chase := func() {
+		t.Helper()
+		if _, err := q.RecordApplicationFollowUp(ctx, RecordApplicationFollowUpParams{
+			UserID: user, JobID: job, EventSource: "user",
+		}); err != nil {
+			t.Fatalf("record follow-up: %v", err)
+		}
+	}
+
+	chase()
+	chase() // the resubmit, within the hour
+
+	count := func() int {
+		t.Helper()
+		var n int
+		if err := q.db.QueryRow(ctx,
+			`SELECT count(*) FROM application_events WHERE user_id = $1 AND kind = 'follow_up_sent'`,
+			user).Scan(&n); err != nil {
+			t.Fatalf("count chases: %v", err)
+		}
+		return n
+	}
+	if got := count(); got != 1 {
+		t.Fatalf("a double submit recorded %d chases, want 1", got)
+	}
+
+	// Age the recorded chase past the window; the next one is a genuine second attempt.
+	if _, err := q.db.Exec(ctx,
+		`UPDATE user_jobs SET followed_up_at = now() - interval '9 days'
+		  WHERE user_id = $1 AND job_id = $2`, user, job); err != nil {
+		t.Fatalf("age the chase: %v", err)
+	}
+	chase()
+	if got := count(); got != 2 {
+		t.Errorf("a second chase nine days later recorded %d events in total, want 2 — the first must survive", got)
+	}
+}
+
+// The load-bearing asymmetry. Deleting a message hides content and leaves the fact
+// standing; re-linking asserts the fact belongs to another employer and must move it.
+// Getting this wrong in either direction is a defect on a public page: a deletion that
+// retracted would let inbox hygiene rewrite a company's rate, and a re-link that did not
+// would leave the wrong company's rate poisoned forever — the case the mail stack met
+// when a catalogue company sharing an ATS brand name collected twenty-three
+// acknowledgements belonging to other employers.
+func TestSyncEmailApplicationEvent_DeletionKeepsTheFactRelinkMovesIt(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "sync@example.test", true)
+	jobA := seedResponseJob(t, q, "sync-a", "workable")
+	jobB := seedResponseJob(t, q, "sync-b", "derq")
+
+	var emailID int64
+	if err := q.db.QueryRow(ctx,
+		`INSERT INTO emails (user_id, source, external_id, received_at, job_id, status_signal)
+		 VALUES ($1, 'gmail', 'm-1', now() - interval '3 days', $2, 'acknowledgement')
+		 RETURNING id`, user, jobA).Scan(&emailID); err != nil {
+		t.Fatalf("seed email: %v", err)
+	}
+	sync := func() {
+		t.Helper()
+		if _, err := q.RetractSupersededEmailEvent(ctx, RetractSupersededEmailEventParams{ID: emailID, UserID: user}); err != nil {
+			t.Fatalf("retract: %v", err)
+		}
+		if err := q.RecordEmailApplicationEvent(ctx, RecordEmailApplicationEventParams{
+			ID: emailID, UserID: user, EventSource: "mail_gmail",
+		}); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+	live := func() (slug string, n int) {
+		t.Helper()
+		if err := q.db.QueryRow(ctx,
+			`SELECT coalesce(max(company_slug), ''), count(*) FROM application_events
+			  WHERE user_id = $1 AND kind = 'employer_reply' AND retracted_at IS NULL`,
+			user).Scan(&slug, &n); err != nil {
+			t.Fatalf("read live events: %v", err)
+		}
+		return
+	}
+
+	sync()
+	sync() // idempotent
+	if slug, n := live(); n != 1 || slug != "workable" {
+		t.Fatalf("after two syncs: %d live events for %q, want 1 for workable", n, slug)
+	}
+
+	// Deleting the message must change nothing.
+	if _, err := q.db.Exec(ctx, `UPDATE emails SET deleted_at = now() WHERE id = $1`, emailID); err != nil {
+		t.Fatalf("delete email: %v", err)
+	}
+	sync()
+	if _, n := live(); n != 1 {
+		t.Errorf("deleting the message left %d live events, want the fact to stand at 1", n)
+	}
+
+	// Re-linking to the right employer must move it.
+	if _, err := q.db.Exec(ctx, `UPDATE emails SET job_id = $2 WHERE id = $1`, emailID, jobB); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	sync()
+	slug, n := live()
+	if n != 1 || slug != "derq" {
+		t.Errorf("after the correction: %d live events for %q, want 1 for derq", n, slug)
+	}
+	var retracted int
+	if err := q.db.QueryRow(ctx,
+		`SELECT count(*) FROM application_events
+		  WHERE user_id = $1 AND company_slug = 'workable' AND retracted_at IS NOT NULL`,
+		user).Scan(&retracted); err != nil {
+		t.Fatalf("count retracted: %v", err)
+	}
+	if retracted != 1 {
+		t.Errorf("the mislinked event was retracted %d times, want 1 — the row must survive as evidence", retracted)
+	}
+}
+
 // Retraction is the link-correction path. The row stays: an event recorded in error is
 // itself a fact, and the ledger is append-only.
 func TestRetractApplicationEvents_StampsRatherThanDeletes(t *testing.T) {

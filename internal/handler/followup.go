@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/followup"
 	"github.com/strelov1/freehire/internal/matchanalysis"
@@ -67,7 +68,9 @@ func (h *inboxHandlers) GetApplicationFollowUp(c *fiber.Ctx) error {
 
 // RecordApplicationFollowUp records that the candidate chased. It does NOT touch the silence
 // derivation: last activity is when the OTHER side moved, and a chase is not a reply (see the
-// column comment in 0059). Idempotent — a double click overwrites the timestamp.
+// column comment in 0059). Idempotent — a double click overwrites the timestamp, and the
+// ledger event it writes is suppressed within the hour for the same reason: a resubmit is
+// seconds apart, a genuine second chase days apart.
 func (h *inboxHandlers) RecordApplicationFollowUp(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -78,7 +81,9 @@ func (h *inboxHandlers) RecordApplicationFollowUp(c *fiber.Ctx) error {
 		return err
 	}
 	if _, err := h.queries.RecordApplicationFollowUp(c.Context(),
-		db.RecordApplicationFollowUpParams{UserID: userID, JobID: job.ID}); err != nil {
+		db.RecordApplicationFollowUpParams{
+			UserID: userID, JobID: job.ID, EventSource: appevent.SourceUser,
+		}); err != nil {
 		return err // ErrNoRows → 404: not an application of this caller's
 	}
 	return c.SendStatus(fiber.StatusNoContent)

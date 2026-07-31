@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/maillink"
@@ -131,6 +132,24 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		}); err != nil {
 			return fmt.Errorf("advance stage: %w", err)
 		}
+	}
+	// Reconcile the ledger inside the same transaction that persisted the link, so an
+	// employer_reply event cannot exist for a classification that rolled back — nor be
+	// missing for one that committed. The reconcile is the same statement the inbox's
+	// manual paths call; the rule has one home.
+	eventSource, err := appevent.SourceForMail(r.MailSource)
+	if err != nil {
+		return fmt.Errorf("ledger source: %w", err)
+	}
+	if _, err := qtx.RetractSupersededEmailEvent(ctx, db.RetractSupersededEmailEventParams{
+		ID: r.EmailID, UserID: userID,
+	}); err != nil {
+		return fmt.Errorf("retract superseded event: %w", err)
+	}
+	if err := qtx.RecordEmailApplicationEvent(ctx, db.RecordEmailApplicationEventParams{
+		ID: r.EmailID, UserID: userID, EventSource: eventSource,
+	}); err != nil {
+		return fmt.Errorf("record reply event: %w", err)
 	}
 	if err := qtx.DeleteEmailClassificationOutbox(ctx, outboxID); err != nil {
 		return fmt.Errorf("delete outbox entry: %w", err)

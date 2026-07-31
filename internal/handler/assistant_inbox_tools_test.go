@@ -295,3 +295,11 @@ func TestSearchWithNoLimitStillReturnsAPage(t *testing.T) {
 		t.Errorf("Search asked the store for LIMIT %d; a zero must not reach it", store.lastList.Lim)
 	}
 }
+
+func (m *mailStore) RetractSupersededEmailEvent(context.Context, db.RetractSupersededEmailEventParams) (int64, error) {
+	return 0, nil
+}
+
+func (m *mailStore) RecordEmailApplicationEvent(context.Context, db.RecordEmailApplicationEventParams) error {
+	return nil
+}

@@ -71,7 +71,15 @@ func (s *Service) Triage(ctx context.Context, userID, id int64, v Verdict) (Mess
 	if jobID.Valid {
 		s.advanceStage(ctx, userID, jobID.Int64, mailclassify.StatusSignal(v.Signal))
 	}
-	return s.Get(ctx, userID, id)
+	msg, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return Message{}, err
+	}
+	// Triage writes status, link and provenance in one update rather than going through
+	// mutate, so it needs its own reconcile. It is the same call, deliberately: a triage
+	// that set a signal on already-linked mail is an employer reply like any other.
+	s.syncLedger(ctx, userID, id, msg.Source)
+	return msg, nil
 }
 
 // Link attaches a message to the application named by slug.
@@ -167,7 +175,41 @@ func (s *Service) mutate(ctx context.Context, userID, id int64, do func() (int64
 	if rows == 0 {
 		return Message{}, ErrNotFound
 	}
-	return s.Get(ctx, userID, id)
+	msg, err := s.Get(ctx, userID, id)
+	if err != nil {
+		return Message{}, err
+	}
+	s.syncLedger(ctx, userID, id, msg.Source)
+	return msg, nil
+}
+
+// syncLedger reconciles the ledger with the message's current link and classification.
+// Every inbox mutation funnels through mutate, so this one call covers confirming a
+// suggestion, a manual (re)link, unlinking, and the external-harness triage — the rule
+// lives in one place rather than in four.
+//
+// Best-effort: the mutation the caller asked for has already succeeded and is the
+// primary result. A failure here is logged, never surfaced — the reconcile is idempotent
+// and the next mutation, or the backfill, will carry it out.
+func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource string) {
+	source, err := appevent.SourceForMail(mailSource)
+	if err != nil {
+		log.Printf("inbox: ledger sync user=%d email=%d: %v", userID, id, err)
+		return
+	}
+	// Order matters: the retraction must land before the insert, or the insert's
+	// conflict check still sees the superseded row as live. See the query comments.
+	if _, err := s.q.RetractSupersededEmailEvent(ctx, db.RetractSupersededEmailEventParams{
+		ID: id, UserID: userID,
+	}); err != nil {
+		log.Printf("inbox: ledger retract user=%d email=%d: %v", userID, id, err)
+		return
+	}
+	if err := s.q.RecordEmailApplicationEvent(ctx, db.RecordEmailApplicationEventParams{
+		ID: id, UserID: userID, EventSource: source,
+	}); err != nil {
+		log.Printf("inbox: ledger record user=%d email=%d: %v", userID, id, err)
+	}
 }
 
 // advanceStage moves a linked application forward when the verdict implies
