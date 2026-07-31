@@ -81,6 +81,11 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// Email → application linking. :slug is registered after the static
 	// /me/tracking/* routes (see Register) so it does not shadow them.
 	api.Get("/me/tracking/:slug", mw.key, h.GetTrackedApplication)
+	// The chase for an application that went quiet: assemble the draft, and record that the
+	// candidate sent it. A key is admitted for the same reason the apply write admits one — the
+	// CLI records applications, and a follow-up is the same kind of act.
+	api.Get("/me/tracking/:slug/followup", mw.key, h.GetApplicationFollowUp)
+	api.Post("/me/tracking/:slug/followup", mw.key, h.RecordApplicationFollowUp)
 	api.Post("/me/emails/:id/link", mw.key, h.LinkEmail)
 	api.Post("/me/emails/:id/unlink", mw.key, h.UnlinkEmail)
 	api.Post("/me/emails/:id/confirm", mw.key, h.ConfirmEmailLink)

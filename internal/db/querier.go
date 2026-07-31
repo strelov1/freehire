@@ -800,6 +800,9 @@ type Querier interface {
 	// when none has been computed. Derived only — never the raw CV text.
 	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
 	// The caller's interaction row for one job (the application-detail header).
+	// last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+	// must reach the same silence verdict as the badge on the board, and two derivations of one rule
+	// drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
 	GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the

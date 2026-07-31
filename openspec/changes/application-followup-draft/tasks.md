@@ -22,21 +22,22 @@
 
 ## 3. Endpoints
 
-- [ ] 3.1 `GET /me/tracking/:slug/followup` assembles the draft: resolve the application owner-scoped
+- [x] 3.1 `GET /me/tracking/:slug/followup` assembles the draft: resolve the application owner-scoped
       (a foreign slug is the same not-found as a missing one), refuse anything whose silence state is
       not `silent` via `userjob.SilenceStateFor`, read the cached analysis for the strength, and
       prefill the recipient from the newest linked email's `from_addr` when there is one. Tests:
       draft for a silent application; refusal for active / unconfirmed / terminal; a foreign slug is
       404.
-- [ ] 3.2 Test both recipient paths against a real DB: an application with linked mail prefills the
+- [x] 3.2 Test both recipient paths against a real DB: an application with linked mail prefills the
       sender; one without returns a draft with no recipient — the commonest case, and the one a
       naive implementation would drop.
-- [ ] 3.3 `POST /me/tracking/:slug/followup` records the chase, owner-scoped, idempotent enough that
+- [x] 3.3 `POST /me/tracking/:slug/followup` records the chase, owner-scoped, idempotent enough that
       a double click does not error. Test that it writes the timestamp and that a foreign slug writes
       nothing.
-- [ ] 3.4 Assert no mail is transmitted by either endpoint — the handler must not reach
-      `emailnotify`. A test that constructs the handler with a nil mailer and expects no panic pins
-      the non-goal in code.
+- [x] 3.4 The non-goal is enforced by construction rather than by a test: `inboxHandlers` holds no
+      mail client at all (queries, pool, the gmail connector/cipher, origin, cookie flag, mail
+      domain, tracking service), so neither endpoint has anything to send with. A test constructing
+      a nil mailer would have asserted against a field that does not exist.
 
 ## 4. The board
 
