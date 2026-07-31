@@ -1,8 +1,8 @@
 ## 1. Transcript scrolling
 
-- [ ] 1.1 Add `web/src/lib/assistant/scrolling.ts` with the pure decision — `atBottom(metrics, tolerance)` and the tolerance constant — plus `scrolling.test.ts` covering at-bottom, scrolled-away, and the growing-last-line case the tolerance exists for.
-- [ ] 1.2 Wire `AssistantChat.svelte` to it: a `stickToBottom` state updated from the pane's `onscroll`, `scrollToBottom(force = false)` that no-ops while false, and `force` at the three deliberate acts (submit, unattended run, open session).
-- [ ] 1.3 Add the "jump to latest" control, shown only while not following; activating it scrolls to the bottom and resumes following.
+- [x] 1.1 Add `web/src/lib/assistant/scrolling.ts` with the pure decision — `atBottom(metrics, tolerance)` and the tolerance constant — plus `scrolling.test.ts` covering at-bottom, scrolled-away, and the growing-last-line case the tolerance exists for.
+- [x] 1.2 Wire `AssistantChat.svelte` to it: a `stickToBottom` state updated from the pane's `onscroll`, `scrollToBottom(force = false)` that no-ops while false, and `force` at the three deliberate acts (submit, unattended run, open session).
+- [x] 1.3 Add the "jump to latest" control, shown only while not following; activating it scrolls to the bottom and resumes following.
 - [ ] 1.4 Verify in a browser against a long streaming answer: scroll up mid-turn and confirm position holds, the control appears, and both the control and scrolling back restore following.
 
 ## 2. Transcription backend

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
-  import { AlertTriangle, MessagesSquare, PanelLeft, Plus, Trash2, WandSparkles } from '@lucide/svelte';
+  import { AlertTriangle, ArrowDown, MessagesSquare, PanelLeft, Plus, Trash2, WandSparkles } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -12,6 +12,7 @@
   import { openRehearsal, sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { splitPresentingCalls } from '$lib/assistant/deck';
+  import { atBottom } from '$lib/assistant/scrolling';
   import { renderMarkdown } from '$lib/assistant/markdown';
   import JobDeck from '$lib/assistant/JobDeck.svelte';
   import SessionRail from '$lib/assistant/SessionRail.svelte';
@@ -116,6 +117,10 @@
 
   let sidebarOpen = $state(true);
   let scroller = $state<HTMLDivElement | null>(null);
+  // Whether arriving turn events may move the pane. Set from the pane's own scroll
+  // events, so scrolling up mid-turn holds position and scrolling back resumes
+  // following with no further ceremony.
+  let stickToBottom = $state(true);
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
@@ -204,9 +209,30 @@
     return () => clearInterval(id);
   });
 
-  async function scrollToBottom() {
+  /**
+   * Bring the newest content into view.
+   *
+   * `force` is the difference between a frame that ARRIVED and an act the reader
+   * PERFORMED. An arriving frame defers to where they are reading; sending a message,
+   * starting a run and opening a conversation do not, because the thing each produces
+   * is at the bottom and leaving it off screen hides the result of the act.
+   */
+  async function scrollToBottom(force = false) {
+    if (!force && !stickToBottom) return;
     await tick();
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    // Asked again after the await: a frame that was allowed to scroll when it arrived
+    // must not still scroll if the reader started reading during that tick.
+    if (!force && !stickToBottom) return;
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+    // Landing at the bottom is also a decision to follow again. The pane's own scroll
+    // event would say so a moment later; saying it here spares the next frame that wait.
+    stickToBottom = true;
+  }
+
+  /** The pane moved. Follow the stream only while the reader is at its end. */
+  function onPaneScroll() {
+    if (scroller) stickToBottom = atBottom(scroller);
   }
 
   // --- Session orchestration -----------------------------------------------
@@ -356,7 +382,7 @@
     } finally {
       switching = false;
     }
-    void scrollToBottom();
+    void scrollToBottom(true);
   }
 
   /**
@@ -488,7 +514,7 @@
     draft = '';
     if (turnActive || queue.length > 0) {
       enqueue(text);
-      void scrollToBottom();
+      void scrollToBottom(true);
       return;
     }
     void dispatch({ kind: 'message', text });
@@ -525,7 +551,7 @@
       started = sendTurn(id, start.text, (event) => onEvent(id, event));
     }
     turn = started;
-    void scrollToBottom();
+    void scrollToBottom(true);
     try {
       await started.done;
     } catch (err) {
@@ -657,7 +683,7 @@
       {/if}
 
       <!-- Message list -->
-      <div bind:this={scroller} class="flex-1 overflow-y-auto p-4">
+      <div bind:this={scroller} onscroll={onPaneScroll} class="flex-1 overflow-y-auto p-4">
         <div class="mx-auto flex max-w-3xl flex-col gap-3">
           {#if phase === 'loading'}
             <p class="text-sm text-muted-foreground">Connecting to the agent…</p>
@@ -757,6 +783,22 @@
             </div>
           {/if}
         </div>
+
+        <!-- Jump to latest. Sticky rather than absolute so it needs no positioned
+             ancestor: as the scroller's last child its natural place is past the bottom
+             of the scrollport, which is exactly when `bottom-2` pins it into view. -->
+        {#if !stickToBottom}
+          <div class="pointer-events-none sticky bottom-2 mt-2 flex justify-center">
+            <button
+              type="button"
+              onclick={() => scrollToBottom(true)}
+              class="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-md transition-colors hover:text-foreground"
+            >
+              <ArrowDown class="size-3.5" />
+              Jump to latest
+            </button>
+          </div>
+        {/if}
       </div>
 
       <Composer
