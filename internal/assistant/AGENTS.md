@@ -147,6 +147,28 @@ can only fail teaches the model to stop calling tools. Reaching no browser is a 
 error naming the remedy, never a failed turn; the call carries its own deadline, because
 it is the only tool whose completion depends on a client we do not control.
 
+**Follow-ups** (`followups.go`, `handler/assistant_followups.go`) suggest what to ask next
+under a settled answer. They are NOT part of the turn: generating them inside the loop
+would make a failure to suggest a failure to answer, and would spend the tool-calling
+model on a three-line task. `POST /assistant/sessions/:id/followups` runs `LLM_MODEL` —
+the cheap one — over `LastExchange` alone, and answers an empty list on EVERY failure
+path: no model, a model error, an unreadable answer, a conversation with nothing said in
+it yet. The strip is decoration, and a decoration that reports a problem nobody can act
+on is worse than one that quietly does not appear; the failure goes to the log instead,
+because otherwise "the model had nothing to suggest" and "the gateway is down" look
+identical from the outside.
+
+Two rules are load-bearing, and both follow from the same fact — activating a suggestion
+speaks it in the CALLER's voice, and the model that wrote it has read job descriptions
+and browsed pages:
+
+- **It renders as text nodes, never through `renderMarkdown`**, and the client sends
+  exactly what it displayed. A truncated question is a different question from the one
+  that was read, which is why the display cap equals the server's per-item cap and why an
+  over-length item is DISCARDED server-side rather than shortened.
+- **The exchange is handed to the model as data.** The system prompt says so outright
+  rather than leaving it implied.
+
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a
 tool result that answers no call in the conversation, so an orphan at the head
