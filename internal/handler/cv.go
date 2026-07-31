@@ -102,6 +102,7 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// Cookie-only, owner-scoped (a foreign id is a 404). The PDF endpoint 501s when no typst
 	// binary is configured; the rest still works.
 	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
+	api.Get("/cv-fonts", mw.cookie, h.ListCVFonts)
 	api.Get("/me/cvs", mw.cookie, h.ListCVs)
 	api.Post("/me/cvs", mw.cookie, h.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
@@ -195,6 +196,14 @@ func recordResponse(rec cv.Record) cvResponse {
 // style, ats_safe) so the UI can render the template gallery. Static registry data — no DB.
 func (h *cvHandlers) ListCVTemplates(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": cv.Templates()})
+}
+
+// ListCVFonts returns the registered typefaces a CV may choose (id, label, the familiar face
+// it matches, and the CSS stack the live preview renders with). Static registry data — no DB.
+// The client reads it instead of hard-coding a list, which is what keeps a second copy of the
+// registry from growing in the web app and drifting from the one the renderer obeys.
+func (h *cvHandlers) ListCVFonts(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"data": cv.Fonts()})
 }
 
 // ListCVs returns the caller's TAILORED CVs (the re-open list), newest edit first, each with

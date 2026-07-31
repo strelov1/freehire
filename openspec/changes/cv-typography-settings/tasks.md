@@ -35,9 +35,9 @@
 
 ## 4. HTTP surface
 
-- [ ] 4.1 Add the fonts list handler and route mirroring `GET /cv/templates`, under the same auth
-- [ ] 4.2 Handler test: the endpoint returns every registered font with id, label, note, and CSS stack
-- [ ] 4.3 Regenerate `web/src/lib/generated/contracts.ts` and add `listCvFonts` to `web/src/lib/api.ts`
+- [x] 4.1 Add the fonts list handler and route mirroring `GET /cv/templates`, under the same auth
+- [x] 4.2 Handler test: the endpoint returns every registered font with id, label, note, and CSS stack
+- [x] 4.3 Regenerate `web/src/lib/generated/contracts.ts` and add `listCvFonts` to `web/src/lib/api.ts`
 
 ## 5. ATS delta
 

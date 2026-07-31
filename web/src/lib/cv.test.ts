@@ -48,6 +48,25 @@ describe('toEditable', () => {
     const d = toEditable({ header: {}, margins: { top: 0.75, right: 0.4, bottom: 0.75, left: 0.4 } });
     expect(d.margins).toEqual({ top: 0.75, right: 0.4, bottom: 0.75, left: 0.4 });
   });
+
+  // Typography is the mirror image of margins: an omitted value must stay unset, because unset
+  // is what tells the renderer to use the template's own. Defaulting it here — the obvious thing
+  // to do by symmetry with toMargins — would send a concrete size back on the next autosave and
+  // silently freeze the template's typography into the document.
+  it('leaves omitted typography unset rather than defaulting it', () => {
+    const d = toEditable({ header: { full_name: 'Ada' } });
+    expect(d.style).toEqual({ font_family: '', font_size: 0, line_height: 0 });
+  });
+
+  it('preserves provided typography', () => {
+    const d = toEditable({ header: {}, style: { font_family: 'carlito', font_size: 10.5, line_height: 0.6 } });
+    expect(d.style).toEqual({ font_family: 'carlito', font_size: 10.5, line_height: 0.6 });
+  });
+
+  it('fills only the typography fields the document omits', () => {
+    const d = toEditable({ header: {}, style: { font_size: 11 } });
+    expect(d.style).toEqual({ font_family: '', font_size: 11, line_height: 0 });
+  });
 });
 
 describe('cvTitle', () => {

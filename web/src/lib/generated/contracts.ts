@@ -720,6 +720,7 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
  */
 export interface Document {
   margins: Margins;
+  style?: Style;
   header: Header;
   summary?: string;
   experience?: ExperienceItem[];
@@ -739,6 +740,27 @@ export interface Margins {
   right: number /* float64 */;
   bottom: number /* float64 */;
   left: number /* float64 */;
+}
+/**
+ * Style is the CV's typography: the typeface, the base type size in points, and the line
+ * height as a leading multiple of the em. It is part of the document, so it persists with
+ * the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
+ * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
+ * the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
+ * difference is deliberate on both counts:
+ *   - Every CV written before this type existed has no style block, so it renders exactly as
+ *     it did. There is nothing to migrate.
+ *   - A template stays a whole design choice. Switching to a template with looser leading
+ *     actually loosens the leading, because that value was never frozen into the document.
+ * Resolving defaults here — the natural thing to do by analogy with clampMargin — would
+ * silently bake the current template's typography into every document on its next save.
+ * FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
+ * resolves it on its own copy of the document at render time.
+ */
+export interface Style {
+  font_family?: string;
+  font_size?: number /* float64 */; // points
+  line_height?: number /* float64 */; // em of leading
 }
 /**
  * Header is the top-of-CV contact block. The tagline under the name is Document.Summary
@@ -2134,7 +2156,7 @@ export const ROLE_ALIASES = {
   'business_analyst': ['business analyst'],
   'c_level': ['ceo', 'chief', 'cpo', 'cto', 'head of', 'vice president', 'vp', 'директор', 'руководитель'],
   'chief_of_staff': ['chief of staff'],
-  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'vlsi design engineer'],
+  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'standard cell design engineer', 'vlsi design engineer'],
   'civil_designer': ['civil design engineer', 'civil designer', 'structural designer'],
   'cloud_architect': ['cloud architect'],
   'cloud_engineer': ['cloud engineer'],
