@@ -398,6 +398,12 @@ Each row that represents an application SHALL additionally carry its
 an application — no `applied_at` — carries all three as null: a job merely viewed
 or saved is not waiting on anyone.
 
+An application row SHALL also carry `cv_opened_at`: when a CV of the caller's that is tied to
+this job was last opened by a non-automated visitor, and null when the caller has no such CV or
+it has never been opened. This field SHALL NOT be an input to `last_activity_at`,
+`days_silent` or `silence_state` — a CV being opened is not a reply, and folding it into the
+silence derivation would clear the marker at the moment it matters most.
+
 #### Scenario: Listing all interactions
 
 - **WHEN** an authenticated user requests `GET /api/v1/me/tracking`
@@ -449,6 +455,24 @@ or saved is not waiting on anyone.
 
 - **WHEN** the listing returns a row the user only viewed or saved
 - **THEN** its `last_activity_at`, `days_silent` and `silence_state` are all null
+
+#### Scenario: An application whose traced CV was opened
+
+- **WHEN** the listing returns an application row and a CV of the caller's tied to that job was
+  opened by a non-automated visitor
+- **THEN** that row's `cv_opened_at` is the most recent such open
+
+#### Scenario: Opening a CV leaves the silence fields alone
+
+- **WHEN** a click is recorded against a CV tied to an application and the listing is read
+- **THEN** that row's `cv_opened_at` is set
+- **AND** its `last_activity_at`, `days_silent` and `silence_state` are what they were before
+  the click
+
+#### Scenario: An application with no traced CV
+
+- **WHEN** the listing returns an application row with no traced CV for that job
+- **THEN** its `cv_opened_at` is null
 
 ### Requirement: Analysed-jobs list endpoint
 
