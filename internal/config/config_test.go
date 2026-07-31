@@ -17,6 +17,25 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_STTModelDefaultsToWhisper(t *testing.T) {
+	t.Setenv("STT_MODEL", "")
+
+	// Unlike the other model names, this one has a default: the gateway that serves
+	// chat also serves transcription, so a deployment that configured LLM_* has
+	// already configured everything dictation needs.
+	if s := Load(); s.STTModel != "whisper-1" {
+		t.Errorf("STTModel = %q, want whisper-1", s.STTModel)
+	}
+}
+
+func TestLoad_STTModelFromEnv(t *testing.T) {
+	t.Setenv("STT_MODEL", "gpt-4o-transcribe")
+
+	if s := Load(); s.STTModel != "gpt-4o-transcribe" {
+		t.Errorf("STTModel = %q, want the env value", s.STTModel)
+	}
+}
+
 func TestLoad_PIIFilterURLFromEnv(t *testing.T) {
 	t.Setenv("PII_FILTER_URL", "http://127.0.0.1:8099/detect")
 

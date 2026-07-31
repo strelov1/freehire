@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/search"
+	"github.com/strelov1/freehire/internal/speech"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
 
@@ -169,6 +170,12 @@ func main() {
 	}
 	defer assistantFlush()
 
+	// Dictation runs on the same gateway and the same key as the two clients above —
+	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
+	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
+	// when the gateway is unset, which the composer reads as "no microphone here".
+	speechClient := speech.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.STTModel)
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs are built per request from the request origin, so one
@@ -208,6 +215,7 @@ func main() {
 		LLM:               llmClient,
 		AssistantLLM:      assistantLLM,
 		AssistantMaxSteps: cfg.AssistantMaxSteps,
+		Speech:            speechClient,
 		PIIDetector:       piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,

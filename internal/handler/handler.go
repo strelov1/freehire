@@ -39,6 +39,7 @@ import (
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/speech"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -179,6 +180,9 @@ type Config struct {
 	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
 	// assistant package's default.
 	AssistantMaxSteps int
+	// Speech transcribes dictated audio for the composer. Nil is the deployment with
+	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
+	Speech *speech.Client
 	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
 	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
 	// to no analysis rather than send PII to the model.
@@ -304,6 +308,14 @@ func Register(app *fiber.App, cfg Config) {
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
+	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
+	// interface would be a non-nil interface, and the handler's "no gateway here"
+	// check would pass straight into a nil dereference.
+	var stt transcriber
+	if cfg.Speech != nil {
+		stt = cfg.Speech
+	}
+	speechH := newSpeechHandlers(stt)
 	// The in-app agent is a facade over the feature handlers above: its tools call
 	// the same services their endpoints do, so a tool result and the API can never
 	// disagree. The tailoring bootstrap mints its conversations through the same
@@ -473,6 +485,8 @@ func Register(app *fiber.App, cfg Config) {
 	resumeH.register(api, mw)
 	// The headshot the photo-bearing CV templates print (see photoHandlers).
 	photoH.register(api, mw)
+	// Dictation for the assistant composer.
+	speechH.register(api, mw)
 	assistantH.register(api, mw)
 
 	// Filter subscriptions (see subscriptionHandlers).

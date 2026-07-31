@@ -80,6 +80,14 @@ type Settings struct {
 	AssistantModel    string
 	AssistantMaxSteps int
 
+	// STTModel transcribes dictated audio, through the same gateway and key the LLM
+	// settings above name — an OpenAI-compatible endpoint serves /chat/completions and
+	// /audio/transcriptions alike. It is the one model name with a default: a
+	// deployment that configured LLM_* has already configured everything dictation
+	// needs, and requiring a second variable to enable a microphone would be ceremony.
+	// The composer offers no microphone where the gateway itself is unconfigured.
+	STTModel string
+
 	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
 	// mask PII out of CV text before it reaches the LLM (internal/pii). Optional here, but
 	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
@@ -186,6 +194,8 @@ func Load() Settings {
 
 		AssistantModel:    os.Getenv("ASSISTANT_MODEL"),
 		AssistantMaxSteps: envInt("ASSISTANT_MAX_STEPS", 0),
+
+		STTModel: env("STT_MODEL", "whisper-1"),
 
 		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 

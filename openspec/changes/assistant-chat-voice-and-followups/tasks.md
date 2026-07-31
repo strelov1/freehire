@@ -7,11 +7,11 @@
 
 ## 2. Transcription backend
 
-- [ ] 2.1 Create `internal/speech` with `Client`, `New(baseURL, apiKey, model)` returning nil when unconfigured, and `Transcribe(ctx, audio []byte, filename string) (string, error)`; test the multipart body it builds, the `text` it parses, and its error mapping against an `httptest` server.
-- [ ] 2.2 Add `STT_MODEL` to `internal/config` with default `whisper-1`, covered by the config test.
-- [ ] 2.3 Add `internal/handler/speech.go`: `POST /api/v1/speech/transcriptions`, the message endpoint's middleware, a per-caller limiter, `readAudioUpload` capping on bytes read, and the error mapping (400 / 401 / 429 / 501 / 502).
-- [ ] 2.4 Add handler tests for each status in 2.3, including "no upstream call is made" for the refusal paths.
-- [ ] 2.5 Wire the client in `cmd/server/main.go` beside the existing LLM clients and pass it to the handler.
+- [x] 2.1 Create `internal/speech` with `Client`, `New(baseURL, apiKey, model)` returning nil when unconfigured, and `Transcribe(ctx, audio []byte, filename string) (string, error)`; test the multipart body it builds, the `text` it parses, and its error mapping against an `httptest` server.
+- [x] 2.2 Add `STT_MODEL` to `internal/config` with default `whisper-1`, covered by the config test.
+- [x] 2.3 Add `internal/handler/speech.go`: `POST /api/v1/speech/transcriptions`, the message endpoint's middleware, a per-caller limiter, `readAudioUpload` capping on bytes read, and the error mapping (400 / 401 / 429 / 501 / 502).
+- [x] 2.4 Add handler tests for each status in 2.3, including "no upstream call is made" for the refusal paths.
+- [x] 2.5 Wire the client in `cmd/server/main.go` beside the existing LLM clients and pass it to the handler.
 
 ## 3. Dictation UI
 
