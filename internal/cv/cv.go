@@ -59,8 +59,11 @@ const (
 // Document is the typed, sanitized CV. Every field is optional; sections the user has
 // not filled in are left empty rather than invented, and Sanitize drops empty entries.
 type Document struct {
-	Margins        Margins          `json:"margins"`
-	Style          Style            `json:"style,omitempty"`
+	Margins Margins `json:"margins"`
+	// No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
+	// empty strings/slices/maps), so the tag would promise clients an absence they never see
+	// while making the generated TypeScript optional for no reason.
+	Style          Style            `json:"style"`
 	Header         Header           `json:"header"`
 	Summary        string           `json:"summary,omitempty"`
 	Experience     []ExperienceItem `json:"experience,omitempty"`

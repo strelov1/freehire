@@ -48,10 +48,10 @@
 
 ## 6. Live HTML preview
 
-- [ ] 6.1 Add the Typst-leading-to-CSS-line-height conversion to `web/src/lib/tailor/geometry.ts`
+- [x] 6.1 Add the Typst-leading-to-CSS-line-height conversion to `web/src/lib/tailor/geometry.ts`
       with the calibration constant documented, and unit-test it (including that the default
       reproduces today's `leading-snug`)
-- [ ] 6.2 Derive one style object in `CvHtmlPreview.svelte` and apply it to both the visible sheets
+- [x] 6.2 Derive one style object in `CvHtmlPreview.svelte` and apply it to both the visible sheets
       and the hidden measurement layer, replacing the `font-serif`/`font-sans`/`text-[13px]`/
       `leading-snug` classes
 - [ ] 6.3 Verify visually with headless Chrome that raising the font size re-paginates the preview and
@@ -59,16 +59,16 @@
 
 ## 7. Settings panel
 
-- [ ] 7.1 Add `SettingRow.svelte` — the shared label-left, control-right row
-- [ ] 7.2 Add `StyleSettings.svelte`: font picker fed by `listCvFonts`, font-size stepper, line-height
+- [x] 7.1 Add `SettingRow.svelte` — the shared label-left, control-right row
+- [x] 7.2 Add `StyleSettings.svelte`: font picker fed by `listCvFonts`, font-size stepper, line-height
       preset picker, each with a "template default" choice, plus the reset-all action
-- [ ] 7.3 Extract the stepper into a shared component so margins and font size share one control
-- [ ] 7.4 Rewrite `MarginSettings.svelte` onto rows: linked side and top-and-bottom steppers by
+- [x] 7.3 Extract the stepper into a shared component so margins and font size share one control
+- [x] 7.4 Rewrite `MarginSettings.svelte` onto rows: linked side and top-and-bottom steppers by
       default, four per-side steppers behind a disclosure, with the linked view reflecting a
       non-uniform axis
-- [ ] 7.5 Unit-test the linked-axis stepping and the non-uniform detection as pure functions in
+- [x] 7.5 Unit-test the linked-axis stepping and the non-uniform detection as pure functions in
       `geometry.ts`
-- [ ] 7.6 Wire both blocks into the Settings tab of `web/src/routes/tailor/[slug]/+page.svelte`
+- [x] 7.6 Wire both blocks into the Settings tab of `web/src/routes/tailor/[slug]/+page.svelte`
 - [ ] 7.7 Verify visually at 340px and 720px panel widths that nothing clips or overflows
 
 ## 8. Documentation

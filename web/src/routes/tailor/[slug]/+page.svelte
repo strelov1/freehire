@@ -20,10 +20,11 @@
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
+  import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
-  import { toEditable, emptyDocument, type CvRecord, type CvAtsDelta } from '$lib/cv';
+  import { toEditable, emptyDocument, type CvRecord, type CvAtsDelta, type CvFont } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
@@ -42,6 +43,9 @@
   let doc = $state<Document>(emptyDocument());
   let title = $state('');
   let templateId = $state('classic-ats');
+  // The typefaces a CV may pick, fetched once. The preview needs each entry's CSS stack and the
+  // Settings picker needs its label, so both read this one list rather than hard-coding it.
+  let fonts = $state<CvFont[]>([]);
   let cvLoaded = $state(false);
   // Autosave lifecycle mirrors the old standalone editor: 'idle' before the first change, then
   // saving → saved (or error).
@@ -192,6 +196,9 @@
       // Not awaited: the workspace is usable before the comparison lands, and the comparison
       // costs two renders.
       void refreshAtsDelta();
+      // Not awaited either: an empty list only means the font picker has nothing to offer yet,
+      // and the preview falls back to the template's own face meanwhile.
+      void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
@@ -420,14 +427,22 @@
               <CvSectionForm bind:doc bind:title />
             </fieldset>
           </div>
+          <!-- Presentation, in two blocks of label→control rows. Both write straight into the
+               shared document, so the centre preview re-renders live and autosave persists them
+               on the same debounce as any other edit. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'settings'}>
-            <section class="space-y-3">
-              <div>
-                <h2 class="text-lg font-semibold">Margins <span class="text-sm font-normal text-muted-foreground">(in inches)</span></h2>
-                <p class="mt-0.5 text-sm text-muted-foreground">Page margins applied to the preview and the downloaded PDF.</p>
-              </div>
-              <MarginSettings bind:margins={doc.margins} />
-            </section>
+            <div class="space-y-6">
+              <section class="space-y-2">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Typography</h2>
+                <StyleSettings bind:style={doc.style} {fonts} />
+              </section>
+              <section class="space-y-2">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Page margins <span class="font-normal normal-case tracking-normal">(inches)</span>
+                </h2>
+                <MarginSettings bind:margins={doc.margins} />
+              </section>
+            </div>
           </div>
           <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat
@@ -483,7 +498,7 @@
           </a>
         </div>
         <div class="min-h-0 flex-1 overflow-auto p-6">
-          <CvHtmlPreview {doc} {templateId} {zoom} />
+          <CvHtmlPreview {doc} {templateId} {zoom} {fonts} />
         </div>
       </div>
 

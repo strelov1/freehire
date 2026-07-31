@@ -720,7 +720,12 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
  */
 export interface Document {
   margins: Margins;
-  style?: Style;
+  /**
+   * No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
+   * empty strings/slices/maps), so the tag would promise clients an absence they never see
+   * while making the generated TypeScript optional for no reason.
+   */
+  style: Style;
   header: Header;
   summary?: string;
   experience?: ExperienceItem[];
