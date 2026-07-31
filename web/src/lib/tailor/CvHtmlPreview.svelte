@@ -353,13 +353,18 @@
   /* What a revision touched is marked with an underline rather than a filled background: the
      page has to keep reading as a CV while it answers "what changed". Wavy and offset so it
      is not mistaken for a link, and it prints away with the highlight since nothing here
-     reaches the PDF — this is preview chrome. */
+     reaches the PDF — this is preview chrome.
+
+     The colour is the brand token rather than a literal: the sheet itself is deliberately
+     untokenised (it imitates the rendered PDF, which knows nothing about the app's theme),
+     but the highlight is the APP speaking over that sheet, so it belongs to the app's
+     palette. */
   .cv-lit {
     text-decoration-line: underline;
     text-decoration-style: dotted;
     text-decoration-thickness: 2px;
     text-underline-offset: 3px;
-    text-decoration-color: #b45309;
+    text-decoration-color: var(--color-brand-strong);
   }
   .cv-lit :global(li) {
     text-decoration: inherit;

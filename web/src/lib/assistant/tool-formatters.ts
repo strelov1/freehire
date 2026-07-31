@@ -150,11 +150,6 @@ function readList(input: unknown, key: string): string | null {
   return parts.length > 0 ? truncate(parts.join(', '), 60) : null;
 }
 
-function readNested(input: unknown, outer: string, inner: string): string | null {
-  if (!input || typeof input !== 'object') return null;
-  const nested = (input as Record<string, unknown>)[outer];
-  return readField(nested, inner);
-}
 
 /** How many edits one cv_edit call carried — the tool takes a batch, not a single patch. */
 function editCount(input: unknown): string | null {
