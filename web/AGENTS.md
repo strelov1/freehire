@@ -16,6 +16,10 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   must not break the page.
 - `MatchSummary.svelte` is the compact sidebar summary (overall % + verdict + top gap)
   linking to the full `/match/[slug]/` page — it never computes inline.
+- The profile headshot (`HeadshotField.svelte`, profile Settings tab) is one image per member,
+  reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
+  sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
+  control renders nothing when `enabled` is false (object storage unconfigured).
 - `ResumeStructuredView.svelte` is read-only; the backend serves the structured CV from
   `GET /api/v1/me/resume` (`structured` field, null when absent/stale/unconfigured).
 - Sentry is gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`); source-map upload

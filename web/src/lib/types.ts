@@ -710,6 +710,15 @@ export interface ResumeMeta {
   structured: import('./generated/contracts').Structured | null;
 }
 
+/** The caller's profile headshot: `enabled` is false when object storage is unconfigured
+ *  (the upload control is then not offered at all), `present` says whether one is stored,
+ *  and `uploaded_at` doubles as the cache buster on the image URL. */
+export interface PhotoMeta {
+  enabled: boolean;
+  present: boolean;
+  uploaded_at: string | null;
+}
+
 /** A community discussion thread (see the add-community-threads change). The author
  *  is a pseudonymous persona handle — the backend never sends the real user id. */
 export interface CommunityThread {

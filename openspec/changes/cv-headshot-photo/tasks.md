@@ -12,7 +12,7 @@
 
 ## 3. HTTP surface
 
-- [x] 3.1 `internal/handler/photo.go`: `PUT/GET/DELETE /api/v1/me/photo`, cookie-only, owner-derived key; `PUT`/`DELETE` return `{"data":{"present":…,"uploaded_at":…}}`, `GET` streams `image/jpeg` with `Cache-Control: private`, storage disabled ⇒ `501`, undecodable/oversized ⇒ `400`
+- [x] 3.1 `internal/handler/photo.go`: `PUT/GET/DELETE /api/v1/me/photo` + `GET /api/v1/me/photo/image`, cookie-only, owner-derived key; `PUT` and the meta `GET` return `{"data":{"enabled":…,"present":…,"uploaded_at":…}}`, the image read streams `image/jpeg` with `Cache-Control: private`, storage disabled ⇒ `501` (meta still answers, reporting it off), undecodable/oversized ⇒ `400`
 - [x] 3.2 Wire the headshot store in `cmd/server/main.go` and register the routes; confirm `accountdelete` erases the photo object through the extended `ListUserBlobKeys` (integration test)
 
 ## 4. Renderer and template registry
@@ -29,10 +29,10 @@
 
 ## 6. Web
 
-- [ ] 6.1 Photo controls in the profile Settings tab (`ProfileForm.svelte`): round preview, upload/replace/remove, client-side type and size precheck, `?v=<uploaded_at>` cache busting
-- [ ] 6.2 `CvHtmlPreview.svelte`: `isPortrait`/`isHeadshot` branches rendering the photo (or the same silhouette as inline SVG) so the preview matches the PDF
-- [ ] 6.3 `TemplateGallery.svelte`: for `photo: true` templates with no stored photo, show the upload nudge linking to the profile Settings tab
+- [x] 6.1 Photo controls in the profile Settings tab (`ProfileForm.svelte`): round preview, upload/replace/remove, client-side type and size precheck, `?v=<uploaded_at>` cache busting
+- [x] 6.2 `CvHtmlPreview.svelte`: `isPortrait`/`isHeadshot` branches rendering the photo (or the same silhouette as inline SVG) so the preview matches the PDF
+- [x] 6.3 `TemplateGallery.svelte`: for `photo: true` templates with no stored photo, show the upload nudge linking to the profile Settings tab
 
 ## 7. Documentation
 
-- [ ] 7.1 Update `internal/cv/AGENTS.md` (photo-bearing templates, the render photo parameter, `has_photo`) and note the headshot in the profile/storage docs
+- [x] 7.1 Update `internal/cv/AGENTS.md` (photo-bearing templates, the render photo parameter, `has_photo`) and note the headshot in the profile/storage docs

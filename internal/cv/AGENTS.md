@@ -7,7 +7,7 @@ rendering.
 ## Templates
 
 Templates are Typst source files under `templates/<id>.typ`, embedded via `//go:embed`. The
-registry is `templates []TemplateInfo` in `template.go` (id, label, style, `ats_safe`).
+registry is `templates []TemplateInfo` in `template.go` (id, label, style, `ats_safe`, `photo`).
 `ResolveTemplate(id)` defaults an empty id to `classic-ats` and rejects unknown ids with
 `ErrUnknownTemplate`; `Templates()` exposes the metadata for the UI gallery and preview
 generation.
@@ -17,7 +17,8 @@ generation.
    (helpers `s`/`arr`/`daterange` are duplicated per file; the renderer only stages
    `template.typ` + `data.json` + fonts, so Typst `#import` of a shared module won't resolve).
 2. Append a `TemplateInfo` entry to `templates`. Mark `ATSSafe: false` for anything that is
-   not single-column with standard headings (e.g. `sidebar`).
+   not single-column with standard headings (e.g. `sidebar`), and `Photo: true` if it prints
+   the headshot (see below). A photo template is never ATS-safe.
 3. Run `make cv-previews` to regenerate `web/static/cv-previews/<id>.svg` (the gallery
    thumbnails). A preview is committed for every registered id — the generator iterates the
    registry so the set can't drift.
@@ -31,6 +32,29 @@ by `Render` (PDF, live) and `GeneratePreviews` (SVG, `cmd/cv-previews`).
 Fonts: the Typst binary embeds no proportional sans, so Liberation Sans (SIL OFL) is bundled
 under `fonts/`, staged into the sandbox, and exposed via `--font-path`. A template that wants
 sans uses `#set text(font: "Liberation Sans")`.
+
+## The headshot (`portrait`, `headshot`)
+
+The photo is NOT part of `Document` — it is a profile asset owned by `internal/headshot`,
+because a document is client-writable and travels into tailoring prompts. `Render` therefore
+takes it as a fourth argument, `photo []byte`, and the handler fetches it only when
+`tmpl.Photo` (`headshotForTemplate` in `internal/handler/photo.go`); a photoless template
+costs no bucket round trip.
+
+Three things a new photo template must respect:
+
+- **The image is a staged FILE, not a URL.** The sandbox has no network and `--root` blocks
+  every outside path, so `compile` writes `photo.jpg` next to `data.json` and the template
+  hardcodes that name.
+- **`has_photo` decides, and it is produced at render time.** `renderPayload` marshals a
+  struct embedding `Document` plus the flag, so it inlines beside the document's own fields
+  without existing on the persisted type — a client cannot set it. It is true exactly when
+  the file was staged, because `image()` on a missing file is a compile error.
+- **The placeholder is drawn, not staged.** Each photo template carries its own
+  `#let silhouette()`. An image asset would be base64-inlined into every committed SVG
+  preview; shapes keep them vector, and mean a member with no photo needs no file at all.
+  `web/src/lib/components/HeadshotSilhouette.svelte` is its twin for the HTML preview — the
+  two must keep agreeing, as must the frame sizes (26mm header / 42mm sidebar cap).
 
 ## What makes a CV tailored (`cvs.is_tailored`)
 

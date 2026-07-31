@@ -40,17 +40,22 @@ The system SHALL normalize every accepted upload to a fixed square portrait rath
 
 ### Requirement: Headshot read and removal are owner-scoped
 
-The system SHALL serve and delete a headshot only for the authenticated owner: the endpoints SHALL derive the object key from the session's user id, so no request can name another user's headshot. Reading a headshot for a user who has none SHALL report its absence rather than erroring, and removing one SHALL delete both the object and the pointer so the user is left as if they had never uploaded.
+The system SHALL serve and delete a headshot only for the authenticated owner: the endpoints SHALL derive the object key from the session's user id, so no request can name another user's headshot. Presence and the image SHALL be separate reads — the headshot resource reports whether one is stored and when it was uploaded, and its image sub-resource streams the bytes — because a client needs the former to choose what to render far more often than it needs the latter. Removing a headshot SHALL delete both the object and the pointer, so the user is left as if they had never uploaded.
 
-#### Scenario: Owner fetches their headshot
+#### Scenario: Owner fetches their headshot image
 
-- **WHEN** a signed-in user with a stored headshot requests it
+- **WHEN** a signed-in user with a stored headshot requests the image sub-resource
 - **THEN** the system streams the stored image bytes with the normalized image content type
+
+#### Scenario: Presence is readable without the bytes
+
+- **WHEN** a signed-in user reads the headshot resource
+- **THEN** the system reports whether a headshot is stored and, when it is, its upload time — without transferring the image
 
 #### Scenario: No headshot stored
 
-- **WHEN** a signed-in user with no headshot requests their headshot
-- **THEN** the system reports that none is stored instead of returning another user's image or a server error
+- **WHEN** a signed-in user with no headshot reads the headshot resource and then its image
+- **THEN** the read reports the absence as a normal state and the image request reports that none is stored, never another user's image or a server error
 
 #### Scenario: Removal clears object and pointer
 
@@ -59,12 +64,17 @@ The system SHALL serve and delete a headshot only for the authenticated owner: t
 
 ### Requirement: The headshot feature degrades when object storage is unconfigured
 
-The system SHALL treat object storage as optional: when it is unconfigured the headshot service SHALL report itself disabled and its endpoints SHALL answer `501 Not Implemented`, while every other profile and CV endpoint keeps working. A CV template that prints a photo SHALL still render in that state, using the placeholder rather than failing.
+The system SHALL treat object storage as optional: when it is unconfigured the headshot service SHALL report itself disabled and its upload, image, and removal endpoints SHALL answer `501 Not Implemented`, while every other profile and CV endpoint keeps working. The presence read SHALL still answer, reporting the feature as disabled, so a client can omit the upload control rather than offer one that fails. A CV template that prints a photo SHALL still render in that state, using the placeholder rather than failing.
 
 #### Scenario: Storage unconfigured
 
-- **WHEN** object storage is not configured and a user uploads or requests a headshot
+- **WHEN** object storage is not configured and a user uploads, fetches, or removes a headshot
 - **THEN** the endpoint returns `501` and the rest of the profile and CV surface is unaffected
+
+#### Scenario: The client can tell the feature is off
+
+- **WHEN** object storage is not configured and a user reads the headshot resource
+- **THEN** the read succeeds and reports the feature as disabled with no headshot present
 
 ### Requirement: The headshot is not part of the CV document
 

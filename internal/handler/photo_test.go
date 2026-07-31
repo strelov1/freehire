@@ -95,6 +95,7 @@ func photoApp(t *testing.T, store *headshot.Store) (*fiber.App, string) {
 	g := auth.RequireAuth(iss, testVersions)
 	app.Put("/me/photo", g, h.PutPhoto)
 	app.Get("/me/photo", g, h.GetPhoto)
+	app.Get("/me/photo/image", g, h.GetPhotoImage)
 	app.Delete("/me/photo", g, h.DeletePhoto)
 	return app, token
 }
@@ -133,8 +134,16 @@ func samplePhoto(t *testing.T) []byte {
 }
 
 func doPhoto(t *testing.T, app *fiber.App, method string, body io.Reader, ctype, token string) *http.Response {
+	return doPhotoPath(t, app, method, "/me/photo", body, ctype, token)
+}
+
+func doPhotoImage(t *testing.T, app *fiber.App, token string) *http.Response {
+	return doPhotoPath(t, app, fiber.MethodGet, "/me/photo/image", nil, "", token)
+}
+
+func doPhotoPath(t *testing.T, app *fiber.App, method, path string, body io.Reader, ctype, token string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(method, "/me/photo", body)
+	req := httptest.NewRequest(method, path, body)
 	if ctype != "" {
 		req.Header.Set("Content-Type", ctype)
 	}
@@ -174,10 +183,19 @@ func TestPhoto_PutGetDeleteRoundTrip(t *testing.T) {
 		t.Fatalf("PUT meta = %+v, want present with an upload time", meta)
 	}
 
-	get := doPhoto(t, app, fiber.MethodGet, nil, "", token)
+	status := doPhoto(t, app, fiber.MethodGet, nil, "", token)
+	defer status.Body.Close()
+	if status.StatusCode != fiber.StatusOK {
+		t.Fatalf("GET meta status = %d, want 200", status.StatusCode)
+	}
+	if m := decodePhotoMeta(t, status); !m.Enabled || !m.Present || m.UploadedAt == nil {
+		t.Errorf("GET meta = %+v, want enabled+present with an upload time", m)
+	}
+
+	get := doPhotoImage(t, app, token)
 	defer get.Body.Close()
 	if get.StatusCode != fiber.StatusOK {
-		t.Fatalf("GET status = %d, want 200", get.StatusCode)
+		t.Fatalf("GET image status = %d, want 200", get.StatusCode)
 	}
 	if ct := get.Header.Get(fiber.HeaderContentType); ct != "image/jpeg" {
 		t.Errorf("GET content type = %q, want image/jpeg", ct)
@@ -204,12 +222,23 @@ func TestPhoto_PutGetDeleteRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPhoto_GetWithoutAHeadshotIs404(t *testing.T) {
+func TestPhoto_WithoutAHeadshot(t *testing.T) {
 	app, token := photoApp(t, headshot.New(newFakePhotoBlobs(), &fakePhotoRepo{}))
-	resp := doPhoto(t, app, fiber.MethodGet, nil, "", token)
-	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusNotFound {
-		t.Errorf("GET status = %d, want 404", resp.StatusCode)
+
+	// The meta read is a normal state, not an error: the SPA renders "no photo yet".
+	meta := doPhoto(t, app, fiber.MethodGet, nil, "", token)
+	defer meta.Body.Close()
+	if meta.StatusCode != fiber.StatusOK {
+		t.Fatalf("GET meta status = %d, want 200", meta.StatusCode)
+	}
+	if m := decodePhotoMeta(t, meta); !m.Enabled || m.Present {
+		t.Errorf("GET meta = %+v, want enabled and not present", m)
+	}
+
+	img := doPhotoImage(t, app, token)
+	defer img.Body.Close()
+	if img.StatusCode != fiber.StatusNotFound {
+		t.Errorf("GET image status = %d, want 404", img.StatusCode)
 	}
 }
 
@@ -237,24 +266,33 @@ func TestPhoto_MissingFilePartIs400(t *testing.T) {
 	}
 }
 
-func TestPhoto_StorageDisabledIs501(t *testing.T) {
+func TestPhoto_StorageDisabled(t *testing.T) {
 	app, token := photoApp(t, headshot.New(nil, &fakePhotoRepo{}))
+
+	// The meta read still answers, reporting the feature off — that is what lets the SPA
+	// omit the upload control instead of offering one that 501s.
+	meta := doPhoto(t, app, fiber.MethodGet, nil, "", token)
+	defer meta.Body.Close()
+	if meta.StatusCode != fiber.StatusOK {
+		t.Fatalf("GET meta status = %d, want 200", meta.StatusCode)
+	}
+	if m := decodePhotoMeta(t, meta); m.Enabled || m.Present {
+		t.Errorf("GET meta = %+v, want disabled and not present", m)
+	}
 
 	body, ctype := photoUpload(t, samplePhoto(t))
 	for _, c := range []struct {
-		method string
-		body   io.Reader
-		ctype  string
+		name string
+		resp *http.Response
 	}{
-		{fiber.MethodPut, body, ctype},
-		{fiber.MethodGet, nil, ""},
-		{fiber.MethodDelete, nil, ""},
+		{"PUT", doPhoto(t, app, fiber.MethodPut, body, ctype, token)},
+		{"GET image", doPhotoImage(t, app, token)},
+		{"DELETE", doPhoto(t, app, fiber.MethodDelete, nil, "", token)},
 	} {
-		resp := doPhoto(t, app, c.method, c.body, c.ctype, token)
-		if resp.StatusCode != fiber.StatusNotImplemented {
-			t.Errorf("%s status = %d, want 501", c.method, resp.StatusCode)
+		if c.resp.StatusCode != fiber.StatusNotImplemented {
+			t.Errorf("%s status = %d, want 501", c.name, c.resp.StatusCode)
 		}
-		resp.Body.Close()
+		c.resp.Body.Close()
 	}
 }
 

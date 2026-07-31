@@ -43,6 +43,8 @@ and a structured extraction, but no portrait.
 
 - **Schema:** new migration adding `users.photo_object_key` and `users.photo_uploaded_at`;
   new sqlc queries for the pointer.
+- **API:** `PUT/GET/DELETE /api/v1/me/photo` and `GET /api/v1/me/photo/image` (presence is a
+  metadata read; the bytes are a sub-resource, mirroring `/me/resume`).
 - **Go:** new `internal/headshot` package; new `internal/handler/photo.go`; `blobstore.PhotoKey`;
   `cv.Renderer.Render` gains a photo parameter (**BREAKING** for the in-repo interface and its
   test doubles only — no wire change); `cv.TemplateInfo`/`cv.Template` gain a `photo` flag;

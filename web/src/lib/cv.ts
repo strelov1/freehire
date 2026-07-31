@@ -74,7 +74,9 @@ export interface UpdateCvInput {
 export const DEFAULT_TEMPLATE_ID = 'classic-ats';
 
 /** A CV template the user can pick in the gallery. `ats_safe` is false for richer layouts
- *  (e.g. the sidebar) that may not parse cleanly in some ATS. Mirrors cv.TemplateInfo. */
+ *  (e.g. the sidebar) that may not parse cleanly in some ATS. `photo` marks the templates
+ *  that print the profile headshot — the gallery prompts for an upload when there is none.
+ *  Mirrors cv.TemplateInfo. */
 // The two-report comparison behind the tailoring ATS delta.
 export type { Delta as AtsDelta, CategoryChange as AtsCategoryChange } from './generated/contracts';
 
@@ -95,6 +97,7 @@ export interface CvTemplate {
   label: string;
   style: string;
   ats_safe: boolean;
+  photo: boolean;
 }
 
 /** A fresh, fully-populated (but empty) document so the form can bind every section

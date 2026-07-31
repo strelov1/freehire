@@ -26,8 +26,13 @@ func newPhotoHandlers(photos *headshot.Store) *photoHandlers {
 }
 
 func (h *photoHandlers) register(api fiber.Router, mw middleware) {
+	// GET /me/photo reports presence; the image itself hangs off it as a sub-resource.
+	// The split mirrors /me/resume, whose read is metadata too: a client needs to know
+	// whether there is a headshot (to choose a control, or to prompt for one in the
+	// template gallery) far more often than it needs the bytes.
 	api.Put("/me/photo", mw.cookie, h.PutPhoto)
 	api.Get("/me/photo", mw.cookie, h.GetPhoto)
+	api.Get("/me/photo/image", mw.cookie, h.GetPhotoImage)
 	api.Delete("/me/photo", mw.cookie, h.DeletePhoto)
 }
 
@@ -35,12 +40,15 @@ func (h *photoHandlers) register(api fiber.Router, mw middleware) {
 // paths so the SPA can swap its preview without a follow-up read. uploaded_at doubles as
 // the cache buster on the image URL.
 type photoMetaResponse struct {
+	// Enabled is false when object storage is unconfigured: the client then offers no
+	// upload control at all, rather than one that answers 501.
+	Enabled    bool       `json:"enabled"`
 	Present    bool       `json:"present"`
 	UploadedAt *time.Time `json:"uploaded_at,omitempty"`
 }
 
-func newPhotoMeta(m headshot.Meta) photoMetaResponse {
-	return photoMetaResponse{Present: m.Present, UploadedAt: m.UploadedAt}
+func newPhotoMeta(enabled bool, m headshot.Meta) photoMetaResponse {
+	return photoMetaResponse{Enabled: enabled, Present: m.Present, UploadedAt: m.UploadedAt}
 }
 
 // PutPhoto stores (or replaces) the caller's headshot from a multipart "file" part. The
@@ -59,12 +67,30 @@ func (h *photoHandlers) PutPhoto(c *fiber.Ctx) error {
 	if err != nil {
 		return mapPhotoError(err)
 	}
-	return c.JSON(fiber.Map{"data": newPhotoMeta(meta)})
+	return c.JSON(fiber.Map{"data": newPhotoMeta(true, meta)})
 }
 
-// GetPhoto streams the caller's stored headshot. The key is derived from the session, so
-// there is no id to scope: a member can only ever ask for their own.
+// GetPhoto reports whether the caller has a headshot and when it was uploaded. Always 200:
+// unconfigured storage and "no headshot yet" are both normal states the SPA renders, and
+// the upload time is what it appends to the image URL as a cache buster.
 func (h *photoHandlers) GetPhoto(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if !h.photos.Enabled() {
+		return c.JSON(fiber.Map{"data": newPhotoMeta(false, headshot.Meta{})})
+	}
+	meta, err := h.photos.Status(c.Context(), userID)
+	if err != nil {
+		return mapPhotoError(err)
+	}
+	return c.JSON(fiber.Map{"data": newPhotoMeta(true, meta)})
+}
+
+// GetPhotoImage streams the caller's stored headshot. The key is derived from the session,
+// so there is no id to scope: a member can only ever ask for their own.
+func (h *photoHandlers) GetPhotoImage(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err

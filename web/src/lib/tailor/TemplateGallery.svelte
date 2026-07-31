@@ -6,11 +6,15 @@
   // /cv-previews/<id>.svg) with the current template highlighted. Picking one persists it via
   // the set-template endpoint and calls onSelected(id) so the host can keep its own template id in
   // step (autosave writes it too) and cache-bust the PDF. Non-ATS-safe templates carry an inline
-  // caution.
+  // caution, and a template that prints a headshot says so when none is stored — the render would
+  // otherwise silently fall back to the placeholder, which is easy to send without noticing.
   let { cvId, onSelected }: { cvId: string; onSelected: (id: string) => void } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let templates = $state<CvTemplate[]>([]);
+  // Whether the member has a headshot. Unknown (null) until the read lands, and false when
+  // object storage is off — in both cases the nudge stays hidden rather than guessing.
+  let hasPhoto = $state<boolean | null>(null);
   let current = $state('');
   // While a switch is in flight, disable the grid so a double-click can't race two saves.
   let saving = $state(false);
@@ -20,10 +24,15 @@
     let cancelled = false;
     void (async () => {
       try {
-        const [list, rec] = await Promise.all([api.listCvTemplates(), api.getCv(cvId)]);
+        const [list, rec, photo] = await Promise.all([
+          api.listCvTemplates(),
+          api.getCv(cvId),
+          api.getPhoto().catch(() => null),
+        ]);
         if (cancelled) return;
         templates = list;
         current = rec.template_id;
+        hasPhoto = photo === null ? null : photo.enabled && photo.present;
         status = 'ready';
       } catch (e) {
         if (cancelled) return;
@@ -89,6 +98,11 @@
             {#if !t.ats_safe}
               <span class="mt-0.5 text-[11px] leading-tight text-amber-600 dark:text-amber-500">
                 May not parse cleanly in some ATS
+              </span>
+            {/if}
+            {#if t.photo && hasPhoto === false}
+              <span class="mt-0.5 text-[11px] leading-tight text-muted-foreground">
+                Add a photo in your profile — this template shows one
               </span>
             {/if}
           </span>

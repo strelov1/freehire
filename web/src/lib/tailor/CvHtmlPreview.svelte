@@ -5,13 +5,21 @@
   // greedily packs blocks onto A4 page bodies via paginateBlocks so a section never straddles the
   // inter-page gap. Page geometry — content width, sheet padding, and the page body height used for
   // pagination — is derived from the document's per-side margins, so preview and PDF agree. The look
-  // tracks the selected template (classic / centered / modern-sans / sidebar). `zoom` scales the
-  // whole stack. String composition lives in $lib/cv (unit-tested); this file is layout only.
+  // tracks the selected template (classic / centered / modern-sans / sidebar / portrait / headshot).
+  // `zoom` scales the whole stack. String composition lives in $lib/cv (unit-tested); this file is
+  // layout only — `photoSrc` is handed in rather than fetched here, since the headshot belongs to the
+  // profile, not to the document being rendered.
   import type { Document, ExperienceItem, Project } from '$lib/generated/contracts';
   import { experienceHeader, educationLine, languageLabel, certificationLine } from '$lib/cv';
+  import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
   import { paginateBlocks } from './geometry';
 
-  let { doc, templateId = 'classic-ats', zoom = 1 }: { doc: Document; templateId?: string; zoom?: number } = $props();
+  let {
+    doc,
+    templateId = 'classic-ats',
+    zoom = 1,
+    photoSrc = null,
+  }: { doc: Document; templateId?: string; zoom?: number; photoSrc?: string | null } = $props();
 
   // A4 at 96dpi, and the inch→pixel factor margins convert through.
   const PAGE_W = 794;
@@ -19,11 +27,15 @@
   const PX_PER_IN = 96;
   const COL_GAP = 24; // matches the sidebar grid's gap-6
 
-  // Per-template presentation flags (default to classic for any unknown id).
+  // Per-template presentation flags (default to classic for any unknown id). `portrait` is the
+  // sidebar layout with a photo above the narrow column; `headshot` is the sans single column with
+  // one in the header — so each reuses the flags of the template it is a variant of.
   const isCentered = $derived(templateId === 'centered');
-  const isSans = $derived(templateId === 'modern-sans');
-  const isSidebar = $derived(templateId === 'sidebar');
-  const ruled = $derived(isCentered || isSans || isSidebar); // a rule under each section heading
+  const isHeadshot = $derived(templateId === 'headshot');
+  const isPortrait = $derived(templateId === 'portrait');
+  const isSans = $derived(templateId === 'modern-sans' || isHeadshot);
+  const twoColumn = $derived(templateId === 'sidebar' || isPortrait);
+  const ruled = $derived(isCentered || isSans || twoColumn); // a rule under each section heading
   const contactSep = $derived(isSans ? '·' : '|');
 
   // Page geometry from the document's margins (inches → px). A missing or zero side falls back to
@@ -35,7 +47,7 @@
   const contentWidth = $derived(PAGE_W - ml - mr);
   const pageBodyHeight = $derived(PAGE_H - mt - mb);
   // Width the paginating (main) column renders at — full content width, or the sidebar's wide column.
-  const mainWidth = $derived(isSidebar ? Math.round(contentWidth * 0.65 - COL_GAP) : contentWidth);
+  const mainWidth = $derived(twoColumn ? Math.round(contentWidth * 0.65 - COL_GAP) : contentWidth);
 
   const header = $derived(doc.header ?? {});
   const contacts = $derived(
@@ -65,8 +77,8 @@
     experience.forEach((e, i) => bl.push({ id: `exp-${i}`, kind: 'exp', item: e, heading: i === 0 }));
     projects.forEach((p, i) => bl.push({ id: `proj-${i}`, kind: 'proj', item: p, heading: i === 0 }));
     if (education.length) bl.push({ id: 'education', kind: 'education' });
-    // In the sidebar layout skills/languages/certs live in the narrow column, not the main flow.
-    if (!isSidebar) {
+    // In the two-column layouts skills/languages/certs live in the narrow column, not the main flow.
+    if (!twoColumn) {
       if (skills.length) bl.push({ id: 'skills', kind: 'list', title: 'Skills', items: skills, sep: ', ' });
       if (languages.length) bl.push({ id: 'languages', kind: 'list', title: 'Languages', items: languages, sep: ', ' });
       if (certifications.length) bl.push({ id: 'certs', kind: 'list', title: 'Certifications', items: certifications, sep: '; ' });
@@ -120,12 +132,25 @@
   </p>
 {/snippet}
 
+<!-- The photo frame: the profile headshot, or the same silhouette the Typst templates draw when
+     none is stored. `size` is a Tailwind class so the two placements can differ — both sized to the
+     millimetres the .typ templates use (26mm in the header, capped at 42mm in the sidebar) at 96dpi,
+     so the preview and the PDF frame the face the same way. -->
+{#snippet photoFrame(size: string)}
+  {#if photoSrc}
+    <img src={photoSrc} alt="" class="shrink-0 rounded-sm border border-neutral-200 object-cover {size}" />
+  {:else}
+    <HeadshotSilhouette class="shrink-0 rounded-sm {size}" />
+  {/if}
+{/snippet}
+
 {#snippet headerBlock()}
-  <header class={['mb-1', isCentered ? 'text-center' : '']}>
+  <header class={['mb-1', isCentered ? 'text-center' : '', isHeadshot ? 'flex items-start gap-5' : '']}>
+    <div class={isHeadshot ? 'min-w-0 flex-1' : ''}>
     <h1 class={['text-2xl font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
       {header.full_name || 'Your Name'}
     </h1>
-    {#if !isSidebar && contacts.length}
+    {#if !twoColumn && contacts.length}
       <div class="mt-1">{@render contactLine()}</div>
     {/if}
     {#if (doc.summary ?? '').trim()}
@@ -133,14 +158,16 @@
         class={[
           'mt-2 text-[12.5px] text-neutral-800',
           isCentered ? 'mx-auto max-w-[62ch] italic' : '',
-          isSidebar ? 'italic' : '',
+          twoColumn ? 'italic' : '',
         ]}
       >
         {doc.summary}
       </p>
     {/if}
+    </div>
+    {#if isHeadshot}{@render photoFrame('size-[98px]')}{/if}
   </header>
-  <hr class={['my-2', isSans || isSidebar ? 'border-neutral-500' : 'border-neutral-300']} />
+  <hr class={['my-2', isSans || twoColumn ? 'border-neutral-500' : 'border-neutral-300']} />
 {/snippet}
 
 {#snippet experienceItem(e: ExperienceItem)}
@@ -200,6 +227,9 @@
 {/snippet}
 
 {#snippet sidebarColumn()}
+  {#if isPortrait}
+    <div class="mb-3">{@render photoFrame('aspect-square w-full max-w-[159px]')}</div>
+  {/if}
   {#if contacts.length}
     <section class="mb-3">
       {@render sectionHeading('Contact')}
@@ -239,7 +269,7 @@
       class={['bg-white text-[13px] leading-snug text-neutral-900 shadow-sm', isSans ? 'font-sans' : 'font-serif']}
       style="width: {PAGE_W}px; min-height: {PAGE_H}px; padding: {mt}px {mr}px {mb}px {ml}px;"
     >
-      {#if isSidebar}
+      {#if twoColumn}
         <div class="grid grid-cols-[35%_1fr] gap-6">
           <div>{#if p === 0}{@render sidebarColumn()}{/if}</div>
           <div>
