@@ -255,3 +255,43 @@ func renderTool(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// The page cap bounds how MANY bodies come back; nothing bounded how LARGE each
+// one is. Real ATS mail is HTML-only and renders to tens of kilobytes of text, so
+// ten of them overflow the registry's result cap — the model then gets a
+// "truncated" envelope holding one message instead of the ten it asked for, and
+// has to spend another round narrowing. The classifier already truncates each body
+// before judging it; the tool has to as well, and for the harder reason: this text
+// is replayed into the context on every later turn.
+func TestInboxSearchTruncatesEachBody(t *testing.T) {
+	huge := strings.Repeat("a very long recruiter template. ", 4000)
+	rows := make([]db.ListEmailsRow, assistantInboxBodyMax)
+	for i := range rows {
+		rows[i] = db.ListEmailsRow{ID: int64(i + 1), BodyText: huge}
+	}
+	store := &mailStore{list: rows, total: int64(len(rows))}
+
+	got, err := runMailTool(t, mailAPI(store), "inbox_search", `{"include_body":true}`)
+	if err != nil {
+		t.Fatalf("inbox_search: %v", err)
+	}
+	rendered := renderTool(t, got)
+	if len(rendered) >= assistantResultCap {
+		t.Errorf("a full page of bodies rendered %d bytes, at or over the registry cap of %d — the model would get a truncation envelope instead of its page",
+			len(rendered), assistantResultCap)
+	}
+}
+
+// A caller that names no limit must get a page, not an empty one. LIMIT 0 is a
+// legal query returning nothing, so a zero has to mean "unspecified" here rather
+// than reaching the store.
+func TestSearchWithNoLimitStillReturnsAPage(t *testing.T) {
+	store := &mailStore{}
+
+	if _, err := inbox.New(store, nil).Search(context.Background(), 3, inbox.Query{}); err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if store.lastList.Lim <= 0 {
+		t.Errorf("Search asked the store for LIMIT %d; a zero must not reach it", store.lastList.Lim)
+	}
+}

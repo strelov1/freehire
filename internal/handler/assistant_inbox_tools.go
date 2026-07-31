@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/inbox"
+	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/mailclassify"
 )
 
@@ -26,6 +27,16 @@ const assistantInboxBodyMax = 10
 // assistantInboxPageMax caps a listing without bodies. Rows are small, but they
 // are still replayed forever.
 const assistantInboxPageMax = 40
+
+// assistantInboxBodyRunes caps ONE body. The page cap bounds how many bodies come
+// back; without this nothing bounded how large each is, and real ATS mail is
+// HTML-only and renders to tens of kilobytes — ten of them overflow the registry's
+// result cap, so the model receives a truncation envelope holding one message
+// instead of the page it asked for.
+//
+// It is tighter than the classifier's own 4000-rune bound on purpose: that text is
+// read once, this text is replayed into the context on every later turn.
+const assistantInboxBodyRunes = 2000
 
 // assistantInboxTools are the mail tools. They are registered for the general chat
 // preset only: a tailoring session works one CV, an experience interview collects
@@ -105,7 +116,7 @@ func mailMessageView(m inbox.Message, withBody bool) assistantMailMessage {
 		LinkedSlug: m.LinkedSlug, LinkedTo: m.LinkedCompany, SuggestedFor: m.SuggestedSlug,
 	}
 	if withBody {
-		out.Body = m.BodyText
+		out.Body = llm.TruncateRunes(m.BodyText, assistantInboxBodyRunes)
 	} else {
 		out.Snippet = m.Snippet
 	}

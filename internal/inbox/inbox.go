@@ -179,6 +179,9 @@ func (q Query) Validate() error {
 	return nil
 }
 
+// DefaultLimit is the page size a caller gets when it names none.
+const DefaultLimit = 20
+
 // Page is one listing page and the total matching the same filters.
 type Page struct {
 	Messages []Message
@@ -194,10 +197,16 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 	if err := q.Validate(); err != nil {
 		return Page{}, err
 	}
+	// LIMIT 0 is a legal query returning nothing, so an unset limit must not reach
+	// the store as one: a caller that named no page size wants a page, not silence.
+	limit := q.Limit
+	if limit <= 0 {
+		limit = DefaultLimit
+	}
 	rows, err := s.q.ListEmails(ctx, db.ListEmailsParams{
 		UserID: userID, Src: q.Source, Unread: q.Unread, Status: q.Status, Q: q.Q,
 		Unclassified: q.Unclassified, Link: q.Link, WithBody: q.WithBody,
-		Lim: int32(q.Limit), Off: int32(q.Offset),
+		Lim: int32(limit), Off: int32(max(q.Offset, 0)),
 	})
 	if err != nil {
 		return Page{}, err
