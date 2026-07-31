@@ -178,7 +178,14 @@ is not warranted.
 - **A redirect inside a PDF is a phishing pattern** and gateways may flag the domain. job-ops
   pushes this risk onto whoever runs the instance; our operator is us, and `freehire.me`
   carries all other traffic → the endpoint is token-only and never reads a destination from the
-  request, so it cannot serve as an open redirect. Residual risk remains and is accepted.
+  request. Residual risk remains and is accepted.
+- **Token-only is not the same as "not a redirector".** No attacker can craft a
+  `freehire.me/cv/…` that sends a stranger anywhere — the request carries no destination. But
+  the destination is still chosen by a user: anyone with an account can put a URL in a CV, turn
+  tracing on, render once, and hold a `freehire.me` link that 302s to it. That is a redirector
+  gated by registration, not the absence of one, and it is what a reputation service will see.
+  Mitigated by what is stored, not by the endpoint: destinations must be `http(s)`, must carry
+  no embedded credentials, and are recorded against the account that minted them.
 - **Visible text that does not match the target is itself a phishing signal** → accepted
   deliberately in exchange for a CV that looks normal.
 - **`ON DELETE CASCADE` kills links in already-sent PDFs** → accepted: erasing one's own data

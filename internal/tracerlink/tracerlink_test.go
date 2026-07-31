@@ -6,22 +6,26 @@ import (
 	"testing"
 )
 
+// The hosts a deployment serves, as configuration would supply them.
+var ourHosts = []string{"freehire.me", "freehire.dev"}
+
 func TestTargetsFindsHeaderAndProjectLinks(t *testing.T) {
-	got := Targets(
+	got := Targets(ourHosts,
 		[]string{"github.com/ada", "https://linkedin.com/in/ada"},
 		[]string{"opensched.dev"},
 	)
-	want := []Target{
-		{SourcePath: "header.links[0]", URL: "https://github.com/ada"},
-		{SourcePath: "header.links[1]", URL: "https://linkedin.com/in/ada"},
-		{SourcePath: "projects[0].link", URL: "https://opensched.dev"},
+	want := []struct{ path, url string }{
+		{"header.links[0]", "https://github.com/ada"},
+		{"header.links[1]", "https://linkedin.com/in/ada"},
+		{"projects[0].link", "https://opensched.dev"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("Targets() = %+v, want %+v", got, want)
 	}
 	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("Targets()[%d] = %+v, want %+v", i, got[i], want[i])
+		if got[i].SourcePath() != want[i].path || got[i].URL != want[i].url {
+			t.Errorf("Targets()[%d] = {%s %s}, want {%s %s}",
+				i, got[i].SourcePath(), got[i].URL, want[i].path, want[i].url)
 		}
 	}
 }
@@ -35,7 +39,7 @@ func TestTargetsNormalisesToAbsoluteHTTPS(t *testing.T) {
 		{"http://example.org/cv", "http://example.org/cv"},
 		{"  github.com/ada  ", "https://github.com/ada"},
 	} {
-		got := Targets([]string{tc.in}, nil)
+		got := Targets(ourHosts, []string{tc.in}, nil)
 		if len(got) != 1 {
 			t.Fatalf("Targets(%q) dropped the link: %+v", tc.in, got)
 		}
@@ -56,23 +60,8 @@ func TestTargetsSkipsWhatCannotBeTraced(t *testing.T) {
 		"javascript:alert(1)",
 		"ftp://example.org/cv.pdf",
 	} {
-		if got := Targets([]string{in}, nil); len(got) != 0 {
+		if got := Targets(ourHosts, []string{in}, nil); len(got) != 0 {
 			t.Errorf("Targets(%q) = %+v, want none", in, got)
-		}
-	}
-}
-
-// Tracing our own redirect would nest a token inside a token, so the product's own host is
-// skipped however it is spelled.
-func TestTargetsSkipsOurOwnHost(t *testing.T) {
-	for _, in := range []string{
-		"freehire.me/cv/acme-x7abc",
-		"https://freehire.me/jobs",
-		"https://www.freehire.me/jobs",
-		"HTTPS://FreeHire.me/jobs",
-	} {
-		if got := Targets([]string{in}, nil); len(got) != 0 {
-			t.Errorf("Targets(%q) = %+v, want none — that is our own host", in, got)
 		}
 	}
 }
@@ -80,18 +69,79 @@ func TestTargetsSkipsOurOwnHost(t *testing.T) {
 // Index alignment is what lets the renderer put each href back where it came from, so a
 // skipped link must not shift the ones after it.
 func TestTargetsKeepsIndexesOfTheOriginalSlice(t *testing.T) {
-	got := Targets([]string{"mailto:ada@example.com", "github.com/ada"}, []string{"", "opensched.dev"})
-	want := []Target{
-		{SourcePath: "header.links[1]", URL: "https://github.com/ada"},
-		{SourcePath: "projects[1].link", URL: "https://opensched.dev"},
-	}
+	got := Targets(ourHosts, []string{"mailto:ada@example.com", "github.com/ada"}, []string{"", "opensched.dev"})
+	want := []string{"header.links[1]", "projects[1].link"}
 	if len(got) != len(want) {
 		t.Fatalf("Targets() = %+v, want %+v", got, want)
 	}
 	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("Targets()[%d] = %+v, want %+v", i, got[i], want[i])
+		if got[i].SourcePath() != want[i] {
+			t.Errorf("Targets()[%d].SourcePath() = %q, want %q", i, got[i].SourcePath(), want[i])
 		}
+	}
+}
+
+// A link that already points at any host we serve is left alone: tracing it would nest a token
+// inside a token. The set comes from configuration, so a second product domain is a deployment
+// fact rather than a code change.
+func TestTargetsSkipsEveryHostWeServe(t *testing.T) {
+	for _, in := range []string{
+		"freehire.me/cv/acme-x7abc",
+		"https://freehire.dev/jobs",
+		"https://www.freehire.me/jobs",
+		"HTTPS://FreeHire.me/jobs",
+		// A trailing dot names the same host to DNS, and is the cheapest way past a
+		// string comparison.
+		"https://freehire.me./jobs",
+		"https://freehire.me:443/jobs",
+	} {
+		if got := Targets(ourHosts, []string{in}, nil); len(got) != 0 {
+			t.Errorf("Targets(%q) = %+v, want none — that is a host we serve", in, got)
+		}
+	}
+}
+
+// A host that merely contains ours is somebody else's.
+func TestTargetsTracesLookalikeHosts(t *testing.T) {
+	for _, in := range []string{"https://freehire.me.evil.com/x", "https://notfreehire.me/x"} {
+		if got := Targets(ourHosts, []string{in}, nil); len(got) != 1 {
+			t.Errorf("Targets(%q) = %+v, want it traced — that host is not ours", in, got)
+		}
+	}
+}
+
+// Credentials in a URL are a phishing construction, and storing someone's password because they
+// pasted it into a CV serves nobody.
+func TestTargetsRejectsEmbeddedCredentials(t *testing.T) {
+	for _, in := range []string{
+		"https://freehire.me@evil.com/",
+		"https://user:pass@example.org/cv",
+	} {
+		if got := Targets(ourHosts, []string{in}, nil); len(got) != 0 {
+			t.Errorf("Targets(%q) = %+v, want none — it carries userinfo", in, got)
+		}
+	}
+}
+
+// A port is not a scheme. Telling them apart is what stops a personal site on a non-standard
+// port being read as an untraceable protocol and silently dropped.
+func TestTargetsAcceptsAHostWithAPort(t *testing.T) {
+	got := Targets(ourHosts, []string{"myserver.dev:8080/cv"}, nil)
+	if len(got) != 1 || got[0].URL != "https://myserver.dev:8080/cv" {
+		t.Errorf("Targets(port) = %+v, want it traced as https", got)
+	}
+}
+
+func TestTargetSourcePathNamesThePositionItCameFrom(t *testing.T) {
+	got := Targets(ourHosts, []string{"github.com/ada"}, []string{"opensched.dev"})
+	if len(got) != 2 {
+		t.Fatalf("Targets() = %+v, want two", got)
+	}
+	if p := got[0].SourcePath(); p != "header.links[0]" {
+		t.Errorf("header SourcePath() = %q, want %q", p, "header.links[0]")
+	}
+	if p := got[1].SourcePath(); p != "projects[0].link" {
+		t.Errorf("project SourcePath() = %q, want %q", p, "projects[0].link")
 	}
 }
 
@@ -107,17 +157,34 @@ func TestTokenCarriesThePrefixAndFiveRandomCharacters(t *testing.T) {
 	}
 }
 
-// Two letters would be 676 tokens per prefix, and hundreds of candidates share the prefix of a
-// popular company. Five characters is what keeps collisions rare rather than routine.
-func TestTokensDoNotRepeat(t *testing.T) {
-	const n = 2000
-	seen := make(map[string]struct{}, n)
-	for range n {
-		tok := Token("acme")
-		if _, dup := seen[tok]; dup {
-			t.Fatalf("Token() repeated %q within %d draws", tok, n)
-		}
-		seen[tok] = struct{}{}
+// The property that matters is how much entropy the random part carries, and that is a fact
+// about the alphabet and the length — not something to sample. Drawing tokens and demanding no
+// collision is itself a birthday problem: 2000 draws from 36^5 collide in ~3% of runs, so that
+// test would redden CI for nothing while asserting a weaker claim than this one.
+//
+// Two letters — what the tool this borrows from uses — is 676 per prefix, and hundreds of
+// candidates apply to the same company and share its prefix.
+func TestTokenRandomPartCarriesEnoughEntropyForASharedPrefix(t *testing.T) {
+	const wantAtLeast = 1 << 20
+	space := 1
+	for range tokenRandomLen {
+		space *= len(tokenAlphabet)
+	}
+	if space < wantAtLeast {
+		t.Errorf("token space is %d per prefix (%d chars of %d), want at least %d",
+			space, tokenRandomLen, len(tokenAlphabet), wantAtLeast)
+	}
+}
+
+// Cheap guard against the one way the generator could be catastrophically wrong — returning a
+// constant — without pretending to measure collision rates.
+func TestTokenDoesNotReturnAConstant(t *testing.T) {
+	seen := make(map[string]struct{})
+	for range 50 {
+		seen[Token("acme")] = struct{}{}
+	}
+	if len(seen) < 40 {
+		t.Errorf("50 draws produced only %d distinct tokens", len(seen))
 	}
 }
 
@@ -204,6 +271,37 @@ func TestClassifyReportsUnknownRatherThanGuessing(t *testing.T) {
 	if got.DeviceType != "unknown" || got.OSFamily != "unknown" || got.UAFamily != "unknown" {
 		t.Errorf("Classify(unrecognised) = {%s %s %s}, want all unknown",
 			got.DeviceType, got.OSFamily, got.UAFamily)
+	}
+}
+
+// A browser that borrows Chrome's engine is not Chrome. Reporting it as Chrome is the same
+// guessing the unknown fallback exists to refuse.
+func TestClassifyDoesNotReportEngineBorrowersAsChrome(t *testing.T) {
+	for _, tc := range []struct{ name, ua, want string }{
+		{"opera", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0", "opera"},
+		{"samsung", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36", "samsung"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Classify("GET", tc.ua).UAFamily; got != tc.want {
+				t.Errorf("UAFamily = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// The bot flag is frozen at write time, so a false positive follows a click for as long as it is
+// kept. These two are the cases a bare substring list gets wrong: a phone brand whose name ends
+// in "bot", and a real browser named "Preview".
+func TestClassifyDoesNotFlagHumansWhoseNamesLookAutomated(t *testing.T) {
+	for _, tc := range []struct{ name, ua string }{
+		{"cubot phone", "Mozilla/5.0 (Linux; Android 10; CUBOT_X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"},
+		{"safari technology preview", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/618.1 (KHTML, like Gecko) Version/17.4 Safari/618.1 Safari Technology Preview"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if Classify("GET", tc.ua).IsBot {
+				t.Errorf("Classify(GET, %s).IsBot = true, want false", tc.name)
+			}
+		})
 	}
 }
 
