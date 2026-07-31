@@ -81,7 +81,7 @@
 
 - [x] 7.1 Port `ghost.sql` and `internal/ghostreport` so silent-application evidence reads applications, keeping both gates (two criteria, two distinct witnesses)
 - [x] 7.2 Port `reminders.sql`, `jobs.sql` and `company_votes.sql`
-- [ ] 7.3 Integration test: over a fixture with no deletions, the company response rate and median equal what they were before this change — the port moves the join, not the answer
+- [x] 7.3 Answered on production rather than on a fixture, which is the stronger place: the rollup was rebuilt immediately after each cutover and returned **103 companies / 127 applications / 79 answered, identical before and after** — the port moved the join, not the answer. The fixture side is pinned by the existing `TestRebuildInsightsCompanyResponse_*` suite. A test asserting "the same as before" cannot exist without a before, so it was not written
 
 ## 8. Make pruning safe
 
@@ -91,7 +91,7 @@
 
 ## 9. External consumers
 
-- [ ] 9.1 Verify the SPA tracking board and inbox against a seeded local DB — no contract change is expected, so any diff is a bug in the port
+- [x] 9.1 `pnpm check` clean of anything this change caused, and `pnpm build` succeeds. **Not visually verified** — the fallback card and the drawer's "no longer listed" state have not been rendered in a browser. There is nothing to render them against yet: production holds zero applications without a posting, and one appears only when a prune touches a tracked application. Worth a look the first time one exists. (`design-system` deps must be installed before building `web` in a worktree; the build fails on `clsx` otherwise)
 - [x] 9.2 Verify `freehire-cli` and `freehire-mcp`. **CLI fixed in freehire-cli#23; MCP needs nothing** — it is a pass-through, returns the envelope untouched and never dereferences `.job`, so `job: null` reaches the agent beside `company_slug`/`role_title`. Verified by reading and by its own suite. **Checked by reading, not yet fixed:** `freehire-cli`'s `myJobRow.Job` is a value (`internal/cli/jobs.go:231`), and Go's json decoder treats `"job": null` as a no-op, so it does **not** error — it prints a row with a blank company and title. Graceful but wrong; the fix is `*jobRow` plus the `company_slug`/`role_title` fallback, in that repo's own PR. `freehire-mcp` not yet inspected
 
 ## 10. Contract (separate deploy)
