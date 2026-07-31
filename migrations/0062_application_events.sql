@@ -10,7 +10,7 @@
 -- This table is the record that stops changing once written. It holds no subject lines,
 -- no bodies, no addresses: only that something happened, when, and to which application.
 --
--- Applied to a fresh volume by initdb after 0059; on an existing prod volume run this
+-- Applied to a fresh volume by initdb after 0061; on an existing prod volume run this
 -- manually (SET ROLE hire) BEFORE deploying code that reads it. Additive, no backfill —
 -- cmd/backfill-application-events populates it as its own pass afterwards.
 

@@ -9,7 +9,7 @@
 -- right-censored median bare tells a candidate that employers reply in six days while most
 -- of the sample was never replied to at all.
 --
--- Applied to a fresh volume by initdb after 0060; on an existing prod volume run this
+-- Applied to a fresh volume by initdb after 0062; on an existing prod volume run this
 -- manually (SET ROLE hire) BEFORE deploying code that reads it. Additive, no backfill —
 -- cmd/rollup-company fills it on its next run.
 

@@ -1,12 +1,12 @@
 ## 1. Schema
 
-- [x] 1.1 Add migration `0060_application_events.sql`: the `application_events` table
+- [x] 1.1 Add migration `0062_application_events.sql`: the `application_events` table
   (`user_id` FK users ON DELETE CASCADE, `job_id` FK jobs ON DELETE SET NULL, `company_slug`,
   `kind`, `signal`, `occurred_at`, `recorded_at`, `source`, `source_ref`, `retracted_at`), the
   partial unique index on `(user_id, kind, source_ref) WHERE source_ref IS NOT NULL`, and the
   aggregate-read index. Column comments carry the reasons: why the slug is denormalized, why
   `occurred_at` and `recorded_at` are separate, why retraction is a stamp and not a delete.
-- [x] 1.2 Add migration `0061_insights_company_response_reply_time.sql`: the nullable
+- [x] 1.2 Add migration `0063_insights_company_response_reply_time.sql`: the nullable
   `median_reply_days` column on `insights_company_response`, additive with no backfill. No
   unanswered column — it is `applications - answered`, computed by the serving layer.
 
