@@ -52,7 +52,7 @@
 - [x] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
 - [x] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only
 - [x] 7.7 Retire `POST /me/cvs/:id/autopilot/undo` in favour of the batch revert
-- [ ] 7.8 Test: every entry point leaves a revision; the actor is never read from the request body
+- [x] 7.8 Test: every entry point leaves a revision; the actor is never read from the request body — the tripwire for the whole gate, since an actor a caller could name would make the policy optional
 
 ## 8. Titles
 
@@ -71,8 +71,8 @@
 ## 10. Retirement and clients
 
 - [x] 10.1 Stop reading and writing `cvs.autopilot_undo`
-- [ ] 10.2 Second migration, separate release: drop `cvs.autopilot_undo`
-- [ ] 10.3 Update `freehire-cli` to the new `PATCH` body
+- [x] 10.2 Second migration, separate release: drop `cvs.autopilot_undo` — #1341, applied 31.07
+- [x] 10.3 Update `freehire-cli` to the new `PATCH` body — freehire-cli#22, released as v0.14.0
 - [x] 10.4 `internal/cv/AGENTS.md` and `internal/handler/AGENTS.md`: the single writer, the path policy, the evidence paths
 
 ## 11. Verification
@@ -81,5 +81,5 @@
 - [x] 11.2 `make sqlc` after the migration; contracts regenerated for the new wire types
 - [x] 11.3 Web `pnpm check` and `vitest` — 0 type errors, 608 tests
 - [x] 11.4 Driven against a real stack (scratch DB built the initdb way, server on :8095, Vite on :5179): two saves recorded as two entries, a rewrite undone and the bullet restored, a second undo refused with 409, the undo itself in the feed with the reversed entry struck through, a tailored copy's feed opening with the system milestone (no undo control), and the underline landing on the rewritten bullet while the one beside it stays untouched. The agent's own run was NOT driven — this machine has no `LLM_*`, so a turn ends 503; `cv_edit` is covered by its unit and integration tests instead
-- [ ] 11.5 Second migration to drop `cvs.autopilot_undo`, in the release AFTER this one lands
-- [ ] 11.6 `freehire-cli`: update to the new `PATCH` body (separate repository)
+- [x] 11.5 Second migration to drop `cvs.autopilot_undo`, in the release AFTER this one lands — done; 79 migrations in the ledger
+- [x] 11.6 `freehire-cli`: update to the new `PATCH` body (separate repository) — v0.14.0, and the installer serves it

@@ -393,3 +393,121 @@ func TestCVRevisionHistoryAndUndo(t *testing.T) {
 		t.Error("the reverted entry is not marked as undone")
 	}
 }
+
+// Who made a change decides what the change is allowed to do: the agent is refused the
+// candidate's own fields and must cite evidence for a claim, the candidate is refused
+// nothing. So the actor has to come from the credential that authenticated the request and
+// never from the request itself — otherwise the gate is one JSON field away from being
+// optional.
+//
+// This test is the tripwire for that. It sends the actor in the body, by the name the wire
+// shape uses, and asserts the recorded revision ignored it.
+func TestTheActorIsNeverReadFromTheRequestBody(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &cvHandlers{queries: queries, jobReader: queries,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
+	app := buildCVApp(h, iss)
+
+	tok, _ := iss.Issue(seedAccount(t, pool, "actor@example.test", true), testTokenVersion)
+
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	decodeJSON(t, doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "General"}), &created)
+	id := created.Data.ID
+
+	// A whole-document save carrying an actor it is not entitled to. BodyParser ignores the
+	// unknown field; what matters is that the recorded revision does too.
+	body := map[string]any{
+		"title":       "General",
+		"template_id": "classic-ats",
+		"actor":       "system",
+		"origin":      "import",
+		"document": map[string]any{
+			"summary": "Ten years of Go",
+			"header":  map[string]any{"full_name": "Ada"},
+		},
+	}
+	if r := doCV(t, app, fiber.MethodPut, "/api/v1/me/cvs/"+id, tok, body); r.StatusCode != fiber.StatusOK {
+		t.Fatalf("save = %d", r.StatusCode)
+	}
+
+	var feed struct {
+		Data []cvedit.RevisionView `json:"data"`
+	}
+	decodeJSON(t, doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/revisions", tok, nil), &feed)
+	if len(feed.Data) == 0 {
+		t.Fatal("the save left no revision")
+	}
+	for _, r := range feed.Data {
+		if r.Actor != "candidate" {
+			t.Errorf("revision recorded actor %q — the body was believed over the cookie", r.Actor)
+		}
+		if r.Origin != "editor" {
+			t.Errorf("revision recorded origin %q — the body was believed over the entry point", r.Origin)
+		}
+	}
+}
+
+// Every entry point that changes a CV must leave an entry in its history: a change nobody
+// recorded is a change nobody can undo, and the feed would be quietly incomplete.
+func TestEveryEntryPointLeavesARevision(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &cvHandlers{queries: queries, jobReader: queries,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
+	app := buildCVApp(h, iss)
+
+	tok, _ := iss.Issue(seedAccount(t, pool, "entrypoints@example.test", true), testTokenVersion)
+
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	decodeJSON(t, doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "General"}), &created)
+	id := created.Data.ID
+
+	count := func() int {
+		var feed struct {
+			Data []cvedit.RevisionView `json:"data"`
+		}
+		decodeJSON(t, doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/revisions", tok, nil), &feed)
+		return len(feed.Data)
+	}
+
+	before := count()
+	if r := doCV(t, app, fiber.MethodPut, "/api/v1/me/cvs/"+id, tok, updateCVRequest{
+		Title: "General", TemplateID: "classic-ats",
+		Document: cv.Document{Summary: "Ten years of Go", Header: cv.Header{FullName: "Ada"}},
+	}); r.StatusCode != fiber.StatusOK {
+		t.Fatalf("whole-document save = %d", r.StatusCode)
+	}
+	if after := count(); after != before+1 {
+		t.Errorf("a whole-document save left %d revisions, want one more than %d", after, before)
+	}
+
+	before = count()
+	if r := doCV(t, app, fiber.MethodPut, "/api/v1/me/cvs/"+id+"/template", tok,
+		setCVTemplateRequest{TemplateID: "centered"}); r.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("template pick = %d", r.StatusCode)
+	}
+	if after := count(); after != before+1 {
+		t.Errorf("the template pick left %d revisions, want one more than %d", after, before)
+	}
+}
