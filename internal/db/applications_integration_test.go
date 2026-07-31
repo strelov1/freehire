@@ -282,3 +282,50 @@ func TestLinkingMailKeepsTheApplicationInStep(t *testing.T) {
 		t.Errorf("after unlinking, application_id = %v, want NULL — the link cleared on both columns", *got)
 	}
 }
+
+// Task 6.5: mail linked to an application survives the removal of the posting, and the
+// pruned pair must not read as a correction — nobody re-linked anything.
+func TestLinkedMailSurvivesAPrunedPosting(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "mail-survives@example.test", true)
+	job := seedResponseJob(t, q, "mail-survives-1", "survivco")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	mail := seedReply(t, q, user, job, "survives-reply")
+	var appID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM applications WHERE user_id = $1`, user).Scan(&appID); err != nil {
+		t.Fatalf("read application: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, job); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+
+	var linked *int64
+	if err := pool.QueryRow(ctx, `SELECT application_id FROM emails WHERE id = $1`, mail).Scan(&linked); err != nil {
+		t.Fatalf("read mail: %v", err)
+	}
+	if linked == nil || *linked != appID {
+		t.Errorf("mail names application %v, want %d — a removal must not detach a thread", linked, appID)
+	}
+
+	// Reconciling after the prune must retract nothing: the pair changed on neither side.
+	if n, err := q.RetractSupersededEmailEvent(ctx, RetractSupersededEmailEventParams{ID: mail, UserID: user}); err != nil {
+		t.Fatalf("retract: %v", err)
+	} else if n != 0 {
+		t.Errorf("the reconcile retracted %d events after a prune, want 0 — nobody corrected anything", n)
+	}
+	var live int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM application_events
+		  WHERE user_id = $1 AND kind = 'employer_reply' AND retracted_at IS NULL`, user).Scan(&live); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if live != 1 {
+		t.Errorf("%d live reply events after the prune, want 1", live)
+	}
+}

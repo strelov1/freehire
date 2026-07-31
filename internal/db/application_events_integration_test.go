@@ -222,8 +222,9 @@ func TestSyncEmailApplicationEvent_DeletionKeepsTheFactRelinkMovesIt(t *testing.
 
 	var emailID int64
 	if err := q.db.QueryRow(ctx,
-		`INSERT INTO emails (user_id, source, external_id, received_at, job_id, status_signal)
-		 VALUES ($1, 'gmail', 'm-1', now() - interval '3 days', $2, 'acknowledgement')
+		`INSERT INTO emails (user_id, source, external_id, received_at, job_id, application_id, status_signal)
+		 VALUES ($1, 'gmail', 'm-1', now() - interval '3 days', $2,
+		         (SELECT a.id FROM applications a WHERE a.user_id = $1 AND a.job_id = $2), 'acknowledgement')
 		 RETURNING id`, user, jobA).Scan(&emailID); err != nil {
 		t.Fatalf("seed email: %v", err)
 	}

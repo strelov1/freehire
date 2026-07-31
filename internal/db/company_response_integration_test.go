@@ -66,8 +66,9 @@ func TestRebuildInsightsCompanyResponse_CountsObservableApplications(t *testing.
 	// classified server-side.
 	var replyID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO emails (user_id, external_id, source, subject, job_id, received_at)
-		 VALUES ($1, 'reply-1', 'gmail', 'Thanks for applying', $2, now()) RETURNING id`,
+		`INSERT INTO emails (user_id, external_id, source, subject, job_id, application_id, received_at)
+		 VALUES ($1, 'reply-1', 'gmail', 'Thanks for applying', $2,
+		         (SELECT a.id FROM applications a WHERE a.user_id = $1 AND a.job_id = $2), now()) RETURNING id`,
 		answered, job1).Scan(&replyID); err != nil {
 		t.Fatalf("seed reply: %v", err)
 	}
@@ -165,8 +166,11 @@ func seedReply(t *testing.T, q *Queries, userID, jobID int64, extID string) int6
 	ctx := context.Background()
 	var id int64
 	if err := q.db.QueryRow(ctx,
-		`INSERT INTO emails (user_id, external_id, source, job_id, received_at)
-		 VALUES ($1, $2, 'gmail', $3, now()) RETURNING id`, userID, extID, jobID).Scan(&id); err != nil {
+		`INSERT INTO emails (user_id, external_id, source, job_id, application_id, received_at)
+		 VALUES ($1, $2, 'gmail', $3,
+		         (SELECT a.id FROM applications a WHERE a.user_id = $1 AND a.job_id = $3),
+		         now())
+		 RETURNING id`, userID, extID, jobID).Scan(&id); err != nil {
 		t.Fatalf("seed reply %s: %v", extID, err)
 	}
 	if err := q.RecordEmailApplicationEvent(ctx, RecordEmailApplicationEventParams{
@@ -260,8 +264,8 @@ func TestRebuildInsightsCompanyResponse_DeletionAndRelink(t *testing.T) {
 	}
 	var reply int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO emails (user_id, external_id, source, job_id, received_at)
-		 VALUES ($1, 'move-1', 'gmail', $2, now()) RETURNING id`, user, jobA).Scan(&reply); err != nil {
+		`INSERT INTO emails (user_id, external_id, source, job_id, application_id, received_at)
+		 VALUES ($1, 'move-1', 'gmail', $2, (SELECT a.id FROM applications a WHERE a.user_id = $1 AND a.job_id = $2), now()) RETURNING id`, user, jobA).Scan(&reply); err != nil {
 		t.Fatalf("seed reply: %v", err)
 	}
 	reconcile := func() {
@@ -341,8 +345,8 @@ func TestRebuildInsightsCompanyResponse_MedianSurvivesPrunedPostings(t *testing.
 	}
 	var reply int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO emails (user_id, external_id, source, job_id, received_at)
-		 VALUES ($1, 'median-reply', 'gmail', $2, $3) RETURNING id`,
+		`INSERT INTO emails (user_id, external_id, source, job_id, application_id, received_at)
+		 VALUES ($1, 'median-reply', 'gmail', $2, (SELECT a.id FROM applications a WHERE a.user_id = $1 AND a.job_id = $2), $3) RETURNING id`,
 		user, job, appliedAt.Add(4*24*time.Hour)).Scan(&reply); err != nil {
 		t.Fatalf("seed reply: %v", err)
 	}

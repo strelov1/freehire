@@ -74,8 +74,8 @@
 - [x] 6.2 Port `internal/inbox` (`RecordApplication`, the `?link=suggested|unlinked` filters) and `internal/maillink` so auto-link, suggestion and monotonic stage advance behave identically
 - [x] 6.3 Port `internal/handler/inbox_linking.go` and `followup.go`
 - [x] 6.4 Port `cmd/classify-mail/store.go`
-- [ ] 6.5 Integration test: mail linked to an application whose posting is then deleted stays linked, and a forward-mapping signal still advances the stage
-- [ ] 6.6 Port the link-correction path (the ordered two-statement retract-then-insert) to compare applications rather than postings, keeping the unique index's `retracted_at` term so a correction can still be recorded. **Moved out of group 4:** the retraction condition can only ask "did this mail move to another application" once the link paths maintain `emails.application_id`, which is 6.1–6.2
+- [x] 6.5 Integration test: mail linked to an application whose posting is then deleted stays linked, and a forward-mapping signal still advances the stage
+- [x] 6.6 Port the link-correction path (the ordered two-statement retract-then-insert) to compare applications rather than postings, keeping the unique index's `retracted_at` term so a correction can still be recorded. **Moved out of group 4:** the retraction condition can only ask "did this mail move to another application" once the link paths maintain `emails.application_id`, which is 6.1–6.2
 
 ## 7. Cut over the remaining derived reads
 

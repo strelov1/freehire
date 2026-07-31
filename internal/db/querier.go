@@ -1770,6 +1770,10 @@ type Querier interface {
 	// here rather than left to be inferred later from a job_id that cmd/prune clears. The
 	// message's own application_id wins; falling back to the posting is sound only because
 	// this runs at write time, while the posting still exists.
+	// The employer comes from the application when the message names one, and from the
+	// posting otherwise: a reply to a job the candidate never recorded applying to is still
+	// a fact worth keeping, it simply has no application to be paired with and never enters
+	// the response ratio, which counts only replies that answer an `applied` event.
 	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally

@@ -20,7 +20,13 @@ WHERE em.id            = $1
   AND ae.kind          = 'employer_reply'
   AND ae.source_ref    = em.id
   AND ae.retracted_at IS NULL
-  AND ae.job_id IS DISTINCT FROM em.job_id;
+  -- The PAIR, not either half. On the application alone this is blind to mail that
+  -- names no application — re-linking it between two postings would move nothing. On
+  -- the posting alone, cmd/prune clears both sides and the row reads as "moved
+  -- elsewhere", retracting a fact nobody corrected. Row-wise IS DISTINCT FROM gets the
+  -- NULLs right in both directions: a pruned pair (app, NULL) equals itself, and
+  -- (NULL, jobA) differs from (NULL, jobB).
+  AND (ae.application_id, ae.job_id) IS DISTINCT FROM (em.application_id, em.job_id);
 
 -- name: RecordEmailApplicationEvent :exec
 -- Step 2: record the event when the message is LINKED and no live event exists for it.
@@ -47,14 +53,19 @@ WHERE em.id            = $1
 INSERT INTO application_events (
     user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
 )
-SELECT em.user_id, COALESCE(em.application_id, a.id), em.job_id, j.company_slug, 'employer_reply',
+-- The employer comes from the application when the message names one, and from the
+-- posting otherwise: a reply to a job the candidate never recorded applying to is still
+-- a fact worth keeping, it simply has no application to be paired with and never enters
+-- the response ratio, which counts only replies that answer an `applied` event.
+SELECT em.user_id, em.application_id, em.job_id,
+       COALESCE(a.company_slug, j.company_slug, ''), 'employer_reply',
        COALESCE(em.status_signal, ''), em.received_at, sqlc.arg(event_source)::text, em.id
   FROM emails em
-  JOIN jobs j ON j.id = em.job_id
-  LEFT JOIN applications a ON a.user_id = em.user_id AND a.job_id = em.job_id
+  LEFT JOIN applications a ON a.id = em.application_id
+  LEFT JOIN jobs j ON j.id = em.job_id
  WHERE em.id      = $1
    AND em.user_id = $2
-   AND em.job_id IS NOT NULL
+   AND (em.application_id IS NOT NULL OR em.job_id IS NOT NULL)
 ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
 DO NOTHING;
 
