@@ -78,7 +78,7 @@ jobs:
       # and every job stayed green. Style Dictionary writes no timestamp, so a
       # rebuild of unchanged sources is byte-identical and this diff is real.
       - name: Check dist matches the token sources
-        run: git diff --exit-code -- dist
+        run: pnpm check:dist
 
       # The primitives live in the package, so web's svelte-check and vitest
       # never see them — both skip node_modules, which is where web resolves

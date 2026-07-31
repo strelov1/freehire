@@ -2,12 +2,13 @@
 // boundary. Both walk web/src, both name files the same way, and both have to
 // read source with its comments gone.
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = join(scriptsDir, '..', '..');
 
-export const webSrc = join(scriptsDir, '..', '..', 'web', 'src');
+export const webSrc = join(repoRoot, 'web', 'src');
 export const packageSrc = join(scriptsDir, '..', 'src');
 
 // Comments describe violations as often as they commit them: check-token-coverage's
@@ -32,7 +33,10 @@ export function* sourceFiles(dir) {
 }
 
 // Repo-relative, so a baseline committed here does not carry whoever's checkout
-// wrote it — including a worktree under .claude/.
+// wrote it — including a worktree under .claude/. Computed from the repo root
+// rather than by finding '/web/src/' in the string: a checkout that itself lives
+// under a path containing web/src would key the baseline off the wrong half of
+// it, and the file would look fine.
 export function repoRelative(path) {
-  return path.slice(path.indexOf('/web/src/') + 1);
+  return relative(repoRoot, path).replaceAll('\\', '/');
 }
