@@ -68,6 +68,7 @@ function revision(over: Partial<RevisionView> = {}): RevisionView {
     title: 'Rewrote a bullet',
     paths: ['summary'],
     reverted: false,
+    undoable: true,
     created_at: '2026-07-31T09:00:00Z',
     ...over,
   } as RevisionView;
@@ -103,8 +104,8 @@ describe('groupByBatch', () => {
   it('reports a run as spent when every edit in it is reverted', () => {
     const batch = crypto.randomUUID();
     const [run] = groupByBatch([
-      revision({ actor: 'agent', batch_id: batch, reverted: true }),
-      revision({ actor: 'agent', batch_id: batch, reverted: true }),
+      revision({ actor: 'agent', batch_id: batch, reverted: true, undoable: false }),
+      revision({ actor: 'agent', batch_id: batch, reverted: true, undoable: false }),
     ]);
     if (run?.kind !== 'batch') throw new Error('the run did not fold into one entry');
     expect(run.undoable).toBe(false);
@@ -113,7 +114,7 @@ describe('groupByBatch', () => {
   it('reports a run as undoable while any edit still stands', () => {
     const batch = crypto.randomUUID();
     const [run] = groupByBatch([
-      revision({ actor: 'agent', batch_id: batch, reverted: true }),
+      revision({ actor: 'agent', batch_id: batch, reverted: true, undoable: false }),
       revision({ actor: 'agent', batch_id: batch, reverted: false }),
     ]);
     if (run?.kind !== 'batch') throw new Error('the run did not fold into one entry');

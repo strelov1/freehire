@@ -167,14 +167,13 @@ Nothing is stored: it is recomputed per request, so a scoring-rule change needs 
 
 ## Autopilot runs
 
-A tailored CV carries what the last unattended run left behind: `autopilot_report` (one entry
-per requirement the run considered, with an outcome from a fixed vocabulary) and
-`autopilot_undo` (the document as it stood before the run's first edit). The wire shape lives
-in `autopilot.go` — it is generated to TypeScript — while `autopilot_store.go` holds what may
-be persisted and the owner-scoped writes that persist it. Keeping them in separate files is
+A tailored CV carries what the last unattended run left behind: `autopilot_report`, one entry
+per requirement the run considered, with an outcome from a fixed vocabulary. The wire shape
+lives in `autopilot.go` — it is generated to TypeScript — while `autopilot_store.go` holds what
+may be persisted and the owner-scoped writes that persist it. Keeping them in separate files is
 what stops the client seeing rules that are ours to enforce.
 
-Three rules the code encodes rather than documents:
+Two rules the code encodes rather than documents:
 
 - **Nothing is coerced.** A status outside `closed_bank` / `closed_candidate` / `open` /
   `not_reached` is refused with the valid ones named, because that message is the model's only
@@ -183,21 +182,36 @@ Three rules the code encodes rather than documents:
 - **A report is replaced whole.** There is no partial update: a requirement closed later from
   the candidate's own words arrives as the same list with one entry changed, so the stored
   value is always the current truth and there is one write path instead of two.
-- **A revert clears the report with the document.** `RevertAutopilot` restores the snapshot and
-  nulls both columns in one owner-scoped statement; a CV with no snapshot matches nothing and
-  yields `ErrNoAutopilotRun` (the handler's 409) rather than blanking the document with NULL.
-  Keeping the log would leave the workspace claiming edits that no longer exist.
 
-The snapshot is taken fresh at the start of EVERY run, so "undo the run" always means the
-document as the last run found it.
+Undoing a run is undoing the revisions it made (see below), not restoring a snapshot. The
+`autopilot_undo` column that used to hold one is retired: it could only answer "put the whole
+run back", and two runs started at once each took a snapshot, so the second captured a
+half-edited document and undoing returned to the middle of the first. Reverting a batch clears
+the report with it, because a report describing edits that no longer exist misdescribes the CV.
 
-Two known edges, both deliberate:
+One edge remains, deliberately:
 
-- **Runs are not serialised per CV.** Two runs started at once (a double click, two tabs) each
-  snapshot, and the second captures a half-edited document — so undoing returns to the middle of
-  the first run. The workspace disables its entry points while a turn is in flight; a server-side
-  lock is machinery this has not yet earned.
 - **A run lays down its own plan.** The handler writes the vacancy's requirements as
   `not_reached` before the turn starts, because a run that exhausts the step cap gets its final
   model call with no tools offered and therefore cannot report. The agent's report replaces the
   plan wholesale.
+
+## Who may write a stored CV
+
+Nothing in this package writes `cvs.data`. `internal/cvedit` owns the only path, and the seam
+is held by visibility rather than by review: `Store.update` is unexported, and `Store.Patch`
+and the eight-op patch vocabulary it applied no longer exist.
+
+Every entry point — the editor's autosave, the template picker, the CLI's `PATCH`, the
+assistant's `cv_edit`, seeding a tailored copy — commits through `cvedit.Editor`, which applies
+the change, records what it did and what would undo it, and writes both in one transaction
+against a locked row. Three consequences worth knowing before touching this:
+
+- **A whole-document save is an input format, not a write path.** `PUT /me/cvs/:id` still
+  carries the document; the differ derives the operations, and from the editor's point of view
+  it is indistinguishable from an agent's batch.
+- **The actor follows the credential, never the body.** A cookie is the candidate; an API key
+  is the agent, and meets the agent's path policy — which is what keeps the contact block
+  closed to it now that no gap in a vocabulary does the job.
+- **The row lock serialises edits to one CV.** `GetCVForEdit … FOR UPDATE` is why two agent
+  turns arriving together no longer interleave.

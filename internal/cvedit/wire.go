@@ -39,6 +39,11 @@ type RevisionView struct {
 	// Reverted says the change has already been undone, which is what greys out its control
 	// rather than removing the entry: the log is never rewritten.
 	Reverted bool `json:"reverted"`
+	// Undoable says the entry has something to reverse. A milestone — "this CV was created"
+	// — has not: undoing it would mean deleting the CV, which is a different action with its
+	// own button. Stated rather than inferred from an empty path list, because "changed
+	// nothing addressable" and "cannot be undone" are different facts.
+	Undoable bool `json:"undoable"`
 	// RevertsID names the revision this one undid, when it is itself an undo.
 	RevertsID string    `json:"reverts_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
@@ -54,6 +59,7 @@ func (r Revision) View() RevisionView {
 		Note:      r.Note,
 		Paths:     r.Paths(),
 		Reverted:  r.Reverted(),
+		Undoable:  len(r.Inverse) > 0 && !r.Reverted(),
 		CreatedAt: r.CreatedAt,
 	}
 	if r.BatchID != uuid.Nil {

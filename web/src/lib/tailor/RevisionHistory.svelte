@@ -95,7 +95,7 @@
       </button>
       {#if revision.reverted}
         <span class="shrink-0 text-xs text-muted-foreground">undone</span>
-      {:else}
+      {:else if revision.undoable}
         <button
           type="button"
           class="shrink-0 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"

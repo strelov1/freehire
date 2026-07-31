@@ -78,6 +78,15 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
+	// Open the copy's history with where it came from, so the feed starts at the beginning
+	// rather than mid-story with the first edit. Best-effort and idempotency-aware: Tailor
+	// returns the EXISTING copy on a reload, and a second milestone would be a second
+	// "created from your base CV" under a CV that was created once.
+	if tailored.CreatedAt.Equal(tailored.UpdatedAt) {
+		if _, err := h.editor.Seed(c.Context(), tailored.ID, userID, "Created from your base CV"); err != nil {
+			log.Printf("cv: seeding the revision history for %s: %v", tailored.ID, err)
+		}
+	}
 	// A reload of /tailor/<slug> re-runs this request. The CV it reaches is the one that
 	// already exists (Tailor is idempotent per vacancy), so its conversation must be reached
 	// too — minting a second session here would rebind the CV and orphan everything the

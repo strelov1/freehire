@@ -996,6 +996,13 @@ export interface RevisionView {
    */
   reverted: boolean;
   /**
+   * Undoable says the entry has something to reverse. A milestone — "this CV was created"
+   * — has not: undoing it would mean deleting the CV, which is a different action with its
+   * own button. Stated rather than inferred from an empty path list, because "changed
+   * nothing addressable" and "cannot be undone" are different facts.
+   */
+  undoable: boolean;
+  /**
    * RevertsID names the revision this one undid, when it is itself an undo.
    */
   reverts_id?: string;

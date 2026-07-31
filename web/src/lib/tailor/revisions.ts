@@ -62,11 +62,11 @@ export function groupByBatch(revisions: readonly RevisionView[]): RevisionGroup[
     const last = groups.at(-1);
     if (batchId && last?.kind === 'batch' && last.batchId === batchId) {
       last.revisions.push(revision);
-      last.undoable ||= !revision.reverted;
+      last.undoable ||= revision.undoable;
       continue;
     }
     if (batchId) {
-      groups.push({ kind: 'batch', batchId, revisions: [revision], undoable: !revision.reverted });
+      groups.push({ kind: 'batch', batchId, revisions: [revision], undoable: revision.undoable });
       continue;
     }
     groups.push({ kind: 'single', revision });

@@ -49,16 +49,16 @@
 - [x] 7.2 `PUT /me/cvs/:id/template` → `Commit(candidate, template)`
 - [x] 7.3 `PATCH /me/cvs/:id` → path operations (new body shape)
 - [x] 7.4 `cv_edit` tool → `Commit(agent, tailor_agent, batch)`, accepting a batch of operations in one call, with the schema generated from the enumerated paths
-- [ ] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
+- [x] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
 - [x] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only
 - [x] 7.7 Retire `POST /me/cvs/:id/autopilot/undo` in favour of the batch revert
 - [ ] 7.8 Test: every entry point leaves a revision; the actor is never read from the request body
 
 ## 8. Titles
 
-- [ ] 8.1 Generate a revision's description from its operations and the document — "Rewrote a bullet in Senior Engineer, Acme", "Edited 3 bullets in Acme", "Changed typography"
-- [ ] 8.2 Carry the agent's `note` separately, rendered as the agent's words
-- [ ] 8.3 Test: a table of operation batches to descriptions, including the folding of several operations into one line
+- [x] 8.1 Generate a revision's description from its operations and the document — "Rewrote a bullet in Senior Engineer, Acme", "Edited 3 bullets in Acme", "Changed typography"
+- [x] 8.2 Carry the agent's `note` separately, rendered as the agent's words
+- [x] 8.3 Test: a table of operation batches to descriptions, including the folding of several operations into one line
 
 ## 9. Workspace
 
@@ -73,7 +73,7 @@
 - [x] 10.1 Stop reading and writing `cvs.autopilot_undo`
 - [ ] 10.2 Second migration, separate release: drop `cvs.autopilot_undo`
 - [ ] 10.3 Update `freehire-cli` to the new `PATCH` body
-- [ ] 10.4 `internal/cv/AGENTS.md` and `internal/handler/AGENTS.md`: the single writer, the path policy, the evidence paths
+- [x] 10.4 `internal/cv/AGENTS.md` and `internal/handler/AGENTS.md`: the single writer, the path policy, the evidence paths
 
 ## 11. Verification
 

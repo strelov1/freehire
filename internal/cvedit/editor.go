@@ -292,6 +292,32 @@ func metaOf(cvID uuid.UUID, s State) cv.Meta {
 	return cv.Meta{ID: cvID, Title: s.Title, TemplateID: s.TemplateID}
 }
 
+// Seed opens a CV's history with a system revision: the copy exists, and this is where its
+// feed starts. It carries no operations and no inverse, because there is nothing to undo —
+// undoing "this CV was created" is deleting it, which is a different action with its own
+// button.
+//
+// Without it a tailored copy's history would begin mid-story, with the first edit and no
+// account of where the document came from.
+func (e *Editor) Seed(ctx context.Context, cvID uuid.UUID, userID int64, title string) (Revision, error) {
+	var rev Revision
+	err := e.repo.Edit(ctx, cvID, userID, func(ctx context.Context, tx Tx) error {
+		_, baseVersion, err := tx.State(ctx)
+		if err != nil {
+			return err
+		}
+		rev, err = tx.Insert(ctx, Revision{
+			CVID:        cvID,
+			Actor:       ActorSystem,
+			Origin:      OriginImport,
+			Title:       title,
+			BaseVersion: baseVersion,
+		})
+		return err
+	})
+	return rev, err
+}
+
 // History is the feed, newest first.
 func (e *Editor) History(ctx context.Context, cvID uuid.UUID, userID int64) ([]Revision, error) {
 	return e.repo.List(ctx, cvID, userID, feedLimit)
