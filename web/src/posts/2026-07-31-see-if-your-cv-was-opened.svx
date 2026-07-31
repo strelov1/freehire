@@ -6,7 +6,6 @@ type: changelog
 tags:
   - cv
   - job-seekers
-draft: true
 ---
 
 An application goes quiet and you learn nothing. Was the CV read and passed over, or did it
