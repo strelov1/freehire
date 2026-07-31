@@ -3,11 +3,13 @@
   import { Button } from '$lib/ui';
   import Disclosure from '$lib/components/ghost/Disclosure.svelte';
   import GateMatrix from '$lib/components/ghost/GateMatrix.svelte';
-  import GhostSandbox from '$lib/components/ghost/GhostSandbox.svelte';
+  import GhostChecklist from '$lib/components/GhostChecklist.svelte';
   import Prevalence from '$lib/components/ghost/Prevalence.svelte';
   import SignalDiagram from '$lib/components/ghost/SignalDiagram.svelte';
   import NumberedGrid from '$lib/components/NumberedGrid.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { CRITERIA } from '$lib/ghost';
+  import type { Ghost } from '$lib/generated/contracts';
   import { GHOST_FAQ } from '$lib/ghostFaq';
   import { GHOST_SIGNALS } from '$lib/ghostSignals';
 
@@ -21,6 +23,15 @@
   // page cannot fall behind the vocabulary — ghostSignals.test.ts fails if a criterion
   // joins without an explanation, and the diagram registry fails to COMPILE if it joins
   // without an illustration. See hire-features-landing-space.
+  // Two structural criteria and nothing from applicants — the commonest thing a reader
+  // arrives having just seen, and the state the matrix says cannot go further on its own.
+  const example: Ghost = {
+    level: 'possible',
+    criteria: ['evergreen_posting', 'ats_absent'],
+    criteria_total: CRITERIA.length,
+    ats_checked_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+  };
+
   const groups = $derived([
     {
       heading: 'The shape of the posting',
@@ -37,55 +48,57 @@
   <!-- Hero. The limit on the claim sits here rather than in a section of its own: it is
        the feature's most important property, not a disclaimer, and a reader who stops
        after the first screen must still have read it. -->
-  <header class="flex flex-col gap-6">
-    <SectionLabel text="ghost jobs" />
-    <h1 class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-      Some postings are not being filled. freehire tells you which, and why it thinks so.
-    </h1>
-    <p class="max-w-2xl text-base leading-relaxed text-muted-foreground">
-      You cannot tell from the page, and every hour spent on one is unpaid work you will
-      never hear about. So freehire watches two things it can actually check: how a posting
-      behaves over time, and what happened to people who applied.
-    </p>
+  <header class="flex flex-col items-start gap-10 lg:flex-row lg:gap-16">
+    <div class="flex max-w-2xl flex-col gap-6">
+      <SectionLabel text="ghost jobs" />
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+        Some postings are not being filled. freehire tells you which, and why it thinks so.
+      </h1>
+      <p class="text-base leading-relaxed text-muted-foreground">
+        You can't tell by looking at the page. An hour spent on one is work you'll never
+        hear back about. So freehire checks two things it can actually see: how the posting
+        behaves, and what happened to people who applied.
+      </p>
 
-    <dl
-      class="flex max-w-3xl flex-col gap-2 border-l-2 border-border pl-4 text-sm leading-relaxed"
-    >
-      <div>
-        <dt class="inline font-medium">What we can check —</dt>
-        <dd class="inline text-muted-foreground">
-          “open 240 days, reposted 13 times, seven copies live at once, and absent from the
-          employer's own careers board.” Every part is verifiable, and every part is shown
-          to you.
-        </dd>
+      <!-- Two lines, not a section. The limit on the claim is the feature's most
+           important property and has to be above the mechanics, but it earns a couplet
+           there — as a full section it was the third block of grey before the first CTA. -->
+      <dl class="flex flex-col gap-1.5 border-l-2 border-border pl-4 text-sm leading-relaxed">
+        <div>
+          <dt class="inline font-medium">We check —</dt>
+          <dd class="inline text-muted-foreground">
+            how long the job has been up, how often it's reposted, whether the company's own
+            careers page lists it, and whether people who applied got an answer.
+          </dd>
+        </div>
+        <div>
+          <dt class="inline font-medium text-muted-foreground">We never say —</dt>
+          <dd class="inline text-muted-foreground">
+            that a company isn't really hiring. That's about what someone meant to do, and
+            we can't see that.
+          </dd>
+        </div>
+      </dl>
+
+      <div class="flex flex-wrap gap-3">
+        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
+        <Button href={resolve('/my/tracking')} variant="ghost" size="lg">
+          Track your applications
+        </Button>
       </div>
-      <div>
-        <dt class="inline font-medium text-muted-foreground">What we never claim —</dt>
-        <dd class="inline text-muted-foreground">
-          “this company is not really hiring.” That is a claim about somebody's intent,
-          which no amount of data here can observe.
-        </dd>
-      </div>
-    </dl>
-
-    <Prevalence />
-
-    <div class="flex flex-wrap gap-3">
-      <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
-      <Button href={resolve('/my/tracking')} variant="ghost" size="lg">
-        Track your applications
-      </Button>
     </div>
+
+    <div class="shrink-0"><Prevalence /></div>
   </header>
 
   <!-- The four criteria, each with its own picture. -->
   <section class="flex flex-col gap-6">
     <SectionLabel text="what lights the mark" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Two describe the <strong class="font-medium text-foreground">posting</strong>. Two
-      describe what happened to a
-      <strong class="font-medium text-foreground">person who applied</strong>. Only the
-      second kind can witness that a job is not being worked.
+      Two of them look at the <strong class="font-medium text-foreground">posting</strong>.
+      Two look at what happened to
+      <strong class="font-medium text-foreground">people who applied</strong>. Only the
+      second kind can tell you nobody is working on the job.
     </p>
 
     <div class="grid gap-x-6 gap-y-8 sm:grid-cols-2">
@@ -93,21 +106,23 @@
         <div class="flex flex-col gap-4">
           <h3 class="text-sm font-semibold tracking-tight">{group.heading}</h3>
           {#each group.items as s (s.code)}
-            <div class="flex flex-col gap-3 rounded-lg border border-border p-4">
+            <!-- Diagram, name, one sentence, and the rest behind a control. The example
+                 `fact` line used to sit here too and was the worst thing on the page: for
+                 `ats_absent` it repeated the criterion's name verbatim, directly under the
+                 criterion's name, directly under a diagram already showing it. It lives in
+                 the disclosure now, where it belongs with the full account. -->
+            <div class="flex flex-1 flex-col gap-3 rounded-lg border border-border p-4">
               <SignalDiagram code={s.code} />
               <div class="flex flex-col gap-1.5">
                 <p class="text-sm font-medium">{s.label}</p>
-                <p class="font-mono text-xs text-muted-foreground">{s.fact}</p>
                 <p class="text-sm leading-relaxed text-muted-foreground">{s.gist}</p>
-                <!-- Named per criterion: four controls all reading "The full account" are
-                     indistinguishable in a list of controls, and the card titles beside
-                     them are paragraphs rather than headings. -->
-                <Disclosure summary="The full account — {s.label}" class="mt-1">
-                  <p
-                    class="mt-2 border-l border-border pl-3 text-sm leading-relaxed text-muted-foreground"
+                <Disclosure summary="Why this counts" srSuffix={s.label} class="mt-1">
+                  <div
+                    class="mt-2 flex flex-col gap-2 border-l border-border pl-3 text-sm leading-relaxed text-muted-foreground"
                   >
-                    {s.why}
-                  </p>
+                    <p class="font-mono text-xs">{s.fact}</p>
+                    <p>{s.why}</p>
+                  </div>
                 </Disclosure>
               </div>
             </div>
@@ -119,27 +134,25 @@
 
   <!-- How the level is decided. The matrix states the rule; the sandbox lets the reader
        try to break it and find they cannot. -->
+  <!-- The matrix alone. A toggle-driven preview of the badge stood here and was cut: it
+       was the heaviest thing on the page, and the table already says what it demonstrated
+       — the strongest wording sits in one corner, and the posting alone cannot reach it. -->
   <section class="flex flex-col gap-6">
     <SectionLabel text="why the level is what it is" />
-    <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Two separate gates, and the wording depends on how many pass. Pass neither and
-      nothing is shown at all — a lone criterion with nobody behind it is too ordinary to
-      mean anything.
-    </p>
 
     <GateMatrix />
 
-    <div class="mt-2 flex flex-col gap-3">
-      <h3 class="text-sm font-semibold tracking-tight">Try it</h3>
-      <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        Below is the interface the job page renders, driven by what you switch on. See how
-        far posting shape alone can take it.
-      </p>
-      <GhostSandbox />
-      <p class="text-xs text-muted-foreground">
-        These are observations about the posting, not a claim about the employer.
-      </p>
+    <!-- The real components, fed an illustrative payload — never a screenshot and never a
+         copy of their markup, which goes stale the first time they are redesigned. This is
+         what the toggle-driven version was built on; only the toggles are gone. -->
+    <div class="flex max-w-xl flex-col gap-2 rounded-lg border border-border p-4">
+      <span class="text-xs text-muted-foreground">This is what a marked job shows you</span>
+      <GhostChecklist ghost={example} />
     </div>
+
+    <p class="text-xs text-muted-foreground">
+      These are observations about the posting, not a claim about the employer.
+    </p>
   </section>
 
   <!-- How a person's experience becomes evidence. The waiting period and the anonymity
@@ -148,20 +161,20 @@
   <section class="flex flex-col gap-5">
     <SectionLabel text="your part" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      The strongest signal is the one only you can give: you applied, and nobody ever
-      answered. There are two ways it reaches us.
+      The strongest signal is one only you can give: you applied and nobody answered. There
+      are two ways it reaches us.
     </p>
     <NumberedGrid
       items={[
         {
           n: '01',
           title: 'Report it yourself',
-          body: 'On the job, choose Report → “No response”. It asks one thing: when you applied. That date is what separates a real silence from impatience, and you can withdraw the report if the employer eventually answers.',
+          body: 'On the job, pick Report → “No response”. It asks one thing: when you applied. That date is what tells a real silence apart from impatience. You can take the report back if the company answers later.',
         },
         {
           n: '02',
           title: 'Or connect a mailbox',
-          body: 'Then it happens without you: freehire sees the reply arrive, or sees that it never did. Without a connected mailbox nothing is counted, because we could not tell silence from a gap in our own data.',
+          body: 'Then it happens on its own: freehire sees the reply arrive, or sees that it never did. Without a connected mailbox nothing is counted — we could not tell silence from a gap in our own data.',
         },
       ]}
     />
@@ -176,25 +189,24 @@
     <SectionLabel text="where it is blind" />
     <ul class="flex max-w-3xl flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
       <li>
-        <strong class="font-medium text-foreground">We only check boards we crawl.</strong>
-        If a company's own careers site is not one of them, its postings are not judged on that
-        criterion at all — absence of proof is not proof.
+        <strong class="font-medium text-foreground">We only check pages we crawl.</strong>
+        If we don't crawl a company's careers page, its jobs aren't judged on that criterion
+        at all. Not finding something isn't proof.
       </li>
       <li>
         <strong class="font-medium text-foreground">Age counts from when we first saw it.</strong>
-        Sources that refresh a posting's date do not fool it, but a job that existed before we
-        started crawling looks younger than it is.
+        Sources that refresh the date don't fool us, but a job that was up before we started
+        crawling looks younger than it is.
       </li>
       <li>
-        <strong class="font-medium text-foreground"
-          >Agencies fire the board criterion honestly.</strong
-        > They advertise roles that belong to their clients, so those roles are genuinely absent
-        from their own board. This is why one criterion is never enough on its own.
+        <strong class="font-medium text-foreground">Agencies trip this honestly.</strong>
+        They advertise roles that belong to their clients, so those roles really are missing from
+        their own page. That's why one criterion is never enough.
       </li>
       <li>
-        <strong class="font-medium text-foreground">A quiet employer is not a fake job.</strong>
-        Recruiters go silent for ordinary reasons, which is why a silence needs a second person
-        and a second signal before it says anything.
+        <strong class="font-medium text-foreground">A quiet company isn't a fake job.</strong>
+        Recruiters go quiet for ordinary reasons. That's why a silence needs a second person and
+        a second signal before it says anything.
       </li>
     </ul>
   </section>

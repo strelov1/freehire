@@ -19,7 +19,10 @@
   };
 </script>
 
-<div class="w-full max-w-2xl">
+<!-- Table and its payoff side by side. Stacked, they were two more blocks in a column
+     that already ran four deep while the right half of the page sat empty. -->
+<div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
+  <div class="w-full max-w-xl shrink-0">
   <!-- A real table, not a grid of divs: this is two axes crossed, and a screen reader
        given nine unrelated cells in source order gets none of that. `scope` is what ties
        "nothing shown" back to "under 2 criteria" and "under 2 people". -->
@@ -76,11 +79,12 @@
         </tr>
       {/each}
     </tbody>
-  </table>
+    </table>
+  </div>
 
-  <p class="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-    Posting shape can fill the right-hand column, and nothing more. The bottom row needs
-    something only people who applied can supply, which is why no quantity of the first
-    kind ever produces the strongest wording.
+  <p class="max-w-sm text-sm leading-relaxed text-muted-foreground">
+    The posting itself can only get you into the right-hand column. The bottom row needs
+    something only people who applied can give — which is why no amount of the first kind
+    ever reaches the strongest wording.
   </p>
 </div>

@@ -35,22 +35,22 @@ export interface SignalExplainer {
 const EXPLAINERS: Record<string, { fact: string; gist: string; why: string }> = {
   evergreen_posting: {
     fact: 'Open 240 days · reposted 13× · 7 copies open at once',
-    gist: 'One role advertised over and over, often with several copies live at the same time. Age alone never fires it — a genuinely hard senior role stays open a long while.',
+    gist: "The same job posted over and over, often with several copies live at once. Age on its own never triggers it — hard senior roles stay open a long time.",
     why: 'One role advertised over and over, often with several copies live at the same time. It never fires on age alone — a genuinely hard senior role stays open a long time. Age is measured from when freehire first saw the posting, not from the date the source prints, so refreshing that date does not reset it.',
   },
   ats_absent: {
     fact: "Not on the company's own careers board · checked 2 days ago",
-    gist: "The posting reached us through an aggregator, and the same role is not on the employer's own board. It counts only where we crawl that board, never where we cannot look.",
+    gist: "We found the job on an aggregator, but the company's own careers page does not list it. Only counted where we actually check that page.",
     why: "The posting reached us through an aggregator, and the same role is not on the employer's own board. It only counts where we actually crawl that board — otherwise absence would report our blind spot as the employer's fault. The check is re-run continuously and expires if it stops, so a stale answer goes quiet instead of standing.",
   },
   silent_applications: {
     fact: 'Applications through freehire went unanswered past their follow-up window',
-    gist: 'People who applied here and were not answered within the window their stage tolerates. Counted only where a mailbox is connected, so a reply would have been seen.',
+    gist: 'People applied through freehire and got no answer in the time their stage allows. Only counted when a mailbox is connected, so a reply would have been seen.',
     why: 'People who applied here, whose mailbox is connected so a reply would have been seen, and who were not answered within the window their stage tolerates. Without a connected mailbox we could not tell silence from a gap in our data, so those applications are not counted at all.',
   },
   user_reports: {
     fact: 'People reported applying with no response',
-    gist: 'Someone states they applied on a given date and heard nothing. It carries no weight until the wait a tracked application gets has passed, and it can be withdrawn.',
+    gist: "Someone says they applied on a given date and heard nothing back. It carries no weight until enough time has passed, and it can be taken back.",
     why: 'Someone states they applied on a given date and heard nothing. It carries no weight until the same span has passed that a tracked application gets, and it can be withdrawn — an employer who answers late costs the posting its evidence.',
   },
 };

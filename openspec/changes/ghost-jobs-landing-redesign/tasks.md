@@ -60,11 +60,11 @@
 - [x] 9.1 Run the full web test suite; run `pnpm run check` and the linter, comparing against the pre-change baseline rather than expecting zero
 - [x] 9.2 Visually verify light and dark themes, checking that hatching, hollow lanes and the empty count slot stay distinguishable in dark
 - [x] 9.3 Verify at a real narrow viewport rather than trusting a `--window-size` flag below ~500px
-- [ ] 9.4 Walk the primary entry path end to end: from a marked job's checklist, follow "How this works" and confirm the page answers which criteria fired and why the level is not higher. PARTIAL — the destination is verified (the link target returns 200 and the page is server-rendered), but the walk from an actually-marked job needs a running API and a job carrying a live stamp, neither of which exists in this worktree. Do it against a deployed build before merging
+- [x] 9.4 Walk the primary entry path end to end — done against production after deploy. On a live marked job the row reads `Possibly inactive 2/4 · Details`, names the two fired criteria, summarises the rest as `Not observed: applications here, reports from people.` and links `How this works` to the landing. No occurrence of the word *ghost* and no accusatory vocabulary anywhere in the signal's own UI
 - [x] 9.5 Confirm the served HTML still contains every FAQ answer and every criterion `why` with nothing expanded, and that the FAQ structured data still matches the visible list
 
 ## 10. Close out
 
 - [x] 10.1 Request code review on the whole diff and act on Critical and Important findings. Fixed: the lint ERROR that broke CI (my verification grepped for "warning" and so never saw it — check the exit code, not a summary of the output); a new sentence claiming nothing shows below two criteria, which the gate matrix three lines below it visibly refutes; the sandbox guard running only one way; the waffle band separated from the remainder by hue alone in dark; four disclosures sharing one accessible name; the matrix rendered as divs rather than a table. Declined: typing EXPLAINERS by the criterion union, because dropping an unexplained criterion rather than failing to compile is documented behaviour and changing it is not this change's business
-- [ ] 10.2 Finish the branch, then archive and sync the change
+- [x] 10.2 Finish the branch, then archive and sync the change — merged as #1336, deployed to prod (blue), verified live
 - [ ] 10.3 Offer a changelog entry — the page is user-facing, and the ghost signal's own entry was deferred until the signal actually fired

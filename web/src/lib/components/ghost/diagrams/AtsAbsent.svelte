@@ -1,32 +1,33 @@
 <script lang="ts">
-  // Where the role is, and where it is not — plus the state that is neither.
+  // Where the role is, and where it is not.
   //
-  // The third panel is the one that earns its place. A reader whose posting is NOT
-  // marked asks why, and the answer is usually that we do not crawl that employer's
-  // board at all, so the criterion is never put to it. Drawing only "found" and
-  // "absent" would report our blind spot as the employer's fault, which is exactly what
-  // the coverage gate exists to prevent.
+  // The middle panel — the absence itself — is the one that fires, so it carries the
+  // weight and the other two are context. Three equal boxes, which is how this began,
+  // gave the reader no way to tell the finding from its surroundings.
+  //
+  // The third panel earns its place by answering the question a reader whose posting is
+  // NOT marked arrives with: usually we do not crawl that employer's board at all, so the
+  // criterion is never put to it. Drawing only "found" and "absent" would report our
+  // blind spot as the employer's fault, which is what the coverage gate exists to prevent.
 </script>
 
-<div class="flex h-24 items-stretch gap-3 text-xs" aria-hidden="true">
-  <div class="flex flex-1 flex-col rounded-md border border-border p-2">
-    <span class="mb-1.5 text-muted-foreground">aggregator</span>
-    <span class="mb-1 h-1.5 w-full rounded-full bg-muted-foreground/30"></span>
-    <span class="mb-1 h-1.5 w-2/3 rounded-full bg-warning"></span>
-    <span class="h-1.5 w-4/5 rounded-full bg-muted-foreground/30"></span>
+<div class="flex h-24 items-center gap-2 text-xs" aria-hidden="true">
+  <div class="flex h-16 w-24 shrink-0 flex-col justify-center gap-1.5 rounded-md border border-border px-2.5">
+    <span class="text-muted-foreground">aggregator</span>
+    <span class="h-1 w-full rounded-full bg-warning"></span>
+    <span class="h-1 w-2/3 rounded-full bg-muted-foreground/25"></span>
   </div>
 
-  <div class="flex flex-1 flex-col rounded-md border border-dashed border-warning/60 p-2">
-    <span class="mb-1.5 text-muted-foreground">their own board</span>
-    <span class="flex flex-1 items-center justify-center text-warning-strong">not there</span>
-    <!-- The check expires. A stale answer goes quiet rather than standing. -->
-    <span class="text-muted-foreground">checked 2d ago</span>
+  <span class="shrink-0 text-muted-foreground/50">→</span>
+
+  <div
+    class="flex h-20 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-warning/70 bg-warning/5"
+  >
+    <span class="text-sm font-medium text-warning-strong">not on their own board</span>
+    <span class="text-muted-foreground">checked 2 days ago · expires if we stop</span>
   </div>
 
-  <div class="flex flex-1 flex-col rounded-md bg-muted p-2">
-    <span class="mb-1.5 text-muted-foreground">board we don't crawl</span>
-    <span class="flex flex-1 items-center justify-center text-muted-foreground">
-      not judged
-    </span>
+  <div class="flex h-16 w-24 shrink-0 items-center rounded-md bg-muted px-2.5 text-muted-foreground">
+    no board of theirs → not judged
   </div>
 </div>
