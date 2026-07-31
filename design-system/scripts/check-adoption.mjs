@@ -15,19 +15,17 @@
 // is whether the app reaches for the primitive when it needs one, and a file that
 // reaches once has answered it. Occurrences would also swing on any refactor that
 // splits or merges a component.
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ratchet } from './ratchet.mjs';
-import { stripComments } from './source.mjs';
+import { packageSrc, repoRelative, sourceFiles, stripComments, webSrc } from './source.mjs';
 
 const PACKAGE = 'freehire-design-system';
 const DOOR = '$lib/ui';
 
-const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
-const indexPath = join(scriptsDir, '..', 'src', 'index.ts');
-const webSrc = join(scriptsDir, '..', '..', 'web', 'src');
-const baselinePath = join(scriptsDir, 'adoption-baseline.json');
+const indexPath = join(packageSrc, 'index.ts');
+const baselinePath = join(fileURLToPath(new URL('.', import.meta.url)), 'adoption-baseline.json');
 
 // Derived from the package's own export surface, so a primitive added to the
 // system joins the census by itself. A list of fifteen names kept here would
@@ -66,14 +64,6 @@ function names(clause) {
     .filter(Boolean);
 }
 
-function* sourceFiles(dir) {
-  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) yield* sourceFiles(path);
-    else if (/\.(svelte|ts)$/.test(entry.name)) yield path;
-  }
-}
-
 function main() {
   const primitives = primitivesFrom(readFileSync(indexPath, 'utf-8'));
   const counts = Object.fromEntries(primitives.map((name) => [name, 0]));
@@ -81,7 +71,7 @@ function main() {
 
   for (const path of sourceFiles(webSrc)) {
     const { door, direct } = readImports(readFileSync(path, 'utf-8'));
-    if (direct.length > 0) trespass.push(`${relative(path)}: imports ${direct.join(', ')}`);
+    if (direct.length > 0) trespass.push(`${repoRelative(path)}: imports ${direct.join(', ')}`);
     for (const name of new Set(door)) {
       if (name in counts) counts[name] += 1;
     }
@@ -120,8 +110,5 @@ function main() {
   console.log('✓ adoption matches its baseline.');
 }
 
-function relative(path) {
-  return path.slice(path.indexOf('/web/src/') + 1);
-}
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();

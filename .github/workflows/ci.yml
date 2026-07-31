@@ -73,6 +73,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # dist/tokens-*.css is committed and generated, and until now nothing
+      # compared the two: a token edited without a rebuild shipped the old CSS
+      # and every job stayed green. Style Dictionary writes no timestamp, so a
+      # rebuild of unchanged sources is byte-identical and this diff is real.
+      - name: Check dist matches the token sources
+        run: git diff --exit-code -- dist
+
       # The primitives live in the package, so web's svelte-check and vitest
       # never see them — both skip node_modules, which is where web resolves
       # them from.
@@ -85,11 +92,19 @@ jobs:
       - name: Validate docs
         run: pnpm validate:docs
 
-      # A hex or a `p-[7px]` in a primitive is a value the theme cannot move and
-      # the `.dark` selector cannot override, and nothing else here would notice:
-      # both are valid input to their compilers and the build stays green.
+      # A hex, a `p-[7px]` or a `text-amber-600` is a value the theme cannot move
+      # and the `.dark` selector cannot override, and nothing else here would
+      # notice: all three are valid input to their compilers and the build stays
+      # green. Two radii — zero in the package, a held count in web/src.
       - name: Check token coverage
         run: pnpm check:tokens
+
+      # This job proves the package builds and the `web` job proves the app
+      # builds, and both are true whether or not they are connected — which is
+      # how eleven primitives stayed unreachable from app code for three phases
+      # with everything green. This is the only step that reads both halves.
+      - name: Check adoption
+        run: pnpm check:adoption
 
       - name: Build Storybook
         run: pnpm build-storybook

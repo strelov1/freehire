@@ -65,6 +65,39 @@ rather than here — their census of `web/` was already off by a third.
   would catch one. Arbitrary *variants* pass: `[&_tr]:border-b` is a selector, not a value.
   `avatar.svelte`'s per-name `hsl()` pair is the one allowed exception, and the script fails
   if that exception ever stops applying. See `docs/verification.md`.
+- **The same check has a second radius over `../web/src`, and it is not the same rule.** The
+  package is held at zero; web is held at its current count *per file* in
+  `scripts/web-token-baseline.json` (550 across 106 files), because a rule nobody can satisfy
+  gets switched off rather than obeyed. Web also gets a third detector the package does not:
+  `text-amber-600` is a well-formed utility off Tailwind's own palette — neither a literal nor
+  an arbitrary value, invisible to both other detectors, and the majority of what web has.
+  **Add a detector once, in `DETECTORS`, and put it in a radius** — never fork it.
+- **Both baselines are exact in both directions.** An improvement is red too, and says so:
+  rerun with `--update` and commit the diff. Do not "fix" that by loosening the comparison to
+  `>=`. A ratchet that absorbs improvements silently sits at 550 while reality is 40, and the
+  regression back to 550 passes green — asserting nothing.
+- **`pnpm check:adoption` is the only check that reads both halves of the repo.** This job
+  proves the package builds and the `web` job proves the app builds, and both are true whether
+  or not they are connected — which is how eleven primitives stayed unreachable from app code
+  for three phases with everything green. It counts the `web/src` files importing each
+  primitive against `scripts/adoption-baseline.json`, and names the unused ones every run
+  (eleven of fifteen today). The primitive list is derived from `src/index.ts`, so a new
+  primitive joins the census by itself — **do not list them in the script.**
+- **`$lib/ui` is a wall, not a convention.** A `.svelte` or `.ts` file under `web/src` that
+  imports `freehire-design-system` by name fails `check:adoption` outright — no baseline, no
+  exception, because there are zero today. `web/src/app.css`'s `@import` of `theme.css` is
+  exempt and must stay so: it is the CSS contract. The walk reads `from`-clauses only.
+- **`dist/` is committed, so CI rebuilds and diffs it** (`pnpm check:dist`). Editing a token
+  without running `pnpm build` used to ship the old CSS with every job green. Style Dictionary
+  writes no timestamp, so the rebuild is byte-identical and the diff means something.
+- **Both cross-boundary checks are repo checks that happen to live here.** They read a
+  directory the package knows nothing about. If `design-system/` is ever extracted, they stay
+  with the repo — do not treat them as part of the package's surface.
+- **`pnpm test` runs two vitest projects.** `components` (`src/**/*.test.ts`, jsdom, the Svelte
+  plugin, `vitest.setup.ts`) and `scripts` (`scripts/**/*.test.mjs`, plain node). A script test
+  put under `src/` would pull in twenty seconds of Svelte transform to test a file walk; a
+  component test under `scripts/` would get no DOM. Each script guards `main()` behind an
+  `import.meta.url` check so importing it in a test does not run it.
 - `svelte` and `tailwindcss` are **peer** dependencies; the package must not bundle its own
   copy. Both are also devDependencies, because Storybook and the tests build against them
   here.

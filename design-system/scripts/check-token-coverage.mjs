@@ -26,7 +26,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ratchet } from './ratchet.mjs';
-import { stripComments } from './source.mjs';
+import { packageSrc, repoRelative, sourceFiles, stripComments, webSrc } from './source.mjs';
 
 // A colour written out rather than referenced. `color()` and `lab()`/`lch()` are
 // in here for completeness — the palette is oklch, so they would be an import
@@ -75,10 +75,7 @@ const ALLOWED = [
   },
 ];
 
-const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
-const packageSrc = join(scriptsDir, '..', 'src');
-const webSrc = join(scriptsDir, '..', '..', 'web', 'src');
-const baselinePath = join(scriptsDir, 'web-token-baseline.json');
+const baselinePath = join(fileURLToPath(new URL('.', import.meta.url)), 'web-token-baseline.json');
 
 function hitsIn(source, kinds) {
   const hits = [];
@@ -88,15 +85,6 @@ function hitsIn(source, kinds) {
     }
   }
   return hits;
-}
-
-function* sourceFiles(dir) {
-  const entries = readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) yield* sourceFiles(path);
-    else if (/\.(svelte|ts)$/.test(entry.name)) yield path;
-  }
 }
 
 let errors = 0;
@@ -139,22 +127,22 @@ function checkWeb(update) {
   for (const path of sourceFiles(webSrc)) {
     const found = hitsIn(readFileSync(path, 'utf-8'), RADII.web);
     if (found.length === 0) continue;
-    const name = path.slice(path.indexOf('/web/src/') + 1);
+    const name = repoRelative(path);
     counts[name] = found.length;
     hits.set(name, found);
   }
 
-  const { ok, lines } = ratchet({ counts, baselinePath, direction: 'down', update });
-  for (const line of lines) {
-    if (ok) {
-      console.log(`  ${line}`);
-      continue;
-    }
-    fail(`web: ${line}`);
+  const { ok, lines, moved } = ratchet({ counts, baselinePath, direction: 'down', update });
+  if (ok) {
+    for (const line of lines) console.log(`  ${line}`);
+  } else {
+    for (const line of lines) fail(`web: ${line}`);
     // Naming the file is not enough to act on: a count went 3 → 4 and the
-    // question is which line is the fourth. The file's hits are few; print them.
-    for (const hit of hits.get(line.split(':')[0]) ?? []) {
-      console.error(`    ${hit.line}: ${hit.kind} — ${hit.text}`);
+    // question is which line is the fourth. A file's hits are few; print them.
+    for (const { key } of moved) {
+      for (const hit of hits.get(key) ?? []) {
+        console.error(`    ${key}:${hit.line}: ${hit.kind} — ${hit.text}`);
+      }
     }
   }
 

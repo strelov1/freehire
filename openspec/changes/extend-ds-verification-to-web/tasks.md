@@ -56,28 +56,29 @@
 
 ## 6. Tests for the primitives the app depends on
 
-- [ ] 6.1 Read `button.svelte`, `input.svelte`, `badge.svelte` first — the scenarios must
+- [x] 6.1 Read `button.svelte`, `input.svelte`, `badge.svelte` first — the scenarios must
       pin the contract each actually offers, not one assumed from its name.
-- [ ] 6.2 RED→GREEN: `src/button.test.ts` — every variant and size resolves to distinct
+- [x] 6.2 RED→GREEN (verified by mutation: each contract broken in turn, the intended test went red)
+      : `src/button.test.ts` — every variant and size resolves to distinct
       classes, `destructive` among them; `disabled` reaches the element; a caller's `class`
       beats a colliding base class through `cn`.
-- [ ] 6.3 RED→GREEN: `src/input.test.ts` — `type` and the native attributes pass through;
+- [x] 6.3 RED→GREEN: `src/input.test.ts` — `type` and the native attributes pass through;
       the invalid state reaches `aria-invalid`; a caller's `class` wins.
-- [ ] 6.4 RED→GREEN: `src/badge.test.ts` — every variant resolves distinctly, `destructive`
+- [x] 6.4 RED→GREEN: `src/badge.test.ts` — every variant resolves distinctly, `destructive`
       among them; a caller's `class` wins.
-- [ ] 6.5 REFACTOR across the three. Tests stay green.
+- [x] 6.5 REFACTOR across the three. Tests stay green.
 
 ## 7. CI and docs
 
-- [ ] 7.1 `.github/workflows/ci.yml` — add `pnpm check:adoption` and `pnpm check:dist` to the
+- [x] 7.1 `.github/workflows/ci.yml` — add `pnpm check:adoption` and `pnpm check:dist` to the
       `design-system` job. No new job, no second install.
-- [ ] 7.2 `design-system/docs/verification.md` — one row per guarantee: what it asserts, which
+- [x] 7.2 `design-system/docs/verification.md` — one row per guarantee: what it asserts, which
       files it reads, and the command. Include the guarantees that already existed.
-- [ ] 7.3 `design-system/AGENTS.md` — state the two radii and why they differ, the exact-match
+- [x] 7.3 `design-system/AGENTS.md` — state the two radii and why they differ, the exact-match
       ratchet and its `--update`, the one door and the CSS exemption, and that `dist` is
       rebuilt and diffed. Keep it to what a future agent would get wrong without it.
-- [ ] 7.5 `simplify` over the whole diff; re-run everything. Tests stay green.
-- [ ] 7.4 Run the full `design-system` job locally end to end: `pnpm build && pnpm check &&
+- [x] 7.5 `simplify` over the whole diff; re-run everything. Tests stay green.
+- [x] 7.4 Run the full `design-system` job locally end to end: `pnpm build && pnpm check &&
       pnpm test && pnpm validate:docs && pnpm check:tokens && pnpm check:adoption && pnpm
       check:dist && pnpm build-storybook`. Every one green.
 

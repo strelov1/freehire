@@ -25,6 +25,7 @@ export function ratchet({ counts, baselinePath, direction, update = false }) {
 
   const better = direction === 'up' ? (a, b) => a > b : (a, b) => a < b;
   const lines = [];
+  const moved = [];
 
   for (const key of Object.keys(baseline).sort()) {
     if (key in counts) continue;
@@ -32,16 +33,21 @@ export function ratchet({ counts, baselinePath, direction, update = false }) {
   }
 
   for (const [key, actual] of byKey(Object.entries(counts))) {
-    const base = baseline[key] ?? 0;
-    if (actual === base) continue;
+    const from = baseline[key] ?? 0;
+    if (actual === from) continue;
+    const improved = better(actual, from);
+    moved.push({ key, from, to: actual, improved });
     lines.push(
-      better(actual, base)
-        ? `${key}: ${base} → ${actual} — improved; rerun with --update to record it`
-        : `${key}: ${base} → ${actual} — regression`,
+      improved
+        ? `${key}: ${from} → ${actual} — improved; rerun with --update to record it`
+        : `${key}: ${from} → ${actual} — regression`,
     );
   }
 
-  return { ok: lines.length === 0, lines };
+  // `moved` alongside `lines` so a caller that wants to say more about a key —
+  // check-token-coverage prints the offending lines of the file — has the key
+  // itself rather than having to parse it back out of a formatted string.
+  return { ok: lines.length === 0, lines, moved };
 }
 
 // By key, so a baseline diffs by the entry that moved rather than by insertion
