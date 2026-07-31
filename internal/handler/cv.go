@@ -147,6 +147,7 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// consent to track a third party is the candidate's to give, and it must not ride along
 	// with a document save the tailoring agent can also make.
 	api.Put("/me/cvs/:id/tracer-links", mw.cookie, h.SetCVTracerLinks)
+	api.Get("/me/cvs/:id/tracer-links", mw.cookie, h.ListCVTracerLinks)
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
@@ -193,6 +194,9 @@ type cvResponse struct {
 	// requirement. The workspace panel renders it from this read rather than by parsing
 	// the conversation, so it survives a reload. Empty when no run has happened.
 	AutopilotReport []cv.AutopilotEntry `json:"autopilot_report,omitempty"`
+	// TracerLinksEnabled is the candidate's consent for this CV's links to be traced. Reported so
+	// the editor can show the toggle's actual state rather than assume it.
+	TracerLinksEnabled bool `json:"tracer_links_enabled"`
 }
 
 // cvTailoredResponse is a tailored CV in the /my/cvs re-open list: metadata plus the vacancy
@@ -225,10 +229,11 @@ func metaResponse(m cv.Meta) cvMetaResponse {
 
 func recordResponse(rec cv.Record) cvResponse {
 	return cvResponse{
-		cvMetaResponse:  metaResponse(rec.Meta),
-		AgentSessionID:  rec.AgentSessionID,
-		Document:        rec.Document,
-		AutopilotReport: rec.AutopilotReport,
+		cvMetaResponse:     metaResponse(rec.Meta),
+		AgentSessionID:     rec.AgentSessionID,
+		Document:           rec.Document,
+		AutopilotReport:    rec.AutopilotReport,
+		TracerLinksEnabled: rec.TracerLinksEnabled,
 	}
 }
 
@@ -418,6 +423,61 @@ func (h *cvHandlers) tracedHrefs(ctx context.Context, rec cv.Record, userID int6
 	minted := h.tracerMinter.Mint(ctx, rec.ID, userID, h.tracerBaseURL,
 		rec.CompanySlug, rec.Document.Header.Links, projectLinks)
 	return cv.LinkHrefs{Header: minted.Header, Projects: minted.Projects}
+}
+
+// tracerLinkResponse is one traced link as the owner reads it.
+type tracerLinkResponse struct {
+	SourcePath     string `json:"source_path"`
+	DestinationURL string `json:"destination_url"`
+	TracedURL      string `json:"traced_url"`
+	Clicks         int64  `json:"clicks"`
+	BotClicks      int64  `json:"bot_clicks"`
+	// DistinctVisitors is omitted rather than reported as zero when the deployment has no salt:
+	// every click then carries an empty hash, and counting those would say "one visitor" about any
+	// number of people. Absent is the honest answer; zero would be a wrong one.
+	DistinctVisitors *int64     `json:"distinct_visitors,omitempty"`
+	LastClickAt      *time.Time `json:"last_click_at,omitempty"`
+}
+
+// ListCVTracerLinks reports what is known about each of an owned CV's traced links.
+//
+// Clicks the owner made themselves are excluded by the query — they are recorded so the history
+// stays complete, not so they can be read back as somebody else's interest. Automated traffic is
+// counted separately rather than dropped, so the UI's "include likely bots" switch needs no second
+// request.
+func (h *cvHandlers) ListCVTracerLinks(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	rows, err := h.queries.ListTracerLinkStats(c.Context(), db.ListTracerLinkStatsParams{CvID: id, UserID: userID})
+	if err != nil {
+		return err
+	}
+	out := make([]tracerLinkResponse, 0, len(rows))
+	for _, r := range rows {
+		item := tracerLinkResponse{
+			SourcePath:     r.SourcePath,
+			DestinationURL: r.DestinationUrl,
+			TracedURL:      h.tracerBaseURL + "/cv/" + r.Token,
+			Clicks:         r.Clicks,
+			BotClicks:      r.BotClicks,
+		}
+		if h.tracerSalt != "" {
+			n := r.DistinctVisitors
+			item.DistinctVisitors = &n
+		}
+		if r.LastClickAt.Valid {
+			t := r.LastClickAt.Time
+			item.LastClickAt = &t
+		}
+		out = append(out, item)
+	}
+	return c.JSON(fiber.Map{"data": out})
 }
 
 // DeleteCV removes an owned CV.

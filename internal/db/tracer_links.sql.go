@@ -33,7 +33,9 @@ SELECT l.token, l.source_path, l.destination_url, l.created_at,
        count(k.id) FILTER (WHERE k.is_likely_bot AND NOT k.is_owner)                           AS bot_clicks,
        count(DISTINCT k.visitor_hash) FILTER (
            WHERE NOT k.is_likely_bot AND NOT k.is_owner AND k.visitor_hash <> '')              AS distinct_visitors,
-       max(k.clicked_at) FILTER (WHERE NOT k.is_likely_bot AND NOT k.is_owner)                 AS last_click_at
+       -- Cast so sqlc gives this a timestamp type: an aggregate inside FILTER has no inferable
+       -- one, and the generated field would be interface{}.
+       (max(k.clicked_at) FILTER (WHERE NOT k.is_likely_bot AND NOT k.is_owner))::timestamptz AS last_click_at
 FROM cv_tracer_links l
 JOIN cvs c ON c.id = l.cv_id
 LEFT JOIN cv_link_clicks k ON k.tracer_link_id = l.id
@@ -55,7 +57,7 @@ type ListTracerLinkStatsRow struct {
 	Clicks           int64              `json:"clicks"`
 	BotClicks        int64              `json:"bot_clicks"`
 	DistinctVisitors int64              `json:"distinct_visitors"`
-	LastClickAt      interface{}        `json:"last_click_at"`
+	LastClickAt      pgtype.Timestamptz `json:"last_click_at"`
 }
 
 // The owner's per-CV panel: every traced link of one CV with what is known about it. Owner-scoped.
@@ -164,9 +166,10 @@ FROM cv_tracer_links l
 WHERE l.id = $1 AND c.id = l.cv_id
 `
 
-// Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Runs in the same
-// transaction as the click insert and only for a countable one — automated traffic and the owner's
-// own clicks are excluded by the caller, not here, so this statement stays a plain stamp.
+// Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Issued right after
+// the click insert, as a separate statement rather than in one transaction with it: both writes are
+// best-effort behind a redirect that must happen regardless, so there is nothing for a rollback to
+// protect. Whether a click counts is decided by the caller, not here, so this stays a plain stamp.
 //
 // GREATEST guards against an out-of-order write moving the marker backwards.
 func (q *Queries) TouchCVLastClick(ctx context.Context, id pgtype.UUID) error {

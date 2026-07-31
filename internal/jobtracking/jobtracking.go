@@ -106,6 +106,15 @@ type TrackedJob struct {
 	// Silence must not read it, because a chase is not a reply (see 0059's column
 	// comment). The board renders the pair — still silent, and chased N days ago.
 	FollowedUpAt *time.Time
+	// CVOpenedAt is when a CV of the caller's tied to this job was last opened by a countable
+	// visitor — not automated traffic, and not the candidate checking their own PDF. Nil when they
+	// have no traced CV for it, or nobody has opened one.
+	//
+	// The board shows it BESIDE the silence state, never instead of it: "they have not answered in
+	// 24 days" and "somebody opened the CV yesterday" are two readings of the same application, and
+	// the second does not soften the first. It is kept out of SilenceStateFor's inputs for the same
+	// reason FollowedUpAt is — see internal/userjob.
+	CVOpenedAt *time.Time
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

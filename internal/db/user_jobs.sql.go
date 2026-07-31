@@ -351,6 +351,17 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
        a.followed_up_at,
+       -- When a CV of the caller's tied to this job was last opened by a countable visitor. Read
+       -- from the denormalised stamp on cvs rather than from the click history, which would mean a
+       -- fifth correlated subquery here joining three tables.
+       --
+       -- Deliberately NOT an input to last_activity_at below, for the same reason followed_up_at is
+       -- not: somebody opening a CV is not a reply. Folding it in would clear the silence badge at
+       -- the moment it matters most — they read it and still said nothing.
+       (SELECT max(cv.last_click_at)
+          FROM cvs cv
+         WHERE cv.user_id = uj.user_id
+           AND cv.job_id = jobs.id)::timestamptz AS cv_opened_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
@@ -416,6 +427,7 @@ type ListUserJobsRow struct {
 	EmailCount           int64              `json:"email_count"`
 	ReminderFireAt       pgtype.Timestamptz `json:"reminder_fire_at"`
 	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
+	CvOpenedAt           pgtype.Timestamptz `json:"cv_opened_at"`
 	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
 	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 }
@@ -506,6 +518,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.EmailCount,
 			&i.ReminderFireAt,
 			&i.FollowedUpAt,
+			&i.CvOpenedAt,
 			&i.LastActivityAt,
 			&i.HasPendingSuggestion,
 		); err != nil {

@@ -278,3 +278,76 @@ func TestStatsOfAForeignCVAreNotReadable(t *testing.T) {
 		t.Errorf("a stranger read %d of someone else's traced links", len(stats))
 	}
 }
+
+// A recruiter opening a CV is not a reply. If the click fed the last-activity derivation, the
+// silence badge would clear at the moment it matters most — they read it and still said nothing.
+// This is the same rule that keeps user_jobs.followed_up_at out of that derivation.
+func TestOpeningACVLeavesTheApplicationsSilenceUntouched(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncateCVs(t, pool)
+	ctx := context.Background()
+
+	user, cv := seedTracerCV(t, pool, "silence@example.com")
+	job := insertJob(t, pool, "silence-job-1")
+	if _, err := pool.Exec(ctx, `UPDATE cvs SET job_id = $1 WHERE id = $2`, job, cv); err != nil {
+		t.Fatalf("bind cv to job: %v", err)
+	}
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	before, err := q.ListUserJobs(ctx, ListUserJobsParams{UserID: user, Filter: "applied", Limit: 10})
+	if err != nil || len(before) != 1 {
+		t.Fatalf("list before: %v (%d rows)", err, len(before))
+	}
+
+	token, err := mint(t, q, user, cv, "acme-aaaaa", "header.links[0]", "https://github.com/ada")
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	link, err := q.TracerLinkByToken(ctx, token)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := q.RecordTracerClick(ctx, RecordTracerClickParams{TracerLinkID: link.ID, VisitorHash: "reader"}); err != nil {
+		t.Fatalf("record click: %v", err)
+	}
+	if err := q.TouchCVLastClick(ctx, link.ID); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+
+	after, err := q.ListUserJobs(ctx, ListUserJobsParams{UserID: user, Filter: "applied", Limit: 10})
+	if err != nil || len(after) != 1 {
+		t.Fatalf("list after: %v (%d rows)", err, len(after))
+	}
+	if !after[0].CvOpenedAt.Valid {
+		t.Error("cv_opened_at is null after a countable click")
+	}
+	if after[0].LastActivityAt != before[0].LastActivityAt {
+		t.Errorf("last_activity_at moved from %v to %v — opening a CV is not a reply",
+			before[0].LastActivityAt, after[0].LastActivityAt)
+	}
+}
+
+// The consent toggle is owner-scoped like every other write to a CV.
+func TestSettingTheTracerToggleIsOwnerScoped(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncateCVs(t, pool)
+	ctx := context.Background()
+	user, cv := seedTracerCV(t, pool, "toggle@example.com")
+	stranger := seedCVUser(t, pool, "not-mine@example.com")
+
+	n, err := q.SetCVTracerLinks(ctx, SetCVTracerLinksParams{ID: cv, UserID: stranger, TracerLinksEnabled: true})
+	if err != nil {
+		t.Fatalf("stranger toggle: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("a stranger updated %d rows of someone else's CV", n)
+	}
+
+	if n, err := q.SetCVTracerLinks(ctx, SetCVTracerLinksParams{ID: cv, UserID: user, TracerLinksEnabled: true}); err != nil || n != 1 {
+		t.Fatalf("owner toggle: n=%d err=%v", n, err)
+	}
+}

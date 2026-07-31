@@ -62,7 +62,9 @@ SELECT l.token, l.source_path, l.destination_url, l.created_at,
        count(k.id) FILTER (WHERE k.is_likely_bot AND NOT k.is_owner)                           AS bot_clicks,
        count(DISTINCT k.visitor_hash) FILTER (
            WHERE NOT k.is_likely_bot AND NOT k.is_owner AND k.visitor_hash <> '')              AS distinct_visitors,
-       max(k.clicked_at) FILTER (WHERE NOT k.is_likely_bot AND NOT k.is_owner)                 AS last_click_at
+       -- Cast so sqlc gives this a timestamp type: an aggregate inside FILTER has no inferable
+       -- one, and the generated field would be interface{}.
+       (max(k.clicked_at) FILTER (WHERE NOT k.is_likely_bot AND NOT k.is_owner))::timestamptz AS last_click_at
 FROM cv_tracer_links l
 JOIN cvs c ON c.id = l.cv_id
 LEFT JOIN cv_link_clicks k ON k.tracer_link_id = l.id

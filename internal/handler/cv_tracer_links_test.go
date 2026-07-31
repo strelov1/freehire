@@ -160,3 +160,38 @@ func TestTracingIsInertWithoutAPublicOrigin(t *testing.T) {
 		t.Errorf("tracedHrefs without a base URL = %+v, want nothing", got)
 	}
 }
+
+// Without the flag in the read, the editor cannot show whether tracing is on — and a toggle that
+// does not report its own state invites the candidate to turn on what is already on.
+func TestTheCVReadReportsWhetherTracingIsOn(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		got := recordResponse(cv.Record{TracerLinksEnabled: enabled})
+		if got.TracerLinksEnabled != enabled {
+			t.Errorf("recordResponse(enabled=%v).TracerLinksEnabled = %v", enabled, got.TracerLinksEnabled)
+		}
+	}
+}
+
+// The panel is the owner's own reading of their own CV, so it is gated like the rest of the
+// authoring surface: a key belongs to the tailoring agent, and what a recruiter did with a CV is
+// not the agent's business.
+func TestCVRegister_TracerLinkStatsAreCookieOnly(t *testing.T) {
+	app := fiber.New()
+	api := app.Group("/api/v1")
+	(&cvHandlers{}).register(api, middleware{
+		key:    namedGate("key"),
+		cvKey:  namedGate("cvKey"),
+		cookie: namedGate("cookie"),
+	})
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet,
+		"/api/v1/me/cvs/"+uuid.New().String()+"/tracer-links", nil))
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if got := string(body); got != "cookie" {
+		t.Errorf("GET /me/cvs/:id/tracer-links is gated by %q, want %q", got, "cookie")
+	}
+}

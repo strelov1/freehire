@@ -219,6 +219,7 @@ func (r *QueriesRepository) ListInteractions(
 			LastActivityAt:       pgconv.TimePtr(row.LastActivityAt),
 			HasPendingSuggestion: row.HasPendingSuggestion,
 			FollowedUpAt:         pgconv.TimePtr(row.FollowedUpAt),
+			CVOpenedAt:           pgconv.TimePtr(row.CvOpenedAt),
 		})
 	}
 	return items, nil

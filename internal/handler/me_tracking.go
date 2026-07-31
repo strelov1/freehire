@@ -31,6 +31,10 @@ type myJobResponse struct {
 	// independent of the silence fields above — a chased application stays silent —
 	// so the board can show both readings at once.
 	FollowedUpAt *time.Time `json:"followed_up_at"`
+	// CVOpenedAt is when somebody last opened a CV the caller sent for this job, or null. Like
+	// FollowedUpAt it sits beside the silence fields and not inside them: a recruiter reading a CV
+	// is not a reply, and the card shows both — still unanswered, and read yesterday.
+	CVOpenedAt *time.Time `json:"cv_opened_at"`
 }
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
@@ -68,6 +72,7 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 			EmailCount:     it.EmailCount,
 			ReminderFireAt: it.ReminderFireAt,
 			FollowedUpAt:   it.FollowedUpAt,
+			CVOpenedAt:     it.CVOpenedAt,
 		}
 		if s := it.Silence(now); s != nil {
 			item.LastActivityAt = &s.LastActivityAt

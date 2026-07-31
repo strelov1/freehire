@@ -64,11 +64,12 @@
 
 ## 7. Read surfaces
 
-- [ ] 7.1 `GET /me/cvs/:id/tracer-links` — per link: destination, clicks, distinct visitors,
-      last click; bots excluded unless requested; owner-scoped; empty list for an untraced CV
-- [ ] 7.2 `ListUserJobs` carries `cv_opened_at` for application rows, read from
+- [x] 7.1 `GET /me/cvs/:id/tracer-links` — per link: destination, clicks, distinct visitors,
+      last click; bots counted separately; owner-scoped; empty list for an untraced CV. The CV
+      read reports the toggle's own state, and the toggle query gained its integration test
+- [x] 7.2 `ListUserJobs` carries `cv_opened_at` for application rows, read from
       `cvs.last_click_at` via `cvs.job_id`
-- [ ] 7.3 Test that a recorded click leaves `last_activity_at`, `days_silent` and
+- [x] 7.3 Test that a recorded click leaves `last_activity_at`, `days_silent` and
       `silence_state` unchanged
 
 ## 8. Web

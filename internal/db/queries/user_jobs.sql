@@ -263,6 +263,17 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.not
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
        a.followed_up_at,
+       -- When a CV of the caller's tied to this job was last opened by a countable visitor. Read
+       -- from the denormalised stamp on cvs rather than from the click history, which would mean a
+       -- fifth correlated subquery here joining three tables.
+       --
+       -- Deliberately NOT an input to last_activity_at below, for the same reason followed_up_at is
+       -- not: somebody opening a CV is not a reply. Folding it in would clear the silence badge at
+       -- the moment it matters most — they read it and still said nothing.
+       (SELECT max(cv.last_click_at)
+          FROM cvs cv
+         WHERE cv.user_id = uj.user_id
+           AND cv.job_id = jobs.id)::timestamptz AS cv_opened_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
