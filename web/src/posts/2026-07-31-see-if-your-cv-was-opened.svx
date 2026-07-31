@@ -1,0 +1,34 @@
+---
+title: See whether your CV was opened
+date: 2026-07-31
+summary: Turn on link tracking for a single CV and the links in its PDF report back when someone opens them — off by default, and honest about what a number like that can and cannot tell you.
+type: changelog
+tags:
+  - cv
+  - job-seekers
+draft: true
+---
+
+An application goes quiet and you learn nothing. Was the CV read and passed over, or did it
+never reach a person? Those are different situations and they call for different responses,
+but silence looks identical either way.
+
+You can now turn on **link tracking** for one CV. When it is on, the links in that CV's PDF —
+your GitHub, your portfolio, your projects — go through freehire on their way to the real
+destination, and the CV's settings panel shows how often each was opened, by how many
+different people, and when the last one was. Applications on your tracking board pick up a
+"CV opened 2d ago" note beside their silence badge.
+
+Three things worth knowing before you switch it on:
+
+- **It is off for every CV until you turn it on, one CV at a time.** A CV going to a
+  government body or a university can simply not have it.
+- **What a recruiter sees does not change.** Your links still read `github.com/yourname`;
+  only where the click goes is different.
+- **An open is a hint, not proof.** Company mail systems follow links automatically to check
+  them, and they look like ordinary browsers when they do. A CV showing opens was fetched;
+  whether a person read it is a further step the number cannot take.
+
+Your own clicks do not count — checking that your links work is not somebody reading your CV.
+Records are deleted after 180 days, and immediately if you delete the CV. What gets stored is
+in the [privacy policy](/privacy).

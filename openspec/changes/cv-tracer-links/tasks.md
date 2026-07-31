@@ -93,4 +93,5 @@
       180-day window, and that the owner's own clicks are not counted
 - [x] 10.2 `internal/cv/AGENTS.md`: adding a template now requires emitting `link()`, and why
       the registry test exists
-- [ ] 10.3 Offer a `/blog` changelog entry once the feature ships
+- [x] 10.3 Changelog entry written as `draft: true` — visible in dev, hidden in prod until
+      `TRACER_LINK_SALT` is set and the feature can actually be switched on
