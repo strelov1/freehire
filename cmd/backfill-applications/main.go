@@ -1,5 +1,10 @@
-// Command backfill-applications gives every existing tracked application a record of its
-// own, and points the facts already recorded against it at that record.
+// Command backfill-applications repairs application links on facts already recorded:
+// ledger events and mail that name a posting but not the application it belongs to.
+//
+// Its first pass — carrying user_jobs rows into applications — was retired with the columns
+// it read. It ran once on production (240 applications) and cannot run again, because
+// user_jobs no longer holds an application. Every write path now sets application_id at the
+// time it links, so this is a repair tool rather than a migration.
 //
 // Three passes, and the order between them is load-bearing: the applications must exist
 // before anything can be attached to them.
@@ -50,11 +55,6 @@ func run(batch int) int {
 	queries := db.New(pool)
 	started := time.Now()
 
-	carried, err := carryOverApplications(ctx, queries, int32(batch))
-	if err != nil {
-		log.Printf("carry-over: %v", err)
-		return 1
-	}
 	events, err := drain(ctx, "events", func() (int64, error) {
 		return queries.BackfillApplicationEventLinks(ctx, int32(batch))
 	})
@@ -70,35 +70,9 @@ func run(batch int) int {
 		return 1
 	}
 
-	log.Printf("backfill complete in %s: %d applications carried over, %d events and %d messages attached",
-		time.Since(started).Round(time.Second), carried, events, mail)
+	log.Printf("repair complete in %s: %d events and %d messages attached",
+		time.Since(started).Round(time.Second), events, mail)
 	return 0
-}
-
-// carryOverApplications walks user_jobs by its composite (user_id, job_id) key, which is
-// its primary key and therefore its only stable order.
-func carryOverApplications(ctx context.Context, q *db.Queries, batch int32) (int64, error) {
-	var lastUser, lastJob, carried int64
-	for {
-		if err := ctx.Err(); err != nil {
-			return carried, err
-		}
-		row, err := q.BackfillApplications(ctx, db.BackfillApplicationsParams{
-			LastUserID: lastUser,
-			LastJobID:  lastJob,
-			BatchSize:  batch,
-		})
-		if err != nil {
-			return carried, err
-		}
-		if row.Scanned == 0 {
-			return carried, nil
-		}
-		lastUser, lastJob = row.LastUserID, row.LastJobID
-		carried += row.Inserted
-		log.Printf("applications: scanned %d up to (user %d, job %d), carried %d so far",
-			row.Scanned, lastUser, lastJob, carried)
-	}
 }
 
 // drain repeats a batched update until it stops moving rows. Both link passes select the

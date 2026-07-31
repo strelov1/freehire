@@ -92,10 +92,10 @@
 ## 9. External consumers
 
 - [ ] 9.1 Verify the SPA tracking board and inbox against a seeded local DB — no contract change is expected, so any diff is a bug in the port
-- [ ] 9.2 Verify `freehire-cli` and `freehire-mcp`. **Checked by reading, not yet fixed:** `freehire-cli`'s `myJobRow.Job` is a value (`internal/cli/jobs.go:231`), and Go's json decoder treats `"job": null` as a no-op, so it does **not** error — it prints a row with a blank company and title. Graceful but wrong; the fix is `*jobRow` plus the `company_slug`/`role_title` fallback, in that repo's own PR. `freehire-mcp` not yet inspected
+- [x] 9.2 Verify `freehire-cli` and `freehire-mcp`. **CLI fixed in freehire-cli#23; MCP needs nothing** — it is a pass-through, returns the envelope untouched and never dereferences `.job`, so `job: null` reaches the agent beside `company_slug`/`role_title`. Verified by reading and by its own suite. **Checked by reading, not yet fixed:** `freehire-cli`'s `myJobRow.Job` is a value (`internal/cli/jobs.go:231`), and Go's json decoder treats `"job": null` as a no-op, so it does **not** error — it prints a row with a blank company and title. Graceful but wrong; the fix is `*jobRow` plus the `company_slug`/`role_title` fallback, in that repo's own PR. `freehire-mcp` not yet inspected
 
 ## 10. Contract (separate deploy)
 
-- [ ] 10.1 Confirm no reader references `user_jobs.applied_at|stage|notes|followed_up_at` or `emails.job_id`, by grep and by a run with the columns renamed out of the way
-- [ ] 10.2 Migration dropping those columns
+- [x] 10.1 Confirmed for the four `user_jobs` columns. Two readers were left and both were spent one-shot replays — `BackfillAppliedEvents` and `BackfillApplications`, which had already run on production — so they were retired with the columns rather than kept alive against a table that no longer holds an application. `emails.job_id` stays until group 6 moves the inbox readers
+- [x] 10.2 `migrations/0066_user_jobs_drops_the_application.sql` — drops the four `user_jobs` columns. `emails.job_id` is deliberately not in it
 - [ ] 10.3 Record in the deploy notes that groups 1–9 and group 10 are separate deploys, and that rollback is code-only until 10.2 is applied

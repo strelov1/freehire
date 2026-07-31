@@ -12,27 +12,27 @@ import (
 )
 
 const listGhostApplicationEvidence = `-- name: ListGhostApplicationEvidence :many
-SELECT uj.job_id::bigint AS job_id,
-       uj.user_id,
-       coalesce(uj.stage, '')::text AS stage,
-       GREATEST(uj.applied_at,
+SELECT a.job_id::bigint AS job_id,
+       a.user_id,
+       coalesce(a.stage, '')::text AS stage,
+       GREATEST(a.applied_at,
                 (SELECT max(e.received_at)
                    FROM emails e
-                  WHERE e.user_id = uj.user_id
-                    AND e.job_id = uj.job_id
+                  WHERE e.user_id = a.user_id
+                    AND e.job_id = a.job_id
                     AND e.deleted_at IS NULL))::timestamptz AS last_activity_at,
        (EXISTS (SELECT 1
                   FROM emails e
-                 WHERE e.user_id = uj.user_id
-                   AND e.suggested_job_id = uj.job_id
+                 WHERE e.user_id = a.user_id
+                   AND e.suggested_job_id = a.job_id
                    AND e.job_id IS NULL
                    AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
-FROM applications uj
-WHERE uj.job_id = ANY($1::bigint[])
-  AND uj.applied_at IS NOT NULL
+FROM applications a
+WHERE a.job_id = ANY($1::bigint[])
+  AND a.applied_at IS NOT NULL
   AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                WHERE gc.user_id = uj.user_id AND gc.status = 'connected')
-    OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = uj.user_id))
+                WHERE gc.user_id = a.user_id AND gc.status = 'connected')
+    OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = a.user_id))
 `
 
 type ListGhostApplicationEvidenceRow struct {

@@ -51,6 +51,8 @@ type Querier interface {
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
+	// Queries over the application record — the durable half of what used to live in
+	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 	// Point one batch of pre-existing ledger events at the application they belong to.
 	// Every event recorded before this change names a posting and no application, and left
 	// that way it stays correlated through job_id — the reference cmd/prune clears.
@@ -60,31 +62,6 @@ type Querier interface {
 	// runs before any posting has been cleared out from under the events it is repairing, and
 	// a row whose job_id is already NULL is skipped rather than guessed at.
 	BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error)
-	// Queries over the application record — the durable half of what used to live in
-	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
-	// Carry one keyset batch of existing tracked applications into records of their own.
-	// Walks (user_id, job_id), which is user_jobs' primary key and therefore its only stable
-	// order.
-	//
-	// Only interactions that were actually applied to are carried. A row that was viewed or
-	// saved has no application in it, and manufacturing one would put a date on something
-	// that never happened.
-	//
-	// The employer and role title are read from the posting HERE, at carry-over, and then
-	// belong to the record. That is the whole point: the posting is what disappears.
-	// The cursor is the LAST ROW of the batch's own order, never max() of each column
-	// independently: the greatest user_id and the greatest job_id can belong to different
-	// rows, and a cursor assembled from both jumps past rows that were never scanned.
-	BackfillApplications(ctx context.Context, arg BackfillApplicationsParams) (BackfillApplicationsRow, error)
-	// Replay one keyset batch of recorded applications. Keyed by job_id because user_jobs has
-	// no surrogate key; the pass walks (user_id, job_id) pairs in job order per user.
-	//
-	// Only applications carry a date. A row that was staged but never marked applied has
-	// nothing to replay, and the ledger says nothing about it rather than inventing a day.
-	// The cursor is the LAST ROW of the batch's own order, not max() of each column
-	// independently: the greatest user_id and the greatest job_id can belong to different
-	// rows, and a cursor assembled from both would jump past rows that were never scanned.
-	BackfillAppliedEvents(ctx context.Context, arg BackfillAppliedEventsParams) (BackfillAppliedEventsRow, error)
 	// The same for mail. A thread linked to a posting must end up linked to the application,
 	// or the first deletion detaches it from a record that is still standing.
 	BackfillEmailApplicationLinks(ctx context.Context, batchSize int32) (int64, error)

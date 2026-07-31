@@ -12,6 +12,7 @@ import (
 )
 
 const backfillApplicationEventLinks = `-- name: BackfillApplicationEventLinks :execrows
+
 WITH page AS (
     SELECT ae.id, a.id AS application_id
       FROM application_events ae
@@ -27,6 +28,8 @@ UPDATE application_events ae
  WHERE ae.id = p.id
 `
 
+// Queries over the application record — the durable half of what used to live in
+// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 // Point one batch of pre-existing ledger events at the application they belong to.
 // Every event recorded before this change names a posting and no application, and left
 // that way it stays correlated through job_id — the reference cmd/prune clears.
@@ -41,73 +44,6 @@ func (q *Queries) BackfillApplicationEventLinks(ctx context.Context, batchSize i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const backfillApplications = `-- name: BackfillApplications :one
-
-WITH batch AS (
-    SELECT uj.user_id, uj.job_id, uj.applied_at, uj.stage, uj.notes, uj.followed_up_at
-      FROM user_jobs uj
-     WHERE (uj.user_id, uj.job_id) > ($1::bigint, $2::bigint)
-       AND uj.applied_at IS NOT NULL
-     ORDER BY uj.user_id, uj.job_id
-     LIMIT $3
-), carried AS (
-    INSERT INTO applications (user_id, company_slug, role_title, job_id,
-                              applied_at, stage, notes, followed_up_at)
-    SELECT b.user_id, j.company_slug, j.title, b.job_id,
-           b.applied_at, b.stage, b.notes, b.followed_up_at
-      FROM batch b JOIN jobs j ON j.id = b.job_id
-    -- The partial unique index is the idempotency key, so an interrupted pass is
-    -- restarted rather than repaired.
-    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL DO NOTHING
-    RETURNING 1
-)
-SELECT COALESCE((SELECT b2.user_id FROM batch b2 ORDER BY b2.user_id DESC, b2.job_id DESC LIMIT 1), 0)::bigint AS last_user_id,
-       COALESCE((SELECT b2.job_id  FROM batch b2 ORDER BY b2.user_id DESC, b2.job_id DESC LIMIT 1), 0)::bigint AS last_job_id,
-       count(*)::bigint AS scanned,
-       (SELECT count(*) FROM carried)::bigint AS inserted
-  FROM batch b
-`
-
-type BackfillApplicationsParams struct {
-	LastUserID int64 `json:"last_user_id"`
-	LastJobID  int64 `json:"last_job_id"`
-	BatchSize  int32 `json:"batch_size"`
-}
-
-type BackfillApplicationsRow struct {
-	LastUserID int64 `json:"last_user_id"`
-	LastJobID  int64 `json:"last_job_id"`
-	Scanned    int64 `json:"scanned"`
-	Inserted   int64 `json:"inserted"`
-}
-
-// Queries over the application record — the durable half of what used to live in
-// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
-// Carry one keyset batch of existing tracked applications into records of their own.
-// Walks (user_id, job_id), which is user_jobs' primary key and therefore its only stable
-// order.
-//
-// Only interactions that were actually applied to are carried. A row that was viewed or
-// saved has no application in it, and manufacturing one would put a date on something
-// that never happened.
-//
-// The employer and role title are read from the posting HERE, at carry-over, and then
-// belong to the record. That is the whole point: the posting is what disappears.
-// The cursor is the LAST ROW of the batch's own order, never max() of each column
-// independently: the greatest user_id and the greatest job_id can belong to different
-// rows, and a cursor assembled from both jumps past rows that were never scanned.
-func (q *Queries) BackfillApplications(ctx context.Context, arg BackfillApplicationsParams) (BackfillApplicationsRow, error) {
-	row := q.db.QueryRow(ctx, backfillApplications, arg.LastUserID, arg.LastJobID, arg.BatchSize)
-	var i BackfillApplicationsRow
-	err := row.Scan(
-		&i.LastUserID,
-		&i.LastJobID,
-		&i.Scanned,
-		&i.Inserted,
-	)
-	return i, err
 }
 
 const backfillEmailApplicationLinks = `-- name: BackfillEmailApplicationLinks :execrows

@@ -1,8 +1,10 @@
 // Command backfill-application-events replays the application history that already has a
 // real date into the application_events ledger.
 //
-// Three kinds are replayed, and only three: employer_reply from emails.received_at,
-// applied from user_jobs.applied_at, and follow_up_sent from user_jobs.followed_up_at.
+// One kind is replayed: employer_reply, from emails.received_at. The applied and
+// follow_up_sent replays were retired with the columns they read — user_jobs.applied_at
+// and user_jobs.followed_up_at moved to the applications table and were dropped, and
+// their events had already been replayed on production before that.
 // Stage history is NOT replayed — user_jobs.stage is a mutable column with no transition
 // date, so any date given to it would be an invention, and the ledger's whole claim is
 // that its contents were observed. Stage timings therefore start empty and accrue from
@@ -76,18 +78,13 @@ func run(batch int, dryRun bool) int {
 		log.Printf("employer replies: %v", err)
 		return 1
 	}
-	applications, err := backfillApplications(ctx, queries, int32(batch))
-	if err != nil {
-		log.Printf("applications: %v", err)
-		return 1
-	}
 
 	outcome, verb := "complete", "recorded"
 	if dryRun {
 		outcome, verb = "dry run", "would record"
 	}
-	log.Printf("backfill %s in %s: %s %d reply events and %d application/chase events",
-		outcome, time.Since(started).Round(time.Second), verb, replies, applications)
+	log.Printf("backfill %s in %s: %s %d reply events",
+		outcome, time.Since(started).Round(time.Second), verb, replies)
 	return 0
 }
 
@@ -113,32 +110,5 @@ func backfillReplies(ctx context.Context, q *db.Queries, batch int32) (int64, er
 		}
 		cursor, inserted = row.LastID, inserted+row.Inserted
 		log.Printf("replies: scanned %d up to email %d, recorded %d so far", row.Scanned, cursor, inserted)
-	}
-}
-
-// backfillApplications walks user_jobs by its composite (user_id, job_id) key, which is
-// its primary key and therefore its only stable order.
-func backfillApplications(ctx context.Context, q *db.Queries, batch int32) (int64, error) {
-	var lastUser, lastJob, inserted int64
-	for {
-		if err := ctx.Err(); err != nil {
-			return inserted, err
-		}
-		row, err := q.BackfillAppliedEvents(ctx, db.BackfillAppliedEventsParams{
-			LastUserID:  lastUser,
-			LastJobID:   lastJob,
-			BatchSize:   batch,
-			EventSource: appevent.SourceUser,
-		})
-		if err != nil {
-			return inserted, err
-		}
-		if row.Scanned == 0 {
-			return inserted, nil
-		}
-		lastUser, lastJob = row.LastUserID, row.LastJobID
-		inserted += row.Inserted
-		log.Printf("applications: scanned %d up to (user %d, job %d), recorded %d so far",
-			row.Scanned, lastUser, lastJob, inserted)
 	}
 }

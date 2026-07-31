@@ -51,7 +51,7 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 	}
 	// The CTE that bumps view_count makes sqlc emit a bespoke row type with the
 	// same shape as db.UserJob; convert so the interaction mapping stays shared.
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // MarkApplied marks a job as applied for a user. The write runs in a
@@ -97,7 +97,7 @@ func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64
 		return Interaction{}, err
 	}
 	// See RecordView: the applied_count CTE yields a bespoke row of db.UserJob shape.
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // SaveJob saves (bookmarks) a job for a user.
@@ -106,7 +106,7 @@ func (r *QueriesRepository) SaveJob(ctx context.Context, userID, jobID int64) (I
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // UnsaveJob clears the saved mark. Returns ErrNoInteraction when no row exists.
@@ -118,7 +118,7 @@ func (r *QueriesRepository) UnsaveJob(ctx context.Context, userID, jobID int64) 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // DismissJob marks a job dismissed (swiped away) for a user.
@@ -127,7 +127,7 @@ func (r *QueriesRepository) DismissJob(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // UndismissJob clears the dismissed mark. Returns ErrNoInteraction when no row exists.
@@ -139,7 +139,7 @@ func (r *QueriesRepository) UndismissJob(ctx context.Context, userID, jobID int6
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // TrackJob upserts stage and/or notes for the interaction. A nil pointer means
@@ -161,7 +161,7 @@ func (r *QueriesRepository) TrackJob(
 		return Interaction{}, err
 	}
 	// See RecordView: the stage-event CTE yields a bespoke row of db.UserJob shape.
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // ClearJobProgress drops stage and applied_at for a user's interaction with a job.
@@ -170,7 +170,7 @@ func (r *QueriesRepository) ClearJobProgress(ctx context.Context, userID, jobID 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // UntrackJob removes a job from the board by clearing all pipeline marks except viewed_at.
@@ -179,7 +179,7 @@ func (r *QueriesRepository) UntrackJob(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(db.UserJob(row)), nil
+	return toInteraction(assembledRow(row)), nil
 }
 
 // ListInteractions returns the caller's interactions joined with the jobs in the
@@ -309,8 +309,26 @@ func (r *QueriesRepository) PipelineCounts(ctx context.Context, userID int64) ([
 	return counts, nil
 }
 
-// toInteraction converts a db.UserJob row to the domain Interaction type.
-func toInteraction(r db.UserJob) Interaction {
+// assembledRow is the shape every write query in user_jobs.sql returns: the marks from
+// user_jobs and the process from applications, in user_jobs' historical column order.
+// sqlc emits a distinct Row type per query with identical layout, so one conversion
+// target keeps the mapping shared — db.UserJob stopped serving that once the application
+// columns were dropped from the table.
+type assembledRow struct {
+	UserID       int64
+	JobID        int64
+	ViewedAt     pgtype.Timestamptz
+	AppliedAt    pgtype.Timestamptz
+	SavedAt      pgtype.Timestamptz
+	Stage        pgtype.Text
+	Notes        pgtype.Text
+	DismissedAt  pgtype.Timestamptz
+	Vote         pgtype.Int2
+	FollowedUpAt pgtype.Timestamptz
+}
+
+// toInteraction converts an assembled row to the domain Interaction type.
+func toInteraction(r assembledRow) Interaction {
 	return Interaction{
 		JobID:       r.JobID,
 		ViewedAt:    pgconv.TimePtr(r.ViewedAt),

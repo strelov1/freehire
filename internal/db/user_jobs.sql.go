@@ -165,7 +165,7 @@ WITH touch AS (
     INSERT INTO user_jobs (user_id, job_id, dismissed_at)
     VALUES ($1, $2, now())
     ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
@@ -599,7 +599,7 @@ WITH prior AS (
     INSERT INTO user_jobs (user_id, job_id)
     VALUES ($1, $2)
     ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 ), upsert AS (
     INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
     SELECT $1, $2::bigint, j.company_slug, j.title,
@@ -749,7 +749,7 @@ WITH touch AS (
     INSERT INTO user_jobs (user_id, job_id)
     VALUES ($1, $2)
     ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
@@ -832,7 +832,7 @@ WITH touch AS (
     INSERT INTO user_jobs (user_id, job_id, saved_at)
     VALUES ($1, $2, now())
     ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
@@ -887,7 +887,7 @@ WITH prior AS (
     INSERT INTO user_jobs (user_id, job_id)
     VALUES ($1, $2)
     ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 ), upsert AS (
     -- applied_at is deliberately not set: setting a stage is not applying, and a
     -- record with no date reads as "tracked, not recorded as applied" (0065).
@@ -975,7 +975,7 @@ const undismissJob = `-- name: UndismissJob :one
 WITH touch AS (
     UPDATE user_jobs SET dismissed_at = NULL
     WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
@@ -1027,7 +1027,7 @@ const unsaveJob = `-- name: UnsaveJob :one
 WITH touch AS (
     UPDATE user_jobs SET saved_at = NULL
     WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
        a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
@@ -1080,7 +1080,7 @@ WITH dropped AS (
 ), unsaved AS (
     UPDATE user_jobs SET saved_at = NULL
     WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+    RETURNING user_id, job_id, viewed_at, saved_at, dismissed_at, vote
 )
 SELECT u.user_id, u.job_id, u.viewed_at,
        NULL::timestamptz AS applied_at, u.saved_at,
