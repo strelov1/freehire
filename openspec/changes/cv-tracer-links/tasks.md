@@ -1,0 +1,86 @@
+## 1. Templates emit clickable links
+
+- [ ] 1.1 Add a registry-driven test asserting every template in `internal/cv/template.go`
+      renders header links and a project link as clickable links; it must fail today for the
+      five templates that print them as inert text
+- [ ] 1.2 Make `portrait`, `sidebar`, `centered`, `modern-sans` and `headshot` emit `link()`,
+      keeping each template's own type scale (every internal `size:` an em multiple of its base)
+- [ ] 1.3 Regenerate the gallery previews with `make cv-previews` and commit the changed SVGs
+
+## 2. Domain package `internal/tracerlink`
+
+- [ ] 2.1 `Targets(doc)` — eligible links with their `source_path`: scheme-less URLs normalise
+      to https, while `mailto:`, `tel:`, empty values and our own domain are skipped
+- [ ] 2.2 `Token(prefix)` — `<prefix>-<rrrrr>`, five random lowercase alphanumerics
+- [ ] 2.3 `Classify(method, userAgent)` — bot flag (pattern list plus "any non-GET is a bot"),
+      device type, OS family, UA family
+- [ ] 2.4 `VisitorHash(salt, ip, userAgent)` — keyed HMAC, stable for one visitor and empty
+      when no salt is configured
+
+## 3. Schema and queries
+
+- [ ] 3.1 Migration `0060_cv_tracer_links.sql` — `cvs.tracer_links_enabled`,
+      `cvs.last_click_at`, tables `cv_tracer_links` and `cv_link_clicks` with their indexes
+- [ ] 3.2 Queries in `internal/db/queries/tracer_links.sql`: idempotent `UpsertTracerLink`,
+      `TracerLinkByToken`, `RecordTracerClick` (stamping `cvs.last_click_at` in the same
+      transaction for countable clicks), `TracerLinkStatsForCV`, `DeleteExpiredTracerClicks`;
+      run `make sqlc`
+- [ ] 3.3 Integration test (build tag): re-minting an unchanged CV reuses tokens; a changed
+      destination mints a new one while the old still resolves; one destination at two
+      positions gets two tokens
+
+## 4. Toggle
+
+- [ ] 4.1 `PUT /me/cvs/:id` accepts `tracer_links_enabled`, owner-scoped, refusing to enable it
+      when no salt is configured; the CV read reports it
+- [ ] 4.2 Test that `PATCH /me/cvs/:id` cannot set it — the field is not in `PatchOps`
+
+## 5. Traced rendering
+
+- [ ] 5.1 `renderPayload` carries `link_hrefs` for header links and projects; a CV with tracing
+      off renders visually unchanged (compare SVG — a Typst PDF embeds a timestamp)
+- [ ] 5.2 `RenderCVPDF` mints tokens and passes the traced hrefs when the CV has tracing on,
+      leaving `cvs.data` untouched
+- [ ] 5.3 Test that the extracted text layer still carries the candidate's own link text
+
+## 6. Redirect endpoint
+
+- [ ] 6.1 `GET /cv/:token` beside `/health`: resolve, record, `302`; unknown or deleted token
+      yields `410` with an explanatory page
+- [ ] 6.2 The destination comes only from the stored token — no query parameter, path remainder
+      or header can influence it
+- [ ] 6.3 A failing click write still redirects
+- [ ] 6.4 A click carrying a valid session for the CV's owner is marked as the owner's own and
+      excluded from counts and from `cvs.last_click_at`
+- [ ] 6.5 `location /cv/ { proxy_pass $backend; }` in `web/nginx.conf`
+
+## 7. Read surfaces
+
+- [ ] 7.1 `GET /me/cvs/:id/tracer-links` — per link: destination, clicks, distinct visitors,
+      last click; bots excluded unless requested; owner-scoped; empty list for an untraced CV
+- [ ] 7.2 `ListUserJobs` carries `cv_opened_at` for application rows, read from
+      `cvs.last_click_at` via `cvs.job_id`
+- [ ] 7.3 Test that a recorded click leaves `last_activity_at`, `days_silent` and
+      `silence_state` unchanged
+
+## 8. Web
+
+- [ ] 8.1 CV editor: the toggle with its plain-language explanation of what gets recorded, and
+      the per-link panel with the "include likely bots" switch
+- [ ] 8.2 Tracking board: the CV-opened marker beside the existing state, worded as evidence
+      rather than proof
+- [ ] 8.3 Verify both visually in a real browser
+
+## 9. Retention and configuration
+
+- [ ] 9.1 `cmd/prune` deletes click records older than 180 days, dry-run by default like every
+      other removal it performs
+- [ ] 9.2 `TRACER_LINK_SALT` documented in the environment reference and `.env.example`
+
+## 10. Documentation
+
+- [ ] 10.1 Privacy policy: what a traced link records, opt-in per CV and off by default, the
+      180-day window, and that the owner's own clicks are not counted
+- [ ] 10.2 `internal/cv/AGENTS.md`: adding a template now requires emitting `link()`, and why
+      the registry test exists
+- [ ] 10.3 Offer a `/blog` changelog entry once the feature ships
