@@ -1,0 +1,26 @@
+---
+title: One job in thirty cities is one job
+date: 2026-07-31
+summary: A saved-search alert went out listing the same vacancy thirty times, once per city the company had posted it in — reposts are now collapsed the moment they are crawled, not hours later.
+type: changelog
+tags:
+  - subscriptions
+  - catalogue
+draft: false
+---
+
+Some companies post one opening once per city. Same title, same description, thirty separate
+listings — one for Bogotá, one for São Paulo, one for Querétaro, and so on. To their applicant
+tracking system those are thirty vacancies. To anyone reading them they are obviously one.
+
+We already collapse those into a single card, with the cities listed on it. What we got wrong was
+the timing: the collapse ran on a schedule every few hours, while new jobs reach search within
+minutes of being crawled. In the gap between the two, every copy was its own vacancy.
+
+That gap is how a saved-search alert went out this morning listing the same job thirty times. If
+you got that email, the alert was working correctly and the catalogue underneath it was not.
+Sorry about the noise.
+
+Reposts are now recognised as they are written, so a per-city fan-out collapses before it can reach
+your [saved searches](/my/searches), the job list, or a company's opening count. The scheduled
+pass still runs behind it and still catches the cases the fast path deliberately skips.
