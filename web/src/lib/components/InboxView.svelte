@@ -15,7 +15,7 @@
   import { statusLabel, statusClass, STATUS_LABELS } from '$lib/emailStatus';
   import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
   import { Paginator } from '$lib/paginated.svelte';
-  import { Badge, Button } from '$lib/ui';
+  import { Badge } from '$lib/ui';
   import GmailConnectDialog from './GmailConnectDialog.svelte';
   import InboxSettings from './InboxSettings.svelte';
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
