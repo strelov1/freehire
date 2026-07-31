@@ -3,6 +3,7 @@
 package cv
 
 import (
+	"math"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/llm"
@@ -45,10 +46,21 @@ const (
 	maxMargin     = 1.5
 )
 
+// Typography bounds. Unlike the margin band above, these clamp only a value the candidate
+// has actually set: see Style for why zero is not a value here.
+const (
+	minFontSize   = 8.5 // below this the text stops being comfortably readable in print
+	maxFontSize   = 12.0
+	fontSizeStep  = 0.5 // a set size is rounded to the nearest multiple
+	minLineHeight = 0.3
+	maxLineHeight = 0.9
+)
+
 // Document is the typed, sanitized CV. Every field is optional; sections the user has
 // not filled in are left empty rather than invented, and Sanitize drops empty entries.
 type Document struct {
 	Margins        Margins          `json:"margins"`
+	Style          Style            `json:"style,omitempty"`
 	Header         Header           `json:"header"`
 	Summary        string           `json:"summary,omitempty"`
 	Experience     []ExperienceItem `json:"experience,omitempty"`
@@ -67,6 +79,52 @@ type Margins struct {
 	Right  float64 `json:"right"`
 	Bottom float64 `json:"bottom"`
 	Left   float64 `json:"left"`
+}
+
+// Style is the CV's typography: the typeface, the base type size in points, and the line
+// height as a leading multiple of the em. It is part of the document, so it persists with
+// the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
+//
+// A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
+// the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
+// difference is deliberate on both counts:
+//
+//   - Every CV written before this type existed has no style block, so it renders exactly as
+//     it did. There is nothing to migrate.
+//   - A template stays a whole design choice. Switching to a template with looser leading
+//     actually loosens the leading, because that value was never frozen into the document.
+//
+// Resolving defaults here — the natural thing to do by analogy with clampMargin — would
+// silently bake the current template's typography into every document on its next save.
+//
+// FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
+// resolves it on its own copy of the document at render time.
+type Style struct {
+	FontFamily string  `json:"font_family,omitempty"`
+	FontSize   float64 `json:"font_size,omitempty"`   // points
+	LineHeight float64 `json:"line_height,omitempty"` // em of leading
+}
+
+// sanitized returns the style with each SET value clamped to its band, and every unset
+// (zero) value left unset.
+func (s Style) sanitized() Style {
+	// A face we cannot render is dropped, not refused: Sanitize repairs a document rather
+	// than failing it, the same way an out-of-range margin is clamped. The fonts endpoint
+	// exists so a client never has to guess an id.
+	if !knownFontID(s.FontFamily) {
+		s.FontFamily = ""
+	}
+	if s.FontSize != 0 {
+		s.FontSize = clampFloat(math.Round(s.FontSize/fontSizeStep)*fontSizeStep, minFontSize, maxFontSize)
+	}
+	if s.LineHeight != 0 {
+		s.LineHeight = clampFloat(s.LineHeight, minLineHeight, maxLineHeight)
+	}
+	return s
+}
+
+func clampFloat(v, lo, hi float64) float64 {
+	return math.Min(hi, math.Max(lo, v))
 }
 
 // DefaultMargins is the half-inch-per-side margin a fresh CV starts with.
@@ -186,6 +244,7 @@ func EmptyDocument() Document {
 // text cannot inject unbounded or malformed content.
 func (d *Document) Sanitize() {
 	d.Margins = d.Margins.sanitized()
+	d.Style = d.Style.sanitized()
 
 	d.Header.FullName = clip(d.Header.FullName, maxNameRunes)
 	d.Header.Email = clip(d.Header.Email, maxEmailRunes)

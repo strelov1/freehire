@@ -95,13 +95,19 @@ from appearing in TypeScript.
 ### The bundled set is metric compatibility, not variety
 
 Libertinus Serif (already embedded in the Typst binary) and Liberation Sans (already bundled) are
-joined by Liberation Serif and Carlito. Those two are metric-compatible with Times New Roman and
-Calibri — the faces recruiters and résumé parsers actually expect — and both are SIL OFL.
+joined by Tinos and Carlito. Those two are metric-compatible with Times New Roman and Calibri — the
+faces recruiters and résumé parsers actually expect — and both are SIL OFL.
+
+Tinos rather than Liberation Serif, which is what this design first named: the liberation-fonts
+project publishes sources, not built TTFs, so bundling it would mean running FontForge in the build.
+Tinos is the same face by another name — Liberation 2.x was rebased onto the Croscore fonts, of which
+Tinos is the serif — and Google Fonts ships it built. The licence file already in `internal/cv/fonts/`
+names Tinos among its reserved font names, so this is the lineage the repository was already carrying.
 
 This is why the list is short and boring on purpose. A CV font picker's job is not to be expressive;
 it is to let someone match the house style of the firm they are applying to.
 
-*Cost accepted:* four more TTFs (~1.5 MB) embedded in the binary and written into the sandbox on
+*Cost accepted:* four more TTFs (~2.4 MB) embedded in the binary and written into the sandbox on
 every render, taking `writeFonts` from two files to eight. A Typst compile is already hundreds of
 milliseconds; a few megabytes of temp-directory writes next to it is noise. The seam for caching the
 staged font directory across renders is obvious if it ever stops being noise, and is not built now.

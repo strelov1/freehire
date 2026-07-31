@@ -1,22 +1,22 @@
 ## 1. Document model and sanitizer
 
-- [ ] 1.1 Add the `Style` type to `internal/cv/cv.go` (font family id, font size in pt, line height in
+- [x] 1.1 Add the `Style` type to `internal/cv/cv.go` (font family id, font size in pt, line height in
       em) and a `Style` field on `Document`, with a doc comment stating the zero-means-inherit rule
       and why it differs from `Margins`
-- [ ] 1.2 Add the style bounds constants (font size 8.5–12.0 pt rounded to 0.5, line height 0.3–0.9 em)
+- [x] 1.2 Add the style bounds constants (font size 8.5–12.0 pt rounded to 0.5, line height 0.3–0.9 em)
       and extend `Sanitize` to clamp only non-zero values
-- [ ] 1.3 `TestSanitizeStyle`: out-of-range size clamps both ways, 10.3 rounds to 10.5, out-of-range
+- [x] 1.3 `TestSanitizeStyle`: out-of-range size clamps both ways, 10.3 rounds to 10.5, out-of-range
       line height clamps both ways, and — named separately — a zero size and a zero line height stay
       zero rather than clamping up to the lower bound
 
 ## 2. Font registry and bundled faces
 
-- [ ] 2.1 Add `FontInfo` and the registry to `internal/cv/fonts.go` (id, label, note, CSS stack public;
+- [x] 2.1 Add `FontInfo` and the registry to `internal/cv/fonts.go` (id, label, note, CSS stack public;
       Typst family name private), plus `Fonts()`, `FontIDs()`, and a resolver
-- [ ] 2.2 Wire the registry into `Sanitize`: an unregistered font family id is reset to unset
-- [ ] 2.3 Commit `LiberationSerif-Regular/Bold.ttf` and `Carlito-Regular/Bold.ttf` to
-      `internal/cv/fonts/` with their SIL OFL licence files
-- [ ] 2.4 Test that every registry entry either names a Typst built-in face or has its TTF present in
+- [x] 2.2 Wire the registry into `Sanitize`: an unregistered font family id is reset to unset
+- [x] 2.3 Commit `Tinos-Regular/Bold.ttf` and `Carlito-Regular/Bold.ttf` to `internal/cv/fonts/`
+      with their SIL OFL licence files
+- [x] 2.4 Test that every registry entry either names a Typst built-in face or has its TTF present in
       the embedded FS, so a registry entry can never be added without its font
 
 ## 3. Rendering

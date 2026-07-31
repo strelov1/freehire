@@ -18,9 +18,9 @@ column and the "+" buttons are clipped off the edge.
 - A font registry alongside the template registry, exposed over a new read endpoint so clients
   discover the available typefaces instead of hard-coding them. Five entries: the template's own
   default plus four faces chosen for metric compatibility with what recruiters and résumé parsers
-  expect — Libertinus Serif, Liberation Serif (Times New Roman metrics), Liberation Sans (Arial
-  metrics), and Carlito (Calibri metrics).
-- Liberation Serif and Carlito are added to the bundled fonts (SIL OFL, with licences) so the
+  expect — Libertinus Serif, Tinos (Times New Roman metrics), Liberation Sans (Arial metrics), and
+  Carlito (Calibri metrics).
+- Tinos and Carlito are added to the bundled fonts (SIL OFL, with licences) so the
   sandboxed Typst run under `--ignore-system-fonts` can resolve them.
 - All four Typst templates read the style block, and their internal type sizes become em-relative so
   raising the base size scales the whole hierarchy rather than flattening it against a fixed 12pt
@@ -63,5 +63,5 @@ None. This extends two existing capabilities.
   Settings tab, and `api.ts`.
 - Generated: `internal/db` is untouched (no schema change); `web/src/lib/generated/contracts.ts` is
   regenerated from `cv.go`.
-- Repository size: four new TTF files (~1.5 MB) embedded in the server binary and staged into each
+- Repository size: four new TTF files (~2.4 MB) embedded in the server binary and staged into each
   render sandbox.
