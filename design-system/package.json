@@ -22,6 +22,8 @@
     "tokens:build": "node scripts/build-tokens.mjs",
     "validate:docs": "node scripts/validate-docs.mjs",
     "check:tokens": "node scripts/check-token-coverage.mjs",
+    "check:adoption": "node scripts/check-adoption.mjs",
+    "check:dist": "pnpm build && git diff --exit-code -- dist",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

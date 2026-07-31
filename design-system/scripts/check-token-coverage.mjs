@@ -1,13 +1,32 @@
-// Asserts that the primitives style themselves from tokens: no colour literal and
-// no Tailwind arbitrary value in src/*.svelte. Both are the same failure — a value
-// that exists in one component and nowhere in tokens/*.tokens.json, so the theme
-// cannot move it and the dark selector cannot override it. Nothing else notices:
-// a hex is valid CSS, an arbitrary value is valid Tailwind, and the build stays
-// green either way.
+// Asserts that things style themselves from the token scale rather than from
+// values nothing owns — a hex, a Tailwind arbitrary value, or a hue off
+// Tailwind's built-in palette. All three are the same failure: a value that
+// exists in one file and nowhere in tokens/*.tokens.json, so the theme cannot
+// move it and the dark selector cannot override it. Nothing else notices,
+// because a hex is valid CSS and the other two are valid Tailwind, and the
+// build stays green either way.
+//
+// TWO RADII, and deliberately not the same rule.
+//
+//   design-system/src — fifteen files, currently clean, so a violation is always
+//                       a mistake. Hard fail, subject only to ALLOWED.
+//   ../../web/src     — 216 files carrying hundreds of violations that no single
+//                       change can remove. Held at exactly their current count
+//                       per file, because a rule nobody can satisfy is a rule
+//                       that gets switched off rather than obeyed.
+//
+// The web half is a REPO-BOUNDARY check: it reads a directory the package itself
+// knows nothing about. If design-system/ is ever extracted, it stays behind.
+//
+// One definition per detector, shared by both radii. A second copy is how the
+// DSDS props and the Storybook argTypes drifted from the components they
+// describe — and a forked detector drifts silently, one radius quietly ceasing
+// to catch what the other still does.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-
-const srcDir = join(import.meta.dirname, '..', 'src');
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ratchet } from './ratchet.mjs';
+import { stripComments } from './source.mjs';
 
 // A colour written out rather than referenced. `color()` and `lab()`/`lch()` are
 // in here for completeness — the palette is oklch, so they would be an import
@@ -20,26 +39,64 @@ const COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\
 // keeps TypeScript indexing (`sizes[size]`, `HTMLButtonElement[]`) out.
 const ARBITRARY = /-\[[^\]]+\](?!:)/g;
 
-// Deliberate exceptions. Each must still match something — a stale entry is an
-// allowance nobody is using, and it would quietly cover the next violation that
-// lands in the same file.
+// A utility built on Tailwind's own colour scale. Neither a literal nor an
+// arbitrary value, so neither detector above can see it — and in web/src it is
+// the majority of what there is. It is off the token scale all the same:
+// `text-amber-600` is a fixed hue the theme cannot move and `.dark` gets no say
+// in. Restricted to the colour-bearing prefixes on purpose; `p-4`, `z-50` and
+// `grid-cols-3` are scales the design system does not own.
+const PALETTE =
+  /\b(?:bg|text|border|ring|fill|stroke|from|via|to|decoration|outline|shadow|accent|caret|divide|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|950|[1-9]00)\b/g;
+
+// Exported as functions, not as the regexes themselves: a /g regex carries
+// lastIndex between calls, so a shared one handed to `.test()` alternates true
+// and false. `String.match` resets it; nothing outside should have to know that.
+export const DETECTORS = {
+  'colour literal': (line) => line.match(COLOUR) ?? [],
+  'Tailwind arbitrary value': (line) => line.match(ARBITRARY) ?? [],
+  'raw palette utility': (line) => line.match(PALETTE) ?? [],
+};
+
+export const RADII = {
+  package: ['colour literal', 'Tailwind arbitrary value'],
+  web: ['colour literal', 'Tailwind arbitrary value', 'raw palette utility'],
+};
+
+// Deliberate exceptions, package radius only. Each must still match something —
+// a stale entry is an allowance nobody is using, and it would quietly cover the
+// next violation that lands in the same file.
 const ALLOWED = [
   {
     file: 'avatar.svelte',
-    pattern: COLOUR,
+    kind: 'colour literal',
     reason:
       'one hue per name at two fixed lightnesses; a token per hue makes no sense, ' +
       'and the pair carries its own contrast so it needs no theme override',
   },
 ];
 
-// Comments describe violations as often as they commit them — this file's own
-// header would trip both patterns.
-function stripComments(source) {
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, '')
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
-    .replaceAll(/(^|[\s;{(])\/\/[^\n]*/g, '$1');
+const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
+const packageSrc = join(scriptsDir, '..', 'src');
+const webSrc = join(scriptsDir, '..', '..', 'web', 'src');
+const baselinePath = join(scriptsDir, 'web-token-baseline.json');
+
+function hitsIn(source, kinds) {
+  const hits = [];
+  for (const [index, line] of stripComments(source).split('\n').entries()) {
+    for (const kind of kinds) {
+      for (const text of DETECTORS[kind](line)) hits.push({ kind, line: index + 1, text });
+    }
+  }
+  return hits;
+}
+
+function* sourceFiles(dir) {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield* sourceFiles(path);
+    else if (/\.(svelte|ts)$/.test(entry.name)) yield path;
+  }
 }
 
 let errors = 0;
@@ -48,37 +105,77 @@ function fail(message) {
   errors++;
 }
 
-const used = new Set();
+// The package radius: zero, and it stays zero.
+function checkPackage() {
+  const used = new Set();
+  const files = readdirSync(packageSrc).filter((f) => f.endsWith('.svelte')).sort();
 
-for (const file of readdirSync(srcDir).filter((f) => f.endsWith('.svelte')).sort()) {
-  const lines = stripComments(readFileSync(join(srcDir, file), 'utf-8')).split('\n');
-
-  for (const [kind, pattern] of [
-    ['colour literal', COLOUR],
-    ['Tailwind arbitrary value', ARBITRARY],
-  ]) {
-    const exception = ALLOWED.find((a) => a.file === file && a.pattern === pattern);
-    for (const [i, line] of lines.entries()) {
-      const hits = line.match(pattern);
-      if (!hits) continue;
+  for (const file of files) {
+    for (const hit of hitsIn(readFileSync(join(packageSrc, file), 'utf-8'), RADII.package)) {
+      const exception = ALLOWED.find((a) => a.file === file && a.kind === hit.kind);
       if (exception) {
         used.add(exception);
         continue;
       }
-      fail(`${file}:${i + 1}: ${kind} — ${hits.join(', ')}`);
+      fail(`${file}:${hit.line}: ${hit.kind} — ${hit.text}`);
     }
   }
+
+  for (const exception of ALLOWED) {
+    if (used.has(exception)) continue;
+    fail(`allowlist: ${exception.file} no longer needs its exception — drop it from this script`);
+  }
+
+  return files.length;
 }
 
-for (const exception of ALLOWED) {
-  if (used.has(exception)) continue;
-  fail(`allowlist: ${exception.file} no longer needs its exception — drop it from this script`);
+// The web radius: held per file, so a regression names the file that caused it
+// rather than moving a global total by one, and the baseline doubles as the
+// ranked list of what is left to fix.
+function checkWeb(update) {
+  const counts = {};
+  const hits = new Map();
+
+  for (const path of sourceFiles(webSrc)) {
+    const found = hitsIn(readFileSync(path, 'utf-8'), RADII.web);
+    if (found.length === 0) continue;
+    const name = path.slice(path.indexOf('/web/src/') + 1);
+    counts[name] = found.length;
+    hits.set(name, found);
+  }
+
+  const { ok, lines } = ratchet({ counts, baselinePath, direction: 'down', update });
+  for (const line of lines) {
+    if (ok) {
+      console.log(`  ${line}`);
+      continue;
+    }
+    fail(`web: ${line}`);
+    // Naming the file is not enough to act on: a count went 3 → 4 and the
+    // question is which line is the fourth. The file's hits are few; print them.
+    for (const hit of hits.get(line.split(':')[0]) ?? []) {
+      console.error(`    ${hit.line}: ${hit.kind} — ${hit.text}`);
+    }
+  }
+
+  return Object.values(counts).reduce((sum, n) => sum + n, 0);
 }
 
-if (errors > 0) {
-  console.error(`\n${errors} violation(s). Use a token from tokens/*.tokens.json, or add a
-deliberate exception to the ALLOWED list in this script with the reason it is one.`);
-  process.exit(1);
+function main() {
+  const update = process.argv.includes('--update');
+  const components = checkPackage();
+  const total = checkWeb(update);
+
+  if (errors > 0) {
+    console.error(`\n${errors} problem(s).
+In design-system/src: use a token from tokens/*.tokens.json, or add a deliberate
+exception to ALLOWED in this script with the reason it is one.
+In web/src: the count is held per file. Fewer is good news the baseline has to
+record — rerun with --update and commit the diff.`);
+    process.exit(1);
+  }
+
+  console.log(`✓ token coverage: ${components} primitives clean, web/src held at ${total} violations.`);
 }
 
-console.log(`✓ token coverage: ${readdirSync(srcDir).filter((f) => f.endsWith('.svelte')).length} components, no unowned colour or arbitrary value.`);
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) main();
