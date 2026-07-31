@@ -51,8 +51,8 @@ type inboxHandlers struct {
 // it would pull jobtracking into that package for no reader's benefit.
 type trackingApplications struct{ *jobtracking.Service }
 
-func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time) error {
-	_, err := t.Service.MarkAppliedAt(ctx, userID, slug, at)
+func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time, source string) error {
+	_, err := t.Service.MarkAppliedAt(ctx, userID, slug, at, source)
 	return err
 }
 

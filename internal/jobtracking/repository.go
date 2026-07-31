@@ -57,21 +57,25 @@ func (r *QueriesRepository) RecordView(ctx context.Context, userID, jobID int64)
 // transaction that locks the job row first (LockJobForApply), so concurrent
 // applies serialize and applied_count cannot double-bump — the same pattern
 // the vote path uses for its counters.
-func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64) (Interaction, error) {
-	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{})
+func (r *QueriesRepository) MarkApplied(ctx context.Context, userID, jobID int64, source string) (Interaction, error) {
+	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{}, source)
 }
 
 // MarkAppliedAt records an application dated by `at` rather than by now() — the
 // path for an application reconstructed from employer mail. It runs the same
 // locked transaction as MarkApplied, so the applied_count guarantee is the same
 // one, not a second implementation of it.
-func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time) (Interaction, error) {
-	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true})
+func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
+	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true}, source)
 }
 
 // markApplied is the shared apply transaction. An invalid `at` means "stamp
 // now()", the ordinary apply.
-func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64, at pgtype.Timestamptz) (Interaction, error) {
+//
+// The `applied` ledger event is written by MarkJobApplied itself, under the same
+// predicate as the applied_count bump, so it lands inside this transaction and
+// cannot diverge from the counter.
+func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64, at pgtype.Timestamptz, source string) (Interaction, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return Interaction{}, err
@@ -82,7 +86,9 @@ func (r *QueriesRepository) markApplied(ctx context.Context, userID, jobID int64
 	if err := qtx.LockJobForApply(ctx, jobID); err != nil {
 		return Interaction{}, err
 	}
-	row, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{UserID: userID, JobID: jobID, At: at})
+	row, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{
+		UserID: userID, JobID: jobID, At: at, EventSource: source,
+	})
 	if err != nil {
 		return Interaction{}, err
 	}
@@ -141,17 +147,20 @@ func (r *QueriesRepository) TrackJob(
 	ctx context.Context,
 	userID, jobID int64,
 	stage, notes *string,
+	source string,
 ) (Interaction, error) {
 	row, err := r.q.TrackJob(ctx, db.TrackJobParams{
-		UserID: userID,
-		JobID:  jobID,
-		Stage:  textFromPtr(stage),
-		Notes:  textFromPtr(notes),
+		UserID:      userID,
+		JobID:       jobID,
+		Stage:       textFromPtr(stage),
+		Notes:       textFromPtr(notes),
+		EventSource: source,
 	})
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	// See RecordView: the stage-event CTE yields a bespoke row of db.UserJob shape.
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // ClearJobProgress drops stage and applied_at for a user's interaction with a job.

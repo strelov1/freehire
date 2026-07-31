@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/userjob"
 )
@@ -21,7 +22,9 @@ type fakeRepo struct {
 	appliedResult jobtracking.Interaction
 	appliedErr    error
 	// appliedAt captures the date handed to MarkAppliedAt.
-	appliedAt           time.Time
+	appliedAt time.Time
+	// appliedSource captures the ledger provenance the caller declared.
+	appliedSource       string
 	saveResult          jobtracking.Interaction
 	saveErr             error
 	unsaveResult        jobtracking.Interaction
@@ -73,14 +76,16 @@ func (f *fakeRepo) RecordView(_ context.Context, _, _ int64) (jobtracking.Intera
 	return f.viewResult, f.viewErr
 }
 
-func (f *fakeRepo) MarkApplied(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
+func (f *fakeRepo) MarkApplied(_ context.Context, _, _ int64, source string) (jobtracking.Interaction, error) {
+	f.appliedSource = source
 	return f.appliedResult, f.appliedErr
 }
 
 // MarkAppliedAt records the date it was handed, so a test can assert the service
 // passed the mail's timestamp through rather than substituting its own.
-func (f *fakeRepo) MarkAppliedAt(_ context.Context, _, _ int64, at time.Time) (jobtracking.Interaction, error) {
+func (f *fakeRepo) MarkAppliedAt(_ context.Context, _, _ int64, at time.Time, source string) (jobtracking.Interaction, error) {
 	f.appliedAt = at
+	f.appliedSource = source
 	return f.appliedResult, f.appliedErr
 }
 
@@ -100,7 +105,7 @@ func (f *fakeRepo) UndismissJob(_ context.Context, _, _ int64) (jobtracking.Inte
 	return f.undismissResult, f.undismissErr
 }
 
-func (f *fakeRepo) TrackJob(_ context.Context, _, _ int64, stage, notes *string) (jobtracking.Interaction, error) {
+func (f *fakeRepo) TrackJob(_ context.Context, _, _ int64, stage, notes *string, _ string) (jobtracking.Interaction, error) {
 	f.trackStage = stage
 	f.trackNotes = notes
 	return f.trackResult, f.trackErr
@@ -199,7 +204,7 @@ func TestMarkApplied_HappyPath(t *testing.T) {
 	repo.appliedResult = jobtracking.Interaction{JobID: jobID, AppliedAt: tPtr(now)}
 	svc := jobtracking.New(repo)
 
-	got, err := svc.MarkApplied(ctx(), userID, slug)
+	got, err := svc.MarkApplied(ctx(), userID, slug, appevent.SourceUser)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -217,7 +222,7 @@ func TestMarkAppliedAt_PassesTheDateThrough(t *testing.T) {
 	repo.appliedResult = jobtracking.Interaction{JobID: jobID, AppliedAt: tPtr(when)}
 	svc := jobtracking.New(repo)
 
-	if _, err := svc.MarkAppliedAt(ctx(), userID, slug, when); err != nil {
+	if _, err := svc.MarkAppliedAt(ctx(), userID, slug, when, appevent.SourceMailGmail); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !repo.appliedAt.Equal(when) {
@@ -229,7 +234,7 @@ func TestMarkAppliedAt_UnknownSlug(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.MarkAppliedAt(ctx(), userID, "missing", time.Now())
+	_, err := svc.MarkAppliedAt(ctx(), userID, "missing", time.Now(), appevent.SourceMailGmail)
 	if !errors.Is(err, jobtracking.ErrJobNotFound) {
 		t.Errorf("err = %v, want ErrJobNotFound", err)
 	}
@@ -239,7 +244,7 @@ func TestMarkApplied_UnknownSlug(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.MarkApplied(ctx(), userID, "missing")
+	_, err := svc.MarkApplied(ctx(), userID, "missing", appevent.SourceUser)
 	if !errors.Is(err, jobtracking.ErrJobNotFound) {
 		t.Errorf("err = %v, want ErrJobNotFound", err)
 	}
@@ -398,7 +403,8 @@ func TestTrack_NilNil_ReturnsErrEmptyTrack(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.Track(ctx(), userID, slug, nil, nil)
+	_, err := svc.Track(ctx(), userID, slug, nil, nil, appevent.SourceUser)
+
 	if !errors.Is(err, jobtracking.ErrEmptyTrack) {
 		t.Errorf("err = %v, want ErrEmptyTrack", err)
 	}
@@ -412,7 +418,7 @@ func TestTrack_InvalidStage_ReturnsErrInvalidStage(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.Track(ctx(), userID, slug, strPtr("bad-stage"), nil)
+	_, err := svc.Track(ctx(), userID, slug, strPtr("bad-stage"), nil, appevent.SourceUser)
 	if !errors.Is(err, jobtracking.ErrInvalidStage) {
 		t.Errorf("err = %v, want ErrInvalidStage", err)
 	}
@@ -428,7 +434,7 @@ func TestTrack_ValidStageOnly(t *testing.T) {
 	repo.trackResult = jobtracking.Interaction{JobID: jobID, Stage: strPtr(stage)}
 	svc := jobtracking.New(repo)
 
-	got, err := svc.Track(ctx(), userID, slug, strPtr(stage), nil)
+	got, err := svc.Track(ctx(), userID, slug, strPtr(stage), nil, appevent.SourceUser)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -450,7 +456,7 @@ func TestTrack_NotesOnly(t *testing.T) {
 	repo.trackResult = jobtracking.Interaction{JobID: jobID, Notes: strPtr(notes)}
 	svc := jobtracking.New(repo)
 
-	got, err := svc.Track(ctx(), userID, slug, nil, strPtr(notes))
+	got, err := svc.Track(ctx(), userID, slug, nil, strPtr(notes), appevent.SourceUser)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -472,7 +478,7 @@ func TestTrack_StageAndNotes(t *testing.T) {
 	repo.trackResult = jobtracking.Interaction{JobID: jobID, Stage: strPtr(stage), Notes: strPtr(notes)}
 	svc := jobtracking.New(repo)
 
-	got, err := svc.Track(ctx(), userID, slug, strPtr(stage), strPtr(notes))
+	got, err := svc.Track(ctx(), userID, slug, strPtr(stage), strPtr(notes), appevent.SourceUser)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -488,7 +494,7 @@ func TestTrack_UnknownSlug(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.Track(ctx(), userID, "missing", strPtr("applied"), nil)
+	_, err := svc.Track(ctx(), userID, "missing", strPtr("applied"), nil, appevent.SourceUser)
 	if !errors.Is(err, jobtracking.ErrJobNotFound) {
 		t.Errorf("err = %v, want ErrJobNotFound", err)
 	}

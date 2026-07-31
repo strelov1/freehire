@@ -54,7 +54,10 @@ type Queries interface {
 // borrows the tracking use case rather than writing its own apply, so the
 // applied_count guarantee stays in one place.
 type Applications interface {
-	MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time) error
+	// source is the appevent source of the recording, derived from the message's own
+	// store. An application reconstructed from mail was observed by the mail, and the
+	// ledger records that rather than crediting whoever clicked.
+	MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time, source string) error
 }
 
 // Service is the mail use cases.

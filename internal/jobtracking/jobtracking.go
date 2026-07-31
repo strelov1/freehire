@@ -140,13 +140,18 @@ type Repository interface {
 	JobIDBySlug(ctx context.Context, slug string) (int64, error)
 
 	RecordView(ctx context.Context, userID, jobID int64) (Interaction, error)
-	MarkApplied(ctx context.Context, userID, jobID int64) (Interaction, error)
+
+	// MarkApplied records an application. `source` is the appevent source of the
+	// recording — who observed it, not who applied — and is carried by the caller
+	// rather than assumed here: the same method serves the SPA, an API key, and the
+	// in-app assistant, and a ledger that guessed would flatten the three.
+	MarkApplied(ctx context.Context, userID, jobID int64, source string) (Interaction, error)
 
 	// MarkAppliedAt records an application dated by `at` instead of now(), for an
 	// application reconstructed from employer mail. It keeps an existing
 	// applied_at rather than rewriting it: a later recording of the same
 	// application is not a later application.
-	MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time) (Interaction, error)
+	MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error)
 
 	SaveJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 
@@ -163,8 +168,9 @@ type Repository interface {
 	UndismissJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 
 	// TrackJob upserts the stage and/or notes for the interaction. A nil pointer
-	// means "leave unchanged".
-	TrackJob(ctx context.Context, userID, jobID int64, stage, notes *string) (Interaction, error)
+	// means "leave unchanged". `source` is the appevent source of the recording,
+	// carried for the same reason MarkApplied carries it.
+	TrackJob(ctx context.Context, userID, jobID int64, stage, notes *string, source string) (Interaction, error)
 
 	// ClearJobProgress drops stage and applied_at, keeping saved_at/viewed_at/notes.
 	ClearJobProgress(ctx context.Context, userID, jobID int64) (Interaction, error)
@@ -275,23 +281,24 @@ func (s *Service) RecordView(ctx context.Context, userID int64, slug string) (In
 	return s.repo.RecordView(ctx, userID, jobID)
 }
 
-// MarkApplied resolves slug → jobID then delegates to the repository.
-func (s *Service) MarkApplied(ctx context.Context, userID int64, slug string) (Interaction, error) {
+// MarkApplied resolves slug → jobID then delegates to the repository. `source` is
+// the appevent source of the recording, supplied by the caller.
+func (s *Service) MarkApplied(ctx context.Context, userID int64, slug, source string) (Interaction, error) {
 	jobID, err := s.repo.JobIDBySlug(ctx, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkApplied(ctx, userID, jobID)
+	return s.repo.MarkApplied(ctx, userID, jobID, source)
 }
 
 // MarkAppliedAt resolves slug → jobID then records an application dated by `at`
 // — the mail-reconstruction path (see Repository.MarkAppliedAt).
-func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time) (Interaction, error) {
+func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time, source string) (Interaction, error) {
 	jobID, err := s.repo.JobIDBySlug(ctx, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkAppliedAt(ctx, userID, jobID, at)
+	return s.repo.MarkAppliedAt(ctx, userID, jobID, at, source)
 }
 
 // SaveJob resolves slug → jobID then delegates to the repository.
@@ -369,7 +376,7 @@ func (s *Service) Untrack(ctx context.Context, userID int64, slug string) (Inter
 // Validation rules:
 //   - Both stage and notes nil → ErrEmptyTrack.
 //   - stage set but not a valid userjob.Stage value → ErrInvalidStage.
-func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, notes *string) (Interaction, error) {
+func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, notes *string, source string) (Interaction, error) {
 	if stage == nil && notes == nil {
 		return Interaction{}, ErrEmptyTrack
 	}
@@ -380,5 +387,5 @@ func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, n
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.TrackJob(ctx, userID, jobID, stage, notes)
+	return s.repo.TrackJob(ctx, userID, jobID, stage, notes, source)
 }

@@ -16,9 +16,9 @@
   the shape `internal/userjob/stages.go` uses. Pure, no DB.
 - [x] 2.2 Add the sqlc queries — record an event, retract by source reference — to
   `internal/db/queries/application_events.sql`; run `make sqlc`.
-- [ ] 2.3 Emit `applied` from `jobtracking.MarkApplied`, inside the existing `LockJobForApply`
+- [x] 2.3 Emit `applied` from `jobtracking.MarkApplied`, inside the existing `LockJobForApply`
   transaction, only when `applied_at` was newly set.
-- [ ] 2.4 Emit `stage_set` from `jobtracking.TrackJob`, only when the stage actually changed.
+- [x] 2.4 Emit `stage_set` from `jobtracking.TrackJob`, only when the stage actually changed.
 - [ ] 2.5 Emit `follow_up_sent` from the follow-up record action, one row per chase.
 - [ ] 2.6 Emit `employer_reply` from `internal/maillink` when a message is both linked and
   classified.

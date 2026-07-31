@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/userjob"
 )
@@ -17,12 +18,14 @@ type trackingRepo struct {
 	slug  string
 	jobID int64
 
-	saved     bool
-	unsaved   bool
-	applied   bool
-	gotStage  *string
-	gotNotes  *string
-	listedFor jobtracking.Filter
+	saved   bool
+	unsaved bool
+	applied bool
+	// appliedSource is the ledger provenance the tool declared for the recording.
+	appliedSource string
+	gotStage      *string
+	gotNotes      *string
+	listedFor     jobtracking.Filter
 }
 
 func (r *trackingRepo) JobIDBySlug(_ context.Context, slug string) (int64, error) {
@@ -36,14 +39,16 @@ func (r *trackingRepo) RecordView(_ context.Context, _, jobID int64) (jobtrackin
 	return jobtracking.Interaction{JobID: jobID}, nil
 }
 
-func (r *trackingRepo) MarkApplied(_ context.Context, _, jobID int64) (jobtracking.Interaction, error) {
+func (r *trackingRepo) MarkApplied(_ context.Context, _, jobID int64, source string) (jobtracking.Interaction, error) {
 	r.applied = true
+	r.appliedSource = source
 	now := time.Now()
 	return jobtracking.Interaction{JobID: jobID, AppliedAt: &now}, nil
 }
 
-func (r *trackingRepo) MarkAppliedAt(_ context.Context, _, jobID int64, at time.Time) (jobtracking.Interaction, error) {
+func (r *trackingRepo) MarkAppliedAt(_ context.Context, _, jobID int64, at time.Time, source string) (jobtracking.Interaction, error) {
 	r.applied = true
+	r.appliedSource = source
 	return jobtracking.Interaction{JobID: jobID, AppliedAt: &at}, nil
 }
 
@@ -66,7 +71,7 @@ func (r *trackingRepo) UndismissJob(_ context.Context, _, jobID int64) (jobtrack
 	return jobtracking.Interaction{JobID: jobID}, nil
 }
 
-func (r *trackingRepo) TrackJob(_ context.Context, _, jobID int64, stage, notes *string) (jobtracking.Interaction, error) {
+func (r *trackingRepo) TrackJob(_ context.Context, _, jobID int64, stage, notes *string, _ string) (jobtracking.Interaction, error) {
 	r.gotStage, r.gotNotes = stage, notes
 	return jobtracking.Interaction{JobID: jobID, Stage: stage, Notes: notes}, nil
 }
@@ -127,6 +132,12 @@ func TestApplyJobToolMarksApplied(t *testing.T) {
 	}
 	if !repo.applied {
 		t.Error("apply_job did not mark the vacancy applied")
+	}
+	// The tool acts as the session owner, but the ledger records who observed the
+	// application. Crediting the agent's recording to the person would put a
+	// machine-recorded row next to hand-recorded ones with nothing to tell them apart.
+	if repo.appliedSource != appevent.SourceAssistant {
+		t.Errorf("apply_job recorded provenance %q, want %q", repo.appliedSource, appevent.SourceAssistant)
 	}
 }
 

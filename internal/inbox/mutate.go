@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/mailclassify"
 )
@@ -141,7 +142,11 @@ func (s *Service) RecordApplication(ctx context.Context, userID, id int64, slug 
 	if err != nil {
 		return Message{}, err
 	}
-	if err := s.apps.MarkAppliedAt(ctx, userID, slug, email.ReceivedAt.Time); err != nil {
+	source, err := appevent.SourceForMail(email.Source)
+	if err != nil {
+		return Message{}, err
+	}
+	if err := s.apps.MarkAppliedAt(ctx, userID, slug, email.ReceivedAt.Time, source); err != nil {
 		return Message{}, err
 	}
 	return s.mutate(ctx, userID, id, func() (int64, error) {

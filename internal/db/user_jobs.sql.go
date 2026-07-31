@@ -551,14 +551,20 @@ WITH prior AS (
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
     WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
+), event AS (
+    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT $1, $2, j.company_slug, 'applied', u.applied_at, $4::text
+      FROM upsert u JOIN jobs j ON j.id = $2
+     WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
 SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at FROM upsert
 `
 
 type MarkJobAppliedParams struct {
-	UserID int64              `json:"user_id"`
-	JobID  int64              `json:"job_id"`
-	At     pgtype.Timestamptz `json:"at"`
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	At          pgtype.Timestamptz `json:"at"`
+	EventSource string             `json:"event_source"`
 }
 
 type MarkJobAppliedRow struct {
@@ -591,8 +597,20 @@ type MarkJobAppliedRow struct {
 // application's date, whereas an ordinary re-apply refreshes it as it always
 // has. Both paths share this one statement so the applied_count transition rule
 // below cannot fork.
+// The `applied` ledger event is written by the same statement, under the same
+// predicate as the counter bump, for the same reason: two records of one
+// transition, decided separately, would eventually disagree. `event_source` is
+// the appevent source of the recording (user, assistant, or a mail source when
+// the application is reconstructed from employer mail); occurred_at is taken
+// from the row's own applied_at, so a dated recording carries the mail's date
+// into the ledger rather than now().
 func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error) {
-	row := q.db.QueryRow(ctx, markJobApplied, arg.UserID, arg.JobID, arg.At)
+	row := q.db.QueryRow(ctx, markJobApplied,
+		arg.UserID,
+		arg.JobID,
+		arg.At,
+		arg.EventSource,
+	)
 	var i MarkJobAppliedRow
 	err := row.Scan(
 		&i.UserID,
@@ -728,33 +746,65 @@ func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, erro
 }
 
 const trackJob = `-- name: TrackJob :one
-INSERT INTO user_jobs (user_id, job_id, stage, notes)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (user_id, job_id) DO UPDATE
-  SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
-      notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH prior AS (
+    SELECT uj.stage FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+), upsert AS (
+    INSERT INTO user_jobs (user_id, job_id, stage, notes)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (user_id, job_id) DO UPDATE
+      SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
+          notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+), event AS (
+    INSERT INTO application_events (user_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT $1, $2, j.company_slug, 'stage_set', u.stage, now(), $5::text
+      FROM upsert u JOIN jobs j ON j.id = $2
+     WHERE u.stage IS NOT NULL
+       AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
+)
+SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at FROM upsert
 `
 
 type TrackJobParams struct {
-	UserID int64       `json:"user_id"`
-	JobID  int64       `json:"job_id"`
-	Stage  pgtype.Text `json:"stage"`
-	Notes  pgtype.Text `json:"notes"`
+	UserID      int64       `json:"user_id"`
+	JobID       int64       `json:"job_id"`
+	Stage       pgtype.Text `json:"stage"`
+	Notes       pgtype.Text `json:"notes"`
+	EventSource string      `json:"event_source"`
+}
+
+type TrackJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 }
 
 // Set an application's stage and/or notes for a user, idempotently. Upserts the
 // (user, job) row (viewed_at defaults). Partial update: a NULL param leaves that
 // column unchanged (COALESCE keeps the existing value), so the caller can set the
 // stage, the notes, or both in one call. Returns the row.
-func (q *Queries) TrackJob(ctx context.Context, arg TrackJobParams) (UserJob, error) {
+// A `stage_set` ledger event is written when — and only when — the stage actually
+// moves. `prior` reads the pre-upsert value, so re-setting the stage the row
+// already carries, or a notes-only call, records nothing: the ledger holds
+// transitions, and a row per no-op would make "how long did this stage last"
+// unanswerable. The event carries no trusted date (source is the caller, not the
+// employer), which is why nothing times it yet — see internal/appevent.
+func (q *Queries) TrackJob(ctx context.Context, arg TrackJobParams) (TrackJobRow, error) {
 	row := q.db.QueryRow(ctx, trackJob,
 		arg.UserID,
 		arg.JobID,
 		arg.Stage,
 		arg.Notes,
+		arg.EventSource,
 	)
-	var i UserJob
+	var i TrackJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,

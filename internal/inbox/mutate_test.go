@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/mailclassify"
 )
@@ -143,7 +144,7 @@ func TestRecordApplicationRefusesMailWithAPendingSuggestion(t *testing.T) {
 func TestRecordApplicationIsDatedByTheMail(t *testing.T) {
 	wrote := time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
 	q := &fakeQueries{
-		email: db.GetEmailRow{ID: 812, ReceivedAt: pgtype.Timestamptz{Time: wrote, Valid: true}},
+		email: db.GetEmailRow{ID: 812, Source: "hosted", ReceivedAt: pgtype.Timestamptz{Time: wrote, Valid: true}},
 		job:   db.Job{ID: 42},
 	}
 	apps := &fakeApps{}
@@ -153,6 +154,28 @@ func TestRecordApplicationIsDatedByTheMail(t *testing.T) {
 	}
 	if !apps.at.Equal(wrote) {
 		t.Errorf("application dated %v, want the message's %v", apps.at, wrote)
+	}
+	if apps.source != appevent.SourceMailHosted {
+		t.Errorf("recorded with provenance %q, want %q — an application reconstructed from mail was observed by the mail, not by whoever clicked", apps.source, appevent.SourceMailHosted)
+	}
+}
+
+// The provenance lookup is strict: an unrecognised store must not default to a
+// mail source, because every default here is one the timings trust. The store
+// vocabulary is pinned to appevent by TestEveryInboxMailSourceHasAnEventSource,
+// so this can only fire for a genuinely unknown value.
+func TestRecordApplicationRefusesAnUnknownMailStore(t *testing.T) {
+	q := &fakeQueries{
+		email: db.GetEmailRow{ID: 812, Source: "imap", ReceivedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
+		job:   db.Job{ID: 42},
+	}
+	apps := &fakeApps{}
+
+	if _, err := New(q, apps).RecordApplication(context.Background(), 7, 812, "go-dev-acme"); err == nil {
+		t.Fatal("RecordApplication accepted an unknown mail store")
+	}
+	if apps.calls != 0 {
+		t.Error("an application was recorded despite the unresolvable provenance")
 	}
 }
 
@@ -213,12 +236,14 @@ func contains(list []string, want string) bool {
 }
 
 type fakeApps struct {
-	calls int
-	at    time.Time
+	calls  int
+	at     time.Time
+	source string
 }
 
-func (f *fakeApps) MarkAppliedAt(_ context.Context, _ int64, _ string, at time.Time) error {
+func (f *fakeApps) MarkAppliedAt(_ context.Context, _ int64, _ string, at time.Time, source string) error {
 	f.calls++
 	f.at = at
+	f.source = source
 	return nil
 }

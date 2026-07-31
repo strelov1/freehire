@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/userjob"
@@ -34,7 +35,10 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			"apply_job",
 			"Mark a vacancy as applied to. This records the user's own application; it does not submit anything to the employer.",
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
-				return h.tracking.tracking.MarkApplied(ctx, userID, slug)
+				// The assistant acts as the caller, but the ledger records who
+				// observed the application, and that was the agent — not a person
+				// filling in their own board.
+				return h.tracking.tracking.MarkApplied(ctx, userID, slug, appevent.SourceAssistant)
 			}),
 		h.trackJobTool(),
 		h.myJobsTool(),
@@ -112,7 +116,7 @@ func (h *assistantHandlers) trackJobTool() assistant.Tool {
 			if h.tracking.tracking == nil {
 				return nil, errors.New("job tracking is not available")
 			}
-			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note)
+			res, err := h.tracking.tracking.Track(ctx, userID, in.Slug, in.Stage, in.Note, appevent.SourceAssistant)
 			if err != nil {
 				return nil, trackingToolError(in.Slug, err)
 			}

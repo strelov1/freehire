@@ -25,10 +25,10 @@ func (stubTrackingRepo) JobIDBySlug(context.Context, string) (int64, error) { re
 func (stubTrackingRepo) RecordView(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
-func (stubTrackingRepo) MarkApplied(context.Context, int64, int64) (jobtracking.Interaction, error) {
+func (stubTrackingRepo) MarkApplied(context.Context, int64, int64, string) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
-func (stubTrackingRepo) MarkAppliedAt(context.Context, int64, int64, time.Time) (jobtracking.Interaction, error) {
+func (stubTrackingRepo) MarkAppliedAt(context.Context, int64, int64, time.Time, string) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
 func (stubTrackingRepo) SaveJob(context.Context, int64, int64) (jobtracking.Interaction, error) {
@@ -43,7 +43,7 @@ func (stubTrackingRepo) DismissJob(context.Context, int64, int64) (jobtracking.I
 func (stubTrackingRepo) UndismissJob(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
-func (stubTrackingRepo) TrackJob(context.Context, int64, int64, *string, *string) (jobtracking.Interaction, error) {
+func (stubTrackingRepo) TrackJob(context.Context, int64, int64, *string, *string, string) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
 func (stubTrackingRepo) ClearJobProgress(context.Context, int64, int64) (jobtracking.Interaction, error) {

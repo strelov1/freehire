@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/reminder"
@@ -148,7 +149,7 @@ func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	interaction, err := h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"))
+	interaction, err := h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"), appevent.SourceUser)
 	if err != nil {
 		return trackingError(err)
 	}
@@ -302,7 +303,7 @@ func (h *trackingHandlers) TrackJob(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	interaction, err := h.tracking.Track(c.Context(), userID, c.Params("slug"), in.Stage, in.Notes)
+	interaction, err := h.tracking.Track(c.Context(), userID, c.Params("slug"), in.Stage, in.Notes, appevent.SourceUser)
 	if err != nil {
 		return trackingError(err)
 	}

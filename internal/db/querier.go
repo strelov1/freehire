@@ -1424,6 +1424,13 @@ type Querier interface {
 	// application's date, whereas an ordinary re-apply refreshes it as it always
 	// has. Both paths share this one statement so the applied_count transition rule
 	// below cannot fork.
+	// The `applied` ledger event is written by the same statement, under the same
+	// predicate as the counter bump, for the same reason: two records of one
+	// transition, decided separately, would eventually disagree. `event_source` is
+	// the appevent source of the recording (user, assistant, or a mail source when
+	// the application is reconstructed from employer mail); occurred_at is taken
+	// from the row's own applied_at, so a dated recording carries the mail's date
+	// into the ledger rather than now().
 	MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) (MarkJobAppliedRow, error)
 	// Point one row at its canon. The import path only: the batch passes recompute whole companies
 	// (RecomputeRoleDuplicatesForCompany, SuppressAggregatorDuplicatesForCompany) and must keep
@@ -2002,7 +2009,13 @@ type Querier interface {
 	// (user, job) row (viewed_at defaults). Partial update: a NULL param leaves that
 	// column unchanged (COALESCE keeps the existing value), so the caller can set the
 	// stage, the notes, or both in one call. Returns the row.
-	TrackJob(ctx context.Context, arg TrackJobParams) (UserJob, error)
+	// A `stage_set` ledger event is written when — and only when — the stage actually
+	// moves. `prior` reads the pre-upsert value, so re-setting the stage the row
+	// already carries, or a notes-only call, records nothing: the ledger holds
+	// transitions, and a row per no-op would make "how long did this stage last"
+	// unanswerable. The event carries no trusted date (source is the caller, not the
+	// employer), which is why nothing times it yet — see internal/appevent.
+	TrackJob(ctx context.Context, arg TrackJobParams) (TrackJobRow, error)
 	// Keep only the newest $2 revisions of a CV. A revision log is an aid to the candidate's
 	// current work, not an archive, and each row carries two operation documents on the table
 	// behind every CV page.
