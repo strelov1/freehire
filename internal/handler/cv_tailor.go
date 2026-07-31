@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
@@ -190,8 +194,13 @@ func (h *cvHandlers) startTailoringSession(ctx context.Context, userID int64, cv
 	return id, nil
 }
 
-// PatchCV applies one field-level patch to an owned CV. Cookie or API key (the agent's CLI
-// uses the key). Bad addressing is a 422; a foreign/missing id is a 404.
+// PatchCV applies a batch of path operations to an owned CV. Cookie or API key (the agent's
+// CLI uses the key). Bad addressing is a 422; a foreign or missing id is a 404.
+//
+// The actor follows the credential rather than the body: a key is what the tailoring agent
+// holds, so a keyed caller edits as the agent and meets the agent's policy — the contact
+// block is closed to it, and an operation that states something about the candidate has to
+// cite banked evidence. A cookie is the candidate at their own keyboard.
 func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -201,33 +210,39 @@ func (h *cvHandlers) PatchCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Decode strictly: reject unknown fields and type mismatches so a mis-addressed
-	// op (a stray "skill" field, a numeric "group") fails with a reason the agent can
-	// act on, instead of being silently ignored and editing the wrong section.
-	p, err := cv.DecodePatch(c.Body())
-	if err != nil {
-		return mapCVError(err)
+
+	// Decode strictly: an unknown field or a type mismatch fails with a reason the caller can
+	// act on, rather than being ignored and editing something else.
+	var in struct {
+		Ops  []cvedit.Op `json:"ops"`
+		Note string      `json:"note"`
 	}
-	// The tailoring agent (API-key caller) never sees the contact block and must not be able
-	// to write it either — reject a header-contact patch so the stored identifiers stay ours.
-	if auth.ViaAPIKey(c) && p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
-		return fiber.NewError(fiber.StatusForbidden, "contact fields are not editable in a tailoring session")
+	decoder := json.NewDecoder(bytes.NewReader(c.Body()))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&in); err != nil {
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "invalid operations: "+err.Error())
 	}
-	meta, err := h.cvStore.Patch(c.Context(), id, userID, p)
+	for i, op := range in.Ops {
+		if _, err := cvedit.ParsePath(string(op.Path)); err != nil {
+			return fiber.NewError(fiber.StatusUnprocessableEntity,
+				fmt.Sprintf("operation %d: %s", i+1, err))
+		}
+	}
+
+	actor := cvedit.ActorCandidate
+	if auth.ViaAPIKey(c) {
+		actor = cvedit.ActorAgent
+	}
+	meta, _, err := h.editor.Commit(c.Context(), id, userID, cvedit.Change{
+		Actor:  actor,
+		Origin: cvedit.OriginCLI,
+		Note:   in.Note,
+		Ops:    in.Ops,
+	})
 	if err != nil {
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})
-}
-
-// isContactHeaderField reports whether a set_header_field patch targets a direct contact
-// identifier the tailoring agent must never write (location is allowed — it is not PII).
-func isContactHeaderField(field string) bool {
-	switch field {
-	case "full_name", "email", "phone":
-		return true
-	}
-	return false
 }
 
 // tailorJob is the vacancy the agent reframes toward: enough of the posting to ground the

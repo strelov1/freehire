@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
@@ -43,6 +44,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
 	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
 		matchAnalysisCache: queries,
 		credits:            creditsStore,
@@ -271,8 +273,12 @@ func TestPatchCVViaKey(t *testing.T) {
 	ownerKey := cvScopedKey(t, h, owner)
 	otherKey := cvScopedKey(t, h, other)
 
-	// A valid patch applies.
-	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, cv.Patch{Op: cv.PatchAddBullet, Experience: 0, Value: "Cut latency"}); resp.StatusCode != fiber.StatusOK {
+	// A valid batch applies. The key edits as the AGENT, so a bullet has to cite banked
+	// evidence — except that this fixture wires no bank, which is "no gate" rather than
+	// "gate that refuses" (the CLI is not a place to enforce provenance it cannot query).
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
+		"ops": []map[string]any{{"kind": "insert", "path": "experience[0].bullets[1]", "value": "Cut latency"}},
+	}); resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("patch = %d, want 200", resp.StatusCode)
 	}
 	rec, _ := h.cvStore.Get(ctx, base.ID, owner)
@@ -299,17 +305,23 @@ func TestPatchCVViaKey(t *testing.T) {
 	}
 
 	// The agent cannot WRITE a contact field either.
-	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, cv.Patch{Op: cv.PatchSetHeaderField, Field: "full_name", Value: "Fake Name"}); resp.StatusCode != fiber.StatusForbidden {
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
+		"ops": []map[string]any{{"kind": "set", "path": "header.full_name", "value": "Fake Name"}},
+	}); resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("patch full_name via key = %d, want 403", resp.StatusCode)
 	}
 
 	// Bad addressing is a 422.
-	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, cv.Patch{Op: cv.PatchReplaceBullet, Experience: 0, Bullet: 9, Value: "x"}); resp.StatusCode != fiber.StatusUnprocessableEntity {
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
+		"ops": []map[string]any{{"kind": "set", "path": "experience[0].bullets[9]", "value": "x"}},
+	}); resp.StatusCode != fiber.StatusUnprocessableEntity {
 		t.Fatalf("bad-patch = %d, want 422", resp.StatusCode)
 	}
 
 	// Another user's key cannot touch this CV (owner isolation → 404, not 403).
-	if resp := doBearer(t, app, fiber.MethodPatch, path, otherKey, cv.Patch{Op: cv.PatchSetSummary, Value: "hijack"}); resp.StatusCode != fiber.StatusNotFound {
+	if resp := doBearer(t, app, fiber.MethodPatch, path, otherKey, map[string]any{
+		"ops": []map[string]any{{"kind": "set", "path": "summary", "value": "hijack"}},
+	}); resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("foreign patch = %d, want 404", resp.StatusCode)
 	}
 }

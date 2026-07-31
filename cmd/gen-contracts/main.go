@@ -158,7 +158,7 @@ func genStructs() (string, error) {
 				OutputPath: cvTS,
 				// autopilot.go carries the run report's wire shape; its server-side rules
 				// (sanitizing, the owner-scoped writes) live in autopilot_store.go and stay here.
-				IncludeFiles: []string{"cv.go", "patch.go", "autopilot.go"},
+				IncludeFiles: []string{"cv.go", "autopilot.go"},
 			},
 			{
 				// One entry in a CV's history feed. Only the wire file: the operations, the

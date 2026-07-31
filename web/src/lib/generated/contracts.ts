@@ -951,39 +951,6 @@ export interface Certification {
   year?: string;
 }
 
-//////////
-// source: patch.go
-
-/**
- * PatchOp is the discriminator selecting which field-level edit a Patch performs.
- */
-export type PatchOp = string;
-export const PatchSetSummary: PatchOp = "set_summary";
-export const PatchSetHeaderField: PatchOp = "set_header_field";
-export const PatchAddBullet: PatchOp = "add_bullet";
-export const PatchReplaceBullet: PatchOp = "replace_bullet";
-export const PatchRemoveBullet: PatchOp = "remove_bullet";
-export const PatchReorderBullets: PatchOp = "reorder_bullets";
-export const PatchSetSkillGroup: PatchOp = "set_skill_group";
-export const PatchSetStack: PatchOp = "set_stack";
-/**
- * Patch is one field-level edit to a CV Document. Op selects the operation; the remaining
- * fields are its address and payload, and only the ones an op needs are read. A patch names
- * the single field it changes rather than re-emitting the document, so an LLM tailoring a CV
- * mid-session cannot silently drop untouched sections.
- */
-export interface Patch {
-  op: PatchOp;
-  experience?: number /* int */; // index into Document.Experience
-  bullet?: number /* int */; // index into the entry's Bullets (replace/remove)
-  field?: string; // header field name (set_header_field)
-  value?: string; // summary / bullet / header value
-  order?: number /* int */[]; // permutation of bullet indices (reorder_bullets)
-  group?: string; // skill group name (set_skill_group)
-  items?: string[]; // skill group items (set_skill_group)
-  stack?: string[]; // per-experience technology line (set_stack)
-}
-
 /**
  * RevisionView is one entry in the history feed.
  * It deliberately does NOT carry the operations. The feed needs to say what changed and

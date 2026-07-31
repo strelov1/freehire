@@ -486,14 +486,10 @@ func mapCVError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	case errors.Is(err, cv.ErrUnknownTemplate):
 		return fiber.NewError(fiber.StatusBadRequest, "unknown template")
-	case errors.Is(err, cv.ErrInvalidPatch):
-		// Surface the specific reason (unknown field, wrong type, out-of-range index)
-		// so an LLM caller can fix the patch instead of retrying against a generic 422.
-		reason := strings.TrimPrefix(err.Error(), cv.ErrInvalidPatch.Error()+": ")
-		return fiber.NewError(fiber.StatusUnprocessableEntity, reason)
 	case errors.Is(err, cvedit.ErrInvalidOp):
-		// Same reasoning as above, for the path-addressed operations: the reason IS the
-		// remedy, and a caller that cannot see it can only retry the same mistake.
+		// Surface the specific reason (unknown path, wrong type, out-of-range index) rather
+		// than a generic 422: the reason IS the remedy, and a caller that cannot see it can
+		// only retry the same mistake.
 		return fiber.NewError(fiber.StatusUnprocessableEntity,
 			strings.TrimPrefix(err.Error(), cvedit.ErrInvalidOp.Error()+": "))
 	case errors.Is(err, cvedit.ErrForbiddenPath), errors.Is(err, cvedit.ErrEvidenceRequired):

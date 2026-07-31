@@ -26,7 +26,7 @@
 - [x] 4.3 `Editor.CommitDocument` — diff against the stored state, then `Commit`; an unchanged save records nothing
 - [x] 4.4 Coalescing: amend the newest revision when actor, origin, paths and recency match; replace `ops`, leave `inverse` alone
 - [x] 4.5 Trim to the newest 100 revisions in the same statement that inserts
-- [ ] 4.6 Make the repository's document write unexported; `Store.Update` and `Store.Patch` cease to be public
+- [x] 4.6 Make the repository's document write unexported; `Store.Update` and `Store.Patch` cease to be public
 - [x] 4.7 Test: coalescing keeps the original inverse; a different path starts a new revision; the feed trims at the cap
 
 ## 5. Policy and the evidence gate
@@ -47,7 +47,7 @@
 
 - [x] 7.1 `PUT /me/cvs/:id` → `CommitDocument(candidate, editor)`
 - [x] 7.2 `PUT /me/cvs/:id/template` → `Commit(candidate, template)`
-- [ ] 7.3 `PATCH /me/cvs/:id` → path operations (new body shape)
+- [x] 7.3 `PATCH /me/cvs/:id` → path operations (new body shape)
 - [x] 7.4 `cv_edit` tool → `Commit(agent, tailor_agent, batch)`, accepting a batch of operations in one call, with the schema generated from the enumerated paths
 - [ ] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
 - [x] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only

@@ -19,45 +19,6 @@ func (f fakeSeeder) Structured(context.Context, int64) (resumeextract.Structured
 	return f.st, f.ok, nil
 }
 
-func TestStorePatchAppliesAndSanitizes(t *testing.T) {
-	s := NewStore(newFakeRepo())
-	ctx := context.Background()
-	base, err := s.Create(ctx, 7, "General", DefaultTemplateID, Document{
-		Experience: []ExperienceItem{{Role: "Eng", Bullets: []string{"A"}}},
-	})
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	if _, err := s.Patch(ctx, base.ID, 7, Patch{Op: PatchAddBullet, Experience: 0, Value: "B"}); err != nil {
-		t.Fatalf("patch: %v", err)
-	}
-	rec, err := s.Get(ctx, base.ID, 7)
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	if got := rec.Document.Experience[0].Bullets; len(got) != 2 || got[1] != "B" {
-		t.Errorf("bullets = %v, want [A B]", got)
-	}
-}
-
-func TestStorePatchInvalidAddressingIsErrInvalidPatch(t *testing.T) {
-	s := NewStore(newFakeRepo())
-	ctx := context.Background()
-	base, _ := s.Create(ctx, 7, "General", DefaultTemplateID, Document{Experience: []ExperienceItem{{Role: "Eng"}}})
-	if _, err := s.Patch(ctx, base.ID, 7, Patch{Op: PatchReplaceBullet, Experience: 0, Bullet: 9, Value: "x"}); !errors.Is(err, ErrInvalidPatch) {
-		t.Errorf("err = %v, want ErrInvalidPatch", err)
-	}
-}
-
-func TestStorePatchForeignOwnerIsNotFound(t *testing.T) {
-	s := NewStore(newFakeRepo())
-	ctx := context.Background()
-	base, _ := s.Create(ctx, 1, "Mine", DefaultTemplateID, Document{})
-	if _, err := s.Patch(ctx, base.ID, 2, Patch{Op: PatchSetSummary, Value: "x"}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
-}
-
 func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 	s := NewStore(newFakeRepo())
 	ctx := context.Background()

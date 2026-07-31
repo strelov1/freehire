@@ -234,7 +234,7 @@ func TestStoreGetForeignUserIsNotFound(t *testing.T) {
 	if _, err := s.Get(ctx, meta.ID, 2); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign Get err = %v, want ErrNotFound", err)
 	}
-	if _, err := s.Update(ctx, meta.ID, 2, "x", "classic-ats", Document{}); !errors.Is(err, ErrNotFound) {
+	if _, err := s.update(ctx, meta.ID, 2, "x", "classic-ats", Document{}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign Update err = %v, want ErrNotFound", err)
 	}
 	if err := s.Delete(ctx, meta.ID, 2); !errors.Is(err, ErrNotFound) {

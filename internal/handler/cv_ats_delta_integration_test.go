@@ -18,6 +18,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
 )
@@ -74,6 +75,7 @@ func newATSDeltaFixture(t *testing.T, pool *pgxpool.Pool) atsDeltaFixture {
 	}}
 	h := &cvHandlers{
 		queries: queries, jobReader: queries, cvStore: store,
+		editor:         cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		resume:         resume.New(nil, resume.NewQueriesRepository(queries)),
 		cvRenderer:     renderer,
 		extractPDFText: textFromPDF,
@@ -309,12 +311,18 @@ func TestATSDelta_ComparesAgainstTheCurrentBase(t *testing.T) {
 
 	first, _ := f.get(t, f.tailored.ID.String())
 
-	// Rewrite the base so it now renders the same text as the tailored copy.
-	if _, err := f.store.Update(ctx, f.base.ID, f.userID, "Base", "centered", cv.Document{
-		Margins: cv.Margins{Top: 1.2, Right: 1.2, Bottom: 1.2, Left: 1.2},
-		Header:  cv.Header{FullName: "Jane Roe", Email: "jane@example.com"},
-		Summary: "tailored summary",
-	}); err != nil {
+	// Rewrite the base so it now renders the same text as the tailored copy. Through the
+	// editor, because that is the only thing that writes a stored CV.
+	if _, _, err := f.h.editor.CommitDocument(ctx, f.base.ID, f.userID,
+		cvedit.ActorCandidate, cvedit.OriginEditor, cvedit.State{
+			Title:      "Base",
+			TemplateID: "centered",
+			Document: cv.Document{
+				Margins: cv.Margins{Top: 1.2, Right: 1.2, Bottom: 1.2, Left: 1.2},
+				Header:  cv.Header{FullName: "Jane Roe", Email: "jane@example.com"},
+				Summary: "tailored summary",
+			},
+		}); err != nil {
 		t.Fatalf("update base: %v", err)
 	}
 

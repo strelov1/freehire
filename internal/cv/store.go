@@ -224,7 +224,7 @@ func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem,
 }
 
 // Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.
-func (s *Store) Update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, doc Document) (Meta, error) {
+func (s *Store) update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, doc Document) (Meta, error) {
 	data, err := marshalSanitized(doc)
 	if err != nil {
 		return Meta{}, err
@@ -247,21 +247,6 @@ func (s *Store) Delete(ctx context.Context, id uuid.UUID, userID int64) error {
 		return ErrNotFound
 	}
 	return nil
-}
-
-// Patch loads an owned CV, applies one field-level edit, and persists the sanitized result.
-// It returns ErrInvalidPatch (leaving the stored CV untouched) when the patch addresses a
-// field or index that does not exist, or ErrNotFound for a foreign/missing id.
-func (s *Store) Patch(ctx context.Context, id uuid.UUID, userID int64, p Patch) (Meta, error) {
-	rec, err := s.Get(ctx, id, userID)
-	if err != nil {
-		return Meta{}, err
-	}
-	doc, err := Apply(rec.Document, p)
-	if err != nil {
-		return Meta{}, err
-	}
-	return s.Update(ctx, id, userID, rec.Title, rec.TemplateID, doc)
 }
 
 // BaseCV returns the user's base CV (job_id IS NULL) with its document; ok is false when the
