@@ -11,6 +11,147 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const backfillAppliedEvents = `-- name: BackfillAppliedEvents :one
+WITH batch AS (
+    SELECT uj.user_id, uj.job_id, uj.applied_at, uj.followed_up_at
+      FROM user_jobs uj
+     WHERE (uj.user_id, uj.job_id) > ($1::bigint, $2::bigint)
+       AND uj.applied_at IS NOT NULL
+     ORDER BY uj.user_id, uj.job_id
+     LIMIT $3
+), applied AS (
+    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT b.user_id, b.job_id, j.company_slug, 'applied', b.applied_at, $4::text
+      FROM batch b JOIN jobs j ON j.id = b.job_id
+     WHERE NOT EXISTS (
+         SELECT 1 FROM application_events ae
+          WHERE ae.user_id = b.user_id AND ae.job_id = b.job_id AND ae.kind = 'applied'
+     )
+    RETURNING 1
+), chased AS (
+    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT b.user_id, b.job_id, j.company_slug, 'follow_up_sent', b.followed_up_at, $4::text
+      FROM batch b JOIN jobs j ON j.id = b.job_id
+     WHERE b.followed_up_at IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM application_events ae
+          WHERE ae.user_id = b.user_id AND ae.job_id = b.job_id AND ae.kind = 'follow_up_sent'
+       )
+    RETURNING 1
+)
+SELECT COALESCE((SELECT b2.user_id FROM batch b2 ORDER BY b2.user_id DESC, b2.job_id DESC LIMIT 1), 0)::bigint AS last_user_id,
+       COALESCE((SELECT b2.job_id  FROM batch b2 ORDER BY b2.user_id DESC, b2.job_id DESC LIMIT 1), 0)::bigint AS last_job_id,
+       count(*)::bigint AS scanned,
+       ((SELECT count(*) FROM applied) + (SELECT count(*) FROM chased))::bigint AS inserted
+  FROM batch b
+`
+
+type BackfillAppliedEventsParams struct {
+	LastUserID  int64  `json:"last_user_id"`
+	LastJobID   int64  `json:"last_job_id"`
+	BatchSize   int32  `json:"batch_size"`
+	EventSource string `json:"event_source"`
+}
+
+type BackfillAppliedEventsRow struct {
+	LastUserID int64 `json:"last_user_id"`
+	LastJobID  int64 `json:"last_job_id"`
+	Scanned    int64 `json:"scanned"`
+	Inserted   int64 `json:"inserted"`
+}
+
+// Replay one keyset batch of recorded applications. Keyed by job_id because user_jobs has
+// no surrogate key; the pass walks (user_id, job_id) pairs in job order per user.
+//
+// Only applications carry a date. A row that was staged but never marked applied has
+// nothing to replay, and the ledger says nothing about it rather than inventing a day.
+// The cursor is the LAST ROW of the batch's own order, not max() of each column
+// independently: the greatest user_id and the greatest job_id can belong to different
+// rows, and a cursor assembled from both would jump past rows that were never scanned.
+func (q *Queries) BackfillAppliedEvents(ctx context.Context, arg BackfillAppliedEventsParams) (BackfillAppliedEventsRow, error) {
+	row := q.db.QueryRow(ctx, backfillAppliedEvents,
+		arg.LastUserID,
+		arg.LastJobID,
+		arg.BatchSize,
+		arg.EventSource,
+	)
+	var i BackfillAppliedEventsRow
+	err := row.Scan(
+		&i.LastUserID,
+		&i.LastJobID,
+		&i.Scanned,
+		&i.Inserted,
+	)
+	return i, err
+}
+
+const backfillEmployerReplyEvents = `-- name: BackfillEmployerReplyEvents :one
+WITH batch AS (
+    SELECT em.id, em.user_id, em.job_id, em.status_signal, em.received_at, em.source
+      FROM emails em
+     WHERE em.id > $1
+       AND em.job_id IS NOT NULL
+     ORDER BY em.id
+     LIMIT $2
+), ins AS (
+    INSERT INTO application_events (
+        user_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
+    )
+    SELECT b.user_id, b.job_id, j.company_slug, 'employer_reply', COALESCE(b.status_signal, ''), b.received_at,
+           CASE b.source
+               WHEN 'gmail'    THEN $3::text
+               WHEN 'hosted'   THEN $4::text
+               WHEN 'external' THEN $5::text
+           END,
+           b.id
+      FROM batch b JOIN jobs j ON j.id = b.job_id
+     WHERE b.source IN ('gmail', 'hosted', 'external')
+    ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
+    DO NOTHING
+    RETURNING 1
+)
+SELECT COALESCE(max(b.id), 0)::bigint AS last_id,
+       count(*)::bigint               AS scanned,
+       (SELECT count(*) FROM ins)::bigint AS inserted
+  FROM batch b
+`
+
+type BackfillEmployerReplyEventsParams struct {
+	ID          int64  `json:"id"`
+	BatchSize   int32  `json:"batch_size"`
+	SrcGmail    string `json:"src_gmail"`
+	SrcHosted   string `json:"src_hosted"`
+	SrcExternal string `json:"src_external"`
+}
+
+type BackfillEmployerReplyEventsRow struct {
+	LastID   int64 `json:"last_id"`
+	Scanned  int64 `json:"scanned"`
+	Inserted int64 `json:"inserted"`
+}
+
+// Replay one keyset batch of already-linked mail into the ledger.
+//
+// Deleted mail is included deliberately. Deletion hides content; it does not un-happen the
+// reply, and excluding it here would bake the very inbox-hygiene dependence this ledger
+// exists to remove into its starting contents.
+//
+// The three appevent source names arrive as parameters rather than being written here, so
+// the vocabulary stays in Go where a pin test guards it. Mail from an unrecognised store
+// is skipped rather than defaulted: an unknown provenance must not read as observed.
+func (q *Queries) BackfillEmployerReplyEvents(ctx context.Context, arg BackfillEmployerReplyEventsParams) (BackfillEmployerReplyEventsRow, error) {
+	row := q.db.QueryRow(ctx, backfillEmployerReplyEvents,
+		arg.ID,
+		arg.BatchSize,
+		arg.SrcGmail,
+		arg.SrcHosted,
+		arg.SrcExternal,
+	)
+	var i BackfillEmployerReplyEventsRow
+	err := row.Scan(&i.LastID, &i.Scanned, &i.Inserted)
+	return i, err
+}
+
 const listApplicationEventsForUserJob = `-- name: ListApplicationEventsForUserJob :many
 SELECT id, user_id, job_id, company_slug, kind, signal, occurred_at, recorded_at, source, source_ref, retracted_at FROM application_events
 WHERE user_id = $1 AND job_id = $2 AND retracted_at IS NULL
@@ -112,7 +253,6 @@ SELECT em.user_id, em.job_id, j.company_slug, 'employer_reply',
  WHERE em.id      = $1
    AND em.user_id = $2
    AND em.job_id IS NOT NULL
-   AND COALESCE(em.status_signal, '') <> ''
 ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
 DO NOTHING
 `
@@ -123,8 +263,15 @@ type RecordEmailApplicationEventParams struct {
 	EventSource string `json:"event_source"`
 }
 
-// Step 2: record the event when the message is both linked and classified and no live
-// event exists for it. Run RetractSupersededEmailEvent first.
+// Step 2: record the event when the message is LINKED and no live event exists for it.
+// Run RetractSupersededEmailEvent first.
+//
+// Linked, not linked-and-classified. Requiring a classification reads as the stricter,
+// safer rule and is the opposite: `external` mail — the tier a caller's own harness
+// pushes — is never classified server-side by design, so those users' replies would
+// never count and their employers would look more silent than they were. That is the
+// distortion this ledger exists to remove. The signal is detail about the reply, not
+// evidence that one arrived; an unclassified reply records an empty signal.
 //
 // The message's own received_at is the date. now() would compress a year of imported
 // history into the day a mailbox was connected.

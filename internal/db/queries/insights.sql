@@ -378,28 +378,53 @@ DELETE FROM insights_company_response;
 -- report our own blind spot as the employer's silence, which is the same mistake the
 -- job-level signal's mailbox gate exists to prevent.
 --
--- "Answered" is any non-deleted mail linked to that application. Not a stage advance:
--- a stage is what the candidate recorded, and a company that replied to somebody who
--- never updated their board still replied.
-INSERT INTO insights_company_response (company_slug, applications, answered)
-SELECT
-    j.company_slug,
-    count(*)::int AS applications,
-    count(*) FILTER (WHERE EXISTS (
-        SELECT 1 FROM emails e
-         WHERE e.user_id = uj.user_id AND e.job_id = uj.job_id AND e.deleted_at IS NULL
-    ))::int AS answered
-FROM user_jobs uj
-JOIN jobs j ON j.id = uj.job_id
-WHERE uj.applied_at IS NOT NULL
-  AND j.company_slug <> ''
-  AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                WHERE gc.user_id = uj.user_id AND gc.status = 'connected')
-    OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = uj.user_id))
-GROUP BY j.company_slug;
+-- Both sides come from application_events, not from live mail. Reading the emails table
+-- made the served rate a function of the candidate's inbox hygiene: it counted messages
+-- WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
+-- answered them look silent, on a public page, about a named company. The ledger records
+-- that the reply arrived; what later became of the message is not the employer's doing.
+--
+-- "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
+-- candidate recorded, and a company that replied to somebody who never updated their
+-- board still replied. A retracted event does not count — it belongs to another employer.
+--
+-- The median covers answered applications only and is therefore right-censored; the
+-- serving layer reports the unanswered count beside it so the number is never read as
+-- "employers reply in six days" when most of the sample was never replied to. Replies
+-- dated before their application (an application reconstructed from a later message, or
+-- clock skew) still count as answered but are kept out of the median, where they would
+-- contribute a negative duration.
+WITH observable AS (
+    SELECT ae.user_id, ae.job_id, ae.company_slug, ae.occurred_at AS applied_at
+      FROM application_events ae
+     WHERE ae.kind = 'applied'
+       AND ae.retracted_at IS NULL
+       AND ae.company_slug <> ''
+       AND (EXISTS (SELECT 1 FROM gmail_connections gc
+                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected')
+         OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
+), answered AS (
+    SELECT o.company_slug, o.applied_at,
+           (SELECT min(r.occurred_at)
+              FROM application_events r
+             WHERE r.user_id      = o.user_id
+               AND r.job_id       = o.job_id
+               AND r.kind         = 'employer_reply'
+               AND r.retracted_at IS NULL) AS replied_at
+      FROM observable o
+)
+INSERT INTO insights_company_response (company_slug, applications, answered, median_reply_days)
+SELECT company_slug,
+       count(*)::int,
+       count(*) FILTER (WHERE replied_at IS NOT NULL)::int,
+       percentile_cont(0.5) WITHIN GROUP (
+           ORDER BY EXTRACT(EPOCH FROM (replied_at - applied_at)) / 86400.0
+       ) FILTER (WHERE replied_at IS NOT NULL AND replied_at >= applied_at)::real
+  FROM answered
+ GROUP BY company_slug;
 
 -- name: GetCompanyResponse :one
 -- The observable application counts for one company. A company with no row has no
 -- observable applications at all, which the caller must treat as "not enough data"
 -- rather than as a zero response rate.
-SELECT applications, answered FROM insights_company_response WHERE company_slug = $1;
+SELECT applications, answered, median_reply_days FROM insights_company_response WHERE company_slug = $1;

@@ -104,6 +104,23 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   and `POST /me/emails/:id/application` is the way out of the second: it records
   the application from the mail and links it in one call. Keep all three reachable;
   measured link coverage is a function of the interface, not only of `mailmatch`.
+- **Every link mutation ends with a ledger reconcile, and retraction is not deletion.**
+  A linked message records an `employer_reply` in `application_events`, and that ledger —
+  not this table — is what the per-company response rate reads. Five paths change the
+  pairing (`SetEmailClassification`, `AgentTriageEmail`, `ConfirmEmailLink`,
+  `LinkEmailToJob`, `UnlinkEmail`), so the rule is one reconcile with five callers: the
+  inbox's four funnel through `mutate`, `Triage` calls it directly because it writes
+  status, link and provenance in a single update. **Deleting a message changes nothing** —
+  it hides content, it does not un-happen the reply — while **re-linking retracts and
+  re-records**, because a wrong link left standing poisons a named company's public rate
+  permanently (the Workable case above). The reconcile is deliberately **two statements in
+  order**: written as one with data-modifying CTEs, every CTE reads the same pre-statement
+  snapshot, so the insert's `ON CONFLICT` still sees the row the retract just stamped and
+  silently records nothing.
+- **A linked message counts as a reply whether or not it is classified.** Requiring a
+  classification reads as the stricter rule and is the opposite: `external` mail is never
+  classified server-side by design, so that tier's replies would never count and their
+  employers would read as more silent than they were.
 - **An application recorded from mail is dated by the mail.** `received_at`, never
   `now()` — the application demonstrably existed by the time the employer wrote, so
   the mail's timestamp is an honest upper bound. The error then leans toward

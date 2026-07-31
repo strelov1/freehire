@@ -53,15 +53,25 @@ func TestRebuildInsightsCompanyResponse_CountsObservableApplications(t *testing.
 	for _, a := range []struct {
 		uid, jid int64
 	}{{answered, job1}, {ignored, job2}} {
-		if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: a.uid, JobID: a.jid}); err != nil {
+		if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: a.uid, JobID: a.jid, EventSource: "user"}); err != nil {
 			t.Fatalf("MarkJobApplied: %v", err)
 		}
 	}
-	// One reply arrives, linked to the first application.
-	if _, err := pool.Exec(ctx,
+	// One reply arrives, linked to the first application. It is deliberately left
+	// unclassified: a linked message is evidence the employer wrote, and requiring a
+	// classification would silently exclude the `external` tier, which is never
+	// classified server-side.
+	var replyID int64
+	if err := pool.QueryRow(ctx,
 		`INSERT INTO emails (user_id, external_id, source, subject, job_id, received_at)
-		 VALUES ($1, 'reply-1', 'gmail', 'Thanks for applying', $2, now())`, answered, job1); err != nil {
+		 VALUES ($1, 'reply-1', 'gmail', 'Thanks for applying', $2, now()) RETURNING id`,
+		answered, job1).Scan(&replyID); err != nil {
 		t.Fatalf("seed reply: %v", err)
+	}
+	if err := q.RecordEmailApplicationEvent(ctx, RecordEmailApplicationEventParams{
+		ID: replyID, UserID: answered, EventSource: "mail_gmail",
+	}); err != nil {
+		t.Fatalf("record reply event: %v", err)
 	}
 
 	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
@@ -92,7 +102,7 @@ func TestRebuildInsightsCompanyResponse_ExcludesUnobservableApplicationsFromBoth
 	for _, a := range []struct {
 		uid, jid int64
 	}{{observable, job1}, {invisible, job2}} {
-		if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: a.uid, JobID: a.jid}); err != nil {
+		if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: a.uid, JobID: a.jid, EventSource: "user"}); err != nil {
 			t.Fatalf("MarkJobApplied: %v", err)
 		}
 	}
@@ -122,5 +132,81 @@ func TestRebuildInsightsCompanyResponse_CompanyWithNoObservableApplicationsHasNo
 	}
 	if _, err := q.GetCompanyResponse(ctx, "quietco"); err == nil {
 		t.Error("a company with no observable application returned a row; absence must stay distinguishable from zero")
+	}
+}
+
+// The two facts the ledger was introduced to protect, asserted at the level a visitor
+// actually sees: the served company rate.
+func TestRebuildInsightsCompanyResponse_DeletionAndRelink(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "rate-move@example.test", true)
+	jobA := seedResponseJob(t, q, "rate-a", "alpha")
+	jobB := seedResponseJob(t, q, "rate-b", "beta")
+	for _, j := range []int64{jobA, jobB} {
+		if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: j, EventSource: "user"}); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	}
+	var reply int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO emails (user_id, external_id, source, job_id, received_at)
+		 VALUES ($1, 'move-1', 'gmail', $2, now()) RETURNING id`, user, jobA).Scan(&reply); err != nil {
+		t.Fatalf("seed reply: %v", err)
+	}
+	reconcile := func() {
+		t.Helper()
+		if _, err := q.RetractSupersededEmailEvent(ctx, RetractSupersededEmailEventParams{ID: reply, UserID: user}); err != nil {
+			t.Fatalf("retract: %v", err)
+		}
+		if err := q.RecordEmailApplicationEvent(ctx, RecordEmailApplicationEventParams{
+			ID: reply, UserID: user, EventSource: "mail_gmail",
+		}); err != nil {
+			t.Fatalf("record: %v", err)
+		}
+	}
+	answered := func(slug string) int32 {
+		t.Helper()
+		// The worker clears and rebuilds in one transaction; the rebuild statement is
+		// insert-only, so a test that reruns it must clear too.
+		if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
+			t.Fatalf("clear: %v", err)
+		}
+		if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+			t.Fatalf("rebuild: %v", err)
+		}
+		row, err := q.GetCompanyResponse(ctx, slug)
+		if err != nil {
+			return 0
+		}
+		return row.Answered
+	}
+
+	reconcile()
+	if got := answered("alpha"); got != 1 {
+		t.Fatalf("alpha answered = %d, want 1", got)
+	}
+
+	// Tidying the inbox must not make an employer that answered look silent.
+	if _, err := pool.Exec(ctx, `UPDATE emails SET deleted_at = now() WHERE id = $1`, reply); err != nil {
+		t.Fatalf("delete mail: %v", err)
+	}
+	reconcile()
+	if got := answered("alpha"); got != 1 {
+		t.Errorf("alpha answered = %d after the candidate deleted the mail, want 1 — inbox hygiene must not move a public number", got)
+	}
+
+	// Correcting a mislink must move the credit, or the wrong company stays poisoned.
+	if _, err := pool.Exec(ctx, `UPDATE emails SET job_id = $2 WHERE id = $1`, reply, jobB); err != nil {
+		t.Fatalf("relink: %v", err)
+	}
+	reconcile()
+	if got := answered("alpha"); got != 0 {
+		t.Errorf("alpha answered = %d after the link was corrected away, want 0", got)
+	}
+	if got := answered("beta"); got != 1 {
+		t.Errorf("beta answered = %d after the correction, want 1", got)
 	}
 }

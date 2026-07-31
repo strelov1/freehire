@@ -19,12 +19,33 @@ import (
 // less than ten points.
 const responseSampleGate = 10
 
+// replySampleGate is how many ANSWERED applications a company needs before its median
+// time to first reply is served.
+//
+// Separate from responseSampleGate on purpose, and deliberately not shared with it: the
+// rate's denominator is every observable application, the median's is only the answered
+// ones, so a company can clear the first comfortably while the second rests on three
+// data points. They are two numbers with two denominators and they need two gates.
+//
+// Like the gate beside it this is a judgement, not a measurement, and should be revisited
+// once the sample exists.
+const replySampleGate = 5
+
 // companyResponse is the served response-rate fact. It is a pointer field on the
 // company payload and absent below the gate, so a client cannot render a rate the
 // data does not support: there is nothing to render.
+//
+// Unanswered rides along because the median is right-censored: it covers the answered
+// applications only, and a client shown "replies in 6 days" without "and 31 were never
+// answered" would read the reassuring half of a two-part fact.
 type companyResponse struct {
 	Applications int32 `json:"applications"`
 	Answered     int32 `json:"answered"`
+	Unanswered   int32 `json:"unanswered"`
+	// MedianReplyDays is absent below replySampleGate, and absent — not zero — for a
+	// company that answered nobody. A median of zero days would read as "answers
+	// immediately", the exact inversion of what happened.
+	MedianReplyDays *float32 `json:"median_reply_days,omitempty"`
 }
 
 // companyResponseRate reads a company's observable application counts and returns
@@ -43,5 +64,14 @@ func companyResponseRate(ctx context.Context, q *db.Queries, slug string) *compa
 	if row.Applications < responseSampleGate {
 		return nil
 	}
-	return &companyResponse{Applications: row.Applications, Answered: row.Answered}
+	out := &companyResponse{
+		Applications: row.Applications,
+		Answered:     row.Answered,
+		Unanswered:   row.Applications - row.Answered,
+	}
+	if row.MedianReplyDays.Valid && row.Answered >= replySampleGate {
+		days := row.MedianReplyDays.Float32
+		out.MedianReplyDays = &days
+	}
+	return out
 }

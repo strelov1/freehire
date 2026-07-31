@@ -111,6 +111,23 @@ employers.
 - **THEN** A's event is retracted and drops out of A's aggregate, and a new event is recorded
   for B at the same `occurred_at`
 
+### Requirement: A linked message records a reply whether or not it is classified
+
+An `employer_reply` event SHALL be recorded for any message linked to an application,
+regardless of whether it carries a classification. The signal, when present, is detail
+about what the reply said; it is not the evidence that a reply arrived.
+
+Requiring a classification reads as the stricter rule and is the opposite. `external` mail
+— the tier a caller's own harness pushes — is never classified server-side by design, so
+those users' replies would never count and their employers would appear more silent than
+they were. That is the distortion this ledger exists to remove.
+
+#### Scenario: Unclassified mail still answers an application
+
+- **WHEN** a message is linked to an application but never classified
+- **THEN** an `employer_reply` event exists for it, carrying an empty signal, and the
+  application counts as answered
+
 ### Requirement: Only events with a real date are backfilled
 
 `cmd/backfill-application-events` SHALL replay only the events whose timestamp exists in the

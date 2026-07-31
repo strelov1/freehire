@@ -110,6 +110,15 @@ uses for the stage vocabulary. Callers are `internal/maillink`, `internal/inbox`
 `internal/inbox` directly and issues no HTTP request; a rule placed in a Fiber handler is one the
 in-process agent never meets, which is how the CV-tailoring contact guard was once lost.
 
+### A linked message is a reply, classified or not
+
+The first draft of this design recorded an event only for mail that was both linked and
+classified. An existing rollup test rejected it, and was right to: `external` mail is never
+classified server-side — that is what makes the bring-your-own-harness tier free — so every
+such user's replies would have gone unrecorded and their employers would have read as more
+silent than they were. The signal is detail about the reply; the link is the evidence one
+arrived.
+
 ### Time to first reply reports its censoring
 
 The median covers answered applications only, and is served with the count of applications still

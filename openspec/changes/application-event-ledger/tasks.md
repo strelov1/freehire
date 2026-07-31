@@ -29,27 +29,27 @@
 
 ## 3. Backfill
 
-- [ ] 3.1 Add `cmd/backfill-application-events`: keyset pass in the manner of
+- [x] 3.1 Add `cmd/backfill-application-events`: keyset pass in the manner of
   `cmd/backfill-derive`, replaying `applied`, `employer_reply`, and `follow_up_sent` from their
   existing timestamps. No `stage_set`.
-- [ ] 3.2 Prove idempotency: a second full run over the same data adds no rows.
+- [x] 3.2 Prove idempotency: a second full run over the same data adds no rows.
 
 ## 4. Aggregate
 
-- [ ] 4.1 Rewrite `RebuildInsightsCompanyResponse` against `application_events`, keeping the
+- [x] 4.1 Rewrite `RebuildInsightsCompanyResponse` against `application_events`, keeping the
   connected-mailbox cohort gate on both sides and excluding retracted events.
-- [ ] 4.2 Add the median days-to-first-reply and the unanswered count to the rebuild, computed
+- [x] 4.2 Add the median days-to-first-reply and the unanswered count to the rebuild, computed
   over `occurred_at`.
-- [ ] 4.3 Serve both in the company payload behind their own sample gates, absent below them.
+- [x] 4.3 Serve both in the company payload behind their own sample gates, absent below them.
 
 ## 5. Verification
 
-- [ ] 5.1 Integration test: deleting a linked email leaves the company rate unchanged.
-- [ ] 5.2 Integration test: re-linking an email moves the answered count between companies.
-- [ ] 5.3 Integration test: two follow-ups on one application produce two readable events.
-- [ ] 5.4 Integration test: a company above the gate with no replies serves a zero rate and no
+- [x] 5.1 Integration test: deleting a linked email leaves the company rate unchanged.
+- [x] 5.2 Integration test: re-linking an email moves the answered count between companies.
+- [x] 5.3 Integration test: two follow-ups on one application produce two readable events.
+- [x] 5.4 Integration test: a company above the gate with no replies serves a zero rate and no
   median.
-- [ ] 5.5 Unit test: the backfill assigns no `stage_set` events and derives dates from the
+- [x] 5.5 Integration test (not unit — the assertion is about SQL the backfill runs): the backfill assigns no `stage_set` events and derives dates from the
   source timestamps, not from the run time.
-- [ ] 5.6 Update `internal/userjob/AGENTS.md` and `docs/agents/mail-stack.md` with the ledger's
+- [x] 5.6 Update `internal/userjob/AGENTS.md` and `docs/agents/mail-stack.md` with the ledger's
   place in each path, and note the retraction-vs-deletion distinction where the link rules live.

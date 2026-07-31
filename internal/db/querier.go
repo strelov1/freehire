@@ -51,6 +51,25 @@ type Querier interface {
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
+	// Replay one keyset batch of recorded applications. Keyed by job_id because user_jobs has
+	// no surrogate key; the pass walks (user_id, job_id) pairs in job order per user.
+	//
+	// Only applications carry a date. A row that was staged but never marked applied has
+	// nothing to replay, and the ledger says nothing about it rather than inventing a day.
+	// The cursor is the LAST ROW of the batch's own order, not max() of each column
+	// independently: the greatest user_id and the greatest job_id can belong to different
+	// rows, and a cursor assembled from both would jump past rows that were never scanned.
+	BackfillAppliedEvents(ctx context.Context, arg BackfillAppliedEventsParams) (BackfillAppliedEventsRow, error)
+	// Replay one keyset batch of already-linked mail into the ledger.
+	//
+	// Deleted mail is included deliberately. Deletion hides content; it does not un-happen the
+	// reply, and excluding it here would bake the very inbox-hygiene dependence this ledger
+	// exists to remove into its starting contents.
+	//
+	// The three appevent source names arrive as parameters rather than being written here, so
+	// the vocabulary stays in Go where a pin test guards it. Mail from an unrecognised store
+	// is skipped rather than defaulted: an unknown provenance must not read as observed.
+	BackfillEmployerReplyEvents(ctx context.Context, arg BackfillEmployerReplyEventsParams) (BackfillEmployerReplyEventsRow, error)
 	// Find the ashby board already carrying a job with this Ashby job id — for company careers
 	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
 	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
@@ -1556,9 +1575,22 @@ type Querier interface {
 	// report our own blind spot as the employer's silence, which is the same mistake the
 	// job-level signal's mailbox gate exists to prevent.
 	//
-	// "Answered" is any non-deleted mail linked to that application. Not a stage advance:
-	// a stage is what the candidate recorded, and a company that replied to somebody who
-	// never updated their board still replied.
+	// Both sides come from application_events, not from live mail. Reading the emails table
+	// made the served rate a function of the candidate's inbox hygiene: it counted messages
+	// WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
+	// answered them look silent, on a public page, about a named company. The ledger records
+	// that the reply arrived; what later became of the message is not the employer's doing.
+	//
+	// "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
+	// candidate recorded, and a company that replied to somebody who never updated their
+	// board still replied. A retracted event does not count — it belongs to another employer.
+	//
+	// The median covers answered applications only and is therefore right-censored; the
+	// serving layer reports the unanswered count beside it so the number is never read as
+	// "employers reply in six days" when most of the sample was never replied to. Replies
+	// dated before their application (an application reconstructed from a later message, or
+	// clock skew) still count as answered but are kept out of the median, where they would
+	// contribute a negative duration.
 	RebuildInsightsCompanyResponse(ctx context.Context) (int64, error)
 	// Per-(company, day) hiring velocity with a running open count, from the retained
 	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
@@ -1647,8 +1679,15 @@ type Querier interface {
 	// A successful crawl clears the failure state and stamps freshness. Upsert so a
 	// first-ever crawl creates the row.
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
-	// Step 2: record the event when the message is both linked and classified and no live
-	// event exists for it. Run RetractSupersededEmailEvent first.
+	// Step 2: record the event when the message is LINKED and no live event exists for it.
+	// Run RetractSupersededEmailEvent first.
+	//
+	// Linked, not linked-and-classified. Requiring a classification reads as the stricter,
+	// safer rule and is the opposite: `external` mail — the tier a caller's own harness
+	// pushes — is never classified server-side by design, so those users' replies would
+	// never count and their employers would look more silent than they were. That is the
+	// distortion this ledger exists to remove. The signal is detail about the reply, not
+	// evidence that one arrived; an unclassified reply records an empty signal.
 	//
 	// The message's own received_at is the date. now() would compress a year of imported
 	// history into the day a mailbox was connected.

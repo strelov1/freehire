@@ -412,3 +412,85 @@ func TestRetractApplicationEvents_StampsRatherThanDeletes(t *testing.T) {
 		t.Errorf("a repeated correction touched %d rows, want 0 — the stamp must not move forward", again)
 	}
 }
+
+// The backfill replays only what carries a real date, and re-running it must add nothing:
+// the pass is restarted after an interruption rather than repaired, and it may run while
+// cmd/classify-mail is working on the same mail.
+func TestBackfill_ReplaysDatedFactsOnlyAndIsIdempotent(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "backfill@example.test", true)
+	job := seedResponseJob(t, q, "backfill-1", "acme")
+	applied := time.Date(2026, 5, 2, 8, 0, 0, 0, time.UTC)
+	chased := time.Date(2026, 5, 23, 8, 0, 0, 0, time.UTC)
+	replied := time.Date(2026, 5, 30, 8, 0, 0, 0, time.UTC)
+
+	// A tracked application with a stage the user set by hand, a chase, and one linked,
+	// classified, and since-deleted reply.
+	if _, err := q.db.Exec(ctx,
+		`INSERT INTO user_jobs (user_id, job_id, applied_at, followed_up_at, stage)
+		 VALUES ($1, $2, $3, $4, 'interview')`, user, job, applied, chased); err != nil {
+		t.Fatalf("seed application: %v", err)
+	}
+	if _, err := q.db.Exec(ctx,
+		`INSERT INTO emails (user_id, source, external_id, received_at, job_id, status_signal, deleted_at)
+		 VALUES ($1, 'gmail', 'bf-1', $2, $3, 'interview_invitation', now())`, user, replied, job); err != nil {
+		t.Fatalf("seed email: %v", err)
+	}
+
+	replay := func() {
+		t.Helper()
+		if _, err := q.BackfillEmployerReplyEvents(ctx, BackfillEmployerReplyEventsParams{
+			ID: 0, BatchSize: 100,
+			SrcGmail: "mail_gmail", SrcHosted: "mail_hosted", SrcExternal: "mail_external",
+		}); err != nil {
+			t.Fatalf("replay replies: %v", err)
+		}
+		if _, err := q.BackfillAppliedEvents(ctx, BackfillAppliedEventsParams{
+			LastUserID: 0, LastJobID: 0, BatchSize: 100, EventSource: "user",
+		}); err != nil {
+			t.Fatalf("replay applications: %v", err)
+		}
+	}
+
+	replay()
+	replay() // idempotent
+
+	kinds := map[string]int{}
+	rows, err := q.db.Query(ctx,
+		`SELECT kind, count(*) FROM application_events WHERE user_id = $1 GROUP BY kind`, user)
+	if err != nil {
+		t.Fatalf("read events: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		var n int
+		if err := rows.Scan(&k, &n); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		kinds[k] = n
+	}
+
+	for kind, want := range map[string]int{"applied": 1, "follow_up_sent": 1, "employer_reply": 1} {
+		if kinds[kind] != want {
+			t.Errorf("%s events = %d, want %d (two passes must produce the same as one)", kind, kinds[kind], want)
+		}
+	}
+	if kinds["stage_set"] != 0 {
+		t.Errorf("the backfill invented %d stage_set events; the stage column carries no transition date, so any date given to one would be fabricated", kinds["stage_set"])
+	}
+
+	// The deleted message's reply is present, at its own date.
+	var occurred time.Time
+	if err := q.db.QueryRow(ctx,
+		`SELECT occurred_at FROM application_events WHERE user_id = $1 AND kind = 'employer_reply'`,
+		user).Scan(&occurred); err != nil {
+		t.Fatalf("read reply event: %v", err)
+	}
+	if !occurred.Equal(replied) {
+		t.Errorf("reply event dated %v, want the message's %v", occurred, replied)
+	}
+}
