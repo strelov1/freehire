@@ -151,3 +151,31 @@ created for them, so no fact recorded before this change loses the application i
 
 - **WHEN** the carry-over runs a second time
 - **THEN** no duplicate applications are created
+
+### Requirement: The board shows an application whose posting is gone
+
+The tracking board SHALL list an application after the catalogue has removed the posting it was
+made against. The posting's fields MAY be absent from the row; the employer and the role title
+MUST be present regardless, read from the application itself.
+
+Each row SHALL carry an identifier of its own, independent of any posting. The board has always
+been a list of applications and only borrowed the posting's slug because one was always at hand;
+an application with no posting has no slug to borrow, and a card the interface cannot address is
+a card it cannot open, route to, or key a list by.
+
+#### Scenario: A pruned posting leaves the card standing
+
+- **WHEN** the catalogue removes a posting a user applied to
+- **AND** that user loads their tracking board
+- **THEN** the application is listed, showing the employer and role title it carries
+- **AND** the row reports no posting
+
+#### Scenario: The row is addressable without a posting
+
+- **WHEN** a row carries no posting
+- **THEN** it still carries an identifier the interface can open and route to
+
+#### Scenario: A row with a posting is unchanged
+
+- **WHEN** a row's posting is still in the catalogue
+- **THEN** the posting's fields are present exactly as before

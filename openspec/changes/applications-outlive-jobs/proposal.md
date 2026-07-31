@@ -51,6 +51,14 @@ row the catalogue deletes on a schedule.
 - No user-visible behaviour changes, with one exception that is a bug fix: a company whose
   postings were pruned stops being reported as more silent than it was.
 
+**Correction, made after reading `ListUserJobs`:** the sentence above holds for the storage
+cutover and NOT for the goal. The board is driven by `user_jobs` rows and embeds a posting in
+every card, and `cmd/prune` cascades that row away — so an application whose posting was removed
+survives in the database and in every aggregate while staying invisible to its owner. Delivering
+the stated goal therefore requires a wire-shape change, and this proposal's promise not to make
+one was written before that was known. The change is scoped and specified rather than made
+quietly: see the posting-less card requirement in `application-record`.
+
 Out of scope, each its own change: reconstructing application history from a mailbox backfill,
 the retrospective surface, and the import channel.
 

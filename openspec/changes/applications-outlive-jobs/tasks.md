@@ -52,9 +52,9 @@
 > not quietly broken: the job fields become optional and a card falls back to the application's
 > own `company_slug` and `role_title`.
 
-- [ ] 5b.1 Decide and record the wire shape for a posting-less card in `jobview`
+- [x] 5b.1 Decide and record the wire shape. **Decided:** `job` becomes optional on a board row; `company_slug` and `role_title` ride at the top level, read from the application; and the row gains **an identifier of its own**. The last part is the finding — `JobBoard.svelte:54` keys every card, route and panel on `row.job.public_slug`, which a posting-less application does not have. Recorded as a requirement in `application-record`, and the proposal's "no wire-shape change" promise is corrected in place rather than quietly broken
 - [ ] 5b.2 Drive the board read from applications, left-joining the posting instead of requiring it
-- [ ] 5b.3 SPA renders the fallback card; `freehire-cli` and `freehire-mcp` tolerate the absent job
+- [ ] 5b.3 SPA renders the fallback card and keys it on the row's own id, not on `job.public_slug`; `freehire-cli` and `freehire-mcp` tolerate the absent job
 - [ ] 5b.4 Integration test: an application whose posting was pruned still appears on its owner's board
 
 ## 6. Cut over the mail path
