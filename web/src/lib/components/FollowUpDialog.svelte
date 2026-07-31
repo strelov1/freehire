@@ -2,7 +2,7 @@
   import { Check, Copy, Clock, X } from '@lucide/svelte';
   import { Button } from '$lib/ui';
   import { api } from '$lib/api';
-  import { clipboardText } from '$lib/followup';
+  import { clipboardText, gmailHref, mailtoHref } from '$lib/followup';
   import { errorMessage } from '$lib/utils';
   import { focusTrap } from '$lib/actions/focusTrap';
   import type { FollowUpDraft } from '$lib/types';
@@ -25,6 +25,8 @@
   let error = $state<string | null>(null);
   let copied = $state(false);
 
+  const who = $derived(company || 'This application');
+
   // Fetch once per mount; the parent keys this dialog by slug, so the prop never
   // changes underneath it.
   $effect(() => {
@@ -39,10 +41,19 @@
     }
   }
 
-  // Copying IS the record: the candidate takes the text away to send it, and asking
-  // for a second confirming click is the friction this feature exists to remove.
-  // A failed POST does not undo the copy — the text is already on the clipboard, so
-  // the button stays "Copied" and only the chase mark is lost.
+  // Taking the draft away IS the record — by clipboard or by compose link, both hand
+  // it to the candidate, and asking for a second confirming click reintroduces the
+  // friction this feature removes. A failed POST does not undo the handoff: the draft
+  // is already gone, so only the chase mark is lost and the message says so.
+  async function record() {
+    try {
+      await api.recordFollowUp(slug);
+      onrecorded(new Date().toISOString());
+    } catch (e) {
+      error = errorMessage(e, "Couldn't record the follow-up — your draft is unaffected.");
+    }
+  }
+
   async function copy() {
     if (!draft) return;
     try {
@@ -52,12 +63,7 @@
       return;
     }
     copied = true;
-    try {
-      await api.recordFollowUp(slug);
-      onrecorded(new Date().toISOString());
-    } catch (e) {
-      error = errorMessage(e, "Copied, but couldn't record the follow-up.");
-    }
+    await record();
   }
 </script>
 
@@ -80,11 +86,7 @@
       <div class="min-w-0 flex-1">
         <h2 class="text-lg font-semibold leading-tight">Follow up</h2>
         <p class="mt-0.5 truncate text-sm text-muted-foreground">
-          {#if draft}
-            {company || 'This application'} — no reply for {draft.days_silent} days
-          {:else}
-            {company || 'This application'}
-          {/if}
+          {who}{#if draft}&nbsp;— no reply for {draft.days_silent} days{/if}
         </p>
       </div>
       <button
@@ -128,15 +130,39 @@
       {/if}
     </div>
 
-    <div class="flex justify-end gap-2 border-t border-border p-4">
-      <Button variant="outline" onclick={onclose}>Close</Button>
-      <Button variant="primary" onclick={copy} disabled={!draft} class="gap-1.5">
-        {#if copied}
-          <Check class="size-4" /> Copied
-        {:else}
-          <Copy class="size-4" /> Copy draft
-        {/if}
-      </Button>
+    <div class="flex flex-wrap items-center gap-2 border-t border-border p-4">
+      {#if draft}
+        <!-- Both links open a compose window in the candidate's own client, prefilled.
+             Neither sends; both record the chase on the way out. Gmail is offered
+             beside mailto because a browser with no registered mail handler does
+             nothing at all on a mailto click. -->
+        <!-- eslint-disable svelte/no-navigation-without-resolve -- mail handoffs, not internal routes -->
+        <span class="flex items-center gap-1 text-xs text-muted-foreground">
+          Open in
+          <a
+            href={gmailHref(draft)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onclick={record}
+            class="font-medium text-brand-strong hover:underline">Gmail</a
+          >
+          <span aria-hidden="true">·</span>
+          <a href={mailtoHref(draft)} onclick={record} class="font-medium text-brand-strong hover:underline">
+            Mail app
+          </a>
+        </span>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
+      {/if}
+      <span class="ml-auto flex gap-2">
+        <Button variant="outline" onclick={onclose}>Close</Button>
+        <Button variant="primary" onclick={copy} disabled={!draft} class="gap-1.5">
+          {#if copied}
+            <Check class="size-4" /> Copied
+          {:else}
+            <Copy class="size-4" /> Copy draft
+          {/if}
+        </Button>
+      </span>
     </div>
   </div>
 </div>

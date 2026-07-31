@@ -41,18 +41,31 @@
 
 ## 4. The board
 
-- [ ] 4.1 Offer the draft from the silent card in `BoardCard.svelte`, next to the existing badge, and
-      show the assembled subject/body with a copy action.
-- [ ] 4.2 A chased card keeps its silence marker and additionally reports when it was chased. Unit
-      test the view logic (the repo's convention: logic in `.ts`, thin components).
-- [ ] 4.3 Verify visually at desktop and mobile widths — the board card is dense, and a second line
-      of state is exactly where it will overflow.
+- [x] 4.1 Offer the draft from the silent card in `BoardCard.svelte`, next to the existing badge, and
+      show the assembled subject/body with a copy action. The card stopped being one `<button>` — a
+      second control cannot nest inside the first — so the open action stretches over the card via an
+      `::after` overlay and the follow-up button sits above it on `z-10`. The dialog also offers a
+      Gmail and a `mailto:` compose link: both hand the draft to the candidate's own client, which is
+      the same handoff the clipboard makes, one click shorter. Copy stays because a `mailto:` on a
+      machine with no registered handler fails silently.
+- [x] 4.2 A chased card keeps its silence marker and additionally reports when it was chased. Unit
+      test the view logic (the repo's convention: logic in `.ts`, thin components) — `$lib/followup.ts`,
+      15 tests. This needed the wire shape first: `followed_up_at` reached the sqlc rows but neither
+      `jobtracking.TrackedJob` nor the two responses carried it, so the board could not have shown it.
+- [x] 4.3 Verify visually at desktop and mobile widths — the board card is dense, and a second line
+      of state is exactly where it will overflow. Shot at 1100 and at a real 390 (CDP device
+      emulation; `--window-size` clamps the layout viewport at 500). No card or dialog overflows; the
+      badge row and the dialog footer wrap rather than clip. Hit-tested the overlay by dispatched
+      pointer events: a click on Follow up does NOT open the drawer, and a click anywhere else still
+      does — the one failure mode a screenshot cannot show.
 
 ## 5. Close out
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...`; `go test -tags=integration ./internal/db/
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...`; `go test -tags=integration ./internal/db/
       ./internal/handler/`; in `web/`: `pnpm run lint`, `pnpm run check`, `pnpm test`, `pnpm run build`
-      (all four — `svelte-check` catches what the others miss).
-- [ ] 5.2 Record in `docs/agents/notifications.md` (or the tracking reference) that `followed_up_at`
+      (all four — `svelte-check` catches what the others miss). Run after rebasing onto origin/main,
+      which had moved four commits (including design-system changes).
+- [x] 5.2 Record in `docs/agents/notifications.md` (or the tracking reference) that `followed_up_at`
       exists, that it is deliberately outside the silence derivation, and what the card shows when
-      both are set.
+      both are set. Written into `internal/userjob/AGENTS.md`, beside the silence ladder it must not
+      join.

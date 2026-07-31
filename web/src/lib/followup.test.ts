@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canFollowUp, chasedLabel, clipboardText } from './followup';
+import { canFollowUp, chasedLabel, clipboardText, mailtoHref, gmailHref } from './followup';
 import type { MyJob, FollowUpDraft } from './types';
 
 // The card's follow-up logic reads only the silence verdict and the chase mark;
@@ -73,5 +73,45 @@ describe('clipboardText', () => {
     expect(clipboardText({ ...draft, recipient: 'jane@acme.com' })).toBe(
       'To: jane@acme.com\nSubject: Following up: Go Engineer application\n\nHello,\n\nI applied…',
     );
+  });
+});
+
+describe('compose links', () => {
+  const draft: FollowUpDraft = {
+    subject: 'Following up: Go Engineer application',
+    body: 'Hello,\n\nI applied…',
+    days_silent: 24,
+  };
+
+  // Paragraph breaks are the whole shape of the message. Left raw, a mail client
+  // may collapse them into one run-on paragraph.
+  it('percent-encodes the newlines that carry the paragraphs', () => {
+    expect(mailtoHref(draft)).toContain('body=Hello%2C%0A%0AI%20applied');
+    expect(gmailHref(draft)).toContain('body=Hello%2C%0A%0AI%20applied');
+  });
+
+  // RFC 6068 keeps the `@` literal in a mailto addr-spec; clients that do not decode
+  // %40 open with an empty To field, which reads as the link being broken. Inside
+  // Gmail's `to=` query parameter the encoded form is ordinary and correct.
+  it('addresses the message when a recipient is known', () => {
+    expect(mailtoHref({ ...draft, recipient: 'jane@acme.com' })).toMatch(/^mailto:jane@acme\.com\?/);
+    expect(gmailHref({ ...draft, recipient: 'jane@acme.com' })).toContain('to=jane%40acme.com');
+  });
+
+  // The address arrives from a parsed mail header, not a controlled vocabulary. A `?`
+  // or `&` in it would otherwise start injecting mailto parameters.
+  it('still encodes everything around the @', () => {
+    expect(mailtoHref({ ...draft, recipient: 'a?b&c@ex ample.com' })).toMatch(/^mailto:a%3Fb%26c@ex%20ample\.com\?/);
+  });
+
+  // The commonest silent application has nobody to address. The link must still open
+  // a compose window with the text in it, leaving the To field for the candidate.
+  it('opens an unaddressed compose when no recipient is known', () => {
+    expect(mailtoHref(draft)).toMatch(/^mailto:\?/);
+    expect(gmailHref(draft)).not.toContain('to=');
+  });
+
+  it('points Gmail at its compose view', () => {
+    expect(gmailHref(draft)).toMatch(/^https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&/);
   });
 });

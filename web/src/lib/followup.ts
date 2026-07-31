@@ -37,3 +37,35 @@ export function clipboardText(draft: FollowUpDraft): string {
   const head = draft.recipient ? `To: ${draft.recipient}\n` : '';
   return `${head}Subject: ${draft.subject}\n\n${draft.body}`;
 }
+
+// Both compose links open a window in the candidate's own client and never send —
+// the same handoff the copy action makes, one click shorter. encodeURIComponent turns
+// the paragraph breaks into %0A; left raw, some clients run the paragraphs together.
+// Both targets cap the URL near 2 KB, comfortably above a draft this size, and the
+// copy action stays as the escape hatch if that ever stops being true.
+
+/** A `mailto:` for the candidate's default mail client. An unaddressed draft still
+ *  opens a compose window with the To field left blank — that is the commonest
+ *  silent application, and withholding the link there would help nobody. */
+export function mailtoHref(draft: FollowUpDraft): string {
+  const to = draft.recipient ? mailtoAddress(draft.recipient) : '';
+  return `mailto:${to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+}
+
+/** RFC 6068 keeps the `@` literal in a mailto addr-spec, and clients that do not decode
+ *  `%40` open with an empty To field — indistinguishable, to the candidate, from the link
+ *  being broken. Everything either side of it is still encoded: the address comes from a
+ *  parsed mail header, so a stray `?` or `&` would otherwise inject mailto parameters. */
+function mailtoAddress(addr: string): string {
+  const at = addr.lastIndexOf('@');
+  if (at < 0) return encodeURIComponent(addr);
+  return `${encodeURIComponent(addr.slice(0, at))}@${encodeURIComponent(addr.slice(at + 1))}`;
+}
+
+/** Gmail's web compose (`su`, not `subject`). Worth offering beside `mailto:` because
+ *  a browser whose OS registers no mail handler does nothing at all on a mailto click
+ *  — a silent failure the candidate would read as the feature being broken. */
+export function gmailHref(draft: FollowUpDraft): string {
+  const to = draft.recipient ? `to=${encodeURIComponent(draft.recipient)}&` : '';
+  return `https://mail.google.com/mail/?view=cm&fs=1&${to}su=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+}
