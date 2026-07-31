@@ -77,7 +77,9 @@
 
 ## 11. Verification
 
-- [ ] 11.1 `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`
-- [ ] 11.2 `make sqlc` after the migration; contracts regenerated for the new wire types
-- [ ] 11.3 Web `pnpm check` and `vitest`
-- [ ] 11.4 Drive it: edit in the workspace, run the agent, undo one edit and a whole run, confirm the underline lands on the right line
+- [x] 11.1 `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`
+- [x] 11.2 `make sqlc` after the migration; contracts regenerated for the new wire types
+- [x] 11.3 Web `pnpm check` and `vitest` — 0 type errors, 608 tests
+- [x] 11.4 Driven against a real stack (scratch DB built the initdb way, server on :8095, Vite on :5179): two saves recorded as two entries, a rewrite undone and the bullet restored, a second undo refused with 409, the undo itself in the feed with the reversed entry struck through, a tailored copy's feed opening with the system milestone (no undo control), and the underline landing on the rewritten bullet while the one beside it stays untouched. The agent's own run was NOT driven — this machine has no `LLM_*`, so a turn ends 503; `cv_edit` is covered by its unit and integration tests instead
+- [ ] 11.5 Second migration to drop `cvs.autopilot_undo`, in the release AFTER this one lands
+- [ ] 11.6 `freehire-cli`: update to the new `PATCH` body (separate repository)
