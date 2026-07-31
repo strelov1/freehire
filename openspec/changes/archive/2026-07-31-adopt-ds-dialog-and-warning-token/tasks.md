@@ -53,12 +53,12 @@ refuses to close mid-delete, and the platform's close knew nothing about that.
 
 ## 5. Finish
 
-- [ ] 5.1 Rebase onto main and re-run **both** `--update`s immediately before merge; a
+- [x] 5.1 Rebase onto main and re-run **both** `--update`s immediately before merge; a
       baseline that went stale mid-review is expected, not a defect.
-- [ ] 5.2 Full local run of the `design-system` job, every check green.
-- [ ] 5.3 Review the whole diff; act on Critical and Important.
-- [ ] 5.4 Integrate, then `/opsx:archive` and `/opsx:sync`.
-- [ ] 5.5 User-facing? The colour is. Offer a changelog entry.
+- [x] 5.2 Full local run of the `design-system` job, every check green.
+- [x] 5.3 Review the whole diff; act on Critical and Important.
+- [x] 5.4 Integrate, then `/opsx:archive` and `/opsx:sync`.
+- [x] 5.5 User-facing? The colour is. Offer a changelog entry.
 
 ## Verification actually performed
 
