@@ -1,0 +1,22 @@
+-- applications.applied_at becomes optional, because the table's subject is slightly wider than
+-- its name suggests: it is the candidate's tracked process with an employer, and applying is one
+-- event in it rather than its precondition.
+--
+-- The forcing case is the tracker's own API. `PATCH /jobs/:slug/track` sets a stage and/or notes
+-- and does NOT require the job to have been marked applied — user_jobs has always been able to
+-- carry a stage with applied_at unset, and the board's own filter counts a row with a stage as
+-- being on the board. When the stage and notes move to this table, that row needs a home here.
+--
+-- The alternative was to leave stage and notes on user_jobs for non-applied jobs and keep them
+-- here for applied ones. That gives one field two homes, which is exactly the duplication this
+-- change exists to remove: the two would disagree the first time a write path forgot one.
+--
+-- A NULL applied_at therefore reads as "tracked, not (yet) recorded as applied". Every consumer
+-- that means "an application was made" must test applied_at IS NOT NULL rather than assuming the
+-- row's existence says so — the ledger's `applied` event and the response-rate rollup already do,
+-- since they read events rather than this column.
+--
+-- Applied to a fresh volume by initdb after 0064; on an existing prod volume run this manually
+-- (SET ROLE hire). Relaxing a constraint, so it cannot fail on existing data.
+
+ALTER TABLE public.applications ALTER COLUMN applied_at DROP NOT NULL;

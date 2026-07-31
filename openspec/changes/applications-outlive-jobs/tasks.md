@@ -27,13 +27,35 @@
 - [x] 4.2 `RebuildInsightsCompanyResponse` pairs `applied` with `employer_reply` on `application_id`; tasks 1.1 and 1.2 go green
 - [x] 4.4 Integration test: the median reply time for a company is unchanged by deleting its postings
 
-## 5. Cut over the tracking core
+## 5a. Cut over the tracking core — storage only, behaviour identical
+
+> **Indivisible.** Reads and writes of `applied_at`/`stage`/`notes`/`followed_up_at` flip in one
+> pass; the design rejected dual-writing. Half of this port leaves the board reading one place
+> and the apply path writing another.
+
+- [x] 5a.0 `migrations/0065_applications_applied_at_optional.sql` — `applied_at` becomes nullable. `PATCH /jobs/:slug/track` sets a stage on a job never marked applied, and that row needs a home here; the alternative gave `stage` two homes, the duplication this change exists to remove. Decision recorded in the `application-record` spec
 
 - [ ] 5.1 Port `internal/db/queries/user_jobs.sql` to read and write `applications` for the application columns, keeping `user_jobs` for view/save/dismiss/vote; run `make sqlc`
 - [ ] 5.2 Port `internal/jobtracking` (`MarkApplied`, `TrackJob`, the board read) — `applied_count` stays incremented only on the live transition, never by the backfill
 - [ ] 5.3 Port `internal/userjob` silence reads so the stage ladder resolves from the application record
 - [ ] 5.4 Port `internal/handler/user_jobs.go`, `me_tracking.go` and `assistant_tracking_tools.go`; assert the wire shapes are identical to before
 - [ ] 5.5 Port `stats.sql` and `internal/handler/stats.go`
+
+## 5b. The board renders an application with no posting — **CONTRACT CHANGE**
+
+> Found while reading `ListUserJobs`: the board is driven by `user_jobs` rows and does
+> `SELECT sqlc.embed(jobs)`, so every card requires a posting. `cmd/prune` cascades the
+> `user_jobs` row away, so after 5a the record survives in the database and in every aggregate
+> but the candidate still cannot see it. The stated goal is only half-delivered without this.
+>
+> `proposal.md` currently promises no wire-shape change. That promise has to be revised here,
+> not quietly broken: the job fields become optional and a card falls back to the application's
+> own `company_slug` and `role_title`.
+
+- [ ] 5b.1 Decide and record the wire shape for a posting-less card in `jobview`
+- [ ] 5b.2 Drive the board read from applications, left-joining the posting instead of requiring it
+- [ ] 5b.3 SPA renders the fallback card; `freehire-cli` and `freehire-mcp` tolerate the absent job
+- [ ] 5b.4 Integration test: an application whose posting was pruned still appears on its owner's board
 
 ## 6. Cut over the mail path
 

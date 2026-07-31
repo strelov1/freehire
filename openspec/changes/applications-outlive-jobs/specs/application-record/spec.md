@@ -6,12 +6,23 @@ The system SHALL store a tracked application as its own record carrying the appl
 employer as a company slug, the role title, `applied_at`, `stage`, `notes` and `followed_up_at`,
 independent of whether the posting it was made against is still in the catalogue.
 
+`applied_at` MAY be absent. The record's subject is the candidate's tracked process with an
+employer, and applying is one event in it rather than its precondition: the tracker has always
+allowed a stage to be set on a job never marked applied. A consumer that means "an application
+was made" MUST test `applied_at`, never the row's existence.
+
 The employer and the role title MUST be stored on the record itself rather than read through the
 posting, because the posting is the part that can disappear.
 
 The record MUST NOT carry its own provenance field. How an application came to exist is already
 recorded by its `applied` event's source in the ledger, and a second copy would be a second thing
 to keep true.
+
+#### Scenario: A stage set without applying is still tracked
+
+- **WHEN** a candidate sets a stage on a job they never marked applied
+- **THEN** a record exists carrying that stage
+- **AND** its `applied_at` is absent, so nothing reports it as an application
 
 #### Scenario: Application carries the employer without consulting the catalogue
 
