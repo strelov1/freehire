@@ -1,11 +1,15 @@
 ## 1. Templates emit clickable links
 
-- [ ] 1.1 Add a registry-driven test asserting every template in `internal/cv/template.go`
+- [x] 1.1 Add a registry-driven test asserting every template in `internal/cv/template.go`
       renders header links and a project link as clickable links; it must fail today for the
       five templates that print them as inert text
-- [ ] 1.2 Make `portrait`, `sidebar`, `centered`, `modern-sans` and `headshot` emit `link()`,
+- [x] 1.2 Make `portrait`, `sidebar`, `centered`, `modern-sans` and `headshot` emit `link()`,
       keeping each template's own type scale (every internal `size:` an em multiple of its base)
-- [ ] 1.3 Regenerate the gallery previews with `make cv-previews` and commit the changed SVGs
+- [x] 1.3 Regenerate the gallery previews with `make cv-previews` and commit the changed SVGs
+- [x] 1.4 Install the prod-pinned typst in CI, so the registry guard runs instead of skipping —
+      a guard that skips is not a guard
+- [ ] 1.5 The requirement's "so that a reader can follow them" is only satisfied once 5.1b
+      lands; group 1 is not shippable on its own
 
 ## 2. Domain package `internal/tracerlink`
 

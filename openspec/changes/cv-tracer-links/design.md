@@ -74,7 +74,19 @@ look for, and it makes clickable links a precondition rather than a nicety.
 
 Not adjacent cleanup — with native visible text, an unclickable link is untrackable, so five of
 six templates would report zero. A registry-driven test covers every template, so a sixth added
-later by copying `portrait.typ` cannot silently reintroduce the hole.
+later by copying `portrait.typ` cannot silently reintroduce the hole. That test only guards the
+rule if CI can run it, so CI installs the same pinned typst as the prod image.
+
+Making a link clickable says nothing about how it looks. Only `classic-ats` colours links
+(`#show link: set text(fill: ...)`); the other five deliberately keep them visually identical to
+body text, which is why the gallery previews changed by zero pixels. The affordance stays each
+template's own design choice — copying that show rule into all six would move every preview and
+alter five designs to no purpose.
+
+The link's *target* is a separate matter from whether it is clickable, and it is not fixed by
+this decision: links are stored scheme-less, so the emitted URI is relative and unfollowable in
+every template today, `classic-ats` included and long predating this change. That is normalised
+in the render payload (task 5.1b), not in six copies of Typst string handling.
 
 ### `last_click_at` is denormalised onto `cvs`
 

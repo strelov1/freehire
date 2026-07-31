@@ -555,7 +555,9 @@ func TestEveryTemplateRendersLinksAsClickableLinks(t *testing.T) {
 		t.Skip("typst not installed; skipping clickable-link render regression")
 	}
 	doc := Document{
-		Header:     Header{FullName: "Ada Lovelace", Email: "ada@example.com", Links: []string{"github.com/ada"}},
+		// Two header links, not one: a template that linked only the first would otherwise
+		// pass, and this test exists to hold templates that do not exist yet.
+		Header:     Header{FullName: "Ada Lovelace", Email: "ada@example.com", Links: []string{"github.com/ada", "linkedin.com/in/ada"}},
 		Summary:    "Backend engineer with a decade of systems work.",
 		Experience: []ExperienceItem{{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present", Bullets: []string{"Cut latency by 40%."}}},
 		Projects:   []Project{{Name: "opensched", Link: "opensched.dev", Bullets: []string{"A tiny cron scheduler."}}},
@@ -573,9 +575,11 @@ func TestEveryTemplateRendersLinksAsClickableLinks(t *testing.T) {
 				t.Fatalf("render: %v", err)
 			}
 			targets := pdfLinkTargets(t, data)
-			for _, want := range []string{"github.com/ada", "opensched.dev"} {
+			for _, want := range []string{"github.com/ada", "linkedin.com/in/ada", "opensched.dev"} {
 				if !linksTo(targets, want) {
-					t.Errorf("template %q prints %q as inert text; link targets found: %v", ti.ID, want, targets)
+					t.Errorf("template %q renders no link to %q — it prints the link as inert text, or "+
+						"drops the section carrying it, and both leave nothing for tracing to substitute; "+
+						"link targets found: %v", ti.ID, want, targets)
 				}
 			}
 		})
