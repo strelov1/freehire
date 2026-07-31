@@ -620,7 +620,7 @@
         {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
         {revisions}
-        bind:pinnedRevision
+        onPreviewRevision={(r) => (pinnedRevision = r)}
         onUndoRevision={undoRevision}
         onUndoRevisionRun={undoRevisionRun}
         {onTemplateSelected}

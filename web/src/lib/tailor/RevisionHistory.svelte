@@ -16,13 +16,15 @@
 
   let {
     revisions,
-    pinned = $bindable(null),
+    onPreview,
     onUndo,
     onUndoRun,
   }: {
     revisions: RevisionView[];
-    /** The entry whose edits stay underlined in the preview until another is picked. */
-    pinned?: RevisionView | null;
+    /** Which entry's edits the preview should underline, or null for none. The highlight
+     *  belongs to the document rather than to this panel, so the feed reports what to show and
+     *  the page decides what to do with it. */
+    onPreview: (revision: RevisionView | null) => void;
     /** Undo one entry. The page owns this rather than the panel, because the document is
      *  saved on a debounce: undoing without flushing the pending save first lets the timer
      *  write the old text back a second later, and the undo silently reverses itself. */
@@ -35,17 +37,19 @@
 
   let busy = $state('');
   let error = $state('');
-  // Hovering previews; clicking pins. They are separate state because a hover must not erase
-  // a deliberate choice — the pinned entry is what the preview falls back to when the pointer
-  // moves away.
-  let hovered = $state<RevisionView | null>(null);
+  // Hovering previews; clicking pins. The clicked entry is kept separately because a hover
+  // must not erase a deliberate choice — it is what the preview falls back to when the pointer
+  // moves away. Both write `pinned` directly rather than through an effect, so the order of
+  // events is the order of assignments.
   let clicked = $state<RevisionView | null>(null);
-  $effect(() => {
-    pinned = hovered ?? clicked;
-  });
+
+  function preview(revision: RevisionView | null) {
+    onPreview(revision ?? clicked);
+  }
 
   function pin(revision: RevisionView) {
     clicked = clicked?.id === revision.id ? null : revision;
+    onPreview(clicked);
   }
 
   async function undoOne(revision: RevisionView) {
@@ -54,7 +58,7 @@
     try {
       await onUndo(revision);
       if (clicked?.id === revision.id) clicked = null;
-      hovered = null;
+      onPreview(clicked);
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that edit.';
     } finally {
@@ -68,7 +72,7 @@
     try {
       await onUndoRun(batchId);
       clicked = null;
-      hovered = null;
+      onPreview(null);
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that run.';
     } finally {
@@ -83,10 +87,8 @@
 {#snippet entry(revision: RevisionView, nested: boolean)}
   <li
     class={['group rounded px-2 py-1.5', nested ? 'ml-3 border-l border-border pl-3' : '']}
-    onmouseenter={() => (hovered = revision)}
-    onmouseleave={() => {
-      if (hovered?.id === revision.id) hovered = null;
-    }}
+    onmouseenter={() => preview(revision)}
+    onmouseleave={() => preview(null)}
   >
     <div class="flex items-start justify-between gap-2">
       <button type="button" class="min-w-0 flex-1 text-left" onclick={() => pin(revision)}>

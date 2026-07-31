@@ -44,7 +44,7 @@
     jobMatch = null,
     onRerunAutopilot,
     revisions = [],
-    pinnedRevision = $bindable(null),
+    onPreviewRevision,
     onUndoRevision,
     onUndoRevisionRun,
   }: {
@@ -66,9 +66,9 @@
     onRerunAutopilot: () => void;
     /** The CV's history, newest first. */
     revisions?: RevisionView[];
-    /** The entry whose edits stay underlined in the preview. Bound so the centre column can
-     *  read it — the highlight belongs to the document, not to this panel. */
-    pinnedRevision?: RevisionView | null;
+    /** Which entry's edits the preview should underline. The highlight belongs to the
+     *  document, so it travels through to the page rather than living in this panel. */
+    onPreviewRevision: (revision: RevisionView | null) => void;
     /** Undoing is the page's to run: it owns the debounced save that has to be flushed
      *  first, and the re-read that follows. */
     onUndoRevision: (revision: RevisionView) => Promise<void>;
@@ -198,7 +198,7 @@
         <TemplateGallery {cvId} onSelected={onTemplateSelected} />
       </div>
     {:else if tab === 'history'}
-      <RevisionHistory {revisions} bind:pinned={pinnedRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
+      <RevisionHistory {revisions} onPreview={onPreviewRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}

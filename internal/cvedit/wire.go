@@ -6,6 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// wireTime is how a timestamp travels: RFC 3339, the shape json.Marshal would produce anyway.
+// Stated as a string because the generated TypeScript has no mapping for time.Time and would
+// otherwise land as `any`, which is a type the client cannot check.
+func wireTime(t time.Time) string { return t.Format(time.RFC3339) }
+
 // This file holds the revision's wire shape — what the history feed shows and what the
 // preview highlights. It is generated to TypeScript, so it stays free of server-only
 // concerns: the operations themselves, the policy and the repository live elsewhere.
@@ -45,8 +50,8 @@ type RevisionView struct {
 	// nothing addressable" and "cannot be undone" are different facts.
 	Undoable bool `json:"undoable"`
 	// RevertsID names the revision this one undid, when it is itself an undo.
-	RevertsID string    `json:"reverts_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	RevertsID string `json:"reverts_id,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 // View renders a revision for the feed.
@@ -60,7 +65,7 @@ func (r Revision) View() RevisionView {
 		Paths:     r.Paths(),
 		Reverted:  r.Reverted(),
 		Undoable:  len(r.Inverse) > 0 && !r.Reverted(),
-		CreatedAt: r.CreatedAt,
+		CreatedAt: wireTime(r.CreatedAt),
 	}
 	if r.BatchID != uuid.Nil {
 		out.BatchID = r.BatchID.String()
