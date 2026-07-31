@@ -1,0 +1,50 @@
+---
+title: Rehearse the interview before you sit it
+date: 2026-07-31
+summary: An application at the interview stage now offers a mock interview — the agent asks about the vacancy's own requirements, listens to your answer, and tells you what a real interviewer would hear.
+type: changelog
+tags:
+  - assistant
+  - tracking
+draft: false
+---
+
+Until now the product stopped helping at the moment that decides the outcome. We take you
+through finding the vacancy, judging the fit, tailoring the CV and sorting the mail — and
+then you get a calendar invite and you are on your own.
+
+An application sitting in **Screening** or **Interview** on your tracking board now carries
+a **Rehearse** button. It opens a mock interview for that specific job.
+
+The agent speaks first: it reads the vacancy, the fit analysis and — if the employer's
+invitation is in your connected mailbox — what they said about the format, then asks which
+round you want to run. A recruiter screen, behavioural questions, questions about your CV,
+a technical round on their stack, system design, or the offer conversation. One round per
+rehearsal, the way a real loop works.
+
+Then it asks. One question at a time, and it waits.
+
+## Where the questions come from
+
+Not from a generic list. They come from the vacancy's own requirements, with your
+experience bank attached to each one, which means the agent knows two different things
+about every requirement:
+
+- **You have evidence for it.** Then you should practise saying it out loud, because
+  knowing a story and telling it well under pressure are not the same skill.
+- **You have nothing for it.** Then that is where you will struggle in the room — so
+  struggle here first, where it costs nothing.
+
+After each answer you get a short read on it: did you say what *you* did or what the team
+did, is there an actual outcome, and is that outcome a number when a number plainly exists.
+No praise padding. An answer that was genuinely good gets a clause and the next question.
+
+## What it will not do
+
+It will not put words in your mouth. If you tell it something real that your experience
+bank does not already hold, it will say so and **ask** whether to record it — and it stores
+your words, not its paraphrase of them. A rehearsal is where people improvise, and an
+improvisation filed as evidence is a claim you never made. Nothing is recorded on a maybe.
+
+The conversation lives in your agent sidebar afterwards, named after the vacancy, so you
+can come back to it the night before.
