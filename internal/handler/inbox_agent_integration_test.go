@@ -25,7 +25,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/jobtracking"
 )
 
 // agentInboxFixture is one signed-in user with an inbox, an app wired through the
@@ -66,10 +65,7 @@ func newAgentInboxFixture(t *testing.T, email string) *agentInboxFixture {
 		t.Fatalf("store key: %v", err)
 	}
 
-	h := &inboxHandlers{
-		queries: queries, pool: pool, mailDomain: "inbox.freehire.test",
-		tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
-	}
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.register(app.Group("/api/v1"), middleware{
 		cookie: auth.RequireAuth(iss, testVersions),

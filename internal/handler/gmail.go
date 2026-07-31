@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/gmailsync"
+	"github.com/strelov1/freehire/internal/inbox"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
@@ -38,13 +40,29 @@ type inboxHandlers struct {
 	// borrows the tracking use case rather than writing its own apply, so the
 	// applied_count guarantee stays in one place (see CreateApplicationFromEmail).
 	tracking *jobtracking.Service
+	// inbox holds the mail use cases these handlers render. The in-app assistant's
+	// mail tools call the same service, so a rule can never hold for one reader and
+	// not the other.
+	inbox *inbox.Service
+}
+
+// trackingApplications adapts the tracking service to the one call the mail
+// service makes of it. inbox does not need the resulting interaction, and taking
+// it would pull jobtracking into that package for no reader's benefit.
+type trackingApplications struct{ *jobtracking.Service }
+
+func (t trackingApplications) MarkAppliedAt(ctx context.Context, userID int64, slug string, at time.Time) error {
+	_, err := t.Service.MarkAppliedAt(ctx, userID, slug, at)
+	return err
 }
 
 func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *gmailsync.Connector, gmailCipher *tokencrypt.Cipher, frontendOrigin string, cookieSecure bool, mailDomain string) *inboxHandlers {
+	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))
 	return &inboxHandlers{
 		queries:        queries,
 		pool:           pool,
-		tracking:       jobtracking.New(jobtracking.NewQueriesRepository(queries, pool)),
+		tracking:       tracking,
+		inbox:          inbox.New(queries, trackingApplications{tracking}),
 		gmailConnector: gmailConnector,
 		gmailCipher:    gmailCipher,
 		frontendOrigin: frontendOrigin,

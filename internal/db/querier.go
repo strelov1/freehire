@@ -279,6 +279,15 @@ type Querier interface {
 	// Total live messages for the caller (same optional filters as ListEmails), for
 	// pagination.
 	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
+	// The mailbox's shape in one pass: one row per classification label (the empty
+	// label being mail nothing has judged yet), carrying that label's total plus how
+	// many of it are unread, unclassified, linked to an application, or carrying a
+	// pending suggestion. The caller sums the rows for the mailbox-wide totals — the
+	// alternative, a FILTER column per label, would restate mailclassify's vocabulary
+	// in SQL, where it would silently fall behind the Go one.
+	//
+	// Soft-deleted mail is excluded, so these counts and the listing's agree.
+	CountEmailsByState(ctx context.Context, userID int64) ([]CountEmailsByStateRow, error)
 	// How many claims this account has filed since a cutoff, for the daily cap. Counts
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.

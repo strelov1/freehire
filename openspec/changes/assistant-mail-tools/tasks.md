@@ -1,31 +1,31 @@
 ## 1. Extract `internal/inbox`
 
-- [ ] 1.1 Create `internal/inbox` with the `Queries` interface it needs from `db`, the
+- [x] 1.1 Create `internal/inbox` with the `Queries` interface it needs from `db`, the
       `Message` / `Page` / `Overview` / `Query` / `Verdict` types, and the sentinel errors
       `ErrNotFound`, `ErrUnknownSignal`, `ErrPendingSuggestion`. Package doc states what the
       package owns and that both the HTTP handlers and the assistant tools are its callers.
-- [ ] 1.2 Move the listing path into `Service.Search`: filter validation (source, signal,
+- [x] 1.2 Move the listing path into `Service.Search`: filter validation (source, signal,
       link state), the `ListEmails` + `CountEmails` pair, and `maillink.ReadableBody` for
       bodies. It has no way to mark a message read — assert that in a test.
-- [ ] 1.3 Move `TriageEmail`'s body into `Service.Triage`, including slug resolution before
+- [x] 1.3 Move `TriageEmail`'s body into `Service.Triage`, including slug resolution before
       the write and the `AgentTriageEmail` call, and `advanceStage` into an unexported
       service method with no `*fiber.Ctx`.
-- [ ] 1.4 Move `Link`, `Unlink`, `ResolveSuggestion` (confirm/reject behind one `accept
+- [x] 1.4 Move `Link`, `Unlink`, `ResolveSuggestion` (confirm/reject behind one `accept
       bool`) and `RecordApplication` — the last one keeping the pending-suggestion refusal
       and the "dated by the mail" rule.
-- [ ] 1.5 Rewrite `internal/handler/inbox.go`, `inbox_agent.go` and `inbox_linking.go` as
+- [x] 1.5 Rewrite `internal/handler/inbox.go`, `inbox_agent.go` and `inbox_linking.go` as
       thin adapters: parse the request, call the service, map sentinel errors to Fiber
       statuses, render. Delete what the move orphaned.
-- [ ] 1.6 Run the existing mail integration tests unchanged (`go test -tags=integration
+- [x] 1.6 Run the existing mail integration tests unchanged (`go test -tags=integration
       ./internal/handler/`). Any test needing an edit means the contract moved — stop and
       report rather than editing the test.
 
 ## 2. The overview query
 
-- [ ] 2.1 Add a `CountEmailsByState` query to `internal/db/queries/gmail.sql` returning, in
+- [x] 2.1 Add a `CountEmailsByState` query to `internal/db/queries/gmail.sql` returning, in
       one pass, the per-`status_signal` counts plus unclassified, unread and per-link-state
       totals for one user, excluding soft-deleted mail. Run `make sqlc`.
-- [ ] 2.2 Implement `Service.Overview` on top of it, projecting to a shape that names every
+- [x] 2.2 Implement `Service.Overview` on top of it, projecting to a shape that names every
       label in `mailclassify.SignalValues` — including the ones with a zero count, so the
       model can tell "none" from "not a label we have".
 

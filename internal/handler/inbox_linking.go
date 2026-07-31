@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/inbox"
 	"github.com/strelov1/freehire/internal/jobview"
 )
 
@@ -83,41 +84,33 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 // ConfirmEmailLink promotes an email's pending suggestion to a confirmed manual
 // link. A 404 when the email is not the caller's or carries no suggestion.
 func (h *inboxHandlers) ConfirmEmailLink(c *fiber.Ctx) error {
-	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return h.queries.ConfirmEmailLink(c.Context(), db.ConfirmEmailLinkParams{ID: id, UserID: userID})
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.ResolveSuggestion(c.Context(), userID, id, true)
 	})
 }
 
 // RejectEmailLink dismisses an email's pending suggestion without linking.
 func (h *inboxHandlers) RejectEmailLink(c *fiber.Ctx) error {
-	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return h.queries.RejectEmailLink(c.Context(), db.RejectEmailLinkParams{ID: id, UserID: userID})
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.ResolveSuggestion(c.Context(), userID, id, false)
 	})
 }
 
 // UnlinkEmail clears an email's application link.
 func (h *inboxHandlers) UnlinkEmail(c *fiber.Ctx) error {
-	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return h.queries.UnlinkEmail(c.Context(), db.UnlinkEmailParams{ID: id, UserID: userID})
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.Unlink(c.Context(), userID, id)
 	})
 }
 
 // LinkEmail manually links an email to the application named by {"slug": …}.
 func (h *inboxHandlers) LinkEmail(c *fiber.Ctx) error {
-	var body struct {
-		Slug string `json:"slug"`
-	}
-	if err := c.BodyParser(&body); err != nil || body.Slug == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "slug required")
-	}
-	job, err := h.queries.GetJobBySlug(c.Context(), body.Slug)
+	slug, err := slugFromBody(c)
 	if err != nil {
-		return err // ErrNoRows → 404
+		return err
 	}
-	return h.mutateEmailLink(c, func(userID, id int64) (int64, error) {
-		return h.queries.LinkEmailToJob(c.Context(), db.LinkEmailToJobParams{
-			ID: id, UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
-		})
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.Link(c.Context(), userID, id, slug)
 	})
 }
 
@@ -128,56 +121,35 @@ func (h *inboxHandlers) LinkEmail(c *fiber.Ctx) error {
 // is no application to attach the mail to, so plain linking has nothing to point
 // at.
 //
-// The application is dated by the email, not by now() — see
-// jobtracking.MarkAppliedAt. Mail still carrying a pending suggestion is refused
-// (409): the matcher has already proposed an answer, and letting this path
-// overwrite it silently would leave the link's provenance ambiguous. Confirming
-// or rejecting the suggestion first resolves that.
+// The application is dated by the email, not by now(). Mail still carrying a
+// pending suggestion is refused (409) — see inbox.Service.RecordApplication.
 func (h *inboxHandlers) CreateApplicationFromEmail(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
+	slug, err := slugFromBody(c)
 	if err != nil {
 		return err
 	}
-	id, err := c.ParamsInt("id")
-	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	}
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.RecordApplication(c.Context(), userID, id, slug)
+	})
+}
+
+// slugFromBody reads the {"slug": …} body shared by the linking endpoints.
+func slugFromBody(c *fiber.Ctx) (string, error) {
 	var body struct {
 		Slug string `json:"slug"`
 	}
 	if err := c.BodyParser(&body); err != nil || body.Slug == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "slug required")
+		return "", fiber.NewError(fiber.StatusBadRequest, "slug required")
 	}
-	email, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: int64(id), UserID: userID})
-	if err != nil {
-		return err // ErrNoRows → 404 (not the caller's message)
-	}
-	if email.SuggestedJobID.Valid && !email.JobID.Valid {
-		return fiber.NewError(fiber.StatusConflict,
-			"email has a pending suggestion ("+pgStr(email.SuggestedSlug)+"); confirm or reject it first")
-	}
-	job, err := h.queries.GetJobBySlug(c.Context(), body.Slug)
-	if err != nil {
-		return err // ErrNoRows → 404
-	}
-	if _, err := h.tracking.MarkAppliedAt(c.Context(), userID, body.Slug, email.ReceivedAt.Time); err != nil {
-		return err
-	}
-	rows, err := h.queries.LinkEmailToJob(c.Context(), db.LinkEmailToJobParams{
-		ID: int64(id), UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
-	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	}
-	return h.renderEmail(c, userID, int64(id))
+	return body.Slug, nil
 }
 
-// mutateEmailLink runs one email-link mutation (scoped to the caller by id) and
-// returns the refreshed email, or 404 when the mutation matched no row.
-func (h *inboxHandlers) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) (int64, error)) error {
+// renderMutation runs one email mutation for the caller and renders the message it
+// changed. It is the shared tail of link, unlink, confirm, reject, triage and
+// application-from-mail, so none of them can drift from another or from GetEmail —
+// and unlike GetEmail it does not mark the message read: the caller is acting on
+// the message, not opening it.
+func (h *inboxHandlers) renderMutation(c *fiber.Ctx, do func(userID, id int64) (inbox.Message, error)) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
@@ -186,40 +158,11 @@ func (h *inboxHandlers) mutateEmailLink(c *fiber.Ctx, do func(userID, id int64) 
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	}
-	rows, err := do(userID, int64(id))
+	msg, err := do(userID, int64(id))
 	if err != nil {
 		return err
 	}
-	if rows == 0 {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	}
-	return h.renderEmail(c, userID, int64(id))
-}
-
-// renderEmail responds with one message in the single-message wire shape, freshly
-// read. It is the shared tail of every mutation that returns the message it just
-// changed (link, unlink, confirm, reject, triage), so those cannot drift from one
-// another or from GetEmail. Unlike GetEmail it does not mark the message read: the
-// caller is acting on the message, not opening it.
-func (h *inboxHandlers) renderEmail(c *fiber.Ctx, userID, id int64) error {
-	row, err := h.queries.GetEmail(c.Context(), db.GetEmailParams{ID: id, UserID: userID})
-	if err != nil {
-		return err
-	}
-	return c.JSON(fiber.Map{"data": emailBody{
-		ID: row.ID, Source: row.Source, ExternalID: row.ExternalID,
-		FromAddr: row.FromAddr, FromName: row.FromName, Subject: row.Subject,
-		BodyText: row.BodyText, BodyHTML: row.BodyHtml,
-		ReceivedAt: row.ReceivedAt.Time, Read: row.Read,
-		emailLinking: emailLinking{
-			StatusSignal:     pgStr(row.StatusSignal),
-			LinkSource:       pgStr(row.LinkSource),
-			LinkedSlug:       pgStr(row.LinkedSlug),
-			LinkedCompany:    pgStr(row.LinkedCompany),
-			SuggestedSlug:    pgStr(row.SuggestedSlug),
-			SuggestedCompany: pgStr(row.SuggestedCompany),
-		},
-	}})
+	return c.JSON(fiber.Map{"data": bodyOf(msg)})
 }
 
 // tsPtr unwraps a nullable timestamp to *time.Time (nil when NULL).

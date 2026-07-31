@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/inbox"
 	"github.com/strelov1/freehire/internal/pgerr"
 	"github.com/strelov1/freehire/internal/search"
 )
@@ -65,11 +66,22 @@ func RenderError(c *fiber.Ctx, err error) error {
 // a malformed search query are all routine.
 func classify(err error) (status int, msg string, report bool) {
 	var fe *fiber.Error
+	var invalidValue *inbox.InvalidError
 	switch {
 	case errors.As(err, &fe):
 		return fe.Code, fe.Message, false
-	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err):
+	case errors.Is(err, pgx.ErrNoRows), pgerr.IsForeignKeyViolation(err), errors.Is(err, inbox.ErrNotFound):
 		return fiber.StatusNotFound, "not found", false
+	// The mail service validates against its own vocabularies and refuses to record
+	// an application over a suggestion nobody has answered. Both readers of that
+	// service need the same decision; only the rendering differs, and this is the
+	// HTTP half of it.
+	case errors.As(err, &invalidValue):
+		return fiber.StatusBadRequest, invalidValue.Error(), false
+	case errors.Is(err, inbox.ErrSlugRequired):
+		return fiber.StatusBadRequest, err.Error(), false
+	case errors.Is(err, inbox.ErrPendingSuggestion):
+		return fiber.StatusConflict, err.Error(), false
 	// The client cancelled the request (navigated away, closed the tab). The
 	// cancellation propagates through downstream calls (DB, Meilisearch) as
 	// context.Canceled — not a server fault, and there is no one left to answer.

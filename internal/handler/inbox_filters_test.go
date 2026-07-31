@@ -1,6 +1,6 @@
-// Unit tests for the inbox filter query-string parsing — the closed
-// vocabularies (source, label, link state) and their rejection of unknown
-// values. No database: parseInboxFilters is pure request parsing.
+// Unit tests for the inbox filter query-string parsing and the closed
+// vocabularies (source, label, link state) it is checked against. No database:
+// parsing is pure, and the vocabulary check is the service's pure Validate.
 package handler
 
 import (
@@ -8,21 +8,23 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/strelov1/freehire/internal/inbox"
 )
 
-// parseFilters runs parseInboxFilters against a request built from rawQuery,
-// returning the parsed filters and the HTTP status the handler would answer
-// (200 when parsing succeeded).
-func parseFilters(t *testing.T, rawQuery string) (inboxFilters, int) {
+// parseFilters runs the listing's query parsing and validation against a request
+// built from rawQuery, returning the parsed filters and the HTTP status the
+// handler would answer (200 when both succeeded).
+func parseFilters(t *testing.T, rawQuery string) (inbox.Query, int) {
 	t.Helper()
-	var got inboxFilters
+	var got inbox.Query
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/f", func(c *fiber.Ctx) error {
-		f, err := parseInboxFilters(c)
-		if err != nil {
+		q := parseInboxQuery(c)
+		if err := q.Validate(); err != nil {
 			return err
 		}
-		got = f
+		got = q
 		return c.SendStatus(fiber.StatusOK)
 	})
 	resp, err := app.Test(httptest.NewRequest("GET", "/f?"+rawQuery, nil), -1)
@@ -51,11 +53,14 @@ func TestParseInboxFilters_LinkState(t *testing.T) {
 	}
 }
 
-// An unknown link state is a 400, not a silently empty listing — the same
-// contract the label filter already honours.
-func TestParseInboxFilters_UnknownLinkStateRejected(t *testing.T) {
-	if _, code := parseFilters(t, "link=bogus"); code != fiber.StatusBadRequest {
-		t.Errorf("?link=bogus status = %d, want 400", code)
+// A value outside a vocabulary is a 400, not a silently empty listing. The service
+// makes that call once, so the HTTP surface and the assistant's tools refuse the
+// same values.
+func TestParseInboxFilters_UnknownValuesRejected(t *testing.T) {
+	for _, raw := range []string{"link=bogus", "source=imap", "status=ghosted"} {
+		if _, code := parseFilters(t, raw); code != fiber.StatusBadRequest {
+			t.Errorf("?%s status = %d, want 400", raw, code)
+		}
 	}
 }
 
@@ -73,10 +78,10 @@ func TestParseInboxFilters_LinkComposesWithOthers(t *testing.T) {
 		t.Errorf("Status = %q, want rejection", f.Status)
 	case f.Source != "gmail":
 		t.Errorf("Source = %q, want gmail", f.Source)
-	case !f.IsUnread:
-		t.Error("IsUnread = false, want true")
-	case !f.IsUnclassified:
-		t.Error("IsUnclassified = false, want true")
+	case !f.Unread:
+		t.Error("Unread = false, want true")
+	case !f.Unclassified:
+		t.Error("Unclassified = false, want true")
 	case f.Q != "acme":
 		t.Errorf("Q = %q, want acme", f.Q)
 	}
