@@ -74,6 +74,7 @@ func genStructs() (string, error) {
 	matchanalysisTS := filepath.Join(tmp, "matchanalysis.ts")
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
+	cveditTS := filepath.Join(tmp, "cvedit.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -159,6 +160,14 @@ func genStructs() (string, error) {
 				// (sanitizing, the owner-scoped writes) live in autopilot_store.go and stay here.
 				IncludeFiles: []string{"cv.go", "patch.go", "autopilot.go"},
 			},
+			{
+				// One entry in a CV's history feed. Only the wire file: the operations, the
+				// path policy and the repository are the server's, and the feed carries the
+				// addresses a revision touched rather than what it did with them.
+				Path:         "github.com/strelov1/freehire/internal/cvedit",
+				OutputPath:   cveditTS,
+				IncludeFiles: []string{"wire.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -209,7 +218,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody, nil
+	cveditBody, err := readBody(cveditTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

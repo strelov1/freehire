@@ -984,6 +984,57 @@ export interface Patch {
   stack?: string[]; // per-experience technology line (set_stack)
 }
 
+/**
+ * RevisionView is one entry in the history feed.
+ * It deliberately does NOT carry the operations. The feed needs to say what changed and
+ * where, not to reproduce it: the addresses are enough to underline the right lines in the
+ * preview, while the inverses hold the candidate's own earlier text and have no business
+ * leaving the server for a list view.
+ */
+export interface RevisionView {
+  id: string;
+  /**
+   * Actor is who made the change: the candidate, the agent, or the system.
+   */
+  actor: string;
+  /**
+   * Origin is the entry point it arrived through — the editor, the template picker, the
+   * tailoring agent, the CLI, an import.
+   */
+  origin: string;
+  /**
+   * BatchID groups the edits of one agent turn, so the feed can offer to undo the run as
+   * a whole. Empty for a change that stands alone.
+   */
+  batch_id?: string;
+  /**
+   * Title describes the change in the application's own words. It is generated from the
+   * operations on the server and never written by a model.
+   */
+  title: string;
+  /**
+   * Note is the agent's own reason for the edit, when it gave one. It is the model's text
+   * and must be rendered as the agent's words, attributed — never as the entry's own
+   * description.
+   */
+  note?: string;
+  /**
+   * Paths are the places this revision touched, e.g. `experience[2].bullets[1]`. The
+   * preview underlines the nodes they address.
+   */
+  paths: string[];
+  /**
+   * Reverted says the change has already been undone, which is what greys out its control
+   * rather than removing the entry: the log is never rewritten.
+   */
+  reverted: boolean;
+  /**
+   * RevertsID names the revision this one undid, when it is itself an undo.
+   */
+  reverts_id?: string;
+  created_at: any /* time.Time */;
+}
+
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;

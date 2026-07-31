@@ -50,7 +50,7 @@
 - [ ] 7.3 `PATCH /me/cvs/:id` → path operations (new body shape)
 - [x] 7.4 `cv_edit` tool → `Commit(agent, tailor_agent, batch)`, accepting a batch of operations in one call, with the schema generated from the enumerated paths
 - [ ] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
-- [ ] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only
+- [x] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only
 - [ ] 7.7 Retire `POST /me/cvs/:id/autopilot/undo` in favour of the batch revert
 - [ ] 7.8 Test: every entry point leaves a revision; the actor is never read from the request body
 

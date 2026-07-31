@@ -53,6 +53,8 @@ func buildCVApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app.Put("/api/v1/me/cvs/:id/template", saved, h.SetCVTemplate)
 	app.Delete("/api/v1/me/cvs/:id", saved, h.DeleteCV)
 	app.Get("/api/v1/me/cvs/:id/pdf", saved, h.RenderCVPDF)
+	app.Get("/api/v1/me/cvs/:id/revisions", saved, h.ListCVRevisions)
+	app.Post("/api/v1/me/cvs/:id/revisions/:rid/undo", saved, h.UndoCVRevision)
 	return app
 }
 
@@ -304,5 +306,90 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	// Name comes from the structure; the summary/tagline falls back to the headline line.
 	if body.Data.Document.Header.FullName != "Seeded Ada" || body.Data.Document.Summary != "Backend Engineer" {
 		t.Fatalf("seeded document = %+v / summary=%q, want name+summary from structure", body.Data.Document.Header, body.Data.Document.Summary)
+	}
+}
+
+// The history feed and per-entry undo, end to end against a real database: the edits are
+// recorded, undoing an older one leaves the newer in place, and the undo is itself an entry.
+func TestCVRevisionHistoryAndUndo(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	if _, err := pool.Exec(context.Background(), "TRUNCATE cvs, users RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &cvHandlers{queries: queries, jobReader: queries,
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
+	app := buildCVApp(h, iss)
+
+	tok, _ := iss.Issue(seedAccount(t, pool, "reviser@example.test", true), testTokenVersion)
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs", tok, createCVRequest{Title: "General"})
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	decodeJSON(t, resp, &created)
+	id := created.Data.ID
+
+	// Two saves, each changing a different place, so neither coalesces into the other.
+	for _, summary := range []string{"Backend engineer", "Platform engineer"} {
+		body := updateCVRequest{Title: "General", TemplateID: "classic-ats",
+			Document: cv.Document{Summary: summary, Header: cv.Header{FullName: "Ada"}}}
+		if r := doCV(t, app, fiber.MethodPut, "/api/v1/me/cvs/"+id, tok, body); r.StatusCode != fiber.StatusOK {
+			t.Fatalf("save %q = %d", summary, r.StatusCode)
+		}
+	}
+
+	var feed struct {
+		Data []cvedit.RevisionView `json:"data"`
+	}
+	decodeJSON(t, doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/revisions", tok, nil), &feed)
+	if len(feed.Data) < 2 {
+		t.Fatalf("feed holds %d entries, want one per save (plus the seed): %+v", len(feed.Data), feed.Data)
+	}
+	newest := feed.Data[0]
+	if newest.Title == "" || len(newest.Paths) == 0 {
+		t.Fatalf("the newest entry says nothing about what it changed: %+v", newest)
+	}
+
+	// Undo the newest edit: the summary returns to what the previous save left.
+	if r := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+id+"/revisions/"+newest.ID+"/undo", tok, nil); r.StatusCode != fiber.StatusOK {
+		t.Fatalf("undo = %d", r.StatusCode)
+	}
+	var after struct {
+		Data struct {
+			Document cv.Document `json:"document"`
+		} `json:"data"`
+	}
+	decodeJSON(t, doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+id, tok, nil), &after)
+	if after.Data.Document.Summary != "Backend engineer" {
+		t.Fatalf("summary = %q, want the text from before the undone edit", after.Data.Document.Summary)
+	}
+
+	// Undoing twice is refused rather than silently repeated.
+	if r := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+id+"/revisions/"+newest.ID+"/undo", tok, nil); r.StatusCode != fiber.StatusConflict {
+		t.Fatalf("second undo = %d, want 409", r.StatusCode)
+	}
+
+	// The undo is itself in the feed, and the entry it reversed is marked rather than removed.
+	decodeJSON(t, doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+id+"/revisions", tok, nil), &feed)
+	var sawUndo, sawReverted bool
+	for _, r := range feed.Data {
+		if r.RevertsID == newest.ID {
+			sawUndo = true
+		}
+		if r.ID == newest.ID && r.Reverted {
+			sawReverted = true
+		}
+	}
+	if !sawUndo {
+		t.Error("the undo did not appear in the feed")
+	}
+	if !sawReverted {
+		t.Error("the reverted entry is not marked as undone")
 	}
 }

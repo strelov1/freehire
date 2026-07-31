@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -137,6 +138,13 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// Undo a whole autopilot run. Cookie-only: it rewrites the document, and the browser
 	// is where the candidate saw the run happen.
 	api.Post("/me/cvs/:id/autopilot/undo", mw.cookie, h.UndoAutopilotRun)
+	// The history of what changed the CV, and the two ways to undo an entry: on its own, or
+	// as the run it belonged to. Cookie-only for the same reason as every other mutation —
+	// the browser is where the candidate is watching this happen, and the tailoring agent
+	// must not be able to undo the work it is being measured on.
+	api.Get("/me/cvs/:id/revisions", mw.cookie, h.ListCVRevisions)
+	api.Post("/me/cvs/:id/revisions/:rid/undo", mw.cookie, h.UndoCVRevision)
+	api.Post("/me/cvs/:id/revisions/batch/:bid/undo", mw.cookie, h.UndoCVRevisionBatch)
 	// What tailoring did to the CV's ATS readiness. Cookie-only, and deliberately so: the
 	// tailoring agent authenticates with a CLI credential, so this gate is what keeps the
 	// score out of the reach of the thing being measured.
@@ -545,4 +553,85 @@ func cvPathID(c *fiber.Ctx) (uuid.UUID, error) {
 		return uuid.Nil, fiber.NewError(fiber.StatusNotFound, "cv not found")
 	}
 	return id, nil
+}
+
+// ListCVRevisions serves the history of what changed this CV, newest first.
+//
+// The feed carries the addresses each revision touched but not the operations themselves:
+// the preview needs the places to underline, and the inverses hold the candidate's own
+// earlier text, which has no business travelling out for a list view.
+func (h *cvHandlers) ListCVRevisions(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	// Owner-scoped read first, so a foreign CV is a 404 rather than an empty feed — the
+	// same answer "no such CV" and "not yours" have everywhere else here.
+	if _, err := h.cvStore.Get(c.Context(), id, userID); err != nil {
+		return mapCVError(err)
+	}
+	revisions, err := h.editor.History(c.Context(), id, userID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	return c.JSON(fiber.Map{"data": cvedit.Views(revisions)})
+}
+
+// UndoCVRevision reverses one entry, leaving later edits in place. The undo is itself
+// recorded, so the feed keeps describing what actually happened to the document.
+func (h *cvHandlers) UndoCVRevision(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	revisionID, err := uuid.Parse(c.Params("rid"))
+	if err != nil {
+		// A malformed id names no revision, so it is reported as missing rather than as a
+		// bad request — keeping "no such revision" and "not yours" the same answer.
+		return fiber.NewError(fiber.StatusNotFound, "revision not found")
+	}
+	meta, undo, err := h.editor.Revert(c.Context(), id, userID, revisionID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"cv": metaResponse(meta), "revision": undo.View()}})
+}
+
+// UndoCVRevisionBatch reverses every standing edit of one agent turn, newest first.
+//
+// The batch id comes from the feed rather than from a column on the CV: the run's own
+// revisions carry it, which is what let the pre-run snapshot be retired along with the edge
+// two concurrent runs used to create.
+func (h *cvHandlers) UndoCVRevisionBatch(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	batchID, err := uuid.Parse(c.Params("bid"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusNotFound, "run not found")
+	}
+	meta, err := h.editor.RevertBatch(c.Context(), id, userID, batchID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	// The run report goes with the run: it describes what the run made of each requirement,
+	// and those edits have just been reversed. Best-effort — the document is already back,
+	// and failing the request now would tell the candidate nothing was undone.
+	if err := h.cvStore.SetAutopilotReport(c.Context(), id, userID, nil); err != nil {
+		log.Printf("cv: clearing the run report after a batch revert: %v", err)
+	}
+	return c.JSON(fiber.Map{"data": metaResponse(meta)})
 }
