@@ -9,9 +9,13 @@
   // on a page whose whole argument is that it states only what it can check.
   const cells = prevalenceWaffle(PREVALENCE);
 
+  // The band carries a ring as well as a tint. In dark the muted warning token lands at
+  // almost exactly the lightness of the neutral remainder, so hue alone separates them —
+  // and hue alone is the one distinction a colour-blind reader does not get. The outline
+  // makes the band a different SHAPE, which survives both themes and any vision.
   const TONE: Record<string, string> = {
     solid: 'bg-warning',
-    banded: 'bg-warning-muted',
+    banded: 'bg-warning-muted ring-1 ring-inset ring-warning/50',
     empty: 'bg-muted-foreground/15',
   };
 </script>
@@ -27,8 +31,8 @@
     <span class="block text-2xl font-semibold tracking-tight text-foreground tabular-nums">
       {PREVALENCE.low}–{PREVALENCE.high}%
     </span>
-    of listings are jobs nobody is working to fill — kept up to collect CVs, to look like
-    growth, or because nobody took them down. The solid cells are the floor every study
-    agrees on; the paler ones are how much they disagree.
+    of listings on the big boards are jobs nobody is working to fill — kept up to collect
+    CVs, to look like growth, or because nobody took them down. The solid cells are the
+    floor every study agrees on; the tinted ones are how much they disagree.
   </figcaption>
 </figure>

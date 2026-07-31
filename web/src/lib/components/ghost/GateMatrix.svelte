@@ -20,33 +20,63 @@
 </script>
 
 <div class="w-full max-w-2xl">
-  <div class="grid grid-cols-[auto_1fr_1fr] gap-px overflow-hidden rounded-lg border border-border bg-border text-sm">
-    <div class="bg-background p-3"></div>
-    <div class="bg-background p-3 text-xs text-muted-foreground">
-      under {CONVERGENCE} criteria
-    </div>
-    <div class="bg-background p-3 text-xs text-muted-foreground">
-      {CONVERGENCE}+ criteria fired
-    </div>
-
-    {#each [false, true] as witnessed (witnessed)}
-      <div class="flex items-center bg-background p-3 text-xs text-muted-foreground">
-        {witnessed ? `${WITNESS_GATE}+ people` : `under ${WITNESS_GATE} people`}
-      </div>
-      {#each [false, true] as converged (converged)}
-        {@const cell = cells.find((c) => c.converged === converged && c.witnessed === witnessed)!}
-        <div
-          class={cn(
-            'bg-background p-3',
-            cell.level === 'likely' && 'text-warning-strong',
-            cell.level === 'none' && 'text-muted-foreground',
-          )}
+  <!-- A real table, not a grid of divs: this is two axes crossed, and a screen reader
+       given nine unrelated cells in source order gets none of that. `scope` is what ties
+       "nothing shown" back to "under 2 criteria" and "under 2 people". -->
+  <table
+    class="w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-border text-sm"
+  >
+    <caption class="sr-only">
+      The ghost level for each combination of the convergence and witness gates
+    </caption>
+    <thead>
+      <tr>
+        <td class="border-b border-border p-3"></td>
+        <th
+          scope="col"
+          class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
         >
-          {WORDING[cell.level]}
-        </div>
+          under {CONVERGENCE} criteria
+        </th>
+        <th
+          scope="col"
+          class="border-b border-l border-border p-3 text-left text-xs font-normal text-muted-foreground"
+        >
+          {CONVERGENCE}+ criteria fired
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {#each [false, true] as witnessed (witnessed)}
+        <tr>
+          <th
+            scope="row"
+            class={cn(
+              'p-3 text-left text-xs font-normal text-muted-foreground',
+              !witnessed && 'border-b border-border',
+            )}
+          >
+            {witnessed ? `${WITNESS_GATE}+ people` : `under ${WITNESS_GATE} people`}
+          </th>
+          {#each [false, true] as converged (converged)}
+            {@const cell = cells.find(
+              (c) => c.converged === converged && c.witnessed === witnessed,
+            )!}
+            <td
+              class={cn(
+                'border-l border-border p-3',
+                !witnessed && 'border-b',
+                cell.level === 'likely' && 'text-warning-strong',
+                cell.level === 'none' && 'text-muted-foreground',
+              )}
+            >
+              {WORDING[cell.level]}
+            </td>
+          {/each}
+        </tr>
       {/each}
-    {/each}
-  </div>
+    </tbody>
+  </table>
 
   <p class="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
     Posting shape can fill the right-hand column, and nothing more. The bottom row needs

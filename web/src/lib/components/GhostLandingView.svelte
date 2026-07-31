@@ -99,7 +99,10 @@
                 <p class="text-sm font-medium">{s.label}</p>
                 <p class="font-mono text-xs text-muted-foreground">{s.fact}</p>
                 <p class="text-sm leading-relaxed text-muted-foreground">{s.gist}</p>
-                <Disclosure summary="The full account" class="mt-1">
+                <!-- Named per criterion: four controls all reading "The full account" are
+                     indistinguishable in a list of controls, and the card titles beside
+                     them are paragraphs rather than headings. -->
+                <Disclosure summary="The full account — {s.label}" class="mt-1">
                   <p
                     class="mt-2 border-l border-border pl-3 text-sm leading-relaxed text-muted-foreground"
                   >
@@ -119,8 +122,9 @@
   <section class="flex flex-col gap-6">
     <SectionLabel text="why the level is what it is" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      Two separate gates, and the wording depends on how many pass. Nothing shows at all
-      until at least two criteria fire — one on its own is ordinary.
+      Two separate gates, and the wording depends on how many pass. Pass neither and
+      nothing is shown at all — a lone criterion with nobody behind it is too ordinary to
+      mean anything.
     </p>
 
     <GateMatrix />

@@ -65,6 +65,6 @@
 
 ## 10. Close out
 
-- [ ] 10.1 Request code review on the whole diff and act on Critical and Important findings
+- [x] 10.1 Request code review on the whole diff and act on Critical and Important findings. Fixed: the lint ERROR that broke CI (my verification grepped for "warning" and so never saw it — check the exit code, not a summary of the output); a new sentence claiming nothing shows below two criteria, which the gate matrix three lines below it visibly refutes; the sandbox guard running only one way; the waffle band separated from the remainder by hue alone in dark; four disclosures sharing one accessible name; the matrix rendered as divs rather than a table. Declined: typing EXPLAINERS by the criterion union, because dropping an unexplained criterion rather than failing to compile is documented behaviour and changing it is not this change's business
 - [ ] 10.2 Finish the branch, then archive and sync the change
 - [ ] 10.3 Offer a changelog entry — the page is user-facing, and the ghost signal's own entry was deferred until the signal actually fired

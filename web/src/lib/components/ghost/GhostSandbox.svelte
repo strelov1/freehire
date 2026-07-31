@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
   import GhostBadge from '$lib/components/GhostBadge.svelte';
   import GhostChecklist from '$lib/components/GhostChecklist.svelte';
   import { CRITERIA, WITNESS_GATE, ghostLevel } from '$lib/ghost';
@@ -13,7 +14,10 @@
   // Its job is to let the reader FAIL to reach the strongest wording with posting shape
   // alone. Asserting that in a sentence is what the page did before, and a sentence is
   // exactly what a reader who has just been surprised by a badge does not believe.
-  let fired = $state<Set<GhostCriterionCode>>(new Set(['evergreen_posting', 'ats_absent']));
+  // SvelteSet rather than a plain Set reassigned on every change: it is the reactive
+  // collection the framework ships, so `toggle` mutates in place and the deriveds below
+  // still fire.
+  const fired = new SvelteSet<GhostCriterionCode>(['evergreen_posting', 'ats_absent']);
   let contributors = $state(0);
 
   const outcomeSelected = $derived(
@@ -38,16 +42,19 @@
     };
   });
 
+  // Contributors and outcome criteria imply each other in the real system: every row that
+  // fires an outcome criterion records the person behind it, so neither can exist alone.
+  // The guard runs BOTH ways — switching the last outcome criterion off drops the count,
+  // and switching the first one on raises it to one — because a panel reading "applications
+  // went unanswered" beside "nobody reported" describes a payload that cannot exist, on a
+  // preview whose whole claim is that it cannot lie.
   function toggle(code: GhostCriterionCode) {
-    const next = new Set(fired);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    fired = next;
+    if (fired.has(code)) fired.delete(code);
+    else fired.add(code);
 
-    // Contributors come from outcome evidence. Leaving a count standing after its last
-    // outcome criterion is switched off would let the reader build a state the payload
-    // cannot hold.
-    if (!CRITERIA.some((c) => c.tier === 'outcome' && next.has(c.code))) contributors = 0;
+    const anyOutcome = CRITERIA.some((c) => c.tier === 'outcome' && fired.has(c.code));
+    if (!anyOutcome) contributors = 0;
+    else if (contributors === 0) contributors = 1;
   }
 
   const STEPS = [
@@ -127,8 +134,8 @@
       </div>
     {:else}
       <p class="text-sm text-muted-foreground">
-        Nothing is shown on the job. One criterion on its own is weak enough to be
-        ordinary, so below two the interface says nothing at all.
+        Nothing is shown on the job. Neither gate has passed — a lone criterion with
+        nobody behind it is too ordinary to mean anything.
       </p>
     {/if}
   </div>
