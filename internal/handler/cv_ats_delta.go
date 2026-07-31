@@ -77,10 +77,15 @@ func (h *cvHandlers) GetCVATSDelta(c *fiber.Ctx) error {
 	}
 
 	// Hold everything but the content constant: the base is rendered with the tailored copy's
-	// template and margins (a copy of the document — the stored base is never touched), and
-	// both sides are scored against the vacancy's own canonical skills.
+	// template, margins, and typography (a copy of the document — the stored base is never
+	// touched), and both sides are scored against the vacancy's own canonical skills.
+	//
+	// Typography is in that list because type size and leading decide how much text lands on a
+	// page, and the score reads the rendered PDF's text layer. Omitting it would hand the
+	// candidate a way to move their own delta by changing a font.
 	baseDoc := base.Document
 	baseDoc.Margins = tailored.Document.Margins
+	baseDoc.Style = tailored.Document.Style
 
 	baseReport, err := h.scoreRenderedCV(c.Context(), baseDoc, tmpl, job.Skills)
 	if err != nil {

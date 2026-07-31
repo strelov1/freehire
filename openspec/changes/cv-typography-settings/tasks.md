@@ -41,9 +41,9 @@
 
 ## 5. ATS delta
 
-- [ ] 5.1 Copy the tailored copy's `Style` onto the in-memory base document in
+- [x] 5.1 Copy the tailored copy's `Style` onto the in-memory base document in
       `internal/handler/cv_ats_delta.go`, alongside template and margins
-- [ ] 5.2 Handler test: a base CV whose stored typography differs from the tailored copy's is scored
+- [x] 5.2 Handler test: a base CV whose stored typography differs from the tailored copy's is scored
       with the tailored copy's typography, and the stored base is unchanged afterwards
 
 ## 6. Live HTML preview
