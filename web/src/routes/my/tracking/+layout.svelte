@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
   import { tablist } from '$lib/actions/tablist';
 
   let { children }: { children: Snippet } = $props();

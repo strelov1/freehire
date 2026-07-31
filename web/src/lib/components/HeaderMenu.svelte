@@ -31,7 +31,7 @@
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { themeStore } from '$lib/theme.svelte';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
 

@@ -10,7 +10,7 @@
 </script>
 
 <script lang="ts" generics="T extends string">
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // A horizontal tab strip that survives a narrow viewport. Past its own width the row
   // scrolls rather than wrapping: a flex row with nowhere to put the overflow first squeezes

@@ -7,10 +7,9 @@
   import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { Button } from '$lib/ui';
+  import { Button, cn } from '$lib/ui';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
-  import { cn } from '$lib/utils';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
   // container, the noindex tag, the auth gate, and the section navigation. Child

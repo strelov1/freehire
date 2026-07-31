@@ -17,8 +17,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { REGION_OPTIONS, WORK_MODE_OPTIONS, CURRENCY_OPTIONS } from '$lib/facets';
   import type { Submission } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
-  import { cn } from '$lib/utils';
+  import { Button, Input, cn } from '$lib/ui';
   import NoteEditor from './NoteEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 

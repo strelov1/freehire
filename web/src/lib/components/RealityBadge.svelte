@@ -1,7 +1,7 @@
 <script lang="ts">
   import { realityBadge, postingContrast } from '$lib/reality';
   import type { Reality } from '$lib/generated/contracts';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // Surfaces the job-reality signal as a facts-backed badge: nothing for a fresh or
   // unclassified job, a muted age chip for a stale one, an amber "Likely evergreen"

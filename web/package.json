@@ -49,7 +49,6 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/sveltekit": "^10.63.0",
-    "clsx": "^2.1.1",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
     "isomorphic-dompurify": "^3.18.0",
@@ -59,7 +58,6 @@
     "satori-html": "^0.3.2",
     "shiki": "^4.3.1",
     "svelte-dnd-action": "^0.9.70",
-    "tailwind-merge": "^3.6.0",
     "freehire-design-system": "file:../design-system"
   }
 }

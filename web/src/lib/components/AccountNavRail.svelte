@@ -5,7 +5,7 @@
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // A compact, icon-only mirror of the account-section navigation (see
   // my/+layout.svelte), pinned to the left edge of full-width surfaces that reset

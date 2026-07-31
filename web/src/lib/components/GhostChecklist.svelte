@@ -4,7 +4,7 @@
   import { ghostBadge, ghostChecklist, ghostGauge, ghostUnobserved } from '$lib/ghost';
   import type { GhostGaugeTone } from '$lib/ghost';
   import type { Ghost } from '$lib/generated/contracts';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // One row for the whole signal: a gauge, the hedged wording, the fired/total scale,
   // and the justification behind a disclosure.

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Button, Badge } from '$lib/ui';
+  import { Button, Badge, cn } from '$lib/ui';
   import { Trash2, X, ExternalLink } from '@lucide/svelte';
   import { STAGES, humanizeStage } from '$lib/stages';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
-  import { timeAgo, cn, errorMessage } from '$lib/utils';
+  import { timeAgo, errorMessage } from '$lib/utils';
   import { tablist } from '$lib/actions/tablist';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';

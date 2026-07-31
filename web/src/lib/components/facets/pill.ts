@@ -1,4 +1,4 @@
-import { cn } from '$lib/utils';
+import { cn } from '$lib/ui';
 
 // The shared three-state look of a selectable facet pill: idle (secondary fill),
 // selected-include (brand fill), selected-exclude (muted destructive,

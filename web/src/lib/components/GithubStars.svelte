@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import ProviderIcon from './ProviderIcon.svelte';
   import { githubStars, formatStars, GITHUB_URL } from '$lib/github.svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // A link to the repo with the live star count. Two shapes from one component:
   // `inline` is the compact desktop-bar badge (icon + count); `row` is the

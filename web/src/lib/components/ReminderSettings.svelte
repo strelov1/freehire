@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
 
   // The account-level saved-job reminder rule: turn reminders on, set the default

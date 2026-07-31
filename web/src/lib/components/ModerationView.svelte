@@ -7,8 +7,8 @@
   import { AsyncData } from '$lib/asyncData.svelte';
   import { currentUser } from '$lib/auth.svelte';
   import type { Submission } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { cn, timeAgo } from '$lib/utils';
+  import { Button, cn } from '$lib/ui';
+  import { timeAgo } from '$lib/utils';
   import ReportQueue from './ReportQueue.svelte';
   import ReferralReviewView from './ReferralReviewView.svelte';
   import States from './States.svelte';

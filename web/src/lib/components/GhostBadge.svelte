@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ghostBadge } from '$lib/ghost';
   import type { Ghost } from '$lib/generated/contracts';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // Surfaces the ghost signal as a hedged chip plus the fired/total scale. It states
   // that a posting MAY be inactive and shows how many criteria back that, never that

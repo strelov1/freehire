@@ -1,6 +1,6 @@
 <script lang="ts">
   import { countryLabel } from '$lib/facets';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // A round country flag, backed by the flag-icons sheet (imported once in the root
   // layout) and shared by the job summary, the location/company filters and company

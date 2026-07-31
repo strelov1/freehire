@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Bell, BellOff } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { cn, timeAgo } from '$lib/utils';
+  import { cn } from '$lib/ui';
+  import { timeAgo } from '$lib/utils';
 
   // The per-saved-job reminder control: shows the pending reminder's countdown with
   // an inline (non-modal) panel to reschedule it to a new delay or turn it off. When

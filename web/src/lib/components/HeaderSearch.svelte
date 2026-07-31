@@ -5,7 +5,7 @@
   import { api } from '$lib/api';
   import type { Job, CompanyListItem } from '$lib/types';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
   import CompanyLogo from './CompanyLogo.svelte';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 

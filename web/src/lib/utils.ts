@@ -1,11 +1,3 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-/** Merge Tailwind class lists, resolving conflicts (last wins). */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 /** User-facing message for a caught value: the Error's message, else the fallback. */
 export function errorMessage(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;

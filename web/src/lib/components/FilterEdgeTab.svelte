@@ -1,6 +1,6 @@
 <script lang="ts">
   import { SlidersHorizontal } from '@lucide/svelte';
-  import { cn } from '$lib/utils';
+  import { cn } from '$lib/ui';
 
   // Icon-only tab pinned to a viewport edge on mobile, opening the filters drawer
   // — the mobile counterpart to the desktop aside panel, and a mirror of the jobs
