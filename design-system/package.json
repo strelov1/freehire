@@ -21,6 +21,7 @@
     "test": "vitest run",
     "tokens:build": "node scripts/build-tokens.mjs",
     "validate:docs": "node scripts/validate-docs.mjs",
+    "check:tokens": "node scripts/check-token-coverage.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

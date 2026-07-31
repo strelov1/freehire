@@ -85,6 +85,12 @@ jobs:
       - name: Validate docs
         run: pnpm validate:docs
 
+      # A hex or a `p-[7px]` in a primitive is a value the theme cannot move and
+      # the `.dark` selector cannot override, and nothing else here would notice:
+      # both are valid input to their compilers and the build stays green.
+      - name: Check token coverage
+        run: pnpm check:tokens
+
       - name: Build Storybook
         run: pnpm build-storybook
 
