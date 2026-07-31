@@ -2032,6 +2032,13 @@ type Querier interface {
 	// Bind (or rebind) the agent session to an owned CV. Owner-scoped: returns 0 affected rows for
 	// a foreign or missing id (the handler maps that to 404).
 	SetCVSession(ctx context.Context, arg SetCVSessionParams) (int64, error)
+	// Turn link tracing on or off for one CV. Owner-scoped: a foreign or missing id matches no row,
+	// and the handler renders that as a 404.
+	//
+	// Deliberately not routed through cvedit, which is otherwise the only writer of a stored CV. Every
+	// write there becomes a revision with a computed inverse, and a consent to track a third party
+	// must not be something an undo of an unrelated edit can grant or revoke.
+	SetCVTracerLinks(ctx context.Context, arg SetCVTracerLinksParams) (int64, error)
 	// Replace a company's collection set. The import worker computes the full set in Go
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.

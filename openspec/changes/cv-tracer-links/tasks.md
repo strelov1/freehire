@@ -35,9 +35,9 @@
 
 ## 4. Toggle
 
-- [ ] 4.1 `PUT /me/cvs/:id` accepts `tracer_links_enabled`, owner-scoped, refusing to enable it
-      when no salt is configured; the CV read reports it
-- [ ] 4.2 Test that `PATCH /me/cvs/:id` cannot set it — the field is not in `PatchOps`
+- [x] 4.1 `PUT /me/cvs/:id/tracer-links` sets the flag, owner-scoped, refusing to enable it when
+      no salt is configured — its own route, outside cvedit, so an undo cannot revoke consent
+- [x] 4.2 Test that `PATCH /me/cvs/:id` cannot set it — the field is not in `PatchOps`
 
 ## 5. Traced rendering
 

@@ -132,6 +132,31 @@ func (q *Queries) RecordTracerClick(ctx context.Context, arg RecordTracerClickPa
 	return err
 }
 
+const setCVTracerLinks = `-- name: SetCVTracerLinks :execrows
+UPDATE cvs SET tracer_links_enabled = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2
+`
+
+type SetCVTracerLinksParams struct {
+	ID                 uuid.UUID `json:"id"`
+	UserID             int64     `json:"user_id"`
+	TracerLinksEnabled bool      `json:"tracer_links_enabled"`
+}
+
+// Turn link tracing on or off for one CV. Owner-scoped: a foreign or missing id matches no row,
+// and the handler renders that as a 404.
+//
+// Deliberately not routed through cvedit, which is otherwise the only writer of a stored CV. Every
+// write there becomes a revision with a computed inverse, and a consent to track a third party
+// must not be something an undo of an unrelated edit can grant or revoke.
+func (q *Queries) SetCVTracerLinks(ctx context.Context, arg SetCVTracerLinksParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCVTracerLinks, arg.ID, arg.UserID, arg.TracerLinksEnabled)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const touchCVLastClick = `-- name: TouchCVLastClick :exec
 UPDATE cvs c
 SET last_click_at = GREATEST(c.last_click_at, now())

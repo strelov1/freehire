@@ -15,8 +15,14 @@ party is the candidate's to give, and an agent MUST NOT be able to give it on th
 
 #### Scenario: The owner enables tracing
 
-- **WHEN** the owner sends `PUT /api/v1/me/cvs/:id` with `tracer_links_enabled` true
+- **WHEN** the owner sends `PUT /api/v1/me/cvs/:id/tracer-links` with `enabled` true
 - **THEN** the flag is persisted and the response reports it
+
+#### Scenario: The toggle is not part of the CV's revision history
+
+- **WHEN** the owner enables tracing and then undoes the CV's most recent document edit
+- **THEN** the flag is still set — an undo of an unrelated edit must not revoke or re-grant
+  consent to track somebody
 
 #### Scenario: The tailoring agent cannot enable tracing
 

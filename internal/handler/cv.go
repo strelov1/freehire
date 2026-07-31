@@ -36,6 +36,9 @@ type cvHandlers struct {
 	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
 	cvStore    *cv.Store
 	cvRenderer cv.Renderer
+	// tracerSalt keys the visitor hash of a traced click. Empty means the deployment cannot
+	// identify visitors at all, which is why enabling tracing is refused without it.
+	tracerSalt string
 	resume     *resume.Store
 	// photos serves the headshot the photo-bearing templates print. Nil-safe: an
 	// unconfigured bucket, like a member with no photo, means the placeholder.
@@ -67,9 +70,10 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
-		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		cvStore:    cv.NewStore(cv.NewQueriesRepository(queries)),
+		tracerSalt: tracerSalt,
 		// The editor is the only thing that writes a stored CV. The evidence gate is
 		// attached later (withExperienceBank) because the bank is wired after this.
 		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
@@ -126,6 +130,10 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Put("/me/cvs/:id", mw.cookie, h.UpdateCV)
 	// Change only the template (the gallery's one-field switch); cookie-only like other mutations.
 	api.Put("/me/cvs/:id/template", mw.cookie, h.SetCVTemplate)
+	// Cookie-only, and deliberately its own route rather than a field on the update above:
+	// consent to track a third party is the candidate's to give, and it must not ride along
+	// with a document save the tailoring agent can also make.
+	api.Put("/me/cvs/:id/tracer-links", mw.cookie, h.SetCVTracerLinks)
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
@@ -341,6 +349,40 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})
+}
+
+type setCVTracerLinksRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// SetCVTracerLinks records the candidate's decision to have the links in this CV's PDF traced,
+// or to stop. Off is the state of every CV that has not been through here.
+//
+// Enabling is refused when the deployment has no visitor salt: without one there is no honest way
+// to tell one visitor from another, and accepting the consent while quietly recording less would
+// answer a question the candidate did not ask. Disabling is never refused — withdrawing consent is
+// not a favour the deployment grants.
+func (h *cvHandlers) SetCVTracerLinks(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := cvPathID(c)
+	if err != nil {
+		return err
+	}
+	var in setCVTracerLinksRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if in.Enabled && h.tracerSalt == "" {
+		return fiber.NewError(fiber.StatusConflict,
+			"link tracing is not configured on this deployment")
+	}
+	if err := h.cvStore.SetTracerLinks(c.Context(), id, userID, in.Enabled); err != nil {
+		return mapCVError(err)
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"tracer_links_enabled": in.Enabled}})
 }
 
 // DeleteCV removes an owned CV.

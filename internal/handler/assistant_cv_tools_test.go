@@ -61,6 +61,9 @@ func (r *cvRepo) CreateTailored(context.Context, int64, int64, string, string, [
 }
 func (r *cvRepo) SetSession(context.Context, uuid.UUID, int64, string) (int64, error)  { return 1, nil }
 func (r *cvRepo) SetTemplate(context.Context, uuid.UUID, int64, string) (int64, error) { return 1, nil }
+func (r *cvRepo) SetTracerLinks(context.Context, uuid.UUID, int64, bool) (int64, error) {
+	return 1, nil
+}
 func (r *cvRepo) ListTailored(context.Context, int64) ([]db.ListTailoredCVsByUserRow, error) {
 	return nil, nil
 }

@@ -164,6 +164,10 @@ type Config struct {
 	// TypstBin is the resolved path to the typst binary for CV PDF rendering. Empty
 	// disables rendering: the /me/cvs/:id/pdf endpoint returns 501, the rest works.
 	TypstBin string
+
+	// TracerLinkSalt keys the visitor hash of a traced click; empty means the CV tracing
+	// toggle cannot be enabled at all.
+	TracerLinkSalt string
 	// LLM backs the optional CV ATS qualitative review. Nil disables the AI layer:
 	// the ATS score stays deterministic (the report just omits content-quality).
 	LLM *llm.Client
@@ -277,7 +281,7 @@ func Register(app *fiber.App, cfg Config) {
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
-	cvH := newCVHandlers(cfg.Pool, queries, cfg.TypstBin, resumeStore, photoStore, creditsStore, matchH)
+	cvH := newCVHandlers(cfg.Pool, queries, cfg.TypstBin, cfg.TracerLinkSalt, resumeStore, photoStore, creditsStore, matchH)
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is

@@ -108,6 +108,12 @@ type Settings struct {
 	// absent, not merely misconfigured — enforced at the cmd/server call site, not here.
 	TypstBin string
 
+	// TracerLinkSalt keys the visitor hash of a click on a traced CV link. Empty disables the
+	// feature's consent toggle outright: without a salt there is no way to tell one visitor from
+	// another that is not reversible by walking the address space, and a hash that only looks
+	// anonymous is worse than no count at all.
+	TracerLinkSalt string
+
 	// Sentry backs optional error reporting for the server and every cron worker
 	// (internal/observability). Optional: an empty SentryDSN disables the integration
 	// entirely (no init, no delivery) — enforced at the observability call site, not
@@ -205,6 +211,7 @@ func Load() Settings {
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
 
 		ServedHosts:                splitCSV(os.Getenv("SERVED_HOSTS")),
+		TracerLinkSalt:             os.Getenv("TRACER_LINK_SALT"),
 		ExtensionRedirectAllowlist: splitCSV(os.Getenv("EXTENSION_REDIRECT_ALLOWLIST")),
 	}
 }

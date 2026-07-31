@@ -122,13 +122,30 @@ Five characters give roughly 60 million per prefix.
 
 ### Departure from prior art 3 — the toggle is unreachable by the agent
 
-`tracer_links_enabled` is written only by `PUT /me/cvs/:id` (cookie-only) and is not a member of
-`PatchOps`, the tailoring agent's path. This mirrors the existing rule that keeps the style
-block out of `PatchOps` — "the tailoring agent edits content, the candidate edits
-presentation" — and the stake here is larger: consent to track a third party is the
-candidate's to give.
+`tracer_links_enabled` is written only over a cookie-only endpoint and is not reachable by the
+tailoring agent. This mirrors the existing rule that keeps the candidate's identity and
+presentation out of the agent's path, and the stake here is larger: consent to track a third
+party is the candidate's to give.
 
 job-ops has no equivalent problem because it has no agent writing to CVs.
+
+### The toggle is its own endpoint, outside the revision history
+
+`PUT /me/cvs/:id/tracer-links`, writing the column directly, rather than a field on
+`PUT /me/cvs/:id` or a member of `cvedit.State`.
+
+Every write that goes through `cvedit` becomes a revision with a computed inverse, and
+`internal/cvedit/AGENTS.md` draws the line already: `State` is "the document plus the two columns
+the candidate edits beside it", while `agent_session_id` and `autopilot_report` sit outside it
+because "nobody edited them, and they would read as nonsense in a feed of edits". A tracking
+consent belongs on that side of the line for a stronger reason than tidiness: inside `State` it
+would be snapshotted into every revision, and undoing an unrelated edit to a bullet point would
+silently re-grant or revoke consent to track somebody. Consent must be changed only by an act
+that is about consent.
+
+The template switch is routed through the editor on the opposite reasoning — "switched to the
+Sidebar template" is a legitimate history line the candidate may want to undo. Undoing a
+decision to stop tracking is not.
 
 ### The owner's own clicks do not count
 

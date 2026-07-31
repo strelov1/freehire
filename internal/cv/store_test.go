@@ -31,6 +31,8 @@ type fakeRow struct {
 	data       []byte
 	jobID      int64 // 0 = base CV (job_id NULL); >0 = tailored copy bound to a vacancy
 	sessionID  string
+	// tracerLinks is the candidate's consent for this CV's links to be traced.
+	tracerLinks bool
 	// report is the last autopilot run's log; undo is the document as it stood before
 	// that run started. Both nil until a run happens.
 	report []byte
@@ -72,6 +74,16 @@ func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, ses
 		return 0, nil
 	}
 	r.sessionID = sessionID
+	f.rows[id] = r
+	return 1, nil
+}
+
+func (f *fakeRepo) SetTracerLinks(_ context.Context, id uuid.UUID, userID int64, enabled bool) (int64, error) {
+	r, ok := f.rows[id]
+	if !ok || r.userID != userID {
+		return 0, nil
+	}
+	r.tracerLinks = enabled
 	f.rows[id] = r
 	return 1, nil
 }

@@ -33,3 +33,22 @@ func TestStoreSetSessionForeignOwnerIsNotFound(t *testing.T) {
 		t.Errorf("foreign set err = %v, want ErrNotFound", err)
 	}
 }
+
+// The toggle is a consent decision, so the same owner scoping that protects the document
+// protects it: a stranger addressing someone else's CV must be told it does not exist, not that
+// it exists and is theirs to configure.
+func TestStoreSetTracerLinksIsOwnerScoped(t *testing.T) {
+	s := NewStore(newFakeRepo())
+	ctx := context.Background()
+	meta, err := s.Create(ctx, 7, "CV", "classic-ats", Document{})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if err := s.SetTracerLinks(ctx, meta.ID, 7, true); err != nil {
+		t.Fatalf("owner enabling tracing: %v", err)
+	}
+	if err := s.SetTracerLinks(ctx, meta.ID, 8, true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a stranger enabled tracing on someone else's CV: err = %v, want ErrNotFound", err)
+	}
+}

@@ -77,3 +77,13 @@ ORDER BY l.created_at, l.source_path;
 -- tokens themselves are kept: an old PDF must keep redirecting even once the clicks behind it have
 -- aged out.
 DELETE FROM cv_link_clicks WHERE clicked_at < now() - sqlc.arg(max_age)::interval;
+
+-- name: SetCVTracerLinks :execrows
+-- Turn link tracing on or off for one CV. Owner-scoped: a foreign or missing id matches no row,
+-- and the handler renders that as a 404.
+--
+-- Deliberately not routed through cvedit, which is otherwise the only writer of a stored CV. Every
+-- write there becomes a revision with a computed inverse, and a consent to track a third party
+-- must not be something an undo of an unrelated edit can grant or revoke.
+UPDATE cvs SET tracer_links_enabled = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2;
