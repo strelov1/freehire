@@ -51,7 +51,10 @@ SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_
             FROM emails e
            WHERE e.user_id = uj.user_id
              AND e.suggested_job_id = uj.job_id
-             AND e.job_id IS NULL
+             -- "Pending" means the caller has not confirmed it, and confirming is
+             -- what attaches the application — the same test the inbox's link
+             -- filter makes, so the two cannot disagree about one message.
+             AND e.application_id IS NULL
              AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id

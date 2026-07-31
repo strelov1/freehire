@@ -25,7 +25,10 @@ SELECT a.job_id::bigint AS job_id,
                   FROM emails e
                  WHERE e.user_id = a.user_id
                    AND e.suggested_job_id = a.job_id
-                   AND e.job_id IS NULL
+                   -- "Pending" means the caller has not confirmed it, and confirming is
+                   -- what attaches the application — the same test the inbox's link
+                   -- filter makes, so the two cannot disagree about one message.
+                   AND e.application_id IS NULL
                    AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM applications a
 WHERE a.job_id = ANY($1::bigint[])

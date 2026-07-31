@@ -98,4 +98,14 @@
 
 - [x] 10.1 Confirmed for the four `user_jobs` columns. Two readers were left and both were spent one-shot replays — `BackfillAppliedEvents` and `BackfillApplications`, which had already run on production — so they were retired with the columns rather than kept alive against a table that no longer holds an application. `emails.job_id` stays until group 6 moves the inbox readers
 - [x] 10.2 `migrations/0066_user_jobs_drops_the_application.sql` — drops the four `user_jobs` columns. `emails.job_id` is deliberately not in it
-- [ ] 10.3 Record in the deploy notes that groups 1–9 and group 10 are separate deploys, and that rollback is code-only until 10.2 is applied
+- [x] 10.3 Deploy notes recorded; every slice shipped as its own deploy, and `0066` was applied only after the code that stopped reading those columns was live.
+
+> **`emails.job_id` is deliberately NOT dropped, and the plan was wrong to assume it would be.**
+> It is not a dead duplicate. It is half the correction key — `(application_id, job_id)`, and
+> the pair is what makes a re-link detectable for mail that names no application — and it is the
+> posting provenance the `employer_reply` event records. A message can legitimately be linked to
+> a posting the candidate never applied to; three such rows exist on production. Dropping the
+> column would reintroduce the blind spot #1369 fixed.
+>
+> The column that WAS dead — the four on `user_jobs` — is gone. This one is load-bearing, and
+> saying so is the correct end state rather than an unfinished one.
