@@ -8,9 +8,11 @@
 // out of vocabulary, not a status worth advertising. The page says so in prose.
 
 export interface InboxStatusEntry {
-  signal: string;
+  signal: EmailStatusSignal;
   description: string;
 }
+
+import type { EmailStatusSignal } from '$lib/generated/contracts';
 
 export const INBOX_STATUS_GUIDE: InboxStatusEntry[] = [
   { signal: 'acknowledgement', description: 'They got your application.' },

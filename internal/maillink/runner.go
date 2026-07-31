@@ -115,6 +115,10 @@ func (r *Runner) Run(ctx context.Context) error {
 	if _, err := r.store.EnqueuePending(ctx); err != nil {
 		return err
 	}
+	// A wave is mostly one user's mail, and their application list is the same for
+	// every message in it — see appCache for why the thread links are NOT cached
+	// alongside it.
+	apps := appCache{store: r.store, byUser: map[int64][]Application{}}
 	for {
 		batch, err := r.store.ClaimBatch(ctx, r.leaseSeconds, r.batchSize)
 		if err != nil {
@@ -124,7 +128,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			return nil
 		}
 		for _, c := range batch {
-			if err := r.process(ctx, c); err != nil {
+			if err := r.process(ctx, apps, c); err != nil {
 				if ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), r.maxAttempts); ferr != nil {
 					log.Printf("maillink: fail outbox %d: %v", c.OutboxID, ferr)
 				}
@@ -133,11 +137,39 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 }
 
-func (r *Runner) process(ctx context.Context, c Claimed) error {
-	apps, err := r.store.Applications(ctx, c.UserID)
+// appCache memoises one user's applications for the length of a run.
+//
+// Only this half of the per-user context may be cached. Application membership is
+// "applied, saved or staged", and the only write a run makes to it is a forward
+// stage move on a row that is already a member — so the list cannot change under
+// us. The thread links CAN: Save writes job_id onto the message it just linked,
+// and a later message in the same thread has to see that link to continue it.
+// Caching both reads as the same optimisation and silently costs thread continuity
+// within a wave.
+type appCache struct {
+	store  Store
+	byUser map[int64][]Application
+}
+
+func (c appCache) get(ctx context.Context, userID int64) ([]Application, error) {
+	if apps, ok := c.byUser[userID]; ok {
+		return apps, nil
+	}
+	apps, err := c.store.Applications(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	c.byUser[userID] = apps
+	return apps, nil
+}
+
+func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
+	apps, err := cache.get(ctx, c.UserID)
 	if err != nil {
 		return err
 	}
+	// Read live on every message: a link this run just wrote must be visible to the
+	// rest of the wave.
 	links, err := r.store.ThreadLinks(ctx, c.UserID)
 	if err != nil {
 		return err
@@ -147,12 +179,11 @@ func (r *Runner) process(ctx context.Context, c Claimed) error {
 		mailmatch.Email{ThreadID: c.ThreadID, FromName: c.FromName, Subject: c.Subject},
 		matchCandidates(apps, links),
 	)
-	autoLinked := (m.Tier == mailmatch.TierThread || m.Tier == mailmatch.TierName) && m.Confidence >= r.cfg.autoLink
-
 	// Only spend the LLM's disambiguation on the ambiguous/unmatched tail; a
 	// confident deterministic match still needs the status, so classify either way.
+	// The same predicate decides what resolveLink persists below — see autoLinks.
 	var candidates []mailclassify.Candidate
-	if !autoLinked {
+	if !r.cfg.autoLinks(m) {
 		candidates = classifyCandidates(apps)
 	}
 	cls, err := r.classifier.Classify(ctx, mailclassify.Input{

@@ -33,7 +33,15 @@ UPDATE emails
 SET status_signal        = $1,
     job_id               = COALESCE($2, job_id),
     link_source          = CASE WHEN $2 IS NOT NULL THEN 'agent' ELSE link_source END,
-    match_confidence     = $3,
+    -- The cast is load-bearing: this is the parameter's FIRST appearance, and it is
+    -- inside an IS NOT NULL, which tells Postgres nothing about its type. Without
+    -- it the statement fails to plan with "could not determine data type". job_id
+    -- above needs no cast only because COALESCE anchors it a line earlier.
+    match_confidence     = CASE
+                               WHEN $3::real IS NOT NULL THEN $3::real
+                               WHEN $2 IS NOT NULL THEN NULL
+                               ELSE match_confidence
+                           END,
     suggested_job_id     = NULL,
     classification_model = 'agent',
     classified_at        = now()
@@ -57,6 +65,13 @@ type AgentTriageEmailParams struct {
 // provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
 // classify-only triage can never silently detach an application. Any pending
 // suggestion is dropped either way: the agent's verdict supersedes it.
+//
+// match_confidence belongs to the LINK, not to the classification, so it follows
+// job_id rather than being overwritten on every call: a stated confidence wins; a
+// NEW link with none stated clears it (nobody said how sure they were about THIS
+// link); an untouched link keeps the confidence it was made with. Writing the
+// argument unconditionally left rows reading link_source='agent' with a NULL
+// confidence after a caller merely re-labelled the message.
 func (q *Queries) AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error) {
 	result, err := q.db.Exec(ctx, agentTriageEmail,
 		arg.StatusSignal,

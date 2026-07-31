@@ -865,6 +865,8 @@ export const COMPANY_TYPE_VALUES = ['product', 'startup', 'outsource', 'outstaff
 export type CompanyType = (typeof COMPANY_TYPE_VALUES)[number];
 export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gamedev', 'media', 'travel', 'healthcare', 'edtech', 'govtech', 'devtools', 'cybersecurity', 'ai', 'hrtech', 'adtech', 'proptech', 'logistics', 'mobility', 'climatetech', 'other'] as const;
 export type Domain = (typeof DOMAIN_VALUES)[number];
+export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
+export type EmailStatusSignal = (typeof EMAIL_STATUS_SIGNAL_VALUES)[number];
 export const COUNTRY_REGION_MAP = {
   'ad': 'eu',
   'ae': 'mena',
@@ -2134,7 +2136,7 @@ export const ROLE_ALIASES = {
   'business_analyst': ['business analyst'],
   'c_level': ['ceo', 'chief', 'cpo', 'cto', 'head of', 'vice president', 'vp', 'директор', 'руководитель'],
   'chief_of_staff': ['chief of staff'],
-  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'vlsi design engineer'],
+  'chip_designer': ['analog design engineer', 'analogue design engineer', 'asic design engineer', 'chip design engineer', 'dft design engineer', 'digital design engineer', 'ic design engineer', 'memory design engineer', 'mixed signal design engineer', 'mixed-signal design engineer', 'physical design engineer', 'rf design engineer', 'rfic design engineer', 'rtl design engineer', 'semiconductor design engineer', 'silicon design engineer', 'soc design engineer', 'standard cell design engineer', 'vlsi design engineer'],
   'civil_designer': ['civil design engineer', 'civil designer', 'structural designer'],
   'cloud_architect': ['cloud architect'],
   'cloud_engineer': ['cloud engineer'],

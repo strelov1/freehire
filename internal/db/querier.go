@@ -24,6 +24,13 @@ type Querier interface {
 	// provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
 	// classify-only triage can never silently detach an application. Any pending
 	// suggestion is dropped either way: the agent's verdict supersedes it.
+	//
+	// match_confidence belongs to the LINK, not to the classification, so it follows
+	// job_id rather than being overwritten on every call: a stated confidence wins; a
+	// NEW link with none stated clears it (nobody said how sure they were about THIS
+	// link); an untouched link keeps the confidence it was made with. Writing the
+	// argument unconditionally left rows reading link_source='agent' with a NULL
+	// confidence after a caller merely re-labelled the message.
 	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary

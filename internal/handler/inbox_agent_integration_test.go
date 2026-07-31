@@ -501,3 +501,43 @@ func TestTriageIsScopedToTheCaller(t *testing.T) {
 		t.Errorf("triaging another user's message = %d, want 404", code)
 	}
 }
+
+// A classify-only triage keeps the link — and must keep the confidence that link
+// was made with. The two travel together: a row reading link_source='agent' with a
+// NULL match_confidence claims a link nobody can say how sure they were about, and
+// the inbox renders that confidence beside the chip.
+//
+// Reachable from two callers now (a user's own harness and the in-app assistant),
+// so the classify-then-reclassify sequence is no longer hypothetical.
+func TestTriageWithoutALinkKeepsTheConfidenceOfTheExistingOne(t *testing.T) {
+	f := newAgentInboxFixture(t, "confidence@example.test")
+	f.applyToJob("go-dev-acme-cccccccc", "applied")
+	id := f.seedEmail(f.userID, "external", "t-conf", "Interview invitation", "are you free?")
+	path := "/api/v1/me/emails/" + strconv.FormatInt(id, 10) + "/triage"
+
+	if code, body := f.callKey("POST", path,
+		map[string]any{"signal": "interview_invitation", "slug": "go-dev-acme-cccccccc", "confidence": 0.9}); code != 200 {
+		t.Fatalf("first triage = %d, want 200 (body %v)", code, body)
+	}
+
+	// Re-classify without deciding the link and without restating a confidence.
+	if code, body := f.callKey("POST", path, map[string]any{"signal": "assessment"}); code != 200 {
+		t.Fatalf("second triage = %d, want 200 (body %v)", code, body)
+	}
+
+	var confidence *float32
+	var linkSource *string
+	if err := f.pool.QueryRow(context.Background(),
+		`SELECT match_confidence, link_source FROM emails WHERE id = $1`, id).Scan(&confidence, &linkSource); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if linkSource == nil || *linkSource != "agent" {
+		t.Fatalf("link_source = %v, want the link kept", linkSource)
+	}
+	if confidence == nil {
+		t.Fatal("match_confidence was wiped by a triage that never touched the link")
+	}
+	if *confidence != 0.9 {
+		t.Errorf("match_confidence = %v, want the 0.9 the link was made with", *confidence)
+	}
+}
