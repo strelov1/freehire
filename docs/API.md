@@ -3145,9 +3145,21 @@ curl -X PUT "https://freehire.me/api/v1/me/cvs/0f2c…" -b cookies.txt \
 
 **Auth:** Session or API key
 
-Apply one field-level edit.
+Apply a batch of edits, addressed by path.
 
-The agent write path, deliberately narrow: one operation at a time, addressed by index, so an edit can be reviewed and reversed. Ops: `set_summary`, `set_header_field`, `add_bullet`, `replace_bullet`, `remove_bullet`, `reorder_bullets`, `set_skill_group`, `set_stack`. An unknown op or an out-of-range index is refused rather than partially applied.
+An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — `summary`,
+`experience[2].bullets[1]`, `skills[0].items[3]`, `education[1].degree`, `style.font_size`.
+Indices are 0-based. The four kinds reach every field of the document, and the whole batch is
+applied or none of it is: an unknown path or an index past the end refuses the request without
+touching the CV.
+
+An API key edits as the tailoring agent, which means two things. The candidate's own fields —
+`header.full_name`, `header.email`, `header.phone`, `header.links`, `title`, `template_id` — are
+refused with a 403. And an edit that states something about the candidate (a summary, a bullet,
+a technology, a skill) must carry `evidence_id` from the experience bank.
+
+Every request is recorded in the CV's history and can be undone on its own; see
+`GET /me/cvs/{id}/revisions`.
 
 **Path parameters**
 
@@ -3159,21 +3171,19 @@ The agent write path, deliberately narrow: one operation at a time, addressed by
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `op` | string | yes | One of the operations above. (e.g. `replace_bullet`) |
-| `experience` | integer | no | Index into the document's experience entries. |
-| `bullet` | integer | no | Index into that entry's bullets (replace/remove). |
-| `field` | string | no | Header field name (`set_header_field`). |
-| `value` | string | no | Summary, bullet or header value. |
-| `order` | integer[] | no | Permutation of bullet indices (`reorder_bullets`). |
-| `group` | string | no | Skill group name (`set_skill_group`). |
-| `items` | string[] | no | Skill group items (`set_skill_group`). |
-| `stack` | string[] | no | Per-experience technology line (`set_stack`). |
+| `ops` | object[] | yes | The edits, applied in order. |
+| `ops[].kind` | string | yes | `set`, `insert`, `remove` or `move`. |
+| `ops[].path` | string | yes | Where to edit (e.g. `experience[0].bullets[1]`). |
+| `ops[].value` | any | no | The new content, for `set` and `insert`. |
+| `ops[].to` | integer | no | The element's new position, for `move`. |
+| `ops[].evidence_id` | string | no | The banked achievement this rests on. Required for a claim about the candidate when editing with an API key. |
+| `note` | string | no | One line on why, shown beside the entry in the history. |
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/me/cvs/0f2c…" \
   -H "Authorization: Bearer fhk_…" \
   -H 'Content-Type: application/json' \
-  -d '{"op":"replace_bullet","experience":0,"bullet":1,"value":"Cut p99 checkout latency 40% by …"}'
+  -d '{"ops":[{"kind":"set","path":"experience[0].bullets[1]","value":"Cut p99 checkout latency 40% by …","evidence_id":"a71f…"}]}'
 ```
 
 ```json

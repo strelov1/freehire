@@ -87,3 +87,22 @@ export function actorLabel(actor: string): string {
       return actor;
   }
 }
+
+/**
+ * makeContainerHighlighter answers the opposite question to `makeHighlighter`: was anything
+ * INSIDE this node changed?
+ *
+ * A project renders as a single line with its bullets inline, so there is no finer node to
+ * mark — without this, a revision on `projects[0].bullets[1]` would underline nothing at all.
+ * It is deliberately separate: lighting a container from a changed child is wrong wherever the
+ * child has a node of its own, which is why the default highlighter refuses to.
+ */
+export function makeContainerHighlighter(paths: readonly string[]): (nodePath: string) => boolean {
+  if (paths.length === 0) return () => false;
+  return (nodePath: string) =>
+    paths.some((p) => {
+      if (!p.startsWith(nodePath) || p.length === nodePath.length) return false;
+      const next = p[nodePath.length];
+      return next === '.' || next === '[';
+    });
+}

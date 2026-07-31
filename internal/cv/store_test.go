@@ -76,16 +76,6 @@ func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, ses
 	return 1, nil
 }
 
-func (f *fakeRepo) SetTemplate(_ context.Context, id uuid.UUID, userID int64, templateID string) (int64, error) {
-	r, ok := f.rows[id]
-	if !ok || r.userID != userID {
-		return 0, nil
-	}
-	r.templateID = templateID
-	f.rows[id] = r
-	return 1, nil
-}
-
 func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
 	var out []db.ListTailoredCVsByUserRow
 	for id, r := range f.rows {
@@ -233,9 +223,6 @@ func TestStoreGetForeignUserIsNotFound(t *testing.T) {
 	}
 	if _, err := s.Get(ctx, meta.ID, 2); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign Get err = %v, want ErrNotFound", err)
-	}
-	if _, err := s.update(ctx, meta.ID, 2, "x", "classic-ats", Document{}); !errors.Is(err, ErrNotFound) {
-		t.Errorf("foreign Update err = %v, want ErrNotFound", err)
 	}
 	if err := s.Delete(ctx, meta.ID, 2); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign Delete err = %v, want ErrNotFound", err)

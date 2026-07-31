@@ -2167,29 +2167,29 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'PATCH',
         path: '/me/cvs/{id}',
         auth: 'cookie-or-key',
-        summary: 'Apply one field-level edit.',
+        summary: 'Apply a batch of edits, addressed by path.',
         description:
-          'The agent write path, deliberately narrow: one operation at a time, ' +
-          'addressed by index, so an edit can be reviewed and reversed. Ops: ' +
-          '`set_summary`, `set_header_field`, `add_bullet`, `replace_bullet`, ' +
-          '`remove_bullet`, `reorder_bullets`, `set_skill_group`, `set_stack`. An ' +
-          'unknown op or an out-of-range index is refused rather than partially applied.',
+          'An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — ' +
+          '`summary`, `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. ' +
+          'Indices are 0-based. The whole batch applies or none of it does: an unknown path or ' +
+          'an index past the end refuses the request without touching the CV. An API key edits ' +
+          'as the tailoring agent, so the candidate\'s own fields are refused and a claim about ' +
+          'them needs `evidence_id` from the experience bank. Every request lands in the CV\'s ' +
+          'history and can be undone on its own.',
         pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id.' }],
         body: [
-          { name: 'op', type: 'string', required: true, description: 'One of the operations above.', example: 'replace_bullet' },
-          { name: 'experience', type: 'integer', description: 'Index into the document\'s experience entries.' },
-          { name: 'bullet', type: 'integer', description: 'Index into that entry\'s bullets (replace/remove).' },
-          { name: 'field', type: 'string', description: 'Header field name (`set_header_field`).' },
-          { name: 'value', type: 'string', description: 'Summary, bullet or header value.' },
-          { name: 'order', type: 'integer[]', description: 'Permutation of bullet indices (`reorder_bullets`).' },
-          { name: 'group', type: 'string', description: 'Skill group name (`set_skill_group`).' },
-          { name: 'items', type: 'string[]', description: 'Skill group items (`set_skill_group`).' },
-          { name: 'stack', type: 'string[]', description: 'Per-experience technology line (`set_stack`).' },
+          { name: 'ops', type: 'object[]', required: true, description: 'The edits, applied in order.' },
+          { name: 'ops[].kind', type: 'string', required: true, description: '`set`, `insert`, `remove` or `move`.', example: 'set' },
+          { name: 'ops[].path', type: 'string', required: true, description: 'Where to edit.', example: 'experience[0].bullets[1]' },
+          { name: 'ops[].value', type: 'any', description: 'The new content, for `set` and `insert`.' },
+          { name: 'ops[].to', type: 'integer', description: "The element's new position, for `move`." },
+          { name: 'ops[].evidence_id', type: 'string', description: 'The banked achievement this rests on.' },
+          { name: 'note', type: 'string', description: 'One line on why, shown beside the entry in the history.' },
         ],
         curl: `curl -X PATCH "${BASE_URL}/me/cvs/0f2c…" \\
   -H "Authorization: Bearer fhk_…" \\
   -H 'Content-Type: application/json' \\
-  -d '{"op":"replace_bullet","experience":0,"bullet":1,"value":"Cut p99 checkout latency 40% by …"}'`,
+  -d '{"ops":[{"kind":"set","path":"experience[0].bullets[1]","value":"Cut p99 checkout latency 40% by …","evidence_id":"a71f…"}]}'`,
         responseExample: `{ "data": { "id": "0f2c…", "document": { … } } }`,
       },
       {

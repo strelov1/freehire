@@ -101,17 +101,20 @@ func (q *Queries) GetCVForEdit(ctx context.Context, arg GetCVForEditParams) (Get
 const getCVRevision = `-- name: GetCVRevision :one
 SELECT id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 FROM cv_revisions
-WHERE id = $1 AND user_id = $2
+WHERE id = $1 AND user_id = $2 AND cv_id = $3
 `
 
 type GetCVRevisionParams struct {
 	ID     uuid.UUID `json:"id"`
 	UserID int64     `json:"user_id"`
+	CvID   uuid.UUID `json:"cv_id"`
 }
 
-// One revision, owner-scoped — what undo reads to find the inverse it must apply.
+// One revision of one CV — what undo reads to find the inverse it must apply. Scoped by BOTH
+// the owner and the CV: a revision id names an entry in one history, and reading it through a
+// different CV of the same owner would undo the wrong document.
 func (q *Queries) GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (CvRevision, error) {
-	row := q.db.QueryRow(ctx, getCVRevision, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getCVRevision, arg.ID, arg.UserID, arg.CvID)
 	var i CvRevision
 	err := row.Scan(
 		&i.ID,

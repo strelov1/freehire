@@ -228,8 +228,8 @@ func TestAnAutopilotRunSearchesEditsAndReports(t *testing.T) {
 		// A bullet with no evidence_id: the claim wall must refuse it mid-run, exactly as it
 		// does in conversation. (set_summary would NOT be refused — a summary asserts nothing
 		// the bank has to back — so the attempt has to be a bullet to test the rule.)
-		callReplyChoice("cv_edit", `{"patch":{"op":"add_bullet","experience":0,"value":"Led a team of twelve."}}`),
-		callReplyChoice("cv_edit", `{"patch":{"op":"add_bullet","experience":0,"value":"Ran the payments Kafka cluster through a 10x traffic year."},"evidence_id":"`+atom.ID.String()+`"}`),
+		callReplyChoice("cv_edit", `{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Led a team of twelve."}]}`),
+		callReplyChoice("cv_edit", `{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Ran the payments Kafka cluster through a 10x traffic year.","evidence_id":"`+atom.ID.String()+`"}]}`),
 		callReplyChoice("tailor_report", `{"items":[
 			{"requirement":"Kafka in production","status":"closed_bank","note":"Cited the payments cluster."},
 			{"requirement":"Team leadership","status":"open","note":"Nothing in the bank."}

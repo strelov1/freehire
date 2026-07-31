@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { keepIndex, makeHighlighter, groupByBatch, actorLabel } from './revisions';
+import { keepIndex, makeHighlighter, makeContainerHighlighter, groupByBatch, actorLabel } from './revisions';
 import type { RevisionView } from '$lib/generated/contracts';
 
 describe('keepIndex', () => {
@@ -140,5 +140,25 @@ describe('actorLabel', () => {
 
   it('falls back to something readable for an actor it has not met', () => {
     expect(actorLabel('robot')).toBe('robot');
+  });
+});
+
+describe('makeContainerHighlighter', () => {
+  // A project renders as one line with its bullets inline: without this, a revision on a
+  // project's bullet would underline nothing at all.
+  it('lights a node when something inside it changed', () => {
+    const lit = makeContainerHighlighter(['projects[0].bullets[1]']);
+    expect(lit('projects[0]')).toBe(true);
+    expect(lit('projects[1]')).toBe(false);
+  });
+
+  it('does not light a node that merely shares a prefix', () => {
+    const lit = makeContainerHighlighter(['projects[10].bullets[0]']);
+    expect(lit('projects[1]')).toBe(false);
+  });
+
+  it('does not light the changed node itself — that is the other highlighter', () => {
+    const lit = makeContainerHighlighter(['projects[0]']);
+    expect(lit('projects[0]')).toBe(false);
   });
 });

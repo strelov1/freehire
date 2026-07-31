@@ -74,7 +74,6 @@ type Repository interface {
 	GetBase(ctx context.Context, userID int64) (db.GetBaseCVByUserRow, error)
 	CreateTailored(ctx context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error)
 	SetSession(ctx context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error)
-	SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) (int64, error)
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 	SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error)
 	GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error)
@@ -190,19 +189,6 @@ func (s *Store) SetSession(ctx context.Context, id uuid.UUID, userID int64, sess
 	return nil
 }
 
-// SetTemplate changes only the template of an owned CV, or returns ErrNotFound. Title and
-// document are left untouched.
-func (s *Store) SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) error {
-	n, err := s.repo.SetTemplate(ctx, id, userID, templateID)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // ListTailored returns the user's tailored CVs (the re-open list): metadata plus the vacancy
 // slug and the bound agent session, newest edit first.
 func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem, error) {
@@ -224,18 +210,6 @@ func (s *Store) ListTailored(ctx context.Context, userID int64) ([]TailoredItem,
 }
 
 // Update sanitizes and replaces an owned CV's editable fields, or returns ErrNotFound.
-func (s *Store) update(ctx context.Context, id uuid.UUID, userID int64, title, templateID string, doc Document) (Meta, error) {
-	data, err := marshalSanitized(doc)
-	if err != nil {
-		return Meta{}, err
-	}
-	row, err := s.repo.Update(ctx, id, userID, title, templateID, data)
-	if err != nil {
-		return Meta{}, mapNotFound(err)
-	}
-	return Meta{ID: row.ID, Title: row.Title, TemplateID: row.TemplateID,
-		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time}, nil
-}
 
 // Delete removes an owned CV, or returns ErrNotFound when nothing matched.
 func (s *Store) Delete(ctx context.Context, id uuid.UUID, userID int64) error {
@@ -401,10 +375,6 @@ func (r queriesRepository) SetSession(ctx context.Context, id uuid.UUID, userID 
 		ID: id, UserID: userID,
 		AgentSessionID: pgtype.Text{String: sessionID, Valid: sessionID != ""},
 	})
-}
-
-func (r queriesRepository) SetTemplate(ctx context.Context, id uuid.UUID, userID int64, templateID string) (int64, error) {
-	return r.q.SetCVTemplate(ctx, db.SetCVTemplateParams{ID: id, UserID: userID, TemplateID: templateID})
 }
 
 func (r queriesRepository) ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {

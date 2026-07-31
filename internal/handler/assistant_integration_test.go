@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -53,6 +54,10 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 	queries := db.New(pool)
 	h := &assistantHandlers{
 		store: assistant.NewStore(queries), queries: queries,
+		// The evidence gate answers from the bank, and the production wiring attaches it in
+		// newAssistantHandlers. Without it here the run could write an unevidenced claim and
+		// the test that says it cannot would pass for the wrong reason.
+		experience: experience.NewStore(experience.NewQueriesRepository(queries)),
 		// The tailoring tools and the autopilot run reach the CV store, so the assistant
 		// under test carries the same CV service the HTTP surface uses.
 		cv: &cvHandlers{
@@ -63,6 +68,7 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 			matchAnalysisCache: queries,
 		},
 	}
+	h.cv.editor.WithEvidenceGate(bankGate{bank: h.experience})
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 	}

@@ -52,8 +52,8 @@ func (p Policy) Allows(actor Actor, ops []Op) error {
 		return nil
 	}
 	for _, op := range ops {
-		for _, prefix := range denied {
-			if pathWithin(op.Path, prefix) {
+		for _, place := range denied {
+			if pathTouches(op.Path, place) {
 				return fmt.Errorf("%w: %q is the candidate's own. Edit the body of the CV instead — "+
 					"experience, summary, skills, projects and education are yours to rewrite", ErrForbiddenPath, op.Path)
 			}
@@ -62,14 +62,28 @@ func (p Policy) Allows(actor Actor, ops []Op) error {
 	return nil
 }
 
-// pathWithin reports whether a path is the named place or something inside it, so denying
-// `header.links` also denies `header.links[0]`.
-func pathWithin(p Path, prefix string) bool {
+// pathTouches reports whether writing at `p` writes the named place — which is true in BOTH
+// directions, and getting that wrong was a hole.
+//
+// Downwards is obvious: denying `header.links` must deny `header.links[0]`. Upwards is the one
+// that bites: `header` is not inside `header.email`, but writing a whole `header` object
+// replaces every contact identifier in it at once. The addressable vocabulary published to the
+// model offers the container alongside the leaf, so a denial that only looks downwards is a
+// denial the model can step over.
+func pathTouches(p Path, place string) bool {
 	s := string(p)
-	if s == prefix {
-		return true
+	return s == place || nests(s, place) || nests(place, s)
+}
+
+// nests reports whether `inner` sits inside `outer` — the same field or index boundary check
+// both directions of pathTouches need, and what keeps `experience[1]` from matching
+// `experience[10]`.
+func nests(inner, outer string) bool {
+	if !strings.HasPrefix(inner, outer) || len(inner) == len(outer) {
+		return false
 	}
-	return strings.HasPrefix(s, prefix) && (s[len(prefix)] == '.' || s[len(prefix)] == '[')
+	next := inner[len(outer)]
+	return next == '.' || next == '['
 }
 
 // EvidenceGate answers whether a cited piece of banked evidence exists, belongs to this
@@ -101,11 +115,25 @@ func shapeOf(p Path) string { return pathIndex.ReplaceAllString(string(p), "[]")
 
 // assertsAClaim reports whether an operation puts a new claim about the candidate on the
 // page. Removing and moving assert nothing: they rearrange or delete what was already said.
+//
+// A container counts. Writing `experience[0]` writes the bullets inside it, and `skills[0]`
+// writes the items — so an operation is gated when its shape IS a claim shape or when a claim
+// shape sits inside it. Checking only for an exact match reopened, one level up, exactly the
+// hole this gate was moved onto paths to close.
 func assertsAClaim(op Op) bool {
 	if op.Kind != OpSet && op.Kind != OpInsert {
 		return false
 	}
-	return claimShapes[shapeOf(op.Path)]
+	shape := shapeOf(op.Path)
+	if claimShapes[shape] {
+		return true
+	}
+	for claim := range claimShapes {
+		if nests(claim, shape) {
+			return true
+		}
+	}
+	return false
 }
 
 // requireEvidence holds the rule the whole tailoring capability exists to keep: a sentence

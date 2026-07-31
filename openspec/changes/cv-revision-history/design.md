@@ -86,7 +86,7 @@ construction: the differ always compares against the state just read from the da
 agent's operations address paths, so a path that has since disappeared is rejected by `Apply`
 itself.
 
-**The feed is capped at 100 revisions per CV**, trimmed in the same statement that inserts. A
+**The feed is capped at 100 revisions per CV**, trimmed in the same transaction as the insert. A
 revision log is a convenience, not an archive, and the rows carry two json documents each on the
 user's hottest table.
 

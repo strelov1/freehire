@@ -67,17 +67,6 @@ func (r queriesRepository) List(ctx context.Context, cvID uuid.UUID, userID int6
 	return revisionsFromRows(rows)
 }
 
-func (r queriesRepository) Get(ctx context.Context, id uuid.UUID, userID int64) (Revision, error) {
-	row, err := r.q.GetCVRevision(ctx, db.GetCVRevisionParams{ID: id, UserID: userID})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Revision{}, ErrNothingToUndo
-		}
-		return Revision{}, err
-	}
-	return revisionFromRow(row)
-}
-
 // queriesTx is one CV's locked row for the length of a transaction. It reads the state once
 // and keeps it, because the callback needs the same view it will write against.
 type queriesTx struct {
@@ -128,7 +117,7 @@ func (t *queriesTx) Newest(ctx context.Context) (Revision, bool, error) {
 }
 
 func (t *queriesTx) Revision(ctx context.Context, id uuid.UUID) (Revision, bool, error) {
-	row, err := t.q.GetCVRevision(ctx, db.GetCVRevisionParams{ID: id, UserID: t.userID})
+	row, err := t.q.GetCVRevision(ctx, db.GetCVRevisionParams{ID: id, UserID: t.userID, CvID: t.cvID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Revision{}, false, nil
 	}

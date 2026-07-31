@@ -30,7 +30,10 @@ func (e *Editor) Revert(ctx context.Context, cvID uuid.UUID, userID int64, revis
 		if err != nil {
 			return err
 		}
-		if !ok || target.Reverted() {
+		// A revision id names an entry in ONE CV's history. Without this, undoing it through
+		// another CV of the same owner would apply that CV's inverses to this document — a
+		// write to the wrong place, driven entirely by a path parameter.
+		if !ok || target.CVID != cvID || target.Reverted() {
 			return ErrNothingToUndo
 		}
 		meta, undo, err = e.undo(ctx, tx, cvID, target.Inverse, []uuid.UUID{target.ID},
@@ -86,7 +89,7 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, err
 	}
 
-	after, redo, err := Apply(before, inverse)
+	after, _, err := Apply(before, inverse)
 	if err != nil {
 		// The place the inverse would restore is gone. This is a fact about the document as
 		// it stands, not a malformed request — and it cannot be known without trying, which
@@ -94,6 +97,11 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, fmt.Errorf("%w: %s", ErrCannotUndo, err)
 	}
 	after.Document.Sanitize()
+
+	// Derived from the sanitized result, exactly as a commit's inverse is: undoing an undo has
+	// to return to what was stored, not to what Apply produced a moment before the sanitizer
+	// looked at it.
+	redo := Diff(after, before)
 
 	meta, err := tx.Save(ctx, after)
 	if err != nil {

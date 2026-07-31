@@ -266,10 +266,15 @@
   let revisions = $state<RevisionView[]>([]);
   let pinnedRevision = $state<RevisionView | null>(null);
 
-  async function loadRevisions() {
+  async function loadRevisions(highlightNewestRun = false) {
     if (!cvId) return;
     try {
       revisions = await api.listCvRevisions(cvId);
+      // After a run, what it changed is underlined without being asked: the candidate's first
+      // question is "what did it do to my CV", and the answer is on the page.
+      if (highlightNewestRun) {
+        pinnedRevision = revisions.find((r) => r.actor === 'agent' && !r.reverted) ?? pinnedRevision;
+      }
     } catch {
       // The history is an accessory read: a workspace that cannot list it still edits.
       revisions = [];
@@ -355,7 +360,7 @@
     try {
       await loadCv();
       pdfVersion += 1;
-      void loadRevisions();
+      void loadRevisions(true);
       void refreshAtsDelta();
       void refreshJobMatch();
     } catch {

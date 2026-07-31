@@ -29,7 +29,7 @@ func (b *bank) Publishable(_ context.Context, _ int64, evidenceID string) error 
 
 func agentEdit(t *testing.T, e *Editor, ops ...Op) error {
 	t.Helper()
-	_, _, err := e.Commit(context.Background(), uuid.New(), 1, Change{
+	_, _, err := e.Commit(context.Background(), uuid.Nil, 1, Change{
 		Actor: ActorAgent, Origin: OriginTailorAgent, Ops: ops,
 	})
 	return err
@@ -187,7 +187,7 @@ func TestRearrangingNeedsNoEvidence(t *testing.T) {
 func TestUndoingRestoresTextWithoutACitation(t *testing.T) {
 	repo := newFakeRepo()
 	e, _ := newEditor(repo, &bank{})
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	_, rev, err := e.Commit(context.Background(), cvID, 1, Change{
 		Actor: ActorAgent, Origin: OriginTailorAgent,
@@ -205,5 +205,59 @@ func TestUndoingRestoresTextWithoutACitation(t *testing.T) {
 	}
 	if repo.state.Experience[0].Bullets[0] != "Shipped it" {
 		t.Fatalf("bullet = %q, want the original text back", repo.state.Experience[0].Bullets[0])
+	}
+}
+
+// Denying a leaf is not enough: writing the CONTAINER writes everything under it. The path
+// vocabulary published to the model offers `header` alongside `header.email`, and coercing a
+// whole object into it replaces every contact identifier at once.
+func TestTheAgentIsRefusedTheContainerOfADeniedField(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+
+	err := agentEdit(t, e, Op{Kind: OpSet, Path: mustParse(t, "header"), Value: map[string]any{
+		"full_name": "Attacker", "email": "attacker@example.com", "phone": "+1 000",
+	}})
+	if !errors.Is(err, ErrForbiddenPath) {
+		t.Fatalf("agent writing the whole header returned %v, want ErrForbiddenPath", err)
+	}
+	if repo.state.Header.Email != "ada@example.com" {
+		t.Fatalf("the contact block was rewritten: %+v", repo.state.Header)
+	}
+}
+
+// The same shape one level up: an operation that writes a container writes the claims inside
+// it, so it has to answer for them. This is the hole the gate exists to close, reopened by
+// addressing `experience[0]` instead of `experience[0].bullets[0]`.
+func TestWritingAContainerOfClaimsNeedsEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		op    Op
+		value any
+	}{
+		{"a whole experience entry", Op{Kind: OpSet, Path: "experience[0]"},
+			map[string]any{"role": "Chief Kubernetes Officer", "bullets": []string{"Invented Kubernetes"}}},
+		{"a whole bullet list", Op{Kind: OpSet, Path: "experience[0].bullets"}, []string{"Invented Kubernetes"}},
+		{"a whole stack line", Op{Kind: OpSet, Path: "experience[0].stack"}, []string{"Kubernetes"}},
+		{"a whole skill group", Op{Kind: OpSet, Path: "skills[0]"},
+			map[string]any{"group": "Cloud", "items": []string{"Kubernetes"}}},
+		{"a whole skill list", Op{Kind: OpSet, Path: "skills[0].items"}, []string{"Kubernetes"}},
+		{"the whole experience section", Op{Kind: OpSet, Path: "experience"},
+			[]map[string]any{{"role": "CTO", "bullets": []string{"Invented Kubernetes"}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			e, _ := newEditor(repo, &bank{})
+
+			op := tc.op
+			op.Value = tc.value
+			err := agentEdit(t, e, op)
+			if !errors.Is(err, ErrEvidenceRequired) {
+				t.Fatalf("uncited write to %s returned %v, want ErrEvidenceRequired", op.Path, err)
+			}
+			if repo.saves != 0 {
+				t.Fatal("an uncited claim was written")
+			}
+		})
 	}
 }

@@ -37,10 +37,12 @@ ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: GetCVRevision :one
--- One revision, owner-scoped — what undo reads to find the inverse it must apply.
+-- One revision of one CV — what undo reads to find the inverse it must apply. Scoped by BOTH
+-- the owner and the CV: a revision id names an entry in one history, and reading it through a
+-- different CV of the same owner would undo the wrong document.
 SELECT *
 FROM cv_revisions
-WHERE id = $1 AND user_id = $2;
+WHERE id = $1 AND user_id = $2 AND cv_id = $3;
 
 -- name: ListCVRevisions :many
 -- The feed, newest first.

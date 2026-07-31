@@ -75,7 +75,6 @@ type Change struct {
 type Repository interface {
 	Edit(ctx context.Context, cvID uuid.UUID, userID int64, fn func(context.Context, Tx) error) error
 	List(ctx context.Context, cvID uuid.UUID, userID int64, limit int32) ([]Revision, error)
-	Get(ctx context.Context, id uuid.UUID, userID int64) (Revision, error)
 }
 
 // Tx is the transactional view of one CV: everything a commit does, it does through here.
@@ -139,6 +138,13 @@ func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Ch
 		meta cv.Meta
 		rev  Revision
 	)
+	// Both checks run BEFORE the transaction opens. The policy needs nothing but the batch,
+	// and the gate reads the experience bank on its own connection — asking it while holding
+	// the CV row lock borrows a second connection from the pool for the length of a commit,
+	// which is the shape a pool-exhaustion deadlock takes under load.
+	if err := e.authorize(ctx, userID, ch); err != nil {
+		return cv.Meta{}, Revision{}, err
+	}
 	err := e.repo.Edit(ctx, cvID, userID, func(ctx context.Context, tx Tx) error {
 		var err error
 		meta, rev, err = e.commit(ctx, tx, cvID, userID, ch)
@@ -147,22 +153,25 @@ func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Ch
 	return meta, rev, err
 }
 
-func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64, ch Change) (cv.Meta, Revision, error) {
+// authorize answers "may this actor make this change at all" — a question about the batch, not
+// about the document, so it is settled before anything is locked.
+func (e *Editor) authorize(ctx context.Context, userID int64, ch Change) error {
 	if len(ch.Ops) == 0 {
-		return cv.Meta{}, Revision{}, fmt.Errorf("%w: a change with no operations", ErrInvalidOp)
+		return fmt.Errorf("%w: a change with no operations", ErrInvalidOp)
 	}
 	if err := e.policy.Allows(ch.Actor, ch.Ops); err != nil {
-		return cv.Meta{}, Revision{}, err
+		return err
 	}
-	if err := e.requireEvidence(ctx, userID, ch); err != nil {
-		return cv.Meta{}, Revision{}, err
-	}
+	return e.requireEvidence(ctx, userID, ch)
+}
 
+// commit assumes authorize has already passed: it is the part that needs the locked row.
+func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64, ch Change) (cv.Meta, Revision, error) {
 	before, baseVersion, err := tx.State(ctx)
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
-	after, inverse, err := Apply(before, ch.Ops)
+	after, _, err := Apply(before, ch.Ops)
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
@@ -170,6 +179,12 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	// Sanitize after applying and before storing, exactly as the whole-document path always
 	// has: a change states what was asked for, and the sanitizer decides what is kept.
 	after.Document.Sanitize()
+
+	// The inverse is derived from what will actually be STORED, not from what Apply produced.
+	// The sanitizer drops entries with nothing in them and bullets that were only whitespace,
+	// and every index after such a drop shifts — so an inverse computed a moment earlier
+	// removes the wrong element. It cost a real experience entry in the test that found this.
+	inverse := Diff(after, before)
 
 	// An operation that changes nothing files nothing. Picking the template already in use
 	// is a click the gallery allows, and "switched to the Sidebar template" under a CV that
@@ -233,6 +248,18 @@ func (e *Editor) continues(newest Revision, ch Change) bool {
 	if newest.Actor != ch.Actor || newest.Origin != ch.Origin || newest.Reverted() {
 		return false
 	}
+	// A second agent turn is a second run. Folding its first edit into the previous turn's
+	// revision would file it under that run's batch, and "undo the run" would miss it.
+	if newest.BatchID != ch.BatchID {
+		return false
+	}
+	// Only `set` may be folded. Replacing the operations is right for it — each save carries
+	// the place's current value — and wrong for the rest: two inserts at the same position are
+	// two additions, and keeping only the second leaves the first recorded nowhere and
+	// undoable by nothing.
+	if !allSets(newest.Ops) || !allSets(ch.Ops) {
+		return false
+	}
 	if newest.RevertsID != uuid.Nil {
 		return false // an undo is a landmark; folding an edit into it would hide both
 	}
@@ -240,6 +267,15 @@ func (e *Editor) continues(newest Revision, ch Change) bool {
 		return false
 	}
 	return samePaths(newest.Ops, ch.Ops)
+}
+
+func allSets(ops []Op) bool {
+	for _, op := range ops {
+		if op.Kind != OpSet {
+			return false
+		}
+	}
+	return true
 }
 
 func samePaths(a, b []Op) bool {
@@ -282,7 +318,14 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 			meta = metaOf(cvID, before)
 			return nil
 		}
-		meta, rev, err = e.commit(ctx, tx, cvID, userID, Change{Actor: actor, Origin: origin, Ops: ops})
+		change := Change{Actor: actor, Origin: origin, Ops: ops}
+		// The operations are derived here, so this is the first moment they can be checked.
+		// The candidate is the only actor that reaches this path and the gate does not apply
+		// to them, so no bank read happens under the lock.
+		if err := e.authorize(ctx, userID, change); err != nil {
+			return err
+		}
+		meta, rev, err = e.commit(ctx, tx, cvID, userID, change)
 		return err
 	})
 	return meta, rev, err

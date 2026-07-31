@@ -23,17 +23,18 @@
     },
   ];
 
-  // The one-operation-at-a-time patch vocabulary (internal/cv/patch.go). Listed
-  // so the page's "you can see every edit" claim is concrete rather than a mood.
+  // The parts of the CV an edit can address (internal/cvedit). Listed so the page's "you can
+  // see every edit" claim is concrete rather than a mood — and every one of them is recorded
+  // in the CV's history, where it can be undone on its own.
   const ops = [
-    'set_summary',
-    'set_header_field',
-    'add_bullet',
-    'replace_bullet',
-    'remove_bullet',
-    'reorder_bullets',
-    'set_skill_group',
-    'set_stack',
+    'summary',
+    'experience[i].bullets[j]',
+    'experience[i].stack[j]',
+    'skills[i].items[j]',
+    'projects[i].bullets[j]',
+    'education[i].degree',
+    'certifications[i].issuer',
+    'style.font_size',
   ];
 
   const steps = [
@@ -254,7 +255,7 @@ freehire <span class="text-foreground">cv context &lt;cv-id&gt;</span>
 freehire <span class="text-foreground">cv get &lt;cv-id&gt;</span>
 
 <span class="text-muted-foreground"># one field-level edit</span>
-freehire <span class="text-foreground">cv edit &lt;cv-id&gt; --patch '&lbrace;"op":"replace_bullet",…&rbrace;'</span>
+freehire <span class="text-foreground">cv edit &lt;cv-id&gt; --op set --path 'experience[0].bullets[1]' --value '…'</span>
 
 <span class="text-muted-foreground"># the PDF</span>
 freehire <span class="text-foreground">cv render &lt;cv-id&gt; --out cv.pdf</span></pre>

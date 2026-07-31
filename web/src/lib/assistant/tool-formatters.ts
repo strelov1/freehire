@@ -79,7 +79,7 @@ function callDetail(call: ToolCall): string | null {
     case 'my_jobs':
       return readField(call.input, 'filter');
     case 'cv_edit':
-      return readNested(call.input, 'patch', 'op');
+      return editCount(call.input);
     default:
       return null;
   }
@@ -154,4 +154,12 @@ function readNested(input: unknown, outer: string, inner: string): string | null
   if (!input || typeof input !== 'object') return null;
   const nested = (input as Record<string, unknown>)[outer];
   return readField(nested, inner);
+}
+
+/** How many edits one cv_edit call carried — the tool takes a batch, not a single patch. */
+function editCount(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const ops = (input as Record<string, unknown>).ops;
+  if (!Array.isArray(ops) || ops.length === 0) return null;
+  return ops.length === 1 ? '1 edit' : `${ops.length} edits`;
 }

@@ -35,9 +35,17 @@
 
   let busy = $state('');
   let error = $state('');
+  // Hovering previews; clicking pins. They are separate state because a hover must not erase
+  // a deliberate choice — the pinned entry is what the preview falls back to when the pointer
+  // moves away.
+  let hovered = $state<RevisionView | null>(null);
+  let clicked = $state<RevisionView | null>(null);
+  $effect(() => {
+    pinned = hovered ?? clicked;
+  });
 
   function pin(revision: RevisionView) {
-    pinned = pinned?.id === revision.id ? null : revision;
+    clicked = clicked?.id === revision.id ? null : revision;
   }
 
   async function undoOne(revision: RevisionView) {
@@ -45,7 +53,8 @@
     error = '';
     try {
       await onUndo(revision);
-      if (pinned?.id === revision.id) pinned = null;
+      if (clicked?.id === revision.id) clicked = null;
+      hovered = null;
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that edit.';
     } finally {
@@ -58,7 +67,8 @@
     error = '';
     try {
       await onUndoRun(batchId);
-      pinned = null;
+      clicked = null;
+      hovered = null;
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that run.';
     } finally {
@@ -73,9 +83,9 @@
 {#snippet entry(revision: RevisionView, nested: boolean)}
   <li
     class={['group rounded px-2 py-1.5', nested ? 'ml-3 border-l border-border pl-3' : '']}
-    onmouseenter={() => (pinned ??= revision)}
+    onmouseenter={() => (hovered = revision)}
     onmouseleave={() => {
-      if (pinned?.id === revision.id && !nested) pinned = null;
+      if (hovered?.id === revision.id) hovered = null;
     }}
   >
     <div class="flex items-start justify-between gap-2">

@@ -15,6 +15,9 @@ import (
 // It models the one thing that matters for correctness here: a commit reads, writes and
 // records against a single consistent view.
 type fakeRepo struct {
+	// cvID is the one CV this repository serves. Revisions carry it, so a test that undoes
+	// through a DIFFERENT id exercises the check that keeps one CV's history out of another.
+	cvID      uuid.UUID
 	state     State
 	updatedAt time.Time
 	revisions []Revision
@@ -22,7 +25,7 @@ type fakeRepo struct {
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{state: sample(), updatedAt: time.Date(2026, 7, 31, 9, 0, 0, 0, time.UTC)}
+	return &fakeRepo{cvID: uuid.New(), state: sample(), updatedAt: time.Date(2026, 7, 31, 9, 0, 0, 0, time.UTC)}
 }
 
 func (r *fakeRepo) Edit(ctx context.Context, _ uuid.UUID, _ int64, fn func(context.Context, Tx) error) error {
@@ -136,7 +139,7 @@ func newEditor(repo *fakeRepo, gate EvidenceGate) (*Editor, *clock) {
 
 func commitSet(t *testing.T, e *Editor, repo *fakeRepo, actor Actor, origin Origin, path, value string) Revision {
 	t.Helper()
-	_, rev, err := e.Commit(context.Background(), uuid.New(), 1, Change{
+	_, rev, err := e.Commit(context.Background(), repo.cvID, 1, Change{
 		Actor:  actor,
 		Origin: origin,
 		Ops:    []Op{{Kind: OpSet, Path: mustParse(t, path), Value: value}},
@@ -320,5 +323,115 @@ func TestAnOperationThatChangesNothingRecordsNothing(t *testing.T) {
 	}
 	if repo.saves != 0 {
 		t.Fatal("a change that changed nothing wrote the document")
+	}
+}
+
+// The sanitizer runs after the operations do, and it can drop what they added — an entry with
+// nothing in it, a bullet that was only whitespace. Every index after the drop then shifts
+// under an inverse computed before it, so undoing removes the wrong thing.
+func TestUndoSurvivesTheSanitizerDroppingWhatWasAdded(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+	cvID := repo.cvID
+	before := repo.state
+
+	_, rev, err := e.Commit(context.Background(), cvID, 1, Change{
+		Actor: ActorCandidate, Origin: OriginEditor,
+		Ops: []Op{
+			// An entry the sanitizer will discard: no role, no company, no bullets.
+			{Kind: OpInsert, Path: mustParse(t, "experience[0]"), Value: map[string]any{"stack": []string{"Go"}}},
+			{Kind: OpSet, Path: mustParse(t, "summary"), Value: "New summary"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if len(repo.state.Experience) != len(before.Experience) {
+		t.Fatalf("the empty entry survived sanitizing: %d entries", len(repo.state.Experience))
+	}
+
+	if _, _, err := e.Revert(context.Background(), cvID, 1, rev.ID); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if !Equal(before, repo.state) {
+		t.Fatalf("undo did not restore the document:\n got  %+v\n want %+v", repo.state.Experience, before.Experience)
+	}
+}
+
+// An edit the sanitizer strips to nothing changed nothing, so it files nothing — there is no
+// entry in the feed offering to undo something the document never took.
+func TestAnEditTheSanitizerErasesRecordsNothing(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+	before := repo.state
+
+	if _, _, err := e.Commit(context.Background(), uuid.New(), 1, Change{
+		Actor: ActorCandidate, Origin: OriginEditor,
+		Ops: []Op{{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[0]"), Value: "   "}},
+	}); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if len(repo.revisions) != 0 || repo.saves != 0 {
+		t.Fatalf("an edit the sanitizer erased left %d revisions", len(repo.revisions))
+	}
+	if !Equal(before, repo.state) {
+		t.Fatal("the document changed")
+	}
+}
+
+// Coalescing replaces a revision's operations, which is right for `set` — each save carries
+// the place's current value — and wrong for everything else. Two inserts at the same position
+// are two additions, and folding them keeps only the second: the first becomes an edit nobody
+// recorded and nobody can undo.
+func TestTwoInsertsAtTheSamePlaceAreTwoRevisions(t *testing.T) {
+	repo := newFakeRepo()
+	e, c := newEditor(repo, nil)
+
+	for _, text := range []string{"first added", "second added"} {
+		c.at = c.at.Add(2 * time.Second)
+		if _, _, err := e.Commit(context.Background(), repo.cvID, 1, Change{
+			Actor: ActorCandidate, Origin: OriginEditor,
+			Ops: []Op{{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[0]"), Value: text}},
+		}); err != nil {
+			t.Fatalf("Commit(%q): %v", text, err)
+		}
+	}
+
+	if len(repo.revisions) != 2 {
+		t.Fatalf("got %d revisions, want one per insertion", len(repo.revisions))
+	}
+	// And both are undoable back to where the document started.
+	for i := len(repo.revisions) - 1; i >= 0; i-- {
+		if _, _, err := e.Revert(context.Background(), repo.cvID, 1, repo.revisions[i].ID); err != nil {
+			t.Fatalf("Revert: %v", err)
+		}
+	}
+	if !Equal(sample(), repo.state) {
+		t.Fatalf("undoing both insertions did not restore the document: %+v", repo.state.Experience[0].Bullets)
+	}
+}
+
+// A second agent turn is a second run. Folding its first edit into the previous turn's
+// revision would file it under that run's batch, and "undo the run" would miss it.
+func TestASecondTurnDoesNotJoinThePreviousRunsBatch(t *testing.T) {
+	repo := newFakeRepo()
+	e, c := newEditor(repo, nil)
+	first, second := uuid.New(), uuid.New()
+
+	for _, batch := range []uuid.UUID{first, second} {
+		c.at = c.at.Add(2 * time.Second)
+		if _, _, err := e.Commit(context.Background(), repo.cvID, 1, Change{
+			Actor: ActorAgent, Origin: OriginTailorAgent, BatchID: batch,
+			Ops: []Op{{Kind: OpSet, Path: mustParse(t, "summary"), Value: "run " + batch.String()[:4]}},
+		}); err != nil {
+			t.Fatalf("Commit: %v", err)
+		}
+	}
+
+	if len(repo.revisions) != 2 {
+		t.Fatalf("got %d revisions, want one per run", len(repo.revisions))
+	}
+	if repo.revisions[1].BatchID != second {
+		t.Fatalf("the second turn's edit is filed under %v, want its own run", repo.revisions[1].BatchID)
 	}
 }

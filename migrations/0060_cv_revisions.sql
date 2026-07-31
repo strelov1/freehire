@@ -17,7 +17,7 @@
 --
 -- user_id is denormalised from cvs so every read is owner-scoped in one predicate.
 --
--- The log is capped per CV (trimmed by the same statement that inserts), so these two jsonb
+-- The log is capped per CV (trimmed in the same transaction as the insert), so these two jsonb
 -- columns cannot grow without bound on the table behind every CV page.
 --
 -- Applied to a fresh volume by initdb after 0059; on an existing prod volume run this file

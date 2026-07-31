@@ -13,7 +13,7 @@
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '$lib/cv';
   import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
   import { paginateBlocks, previewTypography } from './geometry';
-  import { keepIndex, makeHighlighter } from './revisions';
+  import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
   let {
     doc,
@@ -35,6 +35,9 @@
 
   // Whether a given address was touched by whatever the history has selected.
   const lit = $derived(makeHighlighter(highlightPaths));
+  // A project renders as one line with its bullets inline, so anything changed inside it
+  // underlines the line — there is no finer node to put the mark on.
+  const litInside = $derived(makeContainerHighlighter(highlightPaths));
 
   // A4 at 96dpi, and the inch→pixel factor margins convert through.
   const PAGE_W = 794;
@@ -97,7 +100,7 @@
     keepIndex(doc.experience ?? [], (e) => experienceHeader(e) !== '' || (e.bullets ?? []).length > 0),
   );
   const projects = $derived(keepIndex(doc.projects ?? [], (p) => (p.name ?? '').trim() !== ''));
-  const education = $derived((doc.education ?? []).map(educationLine).filter((l) => l !== ''));
+  const education = $derived(keepIndex((doc.education ?? []).map(educationLine), (l) => l !== ''));
   const skills = $derived((doc.skills ?? []).flatMap((g) => g.items ?? []).map((s) => s.trim()).filter((s) => s !== ''));
   const languages = $derived((doc.languages ?? []).map(languageLabel).filter((l) => l !== ''));
   const certifications = $derived((doc.certifications ?? []).map(certificationLine).filter((l) => l !== ''));
@@ -243,7 +246,7 @@
 {#snippet projectItem(p: Project, at: number)}
   {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
   <ul class="ml-4 list-disc">
-    <li class="mb-0.5" class:cv-lit={lit(`projects[${at}]`)}>
+    <li class="mb-0.5" class:cv-lit={lit(`projects[${at}]`) || lit(`projects[${at}].bullets`) || litInside(`projects[${at}]`)}>
       <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
       {#if (p.link ?? '').trim()}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
@@ -277,7 +280,9 @@
   {:else if b.kind === 'education'}
     <section class="mb-3">
       {@render sectionHeading('Education')}
-      {#each education as line, i (i)}<p class="mb-0.5" class:cv-lit={lit(`education[${i}]`)}>{line}</p>{/each}
+      {#each education as line (line.index)}
+        <p class="mb-0.5" class:cv-lit={lit(`education[${line.index}]`)}>{line.item}</p>
+      {/each}
     </section>
   {:else if b.kind === 'list'}
     {@render listBlock(b.title, b.items, b.sep, b.path)}

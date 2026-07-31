@@ -12,7 +12,7 @@ import (
 func TestUndoingAnOlderEditKeepsTheNewerOnes(t *testing.T) {
 	repo := newFakeRepo()
 	e, c := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	first := commitSet(t, e, repo, ActorCandidate, OriginEditor, "summary", "Distributed systems")
 	c.at = c.at.Add(2 * time.Minute)
@@ -33,7 +33,7 @@ func TestUndoingAnOlderEditKeepsTheNewerOnes(t *testing.T) {
 func TestAnUndoIsItselfARevision(t *testing.T) {
 	repo := newFakeRepo()
 	e, _ := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	first := commitSet(t, e, repo, ActorCandidate, OriginEditor, "summary", "Distributed systems")
 
@@ -60,7 +60,7 @@ func TestAnUndoIsItselfARevision(t *testing.T) {
 func TestAnUndoCanItselfBeUndone(t *testing.T) {
 	repo := newFakeRepo()
 	e, _ := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	first := commitSet(t, e, repo, ActorCandidate, OriginEditor, "summary", "Distributed systems")
 	_, undo, err := e.Revert(context.Background(), cvID, 1, first.ID)
@@ -79,7 +79,7 @@ func TestAnUndoCanItselfBeUndone(t *testing.T) {
 func TestUndoingTwiceIsRefused(t *testing.T) {
 	repo := newFakeRepo()
 	e, _ := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	first := commitSet(t, e, repo, ActorCandidate, OriginEditor, "summary", "Distributed systems")
 	if _, _, err := e.Revert(context.Background(), cvID, 1, first.ID); err != nil {
@@ -95,7 +95,7 @@ func TestUndoingTwiceIsRefused(t *testing.T) {
 func TestUndoingWhatIsNoLongerThereExplainsItself(t *testing.T) {
 	repo := newFakeRepo()
 	e, c := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 
 	// Rewrite a bullet, then delete the whole entry it lived in: the inverse would restore
 	// text into a place that no longer exists.
@@ -126,7 +126,7 @@ func TestUndoingWhatIsNoLongerThereExplainsItself(t *testing.T) {
 func TestARunIsUndoneAsOne(t *testing.T) {
 	repo := newFakeRepo()
 	e, c := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 	batch := uuid.New()
 
 	for i, edit := range []struct{ path, value string }{
@@ -158,7 +158,7 @@ func TestARunIsUndoneAsOne(t *testing.T) {
 func TestUndoingOneEditOfARunLeavesTheRest(t *testing.T) {
 	repo := newFakeRepo()
 	e, c := newEditor(repo, nil)
-	cvID := uuid.New()
+	cvID := repo.cvID
 	batch := uuid.New()
 
 	_, first, err := e.Commit(context.Background(), cvID, 1, Change{
@@ -195,5 +195,25 @@ func TestUndoingARunThatNeverHappenedIsRefused(t *testing.T) {
 	_, err := e.RevertBatch(context.Background(), uuid.New(), 1, uuid.New())
 	if !errors.Is(err, ErrNothingToUndo) {
 		t.Fatalf("RevertBatch returned %v, want ErrNothingToUndo", err)
+	}
+}
+
+// A revision id names an entry in ONE CV's history. Undoing it through a different CV of the
+// same owner would apply that CV's inverses to this document — a write to the wrong place,
+// driven entirely by a path parameter.
+func TestUndoingARevisionOfAnotherCVIsRefused(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+	theirCV, otherCV := uuid.New(), uuid.New()
+
+	rev := commitSet(t, e, repo, ActorCandidate, OriginEditor, "summary", "Distributed systems")
+
+	_, _, err := e.Revert(context.Background(), otherCV, 1, rev.ID)
+	if !errors.Is(err, ErrNothingToUndo) {
+		t.Fatalf("undoing another CV's revision returned %v, want ErrNothingToUndo", err)
+	}
+	_ = theirCV
+	if repo.state.Summary != "Distributed systems" {
+		t.Fatalf("the wrong document was rewritten: %q", repo.state.Summary)
 	}
 }

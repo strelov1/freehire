@@ -21,10 +21,15 @@ outside it: nobody edited them, and they would read as nonsense in a feed of edi
 
 ## Inverses
 
-`Apply` returns them. They are computed *during* application, because that is the only moment
-the previous value is still in hand — afterwards, "what did this bullet say before" is a
-question nobody can answer. They come back in reverse order, and `Apply` is all-or-nothing:
-a refused batch leaves the state untouched, so a rejected edit is never a partial one.
+`Apply` computes them *during* application, because that is the only moment the previous value
+is still in hand. `Apply` is all-or-nothing: a refused batch leaves the state untouched, so a
+rejected edit is never a partial one.
+
+What a revision STORES, though, is `Diff(sanitized-after, before)` — derived from what will
+actually be written, not from what `Apply` produced. The sanitizer runs afterwards and drops
+entries with nothing in them and bullets that were only whitespace; every index after such a
+drop shifts, and an inverse computed a moment earlier then removes the wrong element. That cost
+a real experience entry in the test that found it.
 
 An absent list and an empty one are the same stored state (the json tags omit both). Both
 `Apply` and `Diff` treat them as one; keeping them distinct had the differ reporting operations
@@ -43,14 +48,21 @@ indices included.
 
 ## Coalescing, and why the inverse is not touched
 
-Autosave fires 800 ms after a keystroke. A revision absorbs a follow-on edit when the actor,
-the origin and the paths match and it is younger than a minute — the operations are **replaced**
-(each save carries the place's current value, so the newest batch already describes the burst)
-while the **inverse is left alone**, still leading back to the state before the first keystroke.
-That is what makes undo mean something for typed text.
+Autosave fires 800 ms after a keystroke. A revision absorbs a follow-on edit when the actor, the
+origin, the batch and the paths match, it is younger than a minute, and **both sides are `set`**
+— the operations are then replaced (each save carries the place's current value, so the newest
+batch already describes the burst) while the **inverse is left alone**, still leading back to the
+state before the first keystroke.
 
-Appending instead of replacing is wrong twice: the revision stops matching the shape of the
-next save, and a burst breaks into two entries on the third keystroke.
+Three conditions each stop a way of losing an edit:
+
+- Appending instead of replacing makes the revision stop matching the shape of the next save, so
+  a burst breaks into two entries on the third keystroke.
+- Folding anything but `set` loses edits outright: two `insert`s at the same position are two
+  additions, and keeping only the second leaves the first recorded nowhere and undoable by
+  nothing.
+- Ignoring the batch files a second agent turn's first edit under the previous run, and "undo
+  the run" then misses it.
 
 ## Undo
 
@@ -73,6 +85,12 @@ Access control is a table (`DefaultPolicy`), not a side effect of a small vocabu
 is denied `header.full_name`, `header.email`, `header.phone`, `header.links`, `title` and
 `template_id`; the candidate is denied nothing.
 
+**A denial reaches in both directions.** Downwards is obvious — denying `header.links` denies
+`header.links[0]`. Upwards is the one that bites: `header` is not inside `header.email`, but
+writing a whole `header` object replaces every contact identifier at once, and the addressable
+vocabulary published to the model offers the container alongside the leaf. A rule that only
+looked downwards was a rule the model could step over, and it did in the test that found it.
+
 The gate is keyed on **paths that carry a claim about the candidate** — the summary, an entry's
 summary, bullets, a project's bullets, a technology line, a skill group. The last two are new:
 under the named vocabulary only two of eight ops required evidence, so a technology written into
@@ -80,6 +98,10 @@ a stack line arrived uncited while the same claim as a bullet was refused.
 
 It applies to the **agent only**. The rule is that a model's inference must not reach the page;
 the candidate writing about their own career is the source the bank exists to record.
+
+The same reach applies: writing `experience[0]` writes the bullets inside it, so an operation is
+gated when its shape is a claim shape **or a claim shape sits inside it**. Matching exactly
+reopened the hole one level up.
 
 `EvidenceID` sits on the operation, and one uncited operation refuses the whole batch —
 otherwise a claim could ride in among valid ones.
@@ -98,9 +120,18 @@ boundary exists to keep out. An agent's `note` travels separately and is attribu
 document and the revision describing it are written together or not at all — and two agent turns
 arriving at once are serialised rather than interleaved.
 
+The policy and the gate run BEFORE it opens. They are questions about the batch, not about the
+document, and the gate reads the experience bank on its own connection: asking it while holding
+the row lock borrows a second connection from a ten-connection pool for the length of a commit,
+which is the shape a pool-exhaustion deadlock takes under load.
+
+`Revert` checks that the revision belongs to the CV in the path, and `GetCVRevision` is scoped by
+both. A revision id names an entry in one history; reading it through another CV of the same
+owner would undo the wrong document.
+
 `base_version` is journalling, not locking. The differ always compares against the state just
 read, and an operation addressing a path that has since disappeared is refused when applied.
 
-The feed is capped at 100 revisions per CV, trimmed by the same statement that inserts: this is
+The feed is capped at 100 revisions per CV, trimmed in the same transaction as the insert: this is
 an aid to the candidate's current work, not an archive, and each row carries two operation
 documents on the table behind every CV page.
