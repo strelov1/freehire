@@ -16,7 +16,7 @@ import (
 )
 
 // appliedDaysAgo backdates an application so it lands on the far side of its stage's threshold.
-func appliedDaysAgo(t *testing.T, f *agentInboxFixture, jobID int64, days int, stage string) {
+func appliedDaysAgo(t *testing.T, f *harnessInboxFixture, jobID int64, days int, stage string) {
 	t.Helper()
 	at := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	if _, err := f.pool.Exec(context.Background(),
@@ -28,7 +28,7 @@ func appliedDaysAgo(t *testing.T, f *agentInboxFixture, jobID int64, days int, s
 }
 
 func TestFollowUpDraft_SilentApplicationGetsADraft(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-silent@example.test")
+	f := newHarnessInboxFixture(t, "fu-silent@example.test")
 	jid := seedJobSlug(t, f.pool, "followup-silent")
 	appliedDaysAgo(t, f, jid, 24, "applied") // past the 21-day `applied` threshold
 
@@ -49,7 +49,7 @@ func TestFollowUpDraft_SilentApplicationGetsADraft(t *testing.T) {
 }
 
 func TestFollowUpDraft_ActiveApplicationIsRefused(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-active@example.test")
+	f := newHarnessInboxFixture(t, "fu-active@example.test")
 	jid := seedJobSlug(t, f.pool, "followup-active")
 	appliedDaysAgo(t, f, jid, 3, "applied") // well inside the tolerated silence
 
@@ -61,7 +61,7 @@ func TestFollowUpDraft_ActiveApplicationIsRefused(t *testing.T) {
 }
 
 func TestFollowUpDraft_UntrackedSlugIsNotFound(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-untracked@example.test")
+	f := newHarnessInboxFixture(t, "fu-untracked@example.test")
 	seedJobSlug(t, f.pool, "followup-untracked")
 
 	if status, _ := f.callKey(fiber.MethodGet, "/api/v1/me/tracking/followup-untracked/followup", nil); status != fiber.StatusNotFound {
@@ -72,7 +72,7 @@ func TestFollowUpDraft_UntrackedSlugIsNotFound(t *testing.T) {
 // TestFollowUpDraft_PrefillsTheRecipientFromLinkedMail covers the other half of the constraint that
 // shaped this feature: an address exists only when somebody wrote back and then went quiet.
 func TestFollowUpDraft_PrefillsTheRecipientFromLinkedMail(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-replied@example.test")
+	f := newHarnessInboxFixture(t, "fu-replied@example.test")
 	jid := seedJobSlug(t, f.pool, "followup-replied")
 	appliedDaysAgo(t, f, jid, 40, "screening")
 	if _, err := f.pool.Exec(context.Background(),
@@ -97,7 +97,7 @@ func TestFollowUpDraft_PrefillsTheRecipientFromLinkedMail(t *testing.T) {
 }
 
 func TestFollowUpRecord_WritesTheChaseAndIsOwnerScoped(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-record@example.test")
+	f := newHarnessInboxFixture(t, "fu-record@example.test")
 	jid := seedJobSlug(t, f.pool, "followup-record")
 	appliedDaysAgo(t, f, jid, 24, "applied")
 
@@ -125,7 +125,7 @@ func TestFollowUpRecord_WritesTheChaseAndIsOwnerScoped(t *testing.T) {
 }
 
 func TestFollowUpRecord_UntrackedSlugWritesNothing(t *testing.T) {
-	f := newAgentInboxFixture(t, "fu-record-untracked@example.test")
+	f := newHarnessInboxFixture(t, "fu-record-untracked@example.test")
 	jid := seedJobSlug(t, f.pool, "followup-record-untracked")
 
 	if status, _ := f.callKey(fiber.MethodPost, "/api/v1/me/tracking/followup-record-untracked/followup", nil); status != fiber.StatusNotFound {
