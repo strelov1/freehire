@@ -84,14 +84,14 @@
 
 ## 8. Make pruning safe
 
-- [ ] 8.1 Integration test: a prune batch deleting a posting a user applied to leaves the application standing with its link cleared, leaves the company aggregates unchanged, and still removes the views, saves, dismissals and votes
-- [ ] 8.2 Replace `PruneJobs`'s blanket "accepted cost" sentence with the distinction it now makes
-- [ ] 8.3 Verify `cmd/prune`'s dry-run report and batch plan are unchanged
+- [x] 8.1 Integration test: a prune batch deleting a posting a user applied to leaves the application standing with its link cleared, leaves the company aggregates unchanged, and still removes the views, saves, dismissals and votes
+- [x] 8.2 Replace `PruneJobs`'s blanket "accepted cost" sentence with the distinction it now makes
+- [x] 8.3 Verify `cmd/prune`'s dry-run report and batch plan are unchanged
 
 ## 9. External consumers
 
 - [ ] 9.1 Verify the SPA tracking board and inbox against a seeded local DB — no contract change is expected, so any diff is a bug in the port
-- [ ] 9.2 Verify `freehire-cli` (`apply`, `stage`, `note`, `my`) and `freehire-mcp` against the same DB
+- [ ] 9.2 Verify `freehire-cli` and `freehire-mcp`. **Checked by reading, not yet fixed:** `freehire-cli`'s `myJobRow.Job` is a value (`internal/cli/jobs.go:231`), and Go's json decoder treats `"job": null` as a no-op, so it does **not** error — it prints a row with a blank company and title. Graceful but wrong; the fix is `*jobRow` plus the `company_slug`/`role_title` fallback, in that repo's own PR. `freehire-mcp` not yet inspected
 
 ## 10. Contract (separate deploy)
 

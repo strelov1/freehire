@@ -492,3 +492,56 @@ func TestPruneJobsFollowsDuplicateChains(t *testing.T) {
 		t.Errorf("deleted %d rows, want 3 — the whole chain goes with its root", len(got))
 	}
 }
+
+// The guarantee the applications table exists for, asserted against the pruner itself
+// rather than against a hand-written DELETE: removing a posting must leave the
+// candidate's own record standing and must not move what the aggregates say about the
+// employer — while the marks on the posting still go with it.
+func TestPruneJobs_LeavesTheApplicationAndTheAggregates(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "prune-guard@example.test", true)
+	job := seedResponseJob(t, q, "prune-guard-1", "guardco")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	seedReply(t, q, user, job, "prune-guard-reply")
+	if _, err := q.SaveJob(ctx, SaveJobParams{UserID: user, JobID: job}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	appsBefore, answeredBefore := rebuildAnswered(t, q, "guardco")
+
+	if _, err := q.PruneJobs(ctx, PruneJobsParams{Ids: []int64{job}, Rules: []string{"title"}}); err != nil {
+		t.Fatalf("PruneJobs: %v", err)
+	}
+
+	var stage, notes *string
+	var jobID *int64
+	if err := pool.QueryRow(ctx,
+		`SELECT stage, notes, job_id FROM applications WHERE user_id = $1`, user).
+		Scan(&stage, &notes, &jobID); err != nil {
+		t.Fatalf("the application did not survive the pruner: %v", err)
+	}
+	if jobID != nil {
+		t.Errorf("job_id = %v after the prune, want NULL", *jobID)
+	}
+	if stage == nil || *stage != "applied" {
+		t.Errorf("stage = %v, want applied — the candidate's record is not the campaign's to edit", stage)
+	}
+
+	var marks int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_jobs WHERE user_id = $1`, user).Scan(&marks); err != nil {
+		t.Fatalf("count marks: %v", err)
+	}
+	if marks != 0 {
+		t.Errorf("%d interaction rows survived, want 0 — a bookmark goes with its posting", marks)
+	}
+
+	apps, answered := rebuildAnswered(t, q, "guardco")
+	if apps != appsBefore || answered != answeredBefore {
+		t.Errorf("aggregates moved: %d/%d before, %d/%d after — a removal must not change what is said about the employer",
+			appsBefore, answeredBefore, apps, answered)
+	}
+}
