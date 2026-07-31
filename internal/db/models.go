@@ -23,6 +23,20 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type ApplicationEvent struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	JobID       pgtype.Int8        `json:"job_id"`
+	CompanySlug string             `json:"company_slug"`
+	Kind        string             `json:"kind"`
+	Signal      string             `json:"signal"`
+	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
+	RecordedAt  pgtype.Timestamptz `json:"recorded_at"`
+	Source      string             `json:"source"`
+	SourceRef   pgtype.Int8        `json:"source_ref"`
+	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
+}
+
 type AssistantMessage struct {
 	SessionID uuid.UUID          `json:"session_id"`
 	Seq       int32              `json:"seq"`
@@ -253,9 +267,10 @@ type InsightsCompanyGrowth struct {
 }
 
 type InsightsCompanyResponse struct {
-	CompanySlug  string `json:"company_slug"`
-	Applications int32  `json:"applications"`
-	Answered     int32  `json:"answered"`
+	CompanySlug     string        `json:"company_slug"`
+	Applications    int32         `json:"applications"`
+	Answered        int32         `json:"answered"`
+	MedianReplyDays pgtype.Float4 `json:"median_reply_days"`
 }
 
 type InsightsCompanyStat struct {
