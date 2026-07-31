@@ -12,7 +12,7 @@ import (
 )
 
 const listGhostApplicationEvidence = `-- name: ListGhostApplicationEvidence :many
-SELECT uj.job_id,
+SELECT uj.job_id::bigint AS job_id,
        uj.user_id,
        coalesce(uj.stage, '')::text AS stage,
        GREATEST(uj.applied_at,
@@ -27,7 +27,7 @@ SELECT uj.job_id,
                    AND e.suggested_job_id = uj.job_id
                    AND e.job_id IS NULL
                    AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
-FROM user_jobs uj
+FROM applications uj
 WHERE uj.job_id = ANY($1::bigint[])
   AND uj.applied_at IS NOT NULL
   AND (EXISTS (SELECT 1 FROM gmail_connections gc
@@ -61,6 +61,8 @@ type ListGhostApplicationEvidenceRow struct {
 //
 // last_activity_at and has_pending_suggestion mirror ListTrackedJobs deliberately:
 // one definition of "when did this application last move", not two.
+// job_id is nullable on applications, but the filter below matches it against a page of
+// real ids, so a row that reaches the select always carries one.
 func (q *Queries) ListGhostApplicationEvidence(ctx context.Context, jobIds []int64) ([]ListGhostApplicationEvidenceRow, error) {
 	rows, err := q.db.Query(ctx, listGhostApplicationEvidence, jobIds)
 	if err != nil {

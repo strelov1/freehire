@@ -20,8 +20,14 @@ func appliedDaysAgo(t *testing.T, f *harnessInboxFixture, jobID int64, days int,
 	t.Helper()
 	at := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	if _, err := f.pool.Exec(context.Background(),
-		`INSERT INTO user_jobs (user_id, job_id, applied_at, stage) VALUES ($1,$2,$3,$4)
-		 ON CONFLICT (user_id, job_id) DO UPDATE SET applied_at = $3, stage = $4`,
+		`WITH mark AS (
+		     INSERT INTO user_jobs (user_id, job_id) VALUES ($1,$2)
+		     ON CONFLICT (user_id, job_id) DO NOTHING
+		 )
+		 INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+		 SELECT $1, $2, j.company_slug, j.title, $3, $4 FROM jobs j WHERE j.id = $2
+		 ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+		 DO UPDATE SET applied_at = $3, stage = $4`,
 		f.userID, jobID, at, stage); err != nil {
 		t.Fatalf("seed application: %v", err)
 	}
@@ -133,7 +139,7 @@ func TestFollowUpRecord_UntrackedSlugWritesNothing(t *testing.T) {
 	}
 	var n int
 	if err := f.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM user_jobs WHERE user_id=$1 AND job_id=$2 AND followed_up_at IS NOT NULL`,
+		`SELECT count(*) FROM applications WHERE user_id=$1 AND job_id=$2 AND followed_up_at IS NOT NULL`,
 		f.userID, jid).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}

@@ -125,6 +125,6 @@ func (f *fakeQueries) AdvanceUserJobStage(_ context.Context, arg db.AdvanceUserJ
 	if f.advanceErr != nil {
 		return f.advanceErr
 	}
-	f.advancedTo = arg.Stage.String
+	f.advancedTo = arg.Stage
 	return nil
 }

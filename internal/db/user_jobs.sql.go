@@ -12,10 +12,16 @@ import (
 )
 
 const clearJobProgress = `-- name: ClearJobProgress :one
-UPDATE user_jobs
-SET stage = NULL, applied_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH cleared AS (
+    UPDATE applications SET stage = NULL, applied_at = NULL
+    WHERE applications.user_id = $1 AND applications.job_id = $2
+    RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
+)
+SELECT uj.user_id, uj.job_id, uj.viewed_at, c.applied_at, uj.saved_at,
+       c.stage, c.notes, uj.dismissed_at, uj.vote, c.followed_up_at
+  FROM user_jobs uj
+  LEFT JOIN cleared c ON c.user_id = uj.user_id AND c.job_id = uj.job_id
+ WHERE uj.user_id = $1 AND uj.job_id = $2
 `
 
 type ClearJobProgressParams struct {
@@ -23,10 +29,25 @@ type ClearJobProgressParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type ClearJobProgressRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
-func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error) {
+// The application record stays: it holds the notes, and clearing progress is the
+// candidate reconsidering, not a claim the process never happened.
+func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (ClearJobProgressRow, error) {
 	row := q.db.QueryRow(ctx, clearJobProgress, arg.UserID, arg.JobID)
-	var i UserJob
+	var i ClearJobProgressRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -60,7 +81,7 @@ func (q *Queries) ClearJobVote(ctx context.Context, arg ClearJobVoteParams) erro
 
 const countMyJobsByStage = `-- name: CountMyJobsByStage :many
 SELECT stage, count(*) AS count
-FROM user_jobs
+FROM applications
 WHERE user_id = $1
   AND (applied_at IS NOT NULL OR stage IS NOT NULL)
 GROUP BY stage
@@ -96,17 +117,18 @@ func (q *Queries) CountMyJobsByStage(ctx context.Context, userID int64) ([]Count
 }
 
 const countUserJobs = `-- name: CountUserJobs :one
-SELECT count(*)                                        AS "all",
-       count(*) FILTER (WHERE saved_at IS NULL
-                          AND applied_at IS NULL)      AS viewed,
-       count(*) FILTER (WHERE saved_at   IS NOT NULL) AS saved,
-       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
-       count(*) FILTER (WHERE saved_at   IS NOT NULL
-                            OR applied_at IS NOT NULL
-                            OR stage      IS NOT NULL) AS board,
-       count(*) FILTER (WHERE dismissed_at IS NOT NULL) AS dismissed
-FROM user_jobs
-WHERE user_id = $1
+SELECT count(*)                                          AS "all",
+       count(*) FILTER (WHERE uj.saved_at IS NULL
+                          AND a.applied_at IS NULL)        AS viewed,
+       count(*) FILTER (WHERE uj.saved_at  IS NOT NULL)    AS saved,
+       count(*) FILTER (WHERE a.applied_at IS NOT NULL)    AS applied,
+       count(*) FILTER (WHERE uj.saved_at  IS NOT NULL
+                            OR a.applied_at IS NOT NULL
+                            OR a.stage      IS NOT NULL)   AS board,
+       count(*) FILTER (WHERE uj.dismissed_at IS NOT NULL) AS dismissed
+FROM user_jobs uj
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+WHERE uj.user_id = $1
 `
 
 type CountUserJobsRow struct {
@@ -139,10 +161,16 @@ func (q *Queries) CountUserJobs(ctx context.Context, userID int64) (CountUserJob
 }
 
 const dismissJob = `-- name: DismissJob :one
-INSERT INTO user_jobs (user_id, job_id, dismissed_at)
-VALUES ($1, $2, now())
-ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id, dismissed_at)
+    VALUES ($1, $2, now())
+    ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type DismissJobParams struct {
@@ -150,12 +178,25 @@ type DismissJobParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type DismissJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Dismiss (swipe away) a job for a user in the swipe deck. Idempotent and
 // independent of a prior view: it inserts the row (viewed_at defaults) or
 // refreshes dismissed_at in place.
-func (q *Queries) DismissJob(ctx context.Context, arg DismissJobParams) (UserJob, error) {
+func (q *Queries) DismissJob(ctx context.Context, arg DismissJobParams) (DismissJobRow, error) {
 	row := q.db.QueryRow(ctx, dismissJob, arg.UserID, arg.JobID)
-	var i UserJob
+	var i DismissJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -172,10 +213,11 @@ func (q *Queries) DismissJob(ctx context.Context, arg DismissJobParams) (UserJob
 }
 
 const excludedJobIDs = `-- name: ExcludedJobIDs :many
-SELECT job_id
-FROM user_jobs
-WHERE user_id = $1
-ORDER BY GREATEST(viewed_at, saved_at, applied_at, dismissed_at) DESC
+SELECT uj.job_id
+FROM user_jobs uj
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+WHERE uj.user_id = $1
+ORDER BY GREATEST(uj.viewed_at, uj.saved_at, a.applied_at, uj.dismissed_at) DESC
 LIMIT $2
 `
 
@@ -297,7 +339,7 @@ func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string
 }
 
 const listUserJobs = `-- name: ListUserJobs :many
-SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
+SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
        (SELECT count(*)
           FROM emails e
          WHERE e.user_id = uj.user_id
@@ -308,7 +350,7 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
-       uj.followed_up_at,
+       a.followed_up_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
@@ -316,8 +358,8 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
        -- arrives would never fire on the applications ignored outright, which are
        -- the ones worth reporting. NULL on a row that is not an application: a job
        -- merely viewed or saved is not waiting on anyone.
-       (CASE WHEN uj.applied_at IS NOT NULL THEN
-          GREATEST(uj.applied_at,
+       (CASE WHEN a.applied_at IS NOT NULL THEN
+          GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.user_id = uj.user_id
@@ -328,7 +370,7 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
        -- application that the caller has neither confirmed nor rejected. Such mail
        -- contradicts a claim that nobody replied, so the reader downgrades a
        -- silence verdict to a question rather than asserting it.
-       (uj.applied_at IS NOT NULL AND EXISTS (
+       (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1
             FROM emails e
            WHERE e.user_id = uj.user_id
@@ -337,21 +379,22 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
              AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1
   AND ($4::text = 'all'
-       OR ($4::text = 'viewed' AND uj.saved_at IS NULL AND uj.applied_at IS NULL)
+       OR ($4::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)
        OR ($4::text = 'saved' AND uj.saved_at IS NOT NULL)
-       OR ($4::text = 'applied' AND uj.applied_at IS NOT NULL)
+       OR ($4::text = 'applied' AND a.applied_at IS NOT NULL)
        OR ($4::text = 'board'
-           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL))
+           AND (uj.saved_at IS NOT NULL OR a.applied_at IS NOT NULL OR a.stage IS NOT NULL))
        OR ($4::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
 ORDER BY (CASE $4::text
             WHEN 'saved' THEN uj.saved_at
-            WHEN 'applied' THEN uj.applied_at
+            WHEN 'applied' THEN a.applied_at
             WHEN 'viewed' THEN uj.viewed_at
-            WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            WHEN 'board' THEN GREATEST(uj.saved_at, a.applied_at)
             WHEN 'dismissed' THEN uj.dismissed_at
-            ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
+            ELSE GREATEST(uj.viewed_at, uj.saved_at, a.applied_at)
           END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3
 `
@@ -536,44 +579,40 @@ func (q *Queries) LockJobForVote(ctx context.Context, id int64) error {
 
 const markJobApplied = `-- name: MarkJobApplied :one
 WITH prior AS (
-    SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+    SELECT a.applied_at FROM applications a WHERE a.user_id = $1 AND a.job_id = $2::bigint
+), touch AS (
+    -- The interaction row still exists for its own duties; applying to a job never
+    -- opened must still leave one behind, as it always has.
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 ), upsert AS (
-    INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-    VALUES ($1, $2, COALESCE($3::timestamptz, now()), 'applied')
-    ON CONFLICT (user_id, job_id) DO UPDATE
+    INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+    SELECT $1, $2::bigint, j.company_slug, j.title,
+           COALESCE($3::timestamptz, now()), 'applied'
+      FROM jobs j WHERE j.id = $2::bigint
+    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+    DO UPDATE
       SET applied_at = CASE
               WHEN $3::timestamptz IS NOT NULL
-                  THEN COALESCE(user_jobs.applied_at, $3::timestamptz)
+                  THEN COALESCE(applications.applied_at, $3::timestamptz)
               ELSE now()
           END,
-          stage = COALESCE(user_jobs.stage, 'applied')
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+          stage = COALESCE(applications.stage, 'applied')
+    RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
     WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
-), app AS (
-    -- The application record, written by this same statement so it cannot diverge from
-    -- the apply it describes. The employer and role title are copied off the posting
-    -- here, while it is still there; that copy is what survives cmd/prune.
-    --
-    -- DO UPDATE rather than DO NOTHING, and not for the update's sake: DO NOTHING
-    -- returns no row on conflict, and this statement needs the id in both cases — a
-    -- re-apply must name the same application, never a NULL. The assignments mirror the
-    -- upsert above: the date refreshes as it always has, an advanced stage survives.
-    INSERT INTO applications (user_id, company_slug, role_title, job_id, applied_at, stage)
-    SELECT $1, j.company_slug, j.title, $2, u.applied_at, u.stage
-      FROM upsert u JOIN jobs j ON j.id = $2
-    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
-    DO UPDATE SET applied_at = EXCLUDED.applied_at,
-                  stage      = COALESCE(applications.stage, EXCLUDED.stage)
-    RETURNING id
 ), event AS (
     INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, occurred_at, source)
-    SELECT $1, (SELECT id FROM app), $2, j.company_slug, 'applied', u.applied_at, $4::text
-      FROM upsert u JOIN jobs j ON j.id = $2
+    SELECT $1, u.id, $2::bigint, j.company_slug, 'applied', u.applied_at, $4::text
+      FROM upsert u JOIN jobs j ON j.id = $2::bigint
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
-SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at FROM upsert
+SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+  FROM touch t, upsert u
 `
 
 type MarkJobAppliedParams struct {
@@ -645,17 +684,18 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 
 const recordApplicationFollowUp = `-- name: RecordApplicationFollowUp :one
 WITH prior AS (
-    SELECT uj.followed_up_at FROM user_jobs uj
-     WHERE uj.user_id = $1 AND uj.job_id = $2 AND uj.applied_at IS NOT NULL
+    SELECT a.followed_up_at FROM applications a
+     WHERE a.user_id = $1 AND a.job_id = $2::bigint AND a.applied_at IS NOT NULL
 ), upd AS (
-    UPDATE user_jobs
+    UPDATE applications
     SET followed_up_at = now()
-    WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
-    RETURNING followed_up_at
+    WHERE applications.user_id = $1 AND applications.job_id = $2::bigint
+      AND applications.applied_at IS NOT NULL
+    RETURNING id, followed_up_at
 ), event AS (
-    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
-    SELECT $1, $2, j.company_slug, 'follow_up_sent', u.followed_up_at, $3::text
-      FROM upd u JOIN jobs j ON j.id = $2
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT $1, u.id, $2::bigint, j.company_slug, 'follow_up_sent', u.followed_up_at, $3::text
+      FROM upd u JOIN jobs j ON j.id = $2::bigint
      WHERE NOT EXISTS (
          SELECT 1 FROM prior
           WHERE prior.followed_up_at IS NOT NULL
@@ -692,15 +732,34 @@ func (q *Queries) RecordApplicationFollowUp(ctx context.Context, arg RecordAppli
 }
 
 const recordJobView = `-- name: RecordJobView :one
-INSERT INTO user_jobs (user_id, job_id)
-VALUES ($1, $2)
-ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type RecordJobViewParams struct {
 	UserID int64 `json:"user_id"`
 	JobID  int64 `json:"job_id"`
+}
+
+type RecordJobViewRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 }
 
 // Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
@@ -709,9 +768,13 @@ type RecordJobViewParams struct {
 // does NOT touch jobs.view_count — that materialized counter is maintained solely
 // by the nginx-log aggregation worker (cmd/rollup-views), which counts all traffic
 // (anonymous + signed-in + API), so the signed-in beacon must not double-count.
-func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error) {
+// The interaction shape the caller has always received is now assembled from two
+// tables: user_jobs keeps the marks on the posting, applications holds the process.
+// The column list and its order mirror user_jobs' own, so the Go layer's
+// db.UserJob(row) conversion keeps working across every query in this file.
+func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (RecordJobViewRow, error) {
 	row := q.db.QueryRow(ctx, recordJobView, arg.UserID, arg.JobID)
-	var i UserJob
+	var i RecordJobViewRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -752,10 +815,16 @@ func (q *Queries) RecountJobVotes(ctx context.Context, jobID int64) (RecountJobV
 }
 
 const saveJob = `-- name: SaveJob :one
-INSERT INTO user_jobs (user_id, job_id, saved_at)
-VALUES ($1, $2, now())
-ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id, saved_at)
+    VALUES ($1, $2, now())
+    ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type SaveJobParams struct {
@@ -763,11 +832,24 @@ type SaveJobParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type SaveJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 // it inserts the row (viewed_at defaults) or refreshes saved_at in place.
-func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, error) {
+func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error) {
 	row := q.db.QueryRow(ctx, saveJob, arg.UserID, arg.JobID)
-	var i UserJob
+	var i SaveJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -785,29 +867,40 @@ func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, erro
 
 const trackJob = `-- name: TrackJob :one
 WITH prior AS (
-    SELECT uj.stage FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
-), upsert AS (
-    INSERT INTO user_jobs (user_id, job_id, stage, notes)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (user_id, job_id) DO UPDATE
-      SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
-          notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
+    SELECT a.stage FROM applications a WHERE a.user_id = $1 AND a.job_id = $2::bigint
+), touch AS (
+    -- The interaction row keeps its own duties; tracking a job never opened must
+    -- still leave one behind.
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
     RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+), upsert AS (
+    -- applied_at is deliberately not set: setting a stage is not applying, and a
+    -- record with no date reads as "tracked, not recorded as applied" (0065).
+    INSERT INTO applications (user_id, job_id, company_slug, role_title, stage, notes)
+    SELECT $1, $2::bigint, j.company_slug, j.title, $3, $4 FROM jobs j WHERE j.id = $2::bigint::bigint
+    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+    DO UPDATE SET stage = COALESCE(EXCLUDED.stage, applications.stage),
+                  notes = COALESCE(EXCLUDED.notes, applications.notes)
+    RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
 ), event AS (
     -- The event names the application, like every other kind does. Resolved through the
     -- posting because that is the link the caller has, and soundly so: this runs at write
     -- time, while the posting is still there. A stage set on a job never applied to has
     -- no application to name and leaves the column NULL — there is nothing to correlate
     -- yet, and inventing a record would assert an application that was never made.
+    -- ` + "`" + `upsert` + "`" + ` IS the application now, so its id is in hand rather than resolved
+    -- back through the posting.
     INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
-    SELECT $1, a.id, $2, j.company_slug, 'stage_set', u.stage, now(), $5::text
-      FROM upsert u
-      JOIN jobs j ON j.id = $2
-      LEFT JOIN applications a ON a.user_id = $1 AND a.job_id = $2
+    SELECT $1, u.id, $2::bigint, j.company_slug, 'stage_set', u.stage, now(), $5::text
+      FROM upsert u JOIN jobs j ON j.id = $2::bigint
      WHERE u.stage IS NOT NULL
        AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
 )
-SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at FROM upsert
+SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+  FROM touch t, upsert u
 `
 
 type TrackJobParams struct {
@@ -866,10 +959,15 @@ func (q *Queries) TrackJob(ctx context.Context, arg TrackJobParams) (TrackJobRow
 }
 
 const undismissJob = `-- name: UndismissJob :one
-UPDATE user_jobs
-SET dismissed_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH touch AS (
+    UPDATE user_jobs SET dismissed_at = NULL
+    WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type UndismissJobParams struct {
@@ -877,13 +975,26 @@ type UndismissJobParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type UndismissJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Clear a job's dismissed mark without deleting the interaction row, so view/
 // apply/save history survives. No interaction row -> pgx.ErrNoRows; the handler
 // treats that as "already not dismissed", never as a failure. This is the undo
 // path for a swipe-left decision.
-func (q *Queries) UndismissJob(ctx context.Context, arg UndismissJobParams) (UserJob, error) {
+func (q *Queries) UndismissJob(ctx context.Context, arg UndismissJobParams) (UndismissJobRow, error) {
 	row := q.db.QueryRow(ctx, undismissJob, arg.UserID, arg.JobID)
-	var i UserJob
+	var i UndismissJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -900,10 +1011,15 @@ func (q *Queries) UndismissJob(ctx context.Context, arg UndismissJobParams) (Use
 }
 
 const unsaveJob = `-- name: UnsaveJob :one
-UPDATE user_jobs
-SET saved_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH touch AS (
+    UPDATE user_jobs SET saved_at = NULL
+    WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id
 `
 
 type UnsaveJobParams struct {
@@ -911,12 +1027,25 @@ type UnsaveJobParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type UnsaveJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Clear a job's saved mark without deleting the interaction row, so view and
 // apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 // handler treats that as "already not saved", never as a failure.
-func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, error) {
+func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UnsaveJobRow, error) {
 	row := q.db.QueryRow(ctx, unsaveJob, arg.UserID, arg.JobID)
-	var i UserJob
+	var i UnsaveJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,
@@ -933,10 +1062,20 @@ func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, 
 }
 
 const untrackJob = `-- name: UntrackJob :one
-UPDATE user_jobs
-SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+WITH dropped AS (
+    DELETE FROM applications WHERE applications.user_id = $1 AND applications.job_id = $2::bigint
+), unsaved AS (
+    UPDATE user_jobs SET saved_at = NULL
+    WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
+)
+SELECT u.user_id, u.job_id, u.viewed_at,
+       NULL::timestamptz AS applied_at, u.saved_at,
+       NULL::text        AS stage,
+       NULL::text        AS notes,
+       u.dismissed_at, u.vote,
+       NULL::timestamptz AS followed_up_at
+  FROM unsaved u
 `
 
 type UntrackJobParams struct {
@@ -944,11 +1083,28 @@ type UntrackJobParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
+type UntrackJobRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
 // Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 // job remains in the user's view history.
-func (q *Queries) UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error) {
+// Taking a job off the board clears the process outright — this is the candidate
+// saying it is not a thing they are pursuing, which is a claim about their own
+// record and theirs alone to make. cmd/prune has no such standing, which is the
+// whole distinction this change draws.
+func (q *Queries) UntrackJob(ctx context.Context, arg UntrackJobParams) (UntrackJobRow, error) {
 	row := q.db.QueryRow(ctx, untrackJob, arg.UserID, arg.JobID)
-	var i UserJob
+	var i UntrackJobRow
 	err := row.Scan(
 		&i.UserID,
 		&i.JobID,

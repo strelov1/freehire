@@ -5,10 +5,20 @@
 -- does NOT touch jobs.view_count — that materialized counter is maintained solely
 -- by the nginx-log aggregation worker (cmd/rollup-views), which counts all traffic
 -- (anonymous + signed-in + API), so the signed-in beacon must not double-count.
-INSERT INTO user_jobs (user_id, job_id)
-VALUES ($1, $2)
-ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING *;
+-- The interaction shape the caller has always received is now assembled from two
+-- tables: user_jobs keeps the marks on the posting, applications holds the process.
+-- The column list and its order mirror user_jobs' own, so the Go layer's
+-- db.UserJob(row) conversion keeps working across every query in this file.
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
+    RETURNING *
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: MarkJobApplied :one
 -- Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -36,80 +46,98 @@ RETURNING *;
 -- from the row's own applied_at, so a dated recording carries the mail's date
 -- into the ledger rather than now().
 WITH prior AS (
-    SELECT uj.applied_at FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+    SELECT a.applied_at FROM applications a WHERE a.user_id = sqlc.arg(user_id) AND a.job_id = sqlc.arg(job_id)::bigint
+), touch AS (
+    -- The interaction row still exists for its own duties; applying to a job never
+    -- opened must still leave one behind, as it always has.
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES (sqlc.arg(user_id), sqlc.arg(job_id))
+    ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
+    RETURNING *
 ), upsert AS (
-    INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-    VALUES ($1, $2, COALESCE(sqlc.narg(at)::timestamptz, now()), 'applied')
-    ON CONFLICT (user_id, job_id) DO UPDATE
+    INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+    SELECT sqlc.arg(user_id), sqlc.arg(job_id)::bigint, j.company_slug, j.title,
+           COALESCE(sqlc.narg(at)::timestamptz, now()), 'applied'
+      FROM jobs j WHERE j.id = sqlc.arg(job_id)::bigint
+    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+    DO UPDATE
       SET applied_at = CASE
               WHEN sqlc.narg(at)::timestamptz IS NOT NULL
-                  THEN COALESCE(user_jobs.applied_at, sqlc.narg(at)::timestamptz)
+                  THEN COALESCE(applications.applied_at, sqlc.narg(at)::timestamptz)
               ELSE now()
           END,
-          stage = COALESCE(user_jobs.stage, 'applied')
+          stage = COALESCE(applications.stage, 'applied')
     RETURNING *
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
-    WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
-), app AS (
-    -- The application record, written by this same statement so it cannot diverge from
-    -- the apply it describes. The employer and role title are copied off the posting
-    -- here, while it is still there; that copy is what survives cmd/prune.
-    --
-    -- DO UPDATE rather than DO NOTHING, and not for the update's sake: DO NOTHING
-    -- returns no row on conflict, and this statement needs the id in both cases — a
-    -- re-apply must name the same application, never a NULL. The assignments mirror the
-    -- upsert above: the date refreshes as it always has, an advanced stage survives.
-    INSERT INTO applications (user_id, company_slug, role_title, job_id, applied_at, stage)
-    SELECT $1, j.company_slug, j.title, $2, u.applied_at, u.stage
-      FROM upsert u JOIN jobs j ON j.id = $2
-    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
-    DO UPDATE SET applied_at = EXCLUDED.applied_at,
-                  stage      = COALESCE(applications.stage, EXCLUDED.stage)
-    RETURNING id
+    WHERE id = sqlc.arg(job_id) AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 ), event AS (
     INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, occurred_at, source)
-    SELECT $1, (SELECT id FROM app), $2, j.company_slug, 'applied', u.applied_at, sqlc.arg(event_source)::text
-      FROM upsert u JOIN jobs j ON j.id = $2
+    SELECT sqlc.arg(user_id), u.id, sqlc.arg(job_id)::bigint, j.company_slug, 'applied', u.applied_at, sqlc.arg(event_source)::text
+      FROM upsert u JOIN jobs j ON j.id = sqlc.arg(job_id)::bigint
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
-SELECT * FROM upsert;
+SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+  FROM touch t, upsert u;
 
 -- name: SaveJob :one
 -- Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 -- it inserts the row (viewed_at defaults) or refreshes saved_at in place.
-INSERT INTO user_jobs (user_id, job_id, saved_at)
-VALUES ($1, $2, now())
-ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
-RETURNING *;
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id, saved_at)
+    VALUES ($1, $2, now())
+    ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
+    RETURNING *
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: UnsaveJob :one
 -- Clear a job's saved mark without deleting the interaction row, so view and
 -- apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 -- handler treats that as "already not saved", never as a failure.
-UPDATE user_jobs
-SET saved_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING *;
+WITH touch AS (
+    UPDATE user_jobs SET saved_at = NULL
+    WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
+    RETURNING *
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: DismissJob :one
 -- Dismiss (swipe away) a job for a user in the swipe deck. Idempotent and
 -- independent of a prior view: it inserts the row (viewed_at defaults) or
 -- refreshes dismissed_at in place.
-INSERT INTO user_jobs (user_id, job_id, dismissed_at)
-VALUES ($1, $2, now())
-ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
-RETURNING *;
+WITH touch AS (
+    INSERT INTO user_jobs (user_id, job_id, dismissed_at)
+    VALUES ($1, $2, now())
+    ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
+    RETURNING *
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: UndismissJob :one
 -- Clear a job's dismissed mark without deleting the interaction row, so view/
 -- apply/save history survives. No interaction row -> pgx.ErrNoRows; the handler
 -- treats that as "already not dismissed", never as a failure. This is the undo
 -- path for a swipe-left decision.
-UPDATE user_jobs
-SET dismissed_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING *;
+WITH touch AS (
+    UPDATE user_jobs SET dismissed_at = NULL
+    WHERE user_jobs.user_id = $1 AND user_jobs.job_id = $2
+    RETURNING *
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM touch t
+  LEFT JOIN applications a ON a.user_id = t.user_id AND a.job_id = t.job_id;
 
 -- name: ExcludedJobIDs :many
 -- Job ids the user has already interacted with (viewed, saved, applied, or
@@ -119,10 +147,11 @@ RETURNING *;
 -- most-recently-touched first and capped ($2) so the deck's `id NOT IN (...)`
 -- search filter stays bounded; the overflow risk is only an occasional re-shown
 -- long-ago-seen job, never a correctness problem.
-SELECT job_id
-FROM user_jobs
-WHERE user_id = $1
-ORDER BY GREATEST(viewed_at, saved_at, applied_at, dismissed_at) DESC
+SELECT uj.job_id
+FROM user_jobs uj
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+WHERE uj.user_id = $1
+ORDER BY GREATEST(uj.viewed_at, uj.saved_at, a.applied_at, uj.dismissed_at) DESC
 LIMIT $2;
 
 -- name: TrackJob :one
@@ -137,13 +166,22 @@ LIMIT $2;
 -- unanswerable. The event carries no trusted date (source is the caller, not the
 -- employer), which is why nothing times it yet — see internal/appevent.
 WITH prior AS (
-    SELECT uj.stage FROM user_jobs uj WHERE uj.user_id = $1 AND uj.job_id = $2
+    SELECT a.stage FROM applications a WHERE a.user_id = sqlc.arg(user_id) AND a.job_id = sqlc.arg(job_id)::bigint
+), touch AS (
+    -- The interaction row keeps its own duties; tracking a job never opened must
+    -- still leave one behind.
+    INSERT INTO user_jobs (user_id, job_id)
+    VALUES (sqlc.arg(user_id), sqlc.arg(job_id))
+    ON CONFLICT (user_id, job_id) DO UPDATE SET user_id = user_jobs.user_id
+    RETURNING *
 ), upsert AS (
-    INSERT INTO user_jobs (user_id, job_id, stage, notes)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (user_id, job_id) DO UPDATE
-      SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
-          notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
+    -- applied_at is deliberately not set: setting a stage is not applying, and a
+    -- record with no date reads as "tracked, not recorded as applied" (0065).
+    INSERT INTO applications (user_id, job_id, company_slug, role_title, stage, notes)
+    SELECT sqlc.arg(user_id), sqlc.arg(job_id)::bigint, j.company_slug, j.title, sqlc.narg(stage), sqlc.narg(notes) FROM jobs j WHERE j.id = sqlc.arg(job_id)::bigint::bigint
+    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+    DO UPDATE SET stage = COALESCE(EXCLUDED.stage, applications.stage),
+                  notes = COALESCE(EXCLUDED.notes, applications.notes)
     RETURNING *
 ), event AS (
     -- The event names the application, like every other kind does. Resolved through the
@@ -151,30 +189,54 @@ WITH prior AS (
     -- time, while the posting is still there. A stage set on a job never applied to has
     -- no application to name and leaves the column NULL — there is nothing to correlate
     -- yet, and inventing a record would assert an application that was never made.
+    -- `upsert` IS the application now, so its id is in hand rather than resolved
+    -- back through the posting.
     INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
-    SELECT $1, a.id, $2, j.company_slug, 'stage_set', u.stage, now(), sqlc.arg(event_source)::text
-      FROM upsert u
-      JOIN jobs j ON j.id = $2
-      LEFT JOIN applications a ON a.user_id = $1 AND a.job_id = $2
+    SELECT sqlc.arg(user_id), u.id, sqlc.arg(job_id)::bigint, j.company_slug, 'stage_set', u.stage, now(), sqlc.arg(event_source)::text
+      FROM upsert u JOIN jobs j ON j.id = sqlc.arg(job_id)::bigint
      WHERE u.stage IS NOT NULL
        AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
 )
-SELECT * FROM upsert;
+SELECT t.user_id, t.job_id, t.viewed_at, u.applied_at, t.saved_at,
+       u.stage, u.notes, t.dismissed_at, t.vote, u.followed_up_at
+  FROM touch t, upsert u;
 
 -- name: ClearJobProgress :one
 -- Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
-UPDATE user_jobs
-SET stage = NULL, applied_at = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING *;
+-- The application record stays: it holds the notes, and clearing progress is the
+-- candidate reconsidering, not a claim the process never happened.
+WITH cleared AS (
+    UPDATE applications SET stage = NULL, applied_at = NULL
+    WHERE applications.user_id = sqlc.arg(user_id) AND applications.job_id = sqlc.arg(job_id)
+    RETURNING *
+)
+SELECT uj.user_id, uj.job_id, uj.viewed_at, c.applied_at, uj.saved_at,
+       c.stage, c.notes, uj.dismissed_at, uj.vote, c.followed_up_at
+  FROM user_jobs uj
+  LEFT JOIN cleared c ON c.user_id = uj.user_id AND c.job_id = uj.job_id
+ WHERE uj.user_id = sqlc.arg(user_id) AND uj.job_id = sqlc.arg(job_id);
 
 -- name: UntrackJob :one
 -- Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 -- job remains in the user's view history.
-UPDATE user_jobs
-SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
-WHERE user_id = $1 AND job_id = $2
-RETURNING *;
+-- Taking a job off the board clears the process outright — this is the candidate
+-- saying it is not a thing they are pursuing, which is a claim about their own
+-- record and theirs alone to make. cmd/prune has no such standing, which is the
+-- whole distinction this change draws.
+WITH dropped AS (
+    DELETE FROM applications WHERE applications.user_id = sqlc.arg(user_id) AND applications.job_id = sqlc.arg(job_id)::bigint
+), unsaved AS (
+    UPDATE user_jobs SET saved_at = NULL
+    WHERE user_jobs.user_id = sqlc.arg(user_id) AND user_jobs.job_id = sqlc.arg(job_id)
+    RETURNING *
+)
+SELECT u.user_id, u.job_id, u.viewed_at,
+       NULL::timestamptz AS applied_at, u.saved_at,
+       NULL::text        AS stage,
+       NULL::text        AS notes,
+       u.dismissed_at, u.vote,
+       NULL::timestamptz AS followed_up_at
+  FROM unsaved u;
 
 -- name: ListUserJobs :many
 -- A user's job interactions joined with the job rows. Each subset is ordered by
@@ -189,7 +251,7 @@ RETURNING *;
 -- per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
 -- the pending saved-job reminder's deadline (NULL when none), so the saved list can
 -- show "remind in N days" with its reschedule/off controls.
-SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes,
+SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
        (SELECT count(*)
           FROM emails e
          WHERE e.user_id = uj.user_id
@@ -200,7 +262,7 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
-       uj.followed_up_at,
+       a.followed_up_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
@@ -208,8 +270,8 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
        -- arrives would never fire on the applications ignored outright, which are
        -- the ones worth reporting. NULL on a row that is not an application: a job
        -- merely viewed or saved is not waiting on anyone.
-       (CASE WHEN uj.applied_at IS NOT NULL THEN
-          GREATEST(uj.applied_at,
+       (CASE WHEN a.applied_at IS NOT NULL THEN
+          GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.user_id = uj.user_id
@@ -220,7 +282,7 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
        -- application that the caller has neither confirmed nor rejected. Such mail
        -- contradicts a claim that nobody replied, so the reader downgrades a
        -- silence verdict to a question rather than asserting it.
-       (uj.applied_at IS NOT NULL AND EXISTS (
+       (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1
             FROM emails e
            WHERE e.user_id = uj.user_id
@@ -229,21 +291,22 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.
              AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1
   AND (sqlc.arg(filter)::text = 'all'
-       OR (sqlc.arg(filter)::text = 'viewed' AND uj.saved_at IS NULL AND uj.applied_at IS NULL)
+       OR (sqlc.arg(filter)::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)
        OR (sqlc.arg(filter)::text = 'saved' AND uj.saved_at IS NOT NULL)
-       OR (sqlc.arg(filter)::text = 'applied' AND uj.applied_at IS NOT NULL)
+       OR (sqlc.arg(filter)::text = 'applied' AND a.applied_at IS NOT NULL)
        OR (sqlc.arg(filter)::text = 'board'
-           AND (uj.saved_at IS NOT NULL OR uj.applied_at IS NOT NULL OR uj.stage IS NOT NULL))
+           AND (uj.saved_at IS NOT NULL OR a.applied_at IS NOT NULL OR a.stage IS NOT NULL))
        OR (sqlc.arg(filter)::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
 ORDER BY (CASE sqlc.arg(filter)::text
             WHEN 'saved' THEN uj.saved_at
-            WHEN 'applied' THEN uj.applied_at
+            WHEN 'applied' THEN a.applied_at
             WHEN 'viewed' THEN uj.viewed_at
-            WHEN 'board' THEN GREATEST(uj.saved_at, uj.applied_at)
+            WHEN 'board' THEN GREATEST(uj.saved_at, a.applied_at)
             WHEN 'dismissed' THEN uj.dismissed_at
-            ELSE GREATEST(uj.viewed_at, uj.saved_at, uj.applied_at)
+            ELSE GREATEST(uj.viewed_at, uj.saved_at, a.applied_at)
           END) DESC NULLS LAST, uj.job_id DESC
 LIMIT $2 OFFSET $3;
 
@@ -290,17 +353,18 @@ WHERE uj.user_id = $1 AND uj.dismissed_at IS NOT NULL;
 -- board (saved, applied, or stage set), matching the ListUserJobs board filter.
 -- "dismissed" counts jobs the user hid from the feed, matching the ListUserJobs
 -- dismissed filter.
-SELECT count(*)                                        AS "all",
-       count(*) FILTER (WHERE saved_at IS NULL
-                          AND applied_at IS NULL)      AS viewed,
-       count(*) FILTER (WHERE saved_at   IS NOT NULL) AS saved,
-       count(*) FILTER (WHERE applied_at IS NOT NULL) AS applied,
-       count(*) FILTER (WHERE saved_at   IS NOT NULL
-                            OR applied_at IS NOT NULL
-                            OR stage      IS NOT NULL) AS board,
-       count(*) FILTER (WHERE dismissed_at IS NOT NULL) AS dismissed
-FROM user_jobs
-WHERE user_id = $1;
+SELECT count(*)                                          AS "all",
+       count(*) FILTER (WHERE uj.saved_at IS NULL
+                          AND a.applied_at IS NULL)        AS viewed,
+       count(*) FILTER (WHERE uj.saved_at  IS NOT NULL)    AS saved,
+       count(*) FILTER (WHERE a.applied_at IS NOT NULL)    AS applied,
+       count(*) FILTER (WHERE uj.saved_at  IS NOT NULL
+                            OR a.applied_at IS NOT NULL
+                            OR a.stage      IS NOT NULL)   AS board,
+       count(*) FILTER (WHERE uj.dismissed_at IS NOT NULL) AS dismissed
+FROM user_jobs uj
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+WHERE uj.user_id = $1;
 
 -- name: LockJobForApply :exec
 -- Take the job row's lock so concurrent applies on the same job serialize. Without
@@ -360,7 +424,7 @@ SELECT COALESCE((SELECT vote FROM user_jobs WHERE user_id = $1 AND job_id = $2),
 -- applied_at set but no stage groups under a NULL stage. The Go layer folds these
 -- rows into the pipeline buckets.
 SELECT stage, count(*) AS count
-FROM user_jobs
+FROM applications
 WHERE user_id = $1
   AND (applied_at IS NOT NULL OR stage IS NOT NULL)
 GROUP BY stage;
@@ -380,17 +444,18 @@ GROUP BY stage;
 -- seconds apart, a genuine second chase days apart, so any threshold between them is
 -- safe. An hour is the smallest that sits comfortably above a retry.
 WITH prior AS (
-    SELECT uj.followed_up_at FROM user_jobs uj
-     WHERE uj.user_id = $1 AND uj.job_id = $2 AND uj.applied_at IS NOT NULL
+    SELECT a.followed_up_at FROM applications a
+     WHERE a.user_id = sqlc.arg(user_id) AND a.job_id = sqlc.arg(job_id)::bigint AND a.applied_at IS NOT NULL
 ), upd AS (
-    UPDATE user_jobs
+    UPDATE applications
     SET followed_up_at = now()
-    WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
-    RETURNING followed_up_at
+    WHERE applications.user_id = sqlc.arg(user_id) AND applications.job_id = sqlc.arg(job_id)::bigint
+      AND applications.applied_at IS NOT NULL
+    RETURNING id, followed_up_at
 ), event AS (
-    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
-    SELECT $1, $2, j.company_slug, 'follow_up_sent', u.followed_up_at, sqlc.arg(event_source)::text
-      FROM upd u JOIN jobs j ON j.id = $2
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT sqlc.arg(user_id), u.id, sqlc.arg(job_id)::bigint, j.company_slug, 'follow_up_sent', u.followed_up_at, sqlc.arg(event_source)::text
+      FROM upd u JOIN jobs j ON j.id = sqlc.arg(job_id)::bigint
      WHERE NOT EXISTS (
          SELECT 1 FROM prior
           WHERE prior.followed_up_at IS NOT NULL

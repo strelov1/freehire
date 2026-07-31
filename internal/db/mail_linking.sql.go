@@ -35,16 +35,16 @@ func (q *Queries) ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkPara
 }
 
 const getUserApplication = `-- name: GetUserApplication :one
-SELECT uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes, uj.followed_up_at,
-       (CASE WHEN uj.applied_at IS NOT NULL THEN
-          GREATEST(uj.applied_at,
+SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at,
+       (CASE WHEN a.applied_at IS NOT NULL THEN
+          GREATEST(a.applied_at,
                    (SELECT max(e.received_at)
                       FROM emails e
                      WHERE e.user_id = uj.user_id
                        AND e.job_id = uj.job_id
                        AND e.deleted_at IS NULL))
         END)::timestamptz AS last_activity_at,
-       (uj.applied_at IS NOT NULL AND EXISTS (
+       (a.applied_at IS NOT NULL AND EXISTS (
           SELECT 1
             FROM emails e
            WHERE e.user_id = uj.user_id
@@ -52,6 +52,7 @@ SELECT uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes, uj.followed
              AND e.job_id IS NULL
              AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1 AND uj.job_id = $2
 `
 

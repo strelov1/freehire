@@ -194,7 +194,7 @@ func TestRecordApplicationFollowUp_SuppressesAResubmitButNotASecondChase(t *test
 
 	// Age the recorded chase past the window; the next one is a genuine second attempt.
 	if _, err := q.db.Exec(ctx,
-		`UPDATE user_jobs SET followed_up_at = now() - interval '9 days'
+		`UPDATE applications SET followed_up_at = now() - interval '9 days'
 		  WHERE user_id = $1 AND job_id = $2`, user, job); err != nil {
 		t.Fatalf("age the chase: %v", err)
 	}

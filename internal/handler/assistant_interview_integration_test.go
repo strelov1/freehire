@@ -35,8 +35,13 @@ func seedApplication(t *testing.T, pool *pgxpool.Pool, userID int64, externalID,
 		t.Fatalf("seed job: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO user_jobs (user_id, job_id, applied_at, stage)
-		 VALUES ($1, $2, now(), $3)`, userID, jobID, stage); err != nil {
+		`WITH mark AS (
+		     INSERT INTO user_jobs (user_id, job_id) VALUES ($1, $2)
+		     ON CONFLICT (user_id, job_id) DO NOTHING
+		 )
+		 INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+		 SELECT $1, $2, j.company_slug, j.title, now(), $3 FROM jobs j WHERE j.id = $2`,
+		userID, jobID, stage); err != nil {
 		t.Fatalf("seed application: %v", err)
 	}
 	return jobID

@@ -392,7 +392,12 @@ func (f *harnessInboxFixture) applyToJob(slug, stage string) int64 {
 		f.t.Fatalf("seed job: %v", err)
 	}
 	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO user_jobs (user_id, job_id, applied_at, stage) VALUES ($1, $2, now(), $3)`,
+		`WITH mark AS (
+		     INSERT INTO user_jobs (user_id, job_id) VALUES ($1, $2)
+		     ON CONFLICT (user_id, job_id) DO NOTHING
+		 )
+		 INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+		 SELECT $1, $2, j.company_slug, j.title, now(), $3 FROM jobs j WHERE j.id = $2`,
 		f.userID, jobID, stage); err != nil {
 		f.t.Fatalf("seed application: %v", err)
 	}
@@ -403,7 +408,7 @@ func (f *harnessInboxFixture) stageOf(jobID int64) string {
 	f.t.Helper()
 	var stage *string
 	if err := f.pool.QueryRow(context.Background(),
-		`SELECT stage FROM user_jobs WHERE user_id = $1 AND job_id = $2`, f.userID, jobID).Scan(&stage); err != nil {
+		`SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2`, f.userID, jobID).Scan(&stage); err != nil {
 		f.t.Fatalf("read stage: %v", err)
 	}
 	if stage == nil {

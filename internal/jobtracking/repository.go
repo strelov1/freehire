@@ -105,7 +105,7 @@ func (r *QueriesRepository) SaveJob(ctx context.Context, userID, jobID int64) (I
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // UnsaveJob clears the saved mark. Returns ErrNoInteraction when no row exists.
@@ -117,7 +117,7 @@ func (r *QueriesRepository) UnsaveJob(ctx context.Context, userID, jobID int64) 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // DismissJob marks a job dismissed (swiped away) for a user.
@@ -126,7 +126,7 @@ func (r *QueriesRepository) DismissJob(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // UndismissJob clears the dismissed mark. Returns ErrNoInteraction when no row exists.
@@ -138,7 +138,7 @@ func (r *QueriesRepository) UndismissJob(ctx context.Context, userID, jobID int6
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // TrackJob upserts stage and/or notes for the interaction. A nil pointer means
@@ -169,7 +169,7 @@ func (r *QueriesRepository) ClearJobProgress(ctx context.Context, userID, jobID 
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // UntrackJob removes a job from the board by clearing all pipeline marks except viewed_at.
@@ -178,7 +178,7 @@ func (r *QueriesRepository) UntrackJob(ctx context.Context, userID, jobID int64)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return toInteraction(row), nil
+	return toInteraction(db.UserJob(row)), nil
 }
 
 // ListInteractions returns the caller's interactions joined with the jobs in the

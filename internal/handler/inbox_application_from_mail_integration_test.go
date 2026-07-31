@@ -43,7 +43,7 @@ func (f *harnessInboxFixture) application(jobID int64) (appliedAt time.Time, sta
 	var st *string
 	var at *time.Time
 	err := f.pool.QueryRow(context.Background(),
-		`SELECT applied_at, stage FROM user_jobs WHERE user_id = $1 AND job_id = $2`,
+		`SELECT applied_at, stage FROM applications WHERE user_id = $1 AND job_id = $2`,
 		f.userID, jobID).Scan(&at, &st)
 	if err != nil {
 		return time.Time{}, "", false

@@ -81,13 +81,14 @@ RETURNING r.id;
 SELECT r.id, r.user_id, r.job_id, r.channels,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
-       COALESCE(uj.saved_at IS NOT NULL AND uj.applied_at IS NULL, false)::bool AS still_actionable,
+       COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,
        tl.chat_id AS telegram_chat_id
 FROM job_reminders r
 JOIN jobs j ON j.id = r.job_id
 JOIN users u ON u.id = r.user_id
 LEFT JOIN user_jobs uj ON uj.user_id = r.user_id AND uj.job_id = r.job_id
+LEFT JOIN applications a ON a.user_id = r.user_id AND a.job_id = r.job_id
 LEFT JOIN telegram_links tl ON tl.user_id = r.user_id
 WHERE r.id = $1;
 

@@ -19,7 +19,12 @@ import (
 func applyToJob(t *testing.T, pool *pgxpool.Pool, userID, jobID int64, stage string) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(),
-		`INSERT INTO user_jobs (user_id, job_id, applied_at, stage) VALUES ($1, $2, now(), $3)`,
+		`WITH mark AS (
+		     INSERT INTO user_jobs (user_id, job_id) VALUES ($1, $2)
+		     ON CONFLICT (user_id, job_id) DO NOTHING
+		 )
+		 INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at, stage)
+		 SELECT $1, $2, j.company_slug, j.title, now(), $3 FROM jobs j WHERE j.id = $2`,
 		userID, jobID, stage)
 	if err != nil {
 		t.Fatalf("apply to job: %v", err)

@@ -128,7 +128,7 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 		if err := qtx.AdvanceUserJobStage(ctx, db.AdvanceUserJobStageParams{
 			UserID: userID,
 			JobID:  r.JobID,
-			Stage:  pgtype.Text{String: r.AdvanceStageTo, Valid: true},
+			Stage:  r.AdvanceStageTo,
 		}); err != nil {
 			return fmt.Errorf("advance stage: %w", err)
 		}

@@ -88,10 +88,12 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	// all-traffic total SUM(jobs.view_count), independent of user_jobs, seeded below.
 	seedInteraction := func(jid int64, saved, applied bool) {
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO user_jobs (user_id, job_id, viewed_at, saved_at, applied_at)
-			 VALUES ($1, $2, now(),
-			         CASE WHEN $3 THEN now() END,
-			         CASE WHEN $4 THEN now() END)`,
+			`WITH mark AS (
+			     INSERT INTO user_jobs (user_id, job_id, viewed_at, saved_at)
+			     VALUES ($1, $2, now(), CASE WHEN $3 THEN now() END)
+			 )
+			 INSERT INTO applications (user_id, job_id, company_slug, role_title, applied_at)
+			 SELECT $1, $2, j.company_slug, j.title, now() FROM jobs j WHERE j.id = $2 AND $4`,
 			uid, jid, saved, applied); err != nil {
 			t.Fatalf("seed interaction job=%d: %v", jid, err)
 		}

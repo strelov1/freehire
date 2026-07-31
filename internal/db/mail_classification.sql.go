@@ -12,19 +12,20 @@ import (
 )
 
 const advanceUserJobStage = `-- name: AdvanceUserJobStage :exec
-UPDATE user_jobs SET stage = $3 WHERE user_id = $1 AND job_id = $2
+UPDATE applications SET stage = $1::text
+ WHERE user_id = $2::bigint AND job_id = $3::bigint
 `
 
 type AdvanceUserJobStageParams struct {
-	UserID int64       `json:"user_id"`
-	JobID  int64       `json:"job_id"`
-	Stage  pgtype.Text `json:"stage"`
+	Stage  string `json:"stage"`
+	UserID int64  `json:"user_id"`
+	JobID  int64  `json:"job_id"`
 }
 
 // Move an application forward to a new stage (the worker only calls this after
 // checking the transition is strictly forward and high-confidence).
 func (q *Queries) AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error {
-	_, err := q.db.Exec(ctx, advanceUserJobStage, arg.UserID, arg.JobID, arg.Stage)
+	_, err := q.db.Exec(ctx, advanceUserJobStage, arg.Stage, arg.UserID, arg.JobID)
 	return err
 }
 
@@ -217,8 +218,8 @@ func (q *Queries) FailEmailClassification(ctx context.Context, arg FailEmailClas
 
 const getUserJobStage = `-- name: GetUserJobStage :one
 SELECT COALESCE(stage, '')::text AS stage
-FROM user_jobs
-WHERE user_id = $1 AND job_id = $2
+FROM applications
+WHERE user_id = $1::bigint AND job_id = $2::bigint
 `
 
 type GetUserJobStageParams struct {
@@ -239,9 +240,10 @@ const listUserApplicationsForMatch = `-- name: ListUserApplicationsForMatch :man
 SELECT j.id, j.company
 FROM user_jobs uj
 JOIN jobs j ON j.id = uj.job_id
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1
   AND j.closed_at IS NULL
-  AND (uj.applied_at IS NOT NULL OR uj.saved_at IS NOT NULL OR uj.stage IS NOT NULL)
+  AND (a.applied_at IS NOT NULL OR uj.saved_at IS NOT NULL OR a.stage IS NOT NULL)
 `
 
 type ListUserApplicationsForMatchRow struct {

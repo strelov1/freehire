@@ -75,7 +75,9 @@ ORDER BY d;
 -- tables — unlike `viewed`, none of them needs a rollup to stay fast.
 SELECT
     count(*) FILTER (WHERE saved_at IS NOT NULL)::int   AS saved,
-    count(*) FILTER (WHERE applied_at IS NOT NULL)::int AS applied,
+    -- applications live in their own table now, and counting them there is also the
+    -- honest count: one that outlived its posting is still an application somebody made.
+    (SELECT count(*) FROM applications WHERE applied_at IS NOT NULL)::int AS applied,
     (SELECT COALESCE(sum(uniques), 0) FROM job_daily_views)::int AS viewed,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
     (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,

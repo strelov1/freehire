@@ -228,7 +228,7 @@ func (s *Service) advanceStage(ctx context.Context, userID, jobID int64, sig mai
 		return
 	}
 	err = s.q.AdvanceUserJobStage(ctx, db.AdvanceUserJobStageParams{
-		UserID: userID, JobID: jobID, Stage: pgtype.Text{String: next, Valid: true},
+		UserID: userID, JobID: jobID, Stage: next,
 	})
 	if err != nil {
 		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)

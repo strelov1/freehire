@@ -115,7 +115,7 @@ func TestAPIKeysEndToEnd(t *testing.T) {
 		}
 		var n int
 		if err := pool.QueryRow(ctx,
-			"SELECT count(*) FROM user_jobs WHERE user_id = $1 AND applied_at IS NOT NULL", ownerID).Scan(&n); err != nil {
+			"SELECT count(*) FROM applications WHERE user_id = $1 AND applied_at IS NOT NULL", ownerID).Scan(&n); err != nil {
 			t.Fatalf("count applied: %v", err)
 		}
 		if n != 1 {

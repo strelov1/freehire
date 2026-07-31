@@ -191,7 +191,9 @@ type Querier interface {
 	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
 	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
-	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (UserJob, error)
+	// The application record stays: it holds the notes, and clearing progress is the
+	// candidate reconsidering, not a claim the process never happened.
+	ClearJobProgress(ctx context.Context, arg ClearJobProgressParams) (ClearJobProgressRow, error)
 	// Explicitly clear a user's job vote (the DELETE endpoint). No-op when no row or no
 	// vote exists. The caller recomputes counters via RecountJobVotes in the same tx.
 	ClearJobVote(ctx context.Context, arg ClearJobVoteParams) error
@@ -583,7 +585,7 @@ type Querier interface {
 	// Dismiss (swipe away) a job for a user in the swipe deck. Idempotent and
 	// independent of a prior view: it inserts the row (viewed_at defaults) or
 	// refreshes dismissed_at in place.
-	DismissJob(ctx context.Context, arg DismissJobParams) (UserJob, error)
+	DismissJob(ctx context.Context, arg DismissJobParams) (DismissJobRow, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and a non-blacklisted category), so an already-enriched job
@@ -1214,6 +1216,8 @@ type Querier interface {
 	//
 	// last_activity_at and has_pending_suggestion mirror ListTrackedJobs deliberately:
 	// one definition of "when did this application last move", not two.
+	// job_id is nullable on applications, but the filter below matches it against a page of
+	// real ids, so a row that reaches the select always carries one.
 	ListGhostApplicationEvidence(ctx context.Context, jobIds []int64) ([]ListGhostApplicationEvidenceRow, error)
 	// Non-retracted ghost reports for a page of jobs. Maturity — whether the stated
 	// apply date has aged past the `applied` threshold — is applied in Go alongside the
@@ -1764,7 +1768,11 @@ type Querier interface {
 	// does NOT touch jobs.view_count — that materialized counter is maintained solely
 	// by the nginx-log aggregation worker (cmd/rollup-views), which counts all traffic
 	// (anonymous + signed-in + API), so the signed-in beacon must not double-count.
-	RecordJobView(ctx context.Context, arg RecordJobViewParams) (UserJob, error)
+	// The interaction shape the caller has always received is now assembled from two
+	// tables: user_jobs keeps the marks on the posting, applications holds the process.
+	// The column list and its order mirror user_jobs' own, so the Go layer's
+	// db.UserJob(row) conversion keeps working across every query in this file.
+	RecordJobView(ctx context.Context, arg RecordJobViewParams) (RecordJobViewRow, error)
 	// Count a failed delivery for a subscription's claimed jobs: bump attempts, record
 	// the error, and dead-letter (set failed_at) once attempts reach the max. claimed_at
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
@@ -1974,7 +1982,7 @@ type Querier interface {
 	RoleClusterGeoAll(ctx context.Context) ([]RoleClusterGeoAllRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
-	SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, error)
+	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
 	// Hand an unverified, password-backed account to the proven owner of its address when a
 	// provider-verified OAuth identity arrives for it: the password is destroyed, every
 	// session revoked, and every API key deleted, so a squatter who registered the address
@@ -2137,16 +2145,20 @@ type Querier interface {
 	// apply/save history survives. No interaction row -> pgx.ErrNoRows; the handler
 	// treats that as "already not dismissed", never as a failure. This is the undo
 	// path for a swipe-left decision.
-	UndismissJob(ctx context.Context, arg UndismissJobParams) (UserJob, error)
+	UndismissJob(ctx context.Context, arg UndismissJobParams) (UndismissJobRow, error)
 	// Clear an email's application link (leaves the classified status intact).
 	UnlinkEmail(ctx context.Context, arg UnlinkEmailParams) (int64, error)
 	// Clear a job's saved mark without deleting the interaction row, so view and
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
-	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, error)
+	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UnsaveJobRow, error)
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
-	UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob, error)
+	// Taking a job off the board clears the process outright — this is the candidate
+	// saying it is not a thing they are pursuing, which is a claim about their own
+	// record and theirs alone to make. cmd/prune has no such standing, which is the
+	// whole distinction this change draws.
+	UntrackJob(ctx context.Context, arg UntrackJobParams) (UntrackJobRow, error)
 	// Persist the post-transaction balance: the current period and remaining points. Called at
 	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
 	// guaranteed to exist (EnsureBalance ran first).

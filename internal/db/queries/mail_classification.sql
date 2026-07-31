@@ -105,9 +105,10 @@ WHERE id = sqlc.arg(id);
 SELECT j.id, j.company
 FROM user_jobs uj
 JOIN jobs j ON j.id = uj.job_id
+LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
 WHERE uj.user_id = $1
   AND j.closed_at IS NULL
-  AND (uj.applied_at IS NOT NULL OR uj.saved_at IS NOT NULL OR uj.stage IS NOT NULL);
+  AND (a.applied_at IS NOT NULL OR uj.saved_at IS NOT NULL OR a.stage IS NOT NULL);
 
 -- name: ListUserEmailThreadLinks :many
 -- Existing thread→application links for the caller, so the matcher can continue a
@@ -120,10 +121,11 @@ WHERE user_id = $1 AND job_id IS NOT NULL AND thread_id <> '';
 -- The caller's current stage for one application (empty string when unset), so the
 -- worker can decide a monotonic-forward advancement.
 SELECT COALESCE(stage, '')::text AS stage
-FROM user_jobs
-WHERE user_id = $1 AND job_id = $2;
+FROM applications
+WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint;
 
 -- name: AdvanceUserJobStage :exec
 -- Move an application forward to a new stage (the worker only calls this after
 -- checking the transition is strictly forward and high-confidence).
-UPDATE user_jobs SET stage = $3 WHERE user_id = $1 AND job_id = $2;
+UPDATE applications SET stage = sqlc.arg(stage)::text
+ WHERE user_id = sqlc.arg(user_id)::bigint AND job_id = sqlc.arg(job_id)::bigint;
