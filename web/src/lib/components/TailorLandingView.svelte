@@ -121,7 +121,7 @@
             <p class="text-[11px] text-muted-foreground">worth applying</p>
             <div class="mt-3 space-y-1.5">
               <div class="h-1.5 w-full rounded bg-emerald-500/40"></div>
-              <div class="h-1.5 w-2/3 rounded bg-amber-500/40"></div>
+              <div class="h-1.5 w-2/3 rounded bg-warning/40"></div>
               <div class="h-1.5 w-1/3 rounded bg-destructive/40"></div>
             </div>
           </div>
@@ -154,7 +154,7 @@
               <span
                 class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have'
                   ? 'border-emerald-400/50 text-emerald-600 dark:text-emerald-400'
-                  : 'border-amber-400/50 text-amber-600 dark:text-amber-400'}"
+                  : 'border-warning/50 text-warning-strong'}"
               >
                 {item}
               </span>

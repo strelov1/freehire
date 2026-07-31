@@ -96,5 +96,21 @@
   "brand-ring": {
     "$value": "#b2c248",
     "$description": "Focus outline color on brand surfaces."
+  },
+  "warning": {
+    "$value": "oklch(0.769 0.188 70.08)",
+    "$description": "Caution fill. The solid block that marks something as needing attention."
+  },
+  "warning-foreground": {
+    "$value": "oklch(0.279 0.077 45.635)",
+    "$description": "Text on the caution fill."
+  },
+  "warning-strong": {
+    "$value": "oklch(0.555 0.163 48.998)",
+    "$description": "Caution text and borders on the page background, where the fill is not legible."
+  },
+  "warning-muted": {
+    "$value": "oklch(0.962 0.059 95.617)",
+    "$description": "Soft caution tint. A background that carries the meaning without the weight."
   }
 }

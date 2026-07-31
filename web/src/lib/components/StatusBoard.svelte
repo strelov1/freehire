@@ -18,8 +18,8 @@
     },
     degraded: {
       label: 'Degraded',
-      dot: 'bg-amber-500',
-      pill: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+      dot: 'bg-warning',
+      pill: 'border-warning/40 bg-warning/10 text-warning-strong',
     },
     down: {
       label: 'Down',
@@ -166,7 +166,7 @@
               </div>
               <div class="text-sm text-muted-foreground">
                 {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
-                    class="text-amber-600 dark:text-amber-500"
+                    class="text-warning-strong"
                   >
                     · {nf.format(p.cooled_boards)} in cooldown</span
                   >{/if}

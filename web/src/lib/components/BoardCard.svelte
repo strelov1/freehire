@@ -47,7 +47,7 @@
     {/if}
     {#if item.silence_state === 'silent'}
       <span
-        class="flex items-center gap-0.5 text-xs tabular-nums text-amber-600"
+        class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
         title="No reply for {item.days_silent} days"
         aria-label="No reply for {item.days_silent} days"
       >
@@ -97,7 +97,7 @@
       <button
         type="button"
         onclick={() => onfollowup(item)}
-        class="relative z-10 ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/50"
+        class="relative z-10 ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted text-warning-strong dark:hover:bg-warning-muted/50"
       >
         <Send class="size-3 shrink-0" aria-hidden="true" />
         {chased ? 'Chase again' : 'Follow up'}

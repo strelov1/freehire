@@ -216,29 +216,29 @@
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
     good: 'text-brand-strong',
-    moderate: 'text-amber-600 dark:text-amber-500',
-    weak: 'text-amber-600 dark:text-amber-500',
+    moderate: 'text-warning-strong',
+    weak: 'text-warning-strong',
     poor: 'text-destructive',
   };
   const toneBar: Record<Tone, string> = {
     strong: 'bg-brand',
     good: 'bg-brand',
-    moderate: 'bg-amber-500',
-    weak: 'bg-amber-500',
+    moderate: 'bg-warning',
+    weak: 'bg-warning',
     poor: 'bg-destructive',
   };
   const toneStroke: Record<Tone, string> = {
     strong: 'stroke-brand',
     good: 'stroke-brand',
-    moderate: 'stroke-amber-500',
-    weak: 'stroke-amber-500',
+    moderate: 'stroke-warning',
+    weak: 'stroke-warning',
     poor: 'stroke-destructive',
   };
   const toneChip: Record<Tone, string> = {
     strong: 'border-brand/30 bg-brand-muted text-brand-strong',
     good: 'border-brand/30 bg-brand-muted text-brand-strong',
-    moderate: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500',
-    weak: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500',
+    moderate: 'border-warning/30 bg-warning/10 text-warning-strong',
+    weak: 'border-warning/30 bg-warning/10 text-warning-strong',
     poor: 'border-destructive/30 bg-destructive/10 text-destructive',
   };
   const toneGlow: Record<Tone, string> = {
@@ -333,7 +333,7 @@
     {/if}
 
     {#if isStale && !streaming}
-      <p class="fit-reveal rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-500" style="--i:2">
+      <p class="fit-reveal rounded-lg border border-dashed border-warning/40 bg-warning/5 px-4 py-2.5 text-xs text-warning-strong" style="--i:2">
         Your CV or this role changed since this ran — recompute for an up-to-date read.
       </p>
     {/if}
@@ -450,12 +450,12 @@
               </div>
               <div class="flex h-2 overflow-hidden rounded-full bg-secondary">
                 {#if reqTally.covered}<div class="fit-meter h-full bg-brand" style="width: {(reqTally.covered / reqTotal) * 100}%"></div>{/if}
-                {#if reqTally.addit}<div class="fit-meter h-full bg-amber-500" style="width: {(reqTally.addit / reqTotal) * 100}%"></div>{/if}
+                {#if reqTally.addit}<div class="fit-meter h-full bg-warning" style="width: {(reqTally.addit / reqTotal) * 100}%"></div>{/if}
                 {#if reqTally.gap}<div class="fit-meter h-full bg-destructive" style="width: {(reqTally.gap / reqTotal) * 100}%"></div>{/if}
               </div>
               <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {#if reqTally.covered}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-brand"></span>{reqTally.covered} covered</span>{/if}
-                {#if reqTally.addit}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-amber-500"></span>{reqTally.addit} to add</span>{/if}
+                {#if reqTally.addit}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-warning"></span>{reqTally.addit} to add</span>{/if}
                 {#if reqTally.gap}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-destructive"></span>{reqTally.gap} gap</span>{/if}
                 {#if reqTally.synonym}<span class="flex items-center gap-1.5"><span class="size-2 rounded-full border border-dotted border-brand-strong"></span>{reqTally.synonym} via synonym</span>{/if}
               </div>
@@ -504,7 +504,7 @@
                     <span class={['min-w-0 flex-1 text-sm leading-snug', syn && 'border-b border-dotted border-brand-strong/50']}>{r.text}</span>
                     {#if r.evidence_strength}
                       <span
-                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground/60']}
+                        class={['shrink-0 text-[0.6rem] font-medium lowercase tracking-wide', weak ? 'text-warning-strong' : 'text-muted-foreground/60']}
                         title={weak ? 'Only a bare mention in your CV — back it with a concrete result' : 'Backed by ' + r.evidence_strength + ' evidence in your CV'}
                       >{r.evidence_strength}</span>
                     {/if}

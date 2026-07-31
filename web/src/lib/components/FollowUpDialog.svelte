@@ -80,8 +80,8 @@
     {@attach focusTrap()}
   >
     <div class="flex items-start gap-3 border-b border-border p-5">
-      <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950/50">
-        <Clock class="size-5 text-amber-600 dark:text-amber-400" />
+      <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-warning-muted/50">
+        <Clock class="size-5 text-warning-strong" />
       </div>
       <div class="min-w-0 flex-1">
         <h2 class="text-lg font-semibold leading-tight">Follow up</h2>

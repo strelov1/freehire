@@ -17,7 +17,7 @@
 
   function tone(score: number): string {
     if (score >= 75) return 'text-primary';
-    if (score >= 50) return 'text-amber-500';
+    if (score >= 50) return 'text-warning-strong';
     return 'text-destructive';
   }
 
@@ -91,7 +91,7 @@
                 {#if it.status === 'pass'}
                   <Check class="size-3.5 text-primary" />
                 {:else if it.status === 'warn'}
-                  <TriangleAlert class="size-3.5 text-amber-500" />
+                  <TriangleAlert class="size-3.5 text-warning-strong" />
                 {:else}
                   <X class="size-3.5 text-destructive" />
                 {/if}

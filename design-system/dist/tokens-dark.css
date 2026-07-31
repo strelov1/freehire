@@ -23,4 +23,8 @@
   --brand-strong: oklch(0.79 0.1 118);
   --brand-muted: oklch(0.31 0.045 118);
   --brand-ring: oklch(0.6 0.09 118);
+  --warning: oklch(0.828 0.189 84.429); /** Caution fill. The solid block that marks something as needing attention. */
+  --warning-foreground: oklch(0.279 0.077 45.635); /** Text on the caution fill. */
+  --warning-strong: oklch(0.828 0.189 84.429); /** Caution text and borders on the page background, where the fill is not legible. */
+  --warning-muted: oklch(0.279 0.077 45.635); /** Soft caution tint. A background that carries the meaning without the weight. */
 }

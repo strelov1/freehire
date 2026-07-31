@@ -27,9 +27,13 @@ export function ratchet({ counts, baselinePath, direction, update = false }) {
   const lines = [];
   const moved = [];
 
+  // A key can leave the measurement three ways — the last of its occurrences was
+  // fixed, the file was deleted, or it was renamed — and from here they are
+  // indistinguishable. The first is the best outcome there is, so the wording
+  // must not read as an accusation; all three are recorded the same way.
   for (const key of Object.keys(baseline).sort()) {
     if (key in counts) continue;
-    lines.push(`${key}: in the baseline, measured by nothing — drop the entry or restore what counted it`);
+    lines.push(`${key}: no longer measured — cleared, removed or renamed; --update records it`);
   }
 
   for (const [key, actual] of byKey(Object.entries(counts))) {

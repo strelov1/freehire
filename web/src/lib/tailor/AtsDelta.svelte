@@ -19,7 +19,7 @@
   const view = $derived(viewAtsDelta(data));
 
   const toneClass: Record<AtsDeltaTone, string> = {
-    down: 'text-amber-600 dark:text-amber-400',
+    down: 'text-warning-strong',
     up: 'text-emerald-600 dark:text-emerald-400',
     flat: 'text-muted-foreground',
   };
@@ -45,7 +45,7 @@
 
     {#if view.warning}
       <p
-        class="mb-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+        class="mb-2 rounded-lg bg-warning/10 px-2 py-1.5 text-xs text-warning-strong"
         role="status"
       >
         {view.warning}

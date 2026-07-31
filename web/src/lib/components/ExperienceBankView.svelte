@@ -139,7 +139,7 @@
     </div>
 
     {#if needsConfirming > 0}
-      <div class="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+      <div class="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
         <strong class="font-medium">{needsConfirming} not confirmed.</strong>
         The assistant recorded these as its own reading of something you said. They will not
         appear on any CV until you confirm them — edit one to make it yours, or remove it.
@@ -210,7 +210,7 @@
 {#snippet achievement(atom: ExperienceAtom)}
   <li
     class="group rounded-md border px-3 py-2 {unconfirmed(atom)
-      ? 'border-amber-500/40 bg-amber-500/5'
+      ? 'border-warning/40 bg-warning/5'
       : 'border-border'}"
   >
     {#if editing === atom.id}

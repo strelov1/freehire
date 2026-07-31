@@ -12,11 +12,34 @@
         "path": ""
       },
       "tokens": [
-        "background", "foreground", "card", "card-foreground", "popover", "popover-foreground",
-        "primary", "primary-foreground", "secondary", "secondary-foreground",
-        "muted", "muted-foreground", "accent", "accent-foreground",
-        "destructive", "destructive-foreground", "border", "input", "ring",
-        "brand", "brand-foreground", "brand-strong", "brand-muted", "brand-ring"
+        "background",
+        "foreground",
+        "card",
+        "card-foreground",
+        "popover",
+        "popover-foreground",
+        "primary",
+        "primary-foreground",
+        "secondary",
+        "secondary-foreground",
+        "muted",
+        "muted-foreground",
+        "accent",
+        "accent-foreground",
+        "destructive",
+        "destructive-foreground",
+        "border",
+        "input",
+        "ring",
+        "brand",
+        "brand-foreground",
+        "brand-strong",
+        "brand-muted",
+        "brand-ring",
+        "warning",
+        "warning-foreground",
+        "warning-strong",
+        "warning-muted"
       ]
     },
     {
@@ -29,7 +52,21 @@
         "file": "../../tokens/spacing.tokens.json",
         "path": ""
       },
-      "tokens": ["spacing-0", "spacing-1", "spacing-2", "spacing-3", "spacing-4", "spacing-5", "spacing-6", "spacing-8", "spacing-10", "spacing-12", "spacing-16", "spacing-20", "spacing-24"]
+      "tokens": [
+        "spacing-0",
+        "spacing-1",
+        "spacing-2",
+        "spacing-3",
+        "spacing-4",
+        "spacing-5",
+        "spacing-6",
+        "spacing-8",
+        "spacing-10",
+        "spacing-12",
+        "spacing-16",
+        "spacing-20",
+        "spacing-24"
+      ]
     },
     {
       "id": "foundation.typography",
@@ -41,7 +78,25 @@
         "file": "../../tokens/typography.tokens.json",
         "path": ""
       },
-      "tokens": ["font-sans", "font-mono", "font-size-xs", "font-size-sm", "font-size-base", "font-size-lg", "font-size-xl", "font-size-2xl", "font-size-3xl", "font-size-4xl", "font-weight-normal", "font-weight-medium", "font-weight-semibold", "font-weight-bold", "line-height-tight", "line-height-normal", "line-height-relaxed"]
+      "tokens": [
+        "font-sans",
+        "font-mono",
+        "font-size-xs",
+        "font-size-sm",
+        "font-size-base",
+        "font-size-lg",
+        "font-size-xl",
+        "font-size-2xl",
+        "font-size-3xl",
+        "font-size-4xl",
+        "font-weight-normal",
+        "font-weight-medium",
+        "font-weight-semibold",
+        "font-weight-bold",
+        "line-height-tight",
+        "line-height-normal",
+        "line-height-relaxed"
+      ]
     },
     {
       "id": "foundation.radius",
@@ -53,7 +108,13 @@
         "file": "../../tokens/radius.tokens.json",
         "path": ""
       },
-      "tokens": ["radius", "radius-sm", "radius-md", "radius-lg", "radius-xl"]
+      "tokens": [
+        "radius",
+        "radius-sm",
+        "radius-md",
+        "radius-lg",
+        "radius-xl"
+      ]
     },
     {
       "id": "foundation.shadow",
@@ -65,7 +126,12 @@
         "file": "../../tokens/shadow.tokens.json",
         "path": ""
       },
-      "tokens": ["shadow-sm", "shadow-md", "shadow-lg", "shadow-xl"]
+      "tokens": [
+        "shadow-sm",
+        "shadow-md",
+        "shadow-lg",
+        "shadow-xl"
+      ]
     },
     {
       "id": "foundation.motion",
@@ -77,7 +143,14 @@
         "file": "../../tokens/motion.tokens.json",
         "path": ""
       },
-      "tokens": ["duration-fast", "duration-normal", "duration-slow", "ease-in", "ease-out", "ease-in-out"]
+      "tokens": [
+        "duration-fast",
+        "duration-normal",
+        "duration-slow",
+        "ease-in",
+        "ease-out",
+        "ease-in-out"
+      ]
     },
     {
       "id": "foundation.z-index",
@@ -89,7 +162,14 @@
         "file": "../../tokens/z-index.tokens.json",
         "path": ""
       },
-      "tokens": ["z-base", "z-dropdown", "z-sticky", "z-modal", "z-popover", "z-toast"]
+      "tokens": [
+        "z-base",
+        "z-dropdown",
+        "z-sticky",
+        "z-modal",
+        "z-popover",
+        "z-toast"
+      ]
     }
   ]
 }

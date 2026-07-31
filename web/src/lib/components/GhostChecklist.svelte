@@ -36,13 +36,13 @@
   // checked and found clear, and a reassuring colour would claim that difference.
   const filledTone: Record<GhostGaugeTone, string> = {
     low: 'bg-yellow-400 dark:bg-yellow-300',
-    elevated: 'bg-amber-500 dark:bg-amber-400',
+    elevated: 'bg-warning',
     high: 'bg-orange-600 dark:bg-orange-500',
     severe: 'bg-red-600 dark:bg-red-500',
   };
 
   const textTone: Record<'warn' | 'muted', string> = {
-    warn: 'text-amber-700 dark:text-amber-400',
+    warn: 'text-warning-strong',
     muted: 'text-muted-foreground',
   };
 </script>
@@ -111,7 +111,7 @@
         {#each fired as row (row.code)}
           <li class="flex items-baseline gap-2">
             <Check
-              class="size-3.5 shrink-0 translate-y-0.5 text-amber-600 dark:text-amber-400"
+              class="size-3.5 shrink-0 translate-y-0.5 text-warning-strong"
               aria-hidden="true"
             />
             <!-- The separator is glued to the fact with a non-breaking space: Svelte

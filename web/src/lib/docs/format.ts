@@ -7,7 +7,7 @@ export const METHOD_TEXT: Record<string, string> = {
   GET: 'text-emerald-600 dark:text-emerald-400',
   POST: 'text-sky-600 dark:text-sky-400',
   PUT: 'text-violet-600 dark:text-violet-400',
-  PATCH: 'text-amber-600 dark:text-amber-400',
+  PATCH: 'text-warning-strong',
   DELETE: 'text-rose-600 dark:text-rose-400',
 };
 
@@ -16,7 +16,7 @@ export const METHOD_CHIP: Record<string, string> = {
   GET: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400',
   POST: 'bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-400',
   PUT: 'bg-violet-500/10 text-violet-700 ring-violet-500/25 dark:text-violet-400',
-  PATCH: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-400',
+  PATCH: 'bg-warning/10 text-warning-strong ring-warning/25 text-warning-strong',
   DELETE: 'bg-rose-500/10 text-rose-700 ring-rose-500/25 dark:text-rose-400',
 };
 

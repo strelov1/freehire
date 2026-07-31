@@ -99,7 +99,7 @@
     <p class="text-sm text-destructive">{actionError}</p>
   {/if}
   {#if actionNotice}
-    <p class="text-sm text-amber-600 dark:text-amber-500">{actionNotice}</p>
+    <p class="text-sm text-warning-strong">{actionNotice}</p>
   {/if}
 
   {#if status === 'loading'}

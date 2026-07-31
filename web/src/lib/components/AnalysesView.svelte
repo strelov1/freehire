@@ -31,8 +31,8 @@
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
     good: 'text-brand-strong',
-    moderate: 'text-amber-600 dark:text-amber-500',
-    weak: 'text-amber-600 dark:text-amber-500',
+    moderate: 'text-warning-strong',
+    weak: 'text-warning-strong',
     poor: 'text-destructive',
   };
 
@@ -65,7 +65,7 @@
                 <span class="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-muted-foreground">Closed</span>
               {/if}
               {#if it.stale}
-                <span class="shrink-0 rounded-full border border-amber-500/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-amber-700 dark:text-amber-500">Stale</span>
+                <span class="shrink-0 rounded-full border border-warning/40 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase text-warning-strong">Stale</span>
               {/if}
             </span>
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">

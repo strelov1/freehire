@@ -96,7 +96,7 @@
             <span class="text-sm font-medium text-foreground">{t.label}</span>
             <span class="text-xs text-muted-foreground">{t.style}</span>
             {#if !t.ats_safe}
-              <span class="mt-0.5 text-[11px] leading-tight text-amber-600 dark:text-amber-500">
+              <span class="mt-0.5 text-[11px] leading-tight text-warning-strong">
                 May not parse cleanly in some ATS
               </span>
             {/if}

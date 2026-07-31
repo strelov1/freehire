@@ -60,7 +60,7 @@
   // fit constraints (location, language) as softer cautions.
   function toneText(severity: BlockerSeverity): string {
     if (severity === 'hard') return 'text-destructive';
-    if (severity === 'medium') return 'text-amber-700 dark:text-amber-500';
+    if (severity === 'medium') return 'text-warning-strong';
     return 'text-muted-foreground';
   }
 
@@ -85,7 +85,7 @@
 
   const chip = 'rounded-full border px-2 py-0.5 text-xs font-medium';
   const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
-  const adjChip = `${chip} border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-500`;
+  const adjChip = `${chip} border-warning/30 bg-warning/10 text-warning-strong`;
   const missChip = `${chip} border-destructive/30 bg-destructive/10 text-destructive`;
 
   const profileHref = resolve('/my/profile');
@@ -166,7 +166,7 @@
     </div>
     <div class="flex h-2 overflow-hidden rounded bg-secondary">
       <div class="h-full bg-brand transition-all" style="width: {segments.exact}%"></div>
-      <div class="h-full bg-amber-500 transition-all" style="width: {segments.adjacent}%"></div>
+      <div class="h-full bg-warning transition-all" style="width: {segments.adjacent}%"></div>
     </div>
 
     {#if match.matched.length}
@@ -183,7 +183,7 @@
     {#if match.adjacent.length}
       <div class="flex flex-col gap-1.5">
         <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <span class="size-1.5 rounded-full bg-amber-500"></span>Close — you have a related skill
+          <span class="size-1.5 rounded-full bg-warning"></span>Close — you have a related skill
         </span>
         <div class="flex flex-wrap gap-1.5">
           {#each match.adjacent as a (a.name)}

@@ -32,7 +32,7 @@
 
   const toneClass: Record<string, string> = {
     closed: 'text-emerald-600 dark:text-emerald-400',
-    open: 'text-amber-600 dark:text-amber-400',
+    open: 'text-warning-strong',
     skipped: 'text-muted-foreground',
   };
 </script>

@@ -141,7 +141,7 @@ export function teaserChips(jobSkills: string[], missing: Set<string>, limit: nu
 }
 
 /** The two progress-bar segment widths (in percent of the track): a full-weight
- *  green segment for exact matches and a half-weight amber segment for adjacent
+ *  green segment for exact matches and a half-weight warning segment for adjacent
  *  ones. Their sum is the (unrounded) coverage percent. */
 export function matchBarSegments(m: {
   total: number;

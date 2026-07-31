@@ -25,10 +25,10 @@
   // shows at a time — keeps the coverage view compact under the headline + stats.
   let sub = $state<'gaps' | 'skills'>('gaps');
 
-  // Status → badge styling (STRONG green / HIDDEN amber / ADJACENT blue / MISSING red).
+  // Status → badge styling (STRONG green / HIDDEN warning / ADJACENT blue / MISSING red).
   const statusStyle: Record<string, string> = {
     strong: 'bg-brand/10 text-primary',
-    hidden: 'bg-amber-500/10 text-amber-600 dark:text-amber-500',
+    hidden: 'bg-warning/10 text-warning-strong',
     adjacent: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
     missing: 'bg-destructive/10 text-destructive',
   };

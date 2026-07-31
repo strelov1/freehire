@@ -46,8 +46,8 @@
   const toneText: Record<Tone, string> = {
     strong: 'text-brand-strong',
     good: 'text-brand-strong',
-    moderate: 'text-amber-600 dark:text-amber-500',
-    weak: 'text-amber-600 dark:text-amber-500',
+    moderate: 'text-warning-strong',
+    weak: 'text-warning-strong',
     poor: 'text-destructive',
   };
 </script>

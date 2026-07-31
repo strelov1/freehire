@@ -54,6 +54,16 @@
   --color-brand-strong: var(--brand-strong);
   --color-brand-muted: var(--brand-muted);
   --color-brand-ring: var(--brand-ring);
+  /* Caution. Same four roles as brand: --warning is the solid fill,
+     --warning-foreground what reads on it, --warning-strong the text and border
+     tone for the page background (the fill is not legible there), and
+     --warning-muted the soft tint. The app expressed all of this as amber
+     before, one shade per call site plus a dark: partner for each — the partner
+     is what a token removes. */
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-muted: var(--warning-muted);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);

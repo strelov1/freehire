@@ -13,7 +13,7 @@
   const badge = $derived(ghostBadge(ghost));
 
   const toneClass: Record<'warn' | 'muted', string> = {
-    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    warn: 'border-warning/40 bg-warning/10 text-warning-strong',
     muted: 'border-border text-muted-foreground',
   };
 </script>

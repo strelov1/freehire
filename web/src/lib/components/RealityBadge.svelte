@@ -4,7 +4,7 @@
   import { cn } from '$lib/ui';
 
   // Surfaces the job-reality signal as a facts-backed badge: nothing for a fresh or
-  // unclassified job, a muted age chip for a stale one, an amber "Likely evergreen"
+  // unclassified job, a muted age chip for a stale one, a warning-toned "Likely evergreen"
   // for a converged one. It states facts (in the chip label and the hover tooltip, and
   // inline when `detailed`), never a bare accusation. `detailed` renders complementary
   // facts beside the chip on the job detail page — deliberately NOT the age, which the
@@ -25,7 +25,7 @@
   );
 
   const toneClass: Record<'warn' | 'muted', string> = {
-    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    warn: 'border-warning/40 bg-warning/10 text-warning-strong',
     muted: 'border-border text-muted-foreground',
   };
 </script>
