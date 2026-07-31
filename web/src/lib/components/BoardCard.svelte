@@ -37,7 +37,11 @@
     </span>
     <span class="line-clamp-2 text-sm">{item.job.title}</span>
   </button>
-  <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+  <!-- The badge row rides above the open action's overlay so its title tooltips still
+       answer a hover. The cost is that this strip no longer opens the drawer; a lost
+       tooltip is the worse trade, since the badges are the card's only explanation of
+       what "24d" means. -->
+  <span class="relative z-10 flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
     {/if}
