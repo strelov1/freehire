@@ -104,3 +104,17 @@ func TestTitleCategoryUnresolvedRoleCategoryShrinksTheDenominator(t *testing.T) 
 		t.Errorf("earned = %d of weight %d: an exact title match must earn everything still on the table", c.Earned, c.Weight)
 	}
 }
+
+// Every category reports a weight, available or not: the panel and the wire contract treat
+// it as always present, and a category reporting 0 reads as one worth nothing rather than
+// one that could not be scored.
+func TestTitleCategoryReportsItsNominalWeightWhenUnavailable(t *testing.T) {
+	c := titleCategory("", "Data Engineer at Acme")
+
+	if c.Available {
+		t.Fatal("expected an unavailable category")
+	}
+	if c.Weight != WeightTitle {
+		t.Errorf("weight = %d, want the nominal %d", c.Weight, WeightTitle)
+	}
+}

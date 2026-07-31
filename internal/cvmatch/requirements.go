@@ -41,6 +41,12 @@ func requirementsCategory(reqs []Requirement, hasAnalysis bool, cvSkills, jobSki
 		c.Reason = "run the fit analysis to check this vacancy's requirements"
 		return c, nil
 	}
+	// An analysed vacancy that states no requirements is a different situation from one whose
+	// requirements name nothing this scorer can read, and the candidate can act on only one.
+	if len(reqs) == 0 {
+		c.Reason = "this vacancy states no requirements to check against"
+		return c, nil
+	}
 
 	owned := make(map[string]bool, len(cvSkills))
 	for _, s := range cvSkills {

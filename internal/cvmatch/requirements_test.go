@@ -173,3 +173,19 @@ func TestRequirementsCategoryUnavailableWhenNothingIsCheckable(t *testing.T) {
 		t.Errorf("checks = %d, want 2 — an unscored ledger is still shown", len(checks))
 	}
 }
+
+// A vacancy that states no requirements at all is a different situation from one whose
+// requirements name nothing checkable, and the reason must not describe the wrong one.
+func TestRequirementsCategoryDistinguishesAnEmptyLedger(t *testing.T) {
+	empty, _ := requirementsCategory(nil, true, []string{"go"}, []string{"go"})
+	unreadable, _ := requirementsCategory([]Requirement{
+		{Text: "Strong communication skills", Priority: "required"},
+	}, true, []string{"go"}, []string{"go"})
+
+	if empty.Available || unreadable.Available {
+		t.Fatal("both cases must be unavailable")
+	}
+	if empty.Reason == unreadable.Reason {
+		t.Errorf("both reasons read %q; an empty ledger is not an unreadable one", empty.Reason)
+	}
+}

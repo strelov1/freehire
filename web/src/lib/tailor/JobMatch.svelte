@@ -67,7 +67,7 @@
           Skills this vacancy names that your CV does not
         </p>
         <ul class="flex flex-wrap gap-1">
-          {#each view.missingSkills as skill (skill)}
+          {#each view.missingSkills as skill, i (i)}
             <li
               class="rounded border border-amber-500/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-300"
             >
@@ -78,11 +78,13 @@
       </div>
     {/if}
 
+    <!-- Keyed by index, never by the requirement's text: those texts are model output, and two
+         identical lines in one ledger would be duplicate keys and a render crash. -->
     {#if view.requirements.missing.length}
       <div class="mt-3">
         <h4 class="mb-1 text-xs font-semibold text-foreground">Requirements your CV does not evidence</h4>
         <ul class="space-y-1 text-xs text-muted-foreground">
-          {#each view.requirements.missing as req (req.text)}
+          {#each view.requirements.missing as req, i (i)}
             <li class="flex items-start gap-1.5">
               <span class="mt-1 size-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true"></span>
               <span>{req.text}</span>
@@ -103,7 +105,7 @@
             : 's'} could not be checked automatically
         </summary>
         <ul class="mt-1 space-y-1 text-xs text-muted-foreground">
-          {#each view.requirements.unverifiable as req (req.text)}
+          {#each view.requirements.unverifiable as req, i (i)}
             <li class="flex items-start gap-1.5">
               <span class="mt-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden="true"></span>
               <span>

@@ -23,7 +23,10 @@ const (
 // fingerprint used elsewhere: that machinery exists to make two POSTINGS comparable and
 // strips parenthetical and comma decorations a CV legitimately carries.
 func titleCategory(jobTitle, cvText string) ScoredCategory {
-	c := ScoredCategory{ID: CategoryTitle, Label: "Job Title Match"}
+	// Nominal weight until we know which checks can be evaluated: every category reports a
+	// weight whether or not it was scored, and an unavailable one reporting 0 would read as a
+	// category worth nothing rather than one nobody could score.
+	c := ScoredCategory{ID: CategoryTitle, Label: "Job Title Match", Weight: WeightTitle}
 
 	title := normalizeText(jobTitle)
 	if title == "" {
@@ -31,6 +34,8 @@ func titleCategory(jobTitle, cvText string) ScoredCategory {
 		return c
 	}
 	c.Available = true
+	// Rebuilt from the checks that turn out to be evaluable — see addCheck.
+	c.Weight = 0
 
 	// The exact-title check is always evaluable: either the text states the title or it does
 	// not. Matched on word boundaries, not as a bare substring — "Data Engineer" occurs
