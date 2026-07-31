@@ -615,15 +615,16 @@ type UserIdentity struct {
 }
 
 type UserJob struct {
-	UserID      int64              `json:"user_id"`
-	JobID       int64              `json:"job_id"`
-	ViewedAt    pgtype.Timestamptz `json:"viewed_at"`
-	AppliedAt   pgtype.Timestamptz `json:"applied_at"`
-	SavedAt     pgtype.Timestamptz `json:"saved_at"`
-	Stage       pgtype.Text        `json:"stage"`
-	Notes       pgtype.Text        `json:"notes"`
-	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
-	Vote        pgtype.Int2        `json:"vote"`
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 }
 
 type UserJobAnalysis struct {

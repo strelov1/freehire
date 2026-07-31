@@ -1,6 +1,6 @@
 -- name: GetUserApplication :one
 -- The caller's interaction row for one job (the application-detail header).
-SELECT viewed_at, saved_at, applied_at, stage, notes
+SELECT viewed_at, saved_at, applied_at, stage, notes, followed_up_at
 FROM user_jobs
 WHERE user_id = $1 AND job_id = $2;
 

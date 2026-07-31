@@ -15,7 +15,7 @@ const clearJobProgress = `-- name: ClearJobProgress :one
 UPDATE user_jobs
 SET stage = NULL, applied_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type ClearJobProgressParams struct {
@@ -37,6 +37,7 @@ func (q *Queries) ClearJobProgress(ctx context.Context, arg ClearJobProgressPara
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -141,7 +142,7 @@ const dismissJob = `-- name: DismissJob :one
 INSERT INTO user_jobs (user_id, job_id, dismissed_at)
 VALUES ($1, $2, now())
 ON CONFLICT (user_id, job_id) DO UPDATE SET dismissed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type DismissJobParams struct {
@@ -165,6 +166,7 @@ func (q *Queries) DismissJob(ctx context.Context, arg DismissJobParams) (UserJob
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -306,6 +308,7 @@ SELECT jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.compan
          WHERE r.user_id = uj.user_id
            AND r.job_id = jobs.id
            AND r.status = 'pending') AS reminder_fire_at,
+       uj.followed_up_at,
        -- last_activity_at is when this application last moved: its apply date, or
        -- the newest message linked to it when that is later. GREATEST ignores a
        -- NULL aggregate, so an application with no mail falls back to applied_at
@@ -369,6 +372,7 @@ type ListUserJobsRow struct {
 	Notes                pgtype.Text        `json:"notes"`
 	EmailCount           int64              `json:"email_count"`
 	ReminderFireAt       pgtype.Timestamptz `json:"reminder_fire_at"`
+	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
 	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
 	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 }
@@ -458,6 +462,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Notes,
 			&i.EmailCount,
 			&i.ReminderFireAt,
+			&i.FollowedUpAt,
 			&i.LastActivityAt,
 			&i.HasPendingSuggestion,
 		); err != nil {
@@ -542,12 +547,12 @@ WITH prior AS (
               ELSE now()
           END,
           stage = COALESCE(user_jobs.stage, 'applied')
-    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+    RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
     WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
-SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote FROM upsert
+SELECT user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at FROM upsert
 `
 
 type MarkJobAppliedParams struct {
@@ -557,15 +562,16 @@ type MarkJobAppliedParams struct {
 }
 
 type MarkJobAppliedRow struct {
-	UserID      int64              `json:"user_id"`
-	JobID       int64              `json:"job_id"`
-	ViewedAt    pgtype.Timestamptz `json:"viewed_at"`
-	AppliedAt   pgtype.Timestamptz `json:"applied_at"`
-	SavedAt     pgtype.Timestamptz `json:"saved_at"`
-	Stage       pgtype.Text        `json:"stage"`
-	Notes       pgtype.Text        `json:"notes"`
-	DismissedAt pgtype.Timestamptz `json:"dismissed_at"`
-	Vote        pgtype.Int2        `json:"vote"`
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 }
 
 // Mark a job as applied for a user. Idempotent and independent of a prior view:
@@ -598,15 +604,42 @@ func (q *Queries) MarkJobApplied(ctx context.Context, arg MarkJobAppliedParams) 
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
+}
+
+const recordApplicationFollowUp = `-- name: RecordApplicationFollowUp :one
+UPDATE user_jobs
+SET followed_up_at = now()
+WHERE user_id = $1 AND job_id = $2 AND applied_at IS NOT NULL
+RETURNING followed_up_at
+`
+
+type RecordApplicationFollowUpParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
+// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
+// just overwrites the timestamp with a later one rather than erroring.
+//
+// Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
+// applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
+// comment in 0059 for why a chase must not clear the silence it was a response to.
+func (q *Queries) RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, recordApplicationFollowUp, arg.UserID, arg.JobID)
+	var followed_up_at pgtype.Timestamptz
+	err := row.Scan(&followed_up_at)
+	return followed_up_at, err
 }
 
 const recordJobView = `-- name: RecordJobView :one
 INSERT INTO user_jobs (user_id, job_id)
 VALUES ($1, $2)
 ON CONFLICT (user_id, job_id) DO UPDATE SET viewed_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type RecordJobViewParams struct {
@@ -633,6 +666,7 @@ func (q *Queries) RecordJobView(ctx context.Context, arg RecordJobViewParams) (U
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -665,7 +699,7 @@ const saveJob = `-- name: SaveJob :one
 INSERT INTO user_jobs (user_id, job_id, saved_at)
 VALUES ($1, $2, now())
 ON CONFLICT (user_id, job_id) DO UPDATE SET saved_at = now()
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type SaveJobParams struct {
@@ -688,6 +722,7 @@ func (q *Queries) SaveJob(ctx context.Context, arg SaveJobParams) (UserJob, erro
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -698,7 +733,7 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (user_id, job_id) DO UPDATE
   SET stage = COALESCE(EXCLUDED.stage, user_jobs.stage),
       notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type TrackJobParams struct {
@@ -730,6 +765,7 @@ func (q *Queries) TrackJob(ctx context.Context, arg TrackJobParams) (UserJob, er
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -738,7 +774,7 @@ const undismissJob = `-- name: UndismissJob :one
 UPDATE user_jobs
 SET dismissed_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type UndismissJobParams struct {
@@ -763,6 +799,7 @@ func (q *Queries) UndismissJob(ctx context.Context, arg UndismissJobParams) (Use
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -771,7 +808,7 @@ const unsaveJob = `-- name: UnsaveJob :one
 UPDATE user_jobs
 SET saved_at = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type UnsaveJobParams struct {
@@ -795,6 +832,7 @@ func (q *Queries) UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UserJob, 
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }
@@ -803,7 +841,7 @@ const untrackJob = `-- name: UntrackJob :one
 UPDATE user_jobs
 SET saved_at = NULL, applied_at = NULL, stage = NULL, notes = NULL
 WHERE user_id = $1 AND job_id = $2
-RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote
+RETURNING user_id, job_id, viewed_at, applied_at, saved_at, stage, notes, dismissed_at, vote, followed_up_at
 `
 
 type UntrackJobParams struct {
@@ -826,6 +864,7 @@ func (q *Queries) UntrackJob(ctx context.Context, arg UntrackJobParams) (UserJob
 		&i.Notes,
 		&i.DismissedAt,
 		&i.Vote,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }

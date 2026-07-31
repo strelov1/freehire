@@ -35,7 +35,7 @@ func (q *Queries) ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkPara
 }
 
 const getUserApplication = `-- name: GetUserApplication :one
-SELECT viewed_at, saved_at, applied_at, stage, notes
+SELECT viewed_at, saved_at, applied_at, stage, notes, followed_up_at
 FROM user_jobs
 WHERE user_id = $1 AND job_id = $2
 `
@@ -46,11 +46,12 @@ type GetUserApplicationParams struct {
 }
 
 type GetUserApplicationRow struct {
-	ViewedAt  pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt   pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt pgtype.Timestamptz `json:"applied_at"`
-	Stage     pgtype.Text        `json:"stage"`
-	Notes     pgtype.Text        `json:"notes"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
 }
 
 // The caller's interaction row for one job (the application-detail header).
@@ -63,6 +64,7 @@ func (q *Queries) GetUserApplication(ctx context.Context, arg GetUserApplication
 		&i.AppliedAt,
 		&i.Stage,
 		&i.Notes,
+		&i.FollowedUpAt,
 	)
 	return i, err
 }

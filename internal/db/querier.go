@@ -1537,6 +1537,14 @@ type Querier interface {
 	// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
 	// idempotent, and a closed canon fails over to the next min(id) on the next run.
 	RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error)
+	// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
+	// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
+	// just overwrites the timestamp with a later one rather than erroring.
+	//
+	// Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
+	// applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
+	// comment in 0059 for why a chase must not clear the silence it was a response to.
+	RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.

@@ -11,11 +11,11 @@
 
 ## 2. Schema and reads
 
-- [ ] 2.1 Add `migrations/0059_user_jobs_followed_up_at.sql`: one nullable timestamptz, no backfill.
+- [x] 2.1 Add `migrations/0059_user_jobs_followed_up_at.sql`: one nullable timestamptz, no backfill.
       The comment must say why it is NOT part of the last-activity derivation.
-- [ ] 2.2 Carry `followed_up_at` on the tracking reads (`ListTrackedJobs` and the per-slug detail),
+- [x] 2.2 Carry `followed_up_at` on the tracking reads (`ListTrackedJobs` and the per-slug detail),
       and add the write that sets it. `make sqlc`.
-- [ ] 2.3 Integration test the invariant that pays for this change: an application silent for 24 days
+- [x] 2.3 Integration test the invariant that pays for this change: an application silent for 24 days
       that has been chased still reports 24 days silent and the same silence state. Watch it fail
       first by wiring `followed_up_at` into the `GREATEST(...)` — if the test passes with the column
       in the derivation, it is not testing anything.
