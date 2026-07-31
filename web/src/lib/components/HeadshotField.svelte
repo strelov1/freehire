@@ -10,10 +10,8 @@
   // the CV builder. The server normalizes whatever is uploaded to a square JPEG; this side
   // only pre-checks type and size so an obvious mistake costs no upload.
   //
-  // `onChanged` lets the host react (the CV preview re-reads the image). Nothing renders at
-  // all when object storage is unconfigured: an upload control that can only fail is worse
-  // than no control.
-  let { onChanged }: { onChanged?: (meta: PhotoMeta) => void } = $props();
+  // Nothing renders at all when object storage is unconfigured: an upload control that can
+  // only fail is worse than no control.
 
   let meta = $state<PhotoMeta | null>(null);
   let busy = $state(false);
@@ -42,11 +40,6 @@
     };
   });
 
-  function settle(next: PhotoMeta) {
-    meta = next;
-    onChanged?.(next);
-  }
-
   async function upload(file: File) {
     if (!PHOTO_ACCEPT.split(',').includes(file.type)) {
       error = 'Choose a JPEG, PNG, or WebP image.';
@@ -55,7 +48,7 @@
     busy = true;
     error = null;
     try {
-      settle(await api.putPhoto(file));
+      meta = await api.putPhoto(file);
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not upload the photo. Please try again.';
     } finally {
@@ -68,7 +61,7 @@
     error = null;
     try {
       await api.deletePhoto();
-      settle({ enabled: true, present: false, uploaded_at: null });
+      meta = { enabled: true, present: false };
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not remove the photo. Please try again.';
     } finally {

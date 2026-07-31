@@ -29,8 +29,10 @@ anything added to it is both a prompt surface and a client-writable field.
 
 **Non-Goals:**
 
-- A public avatar. The headshot is not shown on community threads, referral pages, or any
-  surface other than the user's own CV rendering and its preview.
+- A public avatar. The headshot appears only where the owner's own CV is rendered: the
+  builder, its preview, and the proof PDF a referrer opens (which already carries the
+  candidate's name and contacts — a silhouette there would misrepresent the CV, not protect
+  anything). It is not shown on community threads, company pages, or any listing.
 - A crop/zoom editor. Normalization is a centred square crop; a framing UI can come later
   behind the same endpoint without a schema change.
 - Photos in ATS-safe templates. Both new templates are `ats_safe: false`; the existing four
@@ -72,7 +74,8 @@ mirrors `resume`'s contract exactly: a `Store` over `blobstore.Store` plus a poi
 
 Storage key: `blobstore.PhotoKey(userID)` → `photos/<id>`, derived from the session's user id.
 Pointer: `users.photo_object_key`, `users.photo_uploaded_at`, added by migration
-`0057_user_headshot.sql` (`0056` is already used twice).
+`0059_user_headshot.sql` (`0056` and `0057` are each already used twice, so "one past the
+last file" is not the same as "one past the highest number").
 
 ### Normalization: decode, orient, crop, scale, re-encode
 
@@ -156,7 +159,7 @@ abort semantics extend to the photo for free.
 
 ## Migration Plan
 
-1. Apply `0057_user_headshot.sql` (two nullable columns; no rewrite, no lock of consequence).
+1. Apply `0059_user_headshot.sql` (two nullable columns; no rewrite, no lock of consequence).
 2. Deploy. The new templates appear in the registry immediately and render the placeholder for
    everyone until photos are uploaded.
 3. `make cv-previews` output is committed with the change, so the gallery has thumbnails on the

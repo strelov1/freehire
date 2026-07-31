@@ -2,6 +2,7 @@ package headshot
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
@@ -77,6 +78,22 @@ func decodeResult(t *testing.T, data []byte) image.Image {
 	return img
 }
 
+// webpFixture is a 300x100 lossless WebP of three vertical bands (red, green, blue) —
+// the same shape the crop test uses. It is committed as bytes because x/image/webp is
+// decode-only, and it exists because the blank webp import is the ONLY thing making the
+// format decodable: without a test that reads one, a tidy-up that drops the import turns
+// every Safari and Android upload into a 400 with nothing going red.
+const webpFixture = "UklGRjwAAABXRUJQVlA4TC8AAAAvK8EYABcwyAKBJJj9iYYRCCTB7E80zPwHdwYIsm0mecmTzmAR/Z+A+ffx818BAQA="
+
+func decodeFixture(t *testing.T, b64 string) []byte {
+	t.Helper()
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	return data
+}
+
 func TestNormalize_ProducesFixedSquareJPEG(t *testing.T) {
 	for _, src := range []struct {
 		name string
@@ -85,6 +102,7 @@ func TestNormalize_ProducesFixedSquareJPEG(t *testing.T) {
 		{"landscape jpeg", encode(t, bands(400, 200, false, red, green, blue), "jpeg")},
 		{"portrait png", encode(t, bands(120, 480, true, red, green, blue), "png")},
 		{"already square", encode(t, bands(64, 64, false, green), "jpeg")},
+		{"webp", decodeFixture(t, webpFixture)},
 	} {
 		t.Run(src.name, func(t *testing.T) {
 			out, err := Normalize(src.data)
@@ -115,38 +133,76 @@ func TestNormalize_CropsTheCentredSquare(t *testing.T) {
 }
 
 func TestNormalize_AppliesDeclaredOrientation(t *testing.T) {
+	// A tall image, red on top and blue at the bottom. A quarter turn makes the bands
+	// vertical, so each case names the edge that must be red and what it expects there.
 	cases := []struct {
 		name        string
 		orientation uint16
 		bigEndian   bool
-		wantTop     string
+		probe       image.Point
+		want        string
 	}{
-		{"upright is untouched", 1, false, "red"},
-		{"180 degrees puts the bottom on top", 3, false, "blue"},
-		{"90 CW is applied", 6, true, "blue"},
-		{"90 CCW is applied", 8, false, "red"},
-		{"mirrored values are left alone", 2, false, "red"},
+		{"upright is untouched", 1, false, image.Point{X: 256, Y: 20}, "red"},
+		{"180 degrees puts the bottom on top", 3, false, image.Point{X: 256, Y: 20}, "blue"},
+		{"90 CW is applied", 6, true, image.Point{X: 20, Y: 256}, "blue"},
+		{"90 CCW is applied", 8, false, image.Point{X: 20, Y: 256}, "red"},
+		// 5 and 7 are a mirror plus a quarter turn: the turn is applied (so the bands end
+		// up vertical, like 8 and 6 respectively), the mirror is not.
+		{"transpose turns like 270", 5, false, image.Point{X: 20, Y: 256}, "red"},
+		{"transverse turns like 90", 7, false, image.Point{X: 20, Y: 256}, "blue"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// A tall image, red on top and blue at the bottom. Under rotation by 90° the
-			// bands become vertical, so only the pair {3, 1} keeps a horizontal split —
-			// the 90° cases are asserted on their left edge instead.
 			src := injectAPP1(t, encode(t, bands(200, 400, true, red, blue), "jpeg"),
 				exifOrientationPayload(c.orientation, c.bigEndian))
 			out, err := Normalize(src)
 			if err != nil {
 				t.Fatalf("Normalize: %v", err)
 			}
-			img := decodeResult(t, out)
-			probe := image.Point{X: 256, Y: 20} // top edge
-			if c.orientation == 6 || c.orientation == 8 {
-				probe = image.Point{X: 20, Y: 256} // left edge
-			}
-			if got := dominant(img.At(probe.X, probe.Y)); got != c.wantTop {
-				t.Errorf("pixel %v is %s, want %s", probe, got, c.wantTop)
+			if got := dominant(decodeResult(t, out).At(c.probe.X, c.probe.Y)); got != c.want {
+				t.Errorf("pixel %v is %s, want %s", c.probe, got, c.want)
 			}
 		})
+	}
+}
+
+// A pure mirror must NOT be undone — and proving that needs an image a horizontal flip
+// actually changes, which horizontal bands do not.
+func TestNormalize_LeavesAMirrorAlone(t *testing.T) {
+	src := injectAPP1(t, encode(t, bands(400, 400, false, red, blue), "jpeg"),
+		exifOrientationPayload(2, false)) // 2 = mirror horizontal
+	out, err := Normalize(src)
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	if got := dominant(decodeResult(t, out).At(20, 256)); got != "red" {
+		t.Errorf("left edge is %s, want red — the mirror was applied", got)
+	}
+}
+
+// JPEG has no alpha, so a cut-out PNG has to land on a background the encoder can express.
+// Premultiplied transparent pixels encode as pure black, which is a face on a black square.
+func TestNormalize_TransparentBackgroundBecomesWhite(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 400, 400))
+	for y := range 400 {
+		for x := range 400 {
+			// An opaque blob in the middle, everything else fully transparent.
+			if (x-200)*(x-200)+(y-200)*(y-200) < 60*60 {
+				img.Set(x, y, red)
+			}
+		}
+	}
+	out, err := Normalize(encode(t, img, "png"))
+	if err != nil {
+		t.Fatalf("Normalize: %v", err)
+	}
+	result := decodeResult(t, out)
+	r, g, b, _ := result.At(10, 10).RGBA()
+	if r < 0xF000 || g < 0xF000 || b < 0xF000 {
+		t.Errorf("transparent corner encoded as rgb(%d,%d,%d), want near-white", r>>8, g>>8, b>>8)
+	}
+	if got := dominant(result.At(256, 256)); got != "red" {
+		t.Errorf("the subject is %s, want red — the background fill covered it", got)
 	}
 }
 

@@ -77,7 +77,10 @@ func (r *fakeRepo) GetPhoto(context.Context, int64) (db.GetUserPhotoRow, error) 
 }
 
 func (r *fakeRepo) SetPhoto(_ context.Context, _ int64, key string) error {
-	r.key, r.uploadedAt, r.sets = key, time.Now(), r.sets+1
+	// A monotonic stamp rather than time.Now(): two uploads in the same millisecond would
+	// otherwise make "the upload time advanced" flaky rather than false.
+	r.key, r.sets = key, r.sets+1
+	r.uploadedAt = time.Unix(1_700_000_000, 0).UTC().Add(time.Duration(r.sets) * time.Second)
 	return nil
 }
 
@@ -134,13 +137,30 @@ func TestStore_PutReplacesTheExistingHeadshot(t *testing.T) {
 	blobs, repo := newFakeBlobs(), &fakeRepo{}
 	s := New(blobs, repo)
 
-	for range 2 {
-		if _, err := s.Put(context.Background(), 42, testImage(t)); err != nil {
-			t.Fatalf("Put: %v", err)
-		}
+	// Two visibly different images: identical bytes would make "replaced" indistinguishable
+	// from "silently kept the first one".
+	first, err := s.Put(context.Background(), 42, encode(t, bands(300, 100, false, red), "jpeg"))
+	if err != nil {
+		t.Fatalf("first Put: %v", err)
 	}
+	stored := append([]byte(nil), blobs.objects["photos/42"]...)
+
+	second, err := s.Put(context.Background(), 42, encode(t, bands(300, 100, false, blue), "jpeg"))
+	if err != nil {
+		t.Fatalf("second Put: %v", err)
+	}
+
 	if len(blobs.objects) != 1 {
 		t.Errorf("two uploads left %d objects, want 1 (the key is derived, not accumulated)", len(blobs.objects))
+	}
+	if bytes.Equal(stored, blobs.objects["photos/42"]) {
+		t.Error("the second upload did not replace the stored bytes")
+	}
+	if got := dominant(decodeResult(t, blobs.objects["photos/42"]).At(256, 256)); got != "blue" {
+		t.Errorf("stored image is %s, want blue — the newer upload is not what is stored", got)
+	}
+	if first.UploadedAt == nil || second.UploadedAt == nil || !second.UploadedAt.After(*first.UploadedAt) {
+		t.Errorf("upload time did not advance: %v then %v", first.UploadedAt, second.UploadedAt)
 	}
 }
 

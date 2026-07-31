@@ -716,7 +716,9 @@ export interface ResumeMeta {
 export interface PhotoMeta {
   enabled: boolean;
   present: boolean;
-  uploaded_at: string | null;
+  // Omitted by the server when there is no headshot, so `undefined` — not null — is the
+  // absent case.
+  uploaded_at?: string;
 }
 
 /** A community discussion thread (see the add-community-threads change). The author

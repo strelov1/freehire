@@ -5,10 +5,13 @@ import (
 	"errors"
 	"io"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/headshot"
 )
@@ -25,12 +28,35 @@ func newPhotoHandlers(photos *headshot.Store) *photoHandlers {
 	return &photoHandlers{photos: photos}
 }
 
+// photoUploadsPerHour bounds how many headshots one member may upload per hour. Every
+// upload decodes and resamples an untrusted image, which is the most CPU and memory a
+// single authenticated request can ask of this process — so unlike the other reads here it
+// needs a ceiling. Twelve is far past a person adjusting their photo and far below anything
+// worth doing with it.
+const photoUploadsPerHour = 12
+
+// photoUploadLimiter throttles uploads per authenticated user, keyed like the contribution
+// limiter (an IP key is lifted by any rotating proxy pool). Mounted AFTER the auth gate so
+// the user id is resolved.
+func photoUploadLimiter() fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        photoUploadsPerHour,
+		Expiration: time.Hour,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			if id, ok := auth.UserID(c); ok {
+				return "user:" + strconv.FormatInt(id, 10)
+			}
+			return "ip:" + c.IP()
+		},
+	})
+}
+
 func (h *photoHandlers) register(api fiber.Router, mw middleware) {
 	// GET /me/photo reports presence; the image itself hangs off it as a sub-resource.
 	// The split mirrors /me/resume, whose read is metadata too: a client needs to know
 	// whether there is a headshot (to choose a control, or to prompt for one in the
 	// template gallery) far more often than it needs the bytes.
-	api.Put("/me/photo", mw.cookie, h.PutPhoto)
+	api.Put("/me/photo", mw.cookie, photoUploadLimiter(), h.PutPhoto)
 	api.Get("/me/photo", mw.cookie, h.GetPhoto)
 	api.Get("/me/photo/image", mw.cookie, h.GetPhotoImage)
 	api.Delete("/me/photo", mw.cookie, h.DeletePhoto)
@@ -119,8 +145,11 @@ func (h *photoHandlers) DeletePhoto(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// maxPhotoUpload bounds what is read from the request part. The service applies the same
-// ceiling to the decoded image; this one stops a body from being buffered at all.
+// maxPhotoUpload bounds what is read out of the multipart part. It is a backstop, not the
+// real gate: fasthttp has already read and parsed the whole body by the time FormFile runs,
+// so the server's BodyLimit (cmd/server/main.go) is what actually stops an oversize upload —
+// and because that limit covers the entire request, a file at this cap is rejected there
+// first. The client advertises a smaller size to keep that from being the common path.
 const maxPhotoUpload = 8 << 20
 
 // readPhotoUpload reads the "file" part into memory. Only multipart is accepted: unlike

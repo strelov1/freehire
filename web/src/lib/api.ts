@@ -139,9 +139,11 @@ export interface JobCopy {
 export const RESUME_MAX_MB = 8;
 const RESUME_MAX_BYTES = RESUME_MAX_MB * 1024 * 1024;
 
-/** Max headshot upload size, mirroring internal/handler/photo.go. Checked client-side so an
- *  oversize photo gets a clear message rather than a bare 400 after a pointless upload. */
-export const PHOTO_MAX_MB = 8;
+/** Max headshot upload size. Deliberately UNDER the server's 8 MiB BodyLimit rather than
+ *  equal to it: the limit covers the whole multipart request, so a file at exactly 8 MiB is
+ *  refused by fasthttp with a bare 413 before any handler — and the member sees an unstyled
+ *  error instead of this message. */
+export const PHOTO_MAX_MB = 6;
 const PHOTO_MAX_BYTES = PHOTO_MAX_MB * 1024 * 1024;
 
 /** The image types the server can decode (internal/headshot). Used as the file input's

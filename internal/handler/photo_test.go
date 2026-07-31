@@ -296,15 +296,6 @@ func TestPhoto_StorageDisabled(t *testing.T) {
 	}
 }
 
-func TestPhoto_RequiresAuthentication(t *testing.T) {
-	app, _ := photoApp(t, headshot.New(newFakePhotoBlobs(), &fakePhotoRepo{}))
-	resp := doPhoto(t, app, fiber.MethodGet, nil, "", "")
-	defer resp.Body.Close()
-	if resp.StatusCode != fiber.StatusUnauthorized {
-		t.Errorf("unauthenticated GET status = %d, want 401", resp.StatusCode)
-	}
-}
-
 // headshotForTemplate is the gate between the render path and object storage: it must fetch for a
 // template that prints a portrait and must not touch the bucket for one that does not.
 func TestHeadshotForTemplate(t *testing.T) {
@@ -356,4 +347,56 @@ func TestHeadshotForTemplate(t *testing.T) {
 			t.Errorf("expected nil with storage disabled, got %d bytes", len(got))
 		}
 	})
+}
+
+// TestPhotoRegister_EveryRouteIsCookieOnly pins the gates against the real register().
+// Cookie-only is the enforcement of "the headshot is PII": the CV surface admits an API key
+// so the tailoring agent's CLI can drive it, and widening any of these routes the same way
+// would put a member's face behind a credential that lives outside the browser. This test is
+// the tripwire.
+func TestPhotoRegister_EveryRouteIsCookieOnly(t *testing.T) {
+	app := fiber.New()
+	api := app.Group("/api/v1")
+	(&photoHandlers{}).register(api, middleware{
+		key:    namedGate("key"),
+		cvKey:  namedGate("cvKey"),
+		cookie: namedGate("cookie"),
+	})
+
+	for _, r := range []struct{ method, path string }{
+		{http.MethodPut, "/api/v1/me/photo"},
+		{http.MethodGet, "/api/v1/me/photo"},
+		{http.MethodGet, "/api/v1/me/photo/image"},
+		{http.MethodDelete, "/api/v1/me/photo"},
+	} {
+		resp, err := app.Test(httptest.NewRequest(r.method, r.path, nil))
+		if err != nil {
+			t.Fatalf("%s %s: %v", r.method, r.path, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if got := string(body); got != "cookie" {
+			t.Errorf("%s %s is gated by %q, want %q", r.method, r.path, got, "cookie")
+		}
+	}
+}
+
+// Every mutation is behind the auth gate, not just the read the round-trip test uses.
+func TestPhoto_EveryRouteRequiresAuthentication(t *testing.T) {
+	app, _ := photoApp(t, headshot.New(newFakePhotoBlobs(), &fakePhotoRepo{}))
+	body, ctype := photoUpload(t, samplePhoto(t))
+	for _, c := range []struct {
+		name string
+		resp *http.Response
+	}{
+		{"PUT", doPhoto(t, app, fiber.MethodPut, body, ctype, "")},
+		{"GET", doPhoto(t, app, fiber.MethodGet, nil, "", "")},
+		{"GET image", doPhotoImage(t, app, "")},
+		{"DELETE", doPhoto(t, app, fiber.MethodDelete, nil, "", "")},
+	} {
+		if c.resp.StatusCode != fiber.StatusUnauthorized {
+			t.Errorf("unauthenticated %s status = %d, want 401", c.name, c.resp.StatusCode)
+		}
+		c.resp.Body.Close()
+	}
 }

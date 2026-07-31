@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -88,6 +89,12 @@ func (s *Store) Put(ctx context.Context, userID int64, data []byte) (Meta, error
 		return Meta{}, err
 	}
 	if err := s.repo.SetPhoto(ctx, userID, key); err != nil {
+		// The object is now in the bucket with nothing pointing at it, and account deletion
+		// collects keys FROM the pointers — so an orphan here would outlive the member's
+		// erasure. Best-effort removal; the upload is a failure either way.
+		if delErr := s.blobs.Delete(ctx, key); delErr != nil {
+			log.Printf("headshot: orphaned object %s after pointer write failed: %v", key, delErr)
+		}
 		return Meta{}, err
 	}
 	return s.Status(ctx, userID)
@@ -131,12 +138,21 @@ func (s *Store) Status(ctx context.Context, userID int64) (Meta, error) {
 	return metaFromPointer(ptr), nil
 }
 
-// Delete removes the stored object and clears the pointer.
+// Delete removes the stored object and clears the pointer. The key comes from the pointer,
+// not from PhotoKey, so the two reads of "which object is this member's" cannot drift — and
+// a member with no headshot costs no delete call.
 func (s *Store) Delete(ctx context.Context, userID int64) error {
 	if !s.Enabled() {
 		return ErrStorageDisabled
 	}
-	if err := s.blobs.Delete(ctx, blobstore.PhotoKey(userID)); err != nil {
+	ptr, err := s.repo.GetPhoto(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !ptr.PhotoObjectKey.Valid {
+		return s.repo.ClearPhoto(ctx, userID)
+	}
+	if err := s.blobs.Delete(ctx, ptr.PhotoObjectKey.String); err != nil {
 		return err
 	}
 	return s.repo.ClearPhoto(ctx, userID)

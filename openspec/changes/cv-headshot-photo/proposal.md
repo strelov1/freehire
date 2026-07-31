@@ -41,7 +41,7 @@ and a structured extraction, but no portrait.
 
 ## Impact
 
-- **Schema:** new migration adding `users.photo_object_key` and `users.photo_uploaded_at`;
+- **Schema:** new migration `0059_user_headshot.sql` adding `users.photo_object_key` and `users.photo_uploaded_at`;
   new sqlc queries for the pointer.
 - **API:** `PUT/GET/DELETE /api/v1/me/photo` and `GET /api/v1/me/photo/image` (presence is a
   metadata read; the bytes are a sub-resource, mirroring `/me/resume`).

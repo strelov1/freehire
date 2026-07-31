@@ -9,12 +9,15 @@ import (
 // for "upright", so a caller can apply it unconditionally.
 const orientationUnset = 1
 
-// EXIF orientation values this package acts on. The mirrored ones (2, 4, 5, 7) are
-// read but deliberately not applied — see transposed in normalize.go.
+// EXIF orientation values this package acts on. The pure mirrors (2 and 4) are read but
+// deliberately not applied; 5 and 7 are a mirror plus a quarter turn, and only the turn is
+// applied — see orient in normalize.go.
 const (
-	orientationRotate180 = 3
-	orientationRotate90  = 6 // 90° clockwise restores upright
-	orientationRotate270 = 8 // 90° counter-clockwise restores upright
+	orientationRotate180  = 3
+	orientationRotate90   = 6 // 90° clockwise restores upright
+	orientationRotate270  = 8 // 90° counter-clockwise restores upright
+	orientationTranspose  = 5 // mirrored; its turn matches orientationRotate270
+	orientationTransverse = 7 // mirrored; its turn matches orientationRotate90
 )
 
 // exifHeader is the APP1 payload prefix that marks the segment as EXIF rather than,
@@ -52,7 +55,7 @@ func exifSegment(data []byte) []byte {
 		case marker == 0xFF: // fill byte; markers may be padded with them
 			i++
 			continue
-		case marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD9):
+		case marker >= 0xD0 && marker <= 0xD9: // RSTn, SOI, EOI
 			i += 2 // standalone marker, no length field
 			continue
 		case marker == 0xDA: // SOS — scan data follows
@@ -89,7 +92,7 @@ func orientationFromTIFF(tiff []byte) int {
 		return orientationUnset
 	}
 	ifd := int(order.Uint32(tiff[4:]))
-	if ifd < 0 || ifd+2 > len(tiff) {
+	if ifd+2 > len(tiff) {
 		return orientationUnset
 	}
 	// The declared entry count is untrusted: clamp it to what the buffer can actually

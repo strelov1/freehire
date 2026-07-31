@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	_ "image/png" // decode PNG uploads
 
@@ -16,10 +17,12 @@ import (
 const (
 	// maxUploadBytes caps the request body. A phone photo is 2–5 MiB.
 	maxUploadBytes = 8 << 20
-	// maxSourcePixels caps the DECODED size, checked on the header before any decode:
-	// a decompression bomb is small on disk and enormous in memory. 50 MP is past any
-	// consumer camera.
-	maxSourcePixels = 50_000_000
+	// maxSourcePixels caps the DECODED size, checked on the header before any decode: a
+	// decompression bomb is small on disk and enormous in memory, and the byte cap does not
+	// bound it — a 0.6 MiB JPEG can decode to 50 MP. The ceiling is what one request may
+	// cost the API process, not what a camera can produce: the output is 512 px, so pixels
+	// past this point buy nothing and only lengthen the resample.
+	maxSourcePixels = 30_000_000
 	// outputEdge is the stored square's side in pixels. At the ~1.4in frame the templates
 	// print, 512 px is over 300 dpi — enough for print, small enough to keep the object
 	// around 40 KB.
@@ -63,8 +66,11 @@ func Normalize(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedImage, err)
 	}
-	upright := orient(src, readOrientation(data))
-	square := scale(upright, centredSquare(upright.Bounds()))
+	// Resize BEFORE rotating. The centred square commutes with a quarter turn, so the
+	// result is the same either way — but rotating the source would allocate a second
+	// full-size buffer and copy it pixel by pixel, which on a 30 MP upload is seconds of
+	// CPU and hundreds of megabytes. Rotating the 512 px square is microseconds.
+	square := orient(scale(src, centredSquare(src.Bounds())), readOrientation(data))
 
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, square, &jpeg.Options{Quality: jpegQuality}); err != nil {
@@ -74,18 +80,20 @@ func Normalize(data []byte) ([]byte, error) {
 }
 
 // orient rotates the image so it is upright, per the EXIF orientation its file declared.
-// Only the three rotations a camera produces are applied; the mirrored orientations
-// (2, 4, 5, 7) come from a deliberate flip, and silently un-mirroring someone's photo is
-// worse than leaving it as they see it everywhere else.
+// Only the ROTATION each orientation carries is applied — never the mirroring: a flip is
+// something a person did on purpose, and silently undoing it hands them back a photo that
+// is not the one they see everywhere else. The transposed orientations (5 and 7) are a
+// mirror AND a quarter turn, so they get the turn and keep the flip; the pure mirrors
+// (2 and 4) are left entirely alone.
 func orient(src image.Image, orientation int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
 	switch orientation {
 	case orientationRotate180:
 		return remap(src, w, h, func(x, y int) (int, int) { return w - 1 - x, h - 1 - y })
-	case orientationRotate90:
+	case orientationRotate90, orientationTransverse:
 		return remap(src, h, w, func(x, y int) (int, int) { return h - 1 - y, x })
-	case orientationRotate270:
+	case orientationRotate270, orientationTranspose:
 		return remap(src, h, w, func(x, y int) (int, int) { return y, w - 1 - x })
 	default:
 		return src
@@ -122,8 +130,14 @@ func centredSquare(b image.Rectangle) image.Rectangle {
 // in one resampling pass, since Scale reads a source rect natively. CatmullRom is the
 // sharpest of the kernels x/image offers and the cost is irrelevant on a 512 px target; the
 // standard library has no resampling scaler at all.
+//
+// The destination starts opaque white and the source is drawn Over it, because JPEG has no
+// alpha: a cut-out PNG scaled with draw.Src would arrive premultiplied, and jpeg.Encode
+// reads those transparent pixels as pure black — a face on a black square, with no error to
+// notice it by.
 func scale(src image.Image, r image.Rectangle) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, outputEdge, outputEdge))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, r, draw.Src, nil)
+	draw.Draw(dst, dst.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, r, draw.Over, nil)
 	return dst
 }

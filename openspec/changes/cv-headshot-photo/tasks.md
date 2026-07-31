@@ -1,6 +1,6 @@
 ## 1. Storage foundation
 
-- [x] 1.1 Add migration `migrations/0057_user_headshot.sql` adding `users.photo_object_key` and `users.photo_uploaded_at`, and add `blobstore.PhotoKey(userID)` (`photos/<id>`) with a test
+- [x] 1.1 Add migration `migrations/0059_user_headshot.sql` adding `users.photo_object_key` and `users.photo_uploaded_at`, and add `blobstore.PhotoKey(userID)` (`photos/<id>`) with a test
 - [x] 1.2 Add the pointer queries to `internal/db/queries/users.sql` (`GetUserPhoto`, `SetUserPhoto`, `ClearUserPhoto`), extend `ListUserBlobKeys` with the photo key, and run `make sqlc`
 - [x] 1.3 Add `golang.org/x/image` to go.mod (`go get golang.org/x/image`, `go mod tidy`)
 
