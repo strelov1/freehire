@@ -54,6 +54,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/skilltag"
@@ -95,6 +97,7 @@ func run() int {
 	limit := flag.Int("limit", 0, "stop after this many target rows; required with --apply, -1 to run uncapped")
 	sampleSize := flag.Int("sample", 200, "how many random matched titles the report prints")
 	seed := flag.Uint64("seed", 1, "sampling seed, so a dry run can be reproduced")
+	tracerClickDays := flag.Int("tracer-click-days", 180, "delete CV tracer clicks older than this many days (0 disables the sweep)")
 	flag.Parse()
 
 	// An uncapped run has to be asked for in as many words. The first live run should
@@ -169,6 +172,19 @@ func run() int {
 				"Prune their jobs first, then move these deliberately.", strings.Join(held, ", "))
 		}
 		return 0
+	}
+
+	// The tracer-click retention sweep. Age-based and unrelated to the job-pruning campaign below,
+	// but it belongs here rather than in a worker of its own: this is the repository's single
+	// hard-delete path, and a second binary for one DELETE is not warranted.
+	//
+	// It obeys --apply like everything else here, and it deletes only the clicks. The tokens stay:
+	// an already-sent PDF must keep redirecting long after the clicks behind it have aged out.
+	if *tracerClickDays > 0 {
+		if err := sweepTracerClicks(ctx, q, *tracerClickDays, *apply); err != nil {
+			log.Printf("prune: tracer clicks: %v", err)
+			return 1
+		}
 	}
 
 	var index docDeleter
@@ -544,4 +560,28 @@ func warnDrainedProviders(w io.Writer, retire []boardKey, brd boards) error {
 			"after its jobs are gone.\n",
 		strings.Join(drained, ", "))
 	return err
+}
+
+// sweepTracerClicks removes click records past the retention window, or reports what it would
+// remove. Counting first costs one extra query and is what lets a dry run say a number.
+func sweepTracerClicks(ctx context.Context, q *db.Queries, days int, apply bool) error {
+	window := pgtype.Interval{Days: int32(days), Valid: true}
+	if !apply {
+		n, err := q.CountExpiredTracerClicks(ctx, window)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			log.Printf("prune: %d tracer click(s) older than %dd would be deleted (--apply to remove)", n, days)
+		}
+		return nil
+	}
+	n, err := q.DeleteExpiredTracerClicks(ctx, window)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		log.Printf("prune: deleted %d tracer click(s) older than %dd", n, days)
+	}
+	return nil
 }

@@ -82,14 +82,14 @@
 
 ## 9. Retention and configuration
 
-- [ ] 9.1 `cmd/prune` deletes click records older than 180 days, dry-run by default like every
+- [x] 9.1 `cmd/prune` deletes click records older than 180 days, dry-run by default like every
       other removal it performs
-- [ ] 9.2 `TRACER_LINK_SALT` documented in the environment reference and `.env.example`
+- [x] 9.2 `TRACER_LINK_SALT` documented in the environment reference and `.env.example`
 
 ## 10. Documentation
 
-- [ ] 10.1 Privacy policy: what a traced link records, opt-in per CV and off by default, the
+- [x] 10.1 Privacy policy: what a traced link records, opt-in per CV and off by default, the
       180-day window, and that the owner's own clicks are not counted
-- [ ] 10.2 `internal/cv/AGENTS.md`: adding a template now requires emitting `link()`, and why
+- [x] 10.2 `internal/cv/AGENTS.md`: adding a template now requires emitting `link()`, and why
       the registry test exists
 - [ ] 10.3 Offer a `/blog` changelog entry once the feature ships

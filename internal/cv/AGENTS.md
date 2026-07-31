@@ -24,7 +24,15 @@ generation.
    (`(18 / 9.5) * 1em`, not `18pt`) or a raised base size will leave your headings behind and
    flatten the hierarchy. Ratios are written as a division so the old absolute value stays
    legible.
-4. Run `make cv-previews` to regenerate `web/static/cv-previews/<id>.svg` (the gallery
+4. **Print every link through `link()`**, and take its target from `hrefAt(kind, i, shown)` rather
+   than from the printed text — the helper is duplicated per file like `s`/`arr`. Two reasons, and
+   the first is not cosmetic: opt-in link tracing substitutes the *target* while leaving the text
+   the candidate wrote, so a template printing a link as inert text reports zero opens forever.
+   The second is that stored links are scheme-less (`github.com/ada`), and only the resolved href
+   is absolute — printing the raw value as the target yields a relative URI no reader can follow.
+   `TestEveryTemplateRendersLinksAsClickableLinks` walks the registry, so a new template is held to
+   this without the test being edited.
+5. Run `make cv-previews` to regenerate `web/static/cv-previews/<id>.svg` (the gallery
    thumbnails). A preview is committed for every registered id — the generator iterates the
    registry so the set can't drift.
 

@@ -12,6 +12,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countExpiredTracerClicks = `-- name: CountExpiredTracerClicks :one
+SELECT count(*) FROM cv_link_clicks WHERE clicked_at < now() - $1::interval
+`
+
+// What the retention sweep would remove. cmd/prune reports before it deletes, and a dry run that
+// cannot say a number is not a report.
+func (q *Queries) CountExpiredTracerClicks(ctx context.Context, maxAge pgtype.Interval) (int64, error) {
+	row := q.db.QueryRow(ctx, countExpiredTracerClicks, maxAge)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteExpiredTracerClicks = `-- name: DeleteExpiredTracerClicks :execrows
 DELETE FROM cv_link_clicks WHERE clicked_at < now() - $1::interval
 `

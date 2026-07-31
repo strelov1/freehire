@@ -90,3 +90,8 @@ DELETE FROM cv_link_clicks WHERE clicked_at < now() - sqlc.arg(max_age)::interva
 -- must not be something an undo of an unrelated edit can grant or revoke.
 UPDATE cvs SET tracer_links_enabled = $3, updated_at = now()
 WHERE id = $1 AND user_id = $2;
+
+-- name: CountExpiredTracerClicks :one
+-- What the retention sweep would remove. cmd/prune reports before it deletes, and a dry run that
+-- cannot say a number is not a report.
+SELECT count(*) FROM cv_link_clicks WHERE clicked_at < now() - sqlc.arg(max_age)::interval;

@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -349,5 +350,50 @@ func TestSettingTheTracerToggleIsOwnerScoped(t *testing.T) {
 
 	if n, err := q.SetCVTracerLinks(ctx, SetCVTracerLinksParams{ID: cv, UserID: user, TracerLinksEnabled: true}); err != nil || n != 1 {
 		t.Fatalf("owner toggle: n=%d err=%v", n, err)
+	}
+}
+
+// Clicks expire; tokens do not. An old PDF must keep redirecting long after the clicks behind it
+// have aged out — the recruiter holding it did nothing to deserve a dead link.
+func TestExpiringClicksKeepsTheTokensThatOutlivedThem(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncateCVs(t, pool)
+	ctx := context.Background()
+	user, cv := seedTracerCV(t, pool, "retention@example.com")
+
+	token, err := mint(t, q, user, cv, "acme-aaaaa", "header.links[0]", "https://github.com/ada")
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	link, err := q.TracerLinkByToken(ctx, token)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	for _, age := range []string{"200 days", "179 days", "1 day"} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO cv_link_clicks (tracer_link_id, clicked_at) VALUES ($1, now() - $2::interval)`,
+			link.ID, age); err != nil {
+			t.Fatalf("seed click aged %s: %v", age, err)
+		}
+	}
+
+	deleted, err := q.DeleteExpiredTracerClicks(ctx, pgtype.Interval{Days: 180, Valid: true})
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("swept %d clicks, want 1 — only the one past 180 days", deleted)
+	}
+
+	var left int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM cv_link_clicks`).Scan(&left); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if left != 2 {
+		t.Errorf("%d clicks left, want 2", left)
+	}
+	if _, err := q.TracerLinkByToken(ctx, token); err != nil {
+		t.Errorf("the token stopped resolving when its oldest clicks aged out: %v", err)
 	}
 }

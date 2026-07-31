@@ -140,6 +140,28 @@
     </section>
 
     <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">CV link tracking</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        You can turn on link tracking for a single CV. It is off for every CV unless you switch it
+        on, and switching it on for one CV does not affect any other.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        When it is on, the links in that CV's PDF point at freehire and forward to the real
+        destination. Following one records the time, the browser and operating system family, the
+        device type, and the host — not the full address — of the page the visitor came from. It
+        also records a keyed hash of the visitor's IP address and browser identity, so that repeat
+        visits can be told from separate people. We do not store the IP address itself, and the
+        hash is keyed with a secret so it cannot be turned back into an address.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        These records are deleted after 180 days, and immediately if you delete the CV. Your own
+        clicks are marked as yours and left out of the counts. A recorded open means the link was
+        fetched; company mail systems follow links automatically, so it is not proof that a person
+        read your CV.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-3">
       <h2 class="text-xl font-semibold tracking-tight">Retention</h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
         We keep account and activity data for as long as your account exists. When you delete your
