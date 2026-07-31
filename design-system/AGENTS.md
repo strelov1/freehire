@@ -8,9 +8,10 @@ that nothing reconciles, and it drifted once already — eleven of the fifteen p
 built, tested, storybooked and documented while being unreachable from the app, with every
 check green. `cn` comes from here too; `$lib/utils` no longer carries a copy.
 
-Being extracted from `web/` in phases by an external contributor; the phase inventory lives
-in `design-system/docs/`. A script that still `echo`s a placeholder is an unfinished phase,
-not breakage.
+Extracted from `web/` over seven phases, all landed. `docs/` holds what outlived them:
+`verification.md` (each guarantee and the command that enforces it), `icons.md`, and the
+DSDS entity JSON. The phase inventories were plans for finished work and are in git history
+rather than here — their census of `web/` was already off by a third.
 
 ## Always true
 
@@ -49,6 +50,15 @@ not breakage.
 - Tokens are authored as `tokens/*.tokens.json` and compiled by Style Dictionary
   (`scripts/build-tokens.mjs`) into `dist/`. Edit the JSON, run `pnpm build` — never hand-edit
   `dist/`.
+- **`.dark` carries only what dark changes.** The dark build reads `color-dark.tokens.json`
+  alone, so `dist/tokens-dark.css` is 24 declarations, not a second copy of the whole scale —
+  the cascade already inherits the rest from `:root`. A dark override of a non-colour token
+  would need its file added to `darkSources`; nothing needs one yet.
+- **A token name may not be authored twice.** `build-tokens.mjs` throws and names both files.
+  Style Dictionary reports its own collisions as a bare count with the details behind a
+  verbosity flag, so a real one reads as the number going up by one. The count that remains
+  (8) is the inert kind: each token file's root `$description` and `$type` are the root
+  group's metadata, they overwrite each other on merge, and nothing consumes them.
 - **A primitive may not style itself outside the token scale.** `pnpm check:tokens` (in CI)
   fails on a colour literal or a Tailwind arbitrary value in `src/*.svelte` — both are a value
   the theme cannot move and `.dark` cannot override, and both compile fine, so nothing else
