@@ -19,7 +19,7 @@ var assistantMailTools = []string{
 }
 
 func TestChatPresetOffersTheMailTools(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 
 	for _, want := range assistantMailTools {
 		if !slices.Contains(reg.Names(), want) {
@@ -41,7 +41,7 @@ func TestOnlyTheChatPresetOffersTheMailTools(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetProfile},
 		{UserID: 3, Preset: assistant.PresetBrowse},
 	} {
-		reg := presetAPI().registry(sess)
+		reg := presetAPI().registry(sess, uuid.New())
 		for _, name := range reg.Names() {
 			if strings.HasPrefix(name, "inbox_") {
 				t.Errorf("preset %q offers %q; mail belongs to the general chat session only", sess.Preset, name)
@@ -56,7 +56,7 @@ func TestOnlyTheChatPresetOffersTheMailTools(t *testing.T) {
 // answer differently — the model would then be instructed at length about tools it
 // had not been given.
 func TestAnUnknownPresetGetsTheChatToolSet(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: "browze"})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: "browze"}, uuid.New())
 
 	for _, want := range append([]string{"search_jobs"}, assistantMailTools...) {
 		if !slices.Contains(reg.Names(), want) {
@@ -88,7 +88,7 @@ func TestPromptOnlyNamesToolsThePresetHas(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 	} {
-		registered := presetAPI().registry(sess).Names()
+		registered := presetAPI().registry(sess, uuid.New()).Names()
 		// Only names that are tools SOMEWHERE can be judged; a backticked word that
 		// is no preset's tool is an argument or a filter value, not a broken promise.
 		everywhere := allRegisteredToolNames(t)
@@ -113,7 +113,7 @@ func allRegisteredToolNames(t *testing.T) []string {
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 	} {
-		all = append(all, presetAPI().registry(sess).Names()...)
+		all = append(all, presetAPI().registry(sess, uuid.New()).Names()...)
 	}
 	return all
 }

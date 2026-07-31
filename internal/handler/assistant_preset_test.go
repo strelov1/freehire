@@ -20,7 +20,7 @@ func presetAPI() *assistantHandlers {
 }
 
 func TestChatPresetOffersDiscoveryAndTrackingTools(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 
 	for _, want := range []string{"facets", "search_jobs", "get_job", "get_company", "market_fit",
 		"present_jobs", "save_job", "unsave_job", "apply_job", "track_job", "my_jobs"} {
@@ -37,7 +37,7 @@ func TestTailorPresetCanAlsoPresentJobs(t *testing.T) {
 	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
 	reg := presetAPI().registry(assistant.Session{
 		UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
-	})
+	}, uuid.New())
 
 	if !slices.Contains(reg.Names(), "present_jobs") {
 		t.Errorf("tailor preset is missing present_jobs; registered: %v", reg.Names())
@@ -46,7 +46,7 @@ func TestTailorPresetCanAlsoPresentJobs(t *testing.T) {
 
 // The panel's agent is the only one with a browser on the other end of the relay.
 func TestBrowsePresetOffersThePageTool(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetBrowse})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetBrowse}, uuid.New())
 
 	if !slices.Contains(reg.Names(), "read_current_page") {
 		t.Errorf("browse preset is missing read_current_page; registered: %v", reg.Names())
@@ -66,7 +66,7 @@ func TestOnlyTheBrowsePresetOffersThePageTool(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetChat},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 	} {
-		reg := presetAPI().registry(sess)
+		reg := presetAPI().registry(sess, uuid.New())
 		if slices.Contains(reg.Names(), "read_current_page") {
 			t.Errorf("preset %q offers read_current_page, but has no browser to read", sess.Preset)
 		}
@@ -74,7 +74,7 @@ func TestOnlyTheBrowsePresetOffersThePageTool(t *testing.T) {
 }
 
 func TestChatPresetHasNoCVTools(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 
 	for _, name := range reg.Names() {
 		if strings.HasPrefix(name, "cv_") {
@@ -87,7 +87,7 @@ func TestTailorPresetAddsTheCVTools(t *testing.T) {
 	cvID, jobID := uuid.MustParse("66666666-6666-4666-8666-666666666666"), int64(9)
 	reg := presetAPI().registry(assistant.Session{
 		UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID,
-	})
+	}, uuid.New())
 
 	for _, want := range []string{"cv_context", "cv_get", "cv_edit", "search_jobs"} {
 		if !slices.Contains(reg.Names(), want) {
@@ -99,7 +99,7 @@ func TestTailorPresetAddsTheCVTools(t *testing.T) {
 func TestTailorPresetWithoutABindingHasNoCVTools(t *testing.T) {
 	// A tailoring session whose CV was deleted must degrade to a plain chat rather
 	// than register CV tools bound to a zero id.
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetTailor})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetTailor}, uuid.New())
 
 	for _, name := range reg.Names() {
 		if strings.HasPrefix(name, "cv_") {
@@ -118,7 +118,7 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetChat},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
 	} {
-		reg := presetAPI().registry(sess)
+		reg := presetAPI().registry(sess, uuid.New())
 		for _, name := range reg.Names() {
 			if slices.Contains(forbidden, name) {
 				t.Errorf("preset %q registers the moderator tool %q", sess.Preset, name)
@@ -128,7 +128,7 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 }
 
 func TestRegistryCarriesTheResultCap(t *testing.T) {
-	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat})
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 	if reg.MaxResultBytes <= 0 {
 		t.Error("the registry has no result cap; one search over full descriptions can fill the context window")
 	}

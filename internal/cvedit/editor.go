@@ -126,6 +126,12 @@ func NewEditor(repo Repository, gate EvidenceGate) *Editor {
 	return &Editor{repo: repo, policy: DefaultPolicy(), gate: gate, now: time.Now}
 }
 
+// WithEvidenceGate attaches the bank the agent's claims are checked against. Assigned after
+// construction because the bank is wired later than the CV handlers — the same shape the
+// other late-bound dependencies here use. Without it the agent can write unevidenced claims,
+// so it is a wiring mistake rather than a configuration choice.
+func (e *Editor) WithEvidenceGate(gate EvidenceGate) { e.gate = gate }
+
 // Commit applies a batch and records it. The document and its revision are written in one
 // transaction against a locked row, so a reader never sees one without the other.
 func (e *Editor) Commit(ctx context.Context, cvID uuid.UUID, userID int64, ch Change) (cv.Meta, Revision, error) {

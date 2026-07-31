@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/experience"
 )
 
@@ -138,6 +137,7 @@ func gateHandlers(t *testing.T) (*assistantHandlers, *stubBank) {
 // branch in the service path that no amount of context can talk its way past.
 func TestCVEditGateRefusesEvidenceTheCandidateNeverGave(t *testing.T) {
 	h, bank := gateHandlers(t)
+	gate := bankGate{bank: h.experience}
 	ctx := context.Background()
 
 	inferred := bank.add(1, experience.Atom{
@@ -145,7 +145,7 @@ func TestCVEditGateRefusesEvidenceTheCandidateNeverGave(t *testing.T) {
 		Provenance: experience.ProvenanceAgentInferred,
 	})
 
-	err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, inferred.ID.String())
+	err := gate.Publishable(ctx, 1, inferred.ID.String())
 	if err == nil {
 		t.Fatal("an agent's own inference was allowed onto the CV")
 	}
@@ -160,6 +160,7 @@ func TestCVEditGateRefusesEvidenceTheCandidateNeverGave(t *testing.T) {
 
 func TestCVEditGateAllowsWhatTheCandidateAsserted(t *testing.T) {
 	h, bank := gateHandlers(t)
+	gate := bankGate{bank: h.experience}
 	ctx := context.Background()
 
 	for _, provenance := range []experience.Provenance{
@@ -171,64 +172,41 @@ func TestCVEditGateAllowsWhatTheCandidateAsserted(t *testing.T) {
 			Claim:      "Cut latency 20s to 1s via " + string(provenance),
 			Provenance: provenance,
 		})
-		if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, atom.ID.String()); err != nil {
+		if err := gate.Publishable(ctx, 1, atom.ID.String()); err != nil {
 			t.Errorf("evidence with provenance %s was refused: %v", provenance, err)
 		}
 	}
 }
 
-// Omitting the id must not be a way around the gate — that would make it decorative.
-func TestCVEditGateRefusesAnUncitedBullet(t *testing.T) {
-	h, _ := gateHandlers(t)
-
-	err := h.requireEvidence(context.Background(), 1, cv.PatchAddBullet, "")
-	if err == nil {
-		t.Fatal("a bullet with no evidence at all was allowed")
-	}
-	if !strings.Contains(err.Error(), "experience_search") {
-		t.Errorf("refusal %q does not point the model at experience_search", err)
-	}
-}
-
 func TestCVEditGateRefusesAnUnknownOrForeignAtom(t *testing.T) {
 	h, bank := gateHandlers(t)
+	gate := bankGate{bank: h.experience}
 	ctx := context.Background()
 
-	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, uuid.New().String()); err == nil {
+	if err := gate.Publishable(ctx, 1, uuid.New().String()); err == nil {
 		t.Error("an id matching no achievement was accepted")
 	}
-	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, "not-a-uuid"); err == nil {
+	if err := gate.Publishable(ctx, 1, "not-a-uuid"); err == nil {
 		t.Error("a malformed id was accepted")
+	}
+	// Omitting the id must not be a way around the gate — that would make it decorative.
+	if err := gate.Publishable(ctx, 1, ""); err == nil {
+		t.Error("an empty id was accepted")
 	}
 
 	// Another user's evidence is not evidence for this candidate.
 	theirs := bank.add(2, experience.Atom{Claim: "Ran the cluster", Provenance: experience.ProvenanceManual})
-	if err := h.requireEvidence(ctx, 1, cv.PatchAddBullet, theirs.ID.String()); err == nil {
+	if err := gate.Publishable(ctx, 1, theirs.ID.String()); err == nil {
 		t.Error("one candidate cited another candidate's achievement")
 	}
 }
 
-// The gate covers claims, not housekeeping. Reordering, removing and the technology line
-// rearrange or delete what is already on the page and assert nothing new; requiring
-// evidence for them would make the agent useless without protecting anything.
-func TestCVEditGateOnlyCoversOpsThatAssertSomething(t *testing.T) {
-	h, _ := gateHandlers(t)
-	ctx := context.Background()
-
-	for _, op := range []cv.PatchOp{
-		cv.PatchRemoveBullet, cv.PatchReorderBullets, cv.PatchSetStack,
-		cv.PatchSetSkillGroup, cv.PatchSetSummary, cv.PatchSetHeaderField,
-	} {
-		if err := h.requireEvidence(ctx, 1, op, ""); err != nil {
-			t.Errorf("op %q was gated: %v", op, err)
-		}
-	}
-	for _, op := range []cv.PatchOp{cv.PatchAddBullet, cv.PatchReplaceBullet} {
-		if err := h.requireEvidence(ctx, 1, op, ""); err == nil {
-			t.Errorf("op %q was not gated", op)
-		}
-	}
-}
+// WHICH edits need a citation is no longer a property of an operation's name — it is the
+// path being written, and it is enforced by the editor rather than here. That moved the
+// boundary: a technology in a stack line and an item in a skill group assert exactly what a
+// bullet does, and under the old vocabulary both arrived uncited. See
+// TestAClaimAboutTheCandidateNeedsEvidence and TestRearrangingNeedsNoEvidence in
+// internal/cvedit.
 
 // A tool result is replayed into the model's context on every later turn, so the profile
 // read must report the bank's SHAPE and not its contents. A few hundred achievements

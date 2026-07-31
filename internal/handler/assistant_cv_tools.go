@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
@@ -20,11 +21,11 @@ import (
 // ones. They are bound to the session's own CV and vacancy: the ids are closed
 // over here rather than taken as arguments, so the model has no way to address a
 // different CV — not even by guessing an id.
-func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64) []assistant.Tool {
+func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchID uuid.UUID) []assistant.Tool {
 	return []assistant.Tool{
 		h.cvContextTool(jobID),
 		h.cvGetTool(cvID),
-		h.cvEditTool(cvID),
+		h.cvEditTool(cvID, batchID),
 		h.tailorReportTool(cvID),
 	}
 }
@@ -221,172 +222,115 @@ func (h *assistantHandlers) cvGetTool(cvID uuid.UUID) assistant.Tool {
 	}
 }
 
-// cvPatchSchema mirrors cv.Patch field by field: every field's name, type, and which op
-// reads it. cv_edit used to advertise the patch as a bare object carrying one example in
-// prose, and the model filled the rest in by analogy — replace_bullet arrived with the
-// bullet's new TEXT in `bullet`, the index field, and no `value` at all. DecodePatch
-// caught it, but a rejected call still costs a whole turn, so the shape belongs in the
-// schema the model reads before it writes. additionalProperties mirrors the decoder's
-// DisallowUnknownFields, and the op enum comes from the cv package so the two cannot drift.
-var cvPatchSchema = map[string]any{
+// cvOpSchema mirrors cvedit.Op field by field: the kind, the address, and the payload each
+// kind reads. The address vocabulary is generated from the document's own structure rather
+// than restated here, so a field added to the CV becomes addressable without anyone editing
+// this schema — the drift that once dropped an operation out of a model's view.
+var cvOpSchema = map[string]any{
 	"type": "object",
-	"description": "One patch: an `op` plus the address and payload that op reads. Indices are 0-based, " +
-		"counted over what cv_get returned. Send only the fields the op needs. `evidence_id` is NOT a " +
-		"patch field — it sits beside `patch`, one level up.",
+	"description": "One edit: a kind, the address it applies to, and what that kind needs. " +
+		"Indices are 0-based, counted over what cv_get returned.",
 	"properties": map[string]any{
-		"op": map[string]any{
-			"type":        "string",
-			"enum":        cv.PatchOps,
-			"description": "Which edit to make.",
-		},
-		"experience": map[string]any{
-			"type": "integer",
-			"description": "Index of the experience entry to edit, into the `experience` list cv_get returned. " +
-				"Read by add_bullet, replace_bullet, remove_bullet, reorder_bullets and set_stack.",
-		},
-		"bullet": map[string]any{
-			"type": "integer",
-			"description": "Index of the bullet WITHIN that experience entry — a number, never the bullet's text. " +
-				"Read by replace_bullet and remove_bullet; the new text goes in `value`.",
-		},
-		"field": map[string]any{
+		"kind": map[string]any{
 			"type": "string",
-			"enum": []string{"location"},
-			"description": "Which header field set_header_field writes. Only location is editable here; the " +
-				"candidate's name, email and phone stay their own.",
+			"enum": cvedit.OpKinds,
+			"description": "set replaces what is at the address. insert puts a new element at that " +
+				"position (one past the end appends). remove takes the element out. move takes the " +
+				"element to the position in `to`.",
+		},
+		"path": map[string]any{
+			"type": "string",
+			"description": "Where to edit, e.g. `summary`, `experience[2].bullets[1]`, " +
+				"`skills[0].items[3]`, `education[1].degree`. The shapes you may address are: " +
+				strings.Join(cvedit.Paths(), ", ") + ".",
 		},
 		"value": map[string]any{
+			"description": "The new content for set and insert: a string for a bullet or a field, " +
+				"an object for a whole entry.",
+		},
+		"to": map[string]any{
+			"type":        "integer",
+			"description": "The element's new position, for move.",
+		},
+		"evidence_id": map[string]any{
 			"type": "string",
-			"description": "The new text: the summary (set_summary), the bullet's text (add_bullet, " +
-				"replace_bullet) or the header field's value (set_header_field).",
-		},
-		"order": map[string]any{
-			"type":  "array",
-			"items": map[string]any{"type": "integer"},
-			"description": "A permutation of the entry's bullet indices for reorder_bullets — the bullets end " +
-				"up in the order listed here.",
-		},
-		"group": map[string]any{
-			"type": "string",
-			"description": `The skill group's NAME for set_skill_group (e.g. "Languages"), not an index. ` +
-				"A name no group has appends a new group.",
-		},
-		"items": map[string]any{
-			"type":        "array",
-			"items":       map[string]any{"type": "string"},
-			"description": "The skill group's full item list for set_skill_group; it replaces the group's current items.",
-		},
-		"stack": map[string]any{
-			"type":        "array",
-			"items":       map[string]any{"type": "string"},
-			"description": "The experience entry's full technology line for set_stack; it replaces the current one.",
+			"description": "The id of the banked achievement this rests on, from experience_search. " +
+				"Required whenever the edit states something about the candidate: a summary, a bullet, " +
+				"a technology in a stack line, or a skill.",
 		},
 	},
-	"required":             []string{"op"},
+	"required":             []string{"kind", "path"},
 	"additionalProperties": false,
 }
 
-// bulletWritingOps are the patch ops that put a CLAIM about the candidate on the page.
-// They are the ones that require evidence; reordering, removing, and editing the
-// technology line rearrange or delete what is already there and assert nothing new.
-var bulletWritingOps = map[cv.PatchOp]bool{
-	cv.PatchAddBullet:     true,
-	cv.PatchReplaceBullet: true,
-}
-
-// cvEditTool applies one field-level patch to the tailored CV.
+// cvEditTool applies a batch of edits to the tailored CV.
 //
-// Writing a bullet requires naming the banked evidence behind it. That is the honest wall
-// made structural rather than instructional: a sentence about what the candidate did
-// cannot reach the page unless it traces to something they asserted — on their CV, in
-// their own words, or by typing it themselves. An agent's own inference is banked and
-// searchable, and stops here.
-func (h *assistantHandlers) cvEditTool(cvID uuid.UUID) assistant.Tool {
+// A batch rather than one edit per call: closing one requirement usually takes several edits
+// — rewrite the bullet, add the technology, adjust the summary — and a turn has a step
+// ceiling. Sending them together also makes them one entry in the candidate's history, which
+// is what they actually did.
+//
+// Two rules the tool no longer states because the editor enforces them. What the agent may
+// address is a path policy, so the contact block is closed to it wherever it is reached from.
+// And writing a claim requires citing banked evidence with publishable provenance: the honest
+// wall made structural rather than instructional, in the service path rather than a prompt.
+// One uncited edit refuses the whole batch.
+func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "cv_edit",
-		Description: "Apply ONE field-level patch to the CV — the patch schema lists the ops and the fields " +
-			"each one reads. Address experience entries and bullets by their index from cv_get. Writing a " +
-			"bullet (add_bullet, replace_bullet) requires `evidence_id`: the id of the banked achievement it " +
-			"is based on, from experience_search. If nothing in the bank backs it, ask the candidate and " +
-			"record their answer with experience_add first. Contact details cannot be edited here.",
+		Description: "Edit the CV. Send every edit that belongs together in one call — they land as one " +
+			"entry in the candidate's history and cost one round instead of several. Address things by " +
+			"their path from cv_get. Anything that states what the candidate did (a bullet, a summary, a " +
+			"technology, a skill) needs `evidence_id` from experience_search; if the bank holds nothing " +
+			"on the point, ask the candidate and record their answer with experience_add first. Contact " +
+			"details are not editable here.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"patch": cvPatchSchema,
-				"evidence_id": map[string]any{
+				"ops": map[string]any{
+					"type":        "array",
+					"description": "The edits, applied in order. If any one of them is refused, none is applied.",
+					"items":       cvOpSchema,
+				},
+				"note": map[string]any{
 					"type": "string",
-					"description": "The id of the banked achievement this bullet is based on, from " +
-						"experience_search. Required for add_bullet and replace_bullet.",
+					"description": "One short line on why you made these edits — shown to the candidate " +
+						"beside them, in your own words.",
 				},
 			},
-			"required": []string{"patch"},
+			"required": []string{"ops"},
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Patch      json.RawMessage `json:"patch"`
-				EvidenceID string          `json:"evidence_id"`
+				Ops  []cvedit.Op `json:"ops"`
+				Note string      `json:"note"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			// The id may arrive INSIDE the patch instead of beside it. Both readings are
-			// reasonable — the evidence belongs to the bullet the patch writes — and a real
-			// run lost three edits in a row to the strict decoder refusing the nested one,
-			// then repeating the same shape because the error never said where it belonged.
-			// Accept either position; the provenance check below is untouched.
-			patch, evidenceID := liftEvidenceID(in.Patch, in.EvidenceID)
-			// Decode strictly, exactly as the HTTP endpoint does: a stray field or a
-			// numeric where a string belongs must fail with a reason rather than
-			// silently editing the wrong part of the document.
-			p, err := cv.DecodePatch(patch)
-			if err != nil {
-				return nil, err // already reads "cv: invalid patch: <reason>"
+			for i, op := range in.Ops {
+				// Validate the address against the document's structure before anything is
+				// applied, so a typo names itself instead of failing deep inside the batch.
+				if _, err := cvedit.ParsePath(string(op.Path)); err != nil {
+					return nil, fmt.Errorf("edit %d: %w", i+1, err)
+				}
 			}
-			// The tailoring agent never sees the contact block and must not be able to
-			// write it either, so the stored identifiers stay the candidate's own.
-			if p.Op == cv.PatchSetHeaderField && isContactHeaderField(p.Field) {
-				return nil, errors.New("contact fields are not editable in a tailoring session")
-			}
-			if err := h.requireEvidence(ctx, userID, p.Op, evidenceID); err != nil {
-				return nil, err
-			}
-			meta, err := h.cv.cvStore.Patch(ctx, cvID, userID, p)
+			meta, rev, err := h.cv.editor.Commit(ctx, cvID, userID, cvedit.Change{
+				Actor:   cvedit.ActorAgent,
+				Origin:  cvedit.OriginTailorAgent,
+				BatchID: batchID,
+				Note:    in.Note,
+				Ops:     in.Ops,
+			})
 			if err != nil {
 				return nil, cvToolError(err)
 			}
-			return map[string]any{"updated_at": meta.UpdatedAt, "title": meta.Title}, nil
+			// A receipt, not the document: a tool result is replayed into the model's
+			// context on every later turn of the session, so echoing the CV back would be
+			// paid for again and again.
+			return map[string]any{"updated_at": meta.UpdatedAt, "applied": len(rev.Ops), "recorded_as": rev.Title}, nil
 		},
 	}
-}
-
-// liftEvidenceID moves a nested `evidence_id` out of the patch object, so the strict patch
-// decoder sees only patch fields. A top-level id wins if both are present, and a patch that
-// carries none is returned untouched — the cheapest path stays allocation-free.
-func liftEvidenceID(patch json.RawMessage, topLevel string) (json.RawMessage, string) {
-	if !bytes.Contains(patch, []byte(`"evidence_id"`)) {
-		return patch, topLevel
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(patch, &fields); err != nil {
-		return patch, topLevel // let DecodePatch report the real problem
-	}
-	raw, ok := fields["evidence_id"]
-	if !ok {
-		return patch, topLevel
-	}
-	delete(fields, "evidence_id")
-	cleaned, err := json.Marshal(fields)
-	if err != nil {
-		return patch, topLevel
-	}
-	if topLevel != "" {
-		return cleaned, topLevel
-	}
-	var nested string
-	if err := json.Unmarshal(raw, &nested); err != nil {
-		return cleaned, topLevel // a non-string id fails the provenance check with its own message
-	}
-	return cleaned, nested
 }
 
 // cvToolError renders a CV failure for the model, keeping owner isolation intact:
@@ -398,32 +342,26 @@ func cvToolError(err error) error {
 	return err
 }
 
-// requireEvidence enforces that a bullet traces to something the candidate asserted.
+// bankGate answers the editor's evidence question from the experience bank.
 //
-// The check runs in the service path, not in the system prompt, because a rule that lives
-// only in a prompt is a rule a long conversation eventually loses — and this is the one
-// rule the whole capability exists to keep. Every failure names what to do next, because
-// that message is the model's only route to correcting itself inside the turn.
-func (h *assistantHandlers) requireEvidence(ctx context.Context, userID int64, op cv.PatchOp, evidenceID string) error {
-	if !bulletWritingOps[op] {
-		return nil
-	}
-	if h.experience == nil {
-		return nil
-	}
+// The rule it enforces is the one the whole tailoring capability exists to keep: a sentence
+// about what the candidate did cannot reach the page unless it traces to something THEY
+// asserted — on their CV, in their own words, or by typing it themselves. An agent's own
+// inference is banked and searchable, and stops here.
+//
+// Every refusal names what to do next, because for a model that message is its only route to
+// correcting itself inside the turn.
+type bankGate struct{ bank experienceBankTools }
 
-	evidenceID = strings.TrimSpace(evidenceID)
-	if evidenceID == "" {
-		return errors.New("writing a bullet needs evidence_id — the id of the banked achievement it " +
-			"is based on. Find it with experience_search; if the bank holds nothing on this point, ask " +
-			"the candidate and record their answer with experience_add first")
+func (g bankGate) Publishable(ctx context.Context, userID int64, evidenceID string) error {
+	if g.bank == nil {
+		return nil
 	}
 	id, err := uuid.Parse(evidenceID)
 	if err != nil {
 		return errors.New("evidence_id must be an achievement id from experience_search")
 	}
-
-	atom, err := h.experience.GetAtom(ctx, id, userID)
+	atom, err := g.bank.GetAtom(ctx, id, userID)
 	if errors.Is(err, experience.ErrNotFound) {
 		return errors.New("no banked achievement with that id — take evidence_id from experience_search")
 	}

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"github.com/google/uuid"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -345,7 +347,7 @@ const assistantResultCap = 60_000
 // whenever they happen to, and a version of this that only listens in one surface
 // would miss most of what they say. The page tool is the opposite case: it is scoped,
 // because only a browsing session has a browser on the other end of the relay.
-func (h *assistantHandlers) registry(sess assistant.Session) *assistant.Registry {
+func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) *assistant.Registry {
 	// One normaliser answers the preset for BOTH the prompt and the tools. Comparing
 	// against the constants directly would let an unrecognised preset fall back to the
 	// chat prompt here while matching no branch below — instructions for tools the
@@ -355,7 +357,7 @@ func (h *assistantHandlers) registry(sess assistant.Session) *assistant.Registry
 	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	tools = append(tools, h.assistantExperienceTools(sess.ID)...)
 	if preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
-		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID)...)
+		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID, batchID)...)
 	}
 	// Mail is the general chat session's. A tailoring session is working one CV
 	// against one vacancy, an interview is collecting what the candidate has done,
