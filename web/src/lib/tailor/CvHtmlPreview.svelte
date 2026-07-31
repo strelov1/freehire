@@ -55,9 +55,10 @@
   // measurement layer below. One value, two consumers — measuring in one type and drawing in
   // another would make pagination disagree with what is on screen, and nothing would report it.
   //
-  // The chosen faces are metric-compatible with faces the browser already has (Tinos with Times
-  // New Roman, Carlito with Calibri), so the CSS stack's fallback lands on the right metrics
-  // without shipping 2.6 MB of webfonts to render a preview.
+  // No webfonts are shipped for the preview: 2.6 MB to approximate a page is a bad trade. Each
+  // stack therefore falls through to whatever the machine has, which on Windows is the very face
+  // the registry entry matches (Times New Roman, Arial, Calibri) and elsewhere may be a generic.
+  // The preview has always approximated the PDF; this keeps it in the same family, not identical.
   const typography = $derived(
     previewTypography(doc.style ?? {}, fonts.find((f) => f.id === doc.style?.font_family)?.css ?? ''),
   );
@@ -65,6 +66,8 @@
     `font-size: ${typography.fontSizePx}px; line-height: ${typography.lineHeight};` +
       (typography.fontFamily ? ` font-family: ${typography.fontFamily};` : ''),
   );
+  // NOTE: the `13` in the text-[calc(N/13*1em)] classes below is PREVIEW_FONT_SIZE_PX — the base
+  // those ratios were taken over. Change the constant and those class strings must follow.
   // The template's own face applies only while the document names none.
   const useTemplateFace = $derived(typography.fontFamily === '');
 

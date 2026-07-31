@@ -1,6 +1,7 @@
 ## Why
 
-A CV's presentation is currently decided almost entirely by the four built-in templates. The only
+A CV's presentation is currently decided almost entirely by the built-in templates (four when this
+was written, six by the time it landed). The only
 knob a candidate can turn is page margins; typeface, type size, and line spacing are hard-coded in
 each Typst template. That leaves the two adjustments people actually reach for when a CV runs three
 lines onto a second page — shrink the type a little, tighten the leading — impossible without
@@ -16,13 +17,12 @@ column and the "+" buttons are clipped off the edge.
   (pt), and line height (leading, em). Every value is optional and an unset value means "use the
   template's own", so existing CVs render byte-identically and need no migration.
 - A font registry alongside the template registry, exposed over a new read endpoint so clients
-  discover the available typefaces instead of hard-coding them. Five entries: the template's own
-  default plus four faces chosen for metric compatibility with what recruiters and résumé parsers
+  discover the available typefaces instead of hard-coding them. Four entries, chosen for metric compatibility with what recruiters and résumé parsers
   expect — Libertinus Serif, Tinos (Times New Roman metrics), Liberation Sans (Arial metrics), and
   Carlito (Calibri metrics).
 - Tinos and Carlito are added to the bundled fonts (SIL OFL, with licences) so the
   sandboxed Typst run under `--ignore-system-fonts` can resolve them.
-- All four Typst templates read the style block, and their internal type sizes become em-relative so
+- Every Typst template reads the style block, and their internal type sizes become em-relative so
   raising the base size scales the whole hierarchy rather than flattening it against a fixed 12pt
   name.
 - The live HTML preview applies the same three values — including in its hidden measurement layer,
@@ -56,7 +56,7 @@ None. This extends two existing capabilities.
 
 - `internal/cv`: `cv.go` (the `Style` type and its sanitizer), `fonts.go` (font registry + two new
   bundled families), `renderer.go` (resolve the font id to a Typst family name in the render-time
-  copy), `templates/*.typ` (all four).
+  copy), `templates/*.typ` (all of them).
 - `internal/handler`: `cv.go` (a fonts list endpoint), `cv_ats_delta.go` (copy style onto the base).
 - `web`: `CvHtmlPreview.svelte`, `MarginSettings.svelte` (rewritten), a new `StyleSettings.svelte`
   and a shared settings-row component, `geometry.ts` (leading conversion), the tailor route's

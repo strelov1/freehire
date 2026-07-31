@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"io"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -304,6 +305,37 @@ func testJPEG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
+// absolutePointSize matches a `size:` given in points. The one legitimate occurrence is the
+// preamble's own `ty("font_size", 9.5) * 1pt`, which is where the base comes from.
+var absolutePointSize = regexp.MustCompile(`size:\s*[\d.]+\s*pt`)
+
+// AGENTS.md tells the next template author that every internal size must be an em multiple of
+// the base, and until now nothing enforced it: reintroducing `size: 12pt` broke no test, and
+// the symptom — a heading that stops growing when the base size is raised — is the kind of
+// thing nobody notices until a candidate complains their name looks wrong at 12pt.
+//
+// A source check rather than a render check, because it names the mistake precisely.
+func TestTemplateSizesAreRelativeToTheBase(t *testing.T) {
+	for _, ti := range Templates() {
+		t.Run(ti.ID, func(t *testing.T) {
+			tmpl, err := ResolveTemplate(ti.ID)
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			for _, line := range strings.Split(string(tmpl.source), "\n") {
+				if !absolutePointSize.MatchString(line) {
+					continue
+				}
+				if strings.Contains(line, `ty("font_size"`) {
+					continue // the preamble's own base, in points by definition
+				}
+				t.Errorf("absolute type size in %s.typ — use an em multiple of the base so it scales:\n  %s",
+					ti.ID, strings.TrimSpace(line))
+			}
+		})
+	}
+}
+
 // styledDoc is the representative CV the typography render tests share.
 func styledDoc(s Style) Document {
 	return Document{
@@ -318,16 +350,22 @@ func styledDoc(s Style) Document {
 	}
 }
 
-// Every template must honour the style block, not just the one it was developed against —
-// the four .typ files share no code by construction, so a preamble added to three of them
-// and forgotten in the fourth is the expected failure mode here.
+// Every template must honour EACH of the three style values, not just the one it was developed
+// against. The .typ files share no code by construction, so a preamble wired into five of them
+// and forgotten in the sixth is the expected failure mode — and so is a preamble that reads the
+// family but forgets the size. Each value is therefore asserted on its own: setting all three at
+// once and checking the output merely differs would pass on any one of them working.
 func TestStyledDocumentRendersInEveryTemplate(t *testing.T) {
 	bin, err := exec.LookPath("typst")
 	if err != nil {
 		t.Skip("typst not installed; skipping styled render test")
 	}
-	doc := styledDoc(Style{FontFamily: "carlito", FontSize: 11.0, LineHeight: 0.7})
 	r := NewTypstRenderer(bin)
+	// Long enough to wrap at every template's measure — modern-sans sets a wide one, and a
+	// summary that fits on a single line there makes a leading change invisible.
+	doc := styledDoc(Style{})
+	doc.Summary = strings.Repeat("Backend engineer with a decade of systems work across payments, "+
+		"settlement, and the infrastructure underneath them. ", 3)
 
 	for _, ti := range Templates() {
 		t.Run(ti.ID, func(t *testing.T) {
@@ -335,17 +373,43 @@ func TestStyledDocumentRendersInEveryTemplate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
-			data, err := r.Render(context.Background(), doc, tmpl, nil)
+			render := func(s Style) []byte {
+				d := doc
+				d.Style = s
+				out, err := r.compile(context.Background(), d, tmpl, "svg", nil)
+				if err != nil {
+					t.Fatalf("render %+v: %v", s, err)
+				}
+				return out
+			}
+			// SVG, because a Typst PDF carries a creation timestamp and would differ anyway.
+			base := render(Style{})
+			for _, c := range []struct {
+				what  string
+				style Style
+			}{
+				{"font_size", Style{FontSize: 12.0}},
+				{"line_height", Style{LineHeight: 0.9}},
+			} {
+				if bytes.Equal(base, render(c.style)) {
+					t.Errorf("template %q ignores %s — its style preamble is missing or incomplete", ti.ID, c.what)
+				}
+			}
+
+			// The face needs the PDF: Typst does not error on a font it cannot find, it
+			// substitutes one, so the only way to tell "applied" from "silently ignored" is to
+			// see the face embedded in the output.
+			d := doc
+			d.Style = Style{FontFamily: "carlito"}
+			data, err := r.Render(context.Background(), d, tmpl, nil)
 			if err != nil {
-				t.Fatalf("render: %v", err)
+				t.Fatalf("render pdf: %v", err)
 			}
 			if !bytes.HasPrefix(data, []byte("%PDF")) {
 				t.Fatalf("output is not a PDF")
 			}
-			// Typst does not error on a font it cannot find, it substitutes one. Asserting the
-			// face is embedded is the only way to tell "applied" from "silently ignored".
 			if !bytes.Contains(bytes.ToLower(data), []byte("carlito")) {
-				t.Errorf("template %q: the chosen face is not embedded — the style block was ignored", ti.ID)
+				t.Errorf("template %q ignores font_family — the chosen face is not embedded", ti.ID)
 			}
 			text := strings.ToLower(extractPDFText(t, data))
 			if !strings.Contains(text, "ada lovelace") {
@@ -452,8 +516,10 @@ func TestUnstyledRenderMatchesTheTemplatesOwnDefaults(t *testing.T) {
 	}
 }
 
-// The renderer resolves a registry id to the engine's own family name, and must do that on
-// its own copy: the caller holds the document the handler is about to persist.
+// A signature tripwire, not coverage. Render takes doc by value and Style holds only scalars,
+// so today this cannot fail however the body is written — it fails the moment someone changes
+// the parameter to *Document, which is exactly when the resolve-on-a-copy decision (the stored
+// document must never hold an engine's face name) would silently stop holding.
 func TestRenderDoesNotMutateTheCallersDocument(t *testing.T) {
 	bin, err := exec.LookPath("typst")
 	if err != nil {

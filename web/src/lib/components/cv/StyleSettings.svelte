@@ -18,7 +18,7 @@
 
   // Named presets, not a number. The stored value is the Typst leading in em, which means
   // nothing to a candidate, and a ratio would be false precision about something they are
-  // choosing by eye against a live preview. 0.5 is what three of the four templates already use.
+  // choosing by eye against a live preview. 0.5 is what four of the six templates already use.
   const LINE_HEIGHTS: { value: number; label: string }[] = [
     { value: 0, label: 'Template default' },
     { value: 0.4, label: 'Compact' },
@@ -34,6 +34,16 @@
     (style.font_size ?? 0) > 0 ? (style.font_size ?? 0).toFixed(1) : TEMPLATE_FONT_SIZE_PT.toFixed(1),
   );
   const sizeIsDefault = $derived(!((style.font_size ?? 0) > 0));
+
+  // Sanitize accepts any leading in [0.3, 0.9], so a CLI or API client can store one that
+  // matches no preset — and a <select> whose value matches no option renders blank while the
+  // value quietly persists. Surfacing it as its own option keeps the control honest and lets
+  // the candidate move off it. Same reason the margin axes show an em dash when sides differ.
+  const lineHeightOptions = $derived.by(() => {
+    const v = style.line_height ?? 0;
+    if (v === 0 || LINE_HEIGHTS.some((lh) => lh.value === v)) return LINE_HEIGHTS;
+    return [...LINE_HEIGHTS, { value: v, label: `Custom (${v.toFixed(2)})` }];
+  });
 
   const isPristine = $derived(
     !style.font_family && !((style.font_size ?? 0) > 0) && !((style.line_height ?? 0) > 0),
@@ -72,7 +82,7 @@
   <SettingRow label="Line height" grow>
     {#snippet control()}
       <select bind:value={style.line_height} class={selectClass} aria-label="Line height">
-        {#each LINE_HEIGHTS as lh (lh.value)}
+        {#each lineHeightOptions as lh (lh.value)}
           <option value={lh.value}>{lh.label}</option>
         {/each}
       </select>

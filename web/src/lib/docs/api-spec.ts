@@ -2229,6 +2229,16 @@ ${BASE_URL}/auth/oauth/google/start`,
         responseExample: `{ "data": [ { "id": "classic", "name": "Classic" }, { "id": "compact", "name": "Compact" } ] }`,
       },
       {
+        method: 'GET',
+        path: '/cv-fonts',
+        auth: 'cookie',
+        summary: 'The typefaces a CV may use.',
+        description:
+          'Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on save and the CV renders in the template\'s own face. `note` names the familiar face the entry matches; `css` is a font stack for rendering a preview in a browser.',
+        curl: `curl "${BASE_URL}/cv-fonts" -b cookies.txt`,
+        responseExample: `{ "data": [ { "id": "tinos", "label": "Tinos", "note": "Times New Roman metrics", "css": "Tinos, \\"Times New Roman\\", Times, serif" } ] }`,
+      },
+      {
         method: 'POST',
         path: '/me/cvs/tailor',
         auth: 'cookie',

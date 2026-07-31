@@ -97,7 +97,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `work_mode` | Work format | remote, hybrid, onsite |
 | `is_tech` | Tech / Non-tech | tech, non_tech |
 | `role` | Role | Open vocabulary — call /jobs/facets for live values |
-| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
+| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, engineering_design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
 | `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
 | `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |
@@ -3253,6 +3253,22 @@ curl "https://freehire.me/api/v1/cv-templates" -b cookies.txt
 
 ```json
 { "data": [ { "id": "classic", "name": "Classic" }, { "id": "compact", "name": "Compact" } ] }
+```
+
+### `GET /cv-fonts`
+
+**Auth:** Session only
+
+The typefaces a CV may use.
+
+Read this rather than hard-coding a list: an unregistered `document.style.font_family` is dropped on save and the CV renders in the template's own face. `note` names the familiar face the entry matches; `css` is a font stack for rendering a preview in a browser.
+
+```bash
+curl "https://freehire.me/api/v1/cv-fonts" -b cookies.txt
+```
+
+```json
+{ "data": [ { "id": "tinos", "label": "Tinos", "note": "Times New Roman metrics", "css": "Tinos, \"Times New Roman\", Times, serif" } ] }
 ```
 
 ### `POST /me/cvs/tailor`

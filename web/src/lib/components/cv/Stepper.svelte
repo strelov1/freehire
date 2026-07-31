@@ -25,12 +25,14 @@
   >
     <Minus class="h-3.5 w-3.5" />
   </button>
-  <span
+  <!-- <output> rather than a span: it carries an implicit status role, so the value is exposed
+       and its change announced. An aria-label on a bare span is not reliably read at all. -->
+  <output
     class={['flex-1 text-center text-sm tabular-nums', muted ? 'text-muted-foreground' : 'text-foreground']}
     aria-label={label}
   >
     {display}
-  </span>
+  </output>
   <button
     type="button"
     aria-label="Increase {label}"

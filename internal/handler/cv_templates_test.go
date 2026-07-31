@@ -78,9 +78,18 @@ func TestListCVFonts(t *testing.T) {
 	if len(body.Data) != len(cv.Fonts()) {
 		t.Fatalf("returned %d fonts, want %d", len(body.Data), len(cv.Fonts()))
 	}
+	notes := 0
 	for _, f := range body.Data {
 		if f.ID == "" || f.Label == "" || f.CSS == "" {
 			t.Errorf("font %+v is missing an id, label, or CSS stack", f)
 		}
+		if f.Note != "" {
+			notes++
+		}
+	}
+	// The note is what makes the list useful — "Calibri metrics" is why someone picks Carlito —
+	// so it must survive the projection, not just exist in the registry.
+	if notes == 0 {
+		t.Error("no font carried a note; the picker has nothing to say about what each face matches")
 	}
 }

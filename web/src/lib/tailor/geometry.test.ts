@@ -30,6 +30,16 @@ describe('previewTypography', () => {
     expect(previewTypography({ font_size: 9 }, '').fontSizePx).toBe(12);
   });
 
+  // Rounding to whole pixels put 9.5pt and 10pt both on 13px, so nudging the stepper moved the
+  // PDF and left the preview still. Every one of the eight stepper positions must be distinct.
+  it('keeps the conversion fractional so no two stepper positions collide', () => {
+    expect(previewTypography({ font_size: 9.5 }, '').fontSizePx).toBeCloseTo(12.667, 3);
+    expect(previewTypography({ font_size: 10 }, '').fontSizePx).toBeCloseTo(13.333, 3);
+
+    const px = [8.5, 9, 9.5, 10, 10.5, 11, 11.5, 12].map((pt) => previewTypography({ font_size: pt }, '').fontSizePx);
+    expect(new Set(px).size).toBe(px.length);
+  });
+
   // The calibration is what keeps preview and PDF agreeing: Typst's leading is the gap between
   // lines, CSS line-height is the whole line box. If this drifts, the preview paginates in one
   // metric and the PDF in another, and nothing reports the disagreement.

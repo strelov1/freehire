@@ -83,7 +83,7 @@ by `Render` (PDF, live) and `GeneratePreviews` (SVG, `cmd/cv-previews`).
 Fonts: the Typst binary embeds no proportional sans, so the bundled faces under `fonts/` (all
 SIL OFL) are staged into the sandbox and exposed via `--font-path`. A template names its own
 default face directly (`#set text(font: "Liberation Sans")`); anything the candidate picks
-arrives through `Document.Style` — see **Fonts** below.
+arrives through `Document.Style` — see **Typography** and **Fonts** above.
 
 ## The headshot (`portrait`, `headshot`)
 

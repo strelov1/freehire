@@ -85,8 +85,10 @@ export function previewTypography(
   const pt = style.font_size ?? 0;
   const leading = style.line_height ?? 0;
   return {
-    // 96dpi: 1pt = 4/3 px.
-    fontSizePx: pt > 0 ? Math.round((pt * 4) / 3) : PREVIEW_FONT_SIZE_PX,
+    // 96dpi: 1pt = 4/3 px, kept fractional. Rounding to whole pixels collapsed 9.5pt and 10pt
+    // onto 13px (and 11 with 11.5 onto 15), so two of the eight stepper positions moved the PDF
+    // and left the preview still — in a feature whose whole point is that they agree.
+    fontSizePx: pt > 0 ? (pt * 4) / 3 : PREVIEW_FONT_SIZE_PX,
     lineHeight: leading > 0 ? leading + LEADING_TO_LINE_HEIGHT : PREVIEW_LINE_HEIGHT,
     fontFamily: (style.font_family ?? '') !== '' ? cssStack : '',
   };
