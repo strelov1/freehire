@@ -79,16 +79,37 @@ The cached `Analysis.RequirementMatch` is the only LLM-derived input, and only i
 `priority` fields are used — both describe the posting and are independent of any CV. `status` and
 `evidence` were determined against the base profile and are deliberately not trusted here.
 
-Re-derivation is `skilltag.Parse(requirement.text)`:
+Re-derivation asks a narrower question than "what skills are in this text": it asks **which of the
+vacancy's own canonical skills this requirement names**.
 
-- **≥1 canonical skill** → checkable. Covered when every skill it names is in the document's parsed
-  skill set. Weighted 2 for `required`, 1 for `preferred`.
-- **0 canonical skills** → unverifiable. Excluded from the denominator; the cached LLM status rides
-  along in the wire shape, labelled, so the panel can still show the candidate what the earlier
-  analysis thought without the score depending on it.
+The first draft of this design said `skilltag.Parse(requirement.text)`, and implementation showed
+why that fails. `Parse` applies a **corroboration rule**: a weak alias — an English word that
+doubles as a technology (`go`, `react`, `swift`, `spring`) — tags only when the same text carries at
+least one strong match. That rule is written for whole documents. A requirement is one line with
+nothing to corroborate against, so `"5+ years of Go"` parses to nothing and
+`"distributed systems in Go or Rust"` loses Go while keeping Rust. The flagship 40-point category
+would have evaporated on precisely the most ordinary requirements.
+
+`skilltag.Canonicalize` resolves a token without corroboration, but its own contract says why it may:
+it is for tokens a caller *asserts*, not prose to be interpreted. A requirement is prose.
+
+So the resolution runs the other way round. `job.Skills` were resolved from the full description,
+where the context to disambiguate existed. For each requirement we ask which of those already-known
+skills its text names — canonicalizing the line's words and phrases and keeping only what the
+vacancy already carries. Nothing is discovered, so nothing needs corroborating.
+
+- **names ≥1 vacancy skill** → checkable. Covered when every skill it names is in the document's
+  parsed skill set. Weighted 2 for `required`, 1 for `preferred`.
+- **names none** → unverifiable. Excluded from the denominator; the cached LLM status rides along in
+  the wire shape, labelled, so the panel can still show what the earlier analysis thought without
+  the score depending on it.
 
 The "every skill it names" rule (rather than "any") is the strict reading, chosen because a
 requirement's text usually names one skill; when it names three, partial coverage is not coverage.
+
+This also buys an invariant the first draft lacked: Requirements Coverage cannot reference a skill
+outside `job.Skills`, so it and Keyword Match draw from one set and cannot disagree about what the
+vacancy asks for.
 
 Reading the same cached row the tailoring agent already reads (`cachedAnalysisCtx`) means no new
 query and no new staleness rule.

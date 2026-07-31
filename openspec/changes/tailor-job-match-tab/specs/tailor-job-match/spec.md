@@ -91,13 +91,24 @@ describe the posting and do not depend on any CV. Their covered/missing status S
 against the current tailored document and MUST NOT be copied from the cached analysis, whose
 statuses were determined against the candidate's base profile.
 
-A requirement SHALL be re-derived by tagging its text with the canonical skill dictionary:
+A requirement's skills SHALL be **the vacancy's own canonical skills that the requirement's text
+names** — not whatever the dictionary can find in that text read alone. The vacancy's skills were
+resolved from its full description, where an ambiguous term had the surrounding context needed to
+resolve it; a single requirement line has no such context, and tagging it in isolation both drops
+skills it plainly states and risks inventing ones it does not.
 
-- a requirement yielding at least one canonical skill is **checkable** — it counts as covered when
-  every skill it names is present in the document's parsed skills, and missing otherwise;
-- a requirement yielding no canonical skill is **unverifiable**. It SHALL be reported as such,
-  carrying the cached analysis's status labelled as coming from the earlier analysis, and SHALL be
-  excluded from the category's denominator per the unverifiable rule.
+A requirement SHALL therefore be re-derived as follows:
+
+- a requirement naming at least one of the vacancy's canonical skills is **checkable** — it counts
+  as covered when every skill it names is present in the document's parsed skills, and missing
+  otherwise;
+- a requirement naming none of them is **unverifiable**. It SHALL be reported as such, carrying the
+  cached analysis's status labelled as coming from the earlier analysis, and SHALL be excluded from
+  the category's denominator per the unverifiable rule.
+
+A requirement MUST NOT be attributed a skill the vacancy does not itself carry. Requirements
+Coverage and Keyword Match therefore draw from one set, and cannot disagree about what the vacancy
+asks for.
 
 A `required` requirement SHALL count for more than a `preferred` one within the category.
 
@@ -109,10 +120,20 @@ reason naming that, rather than reported as zero coverage.
 - **WHEN** a cached requirement names a canonical skill the base profile lacked but the tailored document now contains
 - **THEN** it is reported covered, regardless of the status the cached analysis recorded
 
-#### Scenario: A requirement with no canonical skill is not reported missing
+#### Scenario: A requirement naming no vacancy skill is not reported missing
 
-- **WHEN** a cached requirement's text yields no canonical skill (for example, "strong communication skills")
+- **WHEN** a cached requirement's text names none of the vacancy's canonical skills (for example, "strong communication skills")
 - **THEN** it is reported unverifiable, is excluded from the category's denominator, and its cached status is shown labelled as coming from the earlier analysis
+
+#### Scenario: A skill the vacancy states is read even where it needs context to resolve
+
+- **WHEN** a vacancy carrying the canonical skill `go` has the requirement "5+ years of Go"
+- **THEN** that requirement is checkable against `go`, even though the line read on its own carries no other technical term to resolve the ambiguity against
+
+#### Scenario: A requirement is never attributed a skill outside the vacancy
+
+- **WHEN** a requirement's text mentions a skill the vacancy does not carry
+- **THEN** that skill does not enter the requirement's check, and Requirements Coverage draws only from the set Keyword Match draws from
 
 #### Scenario: A required requirement outweighs a preferred one
 
