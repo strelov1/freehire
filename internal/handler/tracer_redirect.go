@@ -37,10 +37,25 @@ func newTracerHandlers(queries *db.Queries, salt string) *tracerHandlers {
 
 // goneBody is what a recruiter sees when the CV behind a link has been deleted. They did nothing
 // wrong, and a bare 404 reads as a broken site rather than as a link that has expired.
-const goneBody = `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-	`<title>This link is no longer active</title></head><body>` +
-	`<h1>This link is no longer active</h1>` +
-	`<p>The CV it pointed to has been removed by its owner.</p></body></html>`
+const goneBody = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>This link is no longer active</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:2rem;
+font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+color:#18181b;background:#fafafa}
+main{max-width:32rem;text-align:center}
+h1{margin:0 0 .5rem;font-size:1.375rem;font-weight:600;letter-spacing:-.01em}
+p{margin:0;color:#52525b}
+a{display:inline-block;margin-top:1.5rem;color:#3f3f46;font-size:.875rem}
+@media(prefers-color-scheme:dark){body{color:#fafafa;background:#09090b}p{color:#a1a1aa}a{color:#d4d4d8}}
+</style></head><body><main>
+<h1>This link is no longer active</h1>
+<p>The CV it pointed to has been removed by its owner.</p>
+<a href="https://freehire.me">freehire.me</a>
+</main></body></html>`
 
 // Redirect resolves a traced link, records the click, and sends the visitor on.
 //

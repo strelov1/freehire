@@ -78,7 +78,8 @@
       the per-link panel with the "include likely bots" switch
 - [x] 8.2 Tracking board: the CV-opened marker beside the existing state, worded as evidence
       rather than proof
-- [ ] 8.3 Verify both visually in a real browser
+- [x] 8.3 Verify visually in a real browser — the 410 page shipped unstyled, reading as a
+      server fault rather than an explanation; it is the only surface a stranger sees
 
 ## 9. Retention and configuration
 
