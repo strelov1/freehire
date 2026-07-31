@@ -1,0 +1,34 @@
+---
+title: Say it instead of typing it
+date: 2026-07-31
+summary: The assistant's composer now has a microphone, the reply suggests what to ask next, and scrolling up mid-answer no longer snaps you back to the bottom.
+type: changelog
+tags:
+  - assistant
+  - job-seekers
+---
+
+The assistant asks you to describe your career, and a keyboard is the worst possible
+instrument for that. Someone who would happily talk for two minutes about a project types
+two sentences instead — and two sentences is what ends up in the experience bank.
+
+There is now a **microphone in the composer**. Press it, say what you mean, and the words
+land in the message box. They are not sent for you: a transcription is a guess, and a
+guess sent on your behalf is a message you cannot unsend. Read it, fix it, send it —
+or discard the recording with Escape and nothing leaves your browser at all.
+
+Two smaller things landed with it.
+
+**The reply suggests what to ask next.** After the assistant answers, up to three
+questions appear underneath it — compare the first two roles, tailor my CV to this one,
+which of these pays the most. Clicking one sends it as if you had typed it. They only show
+up after an answer that went through, never after something went wrong.
+
+**Scrolling up during a long answer now works.** The transcript used to yank itself back
+to the newest line every time another word arrived, which made re-reading what was said a
+minute ago impossible on exactly the answers worth re-reading. It now follows along only
+while you are already at the bottom; scroll up and it stays put, with a **Jump to latest**
+button to bring you back.
+
+The assistant lives at [/my/assistant](/my/assistant), and the microphone appears wherever
+the composer does — including the CV tailoring workspace and the experience interview.

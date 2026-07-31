@@ -40,4 +40,4 @@
 - [x] 6.1 Update `internal/assistant/AGENTS.md` (the follow-up endpoint and its "failure is invisible" rule) and add `internal/speech/AGENTS.md` plus its row in the root `CLAUDE.md` table.
 - [x] 6.2 Document `STT_MODEL` wherever the other LLM environment variables are documented.
 - [x] 6.3 Run `go build ./... && go vet ./... && go test ./...` and the web checks; verify against the acceptance scenarios in the three spec files.
-- [ ] 6.4 Offer a `/blog` changelog entry for the shipped voice input and follow-ups.
+- [x] 6.4 Offer a `/blog` changelog entry for the shipped voice input and follow-ups.
