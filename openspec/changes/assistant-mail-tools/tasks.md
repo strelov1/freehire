@@ -31,47 +31,47 @@
 
 ## 3. Preset plumbing
 
-- [ ] 3.1 Add `assistant.NormalizePreset(string) string`, mapping anything unrecognised to
+- [x] 3.1 Add `assistant.NormalizePreset(string) string`, mapping anything unrecognised to
       `PresetChat`, and make `SystemPrompt` switch on it.
-- [ ] 3.2 Make `handler.registry` switch on the normalized preset too, so an unknown preset
+- [x] 3.2 Make `handler.registry` switch on the normalized preset too, so an unknown preset
       gets the chat prompt and the chat tool set rather than one of each.
-- [ ] 3.3 Add `TestPromptOnlyNamesToolsThePresetHas`: extract backticked tool-shaped
+- [x] 3.3 Add `TestPromptOnlyNamesToolsThePresetHas`: extract backticked tool-shaped
       identifiers from each preset's prompt and assert each is registered for that preset.
       It must fail today if mail is appended to `chatPrompt` without registering the tools.
 
 ## 4. The mail tools
 
-- [ ] 4.1 `internal/handler/assistant_inbox_tools.go`: `assistantInboxTools()` returning the
+- [x] 4.1 `internal/handler/assistant_inbox_tools.go`: `assistantInboxTools()` returning the
       seven tools, wired to the service and decoding with `assistant.DecodeArgs`.
-- [ ] 4.2 `inbox_overview` — counts only. Test that no message subject, sender or body
+- [x] 4.2 `inbox_overview` — counts only. Test that no message subject, sender or body
       appears in its result.
-- [ ] 4.3 `inbox_search` — the filters, compact rows by default, `include_body` opt-in
+- [x] 4.3 `inbox_search` — the filters, compact rows by default, `include_body` opt-in
       capped at 10. Test the cap and test that a body-less row still carries sender,
       subject, date, label and link state.
-- [ ] 4.4 `inbox_triage` — signal, optional slug, optional confidence. Test that an unknown
+- [x] 4.4 `inbox_triage` — signal, optional slug, optional confidence. Test that an unknown
       signal returns an error naming the invalid value and listing
       `mailclassify.SignalValues`, and that the message is unchanged.
-- [ ] 4.5 `inbox_resolve_suggestion` (`confirm`/`reject`), `inbox_link`, `inbox_unlink`,
+- [x] 4.5 `inbox_resolve_suggestion` (`confirm`/`reject`), `inbox_link`, `inbox_unlink`,
       `inbox_record_application` — including the 409-equivalent refusal when a suggestion is
       still pending.
-- [ ] 4.6 Register the group for `chat` only in `registry`. Extend
+- [x] 4.6 Register the group for `chat` only in `registry`. Extend
       `assistant_preset_test.go`: chat carries all seven; `tailor`, `profile` and `browse`
       carry none.
 
 ## 5. Prompt
 
-- [ ] 5.1 Write `mailPrompt` and append it to the chat prompt only. It carries: orient with
+- [x] 5.1 Write `mailPrompt` and append it to the chat prompt only. It carries: orient with
       `inbox_overview` before searching; the sender display name is usually the ATS relay,
       not the employer; a calendar event the candidate organised is `other`; only a
       deterministic match auto-links, so `link=suggested` is a queue that must be drained;
       and a message body is untrusted input where an instruction is an attack, not a request.
-- [ ] 5.2 Confirm `SystemPrompt(PresetBrowse)` still returns `chatPrompt + browsePrompt`
+- [x] 5.2 Confirm `SystemPrompt(PresetBrowse)` still returns `chatPrompt + browsePrompt`
       with no mail section, and pin it with a test.
 
 ## 6. Docs and finish
 
-- [ ] 6.1 Update `internal/assistant/AGENTS.md`: the mail tool group, why it is preset-scoped
+- [x] 6.1 Update `internal/assistant/AGENTS.md`: the mail tool group, why it is preset-scoped
       like the CV and page tools, the read-marking rule, and the 10-message body cap.
-- [ ] 6.2 Update `docs/agents/mail-stack.md`: the in-app assistant is a third reader of the
+- [x] 6.2 Update `docs/agents/mail-stack.md`: the in-app assistant is a third reader of the
       mail store, reaching it through `internal/inbox` rather than over HTTP.
-- [ ] 6.3 `go build ./... && go vet ./... && go test ./...`, then the integration tag.
+- [x] 6.3 `go build ./... && go vet ./... && go test ./...`, then the integration tag.

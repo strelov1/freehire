@@ -346,14 +346,27 @@ const assistantResultCap = 60_000
 // would miss most of what they say. The page tool is the opposite case: it is scoped,
 // because only a browsing session has a browser on the other end of the relay.
 func (h *assistantHandlers) registry(sess assistant.Session) *assistant.Registry {
+	// One normaliser answers the preset for BOTH the prompt and the tools. Comparing
+	// against the constants directly would let an unrecognised preset fall back to the
+	// chat prompt here while matching no branch below — instructions for tools the
+	// session was never given.
+	preset := assistant.NormalizePreset(sess.Preset)
+
 	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	tools = append(tools, h.assistantExperienceTools(sess.ID)...)
-	if sess.Preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
+	if preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
 		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID)...)
+	}
+	// Mail is the general chat session's. A tailoring session is working one CV
+	// against one vacancy, an interview is collecting what the candidate has done,
+	// and a side panel is talking about the page on screen — none of them has a
+	// reason to read the mailbox, and every tool offered is paid for on every turn.
+	if preset == assistant.PresetChat {
+		tools = append(tools, h.assistantInboxTools()...)
 	}
 	// Only a browsing session has a browser on the other end of the relay. Offering
 	// the page tool anywhere else would give the model a call that can only fail.
-	if sess.Preset == assistant.PresetBrowse {
+	if preset == assistant.PresetBrowse {
 		tools = append(tools, h.readCurrentPageTool())
 	}
 	reg := assistant.NewRegistry(tools...)

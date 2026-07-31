@@ -71,12 +71,43 @@ extension's side panel. A tailoring session's CV tools close over the CV and vac
 ids from the session binding, so the model cannot address another CV even by guessing
 an id.
 
+The preset is answered TWICE — once for the prompt, once for the tool set — and both
+switches read `NormalizePreset`, never the constants directly. They used to disagree on
+the only case neither names: `SystemPrompt` fell back to `chat` for an unrecognised
+preset while the registry compared `== PresetChat` and matched nothing, so such a session
+would have been instructed at length about tools it had not been given.
+`TestPromptOnlyNamesToolsThePresetHas` is the other half of that guard: every tool a
+preset's prompt backticks must be registered for that preset. The reverse is not
+required — a tool may go unnamed, its own description is what the model reads.
+
 `browse` is the one preset whose prompt **overrides** the one it extends, rather
 than only adding to it. The chat playbook opens with `get_profile` and a question
 about what the candidate wants — correct on the website, wrong in a side panel,
 where they opened the thing they want to talk about. Because the extension is
 appended after that instruction, it has to name it: an override that does not say
 what it replaces reads as advice about a different moment.
+
+**Mail** (`handler/assistant_inbox_tools.go`) is the `chat` preset's alone — seven tools
+over `internal/inbox`, the same use cases `/me/inbox` and `/me/emails` render. Three rules
+are load-bearing:
+
+- **No tool opens one message by id.** That endpoint marks the message read, and `read_at`
+  means "a human saw this" — an agent sweeping the backlog through it would zero its
+  owner's unread count. Bodies come from the listing, which marks nothing, and
+  `inbox.Queries` has no read-marking method at all so the guarantee is structural rather
+  than a convention.
+- **A body-bearing page is capped at 10**, against the 50 an external harness may request
+  over HTTP. A harness reads a page once; a tool result is replayed into the model's
+  context on every later turn.
+- **No tool sends mail.** Bodies are attacker-controlled text, and the surest answer to a
+  prompt injection is that it has no outbound channel. The reachable damage is a wrong
+  label or a wrong link, both reversible from `/my/inbox`, and `mailclassify.AdvanceStage`
+  keeps stage movement monotonically forward.
+
+`inbox_triage` refuses an out-of-vocabulary label where `mailclassify.Sanitize` coerces it
+to `other`. The worker sanitizes because it persists raw model output derived from an
+attacker's body; the tool carries a judgement the candidate asked for, and silently
+rewriting it would record a verdict nobody chose.
 
 A `browse` session is one held from the browser extension. It is the only preset whose
 agent can see something outside this process: `read_current_page` attaches to the
