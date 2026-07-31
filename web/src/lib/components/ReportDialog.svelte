@@ -1,14 +1,22 @@
 <script lang="ts">
-  import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert, X } from '@lucide/svelte';
+  import { ArrowLeft, Ban, BellOff, Check, ChevronRight, Clock, MoreHorizontal, ShieldAlert } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { appliedOnError, isEvidenceReason, reportReasons } from '$lib/reports';
   import type { ReportReason } from '$lib/types';
-  import { Button } from '$lib/ui';
-  import { focusTrap } from '$lib/actions/focusTrap';
+  import { Button, Dialog } from '$lib/ui';
 
   // Reports are filed against a single job, addressed by its public slug. The
   // parent owns open/close; this component owns the two-step flow within.
   let { slug, onClose }: { slug: string; onClose: () => void } = $props();
+
+  // The parent mounts this component to open it and unmounts on onClose, so the
+  // dialog is open for its whole life. Dialog owns the closing — Escape, the
+  // backdrop and its own button all land on `open`, and this reports it upward
+  // rather than each affordance calling onClose itself.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onClose();
+  });
 
   // step 'reason' picks one of the controlled reasons; 'details' collects an
   // optional elaboration; 'applied' asks when the caller applied; 'done' is the
@@ -99,31 +107,7 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
-
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <!-- Backdrop is a real button so closing on click is keyboard-accessible. -->
-  <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onClose}
-  ></button>
-
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-label="Report this job"
-    class="relative w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
-    {@attach focusTrap()}
-  >
-    <div class="mb-4 flex items-center justify-between gap-4">
-      <h2 class="text-base font-semibold tracking-tight">Report this job</h2>
-      <button
-        type="button"
-        aria-label="Close"
-        onclick={onClose}
-        class="text-muted-foreground hover:text-foreground"
-      >
-        <X class="size-5" />
-      </button>
-    </div>
+<Dialog bind:open title="Report this job" class="max-w-md">
 
     {#if step === 'reason'}
       <ul class="flex flex-col gap-2">
@@ -235,5 +219,4 @@
         <Button variant="outline" onclick={onClose} class="mt-1">Close</Button>
       </div>
     {/if}
-  </div>
-</div>
+</Dialog>

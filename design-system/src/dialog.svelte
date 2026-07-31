@@ -27,12 +27,21 @@
     open = $bindable(false),
     title,
     description,
+    dismissible = true,
     class: className,
     children,
   }: {
     open?: boolean;
     title?: string;
     description?: string;
+    /**
+     * Whether the caller may close it. Set false while an irreversible request
+     * is in flight: the dialog holds the outcome, and Escape would hide whether
+     * the thing succeeded. Escape, the backdrop and the close button all go
+     * away together — leaving one of the three is a dialog that claims to be
+     * held and is not.
+     */
+    dismissible?: boolean;
     class?: string;
     children: Snippet;
   } = $props();
@@ -61,7 +70,14 @@
   // The backdrop is a pseudo-element of the dialog, so clicks on it surface as
   // clicks on <dialog> itself; everything inside lands on the padded wrapper.
   function onclick(e: MouseEvent) {
-    if (e.target === el) open = false;
+    if (e.target === el && dismissible) open = false;
+  }
+
+  // `cancel` is what showModal() fires for Escape, and preventing it is the
+  // platform's own supported way to refuse. Reimplementing the refusal with a
+  // keydown listener would fight the top layer instead of using it.
+  function oncancel(e: Event) {
+    if (!dismissible) e.preventDefault();
   }
 </script>
 
@@ -70,6 +86,7 @@
   aria-labelledby={title ? titleId : undefined}
   aria-describedby={description ? descriptionId : undefined}
   onclose={() => (open = false)}
+  {oncancel}
   {onclick}
   class={cn(
     'm-auto w-full max-w-lg rounded-lg border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/50 backdrop:backdrop-blur-sm',
@@ -86,13 +103,15 @@
     <div class="mt-4">
       {@render children()}
     </div>
-    <button
-      type="button"
-      class="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onclick={() => (open = false)}
-      aria-label="Close"
-    >
-      <X class="size-4" />
-    </button>
+    {#if dismissible}
+      <button
+        type="button"
+        class="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onclick={() => (open = false)}
+        aria-label="Close"
+      >
+        <X class="size-4" />
+      </button>
+    {/if}
   </div>
 </dialog>

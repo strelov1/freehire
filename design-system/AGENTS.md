@@ -102,6 +102,31 @@ rather than here — their census of `web/` was already off by a third.
   copy. Both are also devDependencies, because Storybook and the tests build against them
   here.
 
+## What `Dialog` does not cover
+
+Ten surfaces in `web/` were built by hand before this primitive was reached for. Four are
+now `Dialog` call sites — `AuthDialog`, `ReportDialog`, `RequestReferralModal`,
+`DeleteAccountButton`. The other six are not stragglers; they are two gaps, and forcing
+either onto `Dialog` means re-adding by hand what it deliberately does not do.
+
+- **A sheet.** `JobDrawer` is a full-height drawer, `FilterModalShell` and
+  `OnboardingWizard` stretch on mobile and centre above `sm`, `CookieConsent` is a bottom
+  banner. `Dialog` is a centred modal and offers no positioning. Three of the four want the
+  same thing — a **Sheet** primitive the system does not have.
+- **A structured dialog.** `GmailConnectDialog` and `FollowUpDialog` both want a bordered
+  header with an icon, a scrolling body and a bordered footer. `Dialog` renders its own
+  `p-6` box with the title, the description and the close button in fixed positions, and
+  `class` lands on `<dialog>` — it cannot be reshaped from the call site. Two call sites is
+  the evidence; a `header`/`footer` snippet pair is the likely answer.
+
+`CookieConsent` carries `role="dialog"` on a surface that is not modal — an accessibility
+defect, listed here so it is not mistaken for a migration target.
+
+**`dismissible={false}` holds a dialog open** while an irreversible request is in flight, so
+Escape cannot hide whether it succeeded. Escape, the backdrop and the close button go away
+together — leaving one is a dialog that claims to be held and is not. Escape is refused by
+preventing the platform's own `cancel` event, not by a keydown listener racing it.
+
 ## Storybook
 
 `pnpm storybook` (port 6006) / `pnpm build-storybook`. Stories are CSF in

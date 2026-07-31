@@ -20,3 +20,15 @@ export const Default: Story = {
   },
 };
 export const TitleOnly: Story = { args: { title: 'Withdraw application?' } };
+
+// Held open: Escape, the backdrop and the close button all go away together,
+// for the window in which an irreversible request is in flight and the dialog
+// is the only place its outcome will appear. The in-dialog buttons are the way
+// out, which is why they are not gated with the rest.
+export const NotDismissible: Story = {
+  args: {
+    title: 'Deleting your account…',
+    description: 'This cannot be undone, so the dialog holds until it finishes.',
+    dismissible: false,
+  },
+};

@@ -4,9 +4,8 @@
   import { login, register } from '$lib/auth.svelte';
   import { authDialog } from '$lib/auth-dialog.svelte';
   import { api, ApiError } from '$lib/api';
-  import { Button } from '$lib/ui';
+  import { Button, Dialog } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
-  import { focusTrap } from '$lib/actions/focusTrap';
 
   // `mode` is bindable so the in-dialog toggle can switch between sign in and
   // register without the parent re-opening it. `initialError` lets the layout
@@ -20,6 +19,15 @@
     onClose: () => void;
     initialError?: string | null;
   } = $props();
+
+  // The parent mounts this component to open it and unmounts on onClose, so the
+  // dialog is open for its whole life. Dialog owns the closing — Escape, the
+  // backdrop and its own button all land on `open`, and this reports it upward
+  // rather than each affordance calling onClose itself.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onClose();
+  });
 
   let email = $state('');
   let password = $state('');
@@ -143,23 +151,7 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
-
-<!-- z-60 so the auth dialog sits ABOVE other z-50 modals (it can be opened from
-     within the filter modal's "Sign in to save filters"). -->
-<div class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-  <!-- Backdrop is a real button so closing on click is keyboard-accessible. -->
-  <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onClose}
-  ></button>
-
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-label={title}
-    class="relative w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg"
-    {@attach focusTrap()}
-  >
-    <h2 class="mb-4 text-base font-semibold tracking-tight">{title}</h2>
+<Dialog bind:open {title} class="max-w-sm">
 
     {#if providers.length > 0 && !isRecovery}
       <div class="mb-4 flex flex-col gap-2">
@@ -266,5 +258,4 @@
         </button>
       </p>
     {/if}
-  </div>
-</div>
+</Dialog>

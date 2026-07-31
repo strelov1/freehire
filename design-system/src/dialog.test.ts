@@ -78,4 +78,50 @@ describe('Dialog', () => {
 
     expect(getByRole('dialog', { hidden: true }).getAttribute('aria-labelledby')).toBeNull();
   });
+
+  // A dialog holding the outcome of a request that cannot be repeated has to be
+  // able to refuse to go away — otherwise Escape hides whether the irreversible
+  // thing succeeded. The platform gives us the refusal for free through
+  // `cancel`, but only if someone calls preventDefault on it.
+  describe('when not dismissible', () => {
+    const undismissable = () => ({ ...open(true), dismissible: false });
+
+    it('refuses the platform’s own cancel', () => {
+      const { getByRole } = render(Dialog, undismissable());
+      const el = getByRole('dialog', { hidden: true });
+
+      const cancel = new Event('cancel', { cancelable: true });
+      el.dispatchEvent(cancel);
+
+      expect(cancel.defaultPrevented).toBe(true);
+    });
+
+    it('ignores a click on its backdrop', async () => {
+      const { getByRole } = render(Dialog, undismissable());
+      const el = getByRole('dialog', { hidden: true }) as HTMLDialogElement;
+
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+
+      expect(el.open).toBe(true);
+    });
+
+    it('offers no close button', () => {
+      const { queryByLabelText } = render(Dialog, undismissable());
+
+      expect(queryByLabelText('Close')).toBeNull();
+    });
+  });
+
+  it('closes on its backdrop and offers a close button by default', async () => {
+    const { getByRole, getByLabelText } = render(Dialog, open(true));
+    const el = getByRole('dialog', { hidden: true }) as HTMLDialogElement;
+
+    expect(getByLabelText('Close')).toBeTruthy();
+
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+
+    expect(el.open).toBe(false);
+  });
 });

@@ -8,14 +8,15 @@
   let {
     title = 'Withdraw application?',
     description,
-  }: { title?: string; description?: string } = $props();
+    dismissible = true,
+  }: { title?: string; description?: string; dismissible?: boolean } = $props();
 
   let open = $state(false);
 </script>
 
 <Button onclick={() => (open = true)}>Open dialog</Button>
 
-<Dialog bind:open {title} {description}>
+<Dialog bind:open {title} {description} {dismissible}>
   <p class="text-sm text-muted-foreground">
     Withdrawing moves the application to Closed. You can apply again while the job is open.
   </p>

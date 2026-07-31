@@ -23,26 +23,32 @@
 
 ## 3. Five modals onto Dialog
 
-For each of `AuthDialog`, `ReportDialog`, `GmailConnectDialog`, `RequestReferralModal`,
-`DeleteAccountButton` — one at a time, not as a batch:
+Four, not five. `GmailConnectDialog` turned out to want a bordered header, a scrolling body
+and a bordered footer, which `Dialog` cannot be reshaped into from the call site — and
+`FollowUpDialog`, which landed from main mid-branch, wants the same. Two call sites for a
+structured dialog is evidence for a following change, not a reason to bend this one.
 
-- [ ] 3.1 Read its current close path first — Escape, backdrop, cancel button — and note what
+Migrated: `AuthDialog`, `ReportDialog`, `RequestReferralModal`, `DeleteAccountButton`.
+`DeleteAccountButton` needed a new `dismissible` prop on `Dialog` first — its close path
+refuses to close mid-delete, and the platform's close knew nothing about that.
+
+- [x] 3.1 Read its current close path first — Escape, backdrop, cancel button — and note what
       each does beyond closing. A handler that also resets form state does not survive on its
       own terms.
-- [ ] 3.2 Replace the overlay with `<Dialog bind:open title description>`; drop the
+- [x] 3.2 Replace the overlay with `<Dialog bind:open title description>`; drop the
       `fixed inset-0`, the z-index, the Escape handler and the hand-rolled focus handling.
-- [ ] 3.3 Width via `class` where the default `max-w-lg` is wrong.
-- [ ] 3.4 Verify by hand: opens, closes on Escape, closes on backdrop, closes on its own
+- [x] 3.3 Width via `class` where the default `max-w-lg` is wrong.
+- [~] 3.4 Verify by hand: opens, closes on Escape, closes on backdrop, closes on its own
       button, submits, and focus returns to the trigger. Both themes.
-- [ ] 3.5 `pnpm check:adoption` — `Dialog` rises; `--update` and commit the diff.
+- [x] 3.5 `pnpm check:adoption` — `Dialog` rises; `--update` and commit the diff.
 
 ## 4. Record what was not done
 
-- [ ] 4.1 One paragraph in `design-system/AGENTS.md`: four surfaces want a Sheet, which the
+- [x] 4.1 One paragraph in `design-system/AGENTS.md`: four surfaces want a Sheet, which the
       system does not have, and why they were not bent onto `Dialog`.
-- [ ] 4.2 Note `CookieConsent`'s `role="dialog"` on a non-modal banner as an accessibility
+- [x] 4.2 Note `CookieConsent`'s `role="dialog"` on a non-modal banner as an accessibility
       defect to fix separately — not in this diff.
-- [ ] 4.3 Add the adjacent palettes and their counts (success 41, danger 32, informational 23)
+- [x] 4.3 Add the adjacent palettes and their counts (success 41, danger 32, informational 23)
       where the next change will find them.
 
 ## 5. Finish

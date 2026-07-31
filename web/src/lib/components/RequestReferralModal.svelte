@@ -1,12 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Check, X } from '@lucide/svelte';
+  import { Check } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import type { CvTailoredItem } from '$lib/cv';
   import type { ReferralRequestInput } from '$lib/types';
-  import { Button } from '$lib/ui';
+  import { Button, Dialog } from '$lib/ui';
   import { isLinkedInUrl } from '$lib/utils';
-  import { focusTrap } from '$lib/actions/focusTrap';
 
   // The parent owns open/close; this component owns the request form. jobId is the
   // optional source-vacancy context recorded with the request.
@@ -23,6 +22,15 @@
     onClose: () => void;
     onSent?: () => void;
   } = $props();
+
+  // The parent mounts this component to open it and unmounts on onClose, so the
+  // dialog is open for its whole life. Dialog owns the closing — Escape, the
+  // backdrop and its own button all land on `open`, and this reports it upward
+  // rather than each affordance calling onClose itself.
+  let open = $state(true);
+  $effect(() => {
+    if (!open) onClose();
+  });
 
   let cvKind = $state<'original' | 'built'>('original');
   let cvId = $state<string | null>(null);
@@ -98,30 +106,7 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
-
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-  <button type="button" aria-label="Close dialog" class="absolute inset-0 bg-black/50" onclick={onClose}
-  ></button>
-
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-label="Ask for a referral"
-    class="relative w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg"
-    {@attach focusTrap()}
-  >
-    <div class="mb-4 flex items-center justify-between gap-4">
-      <h2 class="text-base font-semibold tracking-tight">Ask for a referral · {companyName}</h2>
-      <button
-        type="button"
-        aria-label="Close"
-        onclick={onClose}
-        class="text-muted-foreground hover:text-foreground"
-      >
-        <X class="size-5" />
-      </button>
-    </div>
+<Dialog bind:open title="Ask for a referral" class="max-w-md">
 
     {#if done}
       <div class="flex flex-col items-center gap-3 py-4 text-center">
@@ -254,5 +239,4 @@
         </div>
       </form>
     {/if}
-  </div>
-</div>
+</Dialog>
