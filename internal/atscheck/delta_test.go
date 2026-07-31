@@ -142,3 +142,28 @@ func TestCompareKeepsTheTailoredReportsCategoryOrder(t *testing.T) {
 		t.Errorf("order = %+v, want the tailored report's order (keyword_strength, length_density)", d.Categories)
 	}
 }
+
+// A row that reports only a number tells the candidate what changed and never why. The
+// checks behind the score already exist; the delta carries them so the panel can expand a
+// category into them.
+func TestCompareCarriesTheTailoredSidesLineItems(t *testing.T) {
+	base := report(cat("keyword_strength", "Keyword Strength", 10))
+	tailored := report(cat("keyword_strength", "Keyword Strength", 12))
+	base.Categories[0].Items = []LineItem{{Points: 10, Text: "before", Status: StatusWarn}}
+	tailored.Categories[0].Items = []LineItem{{Points: 12, Text: "after", Status: StatusPass}}
+
+	d := Compare(base, tailored)
+
+	if len(d.Categories) != 1 {
+		t.Fatalf("categories = %d, want 1", len(d.Categories))
+	}
+	got := d.Categories[0].Items
+	if len(got) != 1 {
+		t.Fatalf("items = %+v, want the tailored side's one item", got)
+	}
+	// The candidate is editing the tailored copy; a before/after list of individual checks
+	// is a diff nobody asked for.
+	if got[0].Text != "after" {
+		t.Errorf("item = %q, want the tailored side's item, not the base's", got[0].Text)
+	}
+}

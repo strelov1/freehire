@@ -30,6 +30,11 @@ type CategoryChange struct {
 	Base     int    `json:"base"`
 	Tailored int    `json:"tailored"`
 	Change   int    `json:"change"` // Tailored − Base, signed
+	// Items are the checks behind the TAILORED side's score, so a panel can expand a row
+	// into why it stands where it does. The base side's items are deliberately not carried:
+	// the candidate is editing the tailored copy, and a before/after list of individual
+	// checks is a diff nobody asked for.
+	Items []LineItem `json:"items,omitempty"`
 }
 
 // Compare reports how `tailored` differs from `base`. Categories are joined by id and
@@ -62,6 +67,7 @@ func Compare(base, tailored Report) Delta {
 			Base:     b.Score,
 			Tailored: c.Score,
 			Change:   change,
+			Items:    c.Items,
 		})
 		// Strictly less keeps the first of an equal drop, which is why this reads the
 		// tailored order rather than sorting.

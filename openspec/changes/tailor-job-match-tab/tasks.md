@@ -19,24 +19,24 @@
 
 ## 3. Line items reach the Score tab
 
-- [ ] 3.1 Add the tailored side's `Items` to `atscheck.CategoryChange` and carry them through `Compare`; the base side's items are not carried. Existing delta tests stay green.
-- [ ] 3.2 Extend `viewAtsDelta` in `web/src/lib/tailor/atsdelta.ts` to surface each row's line items, keeping the signed-number and regression wording under vitest.
+- [x] 3.1 Add the tailored side's `Items` to `atscheck.CategoryChange` and carry them through `Compare`; the base side's items are not carried. Existing delta tests stay green.
+- [x] 3.2 Extend `viewAtsDelta` in `web/src/lib/tailor/atsdelta.ts` to surface each row's line items, keeping the signed-number and regression wording under vitest.
 
 ## 4. The panel
 
-- [ ] 4.1 Add `web/src/lib/tailor/jobmatch.ts`: the view model (overall arithmetic as displayed, impact label thresholds from the response's weights, unavailable-category wording) with vitest coverage — no wording in the component.
-- [ ] 4.2 Add `ScoreCategoryRow.svelte`: one disclosure rendering a category's label, impact, score and expandable line items, driven by props both scorers can satisfy.
-- [ ] 4.3 Add `JobMatch.svelte`: overall score, the vacancy it was scored against, the four category rows, named missing keywords, and the requirement ledger with unverifiable entries labelled. An unavailable score renders nothing.
-- [ ] 4.4 Rework `AtsDelta.svelte` to render its rows through `ScoreCategoryRow`, preserving the regression warning and the "measured on the rendered PDF" footnote.
-- [ ] 4.5 Split `ArtifactPanel`'s tabs to `templates | jd | jobmatch | score`: Job Match carries `JobMatch` plus the labelled `MatchAnalysisFull` snapshot; Score carries `AtsDelta` plus `AutopilotReport`.
-- [ ] 4.6 Add the View Job link to the panel header, linking to `resolve('/jobs/[slug]', { slug })` and omitted when there is no job.
-- [ ] 4.7 Add collapse toggles to both side panels: the left panel and the right context panel each fold to a thin rail with a button that restores them, so the centre CV preview can take the full width. Desktop-only (below `lg` the columns are already one at a time), and the collapsed state must not be reachable in a way that hides the panel's tab bar with no way back.
+- [x] 4.1 Add `web/src/lib/tailor/jobmatch.ts`: the view model (overall arithmetic as displayed, impact label thresholds from the response's weights, unavailable-category wording) with vitest coverage — no wording in the component.
+- [x] 4.2 Add `ScoreCategoryRow.svelte`: one disclosure rendering a category's label, impact, score and expandable line items, driven by props both scorers can satisfy.
+- [x] 4.3 Add `JobMatch.svelte`: overall score, the vacancy it was scored against, the four category rows, named missing keywords, and the requirement ledger with unverifiable entries labelled. An unavailable score renders nothing.
+- [x] 4.4 Rework `AtsDelta.svelte` to render its rows through `ScoreCategoryRow`, preserving the regression warning and the "measured on the rendered PDF" footnote.
+- [x] 4.5 Split `ArtifactPanel`'s tabs to `templates | jd | jobmatch | score`: Job Match carries `JobMatch` plus the labelled `MatchAnalysisFull` snapshot; Score carries `AtsDelta` plus `AutopilotReport`.
+- [x] 4.6 Add the View Job link to the panel header, linking to `resolve('/jobs/[slug]', { slug })` and omitted when there is no job.
+- [x] 4.7 Add collapse toggles to both side panels: the left panel and the right context panel each fold to a thin rail with a button that restores them, so the centre CV preview can take the full width. Desktop-only (below `lg` the columns are already one at a time), and the collapsed state must not be reachable in a way that hides the panel's tab bar with no way back.
 
 ## 5. The workspace wiring
 
-- [ ] 5.1 Extend `MobileView` and the mobile tab bar to the eight views, keeping `pickMobile`'s mobile→column sync correct for the two new tabs.
-- [ ] 5.2 Fetch the job-match score on workspace open and after an agent turn, alongside the existing ATS-delta refresh, never awaited and never throwing.
-- [ ] 5.3 Refresh the score after `persist()` succeeds — chained off the save, not off the effect that schedules it — so the number never describes the previous document.
+- [x] 5.1 Extend `MobileView` and the mobile tab bar to the eight views, keeping `pickMobile`'s mobile→column sync correct for the two new tabs.
+- [x] 5.2 Fetch the job-match score on workspace open and after an agent turn, alongside the existing ATS-delta refresh, never awaited and never throwing.
+- [x] 5.3 Refresh the score after `persist()` succeeds — chained off the save, not off the effect that schedules it — so the number never describes the previous document.
 
 ## 6. Finish
 

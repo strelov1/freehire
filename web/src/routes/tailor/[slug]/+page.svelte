@@ -13,7 +13,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ZoomIn, ZoomOut, Download, Menu } from '@lucide/svelte';
+  import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
@@ -23,7 +23,7 @@
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
   import { clampWidth } from '$lib/tailor/geometry';
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
-  import { toEditable, emptyDocument, type CvRecord, type CvAtsDelta } from '$lib/cv';
+  import { toEditable, emptyDocument, type CvRecord, type CvAtsDelta, type CvJobMatch } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
@@ -61,6 +61,10 @@
   // first read, and after any failure — the panel renders it as an absence either way, so a
   // score nobody can compute never becomes an error the candidate has to dismiss.
   let atsDelta = $state<CvAtsDelta | null>(null);
+  // How well the current document matches this vacancy. Unlike the delta this is one render
+  // rather than two and calls no model, so it is refreshed on every persisted edit as well —
+  // it is the one number in the workspace that is supposed to move while the candidate types.
+  let jobMatch = $state<CvJobMatch | null>(null);
   let runActive = $state(false);
   // Any turn, not just a run: "Run again" would silently do nothing while one is in flight.
   let turnActive = $state(false);
@@ -72,12 +76,15 @@
   // switches (hidden, not unmounted) so its live session is never dropped.
   let leftTab = $state<'chat' | 'editor' | 'settings'>('chat');
   let leftWidth = $state(380);
+  // Folded to a rail so the centre CV preview can take the width. Desktop-only: below lg the
+  // columns already show one at a time, and collapsing there would hide a view with no way back.
+  let leftCollapsed = $state(false);
   let leftPanelEl = $state<HTMLElement>();
   let leftResizing = false;
 
   // The right context panel's tab, lifted here so the mobile tab bar can drive it (on desktop the
   // panel's own tab bar sets it via the same binding).
-  let artifactTab = $state<'templates' | 'jd' | 'verdict'>('templates');
+  let artifactTab = $state<'templates' | 'jd' | 'jobmatch' | 'score'>('jobmatch');
 
   // Mobile-only navigation: below lg the three columns collapse to one, so a single flat tab bar
   // picks which view fills the screen. At lg it's hidden and every column shows at once as before.
@@ -85,15 +92,16 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'settings' | 'preview' | 'templates' | 'jd' | 'verdict';
+  type MobileView = 'chat' | 'editor' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
     ['settings', 'Settings'],
     ['preview', 'Preview'],
-    ['templates', 'Templates'],
+    ['jobmatch', 'Job Match'],
+    ['score', 'Score'],
     ['jd', 'Job'],
-    ['verdict', 'Verdict'],
+    ['templates', 'Templates'],
   ];
   let mobileView = $state<MobileView>('chat');
 
@@ -141,6 +149,16 @@
       atsDelta = await api.getCvAtsDelta(cvId);
     } catch {
       atsDelta = null;
+    }
+  }
+
+  // Read the job-match score for the current CV. Never throws, for the same reason the delta
+  // does not: the workspace must load and edit whether or not the score is available.
+  async function refreshJobMatch() {
+    try {
+      jobMatch = await api.getCvJobMatch(cvId);
+    } catch {
+      jobMatch = null;
     }
   }
 
@@ -192,6 +210,7 @@
       // Not awaited: the workspace is usable before the comparison lands, and the comparison
       // costs two renders.
       void refreshAtsDelta();
+      void refreshJobMatch();
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
@@ -221,6 +240,9 @@
       lastSnapshot = snap;
       saveState = 'saved';
       pdfVersion += 1;
+      // Chained off the SAVE, not off the effect that schedules it: read any earlier and the
+      // score would describe the document as it was before this edit landed.
+      void refreshJobMatch();
     } catch (e) {
       saveState = 'error';
       saveError = e instanceof ApiError ? e.message : 'Could not save. Please try again.';
@@ -255,6 +277,7 @@
       await loadCv();
       pdfVersion += 1;
       void refreshAtsDelta();
+      void refreshJobMatch();
     } catch {
       /* best-effort refresh; the next edit or reload will reconcile */
     }
@@ -284,6 +307,7 @@
           await loadCv();
           pdfVersion += 1;
           void refreshAtsDelta();
+          void refreshJobMatch();
         },
       });
     } catch (e) {
@@ -364,11 +388,28 @@
       <!-- LEFT: Editor / Chat tabs (chat stays mounted across tab switches). On mobile it shows only
            when its tab is picked; at lg it's a splitter-sized column always shown. The width rides a
            CSS var so the inline style never overrides the mobile w-full. -->
+      {#if leftCollapsed}
+        <!-- The collapsed rail. Desktop-only, and it carries the one control that brings the
+             panel back — a collapse with no visible way out is a lost panel. -->
+        <div
+          class="hidden shrink-0 flex-col items-center gap-2 border-r border-border bg-background px-1.5 py-2 lg:flex"
+        >
+          <button
+            type="button"
+            onclick={() => (leftCollapsed = false)}
+            aria-label="Expand the editor panel"
+            class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <PanelLeftOpen class="size-4" />
+          </button>
+        </div>
+      {/if}
       <section
         bind:this={leftPanelEl}
         class={[
-          'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none lg:flex',
+          'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none',
           mobileView === 'chat' || mobileView === 'editor' || mobileView === 'settings' ? 'flex' : 'hidden',
+          leftCollapsed ? 'lg:hidden' : 'lg:flex',
         ]}
         style="--lw: {leftWidth}px"
       >
@@ -397,15 +438,25 @@
               Chat
             </button>
           </div>
-          {#if leftTab === 'editor' || leftTab === 'settings'}
-            <span
-              class={['pr-1 text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
-              aria-live="polite"
-              title={saveState === 'error' ? saveError : undefined}
+          <div class="flex items-center gap-1">
+            {#if leftTab === 'editor' || leftTab === 'settings'}
+              <span
+                class={['text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
+                aria-live="polite"
+                title={saveState === 'error' ? saveError : undefined}
+              >
+                {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save failed{/if}
+              </span>
+            {/if}
+            <button
+              type="button"
+              onclick={() => (leftCollapsed = true)}
+              aria-label="Collapse the editor panel"
+              class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save failed{/if}
-            </span>
-          {/if}
+              <PanelLeftClose class="size-4" />
+            </button>
+          </div>
         </div>
         <div class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
@@ -447,7 +498,10 @@
 
       <!-- LEFT SPLITTER -->
       <div
-        class="hidden w-1.5 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-border lg:block"
+        class={[
+          'hidden w-1.5 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-border',
+          leftCollapsed ? 'lg:hidden' : 'lg:block',
+        ]}
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize editor panel"
@@ -497,11 +551,15 @@
         autopilotRevertable={autopilotRevertable}
         autopilotBusy={turnActive || runActive || undoing}
         {atsDelta}
+        {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
         onUndoAutopilot={undoAutopilot}
         {onTemplateSelected}
         bind:tab={artifactTab}
-        mobileVisible={mobileView === 'templates' || mobileView === 'jd' || mobileView === 'verdict'}
+        mobileVisible={mobileView === 'templates' ||
+          mobileView === 'jd' ||
+          mobileView === 'jobmatch' ||
+          mobileView === 'score'}
       />
     </div>
   {/if}

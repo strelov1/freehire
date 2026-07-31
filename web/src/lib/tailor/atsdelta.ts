@@ -2,6 +2,7 @@
 // fell — a warning that names the category responsible. Kept out of the component so the
 // wording and the sign handling are unit-tested rather than eyeballed in a browser.
 import type { CvAtsDelta } from '$lib/cv';
+import type { LineItem } from '$lib/generated/contracts';
 
 export interface AtsDeltaRow {
   id: string;
@@ -11,6 +12,10 @@ export interface AtsDeltaRow {
   change: number;
   /** The change as shown: '+8', '−15', or '0'. */
   text: string;
+  /** The checks behind the tailored side's score, for the row's disclosure. Always an
+   *  array: the wire omits it when empty, and a row the panel cannot iterate would take the
+   *  whole panel down over a category that simply had nothing to say. */
+  items: LineItem[];
 }
 
 export interface AtsDeltaView {
@@ -45,6 +50,7 @@ export function viewAtsDelta(resp: CvAtsDelta | null | undefined): AtsDeltaView 
     tailored: c.tailored,
     change: c.change,
     text: signed(c.change),
+    items: c.items ?? [],
   }));
 
   const view: AtsDeltaView = {

@@ -404,6 +404,13 @@ export interface CategoryChange {
   base: number /* int */;
   tailored: number /* int */;
   change: number /* int */; // Tailored − Base, signed
+  /**
+   * Items are the checks behind the TAILORED side's score, so a panel can expand a row
+   * into why it stands where it does. The base side's items are deliberately not carried:
+   * the candidate is editing the tailored copy, and a before/after list of individual
+   * checks is a diff nobody asked for.
+   */
+  items?: LineItem[];
 }
 
 /**
