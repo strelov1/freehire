@@ -8,6 +8,7 @@ import type {
   Score as JobMatchScore,
   Document,
   Margins,
+  Style,
   ExperienceItem,
   EducationItem,
   SkillGroup,
@@ -112,6 +113,16 @@ export interface CvTemplate {
   photo: boolean;
 }
 
+/** A typeface the CV may use, as /cv-fonts reports it (mirrors cv.FontInfo). `note` names the
+ *  familiar face it matches ("Calibri metrics"); `css` is the stack the live preview renders
+ *  with. The list is fetched, never hard-coded — the server's registry is what the PDF obeys. */
+export interface CvFont {
+  id: string;
+  label: string;
+  note?: string;
+  css: string;
+}
+
 /** A fresh, fully-populated (but empty) document so the form can bind every section
  *  without null-guards. The server still sanitizes on save, dropping the empties. */
 /** The half-inch-per-side page margins a fresh CV starts with (mirrors cv.DefaultMargins). */
@@ -131,9 +142,18 @@ function toMargins(m?: Partial<Margins>): Margins {
   };
 }
 
+/** An all-unset style. Deliberately NOT the mirror of defaultMargins(): every field stays
+ *  empty/zero, which is what tells the renderer to use the active template's own typography.
+ *  Filling these in would send concrete values back on the next autosave and freeze whichever
+ *  template happened to be selected into the document. */
+export function emptyStyle(): Style {
+  return { font_family: '', font_size: 0, line_height: 0 };
+}
+
 export function emptyDocument(): Document {
   return {
     margins: defaultMargins(),
+    style: emptyStyle(),
     header: { full_name: '', email: '', phone: '', location: '', links: [] },
     summary: '',
     experience: [],
@@ -151,6 +171,8 @@ export function toEditable(doc: Partial<Document>): Document {
   const base = emptyDocument();
   return {
     margins: toMargins(doc.margins),
+    // Merged, not defaulted: an absent field stays at its unset sentinel.
+    style: { ...base.style, ...doc.style },
     header: { ...base.header, ...doc.header, links: doc.header?.links ?? [] },
     summary: doc.summary ?? '',
     experience: (doc.experience ?? []).map((e) => ({ ...e, bullets: e.bullets ?? [], stack: e.stack ?? [] })),

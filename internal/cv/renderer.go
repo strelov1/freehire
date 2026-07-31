@@ -67,6 +67,17 @@ func (r *TypstRenderer) compile(ctx context.Context, doc Document, tmpl Template
 	}
 	defer os.RemoveAll(dir)
 
+	// Swap the font registry id for the family name Typst asks for. doc is a value, so this
+	// is a copy and the caller's document — the one the handler is about to persist — keeps
+	// the id. Same trick as Document.withoutContacts; it is what lets the stored document stay
+	// free of engine-specific names. An unregistered or unset id resolves to nothing, leaving
+	// the template's own #set text(font:) to decide.
+	if family, ok := ResolveFontFamily(doc.Style.FontFamily); ok {
+		doc.Style.FontFamily = family
+	} else {
+		doc.Style.FontFamily = ""
+	}
+
 	// The photo is staged only for a template that prints one, so the same condition
 	// decides the file and the flag: image() on a missing file is a compile error, and a
 	// template that draws the placeholder must never be told a photo exists.

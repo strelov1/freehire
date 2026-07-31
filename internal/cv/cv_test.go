@@ -118,6 +118,51 @@ func TestSanitizeMargins(t *testing.T) {
 	}
 }
 
+// A zero style value means "inherit from the template", so — unlike a margin — it must
+// survive Sanitize untouched. Clamping it up to the lower bound would rewrite every CV in
+// the database to the minimum type size on its next save, which is why this is its own test
+// rather than a case inside TestSanitizeStyle.
+func TestSanitizeStyleLeavesUnsetValuesUnset(t *testing.T) {
+	doc := Document{Style: Style{FontSize: 0, LineHeight: 0}}
+	doc.Sanitize()
+
+	if doc.Style.FontSize != 0 {
+		t.Errorf("unset FontSize: got %v, want 0 (inherit from the template)", doc.Style.FontSize)
+	}
+	if doc.Style.LineHeight != 0 {
+		t.Errorf("unset LineHeight: got %v, want 0 (inherit from the template)", doc.Style.LineHeight)
+	}
+}
+
+func TestSanitizeStyle(t *testing.T) {
+	tests := []struct {
+		name                  string
+		in                    Style
+		wantSize, wantLeading float64
+	}{
+		{"over-max font size", Style{FontSize: 30.0}, 12.0, 0},
+		{"below-min font size", Style{FontSize: 4.0}, 8.5, 0},
+		{"font size rounds to the nearest half point", Style{FontSize: 10.3}, 10.5, 0},
+		{"in-range font size is left alone", Style{FontSize: 11.0}, 11.0, 0},
+		{"negative font size clamps to the minimum", Style{FontSize: -2.0}, 8.5, 0},
+		{"over-max line height", Style{LineHeight: 2.0}, 0, 0.9},
+		{"below-min line height", Style{LineHeight: 0.05}, 0, 0.3},
+		{"in-range line height is left alone", Style{LineHeight: 0.55}, 0, 0.55},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := Document{Style: tt.in}
+			doc.Sanitize()
+			if doc.Style.FontSize != tt.wantSize {
+				t.Errorf("FontSize: got %v, want %v", doc.Style.FontSize, tt.wantSize)
+			}
+			if doc.Style.LineHeight != tt.wantLeading {
+				t.Errorf("LineHeight: got %v, want %v", doc.Style.LineHeight, tt.wantLeading)
+			}
+		})
+	}
+}
+
 func TestEmptyDocumentIsSanitizeStable(t *testing.T) {
 	doc := EmptyDocument()
 	before := doc

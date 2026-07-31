@@ -10,16 +10,23 @@
   // layout only — `photoSrc` is handed in rather than fetched here, since the headshot belongs to the
   // profile, not to the document being rendered.
   import type { Document, ExperienceItem, Project } from '$lib/generated/contracts';
-  import { experienceHeader, educationLine, languageLabel, certificationLine } from '$lib/cv';
+  import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '$lib/cv';
   import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
-  import { paginateBlocks } from './geometry';
+  import { paginateBlocks, previewTypography } from './geometry';
 
   let {
     doc,
     templateId = 'classic-ats',
     zoom = 1,
+    fonts = [],
     photoSrc = null,
-  }: { doc: Document; templateId?: string; zoom?: number; photoSrc?: string | null } = $props();
+  }: {
+    doc: Document;
+    templateId?: string;
+    zoom?: number;
+    fonts?: CvFont[];
+    photoSrc?: string | null;
+  } = $props();
 
   // A4 at 96dpi, and the inch→pixel factor margins convert through.
   const PAGE_W = 794;
@@ -44,6 +51,26 @@
   const mr = $derived((doc.margins?.right || 0.5) * PX_PER_IN);
   const mb = $derived((doc.margins?.bottom || 0.5) * PX_PER_IN);
   const ml = $derived((doc.margins?.left || 0.5) * PX_PER_IN);
+  // Typography, resolved once and spread onto BOTH the visible sheets and the hidden
+  // measurement layer below. One value, two consumers — measuring in one type and drawing in
+  // another would make pagination disagree with what is on screen, and nothing would report it.
+  //
+  // No webfonts are shipped for the preview: 2.6 MB to approximate a page is a bad trade. Each
+  // stack therefore falls through to whatever the machine has, which on Windows is the very face
+  // the registry entry matches (Times New Roman, Arial, Calibri) and elsewhere may be a generic.
+  // The preview has always approximated the PDF; this keeps it in the same family, not identical.
+  const typography = $derived(
+    previewTypography(doc.style ?? {}, fonts.find((f) => f.id === doc.style?.font_family)?.css ?? ''),
+  );
+  const typeStyle = $derived(
+    `font-size: ${typography.fontSizePx}px; line-height: ${typography.lineHeight};` +
+      (typography.fontFamily ? ` font-family: ${typography.fontFamily};` : ''),
+  );
+  // NOTE: the `13` in the text-[calc(N/13*1em)] classes below is PREVIEW_FONT_SIZE_PX — the base
+  // those ratios were taken over. Change the constant and those class strings must follow.
+  // The template's own face applies only while the document names none.
+  const useTemplateFace = $derived(typography.fontFamily === '');
+
   const contentWidth = $derived(PAGE_W - ml - mr);
   const pageBodyHeight = $derived(PAGE_H - mt - mb);
   // Width the paginating (main) column renders at — full content width, or the sidebar's wide column.
@@ -116,12 +143,12 @@
 </script>
 
 {#snippet sectionHeading(title: string)}
-  <h2 class={['mb-1 mt-3 text-[12px] font-bold uppercase tracking-wide', isCentered ? 'text-center' : '']}>{title}</h2>
+  <h2 class={['mb-1 mt-3 text-[calc(12/13*1em)] font-bold uppercase tracking-wide', isCentered ? 'text-center' : '']}>{title}</h2>
   {#if ruled}<hr class="mb-2 -mt-0.5 border-neutral-300" />{/if}
 {/snippet}
 
 {#snippet contactLine()}
-  <p class={['text-[12px] text-neutral-700', isCentered ? 'text-center' : '', isSans ? 'text-neutral-500' : '']}>
+  <p class={['text-[calc(12/13*1em)] text-neutral-700', isCentered ? 'text-center' : '', isSans ? 'text-neutral-500' : '']}>
     {#each contacts as c, i (i)}
       {#if i > 0}<span class="mx-1.5 text-neutral-400">{contactSep}</span>{/if}
       {#if isLink(c)}
@@ -147,7 +174,7 @@
 {#snippet headerBlock()}
   <header class={['mb-1', isCentered ? 'text-center' : '', isHeadshot ? 'flex items-start gap-5' : '']}>
     <div class={isHeadshot ? 'min-w-0 flex-1' : ''}>
-    <h1 class={['text-2xl font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
+    <h1 class={['text-[calc(24/13*1em)] leading-[1.333] font-bold', isSans ? 'uppercase tracking-wider' : 'tracking-tight']}>
       {header.full_name || 'Your Name'}
     </h1>
     {#if !twoColumn && contacts.length}
@@ -156,7 +183,7 @@
     {#if (doc.summary ?? '').trim()}
       <p
         class={[
-          'mt-2 text-[12.5px] text-neutral-800',
+          'mt-2 text-[calc(12.5/13*1em)] text-neutral-800',
           isCentered ? 'mx-auto max-w-[62ch] italic' : '',
           twoColumn ? 'italic' : '',
         ]}
@@ -251,8 +278,11 @@
      OUTSIDE the zoomed stack below — otherwise CSS zoom would scale the measured heights. -->
 <div
   aria-hidden="true"
-  class={['pointer-events-none invisible absolute -left-[9999px] top-0 text-[13px] leading-snug text-neutral-900', isSans ? 'font-sans' : 'font-serif']}
-  style="width: {mainWidth}px;"
+  class={[
+    'pointer-events-none invisible absolute -left-[9999px] top-0 text-neutral-900',
+    useTemplateFace && (isSans ? 'font-sans' : 'font-serif'),
+  ]}
+  style="width: {mainWidth}px; {typeStyle}"
 >
   {#each blocks as b, i (b.id)}
     <div bind:this={measureRefs[i]}>{@render blockView(b)}</div>
@@ -266,8 +296,8 @@
 <div class="flex flex-col items-center gap-6" style="zoom: {zoom};">
   {#each pageBlocks as page, p (p)}
     <article
-      class={['bg-white text-[13px] leading-snug text-neutral-900 shadow-sm', isSans ? 'font-sans' : 'font-serif']}
-      style="width: {PAGE_W}px; min-height: {PAGE_H}px; padding: {mt}px {mr}px {mb}px {ml}px;"
+      class={['bg-white text-neutral-900 shadow-sm', useTemplateFace && (isSans ? 'font-sans' : 'font-serif')]}
+      style="width: {PAGE_W}px; min-height: {PAGE_H}px; padding: {mt}px {mr}px {mb}px {ml}px; {typeStyle}"
     >
       {#if twoColumn}
         <div class="grid grid-cols-[35%_1fr] gap-6">

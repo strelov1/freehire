@@ -17,6 +17,7 @@ import type {
   CvRecord,
   CvTailoredItem,
   CvTemplate,
+  CvFont,
   UpdateCvInput,
   TailorResult,
 } from './cv';
@@ -1385,6 +1386,11 @@ export function createApi(
     return requestData<CvTemplate[]>('/api/v1/cv-templates');
   }
 
+  /** List the typefaces a CV may use (id, label, note, css) for the font picker. */
+  async function listCvFonts(): Promise<CvFont[]> {
+    return requestData<CvFont[]>('/api/v1/cv-fonts');
+  }
+
   /** Switch a CV's template only (title + document untouched). */
   async function setCvTemplate(id: string, templateId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/template`, jsonBody('PUT', { template_id: templateId }));
@@ -1658,6 +1664,7 @@ export function createApi(
     putPhoto,
     deletePhoto,
     listCvTemplates,
+    listCvFonts,
     setCvTemplate,
     getCv,
     getCvAtsDelta,

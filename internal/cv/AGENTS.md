@@ -19,9 +19,60 @@ generation.
 2. Append a `TemplateInfo` entry to `templates`. Mark `ATSSafe: false` for anything that is
    not single-column with standard headings (e.g. `sidebar`), and `Photo: true` if it prints
    the headshot (see below). A photo template is never ATS-safe.
-3. Run `make cv-previews` to regenerate `web/static/cv-previews/<id>.svg` (the gallery
+3. Copy the style preamble from an existing template and set its three fallbacks to your own
+   font, size, and leading. **Every internal `size:` must be an em multiple of the base**
+   (`(18 / 9.5) * 1em`, not `18pt`) or a raised base size will leave your headings behind and
+   flatten the hierarchy. Ratios are written as a division so the old absolute value stays
+   legible.
+4. Run `make cv-previews` to regenerate `web/static/cv-previews/<id>.svg` (the gallery
    thumbnails). A preview is committed for every registered id — the generator iterates the
    registry so the set can't drift.
+
+Two Typst traps that cost real debugging time here:
+
+- **In `text(size: X, tracking: Y)` the `em` inside `tracking` resolves against `X`,** not the
+  outer base. Converting a heading's 1pt tracking as `1/9.5 em` nearly doubled it at an 18pt
+  heading. Take the ratio over the call's own size.
+- **A Typst PDF embeds a creation timestamp,** so byte-comparing two PDFs proves nothing —
+  two renders of one source in different seconds differ. Compare SVG, which is deterministic.
+
+## Typography (`Document.Style`)
+
+A CV carries a font id, a base type size in points, and a line height (Typst leading, in em).
+`Sanitize` clamps a set value and **leaves a zero one zero** — zero means "whatever the active
+template uses". That is the opposite of `Margins`, where an unset side resolves to a concrete
+0.5in, and the asymmetry is the whole design:
+
+- No migration. Every CV predating the field has no style block and renders exactly as before.
+- A template stays a whole design choice: switching one still moves whatever the candidate has
+  not overridden.
+
+Writing `clampFontSize` by analogy with `clampMargin` — the obvious thing, they sit ten lines
+apart — would rewrite every CV in the database to the minimum size on its next save.
+`TestSanitizeStyleLeavesUnsetValuesUnset` is the tripwire.
+
+The style block is **not** in `PatchOps`: the tailoring agent edits content, the candidate
+edits presentation.
+
+## Fonts
+
+`fontRegistry` in `fonts.go` is the set a CV may choose (id, label, the familiar face it
+matches, and a CSS stack for the live HTML preview). `GET /cv-fonts` serves it so the web never
+grows a second copy. The document stores the **id**; `renderer.go` swaps in the Typst family
+name on its own copy before marshalling `data.json`, so a persisted CV holds no engine name.
+
+**Adding a font:** drop its `.ttf` (regular + bold) into `fonts/` with its licence, then append
+an entry naming those files. `//go:embed fonts/*.ttf` picks them up and `writeFonts` stages
+them into every compile sandbox.
+
+The set is deliberately small and metric-compatible with what recruiters and résumé parsers
+expect — Tinos for Times New Roman, Liberation Sans for Arial, Carlito for Calibri. That also
+pays off in the browser: the preview ships no webfonts and its CSS fallback lands on the real
+face the metrics match.
+
+`TestEveryRegisteredFontIsResolvable` fails the build if an entry names neither a Typst
+built-in nor a bundled file. It has to, because under `--ignore-system-fonts` a missing face
+is not an error — Typst silently substitutes another one and the CV is quietly wrong.
 
 ## Rendering
 
@@ -29,9 +80,10 @@ generation.
 `--ignore-system-fonts`; user data goes through `data.json` (never argv). `compile` is shared
 by `Render` (PDF, live) and `GeneratePreviews` (SVG, `cmd/cv-previews`).
 
-Fonts: the Typst binary embeds no proportional sans, so Liberation Sans (SIL OFL) is bundled
-under `fonts/`, staged into the sandbox, and exposed via `--font-path`. A template that wants
-sans uses `#set text(font: "Liberation Sans")`.
+Fonts: the Typst binary embeds no proportional sans, so the bundled faces under `fonts/` (all
+SIL OFL) are staged into the sandbox and exposed via `--font-path`. A template names its own
+default face directly (`#set text(font: "Liberation Sans")`); anything the candidate picks
+arrives through `Document.Style` — see **Typography** and **Fonts** above.
 
 ## The headshot (`portrait`, `headshot`)
 

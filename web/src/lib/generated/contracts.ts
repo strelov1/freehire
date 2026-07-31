@@ -832,6 +832,12 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
  */
 export interface Document {
   margins: Margins;
+  /**
+   * No omitempty: it does nothing on a struct (encoding/json only omits false, 0, nil, and
+   * empty strings/slices/maps), so the tag would promise clients an absence they never see
+   * while making the generated TypeScript optional for no reason.
+   */
+  style: Style;
   header: Header;
   summary?: string;
   experience?: ExperienceItem[];
@@ -851,6 +857,27 @@ export interface Margins {
   right: number /* float64 */;
   bottom: number /* float64 */;
   left: number /* float64 */;
+}
+/**
+ * Style is the CV's typography: the typeface, the base type size in points, and the line
+ * height as a leading multiple of the em. It is part of the document, so it persists with
+ * the CV, is copied when the CV is tailored, and is not clobbered by field-level patches.
+ * A zero value means "whatever the active template uses" and Sanitize KEEPS IT ZERO. This is
+ * the opposite of Margins, which resolves an unset side to a concrete 0.5in, and the
+ * difference is deliberate on both counts:
+ *   - Every CV written before this type existed has no style block, so it renders exactly as
+ *     it did. There is nothing to migrate.
+ *   - A template stays a whole design choice. Switching to a template with looser leading
+ *     actually loosens the leading, because that value was never frozen into the document.
+ * Resolving defaults here — the natural thing to do by analogy with clampMargin — would
+ * silently bake the current template's typography into every document on its next save.
+ * FontFamily is a registry id (see fonts.go), never a renderer's own face name: the renderer
+ * resolves it on its own copy of the document at render time.
+ */
+export interface Style {
+  font_family?: string;
+  font_size?: number /* float64 */; // points
+  line_height?: number /* float64 */; // em of leading
 }
 /**
  * Header is the top-of-CV contact block. The tagline under the name is Document.Summary

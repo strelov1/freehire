@@ -91,6 +91,7 @@ func newATSDeltaFixture(t *testing.T, pool *pgxpool.Pool) atsDeltaFixture {
 	ctx := context.Background()
 	base, err := store.Create(ctx, userID, "Base", "centered", cv.Document{
 		Margins: cv.Margins{Top: 1.2, Right: 1.2, Bottom: 1.2, Left: 1.2},
+		Style:   cv.Style{FontFamily: "tinos", FontSize: 12.0, LineHeight: 0.9},
 		Header:  cv.Header{FullName: "Jane Roe", Email: "jane@example.com"},
 		Summary: "base summary",
 	})
@@ -99,6 +100,7 @@ func newATSDeltaFixture(t *testing.T, pool *pgxpool.Pool) atsDeltaFixture {
 	}
 	tailored, err := store.CreateTailored(ctx, userID, jobID, "Tailored", "classic-ats", cv.Document{
 		Margins: cv.Margins{Top: 0.4, Right: 0.4, Bottom: 0.4, Left: 0.4},
+		Style:   cv.Style{FontFamily: "carlito", FontSize: 8.5, LineHeight: 0.3},
 		Header:  cv.Header{FullName: "Jane Roe", Email: "jane@example.com"},
 		Summary: "tailored summary",
 	})
@@ -195,7 +197,7 @@ func TestATSDelta_ComparesTheTailoredCopyAgainstTheBase(t *testing.T) {
 	}
 }
 
-func TestATSDelta_RendersBothSidesWithTheTailoredCopysTemplateAndMargins(t *testing.T) {
+func TestATSDelta_RendersBothSidesWithTheTailoredCopysTemplateMarginsAndTypography(t *testing.T) {
 	f := newATSDeltaFixture(t, startPostgres(t))
 
 	if _, status := f.get(t, f.tailored.ID.String()); status != fiber.StatusOK {
@@ -209,6 +211,16 @@ func TestATSDelta_RendersBothSidesWithTheTailoredCopysTemplateAndMargins(t *test
 	for i, doc := range f.renderer.docsSeen {
 		if doc.Margins != wantMargins {
 			t.Errorf("render %d margins = %+v, want the tailored copy's %+v", i, doc.Margins, wantMargins)
+		}
+	}
+	// Typography belongs in this list for the same reason margins do: type size and leading
+	// decide how much text lands on a page, so they change the extracted text layer the score
+	// is computed from. Leaving it out would let a candidate move their own delta by picking a
+	// font, with the content untouched.
+	wantStyle := cv.Style{FontFamily: "carlito", FontSize: 8.5, LineHeight: 0.3}
+	for i, doc := range f.renderer.docsSeen {
+		if doc.Style != wantStyle {
+			t.Errorf("render %d style = %+v, want the tailored copy's %+v", i, doc.Style, wantStyle)
 		}
 	}
 	for i, tmpl := range f.renderer.tmplsSeen {
@@ -239,6 +251,9 @@ func TestATSDelta_LeavesTheBaseCVUntouched(t *testing.T) {
 	}
 	if after.Document.Margins != before.Document.Margins {
 		t.Errorf("base margins = %+v, want them unchanged at %+v", after.Document.Margins, before.Document.Margins)
+	}
+	if after.Document.Style != before.Document.Style {
+		t.Errorf("base style = %+v, want it unchanged at %+v", after.Document.Style, before.Document.Style)
 	}
 	if after.Document.Summary != before.Document.Summary {
 		t.Errorf("base summary = %q, want it unchanged at %q", after.Document.Summary, before.Document.Summary)
