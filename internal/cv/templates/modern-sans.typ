@@ -51,7 +51,7 @@
     if v != "" { parts.push(v) }
   }
   for l in arr(hd, "links") {
-    if l != "" { parts.push(l) }
+    if l != "" { parts.push(link(l)[#l]) }
   }
   parts
 }
@@ -98,7 +98,7 @@
     let name = s(p, "name")
     let lnk = s(p, "link")
     let bl = arr(p, "bullets")
-    [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#lnk)]]
+    [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(lnk)[#lnk])]]
   }))
 }
 

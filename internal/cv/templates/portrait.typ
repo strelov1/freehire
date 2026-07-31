@@ -102,7 +102,7 @@
   let links = arr(hd, "links").filter(l => l != "")
   if links.len() > 0 {
     section("Links")
-    for l in links { l; linebreak() }
+    for l in links { link(l)[#l]; linebreak() }
   }
   // Skills
   let allSkills = arr(cv, "skills").map(g => arr(g, "items")).flatten()
@@ -185,7 +185,7 @@
       let name = s(p, "name")
       let lnk = s(p, "link")
       let bl = arr(p, "bullets")
-      [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#lnk)]]
+      [#text(weight: "bold")[#name]#if bl.len() > 0 [: #bl.join(" ")]#if lnk != "" [ (#link(lnk)[#lnk])]]
     }))
   }
 }

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -536,6 +537,76 @@ func TestRenderDoesNotMutateTheCallersDocument(t *testing.T) {
 	if doc.Style.FontFamily != "tinos" {
 		t.Errorf("render rewrote the caller's font family to %q; it must resolve on a copy", doc.Style.FontFamily)
 	}
+}
+
+// TestEveryTemplateRendersLinksAsClickableLinks proves each registered template emits its
+// links as PDF link annotations rather than as inert text. Registry-driven, so a template
+// added later is held to the rule without this test being edited.
+//
+// This is a precondition of link tracing, not a cosmetic preference: tracing substitutes the
+// link's target while leaving the visible text alone, so a template that prints a link as
+// plain text carries no target to substitute and would report no clicks at all.
+//
+// classic-ats is the control. If every template fails, including it, the detector below is
+// wrong rather than the templates.
+func TestEveryTemplateRendersLinksAsClickableLinks(t *testing.T) {
+	bin, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("typst not installed; skipping clickable-link render regression")
+	}
+	doc := Document{
+		Header:     Header{FullName: "Ada Lovelace", Email: "ada@example.com", Links: []string{"github.com/ada"}},
+		Summary:    "Backend engineer with a decade of systems work.",
+		Experience: []ExperienceItem{{Role: "Senior Engineer", Company: "Analytical Engines", Start: "2018", End: "Present", Bullets: []string{"Cut latency by 40%."}}},
+		Projects:   []Project{{Name: "opensched", Link: "opensched.dev", Bullets: []string{"A tiny cron scheduler."}}},
+		Skills:     []SkillGroup{{Group: "Languages", Items: []string{"Go"}}},
+	}
+	r := NewTypstRenderer(bin)
+	for _, ti := range Templates() {
+		t.Run(ti.ID, func(t *testing.T) {
+			tmpl, err := ResolveTemplate(ti.ID)
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			data, err := r.Render(context.Background(), doc, tmpl, nil)
+			if err != nil {
+				t.Fatalf("render: %v", err)
+			}
+			targets := pdfLinkTargets(t, data)
+			for _, want := range []string{"github.com/ada", "opensched.dev"} {
+				if !linksTo(targets, want) {
+					t.Errorf("template %q prints %q as inert text; link targets found: %v", ti.ID, want, targets)
+				}
+			}
+		})
+	}
+}
+
+// linksTo reports whether any rendered link points at the given destination. Substring, not
+// equality: what matters is which destination the link carries, not the exact spelling the
+// payload hands to Typst.
+func linksTo(targets []string, want string) bool {
+	return slices.ContainsFunc(targets, func(got string) bool { return strings.Contains(got, want) })
+}
+
+// pdfLinkTargets returns the URI of every link annotation in the rendered PDF — what a
+// reader actually follows, as opposed to what they see.
+func pdfLinkTargets(t *testing.T, data []byte) []string {
+	t.Helper()
+	rd, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("open rendered pdf: %v", err)
+	}
+	var targets []string
+	for i := 1; i <= rd.NumPage(); i++ {
+		annots := rd.Page(i).V.Key("Annots")
+		for j := 0; j < annots.Len(); j++ {
+			if uri := annots.Index(j).Key("A").Key("URI"); uri.Kind() == pdf.String {
+				targets = append(targets, uri.RawString())
+			}
+		}
+	}
+	return targets
 }
 
 func extractPDFText(t *testing.T, data []byte) string {

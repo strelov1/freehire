@@ -39,6 +39,10 @@
 
 - [ ] 5.1 `renderPayload` carries `link_hrefs` for header links and projects; a CV with tracing
       off renders visually unchanged (compare SVG — a Typst PDF embeds a timestamp)
+- [ ] 5.1b The href is absolute even when tracing is off: links are stored scheme-less
+      (`github.com/ada`), so today every template — `classic-ats` included, since long before
+      this change — emits a relative URI that no PDF reader can follow. Normalise in the
+      payload, not in six copies of Typst string handling
 - [ ] 5.2 `RenderCVPDF` mints tokens and passes the traced hrefs when the CV has tracing on,
       leaving `cvs.data` untouched
 - [ ] 5.3 Test that the extracted text layer still carries the candidate's own link text
