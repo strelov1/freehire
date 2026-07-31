@@ -150,6 +150,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
+      # The design system is a `link:` dependency — a bare symlink, so pnpm does not
+      # install its dependencies with web's. The package resolves tailwind-variants,
+      # clsx, tailwind-merge and @lucide/svelte out of its OWN node_modules, which has
+      # to exist before anything imports a primitive. Missing, the web build fails with
+      # MODULE_NOT_FOUND, which is loud — the point of `link:` over `file:` is that its
+      # failure mode is loud.
+      - name: Install design-system dependencies
+        working-directory: design-system
+        run: pnpm install --frozen-lockfile
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

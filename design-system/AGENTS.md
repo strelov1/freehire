@@ -1,7 +1,7 @@
 # Design system
 
 `freehire-design-system` — tokens and Svelte primitives, a **pnpm** package sibling to
-`web/`, linked in as `file:../design-system`. `web/src/lib/ui/index.ts` is a thin re-export
+`web/`, linked in as `link:../design-system`. `web/src/lib/ui/index.ts` is a thin re-export
 surface, so app code imports from `$lib/ui` and never reaches into the package directly.
 It re-exports with `export *`, not a list: an enumerated list is a second copy of `src/index.ts`
 that nothing reconciles, and it drifted once already — eleven of the fifteen primitives were
@@ -18,6 +18,16 @@ rather than here — their census of `web/` was already off by a third.
 - **pnpm, not npm.** `pnpm install && pnpm build` here, then `pnpm install` in `web/`.
   Corepack activates the pinned version. There is no `package-lock.json` anywhere — adding
   one breaks the CI `design-system` → `web` job chain.
+- **`link:`, not `file:` — and the order matters.** `link:` is a bare symlink, so there is no
+  copy of this package to go stale; editing a token here is visible to `web` on its next build
+  with no install at all. It was `file:` until 2026-07-31, which copies into web's virtual
+  store keyed by name+version — and this package's version is a permanent `0.0.0`, so
+  `--frozen-lockfile` happily reused a copy from days earlier. That shipped an app referencing
+  `bg-warning` against a design system defining no such token: green release, colourless
+  badges. The price of the symlink is that **pnpm does not install a linked package's own
+  dependencies** — `tailwind-variants`, `clsx`, `tailwind-merge` and `@lucide/svelte` resolve
+  from `design-system/node_modules`, so **install here before building `web/`** or the build
+  dies with `MODULE_NOT_FOUND`. Loud, which is the trade.
 - **`src/theme.css` is the package's CSS contract, and every consumer imports it.** It holds
   the token imports, the `@source` scan, and the `@theme inline` bridge. `web/src/app.css`
   and `.storybook/preview.css` each `@import` it and add only what is theirs (the typography

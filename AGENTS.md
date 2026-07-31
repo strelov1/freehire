@@ -25,7 +25,9 @@ Non-obvious:
 
 - `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file.
 - `sources/` — YAML board files, not Go. One file per ATS provider, plus `custom.yml` and `telegram.yml`.
-- `design-system/` — a separate pnpm package, sibling to `web/`, linked via `file:../design-system`.
+- `design-system/` — a separate pnpm package, sibling to `web/`, linked via `link:../design-system`
+  (a symlink, not a copy). **Install it before building `web/`** — pnpm does not install a
+  linked package's own dependencies.
 - `internal/db/` — **generated**; edit `internal/db/queries/*.sql` and run `make sqlc`.
 - `services/pii-filter` — a standalone service, not a Go package.
 
