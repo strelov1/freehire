@@ -186,14 +186,18 @@
 
 <!-- The apply CTA renders twice: inline in the header on desktop, and in the
      mobile sticky bar at the end of the article. Sole difference is size + layout
-     classes, so both share this snippet. -->
+     classes, so both share this snippet.
+     nofollow: the destination is the posting's own site, which the catalogue never
+     vetted — the same stance the description sanitizer takes on in-body links
+     (internal/sources/sanitize.go). Without it a submitted vacancy buys a followed
+     link from every job page, which is what the SEO submissions are actually after. -->
 {#snippet applyCta(size: 'md' | 'lg', className: string)}
   <Button
     variant="primary"
     {size}
     href={job.url}
     target="_blank"
-    rel="noopener noreferrer"
+    rel="nofollow noopener noreferrer"
     onclick={onApplyClick}
     class={className}
   >
