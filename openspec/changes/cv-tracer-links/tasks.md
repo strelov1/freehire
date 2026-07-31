@@ -13,12 +13,12 @@
 
 ## 2. Domain package `internal/tracerlink`
 
-- [ ] 2.1 `Targets(doc)` — eligible links with their `source_path`: scheme-less URLs normalise
+- [x] 2.1 `Targets(doc)` — eligible links with their `source_path`: scheme-less URLs normalise
       to https, while `mailto:`, `tel:`, empty values and our own domain are skipped
-- [ ] 2.2 `Token(prefix)` — `<prefix>-<rrrrr>`, five random lowercase alphanumerics
-- [ ] 2.3 `Classify(method, userAgent)` — bot flag (pattern list plus "any non-GET is a bot"),
+- [x] 2.2 `Token(prefix)` — `<prefix>-<rrrrr>`, five random lowercase alphanumerics
+- [x] 2.3 `Classify(method, userAgent)` — bot flag (pattern list plus "any non-GET is a bot"),
       device type, OS family, UA family
-- [ ] 2.4 `VisitorHash(salt, ip, userAgent)` — keyed HMAC, stable for one visitor and empty
+- [x] 2.4 `VisitorHash(salt, ip, userAgent)` — keyed HMAC, stable for one visitor and empty
       when no salt is configured
 
 ## 3. Schema and queries
