@@ -39,6 +39,7 @@ type trackingRow struct {
 	LastActivityAt *time.Time `json:"last_activity_at"`
 	DaysSilent     *int       `json:"days_silent"`
 	SilenceState   *string    `json:"silence_state"`
+	FollowedUpAt   *time.Time `json:"followed_up_at"`
 }
 
 func listSilence(t *testing.T, items []jobtracking.TrackedJob) []trackingRow {
@@ -153,5 +154,35 @@ func TestTrackingSilenceUnconfirmed(t *testing.T) {
 	}
 	if *rows[0].SilenceState != userjob.SilenceUnconfirmed {
 		t.Errorf("silence_state = %q, want %q", *rows[0].SilenceState, userjob.SilenceUnconfirmed)
+	}
+}
+
+// TestTrackingCarriesTheChaseBesideTheSilence asserts a chased application reports both readings
+// at once: it is still silent for the full elapsed time, and it additionally says when it was
+// chased. The board renders a third state from that pair, so dropping either half — omitting
+// followed_up_at from the wire, or letting the chase move the clock — collapses it back to two.
+func TestTrackingCarriesTheChaseBesideTheSilence(t *testing.T) {
+	chased := row("applied", 40*oneDay, 30*oneDay, false)
+	at := time.Now().Add(-2 * oneDay)
+	chased.FollowedUpAt = &at
+
+	rows := listSilence(t, []jobtracking.TrackedJob{chased, row("applied", 40*oneDay, 30*oneDay, false)})
+	if len(rows) != 2 {
+		t.Fatalf("listing returned %d rows, want 2", len(rows))
+	}
+	if rows[0].FollowedUpAt == nil {
+		t.Fatal("a chased application reports no followed_up_at; the board cannot say it was chased")
+	}
+	if !rows[0].FollowedUpAt.Equal(at) {
+		t.Errorf("followed_up_at = %v, want %v", rows[0].FollowedUpAt, at)
+	}
+	if rows[0].SilenceState == nil || *rows[0].SilenceState != userjob.SilenceSilent {
+		t.Errorf("a chased application is no longer silent: %+v", rows[0])
+	}
+	if rows[0].DaysSilent == nil || *rows[0].DaysSilent != 30 {
+		t.Errorf("chasing moved the clock: days_silent = %v, want 30", rows[0].DaysSilent)
+	}
+	if rows[1].FollowedUpAt != nil {
+		t.Errorf("an unchased application reports followed_up_at = %v, want null", rows[1].FollowedUpAt)
 	}
 }
