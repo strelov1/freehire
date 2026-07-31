@@ -1,7 +1,7 @@
 ## 1. Pin the defect and the contract before touching the interface
 
-- [ ] 1.1 Unit-test the search predicate against the shape it has to serve — an application with a posting, one without (employer known only as a slug), a query matching the role, a query matching neither, and a query in the wrong case. **RED first:** the predicate does not exist yet, and its answers are the part of this change with real choices in them
-- [ ] 1.2 Unit-test the row-id decoder: `a<digits>` resolves to an application, anything else is read as a posting slug, and a malformed value is not mistaken for either
+- [x] 1.1 Unit-test the search predicate against the shape it has to serve — an application with a posting, one without (employer known only as a slug), a query matching the role, a query matching neither, and a query in the wrong case. **RED first:** the predicate does not exist yet, and its answers are the part of this change with real choices in them
+- [x] 1.2 Unit-test the row-id decoder: `a<digits>` resolves to an application, anything else is read as a posting slug, and a malformed value is not mistaken for either
 
 ## 2. Writes addressed by the row the listing served
 
