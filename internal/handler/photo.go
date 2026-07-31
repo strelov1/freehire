@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"io"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/headshot"
 )
 
@@ -101,16 +104,13 @@ func readPhotoUpload(c *fiber.Ctx) ([]byte, error) {
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "missing photo file")
 	}
-	if fh.Size > maxPhotoUpload {
-		return nil, fiber.NewError(fiber.StatusBadRequest, "photo is too large")
-	}
 	f, err := fh.Open()
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "cannot read photo file")
 	}
 	defer f.Close()
-	// LimitReader guards the read itself: fh.Size is the client's declaration, not a
-	// promise about what the stream delivers.
+	// The cap is enforced on the read, not on the part's declared size: that number is
+	// the client's claim, not a promise about what the stream delivers.
 	data, err := io.ReadAll(io.LimitReader(f, maxPhotoUpload+1))
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "cannot read photo file")
@@ -137,4 +137,23 @@ func mapPhotoError(err error) error {
 	default:
 		return err
 	}
+}
+
+// headshotForTemplate returns the owner's stored headshot for a template that prints one,
+// and nil for everything else — no storage is touched for a photoless template. Every
+// failure is nil too: a missing photo, an unconfigured bucket, and an unreachable one all
+// mean the same thing to the renderer (draw the placeholder), and none is worth failing a
+// CV download over.
+func headshotForTemplate(ctx context.Context, photos *headshot.Store, userID int64, tmpl cv.Template) []byte {
+	if !tmpl.Photo || !photos.Enabled() {
+		return nil
+	}
+	photo, err := photos.Get(ctx, userID)
+	if err != nil {
+		if !errors.Is(err, headshot.ErrNotStored) {
+			log.Printf("cv render: headshot for user %d: %v", userID, err)
+		}
+		return nil
+	}
+	return photo
 }

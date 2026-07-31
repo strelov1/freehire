@@ -2,11 +2,9 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -476,29 +474,13 @@ func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID i
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, h.ownerHeadshot(c.Context(), ownerID, tmpl))
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, ownerID, tmpl))
 	if err != nil {
 		return err
 	}
 	c.Set(fiber.HeaderContentType, "application/pdf")
 	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
 	return c.Send(pdf)
-}
-
-// ownerHeadshot returns the CV owner's stored headshot for a template that prints one, and
-// nil otherwise — including on every failure, which the templates render as the placeholder.
-func (h *referralHandlers) ownerHeadshot(ctx context.Context, ownerID int64, tmpl cv.Template) []byte {
-	if !tmpl.Photo || !h.photos.Enabled() {
-		return nil
-	}
-	photo, err := h.photos.Get(ctx, ownerID)
-	if err != nil {
-		if !errors.Is(err, headshot.ErrNotStored) {
-			log.Printf("referral proof render: headshot for user %d: %v", ownerID, err)
-		}
-		return nil
-	}
-	return photo
 }
 
 // referralProofKey is the S3 key of a member's proof CV for a company. One offer per

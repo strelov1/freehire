@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
@@ -434,32 +433,13 @@ func (h *cvHandlers) RenderCVPDF(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, h.headshotFor(c.Context(), userID, tmpl))
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, userID, tmpl))
 	if err != nil {
 		return err
 	}
 	c.Set(fiber.HeaderContentType, "application/pdf")
 	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
 	return c.Send(pdf)
-}
-
-// headshotFor returns the owner's stored headshot for a template that prints one, and nil
-// for everything else — no storage is touched for a photoless template. Every failure is
-// nil too: a missing photo, an unconfigured bucket, and an unreachable one all mean the
-// same thing to the renderer (draw the placeholder), and none is worth failing a CV
-// download over.
-func (h *cvHandlers) headshotFor(ctx context.Context, userID int64, tmpl cv.Template) []byte {
-	if !tmpl.Photo || !h.photos.Enabled() {
-		return nil
-	}
-	photo, err := h.photos.Get(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, headshot.ErrNotStored) {
-			log.Printf("cv render: headshot for user %d: %v", userID, err)
-		}
-		return nil
-	}
-	return photo
 }
 
 // validCVTemplate rejects an unknown template_id (400) and resolves an empty one to the

@@ -63,7 +63,8 @@ func Normalize(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedImage, err)
 	}
-	square := scale(crop(orient(src, readOrientation(data))))
+	upright := orient(src, readOrientation(data))
+	square := scale(upright, centredSquare(upright.Bounds()))
 
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, square, &jpeg.Options{Quality: jpegQuality}); err != nil {
@@ -77,64 +78,52 @@ func Normalize(data []byte) ([]byte, error) {
 // (2, 4, 5, 7) come from a deliberate flip, and silently un-mirroring someone's photo is
 // worse than leaving it as they see it everywhere else.
 func orient(src image.Image, orientation int) image.Image {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
 	switch orientation {
 	case orientationRotate180:
-		return rotate(src, func(x, y, w, h int) (int, int) { return w - 1 - x, h - 1 - y })
+		return remap(src, w, h, func(x, y int) (int, int) { return w - 1 - x, h - 1 - y })
 	case orientationRotate90:
-		return rotate(src, func(x, y, w, h int) (int, int) { return h - 1 - y, x })
+		return remap(src, h, w, func(x, y int) (int, int) { return h - 1 - y, x })
 	case orientationRotate270:
-		return rotate(src, func(x, y, w, h int) (int, int) { return y, w - 1 - x })
+		return remap(src, h, w, func(x, y int) (int, int) { return y, w - 1 - x })
 	default:
 		return src
 	}
 }
 
-// rotate rebuilds the image by mapping each source pixel through at, which reports the
-// destination coordinate for a source (x, y) in a w×h image. The destination is square
-// for the quarter turns and same-shaped for the half turn, so its bounds come from the
-// mapped corners rather than being assumed.
-func rotate(src image.Image, at func(x, y, w, h int) (int, int)) image.Image {
+// remap rebuilds the image at dstW×dstH, placing each source pixel where at says. A quarter
+// turn swaps the dimensions, which is why the destination size is stated by the caller
+// rather than inferred.
+func remap(src image.Image, dstW, dstH int, at func(x, y int) (int, int)) image.Image {
 	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
-	maxX, maxY := at(w-1, h-1, w, h)
-	if x, y := at(0, 0, w, h); x > maxX || y > maxY {
-		maxX, maxY = max(maxX, x), max(maxY, y)
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, maxX+1, maxY+1))
-	for y := range h {
-		for x := range w {
-			dx, dy := at(x, y, w, h)
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	for y := range b.Dy() {
+		for x := range b.Dx() {
+			dx, dy := at(x, y)
 			dst.Set(dx, dy, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
 	return dst
 }
 
-// crop returns the largest centred square of the image. A portrait photo therefore keeps
+// centredSquare is the largest square inside the bounds. A portrait photo therefore keeps
 // its middle band rather than its top, which is where a face usually sits in a headshot
 // shot at arm's length.
-func crop(src image.Image) image.Image {
-	b := src.Bounds()
+func centredSquare(b image.Rectangle) image.Rectangle {
 	edge := min(b.Dx(), b.Dy())
-	r := image.Rect(0, 0, edge, edge).Add(image.Point{
+	return image.Rect(0, 0, edge, edge).Add(image.Point{
 		X: b.Min.X + (b.Dx()-edge)/2,
 		Y: b.Min.Y + (b.Dy()-edge)/2,
 	})
-	if sub, ok := src.(interface {
-		SubImage(image.Rectangle) image.Image
-	}); ok {
-		return sub.SubImage(r)
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, edge, edge))
-	draw.Draw(dst, dst.Bounds(), src, r.Min, draw.Src)
-	return dst
 }
 
-// scale resamples the square to outputEdge. CatmullRom is the sharpest of the kernels
-// x/image offers and the cost is irrelevant on a 512 px target; the standard library has
-// no resampling scaler at all.
-func scale(src image.Image) image.Image {
+// scale resamples the source rectangle into an outputEdge square — the crop and the resize
+// in one resampling pass, since Scale reads a source rect natively. CatmullRom is the
+// sharpest of the kernels x/image offers and the cost is irrelevant on a 512 px target; the
+// standard library has no resampling scaler at all.
+func scale(src image.Image, r image.Rectangle) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, outputEdge, outputEdge))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Src, nil)
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, r, draw.Src, nil)
 	return dst
 }

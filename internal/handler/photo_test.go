@@ -267,9 +267,9 @@ func TestPhoto_RequiresAuthentication(t *testing.T) {
 	}
 }
 
-// headshotFor is the gate between the render path and object storage: it must fetch for a
+// headshotForTemplate is the gate between the render path and object storage: it must fetch for a
 // template that prints a portrait and must not touch the bucket for one that does not.
-func TestHeadshotFor(t *testing.T) {
+func TestHeadshotForTemplate(t *testing.T) {
 	photoTmpl, err := cv.ResolveTemplate("portrait")
 	if err != nil {
 		t.Fatalf("resolve portrait: %v", err)
@@ -285,8 +285,7 @@ func TestHeadshotFor(t *testing.T) {
 		if _, err := store.Put(context.Background(), 1, samplePhoto(t)); err != nil {
 			t.Fatalf("Put: %v", err)
 		}
-		h := &cvHandlers{photos: store}
-		if got := h.headshotFor(context.Background(), 1, photoTmpl); len(got) == 0 {
+		if got := headshotForTemplate(context.Background(), store, 1, photoTmpl); len(got) == 0 {
 			t.Error("no headshot handed to a photo-bearing template")
 		}
 	})
@@ -298,8 +297,7 @@ func TestHeadshotFor(t *testing.T) {
 			t.Fatalf("Put: %v", err)
 		}
 		blobs.gets = 0
-		h := &cvHandlers{photos: store}
-		if got := h.headshotFor(context.Background(), 1, plainTmpl); got != nil {
+		if got := headshotForTemplate(context.Background(), store, 1, plainTmpl); got != nil {
 			t.Errorf("a photoless template was handed %d bytes", len(got))
 		}
 		if blobs.gets != 0 {
@@ -308,15 +306,15 @@ func TestHeadshotFor(t *testing.T) {
 	})
 
 	t.Run("photo template without a stored headshot", func(t *testing.T) {
-		h := &cvHandlers{photos: headshot.New(newFakePhotoBlobs(), &fakePhotoRepo{})}
-		if got := h.headshotFor(context.Background(), 1, photoTmpl); got != nil {
+		store := headshot.New(newFakePhotoBlobs(), &fakePhotoRepo{})
+		if got := headshotForTemplate(context.Background(), store, 1, photoTmpl); got != nil {
 			t.Errorf("expected nil (the placeholder path), got %d bytes", len(got))
 		}
 	})
 
 	t.Run("storage unconfigured", func(t *testing.T) {
-		h := &cvHandlers{photos: headshot.New(nil, &fakePhotoRepo{})}
-		if got := h.headshotFor(context.Background(), 1, photoTmpl); got != nil {
+		store := headshot.New(nil, &fakePhotoRepo{})
+		if got := headshotForTemplate(context.Background(), store, 1, photoTmpl); got != nil {
 			t.Errorf("expected nil with storage disabled, got %d bytes", len(got))
 		}
 	})
