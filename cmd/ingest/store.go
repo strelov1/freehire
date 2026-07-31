@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobdedup"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
@@ -50,6 +51,26 @@ func needsIndex(row db.UpsertJobRow) bool {
 	return row.Changed || row.Inserted.Bool
 }
 
+// clustersByRole reports whether a persisted write is worth asking the role-cluster
+// question about — the gate in front of jobdedup.CanonicalForRole.
+//
+// It is a cost gate, not a correctness one: the lookup is a range scan on
+// jobs_open_role_cluster_idx, but a full crawl replays millions of rows per pass against
+// a database that is already the fleet's I/O bottleneck, so which writes pay for it is a
+// real choice. The batch recompute remains the reconciler for whatever this skips.
+//
+// Only a genuinely new posting is asked about. A per-city fan-out arrives as inserts, so
+// this catches it at the moment it happens, and a full pass then pays one lookup per new
+// vacancy — thousands — instead of one per row re-seen, which is nearly the whole
+// catalogue. What it deliberately leaves to the batch recompute is the posting that turns
+// into a duplicate later, when an edit makes its title and description match a sibling's:
+// rarer than the fan-out, and no worse off than before this existed.
+//
+// A row that already carries a marker knows its own answer and is not re-asked.
+func clustersByRole(row db.UpsertJobRow) bool {
+	return row.Inserted.Bool && !row.Job.DuplicateOf.Valid
+}
+
 func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -74,12 +95,34 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 		return fmt.Errorf("upsert job: %w", err)
 	}
 
-	if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
-		TargetVersion:     s.targetVersion,
-		JobID:             saved.Job.ID,
-		ExcludeCategories: vocab.NonTechCategories,
-	}); err != nil {
-		return fmt.Errorf("enqueue enrichment: %w", err)
+	// A company that posts one role once per city sends it as many board identities, all
+	// sharing a role_fingerprint. Ask — after the upsert, because the answer depends on
+	// the written row's id — whether an older canonical copy already exists, and point
+	// this row at it. Without this the copies stay separate searchable jobs until the
+	// next batch recompute hours later, and every one of them reaches search, the
+	// subscription digests, and the company's job count as a vacancy of its own.
+	deduped := false
+	if clustersByRole(saved) {
+		if canon, ok := jobdedup.CanonicalForRole(ctx, qtx, params, saved.Job.ID); ok {
+			if _, err := qtx.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{
+				ID:          saved.Job.ID,
+				DuplicateOf: pgtype.Int8{Int64: canon.ID, Valid: true},
+			}); err != nil {
+				return fmt.Errorf("mark job %d duplicate of %d: %w", saved.Job.ID, canon.ID, err)
+			}
+			deduped = true
+		}
+	}
+
+	// A duplicate never reaches search, so enriching it pays an LLM for an invisible row.
+	if !deduped {
+		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
+			TargetVersion:     s.targetVersion,
+			JobID:             saved.Job.ID,
+			ExcludeCategories: vocab.NonTechCategories,
+		}); err != nil {
+			return fmt.Errorf("enqueue enrichment: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -102,10 +145,10 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 	// facets. The signal only covers fields UpsertJob writes: changes made by other
 	// paths (enrichment via SetJobEnrichment, collections via
 	// PropagateCollectionsToJobs) reconcile on the next batch reindex, not here.
-	// A known non-canonical repost (duplicate_of set on a prior recompute) is not
-	// searchable, so it is never pushed to the live index; the reindex reconciles a
-	// freshly-ingested repost whose marker is not yet computed.
-	if s.indexer != nil && needsIndex(saved) && !saved.Job.DuplicateOf.Valid {
+	// A non-canonical repost is not searchable, so it never reaches the live index —
+	// whether it was marked by a prior recompute or by the write above. What still falls
+	// to the reindex is a row that only became a repost after it was written.
+	if s.indexer != nil && needsIndex(saved) && !deduped && !saved.Job.DuplicateOf.Valid {
 		// The job-reality signal needs this role's cluster counts; a lookup failure
 		// degrades to a unique role (counts 1) rather than failing the index push.
 		repost, mass := int64(1), int64(1)

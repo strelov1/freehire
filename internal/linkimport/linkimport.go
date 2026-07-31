@@ -12,17 +12,16 @@ package linkimport
 
 import (
 	"context"
-	"errors"
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
+	"github.com/strelov1/freehire/internal/jobdedup"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -208,10 +207,13 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err != nil {
 		return Result{}, false, err
 	}
-	// Asked AFTER the upsert, because the answer depends on the written row's id: the batch
-	// recompute makes the cluster's oldest open row the canon, so collapsing onto a NEWER
-	// posting would be undone — and inverted — by the next reindex.
-	canon, deduped := canonicalForRole(ctx, qtx, params, res.Job.ID)
+	// Asked AFTER the upsert, because the answer depends on the written row's id. Only a
+	// URL-keyed generic import can shadow a posting we already crawled: a board identity
+	// is deduplicated by UpsertJob's ON CONFLICT (source, external_id) before it gets here.
+	canon, deduped := db.CanonicalJobForRoleRow{}, false
+	if params.Source == linksource.GenericSource {
+		canon, deduped = jobdedup.CanonicalForRole(ctx, qtx, params, res.Job.ID)
+	}
 	if deduped {
 		if _, err := qtx.MarkJobDuplicateOf(ctx, db.MarkJobDuplicateOfParams{
 			ID:          res.Job.ID,
@@ -247,50 +249,6 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 		out.PublicSlug = canon.PublicSlug
 	}
 	return out, true, nil
-}
-
-// canonicalForRole asks whether the catalog already holds this vacancy in an open, canonical
-// row older than the one just written (id), which is the row the batch recompute would pick as
-// the cluster's canon. Answering with a NEWER posting would have the next reindex undo the
-// marking and invert it, so this stays deliberately in step with
-// RecomputeRoleDuplicatesForCompany rather than racing it.
-//
-// Three things are never asked about:
-//   - a board identity, already deduplicated by UpsertJob's ON CONFLICT (source, external_id);
-//   - an empty fingerprint, which clusters with nobody;
-//   - an empty company slug. The recompute's driver list skips those companies entirely, so a
-//     row marked here would never be released when its canon closes — it would stay out of
-//     search and out of enrichment permanently.
-//
-// Running inside the write transaction keeps the canon from being deleted under the marking;
-// it does not stop a concurrent close (READ COMMITTED, no row lock). That race is benign: URL
-// resolution falls back to the duplicate's own slug once the canon closes, and the next
-// recompute releases the row.
-//
-// A lookup failure is not fatal — the row is written unmarked, exactly as before. Dedup is an
-// improvement, not a condition of keeping the vacancy.
-func canonicalForRole(ctx context.Context, q *db.Queries, p db.UpsertJobParams, id int64) (db.CanonicalJobForRoleRow, bool) {
-	if p.Source != linksource.GenericSource || p.CompanySlug == "" || p.RoleFingerprint.String == "" {
-		return db.CanonicalJobForRoleRow{}, false
-	}
-	row, err := q.CanonicalJobForRole(ctx, db.CanonicalJobForRoleParams{
-		CompanySlug:     p.CompanySlug,
-		RoleFingerprint: p.RoleFingerprint,
-		Source:          p.Source,
-		ExternalID:      p.ExternalID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return db.CanonicalJobForRoleRow{}, false
-	}
-	if err != nil {
-		log.Printf("linkimport: canonical posting for %s/%s: %v",
-			p.CompanySlug, p.RoleFingerprint.String, err)
-		return db.CanonicalJobForRoleRow{}, false
-	}
-	if row.ID >= id {
-		return db.CanonicalJobForRoleRow{}, false
-	}
-	return row, true
 }
 
 // unindex drops a row that was just demoted to a duplicate from the live index. A row written
