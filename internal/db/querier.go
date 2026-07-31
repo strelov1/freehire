@@ -550,6 +550,10 @@ type Querier interface {
 	// Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are
 	// evidence OF that role. Returns 0 affected rows for a foreign or missing id.
 	DeleteExperienceEmployment(ctx context.Context, arg DeleteExperienceEmploymentParams) (int64, error)
+	// The 180-day retention sweep, run by cmd/prune — the repository's single hard-delete path. The
+	// tokens themselves are kept: an old PDF must keep redirecting even once the clicks behind it have
+	// aged out.
+	DeleteExpiredTracerClicks(ctx context.Context, maxAge pgtype.Interval) (int64, error)
 	DeleteGmailConnection(ctx context.Context, userID int64) error
 	DeleteMailbox(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
@@ -1398,6 +1402,19 @@ type Querier interface {
 	// First page of a thread's replies, oldest first. LEFT JOIN so an authorless reply
 	// still returns — a future AI reply, or one whose author deleted their account.
 	ListThreadRepliesFirst(ctx context.Context, arg ListThreadRepliesFirstParams) ([]ListThreadRepliesFirstRow, error)
+	// The owner's per-CV panel: every traced link of one CV with what is known about it. Owner-scoped.
+	//
+	// Clicks flagged as automated are counted separately rather than filtered out, so the UI's "include
+	// likely bots" switch needs no second query. The owner's own clicks are excluded from every count
+	// here: they are recorded so the history is complete, not so they can be reported back as somebody
+	// having opened the CV.
+	//
+	// distinct_visitors counts non-empty hashes only. An empty visitor_hash means the deployment has no
+	// salt configured, and counting those rows would report every unidentifiable click as one visitor.
+	// Filtered on the CV row rather than on l.cv_id: same rows, but it keeps the caller's cv_id one
+	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
+	// nullable UUID, and the handler would carry two spellings of one id.
+	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
 	// Every board currently failing or cooled down, worst first — the operator's
 	// "what's broken" query and the source of the per-run summary log.
 	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
@@ -1798,6 +1815,9 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed post is never reprocessed within the same run.
 	RecordTelegramPostFailure(ctx context.Context, arg RecordTelegramPostFailureParams) (RecordTelegramPostFailureRow, error)
+	// Write one click. Best-effort by contract: the handler redirects whether or not this succeeds,
+	// because a broken redirect lives in a PDF the candidate can neither see nor fix.
+	RecordTracerClick(ctx context.Context, arg RecordTracerClickParams) error
 	// Recompute a single company's materialized vote counters from company_votes and
 	// return them. Run as its own statement AFTER the vote write within one transaction.
 	// Scoped to one company_slug via company_votes_company_slug_idx.
@@ -2116,6 +2136,12 @@ type Querier interface {
 	SyncCompaniesFromJobs(ctx context.Context) error
 	// Mark a session as the most recently active, so the rail's order follows real use.
 	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
+	// Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Runs in the same
+	// transaction as the click insert and only for a countable one — automated traffic and the owner's
+	// own clicks are excluded by the caller, not here, so this statement stays a plain stamp.
+	//
+	// GREATEST guards against an out-of-order write moving the marker backwards.
+	TouchCVLastClick(ctx context.Context, id pgtype.UUID) error
 	// Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 	// crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
 	// offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the
@@ -2126,6 +2152,11 @@ type Querier interface {
 	// exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 	// (not newly saved) would drop out of the sweep and its removed offers would never close.
 	TouchJob(ctx context.Context, arg TouchJobParams) (string, error)
+	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
+	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be
+	// marked as the owner's own). Unauthenticated read — the token IS the credential, and it grants
+	// nothing but a redirect.
+	TracerLinkByToken(ctx context.Context, token string) (TracerLinkByTokenRow, error)
 	// Set an application's stage and/or notes for a user, idempotently. Upserts the
 	// (user, job) row (viewed_at defaults). Partial update: a NULL param leaves that
 	// column unchanged (COALESCE keeps the existing value), so the caller can set the
@@ -2299,6 +2330,19 @@ type Querier interface {
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error
+	// Mint the token for one traced link, or return the token that link already has.
+	//
+	// The PDF is not stored: it is re-rendered on every download, so this runs on every download too.
+	// Idempotency is therefore not an optimisation but the condition for the feature working at all —
+	// without it three downloads would produce three tokens for one link and scatter the counts.
+	//
+	// The no-op DO UPDATE (writing cv_id its own value) is what makes the token come back on conflict:
+	// ON CONFLICT DO NOTHING returns no row, so the caller would have to read the token in a second
+	// statement and race with a concurrent download doing the same. Same idiom as UpsertJob.
+	//
+	// Owner-scoped through the CV: the SELECT yields nothing for a CV the caller does not own, so the
+	// INSERT writes nothing rather than minting a token against a stranger's CV.
+	UpsertTracerLink(ctx context.Context, arg UpsertTracerLinkParams) (string, error)
 	// Create-or-replace the cached analysis for a (user, job). The composite PRIMARY KEY
 	// makes it idempotent: a recompute overwrites the analysis, model, and both staleness
 	// stamps. created_at is deliberately NOT re-bumped on conflict, so it records the

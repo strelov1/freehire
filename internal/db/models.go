@@ -147,17 +147,32 @@ type CreditLedger struct {
 }
 
 type Cv struct {
-	UserID          int64              `json:"user_id"`
-	Title           string             `json:"title"`
-	TemplateID      string             `json:"template_id"`
-	Data            []byte             `json:"data"`
-	JobID           pgtype.Int8        `json:"job_id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
-	AgentSessionID  pgtype.Text        `json:"agent_session_id"`
-	ID              uuid.UUID          `json:"id"`
-	AutopilotReport []byte             `json:"autopilot_report"`
-	IsTailored      bool               `json:"is_tailored"`
+	UserID             int64              `json:"user_id"`
+	Title              string             `json:"title"`
+	TemplateID         string             `json:"template_id"`
+	Data               []byte             `json:"data"`
+	JobID              pgtype.Int8        `json:"job_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	AgentSessionID     pgtype.Text        `json:"agent_session_id"`
+	ID                 uuid.UUID          `json:"id"`
+	AutopilotReport    []byte             `json:"autopilot_report"`
+	IsTailored         bool               `json:"is_tailored"`
+	TracerLinksEnabled bool               `json:"tracer_links_enabled"`
+	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
+}
+
+type CvLinkClick struct {
+	ID           int64              `json:"id"`
+	TracerLinkID pgtype.UUID        `json:"tracer_link_id"`
+	ClickedAt    pgtype.Timestamptz `json:"clicked_at"`
+	IsLikelyBot  bool               `json:"is_likely_bot"`
+	IsOwner      bool               `json:"is_owner"`
+	DeviceType   string             `json:"device_type"`
+	OsFamily     string             `json:"os_family"`
+	UaFamily     string             `json:"ua_family"`
+	ReferrerHost string             `json:"referrer_host"`
+	VisitorHash  string             `json:"visitor_hash"`
 }
 
 type CvRevision struct {
@@ -176,6 +191,16 @@ type CvRevision struct {
 	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CvTracerLink struct {
+	ID              pgtype.UUID        `json:"id"`
+	CvID            pgtype.UUID        `json:"cv_id"`
+	Token           string             `json:"token"`
+	SourcePath      string             `json:"source_path"`
+	DestinationUrl  string             `json:"destination_url"`
+	DestinationHash string             `json:"destination_hash"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type Email struct {

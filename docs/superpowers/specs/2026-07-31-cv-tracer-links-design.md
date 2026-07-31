@@ -99,6 +99,7 @@ CREATE TABLE cv_link_clicks (
     tracer_link_id uuid NOT NULL REFERENCES cv_tracer_links(id) ON DELETE CASCADE,
     clicked_at     timestamptz NOT NULL DEFAULT now(),
     is_likely_bot  boolean NOT NULL DEFAULT false,
+    is_owner       boolean NOT NULL DEFAULT false,
     device_type    text NOT NULL DEFAULT 'unknown',
     os_family      text NOT NULL DEFAULT 'unknown',
     ua_family      text NOT NULL DEFAULT 'unknown',

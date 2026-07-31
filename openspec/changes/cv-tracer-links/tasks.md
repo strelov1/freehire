@@ -23,13 +23,13 @@
 
 ## 3. Schema and queries
 
-- [ ] 3.1 Migration `0060_cv_tracer_links.sql` — `cvs.tracer_links_enabled`,
+- [x] 3.1 Migration `0060_cv_tracer_links.sql` — `cvs.tracer_links_enabled`,
       `cvs.last_click_at`, tables `cv_tracer_links` and `cv_link_clicks` with their indexes
-- [ ] 3.2 Queries in `internal/db/queries/tracer_links.sql`: idempotent `UpsertTracerLink`,
+- [x] 3.2 Queries in `internal/db/queries/tracer_links.sql`: idempotent `UpsertTracerLink`,
       `TracerLinkByToken`, `RecordTracerClick` (stamping `cvs.last_click_at` in the same
       transaction for countable clicks), `TracerLinkStatsForCV`, `DeleteExpiredTracerClicks`;
       run `make sqlc`
-- [ ] 3.3 Integration test (build tag): re-minting an unchanged CV reuses tokens; a changed
+- [x] 3.3 Integration test (build tag): re-minting an unchanged CV reuses tokens; a changed
       destination mints a new one while the old still resolves; one destination at two
       positions gets two tokens
 
