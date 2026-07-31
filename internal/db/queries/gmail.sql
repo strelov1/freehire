@@ -102,10 +102,15 @@ SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.fr
     (CASE WHEN sqlc.arg(with_body)::bool THEN emails.body_html ELSE '' END)::text AS body_html,
     emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
-    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    -- The link is to the APPLICATION; the posting is how it is displayed while the
+    -- catalogue still holds one. cmd/prune clears la.job_id, so linked_slug goes NULL
+    -- while the row stays linked — the employer is on the application for exactly that.
+    lj.public_slug AS linked_slug,
+    COALESCE(lj.company, la.company_slug, '')::text AS linked_company,
     sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN applications la ON la.id = emails.application_id
+LEFT JOIN jobs lj ON lj.id = la.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.user_id = $1
   AND emails.deleted_at IS NULL
@@ -115,9 +120,9 @@ WHERE emails.user_id = $1
   AND (sqlc.arg(unclassified)::bool = false OR emails.classified_at IS NULL)
   AND (
     sqlc.arg(link)::text = ''
-    OR (sqlc.arg(link) = 'linked'    AND emails.job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'suggested' AND emails.job_id IS NULL AND emails.suggested_job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'unlinked'  AND emails.job_id IS NULL AND emails.suggested_job_id IS NULL)
+    OR (sqlc.arg(link) = 'linked'    AND emails.application_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND emails.application_id IS NULL AND emails.suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND emails.application_id IS NULL AND emails.suggested_job_id IS NULL)
   )
   AND (
     sqlc.arg(q)::text = ''
@@ -142,9 +147,9 @@ WHERE user_id = $1
   AND (sqlc.arg(unclassified)::bool = false OR classified_at IS NULL)
   AND (
     sqlc.arg(link)::text = ''
-    OR (sqlc.arg(link) = 'linked'    AND job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+    OR (sqlc.arg(link) = 'linked'    AND application_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
   )
   AND (
     sqlc.arg(q)::text = ''
@@ -192,10 +197,15 @@ LIMIT 1;
 SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
     emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
-    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    -- The link is to the APPLICATION; the posting is how it is displayed while the
+    -- catalogue still holds one. cmd/prune clears la.job_id, so linked_slug goes NULL
+    -- while the row stays linked — the employer is on the application for exactly that.
+    lj.public_slug AS linked_slug,
+    COALESCE(lj.company, la.company_slug, '')::text AS linked_company,
     sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN applications la ON la.id = emails.application_id
+LEFT JOIN jobs lj ON lj.id = la.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.id = $1 AND emails.user_id = $2 AND emails.deleted_at IS NULL;
 
@@ -216,9 +226,9 @@ WHERE user_id = $1
   AND (sqlc.arg(status)::text = '' OR status_signal = sqlc.arg(status))
   AND (
     sqlc.arg(link)::text = ''
-    OR (sqlc.arg(link) = 'linked'    AND job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR (sqlc.arg(link) = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+    OR (sqlc.arg(link) = 'linked'    AND application_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR (sqlc.arg(link) = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
   )
   AND (
     sqlc.arg(q)::text = ''
@@ -254,8 +264,8 @@ SELECT coalesce(status_signal, '')::text AS label,
     count(*)::bigint AS n,
     count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
     count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
-    count(*) FILTER (WHERE job_id IS NOT NULL)::bigint AS linked,
-    count(*) FILTER (WHERE job_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
+    count(*) FILTER (WHERE application_id IS NOT NULL)::bigint AS linked,
+    count(*) FILTER (WHERE application_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
 FROM emails
 WHERE user_id = $1 AND deleted_at IS NULL
 GROUP BY 1;

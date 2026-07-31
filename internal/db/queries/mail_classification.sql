@@ -75,6 +75,13 @@ WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
 UPDATE emails
 SET status_signal        = sqlc.narg(status_signal),
     job_id               = COALESCE(sqlc.narg(job_id), job_id),
+    -- Follows job_id, derived rather than passed, exactly as the other link paths do:
+    -- an untouched link keeps the application it already names.
+    application_id       = CASE WHEN sqlc.narg(job_id) IS NOT NULL
+                                THEN (SELECT a.id FROM applications a
+                                       WHERE a.user_id = emails.user_id
+                                         AND a.job_id = sqlc.narg(job_id))
+                                ELSE application_id END,
     link_source          = CASE WHEN sqlc.narg(job_id) IS NOT NULL THEN 'agent' ELSE link_source END,
     -- The cast is load-bearing: this is the parameter's FIRST appearance, and it is
     -- inside an IS NOT NULL, which tells Postgres nothing about its type. Without
@@ -88,7 +95,7 @@ SET status_signal        = sqlc.narg(status_signal),
     suggested_job_id     = NULL,
     classification_model = 'agent',
     classified_at        = now()
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
 
 -- name: DeleteEmailClassificationOutbox :exec
 DELETE FROM email_classification_outbox WHERE id = $1;

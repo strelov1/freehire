@@ -33,6 +33,13 @@ const agentTriageEmail = `-- name: AgentTriageEmail :execrows
 UPDATE emails
 SET status_signal        = $1,
     job_id               = COALESCE($2, job_id),
+    -- Follows job_id, derived rather than passed, exactly as the other link paths do:
+    -- an untouched link keeps the application it already names.
+    application_id       = CASE WHEN $2 IS NOT NULL
+                                THEN (SELECT a.id FROM applications a
+                                       WHERE a.user_id = emails.user_id
+                                         AND a.job_id = $2)
+                                ELSE application_id END,
     link_source          = CASE WHEN $2 IS NOT NULL THEN 'agent' ELSE link_source END,
     -- The cast is load-bearing: this is the parameter's FIRST appearance, and it is
     -- inside an IS NOT NULL, which tells Postgres nothing about its type. Without
@@ -46,7 +53,7 @@ SET status_signal        = $1,
     suggested_job_id     = NULL,
     classification_model = 'agent',
     classified_at        = now()
-WHERE id = $4 AND user_id = $5
+WHERE emails.id = $4 AND emails.user_id = $5
 `
 
 type AgentTriageEmailParams struct {

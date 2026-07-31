@@ -338,7 +338,10 @@ func TestAgentTriageWithoutJobKeepsTheLink(t *testing.T) {
 	job := insertJob(t, pool, "kept-role")
 	id, _ := pushExternal(t, q, user, "msg-4", "Update", "some news")
 	if _, err := pool.Exec(ctx,
-		`UPDATE emails SET job_id = $2, link_source = 'manual' WHERE id = $1`, id, job); err != nil {
+		`UPDATE emails SET job_id = $2, link_source = 'manual',
+		    application_id = (SELECT a.id FROM applications a
+		                       WHERE a.user_id = emails.user_id AND a.job_id = $2)
+		 WHERE emails.id = $1`, id, job); err != nil {
 		t.Fatalf("seed link: %v", err)
 	}
 

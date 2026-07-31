@@ -22,9 +22,9 @@ WHERE user_id = $1
   AND ($5::bool = false OR classified_at IS NULL)
   AND (
     $6::text = ''
-    OR ($6 = 'linked'    AND job_id IS NOT NULL)
-    OR ($6 = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR ($6 = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+    OR ($6 = 'linked'    AND application_id IS NOT NULL)
+    OR ($6 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($6 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
   )
   AND (
     $7::text = ''
@@ -67,8 +67,8 @@ SELECT coalesce(status_signal, '')::text AS label,
     count(*)::bigint AS n,
     count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
     count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
-    count(*) FILTER (WHERE job_id IS NOT NULL)::bigint AS linked,
-    count(*) FILTER (WHERE job_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
+    count(*) FILTER (WHERE application_id IS NOT NULL)::bigint AS linked,
+    count(*) FILTER (WHERE application_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
 FROM emails
 WHERE user_id = $1 AND deleted_at IS NULL
 GROUP BY 1
@@ -147,10 +147,15 @@ const getEmail = `-- name: GetEmail :one
 SELECT emails.id, emails.source, emails.external_id, emails.s3_key, emails.from_addr, emails.from_name, emails.subject,
     emails.body_text, emails.body_html, emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
-    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    -- The link is to the APPLICATION; the posting is how it is displayed while the
+    -- catalogue still holds one. cmd/prune clears la.job_id, so linked_slug goes NULL
+    -- while the row stays linked — the employer is on the application for exactly that.
+    lj.public_slug AS linked_slug,
+    COALESCE(lj.company, la.company_slug, '')::text AS linked_company,
     sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN applications la ON la.id = emails.application_id
+LEFT JOIN jobs lj ON lj.id = la.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.id = $1 AND emails.user_id = $2 AND emails.deleted_at IS NULL
 `
@@ -177,7 +182,7 @@ type GetEmailRow struct {
 	StatusSignal     pgtype.Text        `json:"status_signal"`
 	LinkSource       pgtype.Text        `json:"link_source"`
 	LinkedSlug       pgtype.Text        `json:"linked_slug"`
-	LinkedCompany    pgtype.Text        `json:"linked_company"`
+	LinkedCompany    string             `json:"linked_company"`
 	SuggestedSlug    pgtype.Text        `json:"suggested_slug"`
 	SuggestedCompany pgtype.Text        `json:"suggested_company"`
 }
@@ -364,10 +369,15 @@ SELECT emails.id, emails.source, emails.external_id, emails.from_addr, emails.fr
     (CASE WHEN $2::bool THEN emails.body_html ELSE '' END)::text AS body_html,
     emails.received_at, (emails.read_at IS NOT NULL)::boolean AS read,
     emails.job_id, emails.suggested_job_id, emails.status_signal, emails.link_source,
-    lj.public_slug AS linked_slug, lj.company AS linked_company,
+    -- The link is to the APPLICATION; the posting is how it is displayed while the
+    -- catalogue still holds one. cmd/prune clears la.job_id, so linked_slug goes NULL
+    -- while the row stays linked — the employer is on the application for exactly that.
+    lj.public_slug AS linked_slug,
+    COALESCE(lj.company, la.company_slug, '')::text AS linked_company,
     sj.public_slug AS suggested_slug, sj.company AS suggested_company
 FROM emails
-LEFT JOIN jobs lj ON lj.id = emails.job_id
+LEFT JOIN applications la ON la.id = emails.application_id
+LEFT JOIN jobs lj ON lj.id = la.job_id
 LEFT JOIN jobs sj ON sj.id = emails.suggested_job_id
 WHERE emails.user_id = $1
   AND emails.deleted_at IS NULL
@@ -377,9 +387,9 @@ WHERE emails.user_id = $1
   AND ($6::bool = false OR emails.classified_at IS NULL)
   AND (
     $7::text = ''
-    OR ($7 = 'linked'    AND emails.job_id IS NOT NULL)
-    OR ($7 = 'suggested' AND emails.job_id IS NULL AND emails.suggested_job_id IS NOT NULL)
-    OR ($7 = 'unlinked'  AND emails.job_id IS NULL AND emails.suggested_job_id IS NULL)
+    OR ($7 = 'linked'    AND emails.application_id IS NOT NULL)
+    OR ($7 = 'suggested' AND emails.application_id IS NULL AND emails.suggested_job_id IS NOT NULL)
+    OR ($7 = 'unlinked'  AND emails.application_id IS NULL AND emails.suggested_job_id IS NULL)
   )
   AND (
     $8::text = ''
@@ -422,7 +432,7 @@ type ListEmailsRow struct {
 	StatusSignal     pgtype.Text        `json:"status_signal"`
 	LinkSource       pgtype.Text        `json:"link_source"`
 	LinkedSlug       pgtype.Text        `json:"linked_slug"`
-	LinkedCompany    pgtype.Text        `json:"linked_company"`
+	LinkedCompany    string             `json:"linked_company"`
 	SuggestedSlug    pgtype.Text        `json:"suggested_slug"`
 	SuggestedCompany pgtype.Text        `json:"suggested_company"`
 }
@@ -509,9 +519,9 @@ WHERE user_id = $1
   AND ($3::text = '' OR status_signal = $3)
   AND (
     $4::text = ''
-    OR ($4 = 'linked'    AND job_id IS NOT NULL)
-    OR ($4 = 'suggested' AND job_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR ($4 = 'unlinked'  AND job_id IS NULL AND suggested_job_id IS NULL)
+    OR ($4 = 'linked'    AND application_id IS NOT NULL)
+    OR ($4 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($4 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
   )
   AND (
     $5::text = ''

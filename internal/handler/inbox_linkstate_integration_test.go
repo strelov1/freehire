@@ -17,12 +17,22 @@ import (
 // pending suggestion instead of a link.
 func (f *harnessInboxFixture) linkEmail(emailID, jobID int64, suggested bool) {
 	f.t.Helper()
-	col := "job_id"
 	if suggested {
-		col = "suggested_job_id"
+		if _, err := f.pool.Exec(context.Background(),
+			`UPDATE emails SET suggested_job_id = $1 WHERE id = $2`, jobID, emailID); err != nil {
+			f.t.Fatalf("suggest email %d: %v", emailID, err)
+		}
+		return
 	}
+	// A link is to the application; the posting is where it was found. Setting job_id
+	// alone is what the link paths stopped doing, so a fixture that did it would test a
+	// state the product can no longer produce.
 	if _, err := f.pool.Exec(context.Background(),
-		`UPDATE emails SET `+col+` = $1 WHERE id = $2`, jobID, emailID); err != nil {
+		`UPDATE emails
+		    SET job_id         = $1,
+		        application_id = (SELECT a.id FROM applications a
+		                           WHERE a.user_id = emails.user_id AND a.job_id = $1)
+		  WHERE emails.id = $2`, jobID, emailID); err != nil {
 		f.t.Fatalf("link email %d: %v", emailID, err)
 	}
 }

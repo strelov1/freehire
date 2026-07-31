@@ -265,7 +265,10 @@ func TestSyncEmailApplicationEvent_DeletionKeepsTheFactRelinkMovesIt(t *testing.
 	}
 
 	// Re-linking to the right employer must move it.
-	if _, err := q.db.Exec(ctx, `UPDATE emails SET job_id = $2 WHERE id = $1`, emailID, jobB); err != nil {
+	if _, err := q.db.Exec(ctx, `UPDATE emails SET job_id = $2,
+		    application_id = (SELECT a.id FROM applications a
+		                       WHERE a.user_id = emails.user_id AND a.job_id = $2)
+		 WHERE emails.id = $1`, emailID, jobB); err != nil {
 		t.Fatalf("relink: %v", err)
 	}
 	sync()

@@ -235,7 +235,7 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 			LinkSource:       pgStr(r.LinkSource),
 			LinkState:        linkState(r.JobID, r.SuggestedJobID),
 			LinkedSlug:       pgStr(r.LinkedSlug),
-			LinkedCompany:    pgStr(r.LinkedCompany),
+			LinkedCompany:    r.LinkedCompany,
 			SuggestedSlug:    pgStr(r.SuggestedSlug),
 			SuggestedCompany: pgStr(r.SuggestedCompany),
 		}
@@ -267,7 +267,7 @@ func (s *Service) Get(ctx context.Context, userID, id int64) (Message, error) {
 		LinkSource:       pgStr(row.LinkSource),
 		LinkState:        linkState(row.JobID, row.SuggestedJobID),
 		LinkedSlug:       pgStr(row.LinkedSlug),
-		LinkedCompany:    pgStr(row.LinkedCompany),
+		LinkedCompany:    row.LinkedCompany,
 		SuggestedSlug:    pgStr(row.SuggestedSlug),
 		SuggestedCompany: pgStr(row.SuggestedCompany),
 	}, nil

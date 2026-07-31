@@ -307,7 +307,10 @@ func TestRebuildInsightsCompanyResponse_DeletionAndRelink(t *testing.T) {
 	}
 
 	// Correcting a mislink must move the credit, or the wrong company stays poisoned.
-	if _, err := pool.Exec(ctx, `UPDATE emails SET job_id = $2 WHERE id = $1`, reply, jobB); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE emails SET job_id = $2,
+		    application_id = (SELECT a.id FROM applications a
+		                       WHERE a.user_id = emails.user_id AND a.job_id = $2)
+		 WHERE emails.id = $1`, reply, jobB); err != nil {
 		t.Fatalf("relink: %v", err)
 	}
 	reconcile()
