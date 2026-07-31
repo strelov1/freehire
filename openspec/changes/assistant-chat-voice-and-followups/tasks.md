@@ -15,10 +15,10 @@
 
 ## 3. Dictation UI
 
-- [ ] 3.1 Add `web/src/lib/assistant/dictation.ts` with the pure parts — `appendTranscript(draft, text)`, the container/extension preference list resolved against a supplied `isTypeSupported`, `canRecord(navigatorLike)`, and the recording ceiling — plus `dictation.test.ts` covering empty draft, trailing whitespace, empty transcription, and an unsupported browser.
-- [ ] 3.2 Add `web/src/lib/assistant/VoiceInput.svelte`: idle / recording / transcribing states, elapsed time, cancel, the ceiling, wake lock acquire-and-release, and track teardown on every exit path.
-- [ ] 3.3 Add the transcription call to `web/src/lib/assistant/api.ts` and mount `VoiceInput` in `Composer.svelte`, appending its result to `draft`; hide the control where `canRecord` is false or the endpoint reported `501`.
-- [ ] 3.4 Surface denied permission, capture failure and transcription failure as messages the caller can act on, leaving the composer typable.
+- [x] 3.1 Add `web/src/lib/assistant/dictation.ts` with the pure parts — `appendTranscript(draft, text)`, the container/extension preference list resolved against a supplied `isTypeSupported`, `canRecord(navigatorLike)`, and the recording ceiling — plus `dictation.test.ts` covering empty draft, trailing whitespace, empty transcription, and an unsupported browser.
+- [x] 3.2 Add `web/src/lib/assistant/VoiceInput.svelte`: idle / recording / transcribing states, elapsed time, cancel, the ceiling, wake lock acquire-and-release, and track teardown on every exit path.
+- [x] 3.3 Add the transcription call to `web/src/lib/assistant/api.ts` and mount `VoiceInput` in `Composer.svelte`, appending its result to `draft`; hide the control where `canRecord` is false or the endpoint reported `501`.
+- [x] 3.4 Surface denied permission, capture failure and transcription failure as messages the caller can act on, leaving the composer typable.
 - [ ] 3.5 Verify in a browser: record, cancel, deny permission, and reach the ceiling.
 
 ## 4. Follow-ups backend

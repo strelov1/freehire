@@ -1,5 +1,7 @@
 <script lang="ts">
   import { ArrowUp, Loader2, Trash2, Square } from '@lucide/svelte';
+  import VoiceInput from '$lib/assistant/VoiceInput.svelte';
+  import { appendTranscript } from '$lib/assistant/dictation';
 
   // The composer: the queued-message panel (messages typed mid-turn, sent
   // one-by-one as turns finish) plus the auto-growing textarea form. Queue and
@@ -26,6 +28,21 @@
   } = $props();
 
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
+
+  // Dictation. `dictationOff` latches once the server reports no speech gateway: the
+  // feature is absent in this deployment, and offering a microphone that answers 501
+  // every time is worse than offering none. `voiceError` is shown in place of the
+  // placeholder hint, so a denied permission is legible without a toast system.
+  let dictationOff = $state(false);
+  let voiceError = $state<string | null>(null);
+
+  function acceptTranscript(text: string) {
+    voiceError = null;
+    draft = appendTranscript(draft, text);
+    // Focus follows the words: the caller's next act is to edit or to send, and both
+    // need the cursor here. They send it themselves — nothing is dispatched for them.
+    textareaEl?.focus();
+  }
 
   // Auto-grow the composer textarea up to a cap (px), like roy-web's `autosize`.
   const COMPOSER_CAP = 200;
@@ -94,6 +111,14 @@
         }}
         class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground/70 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
+      {#if !dictationOff}
+        <VoiceInput
+          {disabled}
+          onTranscript={acceptTranscript}
+          onError={(message) => (voiceError = message)}
+          onUnavailable={() => (dictationOff = true)}
+        />
+      {/if}
       {#if turnActive && onCancel && !draft.trim()}
         <button
           type="button"
@@ -119,5 +144,9 @@
         </button>
       {/if}
     </form>
+
+    {#if voiceError}
+      <p class="mt-1.5 px-4 text-xs text-destructive" role="alert">{voiceError}</p>
+    {/if}
   </div>
 </div>
