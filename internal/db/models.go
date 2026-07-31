@@ -129,7 +129,6 @@ type Cv struct {
 	AgentSessionID  pgtype.Text        `json:"agent_session_id"`
 	ID              uuid.UUID          `json:"id"`
 	AutopilotReport []byte             `json:"autopilot_report"`
-	AutopilotUndo   []byte             `json:"autopilot_undo"`
 	IsTailored      bool               `json:"is_tailored"`
 }
 

@@ -1,0 +1,21 @@
+-- Retire cvs.autopilot_undo, the pre-run document snapshot an autopilot run used to take.
+--
+-- Undoing a run is undoing the revisions it made: every edit carries the batch of the turn it
+-- belongs to (see 0060), so the run is reconstructible from the log and nothing has to be
+-- copied up front. That also removed the edge the snapshot created — two runs started at once
+-- each took one, the second captured a half-edited document, and undoing returned to the
+-- middle of the first.
+--
+-- SEPARATE RELEASE, deliberately. The code stopped reading and writing this column in the
+-- release that shipped cv_revisions. Dropping it in that same release would have been a 42703
+-- on every CV read served by a binary that had not yet been replaced — sqlc generates reads
+-- that name every column of the table, so one missing column fails any query against `cvs`,
+-- not just the feature that owned it.
+--
+-- By the time this runs, both blue and green carry code that never mentions the column, so a
+-- rollback to the other colour is safe too.
+--
+-- Applied to a fresh volume by initdb after 0060; on an existing prod volume release.sh
+-- applies it (schema_migrations tracks it) before restarting the new colour.
+
+ALTER TABLE public.cvs DROP COLUMN autopilot_undo;

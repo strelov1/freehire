@@ -1,0 +1,28 @@
+---
+title: Every CV edit is undoable on its own
+date: 2026-07-31
+summary: The tailoring workspace now keeps a history of what changed your CV — yours and the assistant's — with an undo button on each entry and the edit underlined in the preview.
+type: changelog
+tags:
+  - cv
+  - tailor
+draft: false
+---
+
+Two hands edit a tailored CV: yours and the assistant's. Until now you could see the result and
+nothing else. If the assistant rewrote eleven bullets and you disliked one of them, the only way
+back was to undo the whole run — losing the ten you were happy with.
+
+The [tailoring workspace](/features/tailor) has a **History** tab. Every change to the CV is an
+entry: who made it, when, what it changed, and a button that reverses that one edit and leaves the
+rest alone. Hovering an entry underlines what it touched in the live preview, so "what did it
+actually change" is answered by looking at the page rather than by reading a description of it.
+
+- An assistant run folds into one entry you can undo whole — or open, to undo any single edit
+  inside it.
+- Undoing is itself recorded, so you can undo an undo, and the history keeps describing what
+  really happened to the document.
+- Your own edits are in there too. The history is of the CV, not of the assistant.
+
+When the assistant explains why it made a change, that note sits under the entry in its own
+words — separate from the description of what changed, which is ours.
