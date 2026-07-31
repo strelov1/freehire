@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
 )
@@ -55,7 +56,8 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 		// The tailoring tools and the autopilot run reach the CV store, so the assistant
 		// under test carries the same CV service the HTTP surface uses.
 		cv: &cvHandlers{
-			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), queries: queries, jobReader: queries,
+			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil), queries: queries, jobReader: queries,
 			// The run reads the cached fit analysis to lay down its plan, so the CV handlers
 			// under test carry the same cache the production wiring gives them.
 			matchAnalysisCache: queries,

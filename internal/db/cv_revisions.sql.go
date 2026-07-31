@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,47 +17,31 @@ const amendCVRevision = `-- name: AmendCVRevision :one
 UPDATE cv_revisions
 SET ops = $3, title = $4, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+RETURNING id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 `
 
 type AmendCVRevisionParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID int64       `json:"user_id"`
-	Ops    []byte      `json:"ops"`
-	Title  string      `json:"title"`
-}
-
-type AmendCVRevisionRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID     uuid.UUID       `json:"id"`
+	UserID int64           `json:"user_id"`
+	Ops    json.RawMessage `json:"ops"`
+	Title  string          `json:"title"`
 }
 
 // Fold a follow-on edit into the newest revision: replace what it does and restate its
 // description, but LEAVE inverse alone. The inverse still leads back to the state before the
 // first of the coalesced edits, which is what makes undo mean something for typed text.
-func (q *Queries) AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (AmendCVRevisionRow, error) {
+func (q *Queries) AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (CvRevision, error) {
 	row := q.db.QueryRow(ctx, amendCVRevision,
 		arg.ID,
 		arg.UserID,
 		arg.Ops,
 		arg.Title,
 	)
-	var i AmendCVRevisionRow
+	var i CvRevision
 	err := row.Scan(
 		&i.ID,
 		&i.CvID,
+		&i.UserID,
 		&i.Actor,
 		&i.Origin,
 		&i.BatchID,
@@ -114,40 +99,24 @@ func (q *Queries) GetCVForEdit(ctx context.Context, arg GetCVForEditParams) (Get
 }
 
 const getCVRevision = `-- name: GetCVRevision :one
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 FROM cv_revisions
 WHERE id = $1 AND user_id = $2
 `
 
 type GetCVRevisionParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID int64       `json:"user_id"`
-}
-
-type GetCVRevisionRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 // One revision, owner-scoped — what undo reads to find the inverse it must apply.
-func (q *Queries) GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (GetCVRevisionRow, error) {
+func (q *Queries) GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (CvRevision, error) {
 	row := q.db.QueryRow(ctx, getCVRevision, arg.ID, arg.UserID)
-	var i GetCVRevisionRow
+	var i CvRevision
 	err := row.Scan(
 		&i.ID,
 		&i.CvID,
+		&i.UserID,
 		&i.Actor,
 		&i.Origin,
 		&i.BatchID,
@@ -167,45 +136,28 @@ func (q *Queries) GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (G
 const insertCVRevision = `-- name: InsertCVRevision :one
 INSERT INTO cv_revisions (cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+RETURNING id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 `
 
 type InsertCVRevisionParams struct {
-	CvID        pgtype.UUID        `json:"cv_id"`
+	CvID        uuid.UUID          `json:"cv_id"`
 	UserID      int64              `json:"user_id"`
 	Actor       string             `json:"actor"`
 	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
+	BatchID     *uuid.UUID         `json:"batch_id"`
 	Title       string             `json:"title"`
 	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
+	Ops         json.RawMessage    `json:"ops"`
+	Inverse     json.RawMessage    `json:"inverse"`
 	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-}
-
-type InsertCVRevisionRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	RevertsID   *uuid.UUID         `json:"reverts_id"`
 }
 
 // Record one change: what it did (ops), what would undo it (inverse), who made it and through
 // which entry point, and the document version it was computed against. Written in the same
 // transaction as the document it changed — a change without its revision, or a revision
 // without its change, would make the feed lie.
-func (q *Queries) InsertCVRevision(ctx context.Context, arg InsertCVRevisionParams) (InsertCVRevisionRow, error) {
+func (q *Queries) InsertCVRevision(ctx context.Context, arg InsertCVRevisionParams) (CvRevision, error) {
 	row := q.db.QueryRow(ctx, insertCVRevision,
 		arg.CvID,
 		arg.UserID,
@@ -219,10 +171,11 @@ func (q *Queries) InsertCVRevision(ctx context.Context, arg InsertCVRevisionPara
 		arg.BaseVersion,
 		arg.RevertsID,
 	)
-	var i InsertCVRevisionRow
+	var i CvRevision
 	err := row.Scan(
 		&i.ID,
 		&i.CvID,
+		&i.UserID,
 		&i.Actor,
 		&i.Origin,
 		&i.BatchID,
@@ -240,7 +193,7 @@ func (q *Queries) InsertCVRevision(ctx context.Context, arg InsertCVRevisionPara
 }
 
 const listCVRevisions = `-- name: ListCVRevisions :many
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2
 ORDER BY created_at DESC
@@ -248,41 +201,25 @@ LIMIT $3
 `
 
 type ListCVRevisionsParams struct {
-	CvID   pgtype.UUID `json:"cv_id"`
-	UserID int64       `json:"user_id"`
-	Limit  int32       `json:"limit"`
-}
-
-type ListCVRevisionsRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	CvID   uuid.UUID `json:"cv_id"`
+	UserID int64     `json:"user_id"`
+	Limit  int32     `json:"limit"`
 }
 
 // The feed, newest first.
-func (q *Queries) ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]ListCVRevisionsRow, error) {
+func (q *Queries) ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error) {
 	rows, err := q.db.Query(ctx, listCVRevisions, arg.CvID, arg.UserID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCVRevisionsRow{}
+	items := []CvRevision{}
 	for rows.Next() {
-		var i ListCVRevisionsRow
+		var i CvRevision
 		if err := rows.Scan(
 			&i.ID,
 			&i.CvID,
+			&i.UserID,
 			&i.Actor,
 			&i.Origin,
 			&i.BatchID,
@@ -307,49 +244,33 @@ func (q *Queries) ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams
 }
 
 const listCVRevisionsInBatch = `-- name: ListCVRevisionsInBatch :many
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2 AND batch_id = $3 AND reverted_at IS NULL
 ORDER BY created_at DESC
 `
 
 type ListCVRevisionsInBatchParams struct {
-	CvID    pgtype.UUID `json:"cv_id"`
-	UserID  int64       `json:"user_id"`
-	BatchID pgtype.UUID `json:"batch_id"`
-}
-
-type ListCVRevisionsInBatchRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	CvID    uuid.UUID  `json:"cv_id"`
+	UserID  int64      `json:"user_id"`
+	BatchID *uuid.UUID `json:"batch_id"`
 }
 
 // Every revision of one agent turn or autopilot run that is still standing, newest first —
 // the order a whole-run revert must undo them in.
-func (q *Queries) ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]ListCVRevisionsInBatchRow, error) {
+func (q *Queries) ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]CvRevision, error) {
 	rows, err := q.db.Query(ctx, listCVRevisionsInBatch, arg.CvID, arg.UserID, arg.BatchID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCVRevisionsInBatchRow{}
+	items := []CvRevision{}
 	for rows.Next() {
-		var i ListCVRevisionsInBatchRow
+		var i CvRevision
 		if err := rows.Scan(
 			&i.ID,
 			&i.CvID,
+			&i.UserID,
 			&i.Actor,
 			&i.Origin,
 			&i.BatchID,
@@ -380,8 +301,8 @@ WHERE id = $1 AND user_id = $2 AND reverted_at IS NULL
 `
 
 type MarkCVRevisionRevertedParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID int64       `json:"user_id"`
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
 }
 
 // Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
@@ -395,7 +316,7 @@ func (q *Queries) MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevision
 }
 
 const newestCVRevision = `-- name: NewestCVRevision :one
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT id, cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2
 ORDER BY created_at DESC
@@ -403,35 +324,19 @@ LIMIT 1
 `
 
 type NewestCVRevisionParams struct {
-	CvID   pgtype.UUID `json:"cv_id"`
-	UserID int64       `json:"user_id"`
-}
-
-type NewestCVRevisionRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
-	Actor       string             `json:"actor"`
-	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
-	Title       string             `json:"title"`
-	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
-	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
-	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	CvID   uuid.UUID `json:"cv_id"`
+	UserID int64     `json:"user_id"`
 }
 
 // The revision a follow-on edit might be folded into. Only the newest is a candidate:
 // coalescing into anything older would reorder the log.
-func (q *Queries) NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (NewestCVRevisionRow, error) {
+func (q *Queries) NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (CvRevision, error) {
 	row := q.db.QueryRow(ctx, newestCVRevision, arg.CvID, arg.UserID)
-	var i NewestCVRevisionRow
+	var i CvRevision
 	err := row.Scan(
 		&i.ID,
 		&i.CvID,
+		&i.UserID,
 		&i.Actor,
 		&i.Origin,
 		&i.BatchID,
@@ -457,8 +362,8 @@ WHERE old.cv_id = $1
 `
 
 type TrimCVRevisionsParams struct {
-	CvID  pgtype.UUID `json:"cv_id"`
-	Limit int32       `json:"limit"`
+	CvID  uuid.UUID `json:"cv_id"`
+	Limit int32     `json:"limit"`
 }
 
 // Keep only the newest $2 revisions of a CV. A revision log is an aid to the candidate's

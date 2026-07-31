@@ -119,6 +119,12 @@ func (e *Editor) requireEvidence(ctx context.Context, userID int64, ch Change) e
 	if e.gate == nil {
 		return nil
 	}
+	// Only the agent has to cite. The rule is that a MODEL's inference must not reach the
+	// page — the candidate writing about their own career is the source the bank exists to
+	// record, and asking them for a citation would make their own editor unusable.
+	if ch.Actor != ActorAgent {
+		return nil
+	}
 	for _, op := range ch.Ops {
 		if !assertsAClaim(op) {
 			continue

@@ -8,11 +8,13 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/resume"
@@ -53,6 +55,10 @@ type cvHandlers struct {
 	// extractPDFText reads a rendered CV's text layer the way an ATS parser would. A field
 	// rather than a direct call so a test can state the text layer without a poppler binary.
 	extractPDFText func([]byte) (string, error)
+	// editor is the only path that writes a stored CV. Every entry point — the editor's
+	// autosave, the template picker, the CLI's patch, an agent tool, seeding a tailored
+	// copy — commits through it, so no change happens without a revision recording it.
+	editor *cvedit.Editor
 }
 
 // jobReader is the one vacancy read the tailoring context needs.
@@ -60,9 +66,12 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
-		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		// The editor is the only thing that writes a stored CV. The evidence gate is
+		// attached later (withExperienceBank) because the bank is wired after this.
+		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		jobReader:          queries,
 		resume:             resumeStore,
 		photos:             photoStore,
@@ -320,7 +329,13 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	meta, err := h.cvStore.Update(c.Context(), id, userID, cvTitle(in.Title), tmplID, in.Document)
+	// A whole-document save is an input format, not a second way to write the document: the
+	// differ derives the operations, and from the editor's point of view this is
+	// indistinguishable from an agent's batch. The actor is decided here, by the entry point
+	// that authenticated the caller, and never read from the body.
+	meta, _, err := h.editor.CommitDocument(c.Context(), id, userID,
+		cvedit.ActorCandidate, cvedit.OriginEditor,
+		cvedit.State{Title: cvTitle(in.Title), TemplateID: tmplID, Document: in.Document})
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -418,7 +433,18 @@ func (h *cvHandlers) SetCVTemplate(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if err := h.cvStore.SetTemplate(c.Context(), id, userID, tmplID); err != nil {
+	// Through the editor like every other change: "switched to the Sidebar template" is a
+	// legitimate line in the history, and one the candidate may want to undo.
+	path, err := cvedit.ParsePath("template_id")
+	if err != nil {
+		return err
+	}
+	_, _, err = h.editor.Commit(c.Context(), id, userID, cvedit.Change{
+		Actor:  cvedit.ActorCandidate,
+		Origin: cvedit.OriginTemplate,
+		Ops:    []cvedit.Op{{Kind: cvedit.OpSet, Path: path, Value: tmplID}},
+	})
+	if err != nil {
 		return mapCVError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -490,6 +516,20 @@ func mapCVError(err error) error {
 		// so an LLM caller can fix the patch instead of retrying against a generic 422.
 		reason := strings.TrimPrefix(err.Error(), cv.ErrInvalidPatch.Error()+": ")
 		return fiber.NewError(fiber.StatusUnprocessableEntity, reason)
+	case errors.Is(err, cvedit.ErrInvalidOp):
+		// Same reasoning as above, for the path-addressed operations: the reason IS the
+		// remedy, and a caller that cannot see it can only retry the same mistake.
+		return fiber.NewError(fiber.StatusUnprocessableEntity,
+			strings.TrimPrefix(err.Error(), cvedit.ErrInvalidOp.Error()+": "))
+	case errors.Is(err, cvedit.ErrForbiddenPath), errors.Is(err, cvedit.ErrEvidenceRequired):
+		return fiber.NewError(fiber.StatusForbidden, err.Error())
+	case errors.Is(err, cvedit.ErrNothingToUndo):
+		return fiber.NewError(fiber.StatusConflict, "there is nothing to undo")
+	case errors.Is(err, cvedit.ErrCannotUndo):
+		// A fact about the document as it stands, not a malformed request: the place this
+		// edit changed is gone, so its inverse has nowhere to land.
+		return fiber.NewError(fiber.StatusConflict,
+			"this edit can no longer be undone — the part of the CV it changed is gone")
 	default:
 		return err
 	}

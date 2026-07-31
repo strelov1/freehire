@@ -35,7 +35,7 @@ type Querier interface {
 	// Fold a follow-on edit into the newest revision: replace what it does and restate its
 	// description, but LEAVE inverse alone. The inverse still leads back to the state before the
 	// first of the coalesced edits, which is what makes undo mean something for typed text.
-	AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (AmendCVRevisionRow, error)
+	AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (CvRevision, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
@@ -706,7 +706,7 @@ type Querier interface {
 	// no row for a foreign or missing id.
 	GetCVForEdit(ctx context.Context, arg GetCVForEditParams) (GetCVForEditRow, error)
 	// One revision, owner-scoped — what undo reads to find the inverse it must apply.
-	GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (GetCVRevisionRow, error)
+	GetCVRevision(ctx context.Context, arg GetCVRevisionParams) (CvRevision, error)
 	// Community discussion threads (see the add-community-threads change). Read paths
 	// join community_personas so a row carries the author's handle, never their user_id.
 	// Every such join is a LEFT JOIN: content outlives its author (a deleted account
@@ -898,7 +898,7 @@ type Querier interface {
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
 	// without its change, would make the feed lie.
-	InsertCVRevision(ctx context.Context, arg InsertCVRevisionParams) (InsertCVRevisionRow, error)
+	InsertCVRevision(ctx context.Context, arg InsertCVRevisionParams) (CvRevision, error)
 	// Mint a persona. ON CONFLICT (user_id) DO NOTHING makes a concurrent same-user mint
 	// return no row (the repository re-reads the winner); a handle-unique violation is a
 	// different collision the repository maps to a retry.
@@ -993,10 +993,10 @@ type Querier interface {
 	// model's history is rebuilt from, so tool calls and tool results are included.
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
 	// The feed, newest first.
-	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]ListCVRevisionsRow, error)
+	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
 	// the order a whole-run revert must undo them in.
-	ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]ListCVRevisionsInBatchRow, error)
+	ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]CvRevision, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
@@ -1448,7 +1448,7 @@ type Querier interface {
 	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.
-	NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (NewestCVRevisionRow, error)
+	NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (CvRevision, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.

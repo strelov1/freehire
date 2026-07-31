@@ -94,6 +94,24 @@ func TestAClaimAboutTheCandidateNeedsEvidence(t *testing.T) {
 	}
 }
 
+func TestTheCandidateWritesTheirOwnBulletWithoutACitation(t *testing.T) {
+	repo := newFakeRepo()
+	b := &bank{}
+	e, _ := newEditor(repo, b)
+
+	// The rule is that a MODEL's inference must not reach the page. The candidate writing
+	// about their own career is the source the bank exists to record — requiring a citation
+	// here would make their own editor unusable.
+	commitSet(t, e, repo, ActorCandidate, OriginEditor, "experience[0].bullets[0]", "Ran Kubernetes in production")
+
+	if repo.state.Experience[0].Bullets[0] != "Ran Kubernetes in production" {
+		t.Fatalf("bullet = %q, want the candidate's own words", repo.state.Experience[0].Bullets[0])
+	}
+	if b.calls != 0 {
+		t.Fatalf("the bank was asked %d times about the candidate's own claim", b.calls)
+	}
+}
+
 func TestACitedClaimIsWritten(t *testing.T) {
 	repo := newFakeRepo()
 	b := &bank{}

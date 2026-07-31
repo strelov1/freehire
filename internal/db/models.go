@@ -134,18 +134,18 @@ type Cv struct {
 }
 
 type CvRevision struct {
-	ID          pgtype.UUID        `json:"id"`
-	CvID        pgtype.UUID        `json:"cv_id"`
+	ID          uuid.UUID          `json:"id"`
+	CvID        uuid.UUID          `json:"cv_id"`
 	UserID      int64              `json:"user_id"`
 	Actor       string             `json:"actor"`
 	Origin      string             `json:"origin"`
-	BatchID     pgtype.UUID        `json:"batch_id"`
+	BatchID     *uuid.UUID         `json:"batch_id"`
 	Title       string             `json:"title"`
 	Note        pgtype.Text        `json:"note"`
-	Ops         []byte             `json:"ops"`
-	Inverse     []byte             `json:"inverse"`
+	Ops         json.RawMessage    `json:"ops"`
+	Inverse     json.RawMessage    `json:"inverse"`
 	BaseVersion pgtype.Timestamptz `json:"base_version"`
-	RevertsID   pgtype.UUID        `json:"reverts_id"`
+	RevertsID   *uuid.UUID         `json:"reverts_id"`
 	RevertedAt  pgtype.Timestamptz `json:"reverted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`

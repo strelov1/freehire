@@ -21,6 +21,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -88,6 +89,7 @@ func TestCVTemplatesEndpoint_OpenToAuthed(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
@@ -123,6 +125,7 @@ func TestSetCVTemplateEndpoint(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))}
 	app := buildCVApp(h, iss)
 
@@ -182,6 +185,7 @@ func TestCVEndpoints_CRUDAndIsolation(t *testing.T) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &cvHandlers{queries: queries, jobReader: queries,
 		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
 		resume:  resume.New(nil, resume.NewQueriesRepository(queries))} // storage disabled → seed no-ops
 	app := buildCVApp(h, iss)
 
@@ -272,7 +276,8 @@ func TestCVCreate_SeedsFromStructuredResume(t *testing.T) {
 	// Postgres, so it must work independently of object storage.
 	store := resume.New(nil, resume.NewQueriesRepository(queries))
 	h := &cvHandlers{queries: queries, jobReader: queries,
-		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)), resume: store}
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil), resume: store}
 	app := buildCVApp(h, iss)
 
 	user := seedAccount(t, pool, "seed@example.test", true)

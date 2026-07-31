@@ -22,7 +22,7 @@
 
 - [x] 4.1 Migration: `cv_revisions` (actor, origin, batch, title, note, ops, inverse, base version, reverts_id, reverted_at, timestamps) with the `(cv_id, created_at DESC)` index — plus the sqlc queries, including `GetCVForEdit … FOR UPDATE`, which is what serialises two agent turns arriving together
 - [x] 4.2 `Editor.Commit` — policy, evidence gate, apply, sanitize, persist state and revision in one transaction
-- [ ] 4.2a `Repository`/`Tx` implementation over sqlc + pgx (the editor is unit-tested against a fake; nothing wires it to the pool yet)
+- [x] 4.2a `Repository`/`Tx` implementation over sqlc + pgx (the editor is unit-tested against a fake; nothing wires it to the pool yet)
 - [x] 4.3 `Editor.CommitDocument` — diff against the stored state, then `Commit`; an unchanged save records nothing
 - [x] 4.4 Coalescing: amend the newest revision when actor, origin, paths and recency match; replace `ops`, leave `inverse` alone
 - [x] 4.5 Trim to the newest 100 revisions in the same statement that inserts
@@ -45,8 +45,8 @@
 
 ## 7. Entry points
 
-- [ ] 7.1 `PUT /me/cvs/:id` → `CommitDocument(candidate, editor)`
-- [ ] 7.2 `PUT /me/cvs/:id/template` → `Commit(candidate, template)`
+- [x] 7.1 `PUT /me/cvs/:id` → `CommitDocument(candidate, editor)`
+- [x] 7.2 `PUT /me/cvs/:id/template` → `Commit(candidate, template)`
 - [ ] 7.3 `PATCH /me/cvs/:id` → path operations (new body shape)
 - [ ] 7.4 `cv_edit` tool → `Commit(agent, tailor_agent, batch)`, accepting a batch of operations in one call, with the schema generated from the enumerated paths
 - [ ] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed

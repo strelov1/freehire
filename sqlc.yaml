@@ -42,6 +42,29 @@ sql:
           # type, so a mis-typed id fails at the edge rather than deep in a query.
           - column: "cvs.id"
             go_type: "github.com/google/uuid.UUID"
+          # A revision's own id and the CV it belongs to follow the same rule. batch_id
+          # and reverts_id are pointers because most revisions have neither: a change
+          # made by hand belongs to no agent run, and only an undo reverts something.
+          - column: "cv_revisions.id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "cv_revisions.cv_id"
+            go_type: "github.com/google/uuid.UUID"
+          - column: "cv_revisions.batch_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+          - column: "cv_revisions.reverts_id"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+          # What a revision did and what would undo it: raw JSON round-trips whole into
+          # the feed response, where a []byte would base64-encode both.
+          - column: "cv_revisions.ops"
+            go_type: "encoding/json.RawMessage"
+          - column: "cv_revisions.inverse"
+            go_type: "encoding/json.RawMessage"
           - column: "referral_requests.cv_id"
             go_type:
               import: "github.com/google/uuid"

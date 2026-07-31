@@ -24,6 +24,11 @@ func Diff(old, next State) []Op {
 	return ops
 }
 
+// Equal reports whether two states are the same document once stored. It goes through the
+// differ rather than through DeepEqual so that the two representations of an empty list are
+// treated as one, the same way every other comparison here does.
+func Equal(a, b State) bool { return len(Diff(a, b)) == 0 }
+
 func diffValue(old, next reflect.Value, path string, ops *[]Op) {
 	switch old.Kind() {
 	case reflect.Struct:

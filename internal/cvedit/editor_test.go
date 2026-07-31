@@ -307,3 +307,18 @@ func TestTheFeedIsTrimmed(t *testing.T) {
 		t.Fatalf("feed holds %d revisions, want it trimmed to %d", len(repo.revisions), feedLimit)
 	}
 }
+
+func TestAnOperationThatChangesNothingRecordsNothing(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+
+	// Picking the template already in use is a click the gallery allows.
+	commitSet(t, e, repo, ActorCandidate, OriginTemplate, "template_id", repo.state.TemplateID)
+
+	if len(repo.revisions) != 0 {
+		t.Fatalf("got %d revisions for a change that changed nothing", len(repo.revisions))
+	}
+	if repo.saves != 0 {
+		t.Fatal("a change that changed nothing wrote the document")
+	}
+}

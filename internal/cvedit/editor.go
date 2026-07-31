@@ -165,6 +165,13 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	// has: a change states what was asked for, and the sanitizer decides what is kept.
 	after.Document.Sanitize()
 
+	// An operation that changes nothing files nothing. Picking the template already in use
+	// is a click the gallery allows, and "switched to the Sidebar template" under a CV that
+	// was already on Sidebar is a lie the feed would keep forever.
+	if Equal(before, after) {
+		return metaOf(cvID, before), Revision{}, nil
+	}
+
 	meta, err := tx.Save(ctx, after)
 	if err != nil {
 		return cv.Meta{}, Revision{}, err

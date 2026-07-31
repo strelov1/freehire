@@ -16,7 +16,7 @@ FOR UPDATE;
 -- without its change, would make the feed lie.
 INSERT INTO cv_revisions (cv_id, user_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at;
+RETURNING *;
 
 -- name: AmendCVRevision :one
 -- Fold a follow-on edit into the newest revision: replace what it does and restate its
@@ -25,12 +25,12 @@ RETURNING id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_ve
 UPDATE cv_revisions
 SET ops = $3, title = $4, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at;
+RETURNING *;
 
 -- name: NewestCVRevision :one
 -- The revision a follow-on edit might be folded into. Only the newest is a candidate:
 -- coalescing into anything older would reorder the log.
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT *
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2
 ORDER BY created_at DESC
@@ -38,13 +38,13 @@ LIMIT 1;
 
 -- name: GetCVRevision :one
 -- One revision, owner-scoped — what undo reads to find the inverse it must apply.
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT *
 FROM cv_revisions
 WHERE id = $1 AND user_id = $2;
 
 -- name: ListCVRevisions :many
 -- The feed, newest first.
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT *
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2
 ORDER BY created_at DESC
@@ -53,7 +53,7 @@ LIMIT $3;
 -- name: ListCVRevisionsInBatch :many
 -- Every revision of one agent turn or autopilot run that is still standing, newest first —
 -- the order a whole-run revert must undo them in.
-SELECT id, cv_id, actor, origin, batch_id, title, note, ops, inverse, base_version, reverts_id, reverted_at, created_at, updated_at
+SELECT *
 FROM cv_revisions
 WHERE cv_id = $1 AND user_id = $2 AND batch_id = $3 AND reverted_at IS NULL
 ORDER BY created_at DESC;
