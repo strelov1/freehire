@@ -21,17 +21,17 @@
 
 ## 3. Rendering
 
-- [ ] 3.1 Resolve the font id to its Typst family name on the renderer's own copy of the `Document`
+- [x] 3.1 Resolve the font id to its Typst family name on the renderer's own copy of the `Document`
       before marshalling `data.json`, leaving the stored document untouched
-- [ ] 3.2 Add the style preamble to all four `templates/*.typ`: read `style` with a fallback to each
+- [x] 3.2 Add the style preamble to all four `templates/*.typ`: read `style` with a fallback to each
       template's current hard-coded font, 9.5pt size, and its own leading
-- [ ] 3.3 Convert every internal absolute `size:` in all four templates to an em multiple of the base
+- [x] 3.3 Convert every internal absolute `size:` in all four templates to an em multiple of the base
       (name `1.25em`, section labels `1em`, and any others)
-- [ ] 3.4 Renderer test: a document with all three style values set compiles under every registered
+- [x] 3.4 Renderer test: a document with all three style values set compiles under every registered
       template, and its text layer still extracts
-- [ ] 3.5 Renderer test: rendering does not mutate the caller's document — the font family it holds
+- [x] 3.5 Renderer test: rendering does not mutate the caller's document — the font family it holds
       afterwards is still the registry id
-- [ ] 3.6 Run `make cv-previews` and commit the regenerated thumbnails if the em conversion moved them
+- [x] 3.6 Run `make cv-previews` and commit the regenerated thumbnails if the em conversion moved them
 
 ## 4. HTTP surface
 

@@ -18,13 +18,26 @@
   (if v > 0 { v } else { 0.5 }) * 1in
 }
 #set page(paper: "a4", margin: (left: mg("left"), right: mg("right"), top: mg("top"), bottom: mg("bottom")))
-#set text(font: "Libertinus Serif", size: 9.5pt)
-#set par(leading: 0.5em, justify: true)
+// Typography from the document's style block. Every value is optional and a zero/empty one
+// falls back to this template's own, so a CV that sets nothing renders exactly as it always
+// did. These helpers are duplicated per template on purpose: the renderer stages only
+// template.typ, so an #import of a shared module would not resolve.
+#let st = cv.at("style", default: (:))
+#let ty(k, fallback) = {
+  let v = st.at(k, default: 0)
+  if v > 0 { v } else { fallback }
+}
+#let fontFamily = {
+  let f = st.at("font_family", default: "")
+  if f != "" { f } else { "Libertinus Serif" }
+}
+#set text(font: fontFamily, size: ty("font_size", 9.5) * 1pt)
+#set par(leading: ty("line_height", 0.5) * 1em, justify: true)
 
 // A bold uppercase section label with a thin rule beneath it.
 #let section(t) = {
   v(0.55em)
-  text(weight: "bold", size: 9.5pt)[#upper(t)]
+  text(weight: "bold", size: (9.5 / 9.5) * 1em)[#upper(t)]
   v(0.08em)
   line(length: 100%, stroke: 0.5pt + rgb("#b3b3b3"))
   v(0.2em)
@@ -34,7 +47,7 @@
 #let hd = cv.header
 #{
   set par(justify: false)
-  text(weight: "bold", size: 17pt)[#s(hd, "full_name")]
+  text(weight: "bold", size: (17 / 9.5) * 1em)[#s(hd, "full_name")]
   let summary = s(cv, "summary")
   if summary != "" { linebreak(); v(0.15em); text(style: "italic")[#summary] }
 }
