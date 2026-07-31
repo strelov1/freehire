@@ -10,7 +10,7 @@
   // knows and declines to say, which is not the system that exists.
 </script>
 
-<div class="flex h-24 items-center gap-3 text-[10px]" aria-hidden="true">
+<div class="flex h-24 items-center gap-3 text-xs" aria-hidden="true">
   <div class="flex flex-1 flex-col gap-2 rounded-md border border-border p-2">
     <span class="text-muted-foreground">1 report</span>
     <span class="flex gap-1">

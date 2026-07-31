@@ -13,7 +13,7 @@
   ] as const;
 </script>
 
-<div class="flex h-24 flex-col justify-center gap-2.5 text-[10px]" aria-hidden="true">
+<div class="flex h-24 flex-col justify-center gap-2.5 text-xs" aria-hidden="true">
   {#each LANES as lane (lane.label)}
     <div class="flex items-center gap-2">
       <!-- The apply date. Hollow where the application can never be evidence. -->

@@ -8,7 +8,7 @@
   // the coverage gate exists to prevent.
 </script>
 
-<div class="flex h-24 items-stretch gap-3 text-[10px]" aria-hidden="true">
+<div class="flex h-24 items-stretch gap-3 text-xs" aria-hidden="true">
   <div class="flex flex-1 flex-col rounded-md border border-border p-2">
     <span class="mb-1.5 text-muted-foreground">aggregator</span>
     <span class="mb-1 h-1.5 w-full rounded-full bg-muted-foreground/30"></span>

@@ -120,13 +120,13 @@
            does not have. -->
       <div class="flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
-          <span class="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span class="text-xs uppercase tracking-wider text-muted-foreground">
             In a list, on the card
           </span>
           <div><GhostBadge {ghost} /></div>
         </div>
         <div class="flex flex-col gap-1.5 border-t border-border pt-3">
-          <span class="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span class="text-xs uppercase tracking-wider text-muted-foreground">
             On the job page
           </span>
           <GhostChecklist {ghost} />

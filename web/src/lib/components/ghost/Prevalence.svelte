@@ -23,7 +23,7 @@
 <figure class="flex flex-wrap items-center gap-5 sm:flex-nowrap">
   <div class="grid w-fit shrink-0 grid-cols-10 gap-1" aria-hidden="true">
     {#each cells as cell, i (i)}
-      <span class="size-3.5 rounded-[3px] {TONE[cell]}"></span>
+      <span class="size-3.5 rounded-sm {TONE[cell]}"></span>
     {/each}
   </div>
 
