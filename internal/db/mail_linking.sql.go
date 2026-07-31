@@ -14,9 +14,11 @@ import (
 const confirmEmailLink = `-- name: ConfirmEmailLink :execrows
 UPDATE emails
 SET job_id           = suggested_job_id,
+    application_id   = (SELECT a.id FROM applications a
+                         WHERE a.user_id = emails.user_id AND a.job_id = emails.suggested_job_id),
     link_source      = 'manual',
     suggested_job_id = NULL
-WHERE id = $1 AND user_id = $2 AND suggested_job_id IS NOT NULL
+WHERE emails.id = $1 AND emails.user_id = $2 AND emails.suggested_job_id IS NOT NULL
 `
 
 type ConfirmEmailLinkParams struct {
@@ -95,9 +97,11 @@ func (q *Queries) GetUserApplication(ctx context.Context, arg GetUserApplication
 const linkEmailToJob = `-- name: LinkEmailToJob :execrows
 UPDATE emails
 SET job_id           = $3,
+    application_id   = (SELECT a.id FROM applications a
+                         WHERE a.user_id = emails.user_id AND a.job_id = $3),
     link_source      = 'manual',
     suggested_job_id = NULL
-WHERE id = $1 AND user_id = $2
+WHERE emails.id = $1 AND emails.user_id = $2
 `
 
 type LinkEmailToJobParams struct {
@@ -195,7 +199,8 @@ func (q *Queries) RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams
 
 const unlinkEmail = `-- name: UnlinkEmail :execrows
 UPDATE emails
-SET job_id      = NULL,
+SET job_id         = NULL,
+    application_id = NULL,
     link_source = NULL
 WHERE id = $1 AND user_id = $2
 `

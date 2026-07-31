@@ -69,7 +69,8 @@
 
 ## 6. Cut over the mail path
 
-- [ ] 6.1 Port `mail_linking.sql` and `mail_classification.sql` to `emails.application_id`; run `make sqlc`. **Partly done in 5a:** their reads of `stage`/`applied_at` had to move with the rest of the cutover; the `emails.job_id` → `application_id` half is still open
+- [x] 6.0 Keep `emails.application_id` in step on every link path — `SetEmailClassification`, `ConfirmEmailLink`, `LinkEmailToJob`, `UnlinkEmail`. Purely additive: no reader changes, so nothing can break, and the column stops going stale on each new link (it did, and only the carry-over could repair it). Derived from the posting inside the statement rather than passed in, so a caller cannot pass a mismatched pair
+- [ ] 6.1 Port `mail_linking.sql` and `mail_classification.sql` to READ `emails.application_id`. **Sized:** `gmail.sql` alone joins `jobs` twice to render the inbox's linked/suggested labels, so this carries a wire-shape consequence of its own — an inbox row whose linked application has no posting, the same problem 5b solved for the board; run `make sqlc`. **Partly done in 5a:** their reads of `stage`/`applied_at` had to move with the rest of the cutover; the `emails.job_id` → `application_id` half is still open
 - [ ] 6.2 Port `internal/inbox` (`RecordApplication`, the `?link=suggested|unlinked` filters) and `internal/maillink` so auto-link, suggestion and monotonic stage advance behave identically
 - [ ] 6.3 Port `internal/handler/inbox_linking.go` and `followup.go`
 - [ ] 6.4 Port `cmd/classify-mail/store.go`

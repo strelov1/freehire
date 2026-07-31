@@ -1642,8 +1642,15 @@ type Querier interface {
 	// a row named outright keeps its own rule rather than an arbitrary one — the archive's
 	// purpose is auditing a rule in isolation, which a nondeterministic rule defeats.
 	//
-	// Every other reference to jobs cascades or nulls, so a user's saved job goes with it.
-	// That is an accepted cost of the campaign, not an oversight.
+	// A user's marks on the posting — the view, the bookmark, the dismissal, the vote — cascade
+	// away with it. That is an accepted cost of the campaign: what is lost is a bookmark.
+	//
+	// Their APPLICATION does not, and the distinction is deliberate. It lives in its own table
+	// (0064), holds a date, a stage, free-text notes and a mail history, and references the
+	// posting with ON DELETE SET NULL: the link clears, the record stands. An application is a
+	// record of something a person did, and no catalogue-hygiene campaign has the standing to
+	// delete it. The sentence this replaces weighed a bookmark and, through one shared cascade,
+	// silently applied the same verdict to applications.
 	//
 	// Returns the ids actually deleted, which the caller mirrors into the search index.
 	// The two parameter arrays are positionally paired. They are unnested separately and

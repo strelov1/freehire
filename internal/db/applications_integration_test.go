@@ -234,3 +234,51 @@ func TestTrackJob_StageEventNamesTheApplication(t *testing.T) {
 		t.Errorf("stage_set event names application %v, want %v", eventApp, appID)
 	}
 }
+
+// Every path that links mail to a posting must keep application_id in step, or the
+// column quietly goes stale on each new link and the carry-over would have to be run
+// again to repair it.
+func TestLinkingMailKeepsTheApplicationInStep(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "link-step@example.test", true)
+	job := seedResponseJob(t, q, "link-step-1", "linkco")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	var appID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM applications WHERE user_id = $1`, user).Scan(&appID); err != nil {
+		t.Fatalf("read application: %v", err)
+	}
+	var mailID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO emails (user_id, external_id, source, received_at)
+		 VALUES ($1, 'link-step-mail', 'gmail', now()) RETURNING id`, user).Scan(&mailID); err != nil {
+		t.Fatalf("seed mail: %v", err)
+	}
+
+	appOf := func() *int64 {
+		t.Helper()
+		var got *int64
+		if err := pool.QueryRow(ctx, `SELECT application_id FROM emails WHERE id = $1`, mailID).Scan(&got); err != nil {
+			t.Fatalf("read link: %v", err)
+		}
+		return got
+	}
+
+	if _, err := q.LinkEmailToJob(ctx, LinkEmailToJobParams{ID: mailID, UserID: user, JobID: pgtype.Int8{Int64: job, Valid: true}}); err != nil {
+		t.Fatalf("LinkEmailToJob: %v", err)
+	}
+	if got := appOf(); got == nil || *got != appID {
+		t.Errorf("after a manual link, application_id = %v, want %d", got, appID)
+	}
+
+	if _, err := q.UnlinkEmail(ctx, UnlinkEmailParams{ID: mailID, UserID: user}); err != nil {
+		t.Fatalf("UnlinkEmail: %v", err)
+	}
+	if got := appOf(); got != nil {
+		t.Errorf("after unlinking, application_id = %v, want NULL — the link cleared on both columns", *got)
+	}
+}

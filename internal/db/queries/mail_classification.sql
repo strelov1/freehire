@@ -41,13 +41,19 @@ RETURNING o.id, o.email_id, e.user_id, e.source, e.thread_id, e.from_addr, e.fro
 -- unlinked or suggestion-only email leaves job_id NULL.
 UPDATE emails
 SET job_id               = sqlc.narg(job_id),
+    -- Kept in step with job_id, and derived rather than passed: the caller names a
+    -- posting, and the application is what the ledger and the aggregates pair on. Left
+    -- NULL when the user has no application for that posting — an unlinked fact is
+    -- useful, a wrongly attached one is not.
+    application_id       = (SELECT a.id FROM applications a
+                             WHERE a.user_id = emails.user_id AND a.job_id = sqlc.narg(job_id)),
     suggested_job_id     = sqlc.narg(suggested_job_id),
     link_source          = sqlc.narg(link_source),
     match_confidence     = sqlc.narg(match_confidence),
     status_signal        = sqlc.narg(status_signal),
     classification_model = sqlc.arg(model),
     classified_at        = now()
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
 
 -- name: AgentTriageEmail :execrows
 -- Persist an agent-produced verdict for one message, scoped to the caller (0 rows

@@ -309,13 +309,19 @@ func (q *Queries) ListUserEmailThreadLinks(ctx context.Context, userID int64) ([
 const setEmailClassification = `-- name: SetEmailClassification :exec
 UPDATE emails
 SET job_id               = $1,
+    -- Kept in step with job_id, and derived rather than passed: the caller names a
+    -- posting, and the application is what the ledger and the aggregates pair on. Left
+    -- NULL when the user has no application for that posting — an unlinked fact is
+    -- useful, a wrongly attached one is not.
+    application_id       = (SELECT a.id FROM applications a
+                             WHERE a.user_id = emails.user_id AND a.job_id = $1),
     suggested_job_id     = $2,
     link_source          = $3,
     match_confidence     = $4,
     status_signal        = $5,
     classification_model = $6,
     classified_at        = now()
-WHERE id = $7 AND user_id = $8
+WHERE emails.id = $7 AND emails.user_id = $8
 `
 
 type SetEmailClassificationParams struct {
