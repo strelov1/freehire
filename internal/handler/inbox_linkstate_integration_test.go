@@ -15,7 +15,7 @@ import (
 
 // linkEmail attaches an email to an application, or (when suggested) records a
 // pending suggestion instead of a link.
-func (f *agentInboxFixture) linkEmail(emailID, jobID int64, suggested bool) {
+func (f *harnessInboxFixture) linkEmail(emailID, jobID int64, suggested bool) {
 	f.t.Helper()
 	col := "job_id"
 	if suggested {
@@ -29,7 +29,7 @@ func (f *agentInboxFixture) linkEmail(emailID, jobID int64, suggested bool) {
 
 // classify stamps a message with a status signal, so link state can be combined
 // with the label filter.
-func (f *agentInboxFixture) classify(emailID int64, signal string) {
+func (f *harnessInboxFixture) classify(emailID int64, signal string) {
 	f.t.Helper()
 	if _, err := f.pool.Exec(context.Background(),
 		`UPDATE emails SET status_signal = $1, classified_at = now() WHERE id = $2`,
@@ -40,7 +40,7 @@ func (f *agentInboxFixture) classify(emailID int64, signal string) {
 
 // listLinkState requests the listing under one link state and returns the message
 // ids it produced together with the reported pagination total.
-func (f *agentInboxFixture) listLinkState(query string) ([]int64, int) {
+func (f *harnessInboxFixture) listLinkState(query string) ([]int64, int) {
 	f.t.Helper()
 	code, body := f.callKey("GET", "/api/v1/me/inbox?"+query, nil)
 	if code != 200 {
@@ -60,7 +60,7 @@ func (f *agentInboxFixture) listLinkState(query string) ([]int64, int) {
 // each narrowing is reflected in the pagination total, and that together they
 // partition the caller's mail.
 func TestInboxLinkStateFilter(t *testing.T) {
-	f := newAgentInboxFixture(t, "linkstate@example.test")
+	f := newHarnessInboxFixture(t, "linkstate@example.test")
 	jobID := f.applyToJob("acme-go-dev", "applied")
 
 	linked := f.seedEmail(f.userID, "hosted", "ls-1", "Linked", "body")
@@ -117,7 +117,7 @@ func TestInboxLinkStateFilter(t *testing.T) {
 // confirmation queue who presses "mark all read" would silently mark their whole
 // mailbox read — the filter would narrow what they see but not what they act on.
 func TestMarkAllReadHonoursLinkState(t *testing.T) {
-	f := newAgentInboxFixture(t, "linkmarkall@example.test")
+	f := newHarnessInboxFixture(t, "linkmarkall@example.test")
 	jobID := f.applyToJob("acme-markall", "applied")
 
 	suggested := f.seedEmail(f.userID, "hosted", "ma-1", "Suggested", "body")
@@ -147,7 +147,7 @@ func TestMarkAllReadHonoursLinkState(t *testing.T) {
 // the classification label rather than replacing it, in both the page and the
 // total.
 func TestInboxLinkStateComposesWithLabel(t *testing.T) {
-	f := newAgentInboxFixture(t, "linkcompose@example.test")
+	f := newHarnessInboxFixture(t, "linkcompose@example.test")
 	jobID := f.applyToJob("acme-compose", "applied")
 
 	linkedRejection := f.seedEmail(f.userID, "hosted", "lc-1", "Linked rejection", "body")

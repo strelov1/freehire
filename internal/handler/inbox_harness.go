@@ -1,3 +1,12 @@
+// The bring-your-own-harness tier: a user's own mail client pushes what it
+// fetched, and their own agent records its verdict. It is called the HARNESS
+// surface rather than the "agent" surface because there are now two agents on this
+// store — this one, an external process holding an API key, and the in-app
+// assistant, which issues no HTTP request at all and reaches internal/inbox
+// directly. The rules they share live in that package; what lives here is only
+// what this tier does differently: it brings its own transport and its own
+// classifier, and it is therefore the tier that costs us nothing.
+
 package handler
 
 import (

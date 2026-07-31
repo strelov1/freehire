@@ -27,10 +27,10 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// agentInboxFixture is one signed-in user with an inbox, an app wired through the
+// harnessInboxFixture is one signed-in user with an inbox, an app wired through the
 // real route registration (so the tests pin what register mounts, not a
 // hand-wired middleware), and both a session cookie and a full-scope API key.
-type agentInboxFixture struct {
+type harnessInboxFixture struct {
 	t      *testing.T
 	pool   *pgxpool.Pool
 	q      *db.Queries
@@ -40,7 +40,7 @@ type agentInboxFixture struct {
 	key    string
 }
 
-func newAgentInboxFixture(t *testing.T, email string) *agentInboxFixture {
+func newHarnessInboxFixture(t *testing.T, email string) *harnessInboxFixture {
 	t.Helper()
 	pool := startPostgres(t)
 	ctx := context.Background()
@@ -72,11 +72,11 @@ func newAgentInboxFixture(t *testing.T, email string) *agentInboxFixture {
 		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
 	})
 
-	return &agentInboxFixture{t: t, pool: pool, q: queries, app: app, userID: uid, cookie: cookie, key: token}
+	return &harnessInboxFixture{t: t, pool: pool, q: queries, app: app, userID: uid, cookie: cookie, key: token}
 }
 
 // callKey issues a request authenticated by the API key — the harness's credential.
-func (f *agentInboxFixture) callKey(method, path string, body any) (int, map[string]any) {
+func (f *harnessInboxFixture) callKey(method, path string, body any) (int, map[string]any) {
 	f.t.Helper()
 	return f.call(method, path, body, func(r *http.Request) {
 		r.Header.Set("Authorization", "Bearer "+f.key)
@@ -84,12 +84,12 @@ func (f *agentInboxFixture) callKey(method, path string, body any) (int, map[str
 }
 
 // callAnon issues a request with no credential at all.
-func (f *agentInboxFixture) callAnon(method, path string) (int, map[string]any) {
+func (f *harnessInboxFixture) callAnon(method, path string) (int, map[string]any) {
 	f.t.Helper()
 	return f.call(method, path, nil, func(*http.Request) {})
 }
 
-func (f *agentInboxFixture) call(method, path string, body any, auth func(*http.Request)) (int, map[string]any) {
+func (f *harnessInboxFixture) call(method, path string, body any, auth func(*http.Request)) (int, map[string]any) {
 	f.t.Helper()
 	var r *http.Request
 	if body != nil {
@@ -114,7 +114,7 @@ func (f *agentInboxFixture) call(method, path string, body any, auth func(*http.
 }
 
 // seedEmail stores one message directly, bypassing the ingest endpoint.
-func (f *agentInboxFixture) seedEmail(userID int64, source, externalID, subject, body string) int64 {
+func (f *harnessInboxFixture) seedEmail(userID int64, source, externalID, subject, body string) int64 {
 	f.t.Helper()
 	var id int64
 	err := f.pool.QueryRow(context.Background(),
@@ -132,7 +132,7 @@ func (f *agentInboxFixture) seedEmail(userID int64, source, externalID, subject,
 // while an unauthenticated request stays refused and a key still cannot cross the
 // tenant boundary.
 func TestMailSurfaceAcceptsAnAPIKey(t *testing.T) {
-	f := newAgentInboxFixture(t, "keyed@example.test")
+	f := newHarnessInboxFixture(t, "keyed@example.test")
 	f.seedEmail(f.userID, "hosted", "k-1", "Yours", "body")
 
 	var strangerID int64
@@ -179,7 +179,7 @@ func messages(t *testing.T, body map[string]any) []map[string]any {
 // alone. read_at means "a human saw this"; a harness sweeping the backlog must
 // not zero its owner's unread count.
 func TestAgentListingServesBodiesWithoutMarkingRead(t *testing.T) {
-	f := newAgentInboxFixture(t, "bodies@example.test")
+	f := newHarnessInboxFixture(t, "bodies@example.test")
 	id := f.seedEmail(f.userID, "external", "b-1", "Invitation", "we would like to meet you")
 
 	code, body := f.callKey("GET", "/api/v1/me/inbox?body=1", nil)
@@ -215,7 +215,7 @@ func TestAgentListingServesBodiesWithoutMarkingRead(t *testing.T) {
 // same readable text the classifier reads: many ATS templates carry no plain-text
 // part, and shipping raw HTML would waste the agent's context.
 func TestAgentListingReadsHTMLOnlyMailAsText(t *testing.T) {
-	f := newAgentInboxFixture(t, "htmlonly@example.test")
+	f := newHarnessInboxFixture(t, "htmlonly@example.test")
 	if _, err := f.pool.Exec(context.Background(),
 		`INSERT INTO emails (user_id, source, external_id, subject, body_html, received_at)
 		 VALUES ($1, 'external', 'h-1', 'HTML only', '<p>Congratulations, we have an <b>offer</b></p>', now())`,
@@ -240,7 +240,7 @@ func TestAgentListingReadsHTMLOnlyMailAsText(t *testing.T) {
 // needs triage — its only way to, since external mail is never enqueued for the
 // classification worker.
 func TestAgentListingUnclassifiedIsTheWorkQueue(t *testing.T) {
-	f := newAgentInboxFixture(t, "queue@example.test")
+	f := newHarnessInboxFixture(t, "queue@example.test")
 	pending := f.seedEmail(f.userID, "external", "q-1", "Needs triage", "body")
 	done := f.seedEmail(f.userID, "external", "q-2", "Already triaged", "body")
 	if _, err := f.pool.Exec(context.Background(),
@@ -266,7 +266,7 @@ func TestAgentListingUnclassifiedIsTheWorkQueue(t *testing.T) {
 // the account switcher like any other source, and that an unknown one is still a
 // 400 rather than a silently empty list.
 func TestAgentListingAcceptsTheExternalSource(t *testing.T) {
-	f := newAgentInboxFixture(t, "source@example.test")
+	f := newHarnessInboxFixture(t, "source@example.test")
 	f.seedEmail(f.userID, "external", "s-1", "Pushed", "body")
 	f.seedEmail(f.userID, "hosted", "s-2", "Hosted", "body")
 
@@ -282,7 +282,7 @@ func TestAgentListingAcceptsTheExternalSource(t *testing.T) {
 // TestAgentListingCapsThePage asserts an agent asking for bodies cannot request an
 // unbounded page: bodies are the one listing payload heavy enough to matter.
 func TestAgentListingCapsThePage(t *testing.T) {
-	f := newAgentInboxFixture(t, "cap@example.test")
+	f := newHarnessInboxFixture(t, "cap@example.test")
 
 	_, body := f.callKey("GET", "/api/v1/me/inbox?body=1&limit=500", nil)
 	meta, _ := body["meta"].(map[string]any)
@@ -311,7 +311,7 @@ func message(externalID, subject, body string) map[string]any {
 // a caller's own mail client hands over messages, they land in the ordinary inbox
 // under source 'external', and a re-sync updates rather than duplicates.
 func TestIngestStoresPushedMail(t *testing.T) {
-	f := newAgentInboxFixture(t, "ingest@example.test")
+	f := newHarnessInboxFixture(t, "ingest@example.test")
 
 	code, body := f.callKey("POST", "/api/v1/me/emails", pushBody(
 		message("<a@acme>", "Application received", "thanks for applying"),
@@ -354,7 +354,7 @@ func TestIngestStoresPushedMail(t *testing.T) {
 // than partly written: the caller's harness retries, and a half-stored batch would
 // make "inserted" a lie.
 func TestIngestRejectsBadBatches(t *testing.T) {
-	f := newAgentInboxFixture(t, "badbatch@example.test")
+	f := newHarnessInboxFixture(t, "badbatch@example.test")
 
 	if code, _ := f.callKey("POST", "/api/v1/me/emails", pushBody(
 		message("<ok@acme>", "Fine", "body"),
@@ -381,7 +381,7 @@ func TestIngestRejectsBadBatches(t *testing.T) {
 }
 
 // applyToJob makes the fixture's user an applicant of a job at a given stage.
-func (f *agentInboxFixture) applyToJob(slug, stage string) int64 {
+func (f *harnessInboxFixture) applyToJob(slug, stage string) int64 {
 	f.t.Helper()
 	ctx := context.Background()
 	var jobID int64
@@ -399,7 +399,7 @@ func (f *agentInboxFixture) applyToJob(slug, stage string) int64 {
 	return jobID
 }
 
-func (f *agentInboxFixture) stageOf(jobID int64) string {
+func (f *harnessInboxFixture) stageOf(jobID int64) string {
 	f.t.Helper()
 	var stage *string
 	if err := f.pool.QueryRow(context.Background(),
@@ -416,7 +416,7 @@ func (f *agentInboxFixture) stageOf(jobID int64) string {
 // classification worker does: classify, link, stamp, and move the application
 // forward — so an agent-run inbox behaves like a server-classified one.
 func TestTriageRecordsTheVerdictAndAdvancesTheStage(t *testing.T) {
-	f := newAgentInboxFixture(t, "triage@example.test")
+	f := newHarnessInboxFixture(t, "triage@example.test")
 	jobID := f.applyToJob("go-dev-acme-aaaaaaaa", "applied")
 	id := f.seedEmail(f.userID, "external", "t-1", "Interview invitation", "are you free?")
 
@@ -450,7 +450,7 @@ func TestTriageRecordsTheVerdictAndAdvancesTheStage(t *testing.T) {
 // incident once: a forward signal onto a rejected application must not drag it
 // back into the active pipeline.
 func TestTriageNeverResurrectsASettledApplication(t *testing.T) {
-	f := newAgentInboxFixture(t, "settled@example.test")
+	f := newHarnessInboxFixture(t, "settled@example.test")
 	jobID := f.applyToJob("go-dev-acme-bbbbbbbb", "rejected")
 	id := f.seedEmail(f.userID, "external", "t-2", "Interview invitation", "are you free?")
 
@@ -466,7 +466,7 @@ func TestTriageNeverResurrectsASettledApplication(t *testing.T) {
 // TestTriageRejectsBadInput asserts an out-of-vocabulary signal and an unknown
 // slug change nothing — the agent is not trusted to invent labels or job ids.
 func TestTriageRejectsBadInput(t *testing.T) {
-	f := newAgentInboxFixture(t, "badtriage@example.test")
+	f := newHarnessInboxFixture(t, "badtriage@example.test")
 	id := f.seedEmail(f.userID, "external", "t-3", "Something", "body")
 	path := "/api/v1/me/emails/" + strconv.FormatInt(id, 10) + "/triage"
 
@@ -488,7 +488,7 @@ func TestTriageRejectsBadInput(t *testing.T) {
 
 // TestTriageIsScopedToTheCaller asserts a key cannot triage another user's mail.
 func TestTriageIsScopedToTheCaller(t *testing.T) {
-	f := newAgentInboxFixture(t, "triageowner@example.test")
+	f := newHarnessInboxFixture(t, "triageowner@example.test")
 	var strangerID int64
 	if err := f.pool.QueryRow(context.Background(),
 		`INSERT INTO users (email) VALUES ('triagestranger@example.test') RETURNING id`).Scan(&strangerID); err != nil {
@@ -510,7 +510,7 @@ func TestTriageIsScopedToTheCaller(t *testing.T) {
 // Reachable from two callers now (a user's own harness and the in-app assistant),
 // so the classify-then-reclassify sequence is no longer hypothetical.
 func TestTriageWithoutALinkKeepsTheConfidenceOfTheExistingOne(t *testing.T) {
-	f := newAgentInboxFixture(t, "confidence@example.test")
+	f := newHarnessInboxFixture(t, "confidence@example.test")
 	f.applyToJob("go-dev-acme-cccccccc", "applied")
 	id := f.seedEmail(f.userID, "external", "t-conf", "Interview invitation", "are you free?")
 	path := "/api/v1/me/emails/" + strconv.FormatInt(id, 10) + "/triage"

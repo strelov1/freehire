@@ -11,14 +11,14 @@ import (
 	"github.com/strelov1/freehire/internal/inbox"
 )
 
-// agentPageMax caps a listing that carries bodies. Bodies are the one listing
+// harnessPageMax caps a listing that carries bodies. Bodies are the one listing
 // payload heavy enough to matter, and an agent sweeping its backlog has no reason
 // to pull an unbounded page.
 //
 // The assistant's own listing tool caps itself far lower (see
 // assistantInboxBodyMax): a harness reads a page once, while a tool result is
 // replayed into the model's context on every later turn of the session.
-const agentPageMax = 50
+const harnessPageMax = 50
 
 // emailLinking is the classification/link overlay carried by every inbox message
 // shape: the classified status and, when resolved, the linked application (slug +
@@ -122,7 +122,7 @@ func parseInboxQuery(c *fiber.Ctx) inbox.Query {
 // ?body=1 additionally returns each message's readable body. That is the agent's
 // read path: it triages a page in one request, and — unlike GetEmail — marks
 // nothing read, so a harness sweeping the backlog never zeroes its owner's unread
-// count. Pages carrying bodies are capped at agentPageMax.
+// count. Pages carrying bodies are capped at harnessPageMax.
 func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -132,7 +132,7 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 	q.WithBody = c.QueryBool("body")
 	ceiling := maxLimit
 	if q.WithBody {
-		ceiling = agentPageMax
+		ceiling = harnessPageMax
 	}
 	limit, offset := pageParamsMax(c, ceiling)
 	q.Limit, q.Offset = limit, offset

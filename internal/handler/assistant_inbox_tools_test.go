@@ -89,9 +89,9 @@ func TestInboxSearchCapsBodyPagesBelowTheHarnessCeiling(t *testing.T) {
 		t.Errorf("asked the store for %d messages with bodies, want the cap of %d",
 			store.lastList.Lim, assistantInboxBodyMax)
 	}
-	if assistantInboxBodyMax >= agentPageMax {
+	if assistantInboxBodyMax >= harnessPageMax {
 		t.Errorf("the model's body cap (%d) is not below the harness's (%d); the asymmetry is the point",
-			assistantInboxBodyMax, agentPageMax)
+			assistantInboxBodyMax, harnessPageMax)
 	}
 }
 
