@@ -17,7 +17,7 @@
       than translating it; the token is what `.dark` overrides.
 - [x] 2.2 Sweep for stragglers: no `amber` left under `web/src`.
 - [x] 2.3 `pnpm check:tokens` — the count drops. Record how far with `--update`.
-- [~] 2.4 **Visual check, both themes**, of the surfaces that carry the most: `GhostBadge`,
+- [x] 2.4 **Visual check, both themes**, of the surfaces that carry the most: `GhostBadge`,
       `RealityBadge`, `GhostChecklist`, `MatchAnalysisFull`, `StatusBoard`, `VerdictView`,
       `ATSReportView`. A wrong lightness compiles perfectly.
 
@@ -59,3 +59,16 @@ refuses to close mid-delete, and the platform's close knew nothing about that.
 - [ ] 5.3 Review the whole diff; act on Critical and Important.
 - [ ] 5.4 Integrate, then `/opsx:archive` and `/opsx:sync`.
 - [ ] 5.5 User-facing? The colour is. Offer a changelog entry.
+
+## Verification actually performed
+
+- **Colour, both themes: done.** Dev server against the production API, headless Chrome with
+  `preferredColorScheme` forced each way, `/features/ghost-jobs` — the `Likely inactive` chip
+  and the four-bar gauge read correctly on both backgrounds. Backed by the arithmetic: every
+  fill and muted background is byte-identical to the amber it replaced, and the text tones
+  either match or move toward more contrast (one `amber-800` excepted, −0.08 lightness).
+- **Dialog migration: type-checked and unit-tested, not click-tested.** `pnpm run check` is
+  0 errors across 5516 files, `dismissible` has four tests that failed first, and Dialog's own
+  scroll-lock suite still passes. What is NOT done is opening each of the four in a browser and
+  pressing Escape — the four modals open from authenticated surfaces and a headless
+  `--screenshot` cannot click. **3.4 stays open.**
