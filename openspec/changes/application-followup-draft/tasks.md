@@ -1,11 +1,11 @@
 ## 1. The draft assembler (pure, no I/O)
 
-- [ ] 1.1 Add `internal/followup` with an input struct (role, company, days silent, stage, optional
+- [x] 1.1 Add `internal/followup` with an input struct (role, company, days silent, stage, optional
       strength, optional recipient name) and a function returning subject + body. Table tests cover:
       the same input drafts identically; a missing strength omits the line rather than leaving a gap
       or a placeholder; a missing recipient name falls back to a neutral greeting; the elapsed time
       reads naturally at 21, 24 and 60 days.
-- [ ] 1.2 Pin the tone rules as tests, since they are the product here: no apology, no "just
+- [x] 1.2 Pin the tone rules as tests, since they are the product here: no apology, no "just
       checking in", the ask is a concrete question (is the role still open / what is the timeline),
       and the body stays under a stated length so it is readable on a phone.
 
