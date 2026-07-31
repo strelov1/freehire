@@ -17,14 +17,14 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 	}
 }
 
-func TestLoad_STTModelDefaultsToWhisper(t *testing.T) {
+func TestLoad_STTModelHasNoDefault(t *testing.T) {
 	t.Setenv("STT_MODEL", "")
 
-	// Unlike the other model names, this one has a default: the gateway that serves
-	// chat also serves transcription, so a deployment that configured LLM_* has
-	// already configured everything dictation needs.
-	if s := Load(); s.STTModel != "whisper-1" {
-		t.Errorf("STTModel = %q, want whisper-1", s.STTModel)
+	// No default on purpose. Transcription is billed per minute of audio against an
+	// assistant that is not metered, so a deployment that never named a model must not
+	// find itself paying for one — it gets no microphone instead.
+	if s := Load(); s.STTModel != "" {
+		t.Errorf("STTModel = %q, want empty when unset", s.STTModel)
 	}
 }
 

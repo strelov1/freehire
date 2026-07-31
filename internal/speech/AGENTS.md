@@ -11,7 +11,10 @@ Its HTTP surface is `internal/handler/speech.go`; the microphone that feeds it i
   it would reach around the abstraction it exists to provide. What the two DO share is
   the endpoint — an OpenAI-compatible gateway serves `/chat/completions` and
   `/audio/transcriptions` from the same host with the same key — so they are configured
-  together and only the model name (`STT_MODEL`, default `whisper-1`) is separate.
+  together and only the model name (`STT_MODEL`) is separate.
+- **`STT_MODEL` has no default, and that is the feature switch.** Transcription is
+  billed per minute of audio against an assistant that is not metered, so a deployment
+  that never named a model gets no microphone rather than a bill for one nobody chose.
 - **`New` returns nil when unconfigured.** Nil is "this deployment has no speech",
   following `internal/headshot`: the handler answers 501 and the SPA reads that as a
   surface that does not exist here rather than as a fault. Whoever wires it must put an

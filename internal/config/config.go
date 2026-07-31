@@ -82,10 +82,11 @@ type Settings struct {
 
 	// STTModel transcribes dictated audio, through the same gateway and key the LLM
 	// settings above name — an OpenAI-compatible endpoint serves /chat/completions and
-	// /audio/transcriptions alike. It is the one model name with a default: a
-	// deployment that configured LLM_* has already configured everything dictation
-	// needs, and requiring a second variable to enable a microphone would be ceremony.
-	// The composer offers no microphone where the gateway itself is unconfigured.
+	// /audio/transcriptions alike. Named explicitly like every other model here, with
+	// no default: transcription is billed per minute of audio against an assistant that
+	// is not metered, so a deployment that never said which model to use should not
+	// find itself paying for one. Empty leaves the endpoint answering 501 and the
+	// composer rendering no microphone.
 	STTModel string
 
 	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
@@ -195,7 +196,7 @@ func Load() Settings {
 		AssistantModel:    os.Getenv("ASSISTANT_MODEL"),
 		AssistantMaxSteps: envInt("ASSISTANT_MAX_STEPS", 0),
 
-		STTModel: env("STT_MODEL", "whisper-1"),
+		STTModel: os.Getenv("STT_MODEL"),
 
 		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 
