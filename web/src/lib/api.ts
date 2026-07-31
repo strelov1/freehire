@@ -23,6 +23,7 @@ import type {
   Job,
   EmailLinking,
   TrackedApplication,
+  FollowUpDraft,
   Company,
   CompanyListItem,
   FacetCounts,
@@ -1305,6 +1306,19 @@ export function createApi(
     return requestData<TrackedApplication>(`/api/v1/me/tracking/${encodeURIComponent(slug)}`);
   }
 
+  /** The assembled follow-up draft for a silent application. 409 when the
+   *  application is not waiting on a reply — the same verdict the board's badge
+   *  renders, so a card that offers the draft never gets one. */
+  async function getFollowUpDraft(slug: string): Promise<FollowUpDraft> {
+    return requestData<FollowUpDraft>(`/api/v1/me/tracking/${encodeURIComponent(slug)}/followup`);
+  }
+
+  /** Record that the caller chased this application. Sends nothing — it stamps
+   *  followed_up_at, which stays outside the silence derivation. 204, no body. */
+  async function recordFollowUp(slug: string): Promise<void> {
+    await call(`/api/v1/me/tracking/${encodeURIComponent(slug)}/followup`, { method: 'POST' });
+  }
+
   /** Promote an email's pending suggestion to a confirmed link. */
   async function confirmEmailLink(id: number): Promise<EmailBody> {
     return requestData<EmailBody>(`/api/v1/me/emails/${id}/confirm`, { method: 'POST' });
@@ -1587,6 +1601,8 @@ export function createApi(
     deleteEmail,
     restoreEmail,
     getTrackedApplication,
+    getFollowUpDraft,
+    recordFollowUp,
     confirmEmailLink,
     rejectEmailLink,
     linkEmail,
