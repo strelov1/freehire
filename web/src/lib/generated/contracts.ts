@@ -977,6 +977,8 @@ export const COMPANY_TYPE_VALUES = ['product', 'startup', 'outsource', 'outstaff
 export type CompanyType = (typeof COMPANY_TYPE_VALUES)[number];
 export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gamedev', 'media', 'travel', 'healthcare', 'edtech', 'govtech', 'devtools', 'cybersecurity', 'ai', 'hrtech', 'adtech', 'proptech', 'logistics', 'mobility', 'climatetech', 'other'] as const;
 export type Domain = (typeof DOMAIN_VALUES)[number];
+export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
+export type EmailStatusSignal = (typeof EMAIL_STATUS_SIGNAL_VALUES)[number];
 export const COUNTRY_REGION_MAP = {
   'ad': 'eu',
   'ae': 'mena',

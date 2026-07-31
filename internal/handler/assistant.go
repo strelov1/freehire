@@ -42,6 +42,10 @@ type assistantHandlers struct {
 	profile *profileHandlers
 	// experience backs the bank tools, which every preset offers.
 	experience experienceBankTools
+	// mail backs the inbox tools, which only the general chat preset offers. The
+	// tools reach through it to inbox.Service — the same use cases /me/inbox and
+	// /me/emails render, so a rule cannot hold for one reader and not the other.
+	mail *inboxHandlers
 	// browserTools backs read_current_page in a browsing session. It is the same hub
 	// the agentic autofill drives, so the assistant is a second in-process harness on
 	// the user's channel rather than a second wire to their browser.
@@ -53,7 +57,7 @@ type assistantHandlers struct {
 // unavailable, rather than the whole surface disappearing.
 func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
-	profileH *profileHandlers, browserTools *browsertools.Hub) *assistantHandlers {
+	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers) *assistantHandlers {
 	h := &assistantHandlers{
 		experience:   experience.NewStore(experience.NewQueriesRepository(queries)),
 		store:        assistant.NewStore(queries),
@@ -64,6 +68,7 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 		cv:           cvH,
 		profile:      profileH,
 		browserTools: browserTools,
+		mail:         mail,
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})

@@ -52,7 +52,7 @@ func TestGmailInboxEndToEnd(t *testing.T) {
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	cookie, _ := iss.Issue(uid, testTokenVersion)
-	h := &inboxHandlers{queries: db.New(pool)}
+	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "")
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)

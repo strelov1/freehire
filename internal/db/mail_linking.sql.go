@@ -35,9 +35,24 @@ func (q *Queries) ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkPara
 }
 
 const getUserApplication = `-- name: GetUserApplication :one
-SELECT viewed_at, saved_at, applied_at, stage, notes
-FROM user_jobs
-WHERE user_id = $1 AND job_id = $2
+SELECT uj.viewed_at, uj.saved_at, uj.applied_at, uj.stage, uj.notes, uj.followed_up_at,
+       (CASE WHEN uj.applied_at IS NOT NULL THEN
+          GREATEST(uj.applied_at,
+                   (SELECT max(e.received_at)
+                      FROM emails e
+                     WHERE e.user_id = uj.user_id
+                       AND e.job_id = uj.job_id
+                       AND e.deleted_at IS NULL))
+        END)::timestamptz AS last_activity_at,
+       (uj.applied_at IS NOT NULL AND EXISTS (
+          SELECT 1
+            FROM emails e
+           WHERE e.user_id = uj.user_id
+             AND e.suggested_job_id = uj.job_id
+             AND e.job_id IS NULL
+             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+FROM user_jobs uj
+WHERE uj.user_id = $1 AND uj.job_id = $2
 `
 
 type GetUserApplicationParams struct {
@@ -46,14 +61,20 @@ type GetUserApplicationParams struct {
 }
 
 type GetUserApplicationRow struct {
-	ViewedAt  pgtype.Timestamptz `json:"viewed_at"`
-	SavedAt   pgtype.Timestamptz `json:"saved_at"`
-	AppliedAt pgtype.Timestamptz `json:"applied_at"`
-	Stage     pgtype.Text        `json:"stage"`
-	Notes     pgtype.Text        `json:"notes"`
+	ViewedAt             pgtype.Timestamptz `json:"viewed_at"`
+	SavedAt              pgtype.Timestamptz `json:"saved_at"`
+	AppliedAt            pgtype.Timestamptz `json:"applied_at"`
+	Stage                pgtype.Text        `json:"stage"`
+	Notes                pgtype.Text        `json:"notes"`
+	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
+	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
+	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 }
 
 // The caller's interaction row for one job (the application-detail header).
+// last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+// must reach the same silence verdict as the badge on the board, and two derivations of one rule
+// drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
 func (q *Queries) GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error) {
 	row := q.db.QueryRow(ctx, getUserApplication, arg.UserID, arg.JobID)
 	var i GetUserApplicationRow
@@ -63,6 +84,9 @@ func (q *Queries) GetUserApplication(ctx context.Context, arg GetUserApplication
 		&i.AppliedAt,
 		&i.Stage,
 		&i.Notes,
+		&i.FollowedUpAt,
+		&i.LastActivityAt,
+		&i.HasPendingSuggestion,
 	)
 	return i, err
 }

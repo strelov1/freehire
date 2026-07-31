@@ -3,7 +3,11 @@ package cv
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"os/exec"
 	"strings"
@@ -59,7 +63,7 @@ func TestTypstRendererProducesExtractableATSText(t *testing.T) {
 		t.Fatalf("resolve template: %v", err)
 	}
 
-	data, err := NewTypstRenderer(bin).Render(context.Background(), doc, tmpl)
+	data, err := NewTypstRenderer(bin).Render(context.Background(), doc, tmpl, nil)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -87,7 +91,7 @@ func TestRendererResolvesBundledSansFont(t *testing.T) {
 	tmpl := Template{ID: "sans-probe", source: []byte(
 		"#set text(font: \"Liberation Sans\")\nAda Lovelace — backend engineer\n")}
 
-	data, err := NewTypstRenderer(bin).Render(context.Background(), Document{}, tmpl)
+	data, err := NewTypstRenderer(bin).Render(context.Background(), Document{}, tmpl, nil)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -122,7 +126,7 @@ func TestAllTemplatesProduceExtractableText(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
-			data, err := r.Render(context.Background(), doc, tmpl)
+			data, err := r.Render(context.Background(), doc, tmpl, nil)
 			if err != nil {
 				t.Fatalf("render: %v", err)
 			}
@@ -166,11 +170,11 @@ func TestRenderAppliesMargins(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
-			a, err := r.compile(context.Background(), tight, tmpl, "svg")
+			a, err := r.compile(context.Background(), tight, tmpl, "svg", nil)
 			if err != nil {
 				t.Fatalf("compile tight: %v", err)
 			}
-			b, err := r.compile(context.Background(), wide, tmpl, "svg")
+			b, err := r.compile(context.Background(), wide, tmpl, "svg", nil)
 			if err != nil {
 				t.Fatalf("compile wide: %v", err)
 			}
@@ -179,6 +183,125 @@ func TestRenderAppliesMargins(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRenderPayloadCarriesHasPhotoWithoutTouchingTheDocument proves the flag the templates
+// branch on is produced at render time and inlined beside the document's own fields — so a
+// client cannot set it through the CV endpoints and it never reaches storage.
+func TestRenderPayloadCarriesHasPhoto(t *testing.T) {
+	doc := Document{Header: Header{FullName: "Ada Lovelace"}}
+	for _, hasPhoto := range []bool{true, false} {
+		data, err := renderPayload(doc, hasPhoto)
+		if err != nil {
+			t.Fatalf("renderPayload: %v", err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		if got, ok := decoded["has_photo"].(bool); !ok || got != hasPhoto {
+			t.Errorf("has_photo = %v (present: %v), want %v", decoded["has_photo"], ok, hasPhoto)
+		}
+		// The document's own fields must stay at the top level: the templates read
+		// cv.header, not cv.document.header.
+		if _, ok := decoded["header"]; !ok {
+			t.Errorf("payload lost the document's fields: %s", data)
+		}
+	}
+}
+
+// TestPhotoIsStagedOnlyForPhotoTemplates is the whole point of the registry flag: the image
+// must reach a template that prints it and must not be staged for one that does not.
+func TestPhotoIsStagedOnlyForPhotoTemplates(t *testing.T) {
+	bin, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("typst not installed; skipping photo staging test")
+	}
+	doc := Document{Header: Header{FullName: "Ada Lovelace"}, Summary: "Backend engineer."}
+	r := NewTypstRenderer(bin)
+	photo := testJPEG(t)
+
+	for _, c := range []struct {
+		template   string
+		wantsImage bool
+	}{
+		{"portrait", true},
+		{"headshot", true},
+		{"classic-ats", false},
+		{"sidebar", false},
+	} {
+		t.Run(c.template, func(t *testing.T) {
+			tmpl, err := ResolveTemplate(c.template)
+			if err != nil {
+				t.Fatalf("resolve: %v", err)
+			}
+			with, err := r.compile(context.Background(), doc, tmpl, "svg", photo)
+			if err != nil {
+				t.Fatalf("compile with photo: %v", err)
+			}
+			without, err := r.compile(context.Background(), doc, tmpl, "svg", nil)
+			if err != nil {
+				t.Fatalf("compile without photo: %v", err)
+			}
+			// Typst inlines a raster into SVG as a base64 data URI, so its presence is a
+			// direct assertion that the image was staged AND drawn.
+			embedded := bytes.Contains(with, []byte("data:image/jpeg;base64"))
+			if embedded != c.wantsImage {
+				t.Errorf("template %q: image embedded = %v, want %v", c.template, embedded, c.wantsImage)
+			}
+			if c.wantsImage && bytes.Equal(with, without) {
+				t.Errorf("template %q renders identically with and without a photo", c.template)
+			}
+			if !c.wantsImage && !bytes.Equal(with, without) {
+				t.Errorf("template %q changed when handed a photo it should ignore", c.template)
+			}
+		})
+	}
+}
+
+// A photo template with no stored headshot must still render — the placeholder path.
+func TestPhotoTemplateRendersWithoutAPhoto(t *testing.T) {
+	bin, err := exec.LookPath("typst")
+	if err != nil {
+		t.Skip("typst not installed; skipping placeholder render test")
+	}
+	doc := Document{
+		Header: Header{FullName: "Ada Lovelace", Email: "ada@example.com"},
+		Skills: []SkillGroup{{Group: "Languages", Items: []string{"Go"}}},
+	}
+	for _, id := range []string{"portrait", "headshot"} {
+		tmpl, err := ResolveTemplate(id)
+		if err != nil {
+			t.Fatalf("resolve %q: %v", id, err)
+		}
+		data, err := NewTypstRenderer(bin).Render(context.Background(), doc, tmpl, nil)
+		if err != nil {
+			t.Fatalf("render %q without a photo: %v", id, err)
+		}
+		if !bytes.HasPrefix(data, []byte("%PDF")) {
+			t.Fatalf("template %q: output is not a PDF", id)
+		}
+		if text := strings.ToLower(extractPDFText(t, data)); !strings.Contains(text, "ada lovelace") {
+			t.Errorf("template %q: the placeholder render lost the text layer:\n%s", id, text)
+		}
+	}
+}
+
+// testJPEG is a small, real JPEG — the renderer stages bytes, so the test supplies bytes a
+// decoder would accept rather than a stand-in string.
+func testJPEG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for y := range 64 {
+		for x := range 64 {
+			img.Set(x, y, color.RGBA{R: uint8(4 * x), G: uint8(4 * y), B: 120, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		t.Fatalf("encode jpeg: %v", err)
+	}
+	return buf.Bytes()
 }
 
 func extractPDFText(t *testing.T, data []byte) string {

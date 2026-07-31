@@ -101,6 +101,11 @@ type TrackedJob struct {
 	// separate so the adapter carries facts and the domain does the judging.
 	LastActivityAt       *time.Time
 	HasPendingSuggestion bool
+	// FollowedUpAt is when the candidate last recorded chasing this application, or
+	// nil for one never chased. It rides beside the silence rather than inside it:
+	// Silence must not read it, because a chase is not a reply (see 0059's column
+	// comment). The board renders the pair — still silent, and chased N days ago.
+	FollowedUpAt *time.Time
 }
 
 // Listing is the result of ListTracked: a page of tracked jobs for the active

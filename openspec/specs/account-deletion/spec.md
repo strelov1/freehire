@@ -80,8 +80,9 @@ identity, credentials, activity, generated artifacts, and mail.
 Deletion SHALL erase the member's artifacts held outside the database, which no
 foreign-key cascade can reach.
 
-- Object storage: the stored CV object, every referral-proof PDF, and the raw
-  MIME object of every hosted email the member received.
+- Object storage: the stored CV object, the member's headshot, every
+  referral-proof PDF, and the raw MIME object of every hosted email the member
+  received.
 - Google: the Gmail OAuth grant SHALL be revoked at Google before the stored
   token is discarded, so mailbox access is genuinely surrendered rather than
   merely forgotten.
@@ -90,7 +91,7 @@ foreign-key cascade can reach.
 
 #### Scenario: Stored objects are gone
 
-- **WHEN** a member with a stored CV, a referral proof, and hosted mail is deleted
+- **WHEN** a member with a stored CV, a headshot, a referral proof, and hosted mail is deleted
 - **THEN** none of those objects remain in the bucket
 
 #### Scenario: Google grant surrendered

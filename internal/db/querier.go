@@ -24,6 +24,13 @@ type Querier interface {
 	// provenance are kept. Clearing a link stays the explicit UnlinkEmail action, so a
 	// classify-only triage can never silently detach an application. Any pending
 	// suggestion is dropped either way: the agent's verdict supersedes it.
+	//
+	// match_confidence belongs to the LINK, not to the classification, so it follows
+	// job_id rather than being overwritten on every call: a stated confidence wins; a
+	// NEW link with none stated clears it (nobody said how sure they were about THIS
+	// link); an untouched link keeps the confidence it was made with. Writing the
+	// argument unconditionally left rows reading link_source='agent' with a NULL
+	// confidence after a caller merely re-labelled the message.
 	AgentTriageEmail(ctx context.Context, arg AgentTriageEmailParams) (int64, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
@@ -151,6 +158,8 @@ type Querier interface {
 	// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
 	// the index: a closed job has no vector in either place.
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
+	// Clear the user's headshot pointer, after deleting the object from storage.
+	ClearUserPhoto(ctx context.Context, id int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
 	// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
 	// derived structured résumé (the structure must not outlive the CV it describes).
@@ -279,6 +288,15 @@ type Querier interface {
 	// Total live messages for the caller (same optional filters as ListEmails), for
 	// pagination.
 	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
+	// The mailbox's shape in one pass: one row per classification label (the empty
+	// label being mail nothing has judged yet), carrying that label's total plus how
+	// many of it are unread, unclassified, linked to an application, or carrying a
+	// pending suggestion. The caller sums the rows for the mailbox-wide totals — the
+	// alternative, a FILTER column per label, would restate mailclassify's vocabulary
+	// in SQL, where it would silently fall behind the Go one.
+	//
+	// Soft-deleted mail is excluded, so these counts and the listing's agree.
+	CountEmailsByState(ctx context.Context, userID int64) ([]CountEmailsByStateRow, error)
 	// How many claims this account has filed since a cutoff, for the daily cap. Counts
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
@@ -800,6 +818,9 @@ type Querier interface {
 	// when none has been computed. Derived only — never the raw CV text.
 	GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, error)
 	// The caller's interaction row for one job (the application-detail header).
+	// last_activity_at and has_pending_suggestion mirror ListUserJobs deliberately: the follow-up gate
+	// must reach the same silence verdict as the badge on the board, and two derivations of one rule
+	// drift. See the column comment in 0059 for why followed_up_at is NOT part of the activity.
 	GetUserApplication(ctx context.Context, arg GetUserApplicationParams) (GetUserApplicationRow, error)
 	// Login lookup. Case-insensitive on email; returns password_hash so the handler
 	// can verify the password (and reject accounts that have none). role feeds the
@@ -828,6 +849,9 @@ type Querier interface {
 	// NULL when the account is passwordless (OAuth-only), which the caller treats the same
 	// as a wrong password: there is nothing to verify against.
 	GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Text, error)
+	// The authenticated user's headshot pointer (object key + upload time), or NULLs when
+	// no headshot is stored. The image lives in S3 under the key; this is just the pointer.
+	GetUserPhoto(ctx context.Context, id int64) (GetUserPhotoRow, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
@@ -1265,8 +1289,8 @@ type Querier interface {
 	// The caller's open applications offered to the matcher (applied, saved, or staged),
 	// as (job_id, company). Closed postings are excluded.
 	ListUserApplicationsForMatch(ctx context.Context, userID int64) ([]ListUserApplicationsForMatchRow, error)
-	// Every object-storage key the account owns, in one read: the stored CV, each
-	// referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+	// Every object-storage key the account owns, in one read: the stored CV, the headshot,
+	// each referral-proof PDF, and the raw MIME of each hosted email. Account deletion
 	// collects these BEFORE deleting any row — the mail and proof keys live in the rows
 	// themselves, so once those are gone the objects are unreachable and would sit in
 	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
@@ -1537,6 +1561,14 @@ type Querier interface {
 	// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
 	// idempotent, and a closed canon fails over to the next min(id) on the next run.
 	RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error)
+	// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
+	// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
+	// just overwrites the timestamp with a later one rather than erroring.
+	//
+	// Only an application can be chased: a job merely viewed or saved has nobody to chase, which is why
+	// applied_at must be set. This is NOT fed into the last-activity derivation above; see the column
+	// comment in 0059 for why a chase must not clear the silence it was a response to.
+	RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.
@@ -1835,6 +1867,10 @@ type Querier interface {
 	// stolen token cannot outlive the password it was minted under. Does NOT touch
 	// email_verified: knowing the current password proves nothing about the address.
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int32, error)
+	// Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
+	// by id; the object key is derived from the id, never client input. Nothing derived hangs
+	// off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
+	SetUserPhoto(ctx context.Context, arg SetUserPhotoParams) error
 	// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 	// Owner-scoped by id; the object key is derived from the id, never client input.
 	// Also clears any cached ATS review so a new CV is never scored with a stale one.

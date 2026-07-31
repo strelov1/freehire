@@ -206,3 +206,59 @@ func TestLastActivityNullForNonApplications(t *testing.T) {
 		t.Error("has_pending_suggestion = true on a saved-only job")
 	}
 }
+
+// TestAFollowUpDoesNotStopTheSilenceClock is the invariant the follow-up feature is built on: a
+// chase the candidate sends is not a reply, so recording one must leave last_activity_at — and
+// therefore the days silent and the silence state — exactly where they were. Folding
+// followed_up_at into the derivation would clear the badge at the moment it matters most, and
+// would tell the board an answer arrived when none did.
+func TestAFollowUpDoesNotStopTheSilenceClock(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+
+	uid := seedAPIKeyUser(t, pool, "silence-followup@example.test")
+	jid := insertJob(t, pool, "silence-followup-1")
+	applied := time.Now().Add(-24 * 24 * time.Hour).UTC().Truncate(time.Second)
+	applyAt(t, q, uid, jid, applied)
+
+	before := trackedRow(t, q, uid, "all")
+
+	got, err := q.RecordApplicationFollowUp(context.Background(),
+		RecordApplicationFollowUpParams{UserID: uid, JobID: jid})
+	if err != nil {
+		t.Fatalf("record follow-up: %v", err)
+	}
+	if !got.Valid {
+		t.Fatal("recorded follow-up returned no timestamp")
+	}
+
+	after := trackedRow(t, q, uid, "all")
+	if !sameSecond(after.LastActivityAt, applied) {
+		t.Errorf("last_activity_at = %v after a follow-up, want it unchanged at the apply date %v",
+			after.LastActivityAt, applied)
+	}
+	if !sameSecond(after.LastActivityAt, before.LastActivityAt.Time) {
+		t.Errorf("last_activity_at moved from %v to %v — a chase is not a reply",
+			before.LastActivityAt, after.LastActivityAt)
+	}
+	if !after.FollowedUpAt.Valid {
+		t.Error("followed_up_at is unset on the tracked row; the board cannot say the application was chased")
+	}
+}
+
+// TestFollowUpIsRefusedForANonApplication: a job merely viewed or saved has nobody to chase.
+func TestFollowUpIsRefusedForANonApplication(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+
+	uid := seedAPIKeyUser(t, pool, "silence-followup-2@example.test")
+	jid := insertJob(t, pool, "silence-followup-2")
+	if _, err := q.SaveJob(context.Background(), SaveJobParams{UserID: uid, JobID: jid}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	if _, err := q.RecordApplicationFollowUp(context.Background(),
+		RecordApplicationFollowUpParams{UserID: uid, JobID: jid}); err == nil {
+		t.Error("recording a follow-up on a saved-but-not-applied job succeeded; want no row")
+	}
+}

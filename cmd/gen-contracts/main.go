@@ -16,6 +16,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/location"
+	"github.com/strelov1/freehire/internal/mailclassify"
 	"github.com/strelov1/freehire/internal/roletag"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/userjob"
@@ -276,6 +277,11 @@ func genVocab() string {
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
 	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", vocab.DomainValues))
+	// The classified-mail vocabulary. It is generated rather than retyped because the
+	// inbox renders a label and a badge colour per signal, and a signal added in Go
+	// but missing from the SPA's maps rendered as a blank chip with every test green.
+	// Generated, the omission is a type error instead.
+	b.WriteString(emitVocab("EmailStatusSignal", "EMAIL_STATUS_SIGNAL_VALUES", mailclassify.SignalValues))
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))

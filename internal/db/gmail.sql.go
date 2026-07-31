@@ -62,6 +62,62 @@ func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64
 	return count, err
 }
 
+const countEmailsByState = `-- name: CountEmailsByState :many
+SELECT coalesce(status_signal, '')::text AS label,
+    count(*)::bigint AS n,
+    count(*) FILTER (WHERE read_at IS NULL)::bigint AS unread,
+    count(*) FILTER (WHERE classified_at IS NULL)::bigint AS unclassified,
+    count(*) FILTER (WHERE job_id IS NOT NULL)::bigint AS linked,
+    count(*) FILTER (WHERE job_id IS NULL AND suggested_job_id IS NOT NULL)::bigint AS suggested
+FROM emails
+WHERE user_id = $1 AND deleted_at IS NULL
+GROUP BY 1
+`
+
+type CountEmailsByStateRow struct {
+	Label        string `json:"label"`
+	N            int64  `json:"n"`
+	Unread       int64  `json:"unread"`
+	Unclassified int64  `json:"unclassified"`
+	Linked       int64  `json:"linked"`
+	Suggested    int64  `json:"suggested"`
+}
+
+// The mailbox's shape in one pass: one row per classification label (the empty
+// label being mail nothing has judged yet), carrying that label's total plus how
+// many of it are unread, unclassified, linked to an application, or carrying a
+// pending suggestion. The caller sums the rows for the mailbox-wide totals — the
+// alternative, a FILTER column per label, would restate mailclassify's vocabulary
+// in SQL, where it would silently fall behind the Go one.
+//
+// Soft-deleted mail is excluded, so these counts and the listing's agree.
+func (q *Queries) CountEmailsByState(ctx context.Context, userID int64) ([]CountEmailsByStateRow, error) {
+	rows, err := q.db.Query(ctx, countEmailsByState, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountEmailsByStateRow{}
+	for rows.Next() {
+		var i CountEmailsByStateRow
+		if err := rows.Scan(
+			&i.Label,
+			&i.N,
+			&i.Unread,
+			&i.Unclassified,
+			&i.Linked,
+			&i.Suggested,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteEmailsBySource = `-- name: DeleteEmailsBySource :exec
 DELETE FROM emails WHERE user_id = $1 AND source = $2
 `

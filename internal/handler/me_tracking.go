@@ -27,6 +27,10 @@ type myJobResponse struct {
 	LastActivityAt *time.Time `json:"last_activity_at"`
 	DaysSilent     *int       `json:"days_silent"`
 	SilenceState   *string    `json:"silence_state"`
+	// FollowedUpAt is when the caller last recorded chasing, or null for never. It is
+	// independent of the silence fields above — a chased application stays silent —
+	// so the board can show both readings at once.
+	FollowedUpAt *time.Time `json:"followed_up_at"`
 }
 
 // ListTrackedJobs returns the authenticated user's job interactions joined with the
@@ -63,6 +67,7 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 			Notes:          it.Notes,
 			EmailCount:     it.EmailCount,
 			ReminderFireAt: it.ReminderFireAt,
+			FollowedUpAt:   it.FollowedUpAt,
 		}
 		if s := it.Silence(now); s != nil {
 			item.LastActivityAt = &s.LastActivityAt

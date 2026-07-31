@@ -123,6 +123,27 @@
   const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
+  // The member's headshot, for the templates that print one. Read once here rather than inside
+  // the preview: the photo belongs to the profile, not to the CV being edited, and the same URL
+  // feeds every template switch. Null while unknown, absent, or unconfigured — the preview then
+  // draws the placeholder, exactly as the PDF does.
+  let photoSrc = $state<string | null>(null);
+  $effect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const meta = await api.getPhoto();
+        if (cancelled || !meta.present) return;
+        photoSrc = `/api/v1/me/photo/image?v=${encodeURIComponent(meta.uploaded_at ?? '')}`;
+      } catch {
+        // Best-effort: without it the preview shows the placeholder.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  });
+
   // Offered whenever the conversation is empty — the chat renders them only then. A CV opened
   // by id can carry a conversation nobody has spoken to, and that case looked like lost history.
   const opening = openingActions();
@@ -537,7 +558,7 @@
           </a>
         </div>
         <div class="min-h-0 flex-1 overflow-auto p-6">
-          <CvHtmlPreview {doc} {templateId} {zoom} />
+          <CvHtmlPreview {doc} {templateId} {zoom} {photoSrc} />
         </div>
       </div>
 

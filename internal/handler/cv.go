@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/resume"
 )
 
@@ -30,9 +31,12 @@ import (
 // (blocker capping, credits balance) it reuses.
 type cvHandlers struct {
 	// cvStore owns the CV-builder use cases (per-user structured CVs, CRUD + seed).
-	cvStore            *cv.Store
-	cvRenderer         cv.Renderer
-	resume             *resume.Store
+	cvStore    *cv.Store
+	cvRenderer cv.Renderer
+	resume     *resume.Store
+	// photos serves the headshot the photo-bearing templates print. Nil-safe: an
+	// unconfigured bucket, like a member with no photo, means the placeholder.
+	photos             *headshot.Store
 	queries            *db.Queries
 	credits            *credits.Store
 	matchAnalysisCache matchAnalysisStore
@@ -56,11 +60,12 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
+func newCVHandlers(queries *db.Queries, typstBin string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
 		jobReader:          queries,
 		resume:             resumeStore,
+		photos:             photoStore,
 		seeder:             bankedSeeder{resume: resumeStore, bank: newWorkHistoryReader(queries)},
 		queries:            queries,
 		credits:            creditsStore,
@@ -432,7 +437,7 @@ func (h *cvHandlers) RenderCVPDF(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl)
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, userID, tmpl))
 	if err != nil {
 		return err
 	}

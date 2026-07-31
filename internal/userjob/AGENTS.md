@@ -20,6 +20,10 @@ The per-user job-tracking use cases — **`RecordView`** (touches `viewed_at`), 
 
 Two invariants worth knowing before touching it: a threshold is the **last tolerated day**, not the first offending one, and a settled application reports **no state at all** rather than `active` — the board must be able to tell "nothing owed" from "owed and answered promptly". `TestSilenceThresholdsGrowStricter` guards the ladder's direction, which no individual scenario would catch if it inverted.
 
+**`user_jobs.followed_up_at` records the candidate chasing, and is deliberately outside the clock.** `last_activity_at` is `GREATEST(applied_at, newest linked inbound mail)` — it measures how long the *other side* has been quiet, and a follow-up the candidate sends is not a reply. Adding the column to that `GREATEST(...)` would clear the badge at the moment it matters most, so it is carried *beside* the silence verdict (`jobtracking.TrackedJob`, the listing response, and `GET /me/tracking/:slug`) and never inside its inputs — `SilenceStateFor` is not given it and so cannot read it. `TestAFollowUpDoesNotStopTheSilenceClock` fails if a future reader wires it in; the column comment in migration 0059 says why.
+
+A chased application therefore has **two readings at once**, and the board card shows both: the amber "24d" badge (they still have not answered) plus "chased 2d ago" (we already prodded). The follow-up offer itself stays available — a second chase is the candidate's call. `GET /me/tracking/:slug/followup` assembles the draft via `internal/followup` (deterministic, no LLM, no credits) and refuses anything whose state is not `silent`, reusing `SilenceStateFor` so the offer and the badge can never disagree; `POST` on the same path records the chase. Nothing in this path sends mail — `inboxHandlers` holds no mail client at all.
+
 The `/me/tracking` read joins the caller's interactions with the jobs they touch. View history = all rows; applications = `applied_at IS NOT NULL`.
 
 ## Limitations

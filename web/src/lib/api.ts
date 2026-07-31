@@ -24,6 +24,7 @@ import type {
   Job,
   EmailLinking,
   TrackedApplication,
+  FollowUpDraft,
   Company,
   CompanyListItem,
   FacetCounts,
@@ -60,6 +61,7 @@ import type {
   CreditHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
+  PhotoMeta,
   ResumeMeta,
   ActivityGranularity,
   ActivityPoint,
@@ -138,6 +140,17 @@ export interface JobCopy {
  *  raw 413 the server would emit before the handler runs. The UI also shows it as a hint. */
 export const RESUME_MAX_MB = 8;
 const RESUME_MAX_BYTES = RESUME_MAX_MB * 1024 * 1024;
+
+/** Max headshot upload size. Deliberately UNDER the server's 8 MiB BodyLimit rather than
+ *  equal to it: the limit covers the whole multipart request, so a file at exactly 8 MiB is
+ *  refused by fasthttp with a bare 413 before any handler — and the member sees an unstyled
+ *  error instead of this message. */
+export const PHOTO_MAX_MB = 6;
+const PHOTO_MAX_BYTES = PHOTO_MAX_MB * 1024 * 1024;
+
+/** The image types the server can decode (internal/headshot). Used as the file input's
+ *  `accept` list and as the pre-flight check. */
+export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp';
 
 /** A non-2xx API response. Carries the HTTP status so callers can branch on it
  *  (e.g. 401 invalid credentials, 409 email taken) instead of parsing strings.
@@ -1306,6 +1319,19 @@ export function createApi(
     return requestData<TrackedApplication>(`/api/v1/me/tracking/${encodeURIComponent(slug)}`);
   }
 
+  /** The assembled follow-up draft for a silent application. 409 when the
+   *  application is not waiting on a reply — the same verdict the board's badge
+   *  renders, so a card that offers the draft never gets one. */
+  async function getFollowUpDraft(slug: string): Promise<FollowUpDraft> {
+    return requestData<FollowUpDraft>(`/api/v1/me/tracking/${encodeURIComponent(slug)}/followup`);
+  }
+
+  /** Record that the caller chased this application. Sends nothing — it stamps
+   *  followed_up_at, which stays outside the silence derivation. 204, no body. */
+  async function recordFollowUp(slug: string): Promise<void> {
+    await call(`/api/v1/me/tracking/${encodeURIComponent(slug)}/followup`, { method: 'POST' });
+  }
+
   /** Promote an email's pending suggestion to a confirmed link. */
   async function confirmEmailLink(id: number): Promise<EmailBody> {
     return requestData<EmailBody>(`/api/v1/me/emails/${id}/confirm`, { method: 'POST' });
@@ -1328,7 +1354,33 @@ export function createApi(
 
   // --- CVs and tailoring (open to every signed-in user; credits meter the AI spend) ---
 
-  /** List the available CV templates (id, label, style, ats_safe) for the gallery. */
+  /** The caller's headshot: whether the feature is configured at all (`enabled`), whether
+   *  one is stored, and when it was uploaded. Always 200 — "no photo yet" and "storage is
+   *  off" are both states the profile renders. */
+  async function getPhoto(): Promise<PhotoMeta> {
+    return requestData<PhotoMeta>('/api/v1/me/photo');
+  }
+
+  /** Store (or replace) the caller's headshot. The server normalizes it to a square JPEG,
+   *  so an image it cannot decode comes back as a 400 and nothing is stored. */
+  async function putPhoto(file: File): Promise<PhotoMeta> {
+    if (file.size > PHOTO_MAX_BYTES) {
+      throw new ApiError(
+        413,
+        `This image is larger than ${PHOTO_MAX_MB} MB. Pick a smaller photo and try again.`,
+      );
+    }
+    const form = new FormData();
+    form.append('file', file);
+    return requestData<PhotoMeta>('/api/v1/me/photo', { method: 'PUT', body: form });
+  }
+
+  /** Remove the caller's headshot (object + pointer). */
+  async function deletePhoto(): Promise<void> {
+    await call('/api/v1/me/photo', { method: 'DELETE' });
+  }
+
+  /** List the available CV templates (id, label, style, ats_safe, photo) for the gallery. */
   async function listCvTemplates(): Promise<CvTemplate[]> {
     return requestData<CvTemplate[]>('/api/v1/cv-templates');
   }
@@ -1595,11 +1647,16 @@ export function createApi(
     deleteEmail,
     restoreEmail,
     getTrackedApplication,
+    getFollowUpDraft,
+    recordFollowUp,
     confirmEmailLink,
     rejectEmailLink,
     linkEmail,
     unlinkEmail,
     listCvs,
+    getPhoto,
+    putPhoto,
+    deletePhoto,
     listCvTemplates,
     setCvTemplate,
     getCv,

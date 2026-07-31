@@ -1,7 +1,15 @@
+// The bring-your-own-harness tier: a user's own mail client pushes what it
+// fetched, and their own agent records its verdict. It is called the HARNESS
+// surface rather than the "agent" surface because there are now two agents on this
+// store — this one, an external process holding an API key, and the in-app
+// assistant, which issues no HTTP request at all and reaches internal/inbox
+// directly. The rules they share live in that package; what lives here is only
+// what this tier does differently: it brings its own transport and its own
+// classifier, and it is therefore the tier that costs us nothing.
+
 package handler
 
 import (
-	"log"
 	"strconv"
 	"time"
 
@@ -9,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/mailclassify"
+	"github.com/strelov1/freehire/internal/inbox"
 )
 
 // maxIngestBatch bounds one push. A harness syncing a mailbox pages through it;
@@ -138,87 +146,18 @@ type triageRequest struct {
 	Confidence *float32 `json:"confidence"`
 }
 
-// TriageEmail records an agent-produced verdict for one message and advances the
-// linked application's stage by the same rules the classification worker uses.
-//
-// It is SetEmailClassification's sibling, deliberately: status, link, provenance
-// and the classified stamp are written together, so a message is never left
-// classified-but-unstamped or linked-but-unclassified — states the worker never
-// produces and no reader expects.
-//
-// Omitting a slug means "I am not deciding the link", not "clear it": clearing
-// stays the explicit unlink action, so a classify-only pass cannot silently
-// detach an application.
+// TriageEmail records an agent-produced verdict for one message. The rules — the
+// label vocabulary, the write that lands status, link and stamp together, and the
+// monotonic-forward stage advance — live in inbox.Service.Triage, which the in-app
+// assistant calls for the same operation.
 func (h *inboxHandlers) TriageEmail(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	id, err := c.ParamsInt("id")
-	if err != nil {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	}
 	var req triageRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	if !mailclassify.IsValidSignal(req.Signal) {
-		return fiber.NewError(fiber.StatusBadRequest, "unknown signal")
-	}
-
-	// Resolve the slug before writing: an unknown one is a 404 that changes nothing.
-	var jobID pgtype.Int8
-	if req.Slug != "" {
-		job, err := h.queries.GetJobBySlug(c.Context(), req.Slug)
-		if err != nil {
-			return err // ErrNoRows → 404
-		}
-		jobID = pgtype.Int8{Int64: job.ID, Valid: true}
-	}
-
-	var confidence pgtype.Float4
-	if req.Confidence != nil {
-		confidence = pgtype.Float4{Float32: *req.Confidence, Valid: true}
-	}
-	rows, err := h.queries.AgentTriageEmail(c.Context(), db.AgentTriageEmailParams{
-		ID:           int64(id),
-		UserID:       userID,
-		StatusSignal: pgtype.Text{String: req.Signal, Valid: true},
-		JobID:        jobID,
-		Confidence:   confidence,
+	return h.renderMutation(c, func(userID, id int64) (inbox.Message, error) {
+		return h.inbox.Triage(c.Context(), userID, id, inbox.Verdict{
+			Signal: req.Signal, Slug: req.Slug, Confidence: req.Confidence,
+		})
 	})
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fiber.NewError(fiber.StatusNotFound, "not found")
-	}
-
-	if jobID.Valid {
-		h.advanceStage(c, userID, jobID.Int64, mailclassify.StatusSignal(req.Signal))
-	}
-	return h.renderEmail(c, userID, int64(id))
-}
-
-// advanceStage moves a linked application forward when the verdict implies
-// progress, by the same monotonic-forward rules the classification worker uses.
-// It is best-effort: the verdict is already durable, and a failed advance must
-// not fail the triage the agent successfully recorded.
-func (h *inboxHandlers) advanceStage(c *fiber.Ctx, userID, jobID int64, sig mailclassify.StatusSignal) {
-	current, err := h.queries.GetUserJobStage(c.Context(), db.GetUserJobStageParams{UserID: userID, JobID: jobID})
-	if err != nil {
-		// No application row means the caller linked mail to a job they do not
-		// track; there is simply no stage to advance.
-		return
-	}
-	next, ok := mailclassify.AdvanceStage(current, sig)
-	if !ok {
-		return
-	}
-	err = h.queries.AdvanceUserJobStage(c.Context(), db.AdvanceUserJobStageParams{
-		UserID: userID, JobID: jobID, Stage: pgtype.Text{String: next, Valid: true},
-	})
-	if err != nil {
-		log.Printf("inbox: advance stage user=%d job=%d: %v", userID, jobID, err)
-	}
 }

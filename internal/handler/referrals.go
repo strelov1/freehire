@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/referral"
 )
 
@@ -24,10 +25,13 @@ type referralHandlers struct {
 	blob       blobstore.Store
 	cvRenderer cv.Renderer
 	cvStore    *cv.Store
+	// photos serves the OWNER's headshot when their chosen template prints one, so the
+	// proof a referrer opens is the CV the candidate sees, not a silhouette of them.
+	photos *headshot.Store
 }
 
-func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store) *referralHandlers {
-	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore}
+func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store) *referralHandlers {
+	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos}
 }
 
 func (h *referralHandlers) register(api fiber.Router, mw middleware) {
@@ -470,7 +474,7 @@ func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID i
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl)
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, headshotForTemplate(c.Context(), h.photos, ownerID, tmpl))
 	if err != nil {
 		return err
 	}

@@ -36,7 +36,7 @@ func TestHostedMailboxEndToEnd(t *testing.T) {
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	cookie, _ := iss.Issue(uid, testTokenVersion)
-	h := &inboxHandlers{queries: db.New(pool), mailDomain: "inbox.freehire.test"}
+	h := newInboxHandlers(db.New(pool), pool, nil, nil, "", false, "inbox.freehire.test")
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	ra := auth.RequireAuth(iss, testVersions)

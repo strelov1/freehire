@@ -102,8 +102,8 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 	const leaverEmail = "leaver@example.test"
 	var leaver, stayer int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email, role, resume_object_key, resume_uploaded_at)
-		 VALUES ($1, 'moderator', 'resumes/leaver', now()) RETURNING id`, leaverEmail).Scan(&leaver); err != nil {
+		`INSERT INTO users (email, role, resume_object_key, resume_uploaded_at, photo_object_key, photo_uploaded_at)
+		 VALUES ($1, 'moderator', 'resumes/leaver', now(), 'photos/leaver', now()) RETURNING id`, leaverEmail).Scan(&leaver); err != nil {
 		t.Fatalf("seed leaver: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
@@ -169,7 +169,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, _ := iss.Issue(leaver, testTokenVersion)
-	blobs := newMemBlobs("resumes/leaver", "referral-proof/leaver/acme.pdf", "mail/leaver/msg-1", "resumes/stayer")
+	blobs := newMemBlobs("resumes/leaver", "photos/leaver", "referral-proof/leaver/acme.pdf", "mail/leaver/msg-1", "resumes/stayer")
 	app := newDeleteAccountApp(pool, iss, blobs)
 
 	t.Run("wrong confirmation erases nothing", func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 	})
 
 	t.Run("stored objects are gone, other members' are not", func(t *testing.T) {
-		for _, key := range []string{"resumes/leaver", "referral-proof/leaver/acme.pdf", "mail/leaver/msg-1"} {
+		for _, key := range []string{"resumes/leaver", "photos/leaver", "referral-proof/leaver/acme.pdf", "mail/leaver/msg-1"} {
 			if blobs.objects[key] {
 				t.Errorf("object %q survived the deletion", key)
 			}

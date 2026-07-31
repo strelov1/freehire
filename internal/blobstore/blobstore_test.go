@@ -8,6 +8,20 @@ func TestResumeKey_DerivedFromUserID(t *testing.T) {
 	}
 }
 
+func TestPhotoKey_DerivedFromUserID(t *testing.T) {
+	if got := PhotoKey(7); got != "photos/7" {
+		t.Errorf("PhotoKey(7) = %q, want photos/7", got)
+	}
+}
+
+func TestPhotoKey_DoesNotCollideWithResumeKey(t *testing.T) {
+	// The two per-user objects share a bucket, so their prefixes must differ — a
+	// collision would have an upload silently overwrite the stored CV.
+	if PhotoKey(7) == ResumeKey(7) {
+		t.Errorf("PhotoKey and ResumeKey collide at %q", PhotoKey(7))
+	}
+}
+
 func TestNew_UnconfiguredReturnsNilStore(t *testing.T) {
 	cases := []Config{
 		{},

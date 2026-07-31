@@ -32,6 +32,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 
 | Package | Role |
 |---|---|
+| `internal/inbox` | The mail use cases (read, classify, link, record an application). Both readers call it |
 | `internal/gmailsync` | Incremental Gmail OAuth connect + per-user sync worker (`cmd/gmail-sync`) |
 | `internal/mailingest` | SES inbound: parse MIME → resolve recipient → store (`cmd/mail-ingest`, a daemon) |
 | `internal/mailbox` | Derives `<handle>@<MAILBOX_DOMAIN>`; pure — allocation lives in the handler |
@@ -108,9 +109,19 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   the mail's timestamp is an honest upper bound. The error then leans toward
   *under*-reporting elapsed silence, which is the safe direction: a missed ghost is
   a non-event, a fabricated one tells a person they were ignored when they were not.
+- **There is a third reader, and it issues no HTTP request.** The in-app assistant's mail
+  tools (`chat` preset only) call `internal/inbox` directly with the session owner's id.
+  That package exists because of it: a rule enforced in a Fiber handler is a rule the
+  in-process agent never meets, which is exactly how the CV-tailoring contact guard was
+  lost. Put a new mail rule in the service, not in a handler, and check `IsNotFound` /
+  `InvalidError` render sensibly for both readers. The assistant's own bounds — no
+  single-message read, a 10-message body cap, no tool that sends — are in
+  `internal/assistant/AGENTS.md`.
 - **Bodies reach an agent through the listing (`?body=1`), not `GET /me/emails/:id`.** That
   endpoint marks the message read, and `read_at` means "a human saw this" — a harness
-  sweeping the backlog through it would silently zero its owner's unread count.
+  sweeping the backlog through it would silently zero its owner's unread count. For the
+  in-process reader this is structural: `inbox.Queries` has no read-marking method, so
+  `Search` cannot mark even by mistake.
 - The whole `/me/gmail|inbox|emails|mailbox` surface is `mw.key` — a session cookie **or** a
   full-scope API key, so a user's own agent harness drives it. The lone exception is the
   Gmail OAuth connect/callback pair, which stays cookie-only: it redirects a browser to

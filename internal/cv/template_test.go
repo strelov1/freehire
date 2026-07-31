@@ -40,9 +40,49 @@ func TestRegisteredTemplatesResolveToSource(t *testing.T) {
 
 func TestExpectedTemplatesRegistered(t *testing.T) {
 	ids := TemplateIDs()
-	for _, want := range []string{"classic-ats", "centered", "modern-sans", "sidebar"} {
+	for _, want := range []string{"classic-ats", "centered", "modern-sans", "sidebar", "portrait", "headshot"} {
 		if !slices.Contains(ids, want) {
 			t.Errorf("template %q not registered; got %v", want, ids)
+		}
+	}
+}
+
+func TestPhotoFlagMarksTheTemplatesThatPrintAPortrait(t *testing.T) {
+	want := map[string]bool{
+		"classic-ats": false,
+		"centered":    false,
+		"modern-sans": false,
+		"sidebar":     false,
+		"portrait":    true,
+		"headshot":    true,
+	}
+	for _, ti := range Templates() {
+		w, known := want[ti.ID]
+		if !known {
+			t.Errorf("template %q is registered but the photo expectation is unstated", ti.ID)
+			continue
+		}
+		if ti.Photo != w {
+			t.Errorf("template %q: photo = %v, want %v", ti.ID, ti.Photo, w)
+		}
+		// A photo template cannot be ATS-safe: a portrait is exactly what a single-column
+		// scanner contract excludes.
+		if ti.Photo && ti.ATSSafe {
+			t.Errorf("template %q claims both a photo and ATS safety", ti.ID)
+		}
+	}
+}
+
+func TestResolveTemplateCarriesThePhotoFlag(t *testing.T) {
+	// The renderer decides whether to stage an image from the resolved template, so the
+	// flag must survive resolution and not live on the registry entry alone.
+	for _, ti := range Templates() {
+		tmpl, err := ResolveTemplate(ti.ID)
+		if err != nil {
+			t.Fatalf("ResolveTemplate(%q): %v", ti.ID, err)
+		}
+		if tmpl.Photo != ti.Photo {
+			t.Errorf("template %q: resolved photo = %v, registry says %v", ti.ID, tmpl.Photo, ti.Photo)
 		}
 	}
 }
