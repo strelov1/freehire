@@ -62,11 +62,11 @@
 
 ## 9. Workspace
 
-- [ ] 9.1 History tab in `ArtifactPanel` — entries newest first, author, time, description, undo control, run grouping
-- [ ] 9.2 `CvHtmlPreview`: carry each item's document index through the empty-entry filtering
-- [ ] 9.3 Underline the paths of the hovered, pinned, or newest-run revision
+- [x] 9.1 History tab in `ArtifactPanel` — entries newest first, author, time, description, undo control, run grouping
+- [x] 9.2 `CvHtmlPreview`: carry each item's document index through the empty-entry filtering
+- [x] 9.3 Underline the paths of the hovered, pinned, or newest-run revision
 - [ ] 9.4 Move the whole-run revert from `AutopilotReport` into the run group in the feed
-- [ ] 9.5 Test (`vitest`): path-to-node matching, including an empty bullet before the changed one; description rendering
+- [x] 9.5 Test (`vitest`): path-to-node matching, including an empty bullet before the changed one; description rendering
 
 ## 10. Retirement and clients
 

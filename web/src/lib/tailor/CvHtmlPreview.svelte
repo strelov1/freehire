@@ -13,6 +13,7 @@
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '$lib/cv';
   import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
   import { paginateBlocks, previewTypography } from './geometry';
+  import { keepIndex, makeHighlighter } from './revisions';
 
   let {
     doc,
@@ -20,13 +21,20 @@
     zoom = 1,
     fonts = [],
     photoSrc = null,
+    highlightPaths = [],
   }: {
     doc: Document;
     templateId?: string;
     zoom?: number;
     fonts?: CvFont[];
     photoSrc?: string | null;
+    /** Addresses a revision touched, e.g. `experience[2].bullets[1]`. The nodes they name are
+     *  underlined, so "what changed" is answerable by looking at the page. */
+    highlightPaths?: string[];
   } = $props();
+
+  // Whether a given address was touched by whatever the history has selected.
+  const lit = $derived(makeHighlighter(highlightPaths));
 
   // A4 at 96dpi, and the inch→pixel factor margins convert through.
   const PAGE_W = 794;
@@ -82,8 +90,13 @@
       .map((c) => (c ?? '').trim())
       .filter((c) => c !== ''),
   );
-  const experience = $derived((doc.experience ?? []).filter((e) => experienceHeader(e) !== '' || (e.bullets ?? []).length > 0));
-  const projects = $derived((doc.projects ?? []).filter((p) => (p.name ?? '').trim() !== ''));
+  // keepIndex, not filter: these carry each entry's position in the STORED document, which is
+  // what a revision addresses. Renumbering what survives would send a highlight for
+  // experience[2] to whichever entry happened to land third on the page.
+  const experience = $derived(
+    keepIndex(doc.experience ?? [], (e) => experienceHeader(e) !== '' || (e.bullets ?? []).length > 0),
+  );
+  const projects = $derived(keepIndex(doc.projects ?? [], (p) => (p.name ?? '').trim() !== ''));
   const education = $derived((doc.education ?? []).map(educationLine).filter((l) => l !== ''));
   const skills = $derived((doc.skills ?? []).flatMap((g) => g.items ?? []).map((s) => s.trim()).filter((s) => s !== ''));
   const languages = $derived((doc.languages ?? []).map(languageLabel).filter((l) => l !== ''));
@@ -94,21 +107,25 @@
   // entry (the section heading rides with the first entry); short sections are one block each.
   type Block =
     | { id: string; kind: 'header' }
-    | { id: string; kind: 'exp'; item: ExperienceItem; heading: boolean }
-    | { id: string; kind: 'proj'; item: Project; heading: boolean }
+    | { id: string; kind: 'exp'; item: ExperienceItem; at: number; heading: boolean }
+    | { id: string; kind: 'proj'; item: Project; at: number; heading: boolean }
     | { id: string; kind: 'education' }
-    | { id: string; kind: 'list'; title: string; items: string[]; sep: string };
+    | { id: string; kind: 'list'; title: string; items: string[]; sep: string; path: string };
 
   const blocks = $derived.by<Block[]>(() => {
     const bl: Block[] = [{ id: 'header', kind: 'header' }];
-    experience.forEach((e, i) => bl.push({ id: `exp-${i}`, kind: 'exp', item: e, heading: i === 0 }));
-    projects.forEach((p, i) => bl.push({ id: `proj-${i}`, kind: 'proj', item: p, heading: i === 0 }));
+    experience.forEach(({ index, item }, i) =>
+      bl.push({ id: `exp-${index}`, kind: 'exp', item, at: index, heading: i === 0 }),
+    );
+    projects.forEach(({ index, item }, i) =>
+      bl.push({ id: `proj-${index}`, kind: 'proj', item, at: index, heading: i === 0 }),
+    );
     if (education.length) bl.push({ id: 'education', kind: 'education' });
     // In the two-column layouts skills/languages/certs live in the narrow column, not the main flow.
     if (!twoColumn) {
-      if (skills.length) bl.push({ id: 'skills', kind: 'list', title: 'Skills', items: skills, sep: ', ' });
-      if (languages.length) bl.push({ id: 'languages', kind: 'list', title: 'Languages', items: languages, sep: ', ' });
-      if (certifications.length) bl.push({ id: 'certs', kind: 'list', title: 'Certifications', items: certifications, sep: '; ' });
+      if (skills.length) bl.push({ id: 'skills', kind: 'list', title: 'Skills', items: skills, sep: ', ', path: 'skills' });
+      if (languages.length) bl.push({ id: 'languages', kind: 'list', title: 'Languages', items: languages, sep: ', ', path: 'languages' });
+      if (certifications.length) bl.push({ id: 'certs', kind: 'list', title: 'Certifications', items: certifications, sep: '; ', path: 'certifications' });
     }
     return bl;
   });
@@ -182,6 +199,7 @@
     {/if}
     {#if (doc.summary ?? '').trim()}
       <p
+        class:cv-lit={lit('summary')}
         class={[
           'mt-2 text-[calc(12.5/13*1em)] text-neutral-800',
           isCentered ? 'mx-auto max-w-[62ch] italic' : '',
@@ -197,27 +215,35 @@
   <hr class={['my-2', isSans || twoColumn ? 'border-neutral-500' : 'border-neutral-300']} />
 {/snippet}
 
-{#snippet experienceItem(e: ExperienceItem)}
-  {@const bullets = (e.bullets ?? []).filter((b) => b.trim())}
+{#snippet experienceItem(e: ExperienceItem, at: number)}
+  {@const bullets = keepIndex(e.bullets ?? [], (b) => b.trim() !== '')}
   {@const stack = (e.stack ?? []).filter((s) => s.trim())}
   <div class="mb-2.5">
-    <p class="font-bold">{experienceHeader(e)}</p>
-    {#if (e.summary ?? '').trim()}<p class="text-neutral-800">{e.summary}</p>{/if}
+    <p class="font-bold" class:cv-lit={lit(`experience[${at}].role`) || lit(`experience[${at}].company`)}>
+      {experienceHeader(e)}
+    </p>
+    {#if (e.summary ?? '').trim()}
+      <p class="text-neutral-800" class:cv-lit={lit(`experience[${at}].summary`)}>{e.summary}</p>
+    {/if}
     {#if bullets.length}
       <ul class="ml-4 list-disc space-y-0.5">
-        {#each bullets as b, bi (bi)}<li>{b}</li>{/each}
+        {#each bullets as b (b.index)}
+          <li class:cv-lit={lit(`experience[${at}].bullets[${b.index}]`)}>{b.item}</li>
+        {/each}
       </ul>
     {/if}
     {#if stack.length}
-      <p class="mt-0.5"><span class="font-bold">Stack:</span> {stack.join(', ')}</p>
+      <p class="mt-0.5" class:cv-lit={lit(`experience[${at}].stack`)}>
+        <span class="font-bold">Stack:</span> {stack.join(', ')}
+      </p>
     {/if}
   </div>
 {/snippet}
 
-{#snippet projectItem(p: Project)}
+{#snippet projectItem(p: Project, at: number)}
   {@const bullets = (p.bullets ?? []).filter((b) => b.trim())}
   <ul class="ml-4 list-disc">
-    <li class="mb-0.5">
+    <li class="mb-0.5" class:cv-lit={lit(`projects[${at}]`)}>
       <span class="font-bold">{p.name}</span>{#if bullets.length}: {bullets.join(' ')}{/if}
       {#if (p.link ?? '').trim()}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external URL from the user's CV, not an internal route -->
@@ -227,10 +253,15 @@
   </ul>
 {/snippet}
 
-{#snippet listBlock(title: string, items: string[], sep: string)}
+<!-- These sections are rendered as one composed line each (skills flattened across groups,
+     education/languages/certifications through their own formatters), so their addresses stop
+     at the section: a revision inside one underlines the section rather than the item. Going
+     finer would mean rendering them per-entry, which is a change to the layout, not to the
+     highlighting. -->
+{#snippet listBlock(title: string, items: string[], sep: string, at: string)}
   <section class="mb-3">
     {@render sectionHeading(title)}
-    <p>{items.join(sep)}</p>
+    <p class:cv-lit={lit(at)}>{items.join(sep)}</p>
   </section>
 {/snippet}
 
@@ -239,17 +270,17 @@
     {@render headerBlock()}
   {:else if b.kind === 'exp'}
     {#if b.heading}{@render sectionHeading('Experience')}{/if}
-    {@render experienceItem(b.item)}
+    {@render experienceItem(b.item, b.at)}
   {:else if b.kind === 'proj'}
     {#if b.heading}{@render sectionHeading('Projects')}{/if}
-    {@render projectItem(b.item)}
+    {@render projectItem(b.item, b.at)}
   {:else if b.kind === 'education'}
     <section class="mb-3">
       {@render sectionHeading('Education')}
-      {#each education as line, i (i)}<p class="mb-0.5">{line}</p>{/each}
+      {#each education as line, i (i)}<p class="mb-0.5" class:cv-lit={lit(`education[${i}]`)}>{line}</p>{/each}
     </section>
   {:else if b.kind === 'list'}
-    {@render listBlock(b.title, b.items, b.sep)}
+    {@render listBlock(b.title, b.items, b.sep, b.path)}
   {/if}
 {/snippet}
 
@@ -268,9 +299,9 @@
       {/each}
     </section>
   {/if}
-  {#if skills.length}{@render listBlock('Skills', skills, ', ')}{/if}
-  {#if languages.length}{@render listBlock('Languages', languages, ', ')}{/if}
-  {#if certifications.length}{@render listBlock('Certifications', certifications, '; ')}{/if}
+  {#if skills.length}{@render listBlock('Skills', skills, ', ', 'skills')}{/if}
+  {#if languages.length}{@render listBlock('Languages', languages, ', ', 'languages')}{/if}
+  {#if certifications.length}{@render listBlock('Certifications', certifications, '; ', 'certifications')}{/if}
 {/snippet}
 
 <!-- Hidden measurement layer: renders every block once at the main column width so the effect can
@@ -312,3 +343,20 @@
     </article>
   {/each}
 </div>
+
+<style>
+  /* What a revision touched is marked with an underline rather than a filled background: the
+     page has to keep reading as a CV while it answers "what changed". Wavy and offset so it
+     is not mistaken for a link, and it prints away with the highlight since nothing here
+     reaches the PDF — this is preview chrome. */
+  .cv-lit {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    text-decoration-color: #b45309;
+  }
+  .cv-lit :global(li) {
+    text-decoration: inherit;
+  }
+</style>

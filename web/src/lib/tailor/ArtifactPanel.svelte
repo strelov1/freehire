@@ -18,14 +18,15 @@
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import TemplateGallery from './TemplateGallery.svelte';
+  import RevisionHistory from './RevisionHistory.svelte';
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
   import JobMatch from './JobMatch.svelte';
-  import type { Analysis, AutopilotEntry } from '$lib/generated/contracts';
+  import type { Analysis, AutopilotEntry, RevisionView } from '$lib/generated/contracts';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
   import type { CvAtsDelta, CvJobMatch } from '$lib/cv';
 
-  type Tab = 'templates' | 'jd' | 'jobmatch' | 'score';
+  type Tab = 'templates' | 'jd' | 'jobmatch' | 'score' | 'history';
 
   let {
     cvId,
@@ -44,6 +45,9 @@
     jobMatch = null,
     onRerunAutopilot,
     onUndoAutopilot,
+    revisions = [],
+    pinnedRevision = $bindable(null),
+    onRevisionUndone,
   }: {
     cvId: string;
     job: Job;
@@ -63,11 +67,18 @@
     jobMatch?: CvJobMatch | null;
     onRerunAutopilot: () => void;
     onUndoAutopilot: () => void;
+    /** The CV's history, newest first. */
+    revisions?: RevisionView[];
+    /** The entry whose edits stay underlined in the preview. Bound so the centre column can
+     *  read it — the highlight belongs to the document, not to this panel. */
+    pinnedRevision?: RevisionView | null;
+    onRevisionUndone: () => void;
   } = $props();
 
   const tabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
+    ['history', 'History'],
     ['jd', 'Job'],
     ['templates', 'Templates'],
   ];
@@ -186,6 +197,8 @@
       <div class="p-4">
         <TemplateGallery {cvId} onSelected={onTemplateSelected} />
       </div>
+    {:else if tab === 'history'}
+      <RevisionHistory {cvId} {revisions} bind:pinned={pinnedRevision} onChanged={onRevisionUndone} />
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}

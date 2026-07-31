@@ -32,7 +32,7 @@
     type CvFont,
     type CvJobMatch,
   } from '$lib/cv';
-  import type { Analysis, AutopilotEntry, Document } from '$lib/generated/contracts';
+  import type { Analysis, AutopilotEntry, Document, RevisionView } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
 
   const slug = $derived(page.params.slug ?? '');
@@ -240,9 +240,10 @@
       }
       status = 'ready';
       // Not awaited: the workspace is usable before the comparison lands, and the comparison
-      // costs two renders.
+      // costs two renders. The history is the same kind of accessory read.
       void refreshAtsDelta();
       void refreshJobMatch();
+      void loadRevisions();
       // Not awaited either: an empty list only means the font picker has nothing to offer yet,
       // and the preview falls back to the template's own face meanwhile.
       void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
@@ -261,6 +262,31 @@
     }
   });
 
+  // ---- Revision history ----
+  // The feed is loaded beside the CV and refreshed after anything that writes: a save, an
+  // agent turn, an undo. `pinnedRevision` is what the preview underlines; it lives here rather
+  // than in the panel because the highlight belongs to the document, not to the tab.
+  let revisions = $state<RevisionView[]>([]);
+  let pinnedRevision = $state<RevisionView | null>(null);
+
+  async function loadRevisions() {
+    if (!cvId) return;
+    try {
+      revisions = await api.listCvRevisions(cvId);
+    } catch {
+      // The history is an accessory read: a workspace that cannot list it still edits.
+      revisions = [];
+    }
+  }
+
+  async function onRevisionsChanged() {
+    await loadCv();
+    pdfVersion += 1;
+    void loadRevisions();
+    void refreshAtsDelta();
+    void refreshJobMatch();
+  }
+
   // ---- Autosave (folded in from the old standalone CvEditor) ----
   // A JSON snapshot of the last-persisted state; the effect compares against it to detect real
   // edits (and skip the initial load), and persist() advances it on success.
@@ -275,6 +301,7 @@
       lastSnapshot = snap;
       saveState = 'saved';
       pdfVersion += 1;
+      void loadRevisions();
       // Chained off the SAVE, not off the effect that schedules it: read any earlier and the
       // score would describe the document as it was before this edit landed.
       void refreshJobMatch();
@@ -311,6 +338,7 @@
     try {
       await loadCv();
       pdfVersion += 1;
+      void loadRevisions();
       void refreshAtsDelta();
       void refreshJobMatch();
     } catch {
@@ -580,7 +608,7 @@
           </a>
         </div>
         <div class="min-h-0 flex-1 overflow-auto p-6">
-          <CvHtmlPreview {doc} {templateId} {zoom} {fonts} {photoSrc} />
+          <CvHtmlPreview {doc} {templateId} {zoom} {fonts} {photoSrc} highlightPaths={pinnedRevision?.paths ?? []} />
         </div>
       </div>
 
@@ -597,6 +625,9 @@
         {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
         onUndoAutopilot={undoAutopilot}
+        {revisions}
+        bind:pinnedRevision
+        onRevisionUndone={onRevisionsChanged}
         {onTemplateSelected}
         bind:tab={artifactTab}
         mobileVisible={mobileView === 'templates' ||

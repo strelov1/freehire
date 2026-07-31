@@ -10,6 +10,7 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
+import type { RevisionView } from '$lib/generated/contracts';
 import type {
   CvAtsDelta,
   CvJobMatch,
@@ -1415,6 +1416,30 @@ export function createApi(
   /** What tailoring did to a tailored CV's ATS readiness, against the base CV it came from.
    *  Cookie-only and recomputed per request. 409 for a CV that is not a tailored copy; the
    *  response itself reports `available: false` when the comparison could not be made. */
+  /** The history of what changed this CV, newest first. Each entry names who made it and
+   *  which parts of the document it touched — the addresses the preview underlines. */
+  async function listCvRevisions(id: string): Promise<RevisionView[]> {
+    return requestData<RevisionView[]>(`/api/v1/me/cvs/${encodeURIComponent(id)}/revisions`);
+  }
+
+  /** Undo one entry. Edits made after it survive: only what that revision did is reversed.
+   *  409 when its inverse no longer applies — the part of the CV it changed is gone. */
+  async function undoCvRevision(cvId: string, revisionId: string): Promise<CvMeta> {
+    const { cv } = await requestData<{ cv: CvMeta; revision: RevisionView }>(
+      `/api/v1/me/cvs/${encodeURIComponent(cvId)}/revisions/${encodeURIComponent(revisionId)}/undo`,
+      jsonBody('POST', {}),
+    );
+    return cv;
+  }
+
+  /** Undo every standing edit of one assistant run, newest first. */
+  async function undoCvRevisionRun(cvId: string, batchId: string): Promise<CvMeta> {
+    return requestData<CvMeta>(
+      `/api/v1/me/cvs/${encodeURIComponent(cvId)}/revisions/batch/${encodeURIComponent(batchId)}/undo`,
+      jsonBody('POST', {}),
+    );
+  }
+
   async function getCvAtsDelta(id: string): Promise<CvAtsDelta> {
     return requestData<CvAtsDelta>(`/api/v1/me/cvs/${id}/ats-delta`);
   }
@@ -1673,6 +1698,9 @@ export function createApi(
     deleteCv,
     setCvSession,
     cvPdfUrl,
+    listCvRevisions,
+    undoCvRevision,
+    undoCvRevisionRun,
     tailorCv,
     startTailorSession,
     undoAutopilotRun,
