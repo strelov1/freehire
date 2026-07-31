@@ -7,9 +7,7 @@ candidate's experience bank for each, rewrites what the evidence supports, and c
 it could not close. It is the same method the conversational tailoring uses — the rhythm differs, not
 the rules. Everything a client could otherwise dictate (the brief, the turn's ceiling, the pre-run
 snapshot) belongs to the server, and the run is undoable in one move.
-
 ## Requirements
-
 ### Requirement: An autopilot run is started by the server, not composed by the client
 
 The system SHALL expose a dedicated endpoint that starts an unattended tailoring run on a tailoring
@@ -103,25 +101,44 @@ rather than fail the run.
 
 ### Requirement: A run is revertable in one move
 
-The system SHALL snapshot the tailored CV's document before a run makes its first edit, and SHALL
-offer an owner-scoped revert that restores that snapshot. A revert MUST clear both the snapshot and
-the report, because a report describing edits that no longer exist misdescribes the CV. A CV with no
-snapshot MUST report that there is nothing to revert rather than altering the document.
+The system SHALL group every revision a run commits under that run's own identifier, and SHALL
+offer an owner-scoped revert that undoes those revisions in reverse order. Reverting a whole run
+MUST clear the run report, because a report describing edits that no longer exist misdescribes
+the CV. A CV with no run to revert MUST report that there is nothing to revert rather than
+altering the document.
+
+The pre-run document snapshot is retired. Grouping by run rather than snapshotting removes the
+edge two concurrent runs used to create — each took its own snapshot, and reverting returned the
+document to the middle of the other run.
+
+Undoing a single revision of a run MUST NOT clear the report: the report is about requirements,
+not edits, and remains largely true while one of its edits is reversed. Only reverting the whole
+run clears it.
 
 #### Scenario: Reverting restores the pre-run document
 
 - **WHEN** the owner reverts after a run
-- **THEN** the tailored CV's document is the one it had before the run started
+- **THEN** every revision the run committed is undone in reverse order, and the tailored CV holds the document it had before the run started
 
 #### Scenario: Reverting clears the run's traces
 
-- **WHEN** a revert completes
-- **THEN** both the snapshot and the report are cleared, and the workspace offers to start a run again
+- **WHEN** a whole-run revert completes
+- **THEN** the report is cleared and the workspace offers to start a run again
 
 #### Scenario: Reverting without a run is refused
 
-- **WHEN** a revert is requested for a CV that has no snapshot
+- **WHEN** a revert is requested for a CV no run has edited
 - **THEN** the request is refused and the document is unchanged
+
+#### Scenario: Two concurrent runs revert independently
+
+- **WHEN** two runs edit the same CV and the first is reverted
+- **THEN** only the first run's edits are undone and the second run's edits remain
+
+#### Scenario: Undoing one edit of a run keeps the report
+
+- **WHEN** the owner undoes a single revision belonging to a run
+- **THEN** that edit is reversed and the run report is still shown
 
 ### Requirement: A run ends with a summary and one question
 
@@ -163,3 +180,4 @@ without an additional poll, and the fit analysis it sits above MUST NOT be recom
 
 - **WHEN** a run finishes
 - **THEN** the cached fit analysis shown beneath the report is the same one shown before the run
+
