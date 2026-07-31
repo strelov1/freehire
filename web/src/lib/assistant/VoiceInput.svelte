@@ -206,7 +206,8 @@
         <X class="size-4" />
       </button>
       <span class="pulse size-2 shrink-0 rounded-full bg-destructive"></span>
-      <span class="min-w-[2.5rem] text-center font-mono text-xs tabular-nums text-muted-foreground">
+      <!-- min-w-10 keeps the pill from resizing as the timer ticks past 0:09 and 9:59. -->
+      <span class="min-w-10 text-center font-mono text-xs tabular-nums text-muted-foreground">
         {elapsed}
       </span>
       <button
