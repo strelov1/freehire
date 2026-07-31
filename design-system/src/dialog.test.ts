@@ -106,6 +106,21 @@ describe('Dialog', () => {
       expect(el.open).toBe(true);
     });
 
+    // Preventing `cancel` is not enough on its own. The platform's close watcher
+    // spends a user-activation budget on each preventDefault, and once that runs
+    // out it fires `cancel` unprevented and closes anyway — measured in Chrome:
+    // two Escapes refused, the third closes. It is a deliberate anti-trap valve,
+    // so the only way to honour the contract is to reassert the dialog.
+    it('reopens itself if the platform closes it anyway', async () => {
+      const { getByRole } = render(Dialog, undismissable());
+      const el = getByRole('dialog', { hidden: true }) as HTMLDialogElement;
+
+      el.close();
+      await Promise.resolve();
+
+      expect(el.open).toBe(true);
+    });
+
     it('offers no close button', () => {
       const { queryByLabelText } = render(Dialog, undismissable());
 

@@ -79,13 +79,27 @@
   function oncancel(e: Event) {
     if (!dismissible) e.preventDefault();
   }
+
+  // Preventing `cancel` is necessary and not sufficient. The close watcher
+  // spends a user-activation budget on each preventDefault, and when it runs
+  // out it fires `cancel` unprevented and closes regardless — in Chrome, two
+  // Escapes are refused and the third gets through. That valve exists so a page
+  // cannot trap someone, which is right in general and wrong for the seconds an
+  // irreversible request is in flight, so a held dialog puts itself back.
+  function onclose() {
+    if (!dismissible) {
+      el?.showModal();
+      return;
+    }
+    open = false;
+  }
 </script>
 
 <dialog
   bind:this={el}
   aria-labelledby={title ? titleId : undefined}
   aria-describedby={description ? descriptionId : undefined}
-  onclose={() => (open = false)}
+  {onclose}
   {oncancel}
   {onclick}
   class={cn(

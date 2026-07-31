@@ -124,8 +124,15 @@ defect, listed here so it is not mistaken for a migration target.
 
 **`dismissible={false}` holds a dialog open** while an irreversible request is in flight, so
 Escape cannot hide whether it succeeded. Escape, the backdrop and the close button go away
-together — leaving one is a dialog that claims to be held and is not. Escape is refused by
-preventing the platform's own `cancel` event, not by a keydown listener racing it.
+together — leaving one is a dialog that claims to be held and is not.
+
+**Preventing `cancel` is necessary and not sufficient**, and jsdom cannot show you why. The
+platform's close watcher spends a user-activation budget on each `preventDefault`, and once it
+runs out it fires `cancel` unprevented and closes anyway — measured in Chrome: two Escapes
+refused, the third gets through. That valve exists so a page cannot trap someone. So a held
+dialog also **reasserts itself in `onclose`**. Keep the window short and always leave the
+caller a way out once the request resolves; a unit test that only asserts `defaultPrevented`
+will pass either way.
 
 ## Storybook
 
