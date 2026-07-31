@@ -174,9 +174,10 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 
 // EngagementStats serves the public, unauthenticated engagement counts: how many
 // user_jobs rows have been saved, applied to, and viewed, plus how many résumés
-// have been uploaded, job-fit analyses run, and searches saved. Aggregate-only —
-// the query selects nothing but integer totals, so no per-user field can leak. An
-// empty database yields all zeros (200).
+// have been uploaded, CVs tailored to a vacancy, matches analyzed, inboxes
+// connected, and searches saved. Aggregate-only — the query selects nothing but
+// integer totals, so no per-user field can leak. An empty database yields all
+// zeros (200).
 func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
 	s, err := h.queries.GetEngagementStats(c.Context())
 	if err != nil {
@@ -185,12 +186,14 @@ func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"data": fiber.Map{
-			"saved":          s.Saved,
-			"applied":        s.Applied,
-			"viewed":         s.Viewed,
-			"cvs_uploaded":   s.CvsUploaded,
-			"fit_checks":     s.FitChecks,
-			"saved_searches": s.SavedSearches,
+			"saved":             s.Saved,
+			"applied":           s.Applied,
+			"viewed":            s.Viewed,
+			"cvs_uploaded":      s.CvsUploaded,
+			"cvs_tailored":      s.CvsTailored,
+			"match_analyses":    s.MatchAnalyses,
+			"inboxes_connected": s.InboxesConnected,
+			"saved_searches":    s.SavedSearches,
 		},
 	})
 }

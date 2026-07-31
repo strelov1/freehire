@@ -30,18 +30,23 @@ SELECT
     count(*) FILTER (WHERE applied_at IS NOT NULL)::int AS applied,
     (SELECT COALESCE(sum(uniques), 0) FROM job_daily_views)::int AS viewed,
     (SELECT count(*) FROM users WHERE resume_object_key IS NOT NULL)::int AS cvs_uploaded,
-    (SELECT count(*) FROM user_job_analysis)::int AS fit_checks,
+    (SELECT count(*) FROM cvs WHERE is_tailored)::int AS cvs_tailored,
+    (SELECT count(*) FROM user_job_analysis)::int AS match_analyses,
+    ((SELECT count(*) FROM gmail_connections WHERE status = 'connected')
+        + (SELECT count(*) FROM mailboxes))::int AS inboxes_connected,
     (SELECT count(*) FROM saved_searches)::int AS saved_searches
 FROM user_jobs
 `
 
 type GetEngagementStatsRow struct {
-	Saved         int32 `json:"saved"`
-	Applied       int32 `json:"applied"`
-	Viewed        int32 `json:"viewed"`
-	CvsUploaded   int32 `json:"cvs_uploaded"`
-	FitChecks     int32 `json:"fit_checks"`
-	SavedSearches int32 `json:"saved_searches"`
+	Saved            int32 `json:"saved"`
+	Applied          int32 `json:"applied"`
+	Viewed           int32 `json:"viewed"`
+	CvsUploaded      int32 `json:"cvs_uploaded"`
+	CvsTailored      int32 `json:"cvs_tailored"`
+	MatchAnalyses    int32 `json:"match_analyses"`
+	InboxesConnected int32 `json:"inboxes_connected"`
+	SavedSearches    int32 `json:"saved_searches"`
 }
 
 // Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
@@ -52,10 +57,16 @@ type GetEngagementStatsRow struct {
 // (job_daily_views), NOT jobs.view_count — a SUM over the 6M-row jobs table seqscans
 // for ~90s and times the endpoint out, while the rollup is small and fast. (The
 // per-job "N views" on the job card still reads jobs.view_count directly, no scan.)
-// The remaining three mirror event-total semantics from their own tables:
+// The remaining five mirror event-total semantics from their own tables:
 // cvs_uploaded is the count of users holding a stored résumé (one per user, so also a
-// people count), fit_checks is every job-fit analysis ever run, and saved_searches is
-// every saved search.
+// people count); cvs_tailored counts CVs created as a per-vacancy copy, read off the
+// is_tailored flag rather than job_id — cmd/prune nulls the link (0058); match_analyses
+// is every Analyze-match run, and since user_job_analysis is keyed (user_id, job_id)
+// that is a count of distinct candidate×vacancy matches, not of recomputes;
+// inboxes_connected adds the live Gmail grants to the claimed hosted mailboxes (both are
+// one-per-user and both are a deliberate connect action, so the sum is a count of
+// inboxes, not of people); and saved_searches is every saved search. All five read tiny
+// tables — unlike `viewed`, none of them needs a rollup to stay fast.
 func (q *Queries) GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error) {
 	row := q.db.QueryRow(ctx, getEngagementStats)
 	var i GetEngagementStatsRow
@@ -64,7 +75,9 @@ func (q *Queries) GetEngagementStats(ctx context.Context) (GetEngagementStatsRow
 		&i.Applied,
 		&i.Viewed,
 		&i.CvsUploaded,
-		&i.FitChecks,
+		&i.CvsTailored,
+		&i.MatchAnalyses,
+		&i.InboxesConnected,
 		&i.SavedSearches,
 	)
 	return i, err

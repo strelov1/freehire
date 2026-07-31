@@ -433,7 +433,8 @@ export function createApi(
     return requestData<UserGrowthPoint[]>(`/api/v1/stats/user-growth`);
   }
 
-  /** Aggregate engagement counts (jobs saved / applied / viewed across all users).
+  /** Aggregate engagement counts across all users (jobs saved / applied / viewed, CVs
+   *  uploaded and tailored, matches analyzed, inboxes connected, searches saved).
    *  Aggregate-only, unauthenticated. */
   async function engagementStats(): Promise<EngagementStats> {
     return requestData<EngagementStats>(`/api/v1/stats/engagement`);

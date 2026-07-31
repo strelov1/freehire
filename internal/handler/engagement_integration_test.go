@@ -1,10 +1,12 @@
 //go:build integration
 
 // Integration test for the engagement-stats read endpoint. The counts are pure
-// aggregates over user_jobs, users, user_job_analysis and saved_searches, and the
-// handler reads through a concrete *db.Queries, so it can only be exercised against
-// a real Postgres. It asserts the empty case, then seeds saves/applies/views plus a
-// résumé, a fit analysis and a saved search, and checks every count.
+// aggregates over user_jobs, users, cvs, user_job_analysis, gmail_connections,
+// mailboxes and saved_searches, and the handler reads through a concrete
+// *db.Queries, so it can only be exercised against a real Postgres. It asserts the
+// empty case, then seeds saves/applies/views plus a résumé, a tailored CV, a match
+// analysis, both kinds of connected inbox and a saved search, and checks every
+// count.
 // Run with: go test -tags=integration ./internal/handler/
 package handler
 
@@ -28,12 +30,14 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	app.Get("/api/v1/stats/engagement", h.EngagementStats)
 
 	type counts struct {
-		Saved         int `json:"saved"`
-		Applied       int `json:"applied"`
-		Viewed        int `json:"viewed"`
-		CvsUploaded   int `json:"cvs_uploaded"`
-		FitChecks     int `json:"fit_checks"`
-		SavedSearches int `json:"saved_searches"`
+		Saved            int `json:"saved"`
+		Applied          int `json:"applied"`
+		Viewed           int `json:"viewed"`
+		CvsUploaded      int `json:"cvs_uploaded"`
+		CvsTailored      int `json:"cvs_tailored"`
+		MatchAnalyses    int `json:"match_analyses"`
+		InboxesConnected int `json:"inboxes_connected"`
+		SavedSearches    int `json:"saved_searches"`
 	}
 	type envelope struct {
 		Data counts `json:"data"`
@@ -57,7 +61,8 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 
 	// --- Empty tables: all zeros -----------------------------------------------
 	if c := get(); c.Saved != 0 || c.Applied != 0 || c.Viewed != 0 ||
-		c.CvsUploaded != 0 || c.FitChecks != 0 || c.SavedSearches != 0 {
+		c.CvsUploaded != 0 || c.CvsTailored != 0 || c.MatchAnalyses != 0 ||
+		c.InboxesConnected != 0 || c.SavedSearches != 0 {
 		t.Fatalf("empty tables: got %+v, want all zeros", c)
 	}
 
@@ -95,7 +100,16 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	seedInteraction(j2, true, false)
 	seedInteraction(j3, false, true)
 
-	// A stored résumé (→ cvs_uploaded=1), one job-fit analysis (→ fit_checks=1),
+	// A second user, holding no résumé and no CV, so the per-user counts below stay
+	// pinned to the first one. It exists only to own the revoked Gmail grant —
+	// gmail_connections is keyed by user_id, so both statuses need two users.
+	var uid2 int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('v@example.test') RETURNING id`).Scan(&uid2); err != nil {
+		t.Fatalf("seed second user: %v", err)
+	}
+
+	// A stored résumé (→ cvs_uploaded=1), one Analyze-match run (→ match_analyses=1),
 	// and one saved search (→ saved_searches=1).
 	if _, err := pool.Exec(ctx,
 		`UPDATE users SET resume_object_key = 'cv/u.pdf', resume_uploaded_at = now() WHERE id = $1`,
@@ -105,12 +119,34 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO user_job_analysis (user_id, job_id, analysis, model)
 		 VALUES ($1, $2, '{}'::jsonb, 'test-model')`, uid, j1); err != nil {
-		t.Fatalf("seed fit analysis: %v", err)
+		t.Fatalf("seed match analysis: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO saved_searches (user_id, name, query) VALUES ($1, 'my search', 'go')`,
 		uid); err != nil {
 		t.Fatalf("seed saved search: %v", err)
+	}
+
+	// Two CVs, one tailored to j2 and one plain (→ cvs_tailored=1). The plain row is
+	// what makes this an assertion about is_tailored rather than about count(cvs).
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO cvs (user_id, title, data, job_id, is_tailored) VALUES
+		   ($1, 'Tailored', '{}'::jsonb, $2, true),
+		   ($1, 'Base',     '{}'::jsonb, NULL, false)`, uid, j2); err != nil {
+		t.Fatalf("seed cvs: %v", err)
+	}
+
+	// One live Gmail grant + one claimed hosted mailbox = inboxes_connected 2. The
+	// revoked grant on the second user must NOT count — that is the status filter.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status) VALUES
+		   ($1, 'u@gmail.test', 'enc', 'connected'),
+		   ($2, 'v@gmail.test', 'enc', 'needs_reconsent')`, uid, uid2); err != nil {
+		t.Fatalf("seed gmail connections: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO mailboxes (user_id, address) VALUES ($1, 'u@mail.test')`, uid); err != nil {
+		t.Fatalf("seed mailbox: %v", err)
 	}
 
 	// "viewed" is the all-traffic total: SUM(job_daily_views.uniques), the nginx-log
@@ -127,7 +163,9 @@ func TestEngagementStatsEndpoint(t *testing.T) {
 	}
 
 	if c := get(); c.Saved != 1 || c.Applied != 1 || c.Viewed != 8 ||
-		c.CvsUploaded != 1 || c.FitChecks != 1 || c.SavedSearches != 1 {
-		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 CvsUploaded:1 FitChecks:1 SavedSearches:1}", c)
+		c.CvsUploaded != 1 || c.CvsTailored != 1 || c.MatchAnalyses != 1 ||
+		c.InboxesConnected != 2 || c.SavedSearches != 1 {
+		t.Errorf("got %+v, want {Saved:1 Applied:1 Viewed:8 CvsUploaded:1 CvsTailored:1 "+
+			"MatchAnalyses:1 InboxesConnected:2 SavedSearches:1}", c)
 	}
 }

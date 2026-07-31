@@ -98,16 +98,21 @@
     return last ? last.total : null;
   });
 
+  // Two rows of four on desktop: the first is finding and tracking work, the second
+  // is what people build on top of it (CV, AI read, mail). Order carries that
+  // grouping, so keep the halves intact when adding a counter.
   const engagement = $derived.by(() => {
     const e = data.engagement;
     if (!e) return null;
     return [
+      { value: nf.format(e.viewed), label: 'jobs viewed' },
       { value: nf.format(e.saved), label: 'jobs saved' },
       { value: nf.format(e.applied), label: 'applications' },
-      { value: nf.format(e.viewed), label: 'jobs viewed' },
-      { value: nf.format(e.cvs_uploaded), label: 'CVs uploaded' },
-      { value: nf.format(e.fit_checks), label: 'fit checks' },
       { value: nf.format(e.saved_searches), label: 'saved searches' },
+      { value: nf.format(e.cvs_uploaded), label: 'CVs uploaded' },
+      { value: nf.format(e.cvs_tailored), label: 'CVs tailored' },
+      { value: nf.format(e.match_analyses), label: 'matches analyzed' },
+      { value: nf.format(e.inboxes_connected), label: 'inboxes connected' },
     ];
   });
 </script>
@@ -214,10 +219,11 @@
     </div>
     <h2 class="mt-3 text-xl font-semibold tracking-tight">What people do here</h2>
     <p class="mb-6 mt-1 text-sm text-muted-foreground">
-      Signed-in interactions across freehire — jobs saved, applications tracked, and postings opened.
+      Signed-in interactions across freehire — postings opened and tracked, CVs written and tailored
+      to a vacancy, matches analyzed against a CV, and inboxes wired up for application mail.
     </p>
     {#if engagement}
-      <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+      <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
         {#each engagement as e (e.label)}
           <div class="bg-background p-5 sm:p-6">
             <dt class="font-mono text-xs uppercase tracking-wide text-muted-foreground">{e.label}</dt>
