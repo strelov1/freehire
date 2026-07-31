@@ -40,6 +40,6 @@
 
 ## 6. Finish
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...`, `pnpm test` in `web/`, and the integration tag for the new endpoint.
-- [ ] 6.2 Visually verify the workspace at desktop and below `lg`: all four right-hand tabs, an expanded category row, and an unavailable score rendering as an absence.
-- [ ] 6.3 Update `internal/cv/AGENTS.md` (or add `internal/cvmatch/AGENTS.md`) and the root AGENTS.md module table with the new package.
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...`, `pnpm test` in `web/`, and the integration tag for the new endpoint.
+- [x] 6.2 Visually verify the workspace at desktop and below `lg`: all four right-hand tabs, an expanded category row, and an unavailable score rendering as an absence.
+- [x] 6.3 Update `internal/cv/AGENTS.md` (or add `internal/cvmatch/AGENTS.md`) and the root AGENTS.md module table with the new package.

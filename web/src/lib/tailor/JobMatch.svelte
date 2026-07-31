@@ -32,7 +32,7 @@
     <header class="mb-2 flex items-baseline justify-between gap-2">
       <h3 class="text-sm font-semibold text-foreground">Job match</h3>
       <span class="text-sm font-semibold tabular-nums {toneText[tone]}">
-        {view.overall}<span class="text-xs font-normal text-muted-foreground"> / 100</span>
+        {view.overall}&nbsp;<span class="text-xs font-normal text-muted-foreground">/ 100</span>
       </span>
     </header>
 

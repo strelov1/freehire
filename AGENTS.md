@@ -75,6 +75,7 @@ Each is self-contained and can be read independently.
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
+| **Job-match scoring** (deterministic CV-vs-vacancy score, the unverifiable rule) | [internal/cvmatch/AGENTS.md](internal/cvmatch/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/experience/AGENTS.md](internal/experience/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
 | **CV rendering** (templates, fonts, previews) | [internal/cv/AGENTS.md](internal/cv/AGENTS.md) |
