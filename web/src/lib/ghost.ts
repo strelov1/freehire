@@ -57,12 +57,7 @@ export interface GhostChecklistRow {
  *  Exported because the /features/ghost-jobs landing explains them from this same
  *  array, and a test fails if a criterion joins the vocabulary without being
  *  explained there. A marketing page a test keeps honest. */
-export const CRITERIA: {
-  code: string;
-  label: string;
-  short: string;
-  tier: 'structural' | 'outcome';
-}[] = [
+export const CRITERIA = [
   {
     code: 'evergreen_posting',
     label: 'Posting behaves as evergreen',
@@ -87,7 +82,65 @@ export const CRITERIA: {
     short: 'reports from people',
     tier: 'outcome',
   },
-];
+] as const satisfies readonly {
+  code: string;
+  label: string;
+  short: string;
+  tier: 'structural' | 'outcome';
+}[];
+
+/** The criterion codes, as a union rather than `string`.
+ *
+ *  `satisfies` rather than an annotation: an annotation checks the shape but widens `code`
+ *  to `string`, leaving nothing to build this union from, while a bare `as const` gives the
+ *  literals but would let a mistyped `tier` through. Both are wanted.
+ *
+ *  What it buys: the landing's diagram registry is keyed by this union, so a criterion that
+ *  joins the vocabulary without an illustration is a compile error rather than an empty cell
+ *  on the page. The same guarantee could not be had from a test — vitest here cannot import a
+ *  `.svelte` component without test infrastructure this project does not carry. */
+export type GhostCriterionCode = (typeof CRITERIA)[number]['code'];
+
+/** How many criteria must fire, of any tier, before the signal says anything. */
+export const CONVERGENCE = 2;
+
+/** How many DISTINCT people must contribute outcome evidence for the stronger claim —
+ *  and the reason a contributor count is never served below it. */
+export const WITNESS_GATE = 2;
+
+/** The levels the classifier reports. `none` is most of the catalogue. */
+export type GhostLevel = 'none' | 'possible' | 'likely';
+
+const OUTCOME_CODES: ReadonlySet<string> = new Set(
+  CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code),
+);
+
+/** ghostLevel derives the level from the criteria that fired and the number of distinct
+ *  people behind the outcome evidence. Mirrors internal/ghost, which remains the
+ *  authority — the served payload's `level` is what a job actually carries, and this is
+ *  here so the /features/ghost-jobs landing can demonstrate the ladder rather than
+ *  assert it in prose no test can check.
+ *
+ *  Two independent gates: convergence, and witnesses. Both pass → `likely`, exactly one
+ *  → `possible`, neither → `none`. The witness gate stands on its own because two
+ *  strangers independently reporting silence is a stronger fact than any two artifacts of
+ *  posting shape, and requiring structural corroboration would leave the only tier that
+ *  observes reality unable to mark anything by itself.
+ *
+ *  The witness gate additionally requires that an outcome criterion actually fired. That
+ *  looks redundant — contributors come from outcome evidence, so a real payload cannot
+ *  carry one without the other — but the landing's sandbox moves the criteria and the
+ *  contributor count independently, and a rule that trusted its caller would render
+ *  `likely` from posting shape alone. That is the one claim the feature must never make,
+ *  so the guarantee lives here rather than in the caller's discipline. */
+export function ghostLevel(criteria: readonly string[], contributors: number): GhostLevel {
+  const converged = criteria.length >= CONVERGENCE;
+  const witnessed = contributors >= WITNESS_GATE && criteria.some((c) => OUTCOME_CODES.has(c));
+
+  if (converged && witnessed) return 'likely';
+  if (converged || witnessed) return 'possible';
+  return 'none';
+}
 
 const LABELS: Record<string, { tone: 'warn' | 'muted'; label: string }> = {
   possible: { tone: 'muted', label: 'Possibly inactive' },

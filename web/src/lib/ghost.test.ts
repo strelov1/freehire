@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { ghostBadge, ghostChecklist, ghostGauge, ghostUnobserved, supersedesReality } from './ghost';
+import {
+  CONVERGENCE,
+  CRITERIA,
+  WITNESS_GATE,
+  ghostBadge,
+  ghostChecklist,
+  ghostGauge,
+  ghostLevel,
+  ghostUnobserved,
+  supersedesReality,
+} from './ghost';
 import type { Ghost } from './generated/contracts';
 
 const CODES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'];
@@ -212,5 +222,67 @@ describe('supersedesReality', () => {
 
   it('leaves the reality badge alone for a level it does not know', () => {
     expect(supersedesReality({ ...possible, level: 'invented' })).toBe(false);
+  });
+});
+
+// The level rule, mirrored from internal/ghost so the /features/ghost-jobs landing can
+// demonstrate the ladder instead of asserting it in a sentence no test can reach.
+describe('ghostLevel', () => {
+  const STRUCTURAL = ['evergreen_posting', 'ats_absent'];
+  const OUTCOME = ['silent_applications', 'user_reports'];
+
+  it('shows nothing when neither gate passes', () => {
+    expect(ghostLevel([], 0)).toBe('none');
+    expect(ghostLevel(['evergreen_posting'], 0)).toBe('none');
+    // One outcome criterion from one person passes neither gate either.
+    expect(ghostLevel(['user_reports'], 1)).toBe('none');
+  });
+
+  it('reaches possible on convergence alone', () => {
+    expect(ghostLevel(STRUCTURAL, 0)).toBe('possible');
+  });
+
+  // Two strangers independently reporting silence is a stronger fact than any two
+  // artifacts of posting shape, so the witness gate stands on its own.
+  it('reaches possible on the witness gate alone', () => {
+    expect(ghostLevel(['user_reports'], WITNESS_GATE)).toBe('possible');
+  });
+
+  it('reaches likely only when both gates pass', () => {
+    expect(ghostLevel(['ats_absent', 'user_reports'], WITNESS_GATE)).toBe('likely');
+  });
+
+  // The gate counts people, not criteria: one person with both a silent application and
+  // a filed report converges two criteria but remains a single witness.
+  it('counts people rather than criteria', () => {
+    expect(ghostLevel(OUTCOME, 1)).toBe('possible');
+    expect(ghostLevel(OUTCOME, WITNESS_GATE)).toBe('likely');
+  });
+
+  // The guarantee the landing is built to demonstrate. It lives here rather than in the
+  // caller because the landing's sandbox lets a reader move the criteria and the
+  // contributor count independently: a rule that trusted its caller would happily render
+  // `likely` from posting shape alone, which is the one claim the feature must never make.
+  it('never reaches likely on structural evidence, whatever the contributor count', () => {
+    const subsets = [[], ['evergreen_posting'], ['ats_absent'], STRUCTURAL];
+    for (const criteria of subsets) {
+      for (const contributors of [0, 1, 2, 7]) {
+        expect(ghostLevel(criteria, contributors)).not.toBe('likely');
+      }
+    }
+  });
+
+  it('mirrors the gates it depends on', () => {
+    expect(CONVERGENCE).toBe(2);
+    expect(WITNESS_GATE).toBe(2);
+  });
+
+  // The tiers above are written out rather than derived, so a flipped tier in CRITERIA
+  // fails a test instead of being followed by both the rule and its test. Pinning them
+  // here is what stops the opposite failure: a fifth criterion joining the vocabulary
+  // would otherwise leave the structural property above quietly untested on it.
+  it('covers the whole vocabulary', () => {
+    expect(CRITERIA.filter((c) => c.tier === 'structural').map((c) => c.code)).toEqual(STRUCTURAL);
+    expect(CRITERIA.filter((c) => c.tier === 'outcome').map((c) => c.code)).toEqual(OUTCOME);
   });
 });

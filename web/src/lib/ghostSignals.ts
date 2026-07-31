@@ -12,34 +12,45 @@
 // claims the system knows an employer's intent, because it does not.
 
 import { CRITERIA } from './ghost';
+import type { GhostCriterionCode } from './ghost';
 
 export interface SignalExplainer {
-  code: string;
+  /** The union rather than `string`: the landing hands this straight to the diagram
+   *  registry, which is keyed by it. */
+  code: GhostCriterionCode;
   /** Short human name — the checklist row's label. */
   label: string;
   /** structural = the shape of the posting; outcome = what happened to an applicant. */
   tier: 'structural' | 'outcome';
   /** An example of the observations behind it — illustrative, not a transcript of the UI. */
   fact: string;
-  /** Why this is evidence, and what it is not. */
+  /** The one-line version, always visible beside the criterion's diagram. Carries the
+   *  single limit that matters most for this criterion, because a summary that drops
+   *  every caveat is how a hedged page turns into an accusing one. */
+  gist: string;
+  /** Why this is evidence, and what it is not — the full account, one disclosure away. */
   why: string;
 }
 
-const EXPLAINERS: Record<string, { fact: string; why: string }> = {
+const EXPLAINERS: Record<string, { fact: string; gist: string; why: string }> = {
   evergreen_posting: {
     fact: 'Open 240 days · reposted 13× · 7 copies open at once',
+    gist: 'One role advertised over and over, often with several copies live at the same time. Age alone never fires it — a genuinely hard senior role stays open a long while.',
     why: 'One role advertised over and over, often with several copies live at the same time. It never fires on age alone — a genuinely hard senior role stays open a long time. Age is measured from when freehire first saw the posting, not from the date the source prints, so refreshing that date does not reset it.',
   },
   ats_absent: {
     fact: "Not on the company's own careers board · checked 2 days ago",
+    gist: "The posting reached us through an aggregator, and the same role is not on the employer's own board. It counts only where we crawl that board, never where we cannot look.",
     why: "The posting reached us through an aggregator, and the same role is not on the employer's own board. It only counts where we actually crawl that board — otherwise absence would report our blind spot as the employer's fault. The check is re-run continuously and expires if it stops, so a stale answer goes quiet instead of standing.",
   },
   silent_applications: {
     fact: 'Applications through freehire went unanswered past their follow-up window',
+    gist: 'People who applied here and were not answered within the window their stage tolerates. Counted only where a mailbox is connected, so a reply would have been seen.',
     why: 'People who applied here, whose mailbox is connected so a reply would have been seen, and who were not answered within the window their stage tolerates. Without a connected mailbox we could not tell silence from a gap in our data, so those applications are not counted at all.',
   },
   user_reports: {
     fact: 'People reported applying with no response',
+    gist: 'Someone states they applied on a given date and heard nothing. It carries no weight until the wait a tracked application gets has passed, and it can be withdrawn.',
     why: 'Someone states they applied on a given date and heard nothing. It carries no weight until the same span has passed that a tracked application gets, and it can be withdrawn — an employer who answers late costs the posting its evidence.',
   },
 };
@@ -52,9 +63,8 @@ export const GHOST_SIGNALS: SignalExplainer[] = CRITERIA.flatMap((c) => {
   return explainer ? [{ code: c.code, label: c.label, tier: c.tier, ...explainer }] : [];
 });
 
-/** How many criteria must fire before anything is shown. Mirrors internal/ghost. */
-export const CONVERGENCE = 2;
-
-/** How many distinct people must have contributed outcome evidence for the stronger
- *  claim — and the reason a count is never shown below it. */
-export const WITNESS_GATE = 2;
+// The gates used to live here and now live in `./ghost`, beside the rule that reads them
+// and in the one module that declares itself the mirror of internal/ghost's constants.
+// No re-export is left behind: the page no longer quotes the numbers in prose — the gate
+// matrix interpolates them from the constants — so every consumer imports them from the
+// authority directly.
