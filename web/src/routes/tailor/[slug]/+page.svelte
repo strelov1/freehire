@@ -66,7 +66,6 @@
   // the Editor tab holds in memory and saves on a debounce, so both writing at once loses one
   // side's work silently.
   let autopilotReport = $state<AutopilotEntry[] | undefined>(undefined);
-  let autopilotRevertable = $state(false);
   // What tailoring did to the CV's ATS readiness, refreshed at the two moments the document
   // has just changed most: the workspace opening, and an agent turn finishing. Null until the
   // first read, and after any failure — the panel renders it as an absence either way, so a
@@ -79,7 +78,6 @@
   let runActive = $state(false);
   // Any turn, not just a run: "Run again" would silently do nothing while one is in flight.
   let turnActive = $state(false);
-  let undoing = $state(false);
   // The chat owns starting a turn; "Run again" beside the report reaches it through here.
   let chatRef = $state<AssistantChat>();
 
@@ -167,7 +165,6 @@
     templateId = rec.template_id;
     doc = toEditable(rec.document);
     autopilotReport = rec.autopilot_report;
-    autopilotRevertable = rec.autopilot_revertable;
     lastSnapshot = snapshot();
     cvLoaded = true;
   }
@@ -279,7 +276,27 @@
     }
   }
 
-  async function onRevisionsChanged() {
+  // Undoing goes through undoRun's ordering for the reason it was written: the document is
+  // saved on a debounce, so undoing without flushing the pending save first lets the timer
+  // write the old text straight back a second later — the undo appears to work and then
+  // silently reverses itself. The re-read comes last, and only on success.
+  async function undoRevision(revision: RevisionView) {
+    await undoRun({
+      flush: flushPendingSave,
+      undo: () => api.undoCvRevision(cvId, revision.id).then(() => undefined),
+      refetch: afterUndo,
+    });
+  }
+
+  async function undoRevisionRun(batchId: string) {
+    await undoRun({
+      flush: flushPendingSave,
+      undo: () => api.undoCvRevisionRun(cvId, batchId).then(() => undefined),
+      refetch: afterUndo,
+    });
+  }
+
+  async function afterUndo() {
     await loadCv();
     pdfVersion += 1;
     void loadRevisions();
@@ -353,32 +370,6 @@
     clearTimeout(saveTimer);
     saveTimer = null;
     if (snapshot() !== lastSnapshot) await persist();
-  }
-
-  // Undo a whole run. The ordering (flush → undo → re-read) is the unit-tested undoRun; doing
-  // it any other way lets the pending autosave resurrect the tailored text a second later.
-  async function undoAutopilot() {
-    if (undoing || runActive) return;
-    undoing = true;
-    try {
-      await undoRun({
-        flush: flushPendingSave,
-        undo: async () => {
-          await api.undoAutopilotRun(cvId);
-        },
-        refetch: async () => {
-          await loadCv();
-          pdfVersion += 1;
-          void refreshAtsDelta();
-          void refreshJobMatch();
-        },
-      });
-    } catch (e) {
-      saveState = 'error';
-      saveError = e instanceof ApiError ? e.message : 'Could not undo the run.';
-    } finally {
-      undoing = false;
-    }
   }
 
   // A template switch is persisted by the gallery via setCvTemplate; mirror the new id into the
@@ -619,15 +610,14 @@
         job={job!}
         {analysis}
         {autopilotReport}
-        autopilotRevertable={autopilotRevertable}
-        autopilotBusy={turnActive || runActive || undoing}
+        autopilotBusy={turnActive || runActive}
         {atsDelta}
         {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
-        onUndoAutopilot={undoAutopilot}
         {revisions}
         bind:pinnedRevision
-        onRevisionUndone={onRevisionsChanged}
+        onUndoRevision={undoRevision}
+        onUndoRevisionRun={undoRevisionRun}
         {onTemplateSelected}
         bind:tab={artifactTab}
         mobileVisible={mobileView === 'templates' ||

@@ -10,22 +10,25 @@
   // An entry's description is the server's own words, generated from the operations. The note
   // is the assistant's, and is rendered as such: attributed, in quotes, never as the entry's
   // description. Text a model wrote must not appear as the application speaking.
-  import { api, ApiError } from '$lib/api';
+  import { ApiError } from '$lib/api';
   import type { RevisionView } from '$lib/generated/contracts';
   import { groupByBatch, actorLabel } from './revisions';
 
   let {
-    cvId,
     revisions,
     pinned = $bindable(null),
-    onChanged,
+    onUndo,
+    onUndoRun,
   }: {
-    cvId: string;
     revisions: RevisionView[];
     /** The entry whose edits stay underlined in the preview until another is picked. */
     pinned?: RevisionView | null;
-    /** Called after an undo lands, so the workspace can reload the document and the feed. */
-    onChanged: () => void;
+    /** Undo one entry. The page owns this rather than the panel, because the document is
+     *  saved on a debounce: undoing without flushing the pending save first lets the timer
+     *  write the old text back a second later, and the undo silently reverses itself. */
+    onUndo: (revision: RevisionView) => Promise<void>;
+    /** Undo every standing edit of one run, under the same ordering rule. */
+    onUndoRun: (batchId: string) => Promise<void>;
   } = $props();
 
   const groups = $derived(groupByBatch(revisions));
@@ -41,9 +44,8 @@
     busy = revision.id;
     error = '';
     try {
-      await api.undoCvRevision(cvId, revision.id);
+      await onUndo(revision);
       if (pinned?.id === revision.id) pinned = null;
-      onChanged();
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that edit.';
     } finally {
@@ -55,9 +57,8 @@
     busy = batchId;
     error = '';
     try {
-      await api.undoCvRevisionRun(cvId, batchId);
+      await onUndoRun(batchId);
       pinned = null;
-      onChanged();
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not undo that run.';
     } finally {

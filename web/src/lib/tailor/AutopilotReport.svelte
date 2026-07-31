@@ -8,23 +8,19 @@
   //
   // This is the run's own account of itself, not a re-scored verdict: nothing here recomputes
   // the fit analysis underneath, which still measures the BASE CV against the vacancy.
-  import { RotateCcw, Undo2 } from '@lucide/svelte';
+  import { RotateCcw } from '@lucide/svelte';
   import { summarizeRun, statusMeta } from './autopilot';
   import type { AutopilotEntry } from '$lib/generated/contracts';
 
   let {
     report,
-    revertable,
     busy = false,
     onRerun,
-    onUndo,
   }: {
     report: AutopilotEntry[] | undefined;
-    revertable: boolean;
     /** A run is in flight, or an undo is mid-round-trip: neither action may be started twice. */
     busy?: boolean;
     onRerun: () => void;
-    onUndo: () => void;
   } = $props();
 
   const summary = $derived(summarizeRun(report));
@@ -56,17 +52,6 @@
           <RotateCcw class="size-3.5" />
           Run again
         </button>
-        {#if revertable}
-          <button
-            type="button"
-            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-            disabled={busy}
-            onclick={onUndo}
-          >
-            <Undo2 class="size-3.5" />
-            Undo the run
-          </button>
-        {/if}
       </div>
     </header>
 

@@ -1770,11 +1770,6 @@ type Querier interface {
 	// Withdraw a live claim. Scoped to a non-retracted row so a second retraction affects
 	// nothing and surfaces as not-found, rather than silently re-stamping the date.
 	RetractGhostReport(ctx context.Context, arg RetractGhostReportParams) (GhostReport, error)
-	// Undo a whole autopilot run: restore the pre-run document and clear both autopilot columns.
-	// The report goes with the document because a report describing edits that no longer exist
-	// misdescribes the CV. A CV with no snapshot matches nothing and returns no row, which the
-	// handler maps to "nothing to revert" rather than silently rewriting the document with NULL.
-	RevertCVAutopilot(ctx context.Context, arg RevertCVAutopilotParams) (RevertCVAutopilotRow, error)
 	// Whether the caller already received a reward for this ref (e.g. an accepted contribution).
 	// True means the reward was already granted and must not be granted again (idempotency).
 	RewardExists(ctx context.Context, arg RewardExistsParams) (bool, error)
@@ -1914,11 +1909,6 @@ type Querier interface {
 	// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 	// structure with an already-stale stamp (which Store.Structured would then hide forever).
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error
-	// Copy the tailored CV's current document into the autopilot snapshot, so the run about to
-	// start can be reverted in one move. Taken fresh on every run: a second run's snapshot is the
-	// document as the SECOND run found it, which is what "undo the run" means to whoever presses
-	// it. Owner-scoped: 0 affected rows for a foreign or missing id.
-	SnapshotCVForAutopilot(ctx context.Context, arg SnapshotCVForAutopilotParams) (int64, error)
 	// Soft-delete one message (hidden from the listing, retained for restore),
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
 	// caller's message (→ 404).

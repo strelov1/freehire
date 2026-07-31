@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -90,46 +89,6 @@ func (s *Store) SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int
 		return ErrNotFound
 	}
 	return nil
-}
-
-// SnapshotForAutopilot copies an owned CV's current document into the undo slot, so the run
-// about to start can be reverted whole. Taken fresh on every run: what "undo the run" means
-// to whoever presses it is the document as THIS run found it.
-func (s *Store) SnapshotForAutopilot(ctx context.Context, id uuid.UUID, userID int64) error {
-	n, err := s.repo.SnapshotForAutopilot(ctx, id, userID)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// ErrNoAutopilotRun is returned by RevertAutopilot when the CV holds no snapshot: nothing
-// has been run, or the last run was already reverted.
-var ErrNoAutopilotRun = errors.New("cv: no autopilot run to revert")
-
-// RevertAutopilot restores the pre-run document and clears both the snapshot and the report.
-// The report goes with the document because a report describing edits that no longer exist
-// misdescribes the CV.
-func (s *Store) RevertAutopilot(ctx context.Context, id uuid.UUID, userID int64) (Meta, error) {
-	row, err := s.repo.RevertAutopilot(ctx, id, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// Owner-scoped and snapshot-scoped in one statement: a foreign id and a CV
-			// with no run both match nothing. The caller resolves which by reading the CV.
-			return Meta{}, ErrNoAutopilotRun
-		}
-		return Meta{}, err
-	}
-	return Meta{
-		ID:         row.ID,
-		Title:      row.Title,
-		TemplateID: row.TemplateID,
-		CreatedAt:  row.CreatedAt.Time,
-		UpdatedAt:  row.UpdatedAt.Time,
-	}, nil
 }
 
 // decodeAutopilotReport reads the stored report, tolerating an absent one. A stored report

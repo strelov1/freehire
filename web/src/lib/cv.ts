@@ -34,14 +34,14 @@ export interface CvMeta {
  *  tailored CV (empty when none) — the workspace resumes it.
  *
  *  `autopilot_report` is the last unattended run's account of itself, one entry per
- *  requirement; `autopilot_revertable` says whether the pre-run snapshot is still held. Both
- *  ride on this read so the workspace panel renders from the CV it already re-fetches after
- *  every turn, rather than by parsing the conversation. */
+ *  requirement. It rides on this read so the workspace panel renders from the CV it already
+ *  re-fetches after every turn, rather than by parsing the conversation. Whether a run can be
+ *  undone is no longer a flag here: the history feed carries its own edits, and undoing one is
+ *  undoing them. */
 export interface CvRecord extends CvMeta {
   agent_session_id: string;
   document: Document;
   autopilot_report?: AutopilotEntry[];
-  autopilot_revertable: boolean;
 }
 
 /** A tailored CV in the /my/cvs re-open list: metadata plus the vacancy (slug, title, company)

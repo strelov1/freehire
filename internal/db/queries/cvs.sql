@@ -32,7 +32,7 @@ ORDER BY c.updated_at DESC;
 -- The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
 -- is a whole second document, and no caller needs its bytes — only whether one exists.
 SELECT id, title, template_id, data, job_id, is_tailored, agent_session_id,
-       autopilot_report, (autopilot_undo IS NOT NULL)::boolean AS autopilot_revertable,
+       autopilot_report,
        created_at, updated_at
 FROM cvs
 WHERE id = $1 AND user_id = $2;
@@ -90,15 +90,6 @@ INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored)
 VALUES ($1, $2, $3, $4, $5, true)
 RETURNING id, title, template_id, created_at, updated_at;
 
--- name: SnapshotCVForAutopilot :execrows
--- Copy the tailored CV's current document into the autopilot snapshot, so the run about to
--- start can be reverted in one move. Taken fresh on every run: a second run's snapshot is the
--- document as the SECOND run found it, which is what "undo the run" means to whoever presses
--- it. Owner-scoped: 0 affected rows for a foreign or missing id.
-UPDATE cvs
-SET autopilot_undo = data
-WHERE id = $1 AND user_id = $2;
-
 -- name: SetCVAutopilotReport :execrows
 -- Replace the run report on an owned CV. The agent writes the WHOLE report on every call —
 -- there is no partial update, so a requirement closed later from the candidate's own words
@@ -106,16 +97,6 @@ WHERE id = $1 AND user_id = $2;
 UPDATE cvs
 SET autopilot_report = $3
 WHERE id = $1 AND user_id = $2;
-
--- name: RevertCVAutopilot :one
--- Undo a whole autopilot run: restore the pre-run document and clear both autopilot columns.
--- The report goes with the document because a report describing edits that no longer exist
--- misdescribes the CV. A CV with no snapshot matches nothing and returns no row, which the
--- handler maps to "nothing to revert" rather than silently rewriting the document with NULL.
-UPDATE cvs
-SET data = autopilot_undo, autopilot_undo = NULL, autopilot_report = NULL, updated_at = now()
-WHERE id = $1 AND user_id = $2 AND autopilot_undo IS NOT NULL
-RETURNING id, title, template_id, created_at, updated_at;
 
 -- name: GetTailoredCVForJob :one
 -- The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is

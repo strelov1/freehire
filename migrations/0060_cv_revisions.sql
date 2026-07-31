@@ -64,3 +64,7 @@ CREATE INDEX cv_revisions_cv_id_created_at_idx ON public.cv_revisions (cv_id, cr
 
 -- Reverting a run reads every revision of one batch.
 CREATE INDEX cv_revisions_batch_id_idx ON public.cv_revisions (batch_id) WHERE batch_id IS NOT NULL;
+
+-- The owner FK needs its own index: deleting an account cascades through this table, and
+-- without one that cascade is a sequential scan of every revision anyone has ever made.
+CREATE INDEX cv_revisions_user_id_idx ON public.cv_revisions (user_id);

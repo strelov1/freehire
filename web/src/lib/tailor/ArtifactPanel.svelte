@@ -39,15 +39,14 @@
     tab = $bindable('jobmatch'),
     mobileVisible = false,
     autopilotReport = undefined,
-    autopilotRevertable = false,
     autopilotBusy = false,
     atsDelta = null,
     jobMatch = null,
     onRerunAutopilot,
-    onUndoAutopilot,
     revisions = [],
     pinnedRevision = $bindable(null),
-    onRevisionUndone,
+    onUndoRevision,
+    onUndoRevisionRun,
   }: {
     cvId: string;
     job: Job;
@@ -58,7 +57,6 @@
     /** The last unattended run's log, shown in the Score tab. The fit analysis is untouched
      *  by a run — it measures the base profile, not this tailored copy. */
     autopilotReport?: AutopilotEntry[];
-    autopilotRevertable?: boolean;
     autopilotBusy?: boolean;
     /** What tailoring did to the CV's ATS readiness. Null renders nothing — an unavailable
      *  delta is an absence, not an error state. */
@@ -66,13 +64,15 @@
     /** How well the current document matches this vacancy. Same absence rule as the delta. */
     jobMatch?: CvJobMatch | null;
     onRerunAutopilot: () => void;
-    onUndoAutopilot: () => void;
     /** The CV's history, newest first. */
     revisions?: RevisionView[];
     /** The entry whose edits stay underlined in the preview. Bound so the centre column can
      *  read it — the highlight belongs to the document, not to this panel. */
     pinnedRevision?: RevisionView | null;
-    onRevisionUndone: () => void;
+    /** Undoing is the page's to run: it owns the debounced save that has to be flushed
+     *  first, and the re-read that follows. */
+    onUndoRevision: (revision: RevisionView) => Promise<void>;
+    onUndoRevisionRun: (batchId: string) => Promise<void>;
   } = $props();
 
   const tabs: [Tab, string][] = [
@@ -198,7 +198,7 @@
         <TemplateGallery {cvId} onSelected={onTemplateSelected} />
       </div>
     {:else if tab === 'history'}
-      <RevisionHistory {cvId} {revisions} bind:pinned={pinnedRevision} onChanged={onRevisionUndone} />
+      <RevisionHistory {revisions} bind:pinned={pinnedRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}
@@ -213,13 +213,7 @@
              tab: the two answer different questions against different baselines, and stacking
              them under one heading is what made the previous Verdict tab unreadable. -->
         <AtsDelta data={atsDelta} />
-        <AutopilotReport
-          report={autopilotReport}
-          revertable={autopilotRevertable}
-          busy={autopilotBusy}
-          onRerun={onRerunAutopilot}
-          onUndo={onUndoAutopilot}
-        />
+        <AutopilotReport report={autopilotReport} busy={autopilotBusy} onRerun={onRerunAutopilot} />
       </div>
     {:else}
       <div class="p-4">

@@ -162,7 +162,7 @@ func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVB
 
 const getCVByID = `-- name: GetCVByID :one
 SELECT id, title, template_id, data, job_id, is_tailored, agent_session_id,
-       autopilot_report, (autopilot_undo IS NOT NULL)::boolean AS autopilot_revertable,
+       autopilot_report,
        created_at, updated_at
 FROM cvs
 WHERE id = $1 AND user_id = $2
@@ -174,17 +174,16 @@ type GetCVByIDParams struct {
 }
 
 type GetCVByIDRow struct {
-	ID                  uuid.UUID          `json:"id"`
-	Title               string             `json:"title"`
-	TemplateID          string             `json:"template_id"`
-	Data                []byte             `json:"data"`
-	JobID               pgtype.Int8        `json:"job_id"`
-	IsTailored          bool               `json:"is_tailored"`
-	AgentSessionID      pgtype.Text        `json:"agent_session_id"`
-	AutopilotReport     []byte             `json:"autopilot_report"`
-	AutopilotRevertable bool               `json:"autopilot_revertable"`
-	CreatedAt           pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ID              uuid.UUID          `json:"id"`
+	Title           string             `json:"title"`
+	TemplateID      string             `json:"template_id"`
+	Data            []byte             `json:"data"`
+	JobID           pgtype.Int8        `json:"job_id"`
+	IsTailored      bool               `json:"is_tailored"`
+	AgentSessionID  pgtype.Text        `json:"agent_session_id"`
+	AutopilotReport []byte             `json:"autopilot_report"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 // One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
@@ -204,7 +203,6 @@ func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByID
 		&i.IsTailored,
 		&i.AgentSessionID,
 		&i.AutopilotReport,
-		&i.AutopilotRevertable,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -349,43 +347,6 @@ func (q *Queries) ListTailoredCVsByUser(ctx context.Context, userID int64) ([]Li
 	return items, nil
 }
 
-const revertCVAutopilot = `-- name: RevertCVAutopilot :one
-UPDATE cvs
-SET data = autopilot_undo, autopilot_undo = NULL, autopilot_report = NULL, updated_at = now()
-WHERE id = $1 AND user_id = $2 AND autopilot_undo IS NOT NULL
-RETURNING id, title, template_id, created_at, updated_at
-`
-
-type RevertCVAutopilotParams struct {
-	ID     uuid.UUID `json:"id"`
-	UserID int64     `json:"user_id"`
-}
-
-type RevertCVAutopilotRow struct {
-	ID         uuid.UUID          `json:"id"`
-	Title      string             `json:"title"`
-	TemplateID string             `json:"template_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-}
-
-// Undo a whole autopilot run: restore the pre-run document and clear both autopilot columns.
-// The report goes with the document because a report describing edits that no longer exist
-// misdescribes the CV. A CV with no snapshot matches nothing and returns no row, which the
-// handler maps to "nothing to revert" rather than silently rewriting the document with NULL.
-func (q *Queries) RevertCVAutopilot(ctx context.Context, arg RevertCVAutopilotParams) (RevertCVAutopilotRow, error) {
-	row := q.db.QueryRow(ctx, revertCVAutopilot, arg.ID, arg.UserID)
-	var i RevertCVAutopilotRow
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.TemplateID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const setCVAutopilotReport = `-- name: SetCVAutopilotReport :execrows
 UPDATE cvs
 SET autopilot_report = $3
@@ -447,29 +408,6 @@ type SetCVTemplateParams struct {
 // scoped: returns 0 affected rows for a foreign or missing id (the handler maps that to 404).
 func (q *Queries) SetCVTemplate(ctx context.Context, arg SetCVTemplateParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setCVTemplate, arg.ID, arg.UserID, arg.TemplateID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const snapshotCVForAutopilot = `-- name: SnapshotCVForAutopilot :execrows
-UPDATE cvs
-SET autopilot_undo = data
-WHERE id = $1 AND user_id = $2
-`
-
-type SnapshotCVForAutopilotParams struct {
-	ID     uuid.UUID `json:"id"`
-	UserID int64     `json:"user_id"`
-}
-
-// Copy the tailored CV's current document into the autopilot snapshot, so the run about to
-// start can be reverted in one move. Taken fresh on every run: a second run's snapshot is the
-// document as the SECOND run found it, which is what "undo the run" means to whoever presses
-// it. Owner-scoped: 0 affected rows for a foreign or missing id.
-func (q *Queries) SnapshotCVForAutopilot(ctx context.Context, arg SnapshotCVForAutopilotParams) (int64, error) {
-	result, err := q.db.Exec(ctx, snapshotCVForAutopilot, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}

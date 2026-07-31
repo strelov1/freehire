@@ -135,9 +135,6 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Patch("/me/cvs/:id", mw.key, h.PatchCV)
 	api.Put("/me/cvs/:id/session", mw.key, h.SetCVSession)
 	api.Get("/me/cvs/:id/tailor-context", mw.key, h.TailorContext)
-	// Undo a whole autopilot run. Cookie-only: it rewrites the document, and the browser
-	// is where the candidate saw the run happen.
-	api.Post("/me/cvs/:id/autopilot/undo", mw.cookie, h.UndoAutopilotRun)
 	// The history of what changed the CV, and the two ways to undo an entry: on its own, or
 	// as the run it belonged to. Cookie-only for the same reason as every other mutation —
 	// the browser is where the candidate is watching this happen, and the tailoring agent
@@ -175,9 +172,6 @@ type cvResponse struct {
 	// requirement. The workspace panel renders it from this read rather than by parsing
 	// the conversation, so it survives a reload. Empty when no run has happened.
 	AutopilotReport []cv.AutopilotEntry `json:"autopilot_report,omitempty"`
-	// AutopilotRevertable says whether the pre-run snapshot is still held — whether
-	// "undo the run" has anything to restore.
-	AutopilotRevertable bool `json:"autopilot_revertable"`
 }
 
 // cvTailoredResponse is a tailored CV in the /my/cvs re-open list: metadata plus the vacancy
@@ -210,11 +204,10 @@ func metaResponse(m cv.Meta) cvMetaResponse {
 
 func recordResponse(rec cv.Record) cvResponse {
 	return cvResponse{
-		cvMetaResponse:      metaResponse(rec.Meta),
-		AgentSessionID:      rec.AgentSessionID,
-		Document:            rec.Document,
-		AutopilotReport:     rec.AutopilotReport,
-		AutopilotRevertable: rec.AutopilotRevertable,
+		cvMetaResponse:  metaResponse(rec.Meta),
+		AgentSessionID:  rec.AgentSessionID,
+		Document:        rec.Document,
+		AutopilotReport: rec.AutopilotReport,
 	}
 }
 
@@ -345,32 +338,6 @@ func (h *cvHandlers) UpdateCV(c *fiber.Ctx) error {
 		cvedit.ActorCandidate, cvedit.OriginEditor,
 		cvedit.State{Title: cvTitle(in.Title), TemplateID: tmplID, Document: in.Document})
 	if err != nil {
-		return mapCVError(err)
-	}
-	return c.JSON(fiber.Map{"data": metaResponse(meta)})
-}
-
-// UndoAutopilotRun restores the document an autopilot run started from and clears the run's
-// report along with it.
-//
-// The report goes with the document deliberately: it describes edits that the undo has just
-// removed, so keeping it would leave the panel claiming work that is no longer on the page.
-// A CV with no snapshot is a 409 rather than a silent no-op — nothing to undo is an answer,
-// not a success.
-func (h *cvHandlers) UndoAutopilotRun(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	id, err := cvPathID(c)
-	if err != nil {
-		return err
-	}
-	meta, err := h.cvStore.RevertAutopilot(c.Context(), id, userID)
-	if err != nil {
-		if errors.Is(err, cv.ErrNoAutopilotRun) {
-			return fiber.NewError(fiber.StatusConflict, "there is no autopilot run to undo")
-		}
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": metaResponse(meta)})

@@ -26,10 +26,8 @@ type cvRepo struct {
 	jobID   int64
 	data    []byte
 	written []byte
-	// report and undo are what an autopilot run leaves behind: its log, and the
-	// document as it stood before the run's first edit.
+	// report is what an autopilot run leaves behind: its account of each requirement.
 	report []byte
-	undo   []byte
 }
 
 func (r *cvRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
@@ -38,7 +36,7 @@ func (r *cvRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByI
 	}
 	return db.GetCVByIDRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data,
 		JobID:           pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0},
-		AutopilotReport: r.report, AutopilotRevertable: r.undo != nil}, nil
+		AutopilotReport: r.report}, nil
 }
 
 func (r *cvRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
@@ -74,28 +72,12 @@ func (r *cvRepo) GetTailoredForJob(_ context.Context, userID, jobID int64) (db.G
 	return db.GetTailoredCVForJobRow{ID: r.id, Title: "CV", TemplateID: "classic-ats", Data: r.data}, nil
 }
 
-func (r *cvRepo) SnapshotForAutopilot(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
-	if id != r.id || userID != r.userID {
-		return 0, nil
-	}
-	r.undo = r.data
-	return 1, nil
-}
-
 func (r *cvRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
 	if id != r.id || userID != r.userID {
 		return 0, nil
 	}
 	r.report = report
 	return 1, nil
-}
-
-func (r *cvRepo) RevertAutopilot(_ context.Context, id uuid.UUID, userID int64) (db.RevertCVAutopilotRow, error) {
-	if id != r.id || userID != r.userID || r.undo == nil {
-		return db.RevertCVAutopilotRow{}, pgx.ErrNoRows
-	}
-	r.data, r.undo, r.report = r.undo, nil, nil
-	return db.RevertCVAutopilotRow{ID: id, Title: "CV", TemplateID: "classic-ats"}, nil
 }
 
 // testCVID is the CV every case in this file addresses. Fixed so a failure names a

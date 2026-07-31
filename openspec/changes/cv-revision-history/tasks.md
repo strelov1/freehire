@@ -51,7 +51,7 @@
 - [x] 7.4 `cv_edit` tool → `Commit(agent, tailor_agent, batch)`, accepting a batch of operations in one call, with the schema generated from the enumerated paths
 - [ ] 7.5 Tailored-copy creation and seeding → a system revision that opens the feed
 - [x] 7.6 `GET /me/cvs/:id/revisions` and `POST /me/cvs/:id/revisions/:rid/undo`, cookie-only
-- [ ] 7.7 Retire `POST /me/cvs/:id/autopilot/undo` in favour of the batch revert
+- [x] 7.7 Retire `POST /me/cvs/:id/autopilot/undo` in favour of the batch revert
 - [ ] 7.8 Test: every entry point leaves a revision; the actor is never read from the request body
 
 ## 8. Titles
@@ -65,12 +65,12 @@
 - [x] 9.1 History tab in `ArtifactPanel` — entries newest first, author, time, description, undo control, run grouping
 - [x] 9.2 `CvHtmlPreview`: carry each item's document index through the empty-entry filtering
 - [x] 9.3 Underline the paths of the hovered, pinned, or newest-run revision
-- [ ] 9.4 Move the whole-run revert from `AutopilotReport` into the run group in the feed
+- [x] 9.4 Move the whole-run revert from `AutopilotReport` into the run group in the feed
 - [x] 9.5 Test (`vitest`): path-to-node matching, including an empty bullet before the changed one; description rendering
 
 ## 10. Retirement and clients
 
-- [ ] 10.1 Stop reading and writing `cvs.autopilot_undo`
+- [x] 10.1 Stop reading and writing `cvs.autopilot_undo`
 - [ ] 10.2 Second migration, separate release: drop `cvs.autopilot_undo`
 - [ ] 10.3 Update `freehire-cli` to the new `PATCH` body
 - [ ] 10.4 `internal/cv/AGENTS.md` and `internal/handler/AGENTS.md`: the single writer, the path policy, the evidence paths

@@ -397,11 +397,6 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if sess.Preset != assistant.PresetTailor || sess.CVID == nil || sess.JobID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
-	// The owner comes from the session the ownership check just resolved, not from the
-	// request a second time: two readings of who is calling are one too many.
-	if err := h.cv.cvStore.SnapshotForAutopilot(c.Context(), *sess.CVID, sess.UserID); err != nil {
-		return mapCVError(err)
-	}
 	h.layDownRunPlan(c.Context(), sess)
 	return h.streamTurn(c, sess, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps})
 }
