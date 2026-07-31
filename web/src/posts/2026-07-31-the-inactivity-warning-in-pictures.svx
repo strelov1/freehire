@@ -1,0 +1,32 @@
+---
+title: The inactivity warning, in pictures
+date: 2026-07-31
+summary: The page behind the "Possibly inactive" mark now draws what each criterion actually looks at, and shows in one small table why a warning is not stronger.
+type: changelog
+tags:
+  - ghost-jobs
+  - job-seekers
+---
+
+When a posting carries a **Possibly inactive** mark, the Details line links to a page
+explaining it. Most people arrive there with one question — *why is this posting marked,
+and why is the warning not stronger* — and until now the answer was two and a half
+thousand words of prose.
+
+[That page](/features/ghost-jobs) has been redrawn. Each of the four criteria now has a
+picture of what it actually looks at: the same job posted over and over with several
+copies live at once; a role found on an aggregator but missing from the company's own
+careers page; applications that got no reply in the time their stage allows; reports from
+people who applied and heard nothing.
+
+The part that was hardest to find is now a small table. There are two separate tests — did
+at least two criteria fire, and did at least two different people supply evidence — and
+the wording depends on how many pass. The table shows the strongest wording sitting in one
+corner, and that the posting itself can never get you there. That is the whole reason a
+staffing agency, which honestly has none of its clients' roles on its own board, does not
+end up accused of anything.
+
+The limits are still there, and still stated plainly: we only check careers pages we
+crawl, a quiet company is not a fake job, and nothing here can see what an employer meant
+to do. The full account behind each criterion is one click away rather than on the page at
+all times.
