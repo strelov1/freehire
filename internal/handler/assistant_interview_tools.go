@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -108,6 +109,13 @@ func (h *assistantHandlers) interviewContextTool(jobID int64) assistant.Tool {
 // a vacancy the caller never applied to has no stage, no invitation and no reason to
 // exist, and the missing row is also how we learn the session is not theirs.
 func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID int64) (interviewContext, error) {
+	// A tool error is a sentence the model can act on; a nil dereference here is a panic
+	// inside the SSE writer's goroutine, where Registry.Call's error path cannot reach it
+	// and Fiber's recover is not listening. Production always wires both, so this guards
+	// the next partially-wired harness rather than a live caller.
+	if h.stages == nil || h.cv == nil {
+		return interviewContext{}, errors.New("the rehearsal context is unavailable in this deployment")
+	}
 	stage, err := h.stages.GetUserJobStage(ctx, db.GetUserJobStageParams{UserID: userID, JobID: jobID})
 	if err != nil {
 		return interviewContext{}, err
@@ -141,12 +149,17 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 		out.Requirements = h.evidenceFor(ctx, userID, capRequirements(analysis.RequirementMatch))
 	}
 
+	if h.invitation == nil {
+		return out, nil
+	}
 	if msg, err := h.invitation.InterviewInvitation(ctx, userID, jobID); err == nil {
 		out.Invitation = &interviewInvitation{
 			Untrusted: untrustedNotice,
-			From:      msg.FromName,
-			Subject:   msg.Subject,
-			Body:      clipRunes(msg.BodyText, interviewInvitationLimit),
+			// The display name, or the address when the sender left none — an ATS often
+			// does, which is the same reason the body falls back from text to HTML.
+			From:    invitationSender(msg),
+			Subject: msg.Subject,
+			Body:    clipRunes(msg.BodyText, interviewInvitationLimit),
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		// A mailbox that cannot be read costs the rehearsal its opening line about the
@@ -155,6 +168,16 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 	}
 
 	return out, nil
+}
+
+// invitationSender names who wrote the invitation: the display name when there is one,
+// otherwise the address. "From: " with nothing after it tells the model less than an
+// address does, and an ATS relay frequently sends exactly that.
+func invitationSender(msg inbox.Message) string {
+	if name := strings.TrimSpace(msg.FromName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(msg.FromAddr)
 }
 
 // capRequirements keeps the requirements the interview is most likely to press on.

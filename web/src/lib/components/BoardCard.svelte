@@ -24,8 +24,9 @@
   // is still quiet, the label says we already prodded them. Neither replaces the other.
   const offersFollowUp = $derived(canFollowUp(item));
   const chased = $derived(chasedLabel(item));
-  // The two actions never appear together: a follow-up is offered on silence, a
-  // rehearsal once an employer has engaged, and an application is not both.
+  // Both can show at once: `screening` tolerates 18 days of silence, so an application
+  // waiting on a scheduled call that has gone quiet offers a chase AND a rehearsal. The
+  // row wraps, and the rehearsal is listed first because it is the one with a date on it.
   const offersRehearsal = $derived(canRehearse(item));
 </script>
 
@@ -117,7 +118,8 @@
       <button
         type="button"
         onclick={() => onfollowup(item)}
-        class="relative z-10 ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted text-warning-strong dark:hover:bg-warning-muted/50"
+        class:ml-auto={!offersRehearsal}
+        class="relative z-10 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted text-warning-strong dark:hover:bg-warning-muted/50"
       >
         <Send class="size-3 shrink-0" aria-hidden="true" />
         {chased ? 'Chase again' : 'Follow up'}

@@ -238,6 +238,40 @@ func TestInterviewContextOmitsAMissingInvitation(t *testing.T) {
 	}
 }
 
+// An ATS relay often mails with no display name at all. "From: " with nothing after it
+// tells the model less than an address does — the same reason the body falls back from
+// text/plain to rendered HTML.
+func TestInterviewContextNamesTheSenderWhenTheresNoDisplayName(t *testing.T) {
+	invite := invitationStub{msg: inbox.Message{
+		Subject: "Interview invitation", FromAddr: "no-reply@ashbyhq.test", FromName: "",
+		BodyText: "Tuesday at 10.",
+	}}
+	a := rehearsalAPI(t, twoRequirementAnalysis, nil, stageStub{stage: "interview"}, invite)
+
+	out, err := toolByName(t, a.assistantInterviewTools(9), "interview_context").
+		Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("interview_context: %v", err)
+	}
+	got := out.(interviewContext)
+	if got.Invitation == nil || got.Invitation.From != "no-reply@ashbyhq.test" {
+		t.Errorf("invitation from = %q, want the address when the sender left no name", got.Invitation.From)
+	}
+}
+
+// A tool that reaches a collaborator nobody wired must report it, not panic: the call
+// runs inside the SSE writer's goroutine, where Registry.Call's error path cannot reach
+// a panic and Fiber's recover is not listening.
+func TestInterviewContextReportsAnUnwiredDeployment(t *testing.T) {
+	bare := &assistantHandlers{}
+
+	_, err := toolByName(t, bare.assistantInterviewTools(9), "interview_context").
+		Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err == nil {
+		t.Fatal("interview_context answered from a handler wired to nothing")
+	}
+}
+
 // A rehearsal for an application the caller does not have is not a rehearsal. The stage
 // read is the ownership check: user_jobs holds one row per (user, vacancy).
 func TestInterviewContextRefusesAVacancyTheCallerHasNotApplied(t *testing.T) {
