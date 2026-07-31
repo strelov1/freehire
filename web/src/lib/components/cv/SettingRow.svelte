@@ -8,8 +8,9 @@
   let {
     label,
     hint,
+    grow = false,
     control,
-  }: { label: string; hint?: string; control: Snippet } = $props();
+  }: { label: string; hint?: string; grow?: boolean; control: Snippet } = $props();
 </script>
 
 <div class="flex items-center justify-between gap-3 py-1">
@@ -17,5 +18,8 @@
     <p class="truncate text-sm font-medium text-foreground">{label}</p>
     {#if hint}<p class="truncate text-xs text-muted-foreground">{hint}</p>{/if}
   </div>
-  <div class="shrink-0">{@render control()}</div>
+  <!-- `grow` is for controls whose content varies in length (a select showing a font name):
+       they take the spare width when the panel is dragged wide, instead of truncating a label
+       that would fit. Steppers stay fixed — a number needs no more room than it needs. -->
+  <div class={grow ? 'min-w-0 max-w-[18rem] flex-1' : 'shrink-0'}>{@render control()}</div>
 </div>

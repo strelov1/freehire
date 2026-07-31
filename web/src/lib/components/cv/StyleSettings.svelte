@@ -28,7 +28,7 @@
   ];
 
   const selectClass =
-    'w-[11rem] rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-foreground';
+    'w-full min-w-[9rem] rounded-lg border border-input bg-background px-2 py-1.5 text-sm text-foreground';
 
   const sizeShown = $derived(
     (style.font_size ?? 0) > 0 ? (style.font_size ?? 0).toFixed(1) : TEMPLATE_FONT_SIZE_PT.toFixed(1),
@@ -47,7 +47,7 @@
 </script>
 
 <div class="space-y-1">
-  <SettingRow label="Font">
+  <SettingRow label="Font" grow>
     {#snippet control()}
       <select bind:value={style.font_family} class={selectClass} aria-label="Font">
         <option value="">Template default</option>
@@ -69,7 +69,7 @@
     {/snippet}
   </SettingRow>
 
-  <SettingRow label="Line height">
+  <SettingRow label="Line height" grow>
     {#snippet control()}
       <select bind:value={style.line_height} class={selectClass} aria-label="Line height">
         {#each LINE_HEIGHTS as lh (lh.value)}

@@ -54,7 +54,7 @@
 - [x] 6.2 Derive one style object in `CvHtmlPreview.svelte` and apply it to both the visible sheets
       and the hidden measurement layer, replacing the `font-serif`/`font-sans`/`text-[13px]`/
       `leading-snug` classes
-- [ ] 6.3 Verify visually with headless Chrome that raising the font size re-paginates the preview and
+- [x] 6.3 Verify visually with headless Chrome that raising the font size re-paginates the preview and
       that the preview and the downloaded PDF break pages at the same place
 
 ## 7. Settings panel
@@ -69,9 +69,9 @@
 - [x] 7.5 Unit-test the linked-axis stepping and the non-uniform detection as pure functions in
       `geometry.ts`
 - [x] 7.6 Wire both blocks into the Settings tab of `web/src/routes/tailor/[slug]/+page.svelte`
-- [ ] 7.7 Verify visually at 340px and 720px panel widths that nothing clips or overflows
+- [x] 7.7 Verify visually at 340px and 720px panel widths that nothing clips or overflows
 
 ## 8. Documentation
 
-- [ ] 8.1 Update `internal/cv/AGENTS.md`: the font registry and how to add a face, the
+- [x] 8.1 Update `internal/cv/AGENTS.md`: the font registry and how to add a face, the
       zero-means-inherit rule, and the em-relative size requirement for new templates
