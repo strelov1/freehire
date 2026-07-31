@@ -24,8 +24,11 @@
   <States state="empty" message="Nothing viewed yet. Jobs you open will show up here." />
 {:else}
   <ul class="flex flex-col gap-3">
-    {#each page.items as item (item.job.public_slug)}
-      <li><JobRow job={item.job} dimViewed={false} /></li>
+    <!-- Viewed history is always posting-backed: a row with no posting is an
+         application, and an application was never a view. The guard is the type's,
+         not a real case. -->
+    {#each page.items.filter((i) => i.job) as item (item.id)}
+      <li><JobRow job={item.job!} dimViewed={false} /></li>
     {/each}
   </ul>
   {#if page.hasMore}

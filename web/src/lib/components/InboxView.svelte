@@ -310,11 +310,15 @@
     trackedLoading = true;
     try {
       const res = await api.listMyJobs('applied', 100, 0);
-      trackedApps = res.items.map((m) => ({
-        slug: m.job.public_slug,
-        company: m.job.company,
-        title: m.job.title,
-      }));
+      // Only postings-backed applications can be offered as a link target: linking
+      // mail names a job slug, and an application whose posting was pruned has none.
+      trackedApps = res.items
+        .filter((m) => m.job)
+        .map((m) => ({
+          slug: m.job!.public_slug,
+          company: m.job!.company,
+          title: m.job!.title,
+        }));
       trackedLoaded = true;
     } catch {
       // Leave the list empty; the picker shows its empty state.

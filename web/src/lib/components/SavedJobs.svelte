@@ -25,11 +25,13 @@
   <States state="empty" message="Nothing saved yet. Jobs you save will show up here." />
 {:else}
   <ul class="flex flex-col gap-3">
-    {#each page.items as item (item.job.public_slug)}
+    <!-- Saved jobs are always posting-backed: the bookmark lives on the posting and
+         goes with it. The guard satisfies the type rather than a real case. -->
+    {#each page.items.filter((i) => i.job) as item (item.id)}
       <li>
-        <JobRow job={item.job} dimViewed={false}>
+        <JobRow job={item.job!} dimViewed={false}>
           {#snippet footer()}
-            <ReminderChip slug={item.job.public_slug} fireAt={item.reminder_fire_at} />
+            <ReminderChip slug={item.job!.public_slug} fireAt={item.reminder_fire_at} />
           {/snippet}
         </JobRow>
       </li>

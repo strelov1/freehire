@@ -3,6 +3,7 @@ package jobtracking
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -205,7 +206,10 @@ func (r *QueriesRepository) ListInteractions(
 			return nil, err
 		}
 		items = append(items, TrackedJob{
-			Job: view,
+			ID:          view.PublicSlug,
+			CompanySlug: row.Job.CompanySlug,
+			RoleTitle:   row.Job.Title,
+			Job:         &view,
 			Interaction: Interaction{
 				JobID:     row.Job.ID,
 				ViewedAt:  pgconv.TimePtr(row.ViewedAt),
@@ -221,6 +225,34 @@ func (r *QueriesRepository) ListInteractions(
 			FollowedUpAt:         pgconv.TimePtr(row.FollowedUpAt),
 			CVOpenedAt:           pgconv.TimePtr(row.CvOpenedAt),
 		})
+	}
+
+	// Applications the catalogue no longer holds a posting for. They cannot come from
+	// the query above — it is driven by user_jobs rows, which cmd/prune cascades away —
+	// so they are read separately and merged here. Only the board and applied views owe
+	// them: a pruned application was never a view or a bookmark.
+	if filter == FilterBoard || filter == FilterApplied || filter == FilterAll {
+		orphans, err := r.q.ListOrphanedApplications(ctx, db.ListOrphanedApplicationsParams{
+			UserID: userID, Limit: limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, o := range orphans {
+			items = append(items, TrackedJob{
+				ID:          "a" + strconv.FormatInt(o.ID, 10),
+				CompanySlug: o.CompanySlug,
+				RoleTitle:   o.RoleTitle,
+				Interaction: Interaction{
+					AppliedAt: pgconv.TimePtr(o.AppliedAt),
+					Stage:     textPtr(o.Stage),
+					Notes:     textPtr(o.Notes),
+				},
+				EmailCount:     int(o.EmailCount),
+				LastActivityAt: pgconv.TimePtr(o.LastActivityAt),
+				FollowedUpAt:   pgconv.TimePtr(o.FollowedUpAt),
+			})
+		}
 	}
 	return items, nil
 }

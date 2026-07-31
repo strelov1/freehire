@@ -31,6 +31,11 @@
   // A further reading, and like the chase it sits beside the silence badge rather than instead
   // of it: they read the CV and still have not answered.
   const cvOpened = $derived(cvOpenedLabel(item));
+
+  // The posting is gone once cmd/prune removes it, and the card still has to render.
+  // The employer and role are carried by the application itself for exactly this.
+  const company = $derived(item.job?.company || item.company_slug);
+  const title = $derived(item.job?.title || item.role_title);
 </script>
 
 <!-- The card is a div, not a button: the follow-up action is a second control, and a
@@ -42,14 +47,14 @@
   <button
     type="button"
     onclick={() => onopen(item)}
-    aria-label="Open {item.job.title} at {item.job.company || 'unknown company'}"
+    aria-label="Open {title} at {company || 'unknown company'}"
     class="flex flex-col gap-1.5 text-left after:absolute after:inset-0 after:content-['']"
   >
     <span class="flex items-center gap-1.5 text-sm font-semibold">
-      <CompanyLogo name={item.job.company} />
-      <span class="min-w-0 truncate">{item.job.company || 'Unknown company'}</span>
+      <CompanyLogo name={company} />
+      <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
     </span>
-    <span class="line-clamp-2 text-sm">{item.job.title}</span>
+    <span class="line-clamp-2 text-sm">{title}</span>
   </button>
   <!-- The badge row rides above the open action's overlay so its title tooltips still
        answer a hover. The cost is that this strip no longer opens the drawer; a lost

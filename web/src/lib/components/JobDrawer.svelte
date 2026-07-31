@@ -67,6 +67,7 @@
     emailsLoading = true;
     emailsError = null;
     try {
+      if (!item.job) return;
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
     } catch (e) {
@@ -102,7 +103,12 @@
 
   // Meta pills (work arrangement, region, employment type, seniority) — only the
   // stated ones, reusing the list-card logic.
-  let tags = $derived(cardTags(item.job));
+  // The posting is gone once cmd/prune removes it. The employer and role are on the
+  // application itself; everything else the drawer shows came from the posting and is
+  // simply absent — the honest rendering, since we no longer have it to show.
+  const company = $derived(item.job?.company || item.company_slug);
+  const title = $derived(item.job?.title || item.role_title);
+  let tags = $derived(item.job ? cardTags(item.job) : []);
   let stageLabel = $derived(item.stage ? humanizeStage(item.stage) : null);
 
   // Interaction timeline shown as a wizard-style stepper up top, in engagement-funnel
@@ -160,13 +166,14 @@
     <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 pb-3 pt-5 sm:px-6">
       <div class="flex items-start gap-4">
         <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
-          <CompanyLogo name={item.job.company} size="size-9" />
+          <CompanyLogo name={company} size="size-9" />
         </div>
         <div class="min-w-0 flex-1">
-          <h2 class="text-xl font-bold leading-tight tracking-tight">{item.job.title}</h2>
-          <p class="text-sm text-muted-foreground">{item.job.company || 'Unknown company'}</p>
+          <h2 class="text-xl font-bold leading-tight tracking-tight">{title}</h2>
+          <p class="text-sm text-muted-foreground">{company || 'Unknown company'}</p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
+          {#if item.job}
           <Button
             variant="outline"
             size="sm"
@@ -178,6 +185,7 @@
             View job
             <ExternalLink class="size-3.5" />
           </Button>
+          {/if}
           <button
             type="button"
             onclick={close}
@@ -285,8 +293,10 @@
         </div>
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
-          <JobMatch job={item.job} />
-          <MatchAnalysisFull job={item.job} />
+          {#if item.job}
+            <JobMatch job={item.job} />
+            <MatchAnalysisFull job={item.job} />
+          {/if}
         </div>
       {:else if tab === 'emails'}
         <div class="flex flex-col gap-2">
@@ -349,7 +359,13 @@
         </div>
       {:else}
         <div class="flex flex-col gap-5">
-          {#if item.job.description}
+          {#if !item.job}
+            <!-- The posting was removed from the catalogue. What it said is genuinely
+                 gone; saying so is better than an empty tab that reads as a bug. -->
+            <p class="text-sm text-muted-foreground">
+              This posting is no longer listed. Your application, its stage and your notes are kept.
+            </p>
+          {:else if item.job.description}
             <!-- Description is server-sanitized HTML (see internal/sources), safe to render. -->
             <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
             <div class="job-description text-sm leading-relaxed">{@html item.job.description}</div>
@@ -357,7 +373,7 @@
             <p class="text-sm text-muted-foreground">No description available.</p>
           {/if}
 
-          {#if item.job.skills?.length}
+          {#if item.job?.skills?.length}
             <div class="flex flex-col gap-2 border-t border-border pt-5">
               <p class={sectionLabel}>Skills</p>
               <div class="flex flex-wrap gap-1.5">

@@ -51,7 +51,7 @@
     const next = emptyColumns();
     const cols: Record<string, BoardColumnId> = {};
     for (const row of rows) {
-      const item: BoardItem = { ...row, id: row.job.public_slug };
+      const item: BoardItem = { ...row, id: row.id };
       const col = columnOf(item);
       if (!col) continue; // saved-only rows live in Activity → Saved, not the board
       next[col].push(item);
@@ -231,6 +231,7 @@
     if (rehearsing) return;
     rehearsing = true;
     try {
+      if (!item.job) return;
       const session = await createRehearsal(item.job.public_slug);
       await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
     } catch {
@@ -251,7 +252,8 @@
     openItem = item as BoardItem;
     pendingOutcome = false;
     // Give the open application its own shareable URL without a full navigation.
-    pushState(resolve('/my/tracking/[slug]', { slug: item.job.public_slug }), {});
+    // A card with no posting has no public URL to push; it opens in place.
+    if (item.job) pushState(resolve('/my/tracking/[slug]', { slug: item.job.public_slug }), {});
   }
 </script>
 
@@ -281,7 +283,7 @@
 {/if}
 
 {#if openItem}
-  {#key openItem.job.public_slug}
+  {#key openItem.id}
     <JobDrawer
       item={openItem}
       {pendingOutcome}
@@ -295,10 +297,10 @@
 {/if}
 
 {#if followUpItem}
-  {#key followUpItem.job.public_slug}
+  {#key followUpItem.id}
     <FollowUpDialog
-      slug={followUpItem.job.public_slug}
-      company={followUpItem.job.company}
+      slug={followUpItem.job?.public_slug ?? ''}
+      company={followUpItem.job?.company ?? followUpItem.company_slug}
       onclose={() => (followUpItem = null)}
       onrecorded={markChased}
     />

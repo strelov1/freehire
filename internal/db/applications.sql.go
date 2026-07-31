@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const backfillApplicationEventLinks = `-- name: BackfillApplicationEventLinks :execrows
@@ -132,4 +134,83 @@ func (q *Queries) BackfillEmailApplicationLinks(ctx context.Context, batchSize i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const listOrphanedApplications = `-- name: ListOrphanedApplications :many
+SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
+       (SELECT count(*)
+          FROM emails e
+         WHERE e.application_id = a.id
+           AND e.deleted_at IS NULL) AS email_count,
+       -- Same last-activity rule as the posting-backed rows: the apply date, or the newest
+       -- linked message when that is later. Mail is reached through the application, never
+       -- through the posting, which no longer exists.
+       (CASE WHEN a.applied_at IS NOT NULL THEN
+          GREATEST(a.applied_at,
+                   (SELECT max(e.received_at)
+                      FROM emails e
+                     WHERE e.application_id = a.id
+                       AND e.deleted_at IS NULL))
+        END)::timestamptz AS last_activity_at
+  FROM applications a
+ WHERE a.user_id = $1
+   AND a.job_id IS NULL
+ ORDER BY a.applied_at DESC NULLS LAST, a.id DESC
+ LIMIT $2
+`
+
+type ListOrphanedApplicationsParams struct {
+	UserID int64 `json:"user_id"`
+	Limit  int32 `json:"limit"`
+}
+
+type ListOrphanedApplicationsRow struct {
+	ID             int64              `json:"id"`
+	CompanySlug    string             `json:"company_slug"`
+	RoleTitle      string             `json:"role_title"`
+	AppliedAt      pgtype.Timestamptz `json:"applied_at"`
+	Stage          pgtype.Text        `json:"stage"`
+	Notes          pgtype.Text        `json:"notes"`
+	FollowedUpAt   pgtype.Timestamptz `json:"followed_up_at"`
+	EmailCount     int64              `json:"email_count"`
+	LastActivityAt pgtype.Timestamptz `json:"last_activity_at"`
+}
+
+// The caller's applications whose posting the catalogue no longer holds.
+//
+// Deliberately joins nothing: cmd/prune cleared job_id, so there is no posting to reach
+// and sqlc.embed over a LEFT JOIN would generate a non-pointer Job that fails at scan
+// time on the NULL columns (measured). The employer and role title are on the record
+// itself, which is the whole reason they were copied there.
+//
+// The board reads these alongside the posting-backed rows and merges the two; they are
+// few by nature — one appears only when a posting a candidate applied to is pruned.
+func (q *Queries) ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error) {
+	rows, err := q.db.Query(ctx, listOrphanedApplications, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrphanedApplicationsRow{}
+	for rows.Next() {
+		var i ListOrphanedApplicationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanySlug,
+			&i.RoleTitle,
+			&i.AppliedAt,
+			&i.Stage,
+			&i.Notes,
+			&i.FollowedUpAt,
+			&i.EmailCount,
+			&i.LastActivityAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

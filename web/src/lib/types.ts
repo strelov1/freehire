@@ -401,7 +401,14 @@ export interface UserJob {
 /** One item of the my-jobs listing: the job in the shared wire shape with the
  *  caller's interaction timestamps riding alongside. */
 export interface MyJob {
-  job: Job;
+  /** Addresses the row. The board keys, routes and opens by this rather than by the
+   *  posting's slug: an application whose posting was pruned has no slug to borrow. */
+  id: string;
+  /** Read from the application record, so a card renders whether or not `job` is there. */
+  company_slug: string;
+  role_title: string;
+  /** Null once the catalogue has removed the posting. The application outlives it. */
+  job: Job | null;
   viewed_at: string;
   saved_at: string | null;
   applied_at: string | null;

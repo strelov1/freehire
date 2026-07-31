@@ -29,7 +29,7 @@
     try {
       await api.undismissJob(slug);
       markUndismissed(slug);
-      page.items = page.items.filter((it) => it.job.public_slug !== slug);
+      page.items = page.items.filter((it) => it.job?.public_slug !== slug);
     } finally {
       unhiding = '';
     }
@@ -44,18 +44,19 @@
   <States state="empty" message="Nothing hidden. Jobs you hide from the feed show up here." />
 {:else}
   <ul class="flex flex-col gap-3">
-    {#each page.items as item (item.job.public_slug)}
+    <!-- Hidden jobs are always posting-backed: hiding is a mark on a posting. -->
+    {#each page.items.filter((i) => i.job) as item (item.id)}
       <li>
         <!-- Un-hide lives in the card's footer row (a divided sibling of the link),
              not an overlay, so it never sits on top of the title or blurb on a narrow
              screen. Mirrors the saved list's reminder chip. -->
-        <JobRow job={item.job} dimViewed={false}>
+        <JobRow job={item.job!} dimViewed={false}>
           {#snippet footer()}
             <div class="flex justify-end">
               <button
                 type="button"
-                onclick={() => unhide(item.job.public_slug)}
-                disabled={unhiding === item.job.public_slug}
+                onclick={() => unhide(item.job!.public_slug)}
+                disabled={unhiding === item.job!.public_slug}
                 title="Un-hide — show this job in the feed again"
                 class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition hover:text-brand disabled:pointer-events-none disabled:opacity-50"
               >

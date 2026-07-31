@@ -270,3 +270,79 @@ func TestListMyJobsBoardFilter(t *testing.T) {
 		t.Errorf("meta.counts.board = %d, want 3", body.Meta.Counts.Board)
 	}
 }
+
+// The point of the whole change, asserted where the candidate actually meets it:
+// cmd/prune removes the posting, and the application is still on their board.
+func TestTrackedBoardKeepsAnApplicationWhosePostingWasPruned(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('pruned-board@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	var jobID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, company_slug, public_slug)
+		 VALUES ('test', 'doomed', 'http://example.test', 'Go Dev', 'acme', 'job-doomed')
+		 RETURNING id`).Scan(&jobID); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+	if _, err := queries.MarkJobApplied(ctx, db.MarkJobAppliedParams{
+		UserID: userID, JobID: jobID, EventSource: "user",
+	}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, jobID); err != nil {
+		t.Fatalf("prune the posting: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(userID, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+
+	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking?filter=board", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("board = %d, want 200", resp.StatusCode)
+	}
+	var body struct {
+		Data []struct {
+			ID        string          `json:"id"`
+			Company   string          `json:"company_slug"`
+			RoleTitle string          `json:"role_title"`
+			Job       json.RawMessage `json:"job"`
+			Stage     *string         `json:"stage"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Data) != 1 {
+		t.Fatalf("board returned %d rows, want 1 — the application must not vanish with its posting", len(body.Data))
+	}
+	row := body.Data[0]
+	if string(row.Job) != "null" {
+		t.Errorf("job = %s, want null once the posting is pruned", row.Job)
+	}
+	if row.ID == "" {
+		t.Error("the row carries no id, so the interface cannot open or route to it")
+	}
+	if row.Company != "acme" || row.RoleTitle != "Go Dev" {
+		t.Errorf("employer/role = %q/%q, want acme/Go Dev, read from the application itself", row.Company, row.RoleTitle)
+	}
+	if row.Stage == nil || *row.Stage != "applied" {
+		t.Errorf("stage = %v, want applied — the candidate's own record survives", row.Stage)
+	}
+}

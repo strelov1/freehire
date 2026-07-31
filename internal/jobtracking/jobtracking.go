@@ -87,7 +87,16 @@ func (c Counts) Total(f Filter) int64 {
 // interaction marks. The job carries identity via its slug; the embedded
 // Interaction's JobID is the internal id, never serialized.
 type TrackedJob struct {
-	Job jobview.Job
+	// ID addresses the row. The board has always been a list of applications and only
+	// borrowed the posting's slug because one was always at hand; an application whose
+	// posting was pruned has none to borrow, so the row carries its own.
+	ID string
+	// CompanySlug and RoleTitle come from the application record and are present on
+	// every row, so a card can be rendered without reaching into Job.
+	CompanySlug string
+	RoleTitle   string
+	// Job is absent when the catalogue no longer holds the posting.
+	Job *jobview.Job
 	Interaction
 	// EmailCount is the caller's live inbox messages linked to this job — the
 	// board's per-card ✉ badge. 0 for users without a connected mailbox.

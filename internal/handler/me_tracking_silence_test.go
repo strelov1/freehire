@@ -73,7 +73,7 @@ func listSilence(t *testing.T, items []jobtracking.TrackedJob) []trackingRow {
 
 func row(stage string, appliedAgo, activityAgo time.Duration, pending bool) jobtracking.TrackedJob {
 	j := jobtracking.TrackedJob{
-		Job:                  jobview.Job{PublicSlug: "a-job"},
+		Job:                  &jobview.Job{PublicSlug: "a-job"},
 		HasPendingSuggestion: pending,
 	}
 	if appliedAgo > 0 {

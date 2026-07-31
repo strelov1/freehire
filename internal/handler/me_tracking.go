@@ -12,14 +12,23 @@ import (
 // jobview wire shape with the caller's interaction timestamps riding alongside
 // (not flattened in — the job shape stays identical to every other job surface).
 type myJobResponse struct {
-	Job            jobview.Job `json:"job"`
-	ViewedAt       *time.Time  `json:"viewed_at"`
-	SavedAt        *time.Time  `json:"saved_at"`
-	AppliedAt      *time.Time  `json:"applied_at"`
-	Stage          *string     `json:"stage"`
-	Notes          *string     `json:"notes"`
-	EmailCount     int         `json:"email_count"`
-	ReminderFireAt *time.Time  `json:"reminder_fire_at"`
+	// ID addresses the row. The board keys, routes and opens by it rather than by the
+	// posting's slug, which an application whose posting was pruned does not have.
+	ID string `json:"id"`
+	// Company and RoleTitle ride on every row, read from the application record, so a
+	// card renders whether or not a posting is still there.
+	Company   string `json:"company_slug"`
+	RoleTitle string `json:"role_title"`
+	// Job is null once the catalogue has removed the posting. The application is a fact
+	// about the candidate's life and outlives our inventory of it.
+	Job            *jobview.Job `json:"job"`
+	ViewedAt       *time.Time   `json:"viewed_at"`
+	SavedAt        *time.Time   `json:"saved_at"`
+	AppliedAt      *time.Time   `json:"applied_at"`
+	Stage          *string      `json:"stage"`
+	Notes          *string      `json:"notes"`
+	EmailCount     int          `json:"email_count"`
+	ReminderFireAt *time.Time   `json:"reminder_fire_at"`
 	// The silence fields are null together on any row that is not an application
 	// awaiting a reply — a job merely viewed or saved, or one in a settled stage.
 	// Null means "nothing is owed here", which the board must be able to tell
@@ -63,6 +72,9 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	items := make([]myJobResponse, 0, len(listing.Items))
 	for _, it := range listing.Items {
 		item := myJobResponse{
+			ID:             it.ID,
+			Company:        it.CompanySlug,
+			RoleTitle:      it.RoleTitle,
 			Job:            it.Job,
 			ViewedAt:       it.ViewedAt,
 			SavedAt:        it.SavedAt,

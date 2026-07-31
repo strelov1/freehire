@@ -1339,6 +1339,16 @@ type Querier interface {
 	// First page of a subject's open threads, newest first. Served by the partial index
 	// threads_subject_open_created_idx.
 	ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsFirstParams) ([]ListOpenThreadsFirstRow, error)
+	// The caller's applications whose posting the catalogue no longer holds.
+	//
+	// Deliberately joins nothing: cmd/prune cleared job_id, so there is no posting to reach
+	// and sqlc.embed over a LEFT JOIN would generate a non-pointer Job that fails at scan
+	// time on the NULL columns (measured). The employer and role title are on the record
+	// itself, which is the whole reason they were copied there.
+	//
+	// The board reads these alongside the posting-backed rows and merges the two; they are
+	// few by nature — one appears only when a posting a candidate applied to is pruned.
+	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
 	// queue that deep needs bulk triage, not a longer page.
