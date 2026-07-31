@@ -129,7 +129,9 @@ func (h *cvHandlers) scoreRenderedCV(ctx context.Context, doc cv.Document, tmpl 
 	if h.cvRenderer == nil || h.extractPDFText == nil {
 		return atscheck.Report{}, errNoRenderer
 	}
-	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl)
+	// No headshot: this render exists to be read as text, and a portrait contributes
+	// none. Fetching it would cost a bucket round trip per scored template.
+	pdf, err := h.cvRenderer.Render(ctx, doc, tmpl, nil)
 	if err != nil {
 		return atscheck.Report{}, fmt.Errorf("render cv for scoring: %w", err)
 	}

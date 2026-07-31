@@ -16,11 +16,16 @@ const DefaultTemplateID = "classic-ats"
 // TemplateInfo is a registered template's display metadata. ATSSafe marks the
 // single-column, standard-heading layouts that parse cleanly in résumé-scanning
 // software; richer layouts (e.g. a sidebar) are listed but flagged unsafe.
+//
+// Photo marks the templates that print the member's headshot. It is what stops the
+// render path reaching for object storage on a template that would not use the image,
+// and what lets the gallery prompt for an upload before the template is chosen.
 type TemplateInfo struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Style   string `json:"style"`
 	ATSSafe bool   `json:"ats_safe"`
+	Photo   bool   `json:"photo"`
 }
 
 // templates is the registry of known templates. A CV's template_id must be one of
@@ -31,16 +36,20 @@ var templates = []TemplateInfo{
 	{ID: "centered", Label: "Centered", Style: "centered · serif", ATSSafe: true},
 	{ID: "modern-sans", Label: "Modern", Style: "single-column · sans", ATSSafe: true},
 	{ID: "sidebar", Label: "Sidebar", Style: "two-column · serif", ATSSafe: false},
+	{ID: "portrait", Label: "Portrait", Style: "two-column · photo · serif", ATSSafe: false, Photo: true},
+	{ID: "headshot", Label: "Headshot", Style: "single-column · photo · sans", ATSSafe: false, Photo: true},
 }
 
 // ErrUnknownTemplate is returned when a template_id is not in the registry. The handler
 // maps it to a 400 (an unknown template is never rendered).
 var ErrUnknownTemplate = errors.New("cv: unknown template")
 
-// Template is a resolved CV template: its id and the Typst source that renders a Document
-// (which the source reads back as json("data.json")).
+// Template is a resolved CV template: its id, whether it prints a headshot, and the
+// Typst source that renders a Document (which the source reads back as json("data.json")).
 type Template struct {
-	ID     string
+	ID    string
+	Photo bool
+
 	source []byte
 }
 
@@ -63,12 +72,13 @@ func ResolveTemplate(id string) (Template, error) {
 	if id == "" {
 		id = DefaultTemplateID
 	}
-	if !slices.ContainsFunc(templates, func(t TemplateInfo) bool { return t.ID == id }) {
+	i := slices.IndexFunc(templates, func(t TemplateInfo) bool { return t.ID == id })
+	if i < 0 {
 		return Template{}, fmt.Errorf("%w: %q", ErrUnknownTemplate, id)
 	}
 	src, err := templateFS.ReadFile("templates/" + id + ".typ")
 	if err != nil {
 		return Template{}, fmt.Errorf("cv: read template %q: %w", id, err)
 	}
-	return Template{ID: id, source: src}, nil
+	return Template{ID: id, Photo: templates[i].Photo, source: src}, nil
 }

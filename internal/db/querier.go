@@ -151,6 +151,8 @@ type Querier interface {
 	// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
 	// the index: a closed job has no vector in either place.
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
+	// Clear the user's headshot pointer, after deleting the object from storage.
+	ClearUserPhoto(ctx context.Context, id int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
 	// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
 	// derived structured résumé (the structure must not outlive the CV it describes).
@@ -828,6 +830,9 @@ type Querier interface {
 	// NULL when the account is passwordless (OAuth-only), which the caller treats the same
 	// as a wrong password: there is nothing to verify against.
 	GetUserPasswordHash(ctx context.Context, id int64) (pgtype.Text, error)
+	// The authenticated user's headshot pointer (object key + upload time), or NULLs when
+	// no headshot is stored. The image lives in S3 under the key; this is just the pointer.
+	GetUserPhoto(ctx context.Context, id int64) (GetUserPhotoRow, error)
 	// The caller's single profile, keyed by user_id. No matching row means the user has not
 	// saved a profile yet (the handler maps that to a null payload / 404 on sub-resources).
 	GetUserProfile(ctx context.Context, userID int64) (UserProfile, error)
@@ -1265,8 +1270,8 @@ type Querier interface {
 	// The caller's open applications offered to the matcher (applied, saved, or staged),
 	// as (job_id, company). Closed postings are excluded.
 	ListUserApplicationsForMatch(ctx context.Context, userID int64) ([]ListUserApplicationsForMatchRow, error)
-	// Every object-storage key the account owns, in one read: the stored CV, each
-	// referral-proof PDF, and the raw MIME of each hosted email. Account deletion
+	// Every object-storage key the account owns, in one read: the stored CV, the headshot,
+	// each referral-proof PDF, and the raw MIME of each hosted email. Account deletion
 	// collects these BEFORE deleting any row — the mail and proof keys live in the rows
 	// themselves, so once those are gone the objects are unreachable and would sit in
 	// the bucket forever. Empty keys are filtered out so a caller never asks storage to
@@ -1835,6 +1840,10 @@ type Querier interface {
 	// stolen token cannot outlive the password it was minted under. Does NOT touch
 	// email_verified: knowing the current password proves nothing about the address.
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int32, error)
+	// Record (or replace) the user's headshot pointer, stamping the upload time. Owner-scoped
+	// by id; the object key is derived from the id, never client input. Nothing derived hangs
+	// off the image, so — unlike SetUserResume — there is no cached artefact to invalidate.
+	SetUserPhoto(ctx context.Context, arg SetUserPhotoParams) error
 	// Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 	// Owner-scoped by id; the object key is derived from the id, never client input.
 	// Also clears any cached ATS review so a new CV is never scored with a stale one.

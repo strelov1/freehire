@@ -596,6 +596,8 @@ type User struct {
 	BetaTester                 bool               `json:"beta_tester"`
 	EmailVerified              bool               `json:"email_verified"`
 	TokenVersion               int32              `json:"token_version"`
+	PhotoObjectKey             pgtype.Text        `json:"photo_object_key"`
+	PhotoUploadedAt            pgtype.Timestamptz `json:"photo_uploaded_at"`
 }
 
 type UserEmailCode struct {

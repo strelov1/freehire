@@ -2,9 +2,11 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/referral"
 )
 
@@ -24,10 +27,13 @@ type referralHandlers struct {
 	blob       blobstore.Store
 	cvRenderer cv.Renderer
 	cvStore    *cv.Store
+	// photos serves the OWNER's headshot when their chosen template prints one, so the
+	// proof a referrer opens is the CV the candidate sees, not a silhouette of them.
+	photos *headshot.Store
 }
 
-func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store) *referralHandlers {
-	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore}
+func newReferralHandlers(referral *referral.Service, blob blobstore.Store, cvRenderer cv.Renderer, cvStore *cv.Store, photos *headshot.Store) *referralHandlers {
+	return &referralHandlers{referral: referral, blob: blob, cvRenderer: cvRenderer, cvStore: cvStore, photos: photos}
 }
 
 func (h *referralHandlers) register(api fiber.Router, mw middleware) {
@@ -470,13 +476,29 @@ func (h *referralHandlers) renderOwnerCV(c *fiber.Ctx, cvID uuid.UUID, ownerID i
 	if err != nil {
 		return mapCVError(err)
 	}
-	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl)
+	pdf, err := h.cvRenderer.Render(c.Context(), rec.Document, tmpl, h.ownerHeadshot(c.Context(), ownerID, tmpl))
 	if err != nil {
 		return err
 	}
 	c.Set(fiber.HeaderContentType, "application/pdf")
 	c.Set(fiber.HeaderContentDisposition, `inline; filename="cv.pdf"`)
 	return c.Send(pdf)
+}
+
+// ownerHeadshot returns the CV owner's stored headshot for a template that prints one, and
+// nil otherwise — including on every failure, which the templates render as the placeholder.
+func (h *referralHandlers) ownerHeadshot(ctx context.Context, ownerID int64, tmpl cv.Template) []byte {
+	if !tmpl.Photo || !h.photos.Enabled() {
+		return nil
+	}
+	photo, err := h.photos.Get(ctx, ownerID)
+	if err != nil {
+		if !errors.Is(err, headshot.ErrNotStored) {
+			log.Printf("referral proof render: headshot for user %d: %v", ownerID, err)
+		}
+		return nil
+	}
+	return photo
 }
 
 // referralProofKey is the S3 key of a member's proof CV for a company. One offer per
