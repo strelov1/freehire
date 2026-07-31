@@ -59,7 +59,7 @@
         <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
         <p class="mt-3 text-center font-medium">No tailored CVs yet</p>
         <p class="mt-1 text-center text-sm text-muted-foreground">
-          A tailored CV starts from a vacancy’s fit analysis. Here’s how:
+          A tailored CV starts from a vacancy’s match analysis. Here’s how:
         </p>
         <ol class="mx-auto mt-5 flex max-w-sm flex-col gap-3 text-left text-sm">
           <li class="flex items-start gap-3">
@@ -68,7 +68,7 @@
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">2</span>
-            <span>Run the fit check — press <strong class="font-medium text-foreground">Analyze match</strong> on the job page.</span>
+            <span>Press <strong class="font-medium text-foreground">Analyze match</strong> on the job page.</span>
           </li>
           <li class="flex items-start gap-3">
             <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">3</span>
