@@ -53,7 +53,17 @@
 > own `company_slug` and `role_title`.
 
 - [x] 5b.1 Decide and record the wire shape. **Decided:** `job` becomes optional on a board row; `company_slug` and `role_title` ride at the top level, read from the application; and the row gains **an identifier of its own**. The last part is the finding — `JobBoard.svelte:54` keys every card, route and panel on `row.job.public_slug`, which a posting-less application does not have. Recorded as a requirement in `application-record`, and the proposal's "no wire-shape change" promise is corrected in place rather than quietly broken
-- [ ] 5b.2 Drive the board read from applications, left-joining the posting instead of requiring it
+- [ ] 5b.2 Drive the board read from applications, left-joining the posting instead of requiring it.
+  **Hard constraint, measured with a throwaway probe:** `sqlc.embed(jobs)` over a LEFT JOIN generates a
+  non-pointer `Job` field, and scanning a row whose posting is absent fails at runtime —
+  `can't scan into dest[0] (col: id): cannot scan NULL into *int64`. So the board query cannot keep
+  `sqlc.embed`; it must select explicit nullable posting columns, and `jobview.FromRow` needs a variant
+  that builds from them. That is the bulk of this task, and it was not visible from the query text
+- [ ] 5b.2a Source the rows from a FULL OUTER JOIN of `user_jobs` and `applications`: the board must
+  still list a saved-but-never-applied job (only `user_jobs` has it) and an application whose posting
+  is gone (only `applications` has it)
+- [ ] 5b.2b Emit one opaque row `id` the interface can key on — the posting's slug when there is one,
+  otherwise derived from the application. Fits the house style already set by the opaque-id swap
 - [ ] 5b.3 SPA renders the fallback card and keys it on the row's own id, not on `job.public_slug`; `freehire-cli` and `freehire-mcp` tolerate the absent job
 - [ ] 5b.4 Integration test: an application whose posting was pruned still appears on its owner's board
 
