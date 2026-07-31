@@ -152,11 +152,13 @@ func (q *Queries) BackfillEmployerReplyEvents(ctx context.Context, arg BackfillE
 
 const recordEmailApplicationEvent = `-- name: RecordEmailApplicationEvent :exec
 INSERT INTO application_events (
-    user_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
+    user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
 )
-SELECT em.user_id, em.job_id, j.company_slug, 'employer_reply',
+SELECT em.user_id, COALESCE(em.application_id, a.id), em.job_id, j.company_slug, 'employer_reply',
        COALESCE(em.status_signal, ''), em.received_at, $3::text, em.id
-  FROM emails em JOIN jobs j ON j.id = em.job_id
+  FROM emails em
+  JOIN jobs j ON j.id = em.job_id
+  LEFT JOIN applications a ON a.user_id = em.user_id AND a.job_id = em.job_id
  WHERE em.id      = $1
    AND em.user_id = $2
    AND em.job_id IS NOT NULL
@@ -187,6 +189,10 @@ type RecordEmailApplicationEventParams struct {
 // paths and the backfill can all call it in any order and produce one row.
 // `event_source` is derived from the message's store by the caller, keeping that
 // vocabulary in Go where a pin test guards it.
+// The application the reply belongs to is what the aggregates pair on, so it is resolved
+// here rather than left to be inferred later from a job_id that cmd/prune clears. The
+// message's own application_id wins; falling back to the posting is sound only because
+// this runs at write time, while the posting still exists.
 func (q *Queries) RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error {
 	_, err := q.db.Exec(ctx, recordEmailApplicationEvent, arg.ID, arg.UserID, arg.EventSource)
 	return err

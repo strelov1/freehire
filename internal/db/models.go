@@ -23,18 +23,32 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type Application struct {
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	CompanySlug  string             `json:"company_slug"`
+	RoleTitle    string             `json:"role_title"`
+	JobID        pgtype.Int8        `json:"job_id"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type ApplicationEvent struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	JobID       pgtype.Int8        `json:"job_id"`
-	CompanySlug string             `json:"company_slug"`
-	Kind        string             `json:"kind"`
-	Signal      string             `json:"signal"`
-	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
-	RecordedAt  pgtype.Timestamptz `json:"recorded_at"`
-	Source      string             `json:"source"`
-	SourceRef   pgtype.Int8        `json:"source_ref"`
-	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
+	ID            int64              `json:"id"`
+	UserID        int64              `json:"user_id"`
+	JobID         pgtype.Int8        `json:"job_id"`
+	CompanySlug   string             `json:"company_slug"`
+	Kind          string             `json:"kind"`
+	Signal        string             `json:"signal"`
+	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
+	RecordedAt    pgtype.Timestamptz `json:"recorded_at"`
+	Source        string             `json:"source"`
+	SourceRef     pgtype.Int8        `json:"source_ref"`
+	RetractedAt   pgtype.Timestamptz `json:"retracted_at"`
+	ApplicationID pgtype.Int8        `json:"application_id"`
 }
 
 type AssistantMessage struct {
@@ -187,6 +201,7 @@ type Email struct {
 	ClassifiedAt        pgtype.Timestamptz `json:"classified_at"`
 	ClassificationModel pgtype.Text        `json:"classification_model"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
+	ApplicationID       pgtype.Int8        `json:"application_id"`
 }
 
 type EmailClassificationOutbox struct {

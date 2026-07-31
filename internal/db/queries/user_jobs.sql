@@ -51,9 +51,25 @@ WITH prior AS (
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1
     WHERE id = $2 AND NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
+), app AS (
+    -- The application record, written by this same statement so it cannot diverge from
+    -- the apply it describes. The employer and role title are copied off the posting
+    -- here, while it is still there; that copy is what survives cmd/prune.
+    --
+    -- DO UPDATE rather than DO NOTHING, and not for the update's sake: DO NOTHING
+    -- returns no row on conflict, and this statement needs the id in both cases — a
+    -- re-apply must name the same application, never a NULL. The assignments mirror the
+    -- upsert above: the date refreshes as it always has, an advanced stage survives.
+    INSERT INTO applications (user_id, company_slug, role_title, job_id, applied_at, stage)
+    SELECT $1, j.company_slug, j.title, $2, u.applied_at, u.stage
+      FROM upsert u JOIN jobs j ON j.id = $2
+    ON CONFLICT (user_id, job_id) WHERE job_id IS NOT NULL
+    DO UPDATE SET applied_at = EXCLUDED.applied_at,
+                  stage      = COALESCE(applications.stage, EXCLUDED.stage)
+    RETURNING id
 ), event AS (
-    INSERT INTO application_events (user_id, job_id, company_slug, kind, occurred_at, source)
-    SELECT $1, $2, j.company_slug, 'applied', u.applied_at, sqlc.arg(event_source)::text
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, occurred_at, source)
+    SELECT $1, (SELECT id FROM app), $2, j.company_slug, 'applied', u.applied_at, sqlc.arg(event_source)::text
       FROM upsert u JOIN jobs j ON j.id = $2
      WHERE NOT EXISTS (SELECT 1 FROM prior WHERE prior.applied_at IS NOT NULL)
 )
@@ -130,9 +146,16 @@ WITH prior AS (
           notes = COALESCE(EXCLUDED.notes, user_jobs.notes)
     RETURNING *
 ), event AS (
-    INSERT INTO application_events (user_id, job_id, company_slug, kind, signal, occurred_at, source)
-    SELECT $1, $2, j.company_slug, 'stage_set', u.stage, now(), sqlc.arg(event_source)::text
-      FROM upsert u JOIN jobs j ON j.id = $2
+    -- The event names the application, like every other kind does. Resolved through the
+    -- posting because that is the link the caller has, and soundly so: this runs at write
+    -- time, while the posting is still there. A stage set on a job never applied to has
+    -- no application to name and leaves the column NULL — there is nothing to correlate
+    -- yet, and inventing a record would assert an application that was never made.
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT $1, a.id, $2, j.company_slug, 'stage_set', u.stage, now(), sqlc.arg(event_source)::text
+      FROM upsert u
+      JOIN jobs j ON j.id = $2
+      LEFT JOIN applications a ON a.user_id = $1 AND a.job_id = $2
      WHERE u.stage IS NOT NULL
        AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
 )

@@ -487,11 +487,12 @@ func (q *Queries) RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtyp
 
 const rebuildInsightsCompanyResponse = `-- name: RebuildInsightsCompanyResponse :execrows
 WITH observable AS (
-    SELECT ae.user_id, ae.job_id, ae.company_slug, ae.occurred_at AS applied_at
+    SELECT ae.application_id, ae.company_slug, ae.occurred_at AS applied_at
       FROM application_events ae
      WHERE ae.kind = 'applied'
        AND ae.retracted_at IS NULL
        AND ae.company_slug <> ''
+       AND ae.application_id IS NOT NULL
        AND (EXISTS (SELECT 1 FROM gmail_connections gc
                      WHERE gc.user_id = ae.user_id AND gc.status = 'connected')
          OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
@@ -499,9 +500,8 @@ WITH observable AS (
     SELECT o.company_slug, o.applied_at,
            (SELECT min(r.occurred_at)
               FROM application_events r
-             WHERE r.user_id      = o.user_id
-               AND r.job_id       = o.job_id
-               AND r.kind         = 'employer_reply'
+             WHERE r.application_id = o.application_id
+               AND r.kind          = 'employer_reply'
                AND r.retracted_at IS NULL) AS replied_at
       FROM observable o
 )
@@ -531,6 +531,18 @@ SELECT company_slug,
 // "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
 // candidate recorded, and a company that replied to somebody who never updated their
 // board still replied. A retracted event does not count — it belongs to another employer.
+//
+// The reply is paired to its application through application_id, never through job_id.
+// job_id is ON DELETE SET NULL, so after cmd/prune both sides read NULL, the pair reduces
+// to NULL = NULL — never true — and an employer that answered is served as silent: the
+// distortion this rollup was moved onto the ledger to remove, arriving by a different
+// route. Pairing on (user_id, company_slug) instead would survive the deletion by
+// crediting one reply to every application that user made to that employer, which is
+// worse than losing it.
+//
+// An event with no application_id is left out of BOTH sides rather than counted and never
+// answerable. Only rows written before the carry-over can be in that state, and
+// cmd/backfill-applications is what empties it.
 //
 // The median covers answered applications only and is therefore right-censored; the
 // serving layer reports the unanswered count beside it so the number is never read as

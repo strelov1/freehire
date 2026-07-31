@@ -51,6 +51,31 @@ type Querier interface {
 	// means the key is unknown, revoked, or expired; the caller treats pgx.ErrNoRows as 401
 	// and an insufficient scope as 403.
 	AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error)
+	// Point one batch of pre-existing ledger events at the application they belong to.
+	// Every event recorded before this change names a posting and no application, and left
+	// that way it stays correlated through job_id — the reference cmd/prune clears.
+	//
+	// Matched on (user_id, job_id) because that is the only identity those rows have. It is
+	// exactly the correlation being retired, and it is sound here and nowhere else: this pass
+	// runs before any posting has been cleared out from under the events it is repairing, and
+	// a row whose job_id is already NULL is skipped rather than guessed at.
+	BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error)
+	// Queries over the application record — the durable half of what used to live in
+	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
+	// Carry one keyset batch of existing tracked applications into records of their own.
+	// Walks (user_id, job_id), which is user_jobs' primary key and therefore its only stable
+	// order.
+	//
+	// Only interactions that were actually applied to are carried. A row that was viewed or
+	// saved has no application in it, and manufacturing one would put a date on something
+	// that never happened.
+	//
+	// The employer and role title are read from the posting HERE, at carry-over, and then
+	// belong to the record. That is the whole point: the posting is what disappears.
+	// The cursor is the LAST ROW of the batch's own order, never max() of each column
+	// independently: the greatest user_id and the greatest job_id can belong to different
+	// rows, and a cursor assembled from both jumps past rows that were never scanned.
+	BackfillApplications(ctx context.Context, arg BackfillApplicationsParams) (BackfillApplicationsRow, error)
 	// Replay one keyset batch of recorded applications. Keyed by job_id because user_jobs has
 	// no surrogate key; the pass walks (user_id, job_id) pairs in job order per user.
 	//
@@ -60,6 +85,9 @@ type Querier interface {
 	// independently: the greatest user_id and the greatest job_id can belong to different
 	// rows, and a cursor assembled from both would jump past rows that were never scanned.
 	BackfillAppliedEvents(ctx context.Context, arg BackfillAppliedEventsParams) (BackfillAppliedEventsRow, error)
+	// The same for mail. A thread linked to a posting must end up linked to the application,
+	// or the first deletion detaches it from a record that is still standing.
+	BackfillEmailApplicationLinks(ctx context.Context, batchSize int32) (int64, error)
 	// Replay one keyset batch of already-linked mail into the ledger.
 	//
 	// Deleted mail is included deliberately. Deletion hides content; it does not un-happen the
@@ -1610,6 +1638,18 @@ type Querier interface {
 	// candidate recorded, and a company that replied to somebody who never updated their
 	// board still replied. A retracted event does not count — it belongs to another employer.
 	//
+	// The reply is paired to its application through application_id, never through job_id.
+	// job_id is ON DELETE SET NULL, so after cmd/prune both sides read NULL, the pair reduces
+	// to NULL = NULL — never true — and an employer that answered is served as silent: the
+	// distortion this rollup was moved onto the ledger to remove, arriving by a different
+	// route. Pairing on (user_id, company_slug) instead would survive the deletion by
+	// crediting one reply to every application that user made to that employer, which is
+	// worse than losing it.
+	//
+	// An event with no application_id is left out of BOTH sides rather than counted and never
+	// answerable. Only rows written before the carry-over can be in that state, and
+	// cmd/backfill-applications is what empties it.
+	//
 	// The median covers answered applications only and is therefore right-censored; the
 	// serving layer reports the unanswered count beside it so the number is never read as
 	// "employers reply in six days" when most of the sample was never replied to. Replies
@@ -1708,6 +1748,10 @@ type Querier interface {
 	// paths and the backfill can all call it in any order and produce one row.
 	// `event_source` is derived from the message's store by the caller, keeping that
 	// vocabulary in Go where a pin test guards it.
+	// The application the reply belongs to is what the aggregates pair on, so it is resolved
+	// here rather than left to be inferred later from a job_id that cmd/prune clears. The
+	// message's own application_id wins; falling back to the posting is sound only because
+	// this runs at write time, while the posting still exists.
 	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
