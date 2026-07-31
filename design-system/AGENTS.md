@@ -3,6 +3,10 @@
 `freehire-design-system` — tokens and Svelte primitives, a **pnpm** package sibling to
 `web/`, linked in as `file:../design-system`. `web/src/lib/ui/index.ts` is a thin re-export
 surface, so app code imports from `$lib/ui` and never reaches into the package directly.
+It re-exports with `export *`, not a list: an enumerated list is a second copy of `src/index.ts`
+that nothing reconciles, and it drifted once already — eleven of the fifteen primitives were
+built, tested, storybooked and documented while being unreachable from the app, with every
+check green. `cn` comes from here too; `$lib/utils` no longer carries a copy.
 
 Being extracted from `web/` in phases by an external contributor; the phase inventory lives
 in `design-system/docs/`. A script that still `echo`s a placeholder is an unfinished phase,
@@ -45,6 +49,12 @@ not breakage.
 - Tokens are authored as `tokens/*.tokens.json` and compiled by Style Dictionary
   (`scripts/build-tokens.mjs`) into `dist/`. Edit the JSON, run `pnpm build` — never hand-edit
   `dist/`.
+- **A primitive may not style itself outside the token scale.** `pnpm check:tokens` (in CI)
+  fails on a colour literal or a Tailwind arbitrary value in `src/*.svelte` — both are a value
+  the theme cannot move and `.dark` cannot override, and both compile fine, so nothing else
+  would catch one. Arbitrary *variants* pass: `[&_tr]:border-b` is a selector, not a value.
+  `avatar.svelte`'s per-name `hsl()` pair is the one allowed exception, and the script fails
+  if that exception ever stops applying. See `docs/verification.md`.
 - `svelte` and `tailwindcss` are **peer** dependencies; the package must not bundle its own
   copy. Both are also devDependencies, because Storybook and the tests build against them
   here.

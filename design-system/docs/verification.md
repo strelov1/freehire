@@ -1,46 +1,47 @@
-# Phase 7 — Verify
+# Verification
 
-Clean-checkout verification pass. All checks run from the phase 6 branch state (which includes all phases 1-6).
+What the package guarantees about itself, and the check that holds each guarantee up.
 
-## design-system
+The phase 7 pass that opened this file recorded its results as prose — a table of
+warning counts and a claim of zero hardcoded colours. Eight days later the counts
+were wrong in both directions and the colour claim was false, with nothing red to
+say so. A guarantee written down is a guarantee that rots, so each one below names
+the command that enforces it. All of them run in CI on every PR.
 
-| check | result |
+| Guarantee | Enforced by |
 |---|---|
-| `pnpm install --frozen-lockfile` | ✓ |
-| `pnpm tokens:build` | ✓ (2 CSS files generated) |
-| `pnpm validate:docs` | ✓ (23 entities across 3 JSON files) |
-| `pnpm build-storybook` | ✓ (138 modules, 1.97s) |
-
-## web
-
-| check | result |
-|---|---|
-| `pnpm install --frozen-lockfile` | ✓ |
-| `pnpm run check` | ✓ (0 errors, 11 pre-existing warnings) |
-| `pnpm run lint` | ✓ (0 errors, 3 pre-existing warnings) |
-| `pnpm run build` | ✓ (adapter-node build green) |
+| The tokens compile to a light and a dark stylesheet | `pnpm build` |
+| Every primitive type-checks | `pnpm check` |
+| The primitives behave (`src/*.test.ts`) | `pnpm test` |
+| The DSDS entities still describe the package they document | `pnpm validate:docs` |
+| No primitive styles itself outside the token scale | `pnpm check:tokens` |
+| Every story builds | `pnpm build-storybook` |
+| The built Storybook actually carries the primitives' utilities | CI, `grep .animate-pulse storybook-static` |
 
 ## Token coverage
 
-- **design-system/src/*.svelte:** 0 hardcoded colors, 0 Tailwind arbitrary values.
-- **web/src/lib/ui/:** 0 hardcoded colors, 0 Tailwind arbitrary values.
+`scripts/check-token-coverage.mjs` fails on a colour literal (`#fff`, `rgb()`,
+`oklch()`) or a Tailwind arbitrary value (`p-[7px]`, `bg-[#fff]`) in
+`src/*.svelte`. Both are the same defect: a value the theme cannot move and the
+`.dark` selector cannot override. Neither compiler objects to one, so without this
+the build stays green and the primitive silently stops following the theme.
 
-All primitives use CSS custom properties generated from the DTCG token build. No hex/rgb/oklch literals, no `bg-[#...]` or `p-[7px]` patterns.
+Arbitrary *variants* pass — `[&_tr]:border-b` in `table.svelte` is a selector, and
+no token could stand in for it.
 
-## CI (GitHub Actions)
+One deliberate exception, listed in the script and failing if it ever stops
+applying: `avatar.svelte` derives a per-name hue as an inline `hsl()` pair. A token
+per hue would be 360 tokens, and the two lightnesses are fixed so the pair carries
+its own contrast in either theme without an override.
 
-All CI checks pass on every phase PR:
-- `design-system` job: install + build + test + validate:docs + build-storybook
-- `web` job: install + lint + check + build (depends on `design-system`)
-- `backend` job: go build + vet + gofmt + unit + integration tests
-- `pr-smoke` job: Docker build + compose up + health check
+## Reachability
 
-## Inventory + DSDS docs
+Every check above establishes that the package is correct, not that the app can
+reach it. That gap was real: `web/src/lib/ui/index.ts` enumerated four primitives
+out of fifteen, and the other eleven were built, tested, storybooked and documented
+while no app code could import them — with all of the above green.
 
-- `docs/component-inventory.md`: 99 components classified (29 components, 35 views, 10 layouts, 20 patterns)
-- `docs/icon-inventory.md`: 172 library usages + 13 bespoke SVGs
-- `docs/dsds/foundation.json`: 7 foundation entities
-- `docs/dsds/theme.json`: 1 dark theme entity
-- `docs/dsds/components.json`: 15 component entities
-
-All docs checked in and validated by `pnpm validate:docs`.
+It is now `export * from 'freehire-design-system'`, so the seam cannot drift again.
+That is a structural guarantee rather than a check, which is why it has no row in
+the table. What still isn't measured is *use* — a primitive can be reachable and
+have no call site, and no build will say so.
