@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -18,16 +20,64 @@ import (
 // empty) and records every UpdateJobDerived call. UpdateJobDerived is guarded so the
 // concurrent worker pool can call it in parallel without a data race.
 type fakeStore struct {
-	jobs    []db.Job
+	jobs []db.Job
+	// corrupt marks ids whose row cannot be read: the wide batch over any window
+	// containing one fails with XX001, and so does fetching it singly.
+	corrupt map[int64]bool
 	mu      sync.Mutex
 	updates []db.UpdateJobDerivedParams
 }
 
-func (f *fakeStore) ListJobsByIDAfter(_ context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error) {
-	if arg.AfterID != 0 {
-		return nil, nil
+// page is the keyset window the three read methods share, so the degrade path sees
+// exactly the rows the wide batch would have returned.
+func (f *fakeStore) page(afterID int64, batchSize int32) []db.Job {
+	var out []db.Job
+	for _, j := range f.jobs {
+		if j.ID <= afterID {
+			continue
+		}
+		out = append(out, j)
+		if len(out) == int(batchSize) {
+			break
+		}
 	}
-	return f.jobs, nil
+	return out
+}
+
+// corruptedRow is the SQLSTATE a damaged TOAST pointer raises. A wide SELECT over a
+// window containing one such row fails entirely; the id-only projection does not
+// detoast, so it still answers.
+func corruptedRow() error { return &pgconn.PgError{Code: "XX001", Message: "missing chunk number 0"} }
+
+func (f *fakeStore) ListJobsByIDAfter(_ context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error) {
+	rows := f.page(arg.AfterID, arg.BatchSize)
+	for _, j := range rows {
+		if f.corrupt[j.ID] {
+			return nil, corruptedRow()
+		}
+	}
+	return rows, nil
+}
+
+func (f *fakeStore) ListJobIDsAfter(_ context.Context, arg db.ListJobIDsAfterParams) ([]int64, error) {
+	rows := f.page(arg.AfterID, arg.BatchSize)
+	ids := make([]int64, len(rows))
+	for i, j := range rows {
+		ids[i] = j.ID
+	}
+	return ids, nil
+}
+
+func (f *fakeStore) GetJob(_ context.Context, id int64) (db.Job, error) {
+	if f.corrupt[id] {
+		return db.Job{}, corruptedRow()
+	}
+	for _, j := range f.jobs {
+		if j.ID == id {
+			return j, nil
+		}
+	}
+	return db.Job{}, pgx.ErrNoRows
 }
 
 func (f *fakeStore) UpdateJobDerived(_ context.Context, arg db.UpdateJobDerivedParams) error {
@@ -270,5 +320,79 @@ func TestBackfill_ProgressDoesNotChangeTheResult(t *testing.T) {
 	}
 	if scanned != 1 || updated != 1 || slugsMoved != 1 {
 		t.Errorf("scanned=%d updated=%d slugsMoved=%d, want 1/1/1", scanned, updated, slugsMoved)
+	}
+}
+
+// The backfill records no resume point, so an aborting scan is not one failed run: every
+// later run restarts at id 0 and dies at the same row, leaving every deterministic column
+// past it stale forever. Skipping the unreadable row is what makes the pass finishable.
+func TestBackfill_SkipsACorruptedRowAndFinishesTheScan(t *testing.T) {
+	jobs := make([]db.Job, 0, 3)
+	for i := 1; i <= 3; i++ {
+		jobs = append(jobs, db.Job{
+			ID: int64(i), Title: "Senior Go Developer", Company: "Acme",
+			Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+			Description: backfillJobDescription,
+		})
+	}
+	store := &fakeStore{jobs: jobs, corrupt: map[int64]bool{2: true}}
+
+	scanned, updated, _, err := backfillAll(context.Background(), store, 1)
+	if err != nil {
+		t.Fatalf("backfillAll: %v — a corrupted row must not end the run", err)
+	}
+	if scanned != 2 || updated != 2 {
+		t.Errorf("scanned=%d updated=%d, want 2/2 (the readable rows either side of the damaged one)", scanned, updated)
+	}
+	for _, u := range store.updates {
+		if u.ID == 2 {
+			t.Error("the corrupted row was written")
+		}
+	}
+	// The row AFTER the damaged one is the point: an abort would have left it stale.
+	var sawThird bool
+	for _, u := range store.updates {
+		if u.ID == 3 {
+			sawThird = true
+		}
+	}
+	if !sawThird {
+		t.Error("the scan stopped at the corrupted row instead of continuing past it")
+	}
+}
+
+// The exhaustion signal is the keyset cursor, not the page size. A page that skipped a
+// corrupted row is legitimately SHORT, so a "fewer rows than the batch → end of table"
+// test would stop here and report a complete pass — silently leaving every row after the
+// first damaged one stale. That is worse than the abort this change replaces, because
+// nothing in the run says so.
+func TestBackfill_ShortDegradedPageDoesNotEndTheScan(t *testing.T) {
+	const n = backfillBatchSize + 1
+	jobs := make([]db.Job, 0, n)
+	for i := 1; i <= n; i++ {
+		jobs = append(jobs, db.Job{
+			ID: int64(i), Title: "Go Developer", Company: "Acme",
+			Source: "manual", ExternalID: "x", Location: "Berlin, Germany",
+		})
+	}
+	// Inside the FIRST page, so that page comes back one row short of the batch size.
+	store := &fakeStore{jobs: jobs, corrupt: map[int64]bool{250: true}}
+
+	scanned, _, _, err := backfillAll(context.Background(), store, 4)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != n-1 {
+		t.Fatalf("scanned=%d, want %d — the scan ended at the short page instead of following the cursor", scanned, n-1)
+	}
+	// The row past the first page is the proof: it is only reachable on a second page.
+	var sawLast bool
+	for _, u := range store.updates {
+		if u.ID == int64(n) {
+			sawLast = true
+		}
+	}
+	if !sawLast {
+		t.Errorf("row %d (page 2) was never scanned", n)
 	}
 }

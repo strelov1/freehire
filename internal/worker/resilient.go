@@ -37,21 +37,28 @@ type PageReader interface {
 	Row(ctx context.Context, id int64) (db.Job, error)
 }
 
-// jobQueries is the subset of *db.Queries the readers call — narrowed to keep the
-// readers testable and their dependency explicit.
-type jobQueries interface {
+// FullScanQueries is the subset of *db.Queries a whole-table reader calls. It is
+// declared separately from PostedSinceQueries so each constructor asks for exactly what
+// it uses: a worker with its own narrow store (cmd/backfill-derive) can satisfy one
+// without declaring methods the reader would never invoke.
+type FullScanQueries interface {
 	ListJobsByIDAfter(context.Context, db.ListJobsByIDAfterParams) ([]db.Job, error)
 	ListJobIDsAfter(context.Context, db.ListJobIDsAfterParams) ([]int64, error)
+	GetJob(context.Context, int64) (db.Job, error)
+}
+
+// PostedSinceQueries is the same for the freshness-windowed reader.
+type PostedSinceQueries interface {
 	ListOpenJobsPostedAfter(context.Context, db.ListOpenJobsPostedAfterParams) ([]db.Job, error)
 	ListOpenJobIDsPostedAfter(context.Context, db.ListOpenJobIDsPostedAfterParams) ([]int64, error)
 	GetJob(context.Context, int64) (db.Job, error)
 }
 
-type fullScanReader struct{ q jobQueries }
+type fullScanReader struct{ q FullScanQueries }
 
-// NewFullScanReader adapts *db.Queries to a PageReader over the whole jobs table
+// NewFullScanReader adapts a job store to a PageReader over the whole jobs table
 // (keyset by id).
-func NewFullScanReader(q jobQueries) PageReader { return fullScanReader{q} }
+func NewFullScanReader(q FullScanQueries) PageReader { return fullScanReader{q} }
 
 func (r fullScanReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
 	return r.q.ListJobsByIDAfter(ctx, db.ListJobsByIDAfterParams{AfterID: afterID, BatchSize: bs})
@@ -64,16 +71,16 @@ func (r fullScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
 }
 
 type postedSinceReader struct {
-	q     jobQueries
+	q     PostedSinceQueries
 	since pgtype.Timestamptz
 }
 
-// NewPostedSinceReader adapts *db.Queries to a PageReader over OPEN jobs whose
+// NewPostedSinceReader adapts a job store to a PageReader over OPEN jobs whose
 // effective posting date (COALESCE(posted_at, created_at)) is at or after since —
 // the freshness window `reindex --semantic --posted-within` embeds. Keyset by id.
 // Unlike the incremental reader it returns open jobs only, since the semantic swap
 // rebuild it feeds never holds closed jobs (nothing to delete).
-func NewPostedSinceReader(q jobQueries, since time.Time) PageReader {
+func NewPostedSinceReader(q PostedSinceQueries, since time.Time) PageReader {
 	return postedSinceReader{q: q, since: pgtype.Timestamptz{Time: since, Valid: true}}
 }
 

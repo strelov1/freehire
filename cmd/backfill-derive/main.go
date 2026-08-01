@@ -81,7 +81,10 @@ const progressEvery = 100_000
 // DeleteOrphanCompanies) is deliberately not here — it runs once, single-threaded,
 // after the pass.
 type deriveStore interface {
-	ListJobsByIDAfter(ctx context.Context, arg db.ListJobsByIDAfterParams) ([]db.Job, error)
+	// The three reads worker.NewFullScanReader needs: the wide keyset batch, the id-only
+	// projection it falls back to, and the single-row fetch that isolates a damaged row
+	// from its readable neighbours.
+	worker.FullScanQueries
 	UpdateJobDerived(ctx context.Context, arg db.UpdateJobDerivedParams) error
 }
 
@@ -235,25 +238,35 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency int, e
 	jobsCh := make(chan db.Job, backfillBatchSize)
 
 	// Reader (producer): pages the table by keyset and feeds the channel.
+	//
+	// It reads through worker.ResilientPage because this pass has no resume point: a row
+	// whose TOAST is damaged fails the whole wide SELECT, and an aborting scan would
+	// re-fail at the same id on every later run, leaving every derived column past it
+	// stale for good. The helper degrades to reading the faulting window row by row and
+	// skips only what is genuinely unreadable.
+	reader := worker.NewFullScanReader(store)
 	var readerWG sync.WaitGroup
 	readerWG.Add(1)
 	go func() {
 		defer readerWG.Done()
 		defer close(jobsCh)
+		// Owned by this goroutine alone, so a plain counter is enough. Reported once at
+		// the end rather than per page: an operator needs the total, and each skipped id
+		// is already logged where it was met.
+		var skipped int
+		defer func() {
+			if skipped > 0 {
+				log.Printf("backfill-derive: skipped %d corrupted row(s); their derived columns are unchanged", skipped)
+			}
+		}()
 		var afterID int64
 		for {
-			jobs, e := store.ListJobsByIDAfter(ctx, db.ListJobsByIDAfterParams{
-				AfterID:   afterID,
-				BatchSize: backfillBatchSize,
-			})
+			jobs, lastID, corrupted, e := worker.ResilientPage(ctx, reader, afterID, backfillBatchSize)
 			if e != nil {
 				fail(e)
 				return
 			}
-			if len(jobs) == 0 {
-				return
-			}
-			afterID = jobs[len(jobs)-1].ID
+			skipped += len(corrupted)
 			for i := range jobs {
 				select {
 				case jobsCh <- jobs[i]:
@@ -261,9 +274,13 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency int, e
 					return
 				}
 			}
-			if len(jobs) < backfillBatchSize {
+			// Keyset progress is the exhaustion signal. A "< batchSize" test would end
+			// the scan at the first corrupted row, because the degrade path returns a
+			// legitimately short page whenever it skips one.
+			if lastID == afterID {
 				return
 			}
+			afterID = lastID
 		}
 	}()
 
