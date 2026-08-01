@@ -408,14 +408,21 @@ export const CURRENCY_OPTIONS: FacetOption[] = CURRENCY;
 
 // The company-tag registry as pill options, from the generated registry the
 // /collections hub also renders, so the label/slug pairs cannot drift.
-// Editorial collections first, then credentials, each under its own sub-heading.
-// A credential is a verifiable licence drawn from a public register, not one of our
-// curated picks, and running them together would read as though we vouched for both
-// the same way. They stay on one `collections` param regardless: facet state and URL
-// serialization are keyed by param, so a second facet entry sharing it would append
-// every value twice.
+// Credentials last, under their own sub-heading: a credential is a verifiable
+// licence drawn from a public register, not one of our curated picks, and running
+// them together would read as though we vouched for both the same way. They stay on
+// one `collections` param regardless: facet state and URL serialization are keyed by
+// param, so a second facet entry sharing it would append every value twice.
+//
+// Everything that is not a credential is offered ungrouped, rather than listing the
+// kinds that qualify. Naming them was how `yc` and `techstars` fell out of the
+// filters entirely the day they became backers — filterable through the API,
+// unreachable in the UI, and silent about it.
 const COLLECTION: FacetOption[] = [
-  ...COLLECTIONS.filter((c) => c.kind === 'editorial').map((c) => ({ value: c.slug, label: c.title })),
+  ...COLLECTIONS.filter((c) => c.kind !== 'credential').map((c) => ({
+    value: c.slug,
+    label: c.title,
+  })),
   ...COLLECTIONS.filter((c) => c.kind === 'credential').map((c) => ({
     value: c.slug,
     label: c.title,

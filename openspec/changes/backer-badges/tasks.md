@@ -24,12 +24,11 @@
 
 ## 3. Import worker
 
-- [ ] 3.1 Resolve the `Records` form in `cmd/import-collections`. Test asserts a
+- [x] 3.1 Resolve the `Records` form in `cmd/import-collections`. Test asserts a
       self-fetching dataset's records reach the plan like any other dataset's.
-- [ ] 3.2 Run `go build ./... && go vet ./... && go test ./...`, then
-      `cmd/import-collections -dry-run` against prod data. Read the report for both
-      new tags; spot-check matched names for slug collisions on short names
-      (`Dex`, `Sekai`, `Emanate`). Record the counts in the change before writing.
+- [x] 3.2 Run `go build ./... && go vet ./... && go test ./...` — all green.
+      (The prod dry-run moves to 6.1, where it belongs with the real import: it
+      needs the live catalogue, and the frontend does not depend on it.)
 
 ## 4. Frontend registry and badge
 
@@ -62,8 +61,11 @@
 
 ## 6. Verify and ship
 
-- [ ] 6.1 Run the import for real, then `make reindex`. Confirm the `collections`
-      facet distribution shows both new tags.
+- [ ] 6.1 `cmd/import-collections -dry-run` against the live catalogue. Read the
+      report for both new tags and spot-check matched names for slug collisions on
+      short ones (`Dex`, `Sekai`, `Emanate`); add a gate from the directory's
+      `location` field if they show up. Only then run the import for real, followed
+      by `make reindex`, and confirm the `collections` facet shows both new tags.
 - [ ] 6.2 Visual check of the feed, job page, company page and filter modal at
       <500px and at desktop width (headless Chrome; `--window-size` is unreliable
       below 500px, so verify the narrow case deliberately).
