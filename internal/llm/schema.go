@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/tmc/langchaingo/httputil"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 
@@ -65,8 +64,16 @@ func (cfg genConfig) validate() error {
 }
 
 // modelCache holds the per-schema models behind a pointer, so Client stays copyable —
-// WithTimeout clones it, and a mutex embedded by value would be copied with it. A
-// clone shares the cache, which is right: it addresses the same endpoint.
+// WithTimeout clones it, and a mutex embedded by value would be copied with it. That
+// clone shares the cache, which is right: it addresses the same endpoint with the same
+// credential and the same headers.
+//
+// **As does NOT share it, and must not.** The key below is the schema's name and its
+// rendered shape — not the credential, and not the tags. A clone that changed either
+// while sharing this cache would be served the model the FIRST caller built: one user's
+// call going out on another user's key, or a tagged call going out untagged. Both
+// succeed, both decode, and neither is visible in anything but the spend report.
+// TestAsDoesNotShareSchemaBoundModelsAcrossCredentials is the guard.
 type modelCache struct {
 	mu     sync.Mutex
 	models map[string]llms.Model
@@ -123,8 +130,10 @@ func (c *Client) modelFor(cfg genConfig) (llms.Model, error) {
 			openai.WithBaseURL(c.baseURL),
 			openai.WithToken(c.apiKey),
 			openai.WithModel(c.modelID),
+			// The schema rewrite sits on top of whatever this client already travels
+			// on, so a tagged client's schema-bound calls carry their tags too.
 			openai.WithHTTPClient(&http.Client{
-				Transport: &schemaInjector{format: format, next: httputil.DefaultTransport},
+				Transport: &schemaInjector{format: format, next: c.transport()},
 			}),
 		)
 		if err != nil {

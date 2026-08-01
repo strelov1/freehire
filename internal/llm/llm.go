@@ -48,8 +48,20 @@ type Client struct {
 	baseURL string
 	apiKey  string
 
+	// tags label each call for the gateway's per-feature spend rollup. Set by As and
+	// empty otherwise, so a client nobody re-credentialed sends exactly what it always
+	// did.
+	tags []string
+
+	// fallbackKey and onRefused belong to a client bound to a per-user credential: the
+	// credential to retry on when the gateway no longer knows that user's, and how to
+	// report that it should be replaced. Both empty on every other client.
+	fallbackKey string
+	onRefused   func()
+
 	// schemaModels is held by pointer so WithTimeout can keep cloning the Client: a
-	// mutex embedded by value would be copied along with it.
+	// mutex embedded by value would be copied along with it. As is the one clone that
+	// must NOT share it — see the comment there.
 	schemaModels *modelCache
 }
 
