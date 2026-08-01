@@ -1,50 +1,50 @@
 ## 1. The ledger read
 
-- [ ] 1.1 Add `ListApplicationEventsInRange` to `internal/db/queries/application_events.sql`:
+- [x] 1.1 Add `ListApplicationEventsInRange` to `internal/db/queries/application_events.sql`:
       the caller's events between two timestamps, `retracted_at IS NULL`, ordered by
       `occurred_at`. `LEFT JOIN applications` for `role_title` and `LEFT JOIN emails ON
       ae.source_ref = e.id` for `subject` and `id`, with both email columns NULL when
       `e.deleted_at IS NOT NULL`. Select `kind`, `signal`, `source`, `occurred_at`,
       `company_slug`, `application_id`, `job_id`. Run `make sqlc`.
-- [ ] 1.2 Add `internal/apptimeline` with a package doc stating what it is (the ledger's first
+- [x] 1.2 Add `internal/apptimeline` with a package doc stating what it is (the ledger's first
       dated reader) and why it is not in `jobtracking` (that package is per-`(user, job)`
       mutations; this is a range read, and the in-app assistant will call it without HTTP).
       Define the `Event` type and a `Range(ctx, userID, from, to)` method over a narrow
       `Queries` interface, following the shape `internal/inbox` uses.
-- [ ] 1.3 Set `Observed` on each event from `appevent.TrustedForDayMath(source)` inside
+- [x] 1.3 Set `Observed` on each event from `appevent.TrustedForDayMath(source)` inside
       `apptimeline`, never at the handler or in the SPA. Comment says why: the source
       vocabulary has grown before, and a second copy of the rule would call a newly added
       source observed after the first had refused it.
-- [ ] 1.4 Validate the range in the service: `from` and `to` required, `from <= to`, span
+- [x] 1.4 Validate the range in the service: `from` and `to` required, `from <= to`, span
       capped at 366 days, returning `apptimeline`'s invalid-input error so both the handler
       and a future in-process caller meet the same rule.
 
 ## 2. Tests for the read
 
-- [ ] 2.1 Integration test (build tag `integration`, `internal/db`): an event whose email was
+- [x] 2.1 Integration test (build tag `integration`, `internal/db`): an event whose email was
       deleted comes back with its date, employer and signal, and with neither subject nor
       email id.
-- [ ] 2.2 Integration test: a retracted event is absent and its replacement is present at the
+- [x] 2.2 Integration test: a retracted event is absent and its replacement is present at the
       same `occurred_at`; and a second user's events on the same day are not returned.
-- [ ] 2.3 Unit test in `apptimeline`: `Observed` equals `appevent.TrustedForDayMath` for every
+- [x] 2.3 Unit test in `apptimeline`: `Observed` equals `appevent.TrustedForDayMath` for every
       entry in `appevent.Sources`, asserting the collection length first so a source added
       without a verdict fails the test rather than being skipped — the device
       `TestOnlyMailSourcesAreTrustedForDayMath` uses.
-- [ ] 2.4 Unit test in `apptimeline`: the range validation — missing bounds, inverted bounds
+- [x] 2.4 Unit test in `apptimeline`: the range validation — missing bounds, inverted bounds
       and an over-long span are refused; a single-day range is accepted.
 
 ## 3. The endpoint
 
-- [ ] 3.1 Add `GET /me/timeline` under `mw.key` in `internal/handler`, parsing `from`/`to` as
+- [x] 3.1 Add `GET /me/timeline` under `mw.key` in `internal/handler`, parsing `from`/`to` as
       RFC3339 and rendering `{"data": [...], "meta": {"from", "to", "count"}}`. Comment the
       path choice: not `/me/tracking/calendar`, because `GET /me/tracking/:slug` is registered
       in `gmail.go` and its static siblings resolve only on `Register*` call order — the same
       reasoning already recorded above `/me/applications/:id` in `user_jobs.go`.
-- [ ] 3.2 Serve `kind` and `signal` as plain strings from their vocabularies; do not enumerate
+- [x] 3.2 Serve `kind` and `signal` as plain strings from their vocabularies; do not enumerate
       today's four kinds in the response type or in any switch that would fail on a fifth.
-- [ ] 3.3 Handler tests: unauthenticated is 401, a bad or inverted range is 400 before any DB
+- [x] 3.3 Handler tests: unauthenticated is 401, a bad or inverted range is 400 before any DB
       touch, and a valid range renders the documented envelope.
-- [ ] 3.4 Add the route to the API documentation surface alongside the other `/me` reads.
+- [x] 3.4 Add the route to the API documentation surface alongside the other `/me` reads.
 
 ## 4. The month model
 
