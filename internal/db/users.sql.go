@@ -45,13 +45,17 @@ UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
     resume_embedding = NULL, resume_embedding_model = NULL,
     resume_structured = NULL, resume_structured_model = NULL,
-    resume_structured_uploaded_at = NULL
+    resume_structured_uploaded_at = NULL,
+    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL
 WHERE id = $1
 `
 
 // Clear the user's résumé pointer (after deleting the object from storage), any
-// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
-// derived structured résumé (the structure must not outlive the CV it describes).
+// cached ATS review, the derived CV embedding (no CV → no recommendations), the
+// derived structured résumé (the structure must not outlive the CV it describes), and
+// the geography derived from that structure (which must not outlive it either — a
+// country left behind here would keep answering "where is this candidate" from a CV
+// that no longer exists).
 func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearUserResume, id)
 	return err
@@ -276,6 +280,40 @@ func (q *Queries) GetUserResumeEmbedding(ctx context.Context, id int64) (GetUser
 	return i, err
 }
 
+const getUserResumeGeography = `-- name: GetUserResumeGeography :one
+SELECT resume_countries, resume_regions, resume_cities,
+       resume_structured_uploaded_at, resume_uploaded_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserResumeGeographyRow struct {
+	ResumeCountries            []string           `json:"resume_countries"`
+	ResumeRegions              []string           `json:"resume_regions"`
+	ResumeCities               []string           `json:"resume_cities"`
+	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
+}
+
+// The geography derived from the user's structured résumé, alongside the two stamps the
+// caller needs to judge freshness (the derivation's own stamp and the current résumé
+// upload time) — the same stamp-and-compare the structure read uses, so a geography
+// derived from a superseded CV reads as absent rather than being served.
+// NULL arrays mean "not known"; an empty array means the CV named a place the dictionary
+// could not resolve. The two are deliberately different answers.
+func (q *Queries) GetUserResumeGeography(ctx context.Context, id int64) (GetUserResumeGeographyRow, error) {
+	row := q.db.QueryRow(ctx, getUserResumeGeography, id)
+	var i GetUserResumeGeographyRow
+	err := row.Scan(
+		&i.ResumeCountries,
+		&i.ResumeRegions,
+		&i.ResumeCities,
+		&i.ResumeStructuredUploadedAt,
+		&i.ResumeUploadedAt,
+	)
+	return i, err
+}
+
 const getUserResumeStructured = `-- name: GetUserResumeStructured :one
 SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at
 FROM users
@@ -370,6 +408,50 @@ func (q *Queries) ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text
 			return nil, err
 		}
 		items = append(items, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersForResumeGeoBackfill = `-- name: ListUsersForResumeGeoBackfill :many
+SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
+FROM users
+WHERE resume_structured IS NOT NULL
+  AND resume_uploaded_at IS NOT NULL
+  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
+  AND ($1::bigint = 0 OR id = $1::bigint)
+ORDER BY id
+`
+
+type ListUsersForResumeGeoBackfillRow struct {
+	ID               int64              `json:"id"`
+	Location         string             `json:"location"`
+	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
+}
+
+// Users whose stored structured résumé currently describes their stored CV, for the
+// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
+// deriving geography from one would route around the staleness rule that governs the
+// structure itself. Returns the location line the derivation reads plus the stamp to
+// write under, so the worker needs no second round-trip per user.
+// The location line is coalesced to ” and cast so sqlc types it as a string rather than
+// interface{}. An absent key and an empty string are the same case — the CV stated no
+// location — and both must derive to an ABSENT geography, not to an empty resolved one.
+func (q *Queries) ListUsersForResumeGeoBackfill(ctx context.Context, userID int64) ([]ListUsersForResumeGeoBackfillRow, error) {
+	rows, err := q.db.Query(ctx, listUsersForResumeGeoBackfill, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersForResumeGeoBackfillRow{}
+	for rows.Next() {
+		var i ListUsersForResumeGeoBackfillRow
+		if err := rows.Scan(&i.ID, &i.Location, &i.ResumeUploadedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -545,9 +627,39 @@ func (q *Queries) SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeE
 	return err
 }
 
+const setUserResumeGeography = `-- name: SetUserResumeGeography :exec
+UPDATE users
+SET resume_countries = $2, resume_regions = $3, resume_cities = $4
+WHERE id = $1 AND resume_uploaded_at = $5
+`
+
+type SetUserResumeGeographyParams struct {
+	ID               int64              `json:"id"`
+	ResumeCountries  []string           `json:"resume_countries"`
+	ResumeRegions    []string           `json:"resume_regions"`
+	ResumeCities     []string           `json:"resume_cities"`
+	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
+}
+
+// Persist only the derived geography for a user, under the same monotonic guard the
+// structure write uses. This is the reconciler's write path: it re-derives from an
+// already-stored structure, so it must not touch the structure or its model stamp, and
+// must still refuse to write against a CV that has been replaced since the row was read.
+func (q *Queries) SetUserResumeGeography(ctx context.Context, arg SetUserResumeGeographyParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeGeography,
+		arg.ID,
+		arg.ResumeCountries,
+		arg.ResumeRegions,
+		arg.ResumeCities,
+		arg.ResumeUploadedAt,
+	)
+	return err
+}
+
 const setUserResumeStructured = `-- name: SetUserResumeStructured :exec
 UPDATE users
-SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4
+SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
+    resume_countries = $5, resume_regions = $6, resume_cities = $7
 WHERE id = $1 AND resume_uploaded_at = $4
 `
 
@@ -556,6 +668,9 @@ type SetUserResumeStructuredParams struct {
 	ResumeStructured           []byte             `json:"resume_structured"`
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
+	ResumeCountries            []string           `json:"resume_countries"`
+	ResumeRegions              []string           `json:"resume_regions"`
+	ResumeCities               []string           `json:"resume_cities"`
 }
 
 // Persist the user's derived structured résumé, stamped with the producing LLM model
@@ -565,12 +680,21 @@ type SetUserResumeStructuredParams struct {
 // extraction for a since-superseded CV (its stamp no longer equals the current upload
 // time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 // structure with an already-stale stamp (which Store.Structured would then hide forever).
+//
+// The candidate's geography rides in this same statement rather than a second one, so it
+// inherits that guard for free and can never end up describing a different CV than the
+// structure it was derived from. It is deterministic and costs no I/O, so there is
+// nothing to gain by deferring it — and a separate write would have to duplicate the
+// guard, which is exactly how invariants drift apart.
 func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error {
 	_, err := q.db.Exec(ctx, setUserResumeStructured,
 		arg.ID,
 		arg.ResumeStructured,
 		arg.ResumeStructuredModel,
 		arg.ResumeStructuredUploadedAt,
+		arg.ResumeCountries,
+		arg.ResumeRegions,
+		arg.ResumeCities,
 	)
 	return err
 }

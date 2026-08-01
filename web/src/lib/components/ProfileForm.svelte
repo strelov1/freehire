@@ -10,6 +10,7 @@
   } from '$lib/facets';
   import { categoryLabel } from '$lib/labels';
   import { profileStore } from '$lib/profile.svelte';
+  import { buildLocationPreferences } from '$lib/profileLocation';
   import type { LocationPreferences, UserProfile } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import HeadshotField from './HeadshotField.svelte';
@@ -71,18 +72,33 @@
   let workModes = $state.raw<string[]>(loc0?.work_modes ?? []);
   let remoteRegions = $state.raw<string[]>(loc0?.remote.regions ?? []);
   let remoteCountries = $state.raw<string[]>(loc0?.remote.countries ?? []);
-  let baseCountry = $state<string>(loc0?.base.country ?? '');
-  let baseCity = $state<string>(loc0?.base.city ?? '');
+  // Where the user IS. Seeded from what they stated, falling back to what their CV was
+  // read to say — so someone who has uploaded a CV confirms a fact rather than retyping
+  // it. The derivation only ever fills an UNSTATED field: a saved base always wins, and
+  // an ambiguous derivation (more than one country) offers nothing rather than guessing.
+  // svelte-ignore state_referenced_locally
+  const derived0 = profile?.derived_location ?? null;
+  const derivedCountry = (derived0?.countries.length === 1 ? derived0.countries[0] : '') ?? '';
+  const derivedCity = (derived0?.cities.length === 1 ? derived0.cities[0] : '') ?? '';
+  let baseCountry = $state<string>(loc0?.base.country ?? derivedCountry);
+  let baseCity = $state<string>(loc0?.base.city ?? derivedCity);
   let relocOpen = $state<boolean>(loc0?.relocation.open ?? false);
   let relocRegions = $state.raw<string[]>(loc0?.relocation.regions ?? []);
   let relocCountries = $state.raw<string[]>(loc0?.relocation.countries ?? []);
   let relocCities = $state.raw<string[]>(loc0?.relocation.cities ?? []);
   let cityDraft = $state('');
 
-  // Work format gates the geo sub-forms (progressive disclosure): remote reach shows only
-  // when Remote is accepted; the physical base + relocation show only for On-site/Hybrid.
-  // Hidden fields linger in state (re-selecting the format restores the draft) but are not
-  // saved — buildLocation() reads the same gates.
+  // Work format gates the two "where would you take work" sub-forms: remote reach shows
+  // only when Remote is accepted, relocation only for On-site/Hybrid. Hidden fields linger
+  // in state (re-selecting the format restores the draft) but are not saved —
+  // buildLocation() reads the same gates.
+  //
+  // The physical BASE is deliberately not among them. Where someone lives is a fact about
+  // them, not a preference conditional on the arrangements they accept, and it matters
+  // most for a remote worker: it governs their right to work, their taxation and their
+  // overlap with a team. It used to be gated here and DISCARDED on save for anyone who
+  // accepted only remote work, which is why two hard-constraint checks that read it were
+  // silently inert for most profiles.
   const wantsRemote = $derived(workModes.includes('remote'));
   const wantsPhysical = $derived(workModes.includes('onsite') || workModes.includes('hybrid'));
 
@@ -249,24 +265,21 @@
     relocCities = [...relocCities, city];
   }
 
-  // Reassemble the flat fields into the location block, or null when the user picked nothing
-  // (the server also collapses an all-empty block, but sending null keeps intent explicit).
-  // Relocation targets are gated on `relocOpen`: withdrawing "Open to relocation" drops them
-  // from the saved block (they linger in local state so toggling back on restores the draft),
-  // matching how the filter seed ignores targets when the user is not open to relocating.
+  // Reassemble the flat fields into the saved location block. The rules — which sub-forms
+  // the work format gates, and why `base` is NOT among them — live in profileLocation.ts so
+  // they are unit-testable; this component only supplies the fields.
   function buildLocation(): LocationPreferences | null {
-    // Only persist fields the current work format reveals — a hidden sub-form's lingering
-    // draft is not saved (mirrors how the UI gates them).
-    const loc: LocationPreferences = {
-      work_modes: workModes,
-      remote: wantsRemote ? { regions: remoteRegions, countries: remoteCountries } : {},
-      base: wantsPhysical ? { country: baseCountry || undefined, city: baseCity.trim() || undefined } : {},
-      relocation:
-        wantsPhysical && relocOpen
-          ? { open: true, regions: relocRegions, countries: relocCountries, cities: relocCities }
-          : { open: false },
-    };
-    return workModes.length === 0 ? null : loc;
+    return buildLocationPreferences({
+      workModes,
+      remoteRegions,
+      remoteCountries,
+      baseCountry,
+      baseCity,
+      relocOpen,
+      relocRegions,
+      relocCountries,
+      relocCities,
+    });
   }
 
   async function submit(e: SubmitEvent) {
@@ -490,6 +503,27 @@
       </div>
     </div>
 
+    <!-- Where you are now. Asked of EVERY user, whatever work formats they accept: it is
+         a fact about the person, not a preference, and it is what the visa-sponsorship and
+         onsite-country checks compare a job against. Pre-filled from the CV when the user
+         has stated nothing, so they confirm rather than retype. -->
+    <div class="flex flex-col gap-1.5">
+      <span class="text-xs font-medium text-muted-foreground">Where you're based</span>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <select
+          bind:value={baseCountry}
+          aria-label="Base country"
+          class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
+        >
+          <option value="">Country…</option>
+          {#each COUNTRY_OPTIONS as opt (opt.value)}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+        <Input bind:value={baseCity} aria-label="Base city" placeholder="City" class="w-full" />
+      </div>
+    </div>
+
     {#if workModes.length === 0}
       <span class="text-xs text-muted-foreground">Pick a work format above to set where you can work.</span>
     {/if}
@@ -507,27 +541,8 @@
       </div>
     {/if}
 
-    <!-- Physical presence (base + relocation) — only for On-site / Hybrid. -->
+    <!-- Relocation — only meaningful for someone who would take physical work. -->
     {#if wantsPhysical}
-      <!-- Base location -->
-      <div class="flex flex-col gap-1.5">
-        <span class="text-xs font-medium text-muted-foreground">Where you're based</span>
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <select
-            bind:value={baseCountry}
-            aria-label="Base country"
-            class="h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 dark:bg-input/30"
-          >
-            <option value="">Country…</option>
-            {#each COUNTRY_OPTIONS as opt (opt.value)}
-              <option value={opt.value}>{opt.label}</option>
-            {/each}
-          </select>
-          <Input bind:value={baseCity} aria-label="Base city" placeholder="City" class="w-full" />
-        </div>
-      </div>
-
-      <!-- Relocation -->
       <div class="flex flex-col gap-2">
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" bind:checked={relocOpen} class="size-4 rounded border-input" />

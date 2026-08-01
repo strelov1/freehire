@@ -700,12 +700,26 @@ export interface LocationPreferences {
   relocation: LocationRelocation;
 }
 
+/** Where the CV says the candidate IS, resolved by the location dictionary. Read-only:
+ *  it is produced by the CV derivation alone and no profile write can set it. Deliberately
+ *  a sibling of location_preferences rather than part of it — that block is what the user
+ *  ASSERTED, this is what was DERIVED for them, and only the former may be saved back. */
+export interface DerivedLocation {
+  countries: string[];
+  regions: string[];
+  cities: string[];
+}
+
 export interface UserProfile {
   specializations: string[];
   skills: string[];
   /** Canonical skill tokens the user wants to avoid; seeded into the jobs filter's skills exclude set by "Apply my profile". Empty when the user excludes nothing. */
   excluded_skills: string[];
   location_preferences: LocationPreferences | null;
+  /** Null when nothing was derived (no CV, no current structure, or a location the
+   *  dictionary could not resolve). Used to pre-fill "where you're based" for a user who
+   *  has stated no base, so they confirm a fact already on their CV instead of retyping it. */
+  derived_location: DerivedLocation | null;
   /** The caller's structured CV without its contact fields — served beside the profile so
    *  one read covers both what the user wants and what they have done. Null when no current
    *  structure exists. Contacts come from GET /me/resume instead (the profile page's contact

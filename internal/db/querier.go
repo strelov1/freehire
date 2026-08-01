@@ -209,8 +209,11 @@ type Querier interface {
 	// Clear the user's headshot pointer, after deleting the object from storage.
 	ClearUserPhoto(ctx context.Context, id int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
-	// cached ATS review, the derived CV embedding (no CV → no recommendations), and the
-	// derived structured résumé (the structure must not outlive the CV it describes).
+	// cached ATS review, the derived CV embedding (no CV → no recommendations), the
+	// derived structured résumé (the structure must not outlive the CV it describes), and
+	// the geography derived from that structure (which must not outlive it either — a
+	// country left behind here would keep answering "where is this candidate" from a CV
+	// that no longer exists).
 	ClearUserResume(ctx context.Context, id int64) error
 	// Moderator close: the thread leaves the open listing and rejects new replies.
 	CloseCommunityThread(ctx context.Context, id int64) error
@@ -961,6 +964,13 @@ type Querier interface {
 	// NULLs when none is stored. The caller ignores a vector whose model no longer matches
 	// the current embedder (stale) — see the cv-recommendations change.
 	GetUserResumeEmbedding(ctx context.Context, id int64) (GetUserResumeEmbeddingRow, error)
+	// The geography derived from the user's structured résumé, alongside the two stamps the
+	// caller needs to judge freshness (the derivation's own stamp and the current résumé
+	// upload time) — the same stamp-and-compare the structure read uses, so a geography
+	// derived from a superseded CV reads as absent rather than being served.
+	// NULL arrays mean "not known"; an empty array means the CV named a place the dictionary
+	// could not resolve. The two are deliberately different answers.
+	GetUserResumeGeography(ctx context.Context, id int64) (GetUserResumeGeographyRow, error)
 	// The user's derived structured résumé plus its provenance stamps (the LLM model and
 	// the résumé upload time it was derived from), alongside the current résumé upload time
 	// so the caller can tell whether the structure still describes the stored CV (served
@@ -1472,6 +1482,15 @@ type Querier interface {
 	// the pending saved-job reminder's deadline (NULL when none), so the saved list can
 	// show "remind in N days" with its reschedule/off controls.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
+	// Users whose stored structured résumé currently describes their stored CV, for the
+	// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
+	// deriving geography from one would route around the staleness rule that governs the
+	// structure itself. Returns the location line the derivation reads plus the stamp to
+	// write under, so the worker needs no second round-trip per user.
+	// The location line is coalesced to '' and cast so sqlc types it as a string rather than
+	// interface{}. An absent key and an empty string are the same case — the CV stated no
+	// location — and both must derive to an ABSENT geography, not to an empty resolved one.
+	ListUsersForResumeGeoBackfill(ctx context.Context, userID int64) ([]ListUsersForResumeGeoBackfillRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
 	// any interaction row counts as viewed). Used by the SPA to dim already-seen
 	// cards in the browse list without authenticating the public job-read path.
@@ -2135,6 +2154,11 @@ type Querier interface {
 	// Persist the user's derived CV embedding vector plus the identity of the embedder
 	// that produced it (so a model change can mark the vector stale). Never the raw CV text.
 	SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error
+	// Persist only the derived geography for a user, under the same monotonic guard the
+	// structure write uses. This is the reconciler's write path: it re-derives from an
+	// already-stored structure, so it must not touch the structure or its model stamp, and
+	// must still refuse to write against a CV that has been replaced since the row was read.
+	SetUserResumeGeography(ctx context.Context, arg SetUserResumeGeographyParams) error
 	// Persist the user's derived structured résumé, stamped with the producing LLM model
 	// and the résumé upload time it was derived from (passed in, not now(), so the stamp
 	// matches the CV the background extraction actually read). Never the raw CV text.
@@ -2142,6 +2166,12 @@ type Querier interface {
 	// extraction for a since-superseded CV (its stamp no longer equals the current upload
 	// time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 	// structure with an already-stale stamp (which Store.Structured would then hide forever).
+	//
+	// The candidate's geography rides in this same statement rather than a second one, so it
+	// inherits that guard for free and can never end up describing a different CV than the
+	// structure it was derived from. It is deterministic and costs no I/O, so there is
+	// nothing to gain by deferring it — and a separate write would have to duplicate the
+	// guard, which is exactly how invariants drift apart.
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error
 	// Soft-delete one message (hidden from the listing, retained for restore),
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the

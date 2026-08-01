@@ -221,15 +221,26 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     // Relocation targets only count when the user is actually open to relocating — `open`
     // gates the whole relocation contribution (targets and the relocation facet alike).
     const reloc = loc.relocation.open ? loc.relocation : { regions: [], countries: [], cities: [] };
+    // `base` says where the user LIVES; the facets say where they want the WORK. Those
+    // coincide only for someone who accepts physical work — the job has to be commutable
+    // — so base is folded in for them and withheld from everyone else. Seeding a
+    // remote-only candidate's home country as a job-country filter would narrow their
+    // search to the one country they least need the job to be in.
+    //
+    // This gate used to be implicit: the profile form collected `base` from on-site and
+    // hybrid users only, and dropped it on save for everyone else. Now that the form asks
+    // every user where they are, the gate has to be stated here instead.
+    const wantsPhysical = (loc.work_modes ?? []).some((m) => m === 'onsite' || m === 'hybrid');
+    const base = wantsPhysical ? loc.base : {};
     f.facets.work_mode = seed(loc.work_modes ?? []);
     f.facets.regions = seed([...(loc.remote.regions ?? []), ...(reloc.regions ?? [])]);
     f.facets.countries = seed([
       ...(loc.remote.countries ?? []),
-      ...(loc.base.country ? [loc.base.country] : []),
+      ...(base.country ? [base.country] : []),
       ...(reloc.countries ?? []),
     ]);
     f.facets.cities = seed([
-      ...(loc.base.city ? [loc.base.city] : []),
+      ...(base.city ? [base.city] : []),
       ...(reloc.cities ?? []),
     ]);
     if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);

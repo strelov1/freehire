@@ -165,6 +165,26 @@ var nameToCountry = map[string]string{
 	"estonia": "ee", "luxembourg": "lu", "iceland": "is", "malta": "mt",
 	"monaco": "mc", "north macedonia": "mk", "bosnia and herzegovina": "ba",
 	"albania": "al", "montenegro": "me", "kosovo": "xk", "mauritius": "mu",
+	// Countries that regionCountries could already place but that no name resolved to,
+	// so they were reachable only via their bare ISO code and never from a location
+	// spelling them out. Names only — never the codes: a bare code here would be
+	// consulted before the US/Canada subdivision table's same-spelled entries and turn
+	// "Baton Rouge, LA" into Laos. TestEveryPlaceableCountryHasAName keeps the two maps
+	// from drifting apart again.
+	//
+	// "palestine" is deliberately absent: it is also a city in Texas, and the bare name
+	// would read "Palestine, TX" as the Palestinian territories. Only the unambiguous
+	// long forms are listed, the same precision-over-recall rule the eligibility phrases
+	// follow.
+	"andorra": "ad", "angola": "ao", "brunei": "bn", "brunei darussalam": "bn",
+	"ivory coast": "ci", "côte d'ivoire": "ci", "cote d'ivoire": "ci",
+	"cameroon": "cm", "honduras": "hn", "cambodia": "kh", "laos": "la",
+	"liechtenstein": "li", "libya": "ly", "myanmar": "mm", "burma": "mm",
+	"mongolia": "mn", "macao": "mo", "macau": "mo", "mozambique": "mz",
+	"nicaragua": "ni", "palestinian territories": "ps", "state of palestine": "ps",
+	"rwanda": "rw", "san marino": "sm", "senegal": "sn", "el salvador": "sv",
+	"tanzania": "tz", "uganda": "ug", "yemen": "ye", "zambia": "zm",
+	"zimbabwe": "zw",
 	// Spanish.
 	"españa": "es", "alemania": "de", "méxico": "mx", "méjico": "mx",
 	"grecia": "gr", "francia": "fr", "italia": "it", "países bajos": "nl",

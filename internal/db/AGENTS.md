@@ -10,6 +10,17 @@ The `internal/db` package — generated sqlc code, hand-written SQL queries, and
 - `migrations/` is the single source of truth for schema — the same dir feeds both sqlc and Postgres initdb.
 - `jobs.UNIQUE (source, external_id)` is the dedup key; `UpsertJob` is `ON CONFLICT` on it.
 - Fresh volumes get the whole `migrations/` dir via Postgres initdb (mounted into `/docker-entrypoint-initdb.d`, applied once on first init, in filename order). Every existing database (prod included) is migrated by `cmd/migrate` (`go run ./cmd/migrate`), which applies only files not yet recorded in `schema_migrations` (version = filename) — one transaction per file, under a session advisory lock. Changing an already-applied migration does NOT re-apply it; add a new file instead.
+- **An EXPANSIVE migration is applied before the deploy that reads it, not with it.** Adding
+  a nullable column is safe to run ahead of time and unreadable by the previous binary, but
+  the next binary reads it on a hot path — an unapplied column is a `42703` on every request
+  that touches it, not a degraded feature. Migration `0068` (candidate geography on `users`)
+  is the current example; its own header states the ordering.
+- **A nullable column and a `NOT NULL DEFAULT '{}'` column answer different questions.**
+  `jobs.countries` is the latter because a job always has a location string and derives it
+  synchronously, so `'{}'` means "the dictionary was silent". `users.resume_countries` is
+  the former because a user has a third state — no CV, or no current structure — so `NULL`
+  means "not known" and `'{}'` means "stated, but unresolvable". Collapsing them would lose
+  the dictionary's live coverage metric. Copy the shape only when the states match.
 - A new column referencing `users` needs its **own index** — Postgres indexes only the referenced side, so an unindexed reference makes every account deletion scan that table (this is what timed out account deletion against the 19 GB `jobs` table). `TestEveryUserForeignKeyIsIndexed` enforces it.
 
 Response shapes and error rendering are the handler layer's concern — see

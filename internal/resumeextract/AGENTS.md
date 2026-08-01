@@ -15,7 +15,13 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
 - **The request carries a schema derived from `Structured`** (`schema.go`), minus the contact fields: those come from PII detection over text the model never sees, and a strict schema requires every property, so leaving them in would be an instruction to invent a name, an email and a phone for a CV that reaches the model with all three redacted.
 - **`total_years` is asked for as TEXT, though the contract field is an `int`.** Given an integer field a model turns "5.9 years" into 6 by rounding; `truncInt` turns it into 5. The difference is experience the candidate does not have, so the arithmetic stays on this side. Measured against the CV fixtures, the schema's one systematic effect was to stop the model filling the candidate's `location` with the last employer's office ("Singapore (Remote)", 3 runs of 3) for a CV that states no location for the person.
 - **An unconfigured/failing LLM leaves upload, embedding, and the deterministic extractors untouched.**
-- **Deletion clears the columns** (`ClearUserResume`).
+- **Persisting the structure also derives the candidate's GEOGRAPHY** from its `location`
+  line, in the same statement and under the same stamp (`resume.Store.SetStructured` →
+  `resume.DeriveGeography` → `location.ParseResidence`). Riding in one statement means the
+  monotonic guard covers both, so a stored geography can never describe a different CV than
+  the structure beside it. Unlike the structure, the geography HAS a reconciler
+  (`cmd/backfill-resume-geo`, database-only), so a dictionary change reaches existing users.
+- **Deletion clears the columns** (`ClearUserResume`), geography included.
 - **No new env** — reuses `LLM_*`.
 - **The fit analysis reads a COMPOSITION, not this shape alone:** `experience.ProfessionalFrom` takes the work history from the bank and everything else from here, and that is the only candidate text `matchanalysis` sends. An empty bank means no analysis; a stale structure now costs education and languages rather than the whole thing. There is still deliberately no raw-CV fallback, and there is deliberately no fallback to this package's own copy of the experience either — a silent one would hide a failed backfill for months.
 

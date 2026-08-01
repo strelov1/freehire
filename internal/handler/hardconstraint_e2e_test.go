@@ -17,7 +17,7 @@ import (
 func TestServedAnalysisCappedByUnmetHardConstraint(t *testing.T) {
 	job := db.Job{Description: "Requires an active PMP certification."}
 	cv := resumeextract.Structured{Certifications: []string{"AWS Certified Solutions Architect"}} // lists certs, not PMP
-	jr, ev := buildHardConstraintInputs(job, cv, userprofile.LocationPreferences{})
+	jr, ev := buildHardConstraintInputs(job, cv, userprofile.LocationPreferences{}, nil)
 	blockers := hardconstraint.Evaluate(jr, ev)
 
 	analysis := &matchanalysis.Analysis{OverallScore: 88, Verdict: "Strong Fit"}

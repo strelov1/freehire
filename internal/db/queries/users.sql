@@ -125,13 +125,17 @@ WHERE id = $1;
 
 -- name: ClearUserResume :exec
 -- Clear the user's résumé pointer (after deleting the object from storage), any
--- cached ATS review, the derived CV embedding (no CV → no recommendations), and the
--- derived structured résumé (the structure must not outlive the CV it describes).
+-- cached ATS review, the derived CV embedding (no CV → no recommendations), the
+-- derived structured résumé (the structure must not outlive the CV it describes), and
+-- the geography derived from that structure (which must not outlive it either — a
+-- country left behind here would keep answering "where is this candidate" from a CV
+-- that no longer exists).
 UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
     resume_embedding = NULL, resume_embedding_model = NULL,
     resume_structured = NULL, resume_structured_model = NULL,
-    resume_structured_uploaded_at = NULL
+    resume_structured_uploaded_at = NULL,
+    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL
 WHERE id = $1;
 
 -- name: GetUserPhoto :one
@@ -200,9 +204,54 @@ WHERE id = $1;
 -- extraction for a since-superseded CV (its stamp no longer equals the current upload
 -- time) matches no row and is dropped, so a late writer can't clobber a newer CV's
 -- structure with an already-stale stamp (which Store.Structured would then hide forever).
+--
+-- The candidate's geography rides in this same statement rather than a second one, so it
+-- inherits that guard for free and can never end up describing a different CV than the
+-- structure it was derived from. It is deterministic and costs no I/O, so there is
+-- nothing to gain by deferring it — and a separate write would have to duplicate the
+-- guard, which is exactly how invariants drift apart.
 UPDATE users
-SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4
+SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
+    resume_countries = $5, resume_regions = $6, resume_cities = $7
 WHERE id = $1 AND resume_uploaded_at = $4;
+
+-- name: GetUserResumeGeography :one
+-- The geography derived from the user's structured résumé, alongside the two stamps the
+-- caller needs to judge freshness (the derivation's own stamp and the current résumé
+-- upload time) — the same stamp-and-compare the structure read uses, so a geography
+-- derived from a superseded CV reads as absent rather than being served.
+-- NULL arrays mean "not known"; an empty array means the CV named a place the dictionary
+-- could not resolve. The two are deliberately different answers.
+SELECT resume_countries, resume_regions, resume_cities,
+       resume_structured_uploaded_at, resume_uploaded_at
+FROM users
+WHERE id = $1;
+
+-- name: ListUsersForResumeGeoBackfill :many
+-- Users whose stored structured résumé currently describes their stored CV, for the
+-- geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
+-- deriving geography from one would route around the staleness rule that governs the
+-- structure itself. Returns the location line the derivation reads plus the stamp to
+-- write under, so the worker needs no second round-trip per user.
+-- The location line is coalesced to '' and cast so sqlc types it as a string rather than
+-- interface{}. An absent key and an empty string are the same case — the CV stated no
+-- location — and both must derive to an ABSENT geography, not to an empty resolved one.
+SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
+FROM users
+WHERE resume_structured IS NOT NULL
+  AND resume_uploaded_at IS NOT NULL
+  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
+  AND (sqlc.arg(user_id)::bigint = 0 OR id = sqlc.arg(user_id)::bigint)
+ORDER BY id;
+
+-- name: SetUserResumeGeography :exec
+-- Persist only the derived geography for a user, under the same monotonic guard the
+-- structure write uses. This is the reconciler's write path: it re-derives from an
+-- already-stored structure, so it must not touch the structure or its model stamp, and
+-- must still refuse to write against a CV that has been replaced since the row was read.
+UPDATE users
+SET resume_countries = $2, resume_regions = $3, resume_cities = $4
+WHERE id = $1 AND resume_uploaded_at = $5;
 
 -- name: GetUserRole :one
 -- Slim role lookup for the RequireRole authorization middleware: it runs on every

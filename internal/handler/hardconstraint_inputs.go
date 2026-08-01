@@ -63,7 +63,14 @@ func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Jo
 	if len(profile.LocationPreferences) > 0 {
 		_ = json.Unmarshal(profile.LocationPreferences, &loc) // best-effort; empty loc simply skips geo checks
 	}
-	jr, ev := buildHardConstraintInputs(job, cv, loc)
+	// Where the caller has asserted no base country, fall back to the one derived from
+	// their CV. Best-effort: a failing read simply leaves the country empty, which is the
+	// behaviour this path had for every caller before the fallback existed.
+	var derived []string
+	if geo, ok, err := h.resume.Geography(ctx, userID); err == nil && ok {
+		derived = geo.Countries
+	}
+	jr, ev := buildHardConstraintInputs(job, cv, loc, derived)
 	return hardconstraint.Evaluate(jr, ev)
 }
 
@@ -73,7 +80,9 @@ func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Jo
 // (required certifications and degree-optional); visa sponsorship comes from the
 // enrichment jsonb. The CV side reads the structured résumé and the profile's base
 // country / remote preference. Pure so it is unit-testable.
-func buildHardConstraintInputs(job db.Job, cv resumeextract.Structured, loc userprofile.LocationPreferences) (hardconstraint.JobRequirements, hardconstraint.CVEvidence) {
+// derivedCountries is the geography read off the caller's CV; it is consulted only when
+// the caller asserted no base country of their own (see candidateCountry).
+func buildHardConstraintInputs(job db.Job, cv resumeextract.Structured, loc userprofile.LocationPreferences, derivedCountries []string) (hardconstraint.JobRequirements, hardconstraint.CVEvidence) {
 	jr := hardconstraint.JobRequirements{
 		ExperienceYearsMin:     int4Ptr(job.ExperienceYearsMin),
 		EducationLevel:         job.EducationLevel,
@@ -89,7 +98,7 @@ func buildHardConstraintInputs(job db.Job, cv resumeextract.Structured, loc user
 		Degrees:        degreeNames(cv.Education),
 		Languages:      cv.Languages,
 		Certifications: cv.Certifications,
-		CountryCode:    loc.Base.Country,
+		CountryCode:    candidateCountry(loc.Base.Country, derivedCountries),
 		PrefersRemote:  prefersRemote(loc.WorkModes),
 	}
 	return jr, ev
@@ -141,4 +150,28 @@ func int4Ptr(v pgtype.Int4) *int {
 	}
 	n := int(v.Int32)
 	return &n
+}
+
+// candidateCountry decides which country the hard-constraint evaluator judges the caller
+// by: the one they ASSERTED on their profile (location_preferences.base.country), or —
+// only when they asserted none — the one DERIVED from their CV.
+//
+// This is the same shape as jobview.geoFacet, where the dictionary pins what it can and
+// the weaker source fills only the unpinned bucket. The candidate's own statement is the
+// authority; the derivation exists to stop the two country-dependent constraints from
+// being silently inert for everyone who never filled the field in.
+//
+// A derivation naming more than one country is treated as NO answer rather than resolved
+// by picking one. The whole dictionary discipline is never to guess, and an ambiguous
+// derivation is not a fact — manufacturing one here would produce a blocker the candidate
+// never supplied the evidence for, which is exactly what "never emit a false blocker"
+// forbids.
+func candidateCountry(asserted string, derived []string) string {
+	if asserted != "" {
+		return asserted
+	}
+	if len(derived) != 1 {
+		return ""
+	}
+	return derived[0]
 }

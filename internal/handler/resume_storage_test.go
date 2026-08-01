@@ -62,6 +62,11 @@ type fakeResumeRepo struct {
 	structured  []byte
 	structModel string
 	structAt    pgtype.Timestamptz
+	// The candidate geography derived from the structure's location line, persisted in
+	// the same write. nil means "not known"; an empty slice means the CV stated a place
+	// the dictionary could not resolve.
+	structCountries []string
+	structRegions   []string
 }
 
 func (r *fakeResumeRepo) Get(_ context.Context, _ int64) (db.GetUserResumeRow, error) {
@@ -97,9 +102,10 @@ func (r *fakeResumeRepo) GetEmbedding(_ context.Context, _ int64) (db.GetUserRes
 	}, nil
 }
 
-func (r *fakeResumeRepo) SetStructured(_ context.Context, _ int64, blob []byte, model string, uploadedAt time.Time) error {
-	r.structured, r.structModel = blob, model
-	r.structAt = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+func (r *fakeResumeRepo) SetStructured(_ context.Context, w resume.StructuredWrite) error {
+	r.structured, r.structModel = w.Blob, w.Model
+	r.structAt = pgtype.Timestamptz{Time: w.UploadedAt, Valid: true}
+	r.structCountries, r.structRegions = w.Countries, w.Regions
 	return nil
 }
 
@@ -227,4 +233,16 @@ func TestResume_Unauthenticated(t *testing.T) {
 	if status, _ := resumeReq(t, app, fiber.MethodGet, "", ""); status != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", status)
 	}
+}
+
+func (r *fakeResumeRepo) GetGeography(_ context.Context, _ int64) (db.GetUserResumeGeographyRow, error) {
+	row := db.GetUserResumeGeographyRow{
+		ResumeCountries:            r.structCountries,
+		ResumeRegions:              r.structRegions,
+		ResumeStructuredUploadedAt: r.structAt,
+	}
+	if r.set {
+		row.ResumeUploadedAt = pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true}
+	}
+	return row, nil
 }

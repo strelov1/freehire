@@ -57,6 +57,46 @@ func TestParse(t *testing.T) {
 			location: "Łódź, Poland",
 			want:     Geo{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Łódź"}},
 		},
+		// Countries that carried a region in countryToRegion but no name in nameToCountry:
+		// placeable once identified, yet unable to identify themselves. See
+		// TestEveryPlaceableCountryHasAName, which guards the two maps against drifting apart.
+		{
+			name:     "honduras named in full resolves to its code and region",
+			location: "San Pedro Sula, Honduras",
+			want:     Geo{Countries: []string{"hn"}, Regions: []string{"latam"}, Cities: []string{"San Pedro Sula"}},
+		},
+		{
+			name:     "rwanda named in full resolves to its code and region",
+			location: "Kigali, Rwanda",
+			want:     Geo{Countries: []string{"rw"}, Regions: []string{"africa"}, Cities: []string{"Kigali"}},
+		},
+		{
+			// Before the country name existed, "laos" fell through to the long-tail city
+			// branch and matched a Vietnamese city via its GeoNames alternate names. Naming
+			// the country makes the token resolve first, and the city-agreement check then
+			// rejects the unrelated city (la != vn) instead of emitting it.
+			name:     "naming laos stops it resolving to an unrelated vietnamese city",
+			location: "Laos",
+			want:     Geo{Countries: []string{"la"}, Regions: []string{"apac"}},
+		},
+		// Regression guards for the added names: every added entry is a full word, and the
+		// subdivision table is consulted BEFORE the bare two-letter country code, so the
+		// US-state readings of these tokens must be untouched by the new countries la/mn/mo.
+		{
+			name:     "LA stays louisiana rather than laos",
+			location: "Baton Rouge, LA",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Baton Rouge"}},
+		},
+		{
+			name:     "MN stays minnesota rather than mongolia",
+			location: "Minneapolis, MN",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Minneapolis"}},
+		},
+		{
+			name:     "MO stays missouri rather than macao",
+			location: "St. Louis, MO",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"St. Louis"}},
+		},
 		{
 			name:     "unambiguous UK city",
 			location: "Manchester",

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -18,6 +19,9 @@ import (
 // database. The bool reports whether a structure current with the stored CV exists.
 type structuredResumeReader interface {
 	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
+	// Geography is where the CV says the candidate IS, under the same freshness rule as
+	// Structured — a geography derived from a superseded CV reads as absent.
+	Geography(ctx context.Context, userID int64) (resume.Geography, bool, error)
 }
 
 // profileHandlers serves the single-per-user profile (a specialization + skills set).
@@ -65,20 +69,37 @@ type profileResponse struct {
 	Skills              []string                    `json:"skills"`
 	ExcludedSkills      []string                    `json:"excluded_skills"`
 	LocationPreferences json.RawMessage             `json:"location_preferences"`
+	DerivedLocation     *derivedLocation            `json:"derived_location"`
 	CV                  *resumeextract.Professional `json:"cv"`
 	CreatedAt           *time.Time                  `json:"created_at"`
 	UpdatedAt           *time.Time                  `json:"updated_at"`
 }
 
+// derivedLocation is where the caller's CV says they ARE, as resolved by the location
+// dictionary. It is deliberately a sibling of location_preferences rather than merged
+// into it: one is what the candidate asserted and the other is what was derived for them,
+// and a consumer needs to know which it is holding. Read-only — no profile write can set
+// it, because it is produced solely by the CV derivation.
+//
+// The client uses it to pre-fill "where you're based" for a user who has stated no base,
+// so confirming a fact already on the CV is cheaper than retyping it. null when the
+// caller has no current structured résumé.
+type derivedLocation struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	Cities    []string `json:"cities"`
+}
+
 // toProfileResponse maps a stored profile to its wire shape (no user id). The location
 // block is the raw JSONB (json.RawMessage), which marshals through unchanged — a NULL
 // column stays null.
-func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional) profileResponse {
+func toProfileResponse(p userprofile.Profile, cv *resumeextract.Professional, loc *derivedLocation) profileResponse {
 	return profileResponse{
 		Specializations:     p.Specializations,
 		Skills:              p.Skills,
 		ExcludedSkills:      p.ExcludedSkills,
 		LocationPreferences: p.LocationPreferences,
+		DerivedLocation:     loc,
 		CV:                  cv,
 		CreatedAt:           p.CreatedAt,
 		UpdatedAt:           p.UpdatedAt,
@@ -179,7 +200,7 @@ func (h *profileHandlers) GetProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID))})
+	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID), h.derivedLocation(c.Context(), userID))})
 }
 
 // PutProfile creates-or-replaces the authenticated user's profile (specializations +
@@ -203,7 +224,7 @@ func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 	}
 	// The same representation the read serves — one resource, one shape, so a client that
 	// saves and a client that fetches see the same profile.
-	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID))})
+	return c.JSON(fiber.Map{"data": toProfileResponse(profile, h.structuredCV(c.Context(), userID), h.derivedLocation(c.Context(), userID))})
 }
 
 // DeleteProfile clears the authenticated user's profile. Idempotent: deleting when none
@@ -218,4 +239,29 @@ func (h *profileHandlers) DeleteProfile(c *fiber.Ctx) error {
 		return err
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// derivedLocation reads the geography derived from the caller's CV, or nil when there is
+// none. Best-effort like the cv block: the derivation supplements the profile, so an
+// unconfigured résumé service or a failing lookup degrades to a null block rather than
+// denying the caller their own profile.
+//
+// A geography that resolved nothing reads as absent rather than as an empty block. The
+// database keeps "the CV stated nothing" and "the CV stated something unresolvable"
+// apart for the coverage metric, but a client asking "where is this candidate" gets the
+// same answer from both — nothing to pre-fill — and an empty block would invite it to
+// render an empty control as if it meant something.
+func (h *profileHandlers) derivedLocation(ctx context.Context, userID int64) *derivedLocation {
+	if h.resume == nil {
+		return nil
+	}
+	geo, ok, err := h.resume.Geography(ctx, userID)
+	if err != nil {
+		log.Printf("profile derived location: user %d: %v", userID, err)
+		return nil
+	}
+	if !ok || (len(geo.Countries) == 0 && len(geo.Regions) == 0 && len(geo.Cities) == 0) {
+		return nil
+	}
+	return &derivedLocation{Countries: geo.Countries, Regions: geo.Regions, Cities: geo.Cities}
 }

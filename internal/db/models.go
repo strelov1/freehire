@@ -671,6 +671,9 @@ type User struct {
 	PhotoObjectKey             pgtype.Text        `json:"photo_object_key"`
 	PhotoUploadedAt            pgtype.Timestamptz `json:"photo_uploaded_at"`
 	LlmKey                     pgtype.Text        `json:"llm_key"`
+	ResumeCountries            []string           `json:"resume_countries"`
+	ResumeRegions              []string           `json:"resume_regions"`
+	ResumeCities               []string           `json:"resume_cities"`
 }
 
 type UserEmailCode struct {

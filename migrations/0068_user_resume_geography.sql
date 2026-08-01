@@ -1,0 +1,41 @@
+-- Where the CANDIDATE is, derived deterministically from the location line of their
+-- structured résumé (see the candidate-resume-geography change). Jobs have carried
+-- derived countries/regions since 0001; candidates carried only the raw free-text line
+-- the LLM copied off the CV, so a candidate's country could not be filtered, faceted, or
+-- matched against a job's geography.
+--
+-- These mirror jobs.countries/regions as text[] so the same array idioms and aggregations
+-- work, but the resume_ prefix is load-bearing: on users it already means "derived from
+-- the stored CV" (resume_structured, resume_embedding, resume_ats_analysis), and it keeps
+-- this apart from user_profiles.location_preferences. The two answer different questions
+-- and must never be conflated — location_preferences.base is where the user SAYS they
+-- are, these columns are what their CV was read to say. Where both exist the user's own
+-- statement wins; these only fill a gap.
+--
+-- The values are the candidate projection of the location dictionary, NOT the job one:
+-- the `global` region is never stored here (a job may be open anywhere, a person is
+-- always somewhere) and no work mode is stored at all (how someone wants to work is a
+-- preference, and it already lives in location_preferences.work_modes).
+--
+-- NULLABLE WITH NO DEFAULT, deliberately diverging from jobs.countries (which is
+-- NOT NULL DEFAULT '{}'). A job always has a location string and derives it
+-- synchronously on ingest, so '{}' there unambiguously means "the dictionary was
+-- silent". A user has a third state a job does not — no CV, no structured résumé yet, or
+-- one superseded by a newer upload. So:
+--     NULL  -> unknown: no CV, no current structure, or a structure stating no location
+--     '{}'  -> the CV stated a place and the curated dictionary resolved nothing
+-- Collapsing the two would confuse "we don't know" with "nowhere", and would also throw
+-- away a permanent live-data coverage metric for the dictionary:
+--     SELECT count(*) FROM users WHERE resume_countries = '{}';
+-- Same reasoning as jobderive.Derived.IsTech being a *bool: never coerced, so the
+-- coverage gap stays measurable.
+--
+-- Three nullable columns: no table rewrite, no default to backfill, no lock of
+-- consequence. Additive and unread by the previous binary, but the NEXT binary reads
+-- them on every profile fetch, so on an existing prod volume this ALTER must be run
+-- BEFORE that deploy (an unapplied column is a 42703 on a hot path, not a degraded
+-- feature). A rollback leaves the columns harmlessly behind.
+ALTER TABLE public.users
+    ADD COLUMN resume_countries text[],
+    ADD COLUMN resume_regions text[],
+    ADD COLUMN resume_cities text[];

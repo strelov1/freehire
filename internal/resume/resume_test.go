@@ -51,6 +51,15 @@ type fakeRepo struct {
 	structured map[int64][]byte
 	structMod  map[int64]string
 	structAt   map[int64]pgtype.Timestamptz // simulates users.resume_structured_uploaded_at
+	geo        map[int64]storedGeo          // simulates users.resume_countries/regions/cities
+}
+
+// storedGeo mirrors the three derived geography columns. A nil slice stands for SQL NULL
+// ("not known"); a non-nil empty slice stands for '{}' ("stated, but unresolvable").
+type storedGeo struct {
+	Countries []string
+	Regions   []string
+	Cities    []string
 }
 
 func newFakeRepo() *fakeRepo {
@@ -62,13 +71,23 @@ func newFakeRepo() *fakeRepo {
 		structured: map[int64][]byte{},
 		structMod:  map[int64]string{},
 		structAt:   map[int64]pgtype.Timestamptz{},
+		geo:        map[int64]storedGeo{},
 	}
 }
 
-func (r *fakeRepo) SetStructured(_ context.Context, userID int64, blob []byte, model string, uploadedAt time.Time) error {
-	r.structured[userID] = blob
-	r.structMod[userID] = model
-	r.structAt[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+// SetStructured models the real statement, guard included: the SQL carries
+// `WHERE id = $1 AND resume_uploaded_at = $stamp`, so a write stamped with a
+// since-superseded upload time matches no row and is dropped whole — structure AND
+// geography. The fake used to write unconditionally, which meant no Store-level test
+// could ever observe that the two travel together.
+func (r *fakeRepo) SetStructured(_ context.Context, w StructuredWrite) error {
+	if cur, ok := r.uploadedAt[w.UserID]; !ok || !cur.Valid || !cur.Time.Equal(w.UploadedAt) {
+		return nil
+	}
+	r.structured[w.UserID] = w.Blob
+	r.structMod[w.UserID] = w.Model
+	r.structAt[w.UserID] = pgtype.Timestamptz{Time: w.UploadedAt, Valid: true}
+	r.geo[w.UserID] = storedGeo{Countries: w.Countries, Regions: w.Regions, Cities: w.Cities}
 	return nil
 }
 
@@ -110,11 +129,13 @@ func (r *fakeRepo) Set(_ context.Context, userID int64, key string) error {
 }
 
 func (r *fakeRepo) Clear(_ context.Context, userID int64) error {
-	// Mirrors ClearUserResume, which nulls the pointer AND the derived structured columns.
+	// Mirrors ClearUserResume, which nulls the pointer, the derived structured columns,
+	// and the geography derived from them.
 	delete(r.ptr, userID)
 	delete(r.structured, userID)
 	delete(r.structMod, userID)
 	delete(r.structAt, userID)
+	delete(r.geo, userID)
 	return nil
 }
 
@@ -271,3 +292,14 @@ func TestStore_DeleteClearsStructured(t *testing.T) {
 }
 
 var _ blobstore.Store = (*fakeBlobs)(nil)
+
+func (r *fakeRepo) GetGeography(_ context.Context, userID int64) (db.GetUserResumeGeographyRow, error) {
+	g := r.geo[userID]
+	return db.GetUserResumeGeographyRow{
+		ResumeCountries:            g.Countries,
+		ResumeRegions:              g.Regions,
+		ResumeCities:               g.Cities,
+		ResumeStructuredUploadedAt: r.structAt[userID],
+		ResumeUploadedAt:           r.uploadedAt[userID],
+	}, nil
+}

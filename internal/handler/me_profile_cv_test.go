@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -21,10 +23,18 @@ type fakeStructuredResume struct {
 	ret resumeextract.Structured
 	ok  bool
 	err error
+	// geo is the derived candidate geography; geoOK mirrors the freshness bool. Zero
+	// values model a caller for whom nothing was derived.
+	geo   resume.Geography
+	geoOK bool
 }
 
 func (f fakeStructuredResume) Structured(context.Context, int64) (resumeextract.Structured, bool, error) {
 	return f.ret, f.ok, f.err
+}
+
+func (f fakeStructuredResume) Geography(context.Context, int64) (resume.Geography, bool, error) {
+	return f.geo, f.geoOK, nil
 }
 
 // profileAppWithResume mounts the profile read on a handler wired to the given résumé
@@ -125,4 +135,64 @@ func TestGetProfile_DegradesToNullCV(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The derived block is a SIBLING of location_preferences, not a merge into it: one is
+// what the candidate asserted, the other what was derived for them, and the client has to
+// know which it is holding before it pre-fills a control with it.
+func TestProfileRead_CarriesDerivedLocation(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	cv := fakeStructuredResume{
+		ret: resumeextract.Structured{Headline: "Backend engineer"}, ok: true,
+		geo:   resume.Geography{Countries: []string{"pl"}, Regions: []string{"eu"}, Cities: []string{"Kraków"}},
+		geoOK: true,
+	}
+	app, token := profileAppWithResume(t, savedProfile(), cv)
+	_ = repo
+
+	body := profileDerived(t, app, token)
+	if body == nil {
+		t.Fatal("derived_location = null, want the geography derived from the CV")
+	}
+	if len(body.Countries) != 1 || body.Countries[0] != "pl" {
+		t.Errorf("derived countries = %v, want [pl]", body.Countries)
+	}
+}
+
+// Nothing derived reads as null rather than as an empty block — an empty block would
+// invite the client to render a pre-fill control as though it had something to offer.
+func TestProfileRead_DerivedLocationNullWhenNothingResolved(t *testing.T) {
+	repo := &fakeProfileRepo{}
+	cv := fakeStructuredResume{
+		ret: resumeextract.Structured{Headline: "Backend engineer"}, ok: true,
+		geo:   resume.Geography{Countries: []string{}, Regions: []string{}},
+		geoOK: true,
+	}
+	app, token := profileAppWithResume(t, savedProfile(), cv)
+	_ = repo
+
+	if got := profileDerived(t, app, token); got != nil {
+		t.Errorf("derived_location = %+v, want null when nothing resolved", got)
+	}
+}
+
+// profileDerived reads the response's derived_location block, nil when the key is null.
+func profileDerived(t *testing.T, app *fiber.App, token string) *derivedLocation {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/me/profile", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Data struct {
+			DerivedLocation *derivedLocation `json:"derived_location"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode profile response: %v", err)
+	}
+	return body.Data.DerivedLocation
 }

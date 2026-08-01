@@ -25,6 +25,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
@@ -69,12 +70,50 @@ type Repository interface {
 	// CV is never matched by the old vector). GetEmbedding reads them back.
 	SetEmbedding(ctx context.Context, userID int64, vec []float64, model string) error
 	GetEmbedding(ctx context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error)
-	// SetStructured persists the derived structured résumé blob + the producing model and
-	// the résumé upload time it was derived from (the stamp). GetStructured reads the blob,
-	// its stamps, and the current résumé upload time so the Store can tell whether the
-	// structure still describes the stored CV.
-	SetStructured(ctx context.Context, userID int64, blob []byte, model string, uploadedAt time.Time) error
+	// SetStructured persists the derived structured résumé and the geography derived from
+	// it, as one write. GetStructured reads the blob, its stamps, and the current résumé
+	// upload time so the Store can tell whether the structure still describes the stored CV.
+	SetStructured(ctx context.Context, w StructuredWrite) error
 	GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error)
+	// GetGeography reads the derived candidate geography plus the two stamps needed to
+	// judge whether it still describes the stored CV.
+	GetGeography(ctx context.Context, userID int64) (db.GetUserResumeGeographyRow, error)
+}
+
+// Geography is where the candidate is, as derived from their CV and stored. Countries is
+// empty both when the CV named no place and when it named one the dictionary could not
+// resolve; the two are distinguished in the database (NULL vs '{}') for the coverage
+// metric, and deliberately NOT here — a consumer asking "where is this candidate" gets
+// the same answer either way, which is "nowhere I can tell you".
+type Geography struct {
+	Countries []string
+	Regions   []string
+	Cities    []string
+}
+
+// StructuredWrite is one persist of the derived structured résumé together with the
+// candidate geography derived from it — one row, one statement, one stamp. They travel
+// together so the monotonic guard (`WHERE resume_uploaded_at = UploadedAt`) covers both:
+// a slow extraction for a since-replaced CV writes neither, and a stored geography can
+// never describe a different CV than the structure beside it.
+//
+// Countries/Regions/Cities carry a three-way answer, and the nil/empty distinction is the
+// point rather than an accident:
+//
+//	nil          — not known: the CV states no location at all
+//	empty slice  — the CV stated a place the curated dictionary could not resolve
+//	non-empty    — what it resolved to
+//
+// Collapsing nil and empty would confuse "we don't know where this candidate is" with
+// "this candidate is nowhere", and would throw away the dictionary's live coverage metric.
+type StructuredWrite struct {
+	UserID     int64
+	Blob       []byte
+	Model      string
+	UploadedAt time.Time
+	Countries  []string
+	Regions    []string
+	Cities     []string
 }
 
 // Store owns the résumé's object storage plus its pointer. blobs is nil when storage is
@@ -139,7 +178,50 @@ func (s *Store) SetStructured(ctx context.Context, userID int64, st resumeextrac
 	if err != nil {
 		return fmt.Errorf("resume: marshal structured: %w", err)
 	}
-	return s.repo.SetStructured(ctx, userID, blob, model, uploadedAt)
+	countries, regions, cities := DeriveGeography(st.Location)
+	return s.repo.SetStructured(ctx, StructuredWrite{
+		UserID:     userID,
+		Blob:       blob,
+		Model:      model,
+		UploadedAt: uploadedAt,
+		Countries:  countries,
+		Regions:    regions,
+		Cities:     cities,
+	})
+}
+
+// DeriveGeography derives the candidate's geography from the location line their
+// structured résumé carries, and projects it onto the three stored columns.
+//
+// It is exported because it has TWO callers that must never disagree: the upload path
+// (Store.SetStructured, above) and the reconciler (cmd/backfill-resume-geo). If the two
+// derived differently, re-running the reconciler would rewrite rows the upload path had
+// just written, and "a second run changes nothing" would quietly stop being true.
+//
+// The derivation itself is location.ParseResidence — the candidate entry point, never
+// location.Parse: a job may be open anywhere and a person never is, so the global region
+// and the work-mode hint are not part of where someone lives. It is deterministic and
+// does no I/O, which is why it runs on the write path rather than as scheduled work.
+//
+// The nil-versus-empty decision lives here rather than in the parser, because it is a
+// question about the INPUT, not about the resolution: ParseResidence returns nothing both
+// for a CV that stated no location and for one whose location it could not resolve, and
+// only this layer still knows which of the two happened.
+func DeriveGeography(stated string) (countries, regions, cities []string) {
+	if strings.TrimSpace(stated) == "" {
+		return nil, nil, nil
+	}
+	res := location.ParseResidence(stated)
+	return orEmpty(res.Countries), orEmpty(res.Regions), orEmpty(res.Cities)
+}
+
+// orEmpty turns a nil slice into an empty one, so a stated-but-unresolved location is
+// stored as '{}' ("the dictionary was silent here") rather than NULL ("we don't know").
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // Structured returns the user's derived structured résumé, but ONLY when it still
@@ -368,15 +450,42 @@ func (r *QueriesRepository) GetEmbedding(ctx context.Context, userID int64) (db.
 	return r.q.GetUserResumeEmbedding(ctx, userID)
 }
 
-func (r *QueriesRepository) SetStructured(ctx context.Context, userID int64, blob []byte, model string, uploadedAt time.Time) error {
+func (r *QueriesRepository) SetStructured(ctx context.Context, w StructuredWrite) error {
 	return r.q.SetUserResumeStructured(ctx, db.SetUserResumeStructuredParams{
-		ID:                         userID,
-		ResumeStructured:           blob,
-		ResumeStructuredModel:      pgtype.Text{String: model, Valid: model != ""},
-		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: uploadedAt, Valid: true},
+		ID:                         w.UserID,
+		ResumeStructured:           w.Blob,
+		ResumeStructuredModel:      pgtype.Text{String: w.Model, Valid: w.Model != ""},
+		ResumeStructuredUploadedAt: pgtype.Timestamptz{Time: w.UploadedAt, Valid: true},
+		ResumeCountries:            w.Countries,
+		ResumeRegions:              w.Regions,
+		ResumeCities:               w.Cities,
 	})
 }
 
 func (r *QueriesRepository) GetStructured(ctx context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
 	return r.q.GetUserResumeStructured(ctx, userID)
+}
+
+// Geography returns the candidate geography derived from the user's CV, under the SAME
+// freshness rule as Structured: it is served only while its stamp still equals the
+// résumé's upload time. ok is false (with no error) when none is stored or the stamp is
+// stale, so a geography derived from a superseded CV is treated as absent rather than
+// answering "where is this candidate" from a document that has been replaced.
+func (s *Store) Geography(ctx context.Context, userID int64) (Geography, bool, error) {
+	row, err := s.repo.GetGeography(ctx, userID)
+	if err != nil {
+		return Geography{}, false, err
+	}
+	if !stampsEqual(row.ResumeStructuredUploadedAt, row.ResumeUploadedAt) {
+		return Geography{}, false, nil
+	}
+	return Geography{
+		Countries: row.ResumeCountries,
+		Regions:   row.ResumeRegions,
+		Cities:    row.ResumeCities,
+	}, true, nil
+}
+
+func (r *QueriesRepository) GetGeography(ctx context.Context, userID int64) (db.GetUserResumeGeographyRow, error) {
+	return r.q.GetUserResumeGeography(ctx, userID)
 }

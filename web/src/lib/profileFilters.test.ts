@@ -14,6 +14,7 @@ function mkProfile(
     skills,
     excluded_skills: excludedSkills,
     location_preferences: location,
+    derived_location: null,
     cv: null,
     created_at: null,
     updated_at: null,
@@ -102,6 +103,39 @@ describe('filtersFromProfile', () => {
     const p = filtersToParams(f);
     expect(p.getAll('skills')).toEqual(['go']);
     expect(p.getAll('skills_exclude')).toEqual(['php']);
+  });
+
+  // `base` is where the user LIVES, not where they want the work. For someone who
+  // accepts only remote work those are different places, and seeding their home country
+  // as a job-country filter would narrow their search to the one country they least need
+  // the job to be in. The gate used to be implicit — the profile form only ever collected
+  // `base` from on-site/hybrid users — so un-gating that form makes it load-bearing here.
+  it('does not seed countries or cities from base for a remote-only user', () => {
+    const location: LocationPreferences = {
+      work_modes: ['remote'],
+      remote: { regions: ['latam'] },
+      base: { country: 'co', city: 'Manizales' },
+      relocation: { open: false },
+    };
+    const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], ['go'], location)));
+    expect(p.getAll('work_mode')).toEqual(['remote']);
+    expect(p.getAll('regions')).toEqual(['latam']);
+    expect(p.getAll('countries')).toEqual([]);
+    expect(p.getAll('cities')).toEqual([]);
+  });
+
+  // Someone who accepts physical work does need the job near where they are, so for them
+  // the two coincide and the contribution is kept.
+  it('still seeds countries and cities from base for a hybrid user', () => {
+    const location: LocationPreferences = {
+      work_modes: ['hybrid'],
+      remote: { regions: [] },
+      base: { country: 'co', city: 'Manizales' },
+      relocation: { open: false },
+    };
+    const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], ['go'], location)));
+    expect(p.getAll('countries')).toEqual(['co']);
+    expect(p.getAll('cities')).toEqual(['Manizales']);
   });
 
   it('a profile with no location block seeds only category and skills', () => {
