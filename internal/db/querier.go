@@ -684,8 +684,10 @@ type Querier interface {
 	// failed_at) once attempts reach max_attempts. The lease (claimed_at) is
 	// intentionally left in place — its expiry gates the retry to a later run and
 	// doubles as the crash reaper, so a failed entry is never reprocessed within the
-	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
-	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error
+	// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure, RETURNING included:
+	// failed_at is how the caller learns an entry dead-lettered, which is what decides the
+	// worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
+	FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error)
 	// Import's write: fill only the fields the bank has nothing for, and never overwrite a value
 	// already there. A user who corrected their job title must not have that correction undone by
 	// re-uploading the CV it came from. is_current is not touched at all — a CV that still says

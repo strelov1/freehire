@@ -2,6 +2,7 @@ package maillink
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -18,6 +19,9 @@ type fakeStore struct {
 	claimedOnce bool
 	saved       []Result
 	savedOutbox []int64
+	failCalls   int
+	deadLetter  bool
+	failErr     error
 }
 
 func (s *fakeStore) EnqueuePending(context.Context) (int64, error) { return 0, nil }
@@ -42,7 +46,13 @@ func (s *fakeStore) Save(_ context.Context, outboxID, _ int64, r Result, _ strin
 	s.savedOutbox = append(s.savedOutbox, outboxID)
 	return nil
 }
-func (s *fakeStore) Fail(context.Context, int64, string, int) error { return nil }
+
+// failCalls records every Fail the run made, and deadLetter decides what each reports — the
+// signal the worker's exit code is built from.
+func (s *fakeStore) Fail(context.Context, int64, string, int) (bool, error) {
+	s.failCalls++
+	return s.deadLetter, s.failErr
+}
 
 type fakeClassifier struct {
 	out        mailclassify.Classification
@@ -68,7 +78,7 @@ func TestRunnerAutoLinksDeterministicMatchAndAdvancesStage(t *testing.T) {
 	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalInterviewInvitation, Confidence: 0.95}}
 	r := New(store, cls, "test-model")
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(store.saved) != 1 {
@@ -106,7 +116,7 @@ func TestRunnerFeedsHTMLOnlyBodyToClassifier(t *testing.T) {
 	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalRejection, Confidence: 0.9}}
 	r := New(store, cls, "test-model")
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if cls.gotBody == "" {
@@ -139,7 +149,7 @@ func TestRunnerLearnsSenderOfApplicationMail(t *testing.T) {
 	learner := &fakeLearner{}
 	r := New(store, cls, "test-model").WithLearner(learner)
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(learner.learned) != 1 || learner.learned[0] != "no-reply@newats.example" {
@@ -156,7 +166,7 @@ func TestRunnerDoesNotLearnNonApplicationMail(t *testing.T) {
 	learner := &fakeLearner{}
 	r := New(store, cls, "test-model").WithLearner(learner)
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if len(learner.learned) != 0 {
@@ -175,7 +185,7 @@ func TestRunnerAmbiguousMatchOffersLLMSuggestion(t *testing.T) {
 	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalRejection, Confidence: 0.9, MatchedJobID: 6}}
 	r := New(store, cls, "test-model")
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	got := store.saved[0]
@@ -210,7 +220,7 @@ func TestRunnerReadsApplicationsOncePerUserButThreadLinksEveryTime(t *testing.T)
 	}
 	r := New(store, &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalAcknowledgement}}, "test-model")
 
-	if err := r.Run(context.Background()); err != nil {
+	if _, err := r.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -221,4 +231,75 @@ func TestRunnerReadsApplicationsOncePerUserButThreadLinksEveryTime(t *testing.T)
 		t.Errorf("ThreadLinks read %d times for 3 emails, want 3 — a link written mid-wave must be visible to the rest of it",
 			store.threadReads)
 	}
+}
+
+// A queue that fails everything must say so upward. Nothing else reads
+// email_classification_outbox.failed_at, so before this the worker logged "done" and returned 0
+// while every entry dead-lettered — the state worker.ExitCode exists to surface.
+func TestRunnerTalliesFailuresAndDeadLetters(t *testing.T) {
+	store := &fakeStore{
+		deadLetter: true,
+		claimed: []Claimed{
+			{OutboxID: 1, EmailID: 11, UserID: 1, Subject: "a"},
+			{OutboxID: 2, EmailID: 12, UserID: 1, Subject: "b"},
+		},
+	}
+	r := New(store, &explodingClassifier{}, "test-model")
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Failed != 2 || stats.DeadLettered != 2 {
+		t.Errorf("stats = %+v, want Failed=2 DeadLettered=2", stats)
+	}
+	if store.failCalls != 2 {
+		t.Errorf("Fail called %d times, want 2", store.failCalls)
+	}
+}
+
+// A failure that has NOT exhausted its attempts is a retry, not a dead letter. Counting it as
+// one would fail the run for a queue that is working exactly as designed.
+func TestRunnerCountsARetryableFailureSeparately(t *testing.T) {
+	store := &fakeStore{
+		deadLetter: false,
+		claimed:    []Claimed{{OutboxID: 1, EmailID: 11, UserID: 1, Subject: "a"}},
+	}
+	r := New(store, &explodingClassifier{}, "test-model")
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Failed != 1 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want Failed=1 DeadLettered=0", stats)
+	}
+}
+
+// When the bookkeeping write itself fails the entry is left to its lease expiry, so its
+// dead-letter state is unknown — and unknown is not guessed. It still counts as failed.
+func TestRunnerDoesNotGuessDeadLetterWhenFailItselfFails(t *testing.T) {
+	store := &fakeStore{
+		deadLetter: true, // would have said yes, had the write landed
+		failErr:    errContrived,
+		claimed:    []Claimed{{OutboxID: 1, EmailID: 11, UserID: 1, Subject: "a"}},
+	}
+	r := New(store, &explodingClassifier{}, "test-model")
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Failed != 1 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want Failed=1 DeadLettered=0 — the write never landed", stats)
+	}
+}
+
+var errContrived = errors.New("contrived bookkeeping failure")
+
+// explodingClassifier fails every message, which is how the tests above drive the failure path.
+type explodingClassifier struct{}
+
+func (explodingClassifier) Classify(context.Context, mailclassify.Input) (mailclassify.Classification, error) {
+	return mailclassify.Classification{}, errContrived
 }

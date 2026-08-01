@@ -199,12 +199,13 @@ func (q *Queries) EnqueuePendingEmailClassification(ctx context.Context) (int64,
 	return result.RowsAffected(), nil
 }
 
-const failEmailClassification = `-- name: FailEmailClassification :exec
+const failEmailClassification = `-- name: FailEmailClassification :one
 UPDATE email_classification_outbox
 SET attempts    = attempts + 1,
     last_error  = $1,
     failed_at   = CASE WHEN attempts + 1 >= $2::int THEN now() ELSE NULL END
 WHERE id = $3
+RETURNING attempts, failed_at
 `
 
 type FailEmailClassificationParams struct {
@@ -213,14 +214,23 @@ type FailEmailClassificationParams struct {
 	ID          int64  `json:"id"`
 }
 
+type FailEmailClassificationRow struct {
+	Attempts int32              `json:"attempts"`
+	FailedAt pgtype.Timestamptz `json:"failed_at"`
+}
+
 // Record a failed attempt: bump attempts, store the error, and dead-letter (set
 // failed_at) once attempts reach max_attempts. The lease (claimed_at) is
 // intentionally left in place — its expiry gates the retry to a later run and
 // doubles as the crash reaper, so a failed entry is never reprocessed within the
-// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
-func (q *Queries) FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) error {
-	_, err := q.db.Exec(ctx, failEmailClassification, arg.LastError, arg.MaxAttempts, arg.ID)
-	return err
+// same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure, RETURNING included:
+// failed_at is how the caller learns an entry dead-lettered, which is what decides the
+// worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
+func (q *Queries) FailEmailClassification(ctx context.Context, arg FailEmailClassificationParams) (FailEmailClassificationRow, error) {
+	row := q.db.QueryRow(ctx, failEmailClassification, arg.LastError, arg.MaxAttempts, arg.ID)
+	var i FailEmailClassificationRow
+	err := row.Scan(&i.Attempts, &i.FailedAt)
+	return i, err
 }
 
 const getUserJobStage = `-- name: GetUserJobStage :one

@@ -100,17 +100,20 @@ WHERE emails.id = sqlc.arg(id) AND emails.user_id = sqlc.arg(user_id);
 -- name: DeleteEmailClassificationOutbox :exec
 DELETE FROM email_classification_outbox WHERE id = $1;
 
--- name: FailEmailClassification :exec
+-- name: FailEmailClassification :one
 -- Record a failed attempt: bump attempts, store the error, and dead-letter (set
 -- failed_at) once attempts reach max_attempts. The lease (claimed_at) is
 -- intentionally left in place — its expiry gates the retry to a later run and
 -- doubles as the crash reaper, so a failed entry is never reprocessed within the
--- same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure.
+-- same run. Mirrors RecordEnrichmentFailure / RecordSemanticFailure, RETURNING included:
+-- failed_at is how the caller learns an entry dead-lettered, which is what decides the
+-- worker's exit code. Without it a mail queue can dead-letter every entry and still exit 0.
 UPDATE email_classification_outbox
 SET attempts    = attempts + 1,
     last_error  = sqlc.arg(last_error),
     failed_at   = CASE WHEN attempts + 1 >= sqlc.arg(max_attempts)::int THEN now() ELSE NULL END
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id)
+RETURNING attempts, failed_at;
 
 -- name: ListUserApplicationsForMatch :many
 -- The caller's open applications offered to the matcher (applied, saved, or staged),

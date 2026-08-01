@@ -67,7 +67,11 @@ type Store interface {
 	CurrentStage(ctx context.Context, userID, jobID int64) (string, error)
 	// Save persists the result and deletes the outbox row in one transaction.
 	Save(ctx context.Context, outboxID, userID int64, r Result, model string) error
-	Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) error
+	// Fail records a failed attempt and reports whether the entry dead-lettered — reached
+	// max_attempts and will not be retried. The bool is not decoration: it is what the
+	// worker's exit code is built from, and without it a queue can dead-letter every entry
+	// and still exit 0.
+	Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) (deadLettered bool, err error)
 }
 
 // Classifier is the LLM port.
@@ -117,9 +121,19 @@ func (r *Runner) WithLearner(l Learner) *Runner {
 
 // Run enqueues every unclassified email, then drains the outbox wave by wave
 // until it is empty.
-func (r *Runner) Run(ctx context.Context) error {
+// Stats is what a run reports upward. Failed counts entries whose processing errored this
+// run; DeadLettered counts the subset that reached max_attempts and will not be retried.
+// cmd/classify-mail turns them into its exit code, so a mail queue that quietly stops working
+// is visible to the scheduler rather than only in journalctl.
+type Stats struct {
+	Failed       int
+	DeadLettered int
+}
+
+func (r *Runner) Run(ctx context.Context) (Stats, error) {
+	var stats Stats
 	if _, err := r.store.EnqueuePending(ctx); err != nil {
-		return err
+		return stats, err
 	}
 	// A wave is mostly one user's mail, and their application list is the same for
 	// every message in it — see appCache for why the thread links are NOT cached
@@ -128,15 +142,24 @@ func (r *Runner) Run(ctx context.Context) error {
 	for {
 		batch, err := r.store.ClaimBatch(ctx, r.leaseSeconds, r.batchSize)
 		if err != nil {
-			return err
+			return stats, err
 		}
 		if len(batch) == 0 {
-			return nil
+			return stats, nil
 		}
 		for _, c := range batch {
 			if err := r.process(ctx, apps, c); err != nil {
-				if ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), r.maxAttempts); ferr != nil {
+				stats.Failed++
+				// Tallied where the bookkeeping error is already logged: a Fail that itself
+				// fails leaves the entry to its lease expiry, so it counts as failed but its
+				// dead-letter state is unknown and is not guessed.
+				deadLettered, ferr := r.store.Fail(ctx, c.OutboxID, err.Error(), r.maxAttempts)
+				if ferr != nil {
 					log.Printf("maillink: fail outbox %d: %v", c.OutboxID, ferr)
+					continue
+				}
+				if deadLettered {
+					stats.DeadLettered++
 				}
 			}
 		}

@@ -146,12 +146,18 @@ func (s *dbStore) Save(ctx context.Context, outboxID, userID int64, r maillink.R
 	return tx.Commit(ctx)
 }
 
-func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) error {
-	return s.q.FailEmailClassification(ctx, db.FailEmailClassificationParams{
+// Fail records the attempt and reports whether the entry dead-lettered, which the statement
+// tells us by stamping failed_at — the same signal the enrichment and semantic queues return.
+func (s *dbStore) Fail(ctx context.Context, outboxID int64, cause string, maxAttempts int) (bool, error) {
+	row, err := s.q.FailEmailClassification(ctx, db.FailEmailClassificationParams{
 		LastError:   cause,
 		MaxAttempts: int32(maxAttempts),
 		ID:          outboxID,
 	})
+	if err != nil {
+		return false, err
+	}
+	return row.FailedAt.Valid, nil
 }
 
 func int8OrNull(v int64) pgtype.Int8 {

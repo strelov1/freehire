@@ -52,10 +52,14 @@ func run() int {
 
 	runner := maillink.New(newDBStore(pool), mailclassify.NewClassifier(client), client.ModelID()).
 		WithLearner(newDomainLearner(pool))
-	if err := runner.Run(ctx); err != nil {
+	stats, err := runner.Run(ctx)
+	if err != nil {
 		log.Printf("classify-mail: %v", err)
 		return 1
 	}
-	log.Printf("classify-mail: done")
-	return 0
+	log.Printf("classify-mail: done failed=%d dead-lettered=%d", stats.Failed, stats.DeadLettered)
+	// Nothing else reads email_classification_outbox.failed_at, so a queue that dead-letters
+	// every entry was previously visible only in journalctl. The exit code is what the
+	// scheduler sees.
+	return worker.ExitCode(stats.Failed, stats.DeadLettered)
 }
