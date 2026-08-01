@@ -100,11 +100,19 @@
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
   // candidate set the date. An unrecognised kind gets the neutral mark rather than none —
   // a fifth kind is coming and must be visible before this file knows its name.
+  //
+  // Tokens, not raw palette hues. Four arbitrary colours would read as a fifth vocabulary
+  // nobody owns, and `pnpm check:tokens` counts them per file; the neighbouring status maps
+  // predate the check and carry a recorded baseline, which is not a reason to add to it.
+  //
+  // Only four token colours are actually distinct: primary and secondary-foreground hold
+  // the SAME value in both themes (oklch(0.13 0 0) light, oklch(0.985 0 0) dark), so
+  // reaching for the second to separate two kinds silently collapses them into one mark.
   const KIND_TONE: Record<string, string> = {
-    applied: 'text-sky-600 dark:text-sky-400',
-    employer_reply: 'text-emerald-600 dark:text-emerald-400',
-    follow_up_sent: 'text-amber-600 dark:text-amber-400',
-    stage_set: 'text-violet-600 dark:text-violet-400',
+    applied: 'text-primary',
+    employer_reply: 'text-brand-strong',
+    follow_up_sent: 'text-warning-strong',
+    stage_set: 'text-muted-foreground',
   };
   const tone = (kind: string) => KIND_TONE[kind] ?? 'text-muted-foreground';
 
@@ -193,7 +201,7 @@
                 ></span>
               {/each}
               {#if marks.remaining > 0}
-                <span class="text-[10px] leading-none text-muted-foreground">+{marks.remaining}</span>
+                <span class="text-xs leading-none text-muted-foreground">+{marks.remaining}</span>
               {/if}
             </span>
           </button>
