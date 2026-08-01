@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import { goto, pushState, replaceState } from '$app/navigation';
+  import { goto, pushState } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Search, X as XIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { MyJob } from '$lib/types';
   import {
     BOARD_COLUMNS,
@@ -116,30 +116,18 @@
     if (!preloaded && isAuthenticated()) void load();
   });
 
-  // Search. Seeded from the URL so a shared or reloaded link shows the same rows.
-  let query = $state(page.url.searchParams.get('q') ?? '');
-
-  // State and URL are written together, synchronously, in the handler. Driving the URL
-  // from a reactive effect instead puts two effects on the same state: a keystroke
-  // schedules both, the URL-sync one runs first against a still-stale URL, and the
-  // just-typed character is overwritten. That has bitten this codebase twice.
-  function setQuery(v: string) {
-    query = v;
-    const url = new URL(page.url);
-    if (v) url.searchParams.set('q', v);
-    else url.searchParams.delete('q');
-    replaceState(url, {});
-  }
-
-  // The one effect, and it observes the URL alone — back/forward and nothing else. The
-  // state read is untracked, or typing would resubscribe it and clobber the value
-  // against a URL replaceState has not committed yet.
-  $effect(() => {
-    const urlQ = page.url.searchParams.get('q') ?? '';
-    untrack(() => {
-      if (urlQ !== query) query = urlQ;
-    });
+  // Search, mirrored into `?q=` so a shared or reloaded link shows the same rows.
+  // UrlSyncedState owns the transport: it writes the URL synchronously on every
+  // keystroke (the structural fix for the dropped-character race) and seeds from
+  // location.search rather than page.url, which lags after a shallow-routing
+  // back/forward. Filtering is local and instant, so there is nothing to debounce —
+  // setNow writes and applies together, and the view reads `value`.
+  const search = new UrlSyncedState<string>(page.url.searchParams, {
+    parse: (p) => p.get('q') ?? '',
+    serialize: (v) => new URLSearchParams(v ? { q: v } : {}),
   });
+  syncOnNavigation(search);
+  const query = $derived(search.value);
 
   const searching = $derived(query.trim().length > 0);
   const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
@@ -348,7 +336,7 @@
       <input
         type="search"
         value={query}
-        oninput={(e) => setQuery(e.currentTarget.value)}
+        oninput={(e) => search.setNow(e.currentTarget.value)}
         placeholder="Search company or role"
         aria-label="Search applications by company or role"
         class="w-full rounded-md border border-input bg-transparent py-1.5 pl-8 pr-8 text-sm"
@@ -356,7 +344,7 @@
       {#if searching}
         <button
           type="button"
-          onclick={() => setQuery('')}
+          onclick={() => search.setNow('')}
           aria-label="Clear search"
           class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
