@@ -111,6 +111,55 @@ func TestDelete_RevokeFailureDoesNotBlockDeletion(t *testing.T) {
 	}
 }
 
+// The gateway credential names this account on a system we do not own, so it goes with
+// the account — and it must go BEFORE the row, because the row is the only place its
+// value is written down. Erasing the row first would leave a live credential nothing can
+// name, spending under an account that no longer exists.
+func TestDelete_BlocksTheGatewayCredentialBeforeTheRow(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{calls: &calls}
+	svc := New(repo, nil, nil).WithGatewayKeys(func(context.Context, int64) error {
+		calls = append(calls, "block-gateway-key")
+		return nil
+	})
+
+	if err := svc.Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	blocked, deleted := -1, -1
+	for i, c := range calls {
+		switch c {
+		case "block-gateway-key":
+			blocked = i
+		case "delete-rows":
+			deleted = i
+		}
+	}
+	if blocked < 0 {
+		t.Fatalf("calls = %v, want the gateway credential blocked", calls)
+	}
+	if deleted < 0 || blocked > deleted {
+		t.Errorf("calls = %v, want the credential blocked before the row is erased", calls)
+	}
+}
+
+// The same rule the Google grant follows: a member leaving must not be held up by a third
+// system's availability, and the credential is worthless once its account is gone.
+func TestDelete_GatewayFailureDoesNotBlockDeletion(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{calls: &calls}
+	svc := New(repo, nil, nil).WithGatewayKeys(func(context.Context, int64) error {
+		return errors.New("gateway down")
+	})
+
+	if err := svc.Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if !repo.deleteSeen {
+		t.Error("account was not deleted after a failed credential block")
+	}
+}
+
 // Storage and Gmail are both optional deployments-wide. A nil dependency means
 // "nothing to erase there", never an error — otherwise a self-hosted instance with
 // no S3 could never delete an account.

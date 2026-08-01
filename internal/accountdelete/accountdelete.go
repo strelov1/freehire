@@ -1,12 +1,18 @@
-// Package accountdelete erases a member's account for good. Deletion spans three
-// systems that cannot share a transaction — Postgres, object storage, and Google —
-// so the ordering between them IS the design, and it lives here rather than in a
-// handler where it could not be tested with fakes.
+// Package accountdelete erases a member's account for good. Deletion spans four
+// systems that cannot share a transaction — Postgres, object storage, Google, and the
+// LLM gateway — so the ordering between them IS the design, and it lives here rather
+// than in a handler where it could not be tested with fakes.
 //
 // Postgres does most of the work by itself: every user-owned table declares
 // ON DELETE CASCADE, so one DELETE reaches the CVs, mail, credits, tracking, keys,
 // and community persona. What the cascade cannot reach is what this package adds:
-// the objects in the bucket and the OAuth grant held at Google.
+// the objects in the bucket, the OAuth grant held at Google, and the gateway
+// credential the account's model calls were spent under.
+//
+// The gateway credential is the one thing here that is retired rather than erased. It
+// is what the gateway's spend records hang off, and a cost history that vanishes when
+// somebody leaves is not a cost history; blocking it stops the spending and keeps the
+// numbers.
 package accountdelete
 
 import (
@@ -43,6 +49,10 @@ type Service struct {
 	repo   Repository
 	blobs  blobstore.Store
 	revoke RevokeFunc
+	// blockKey stops the credential the LLM gateway knows this account by, without
+	// erasing it — the gateway's spend record hangs off that key. Nil when the
+	// deployment does not attribute spend, which is simply nothing to do there.
+	blockKey RevokeFunc
 }
 
 // New builds the service. Pass a nil store and/or a nil revoker for a deployment
@@ -77,7 +87,30 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 			log.Printf("accountdelete: revoke grant for user %d: %v", userID, err)
 		}
 	}
+	// The gateway credential is the same shape of problem as the objects: its value
+	// lives in the row that is about to disappear, so it has to be dealt with first or
+	// nothing can name it afterwards — a live credential spending under an account that
+	// no longer exists.
+	//
+	// It is BLOCKED rather than erased. The gateway's record of what that key spent is
+	// the cost history, and deleting the key takes the history with it; a departing
+	// member must stop being able to spend, but need not take last quarter's numbers
+	// along. Best-effort like the grant above, and for the same reason.
+	if s.blockKey != nil {
+		if err := s.blockKey(ctx, userID); err != nil {
+			log.Printf("accountdelete: block gateway credential for user %d: %v", userID, err)
+		}
+	}
 	return s.repo.DeleteUser(ctx, userID)
+}
+
+// WithGatewayKeys attaches the blocker for the LLM gateway credential. Separate from the
+// constructor because a deployment that does not attribute spend is ordinary rather than
+// degraded, and because this is the third external system erasure spans — a fourth
+// positional argument would stop saying which is which.
+func (s *Service) WithGatewayKeys(block RevokeFunc) *Service {
+	s.blockKey = block
+	return s
 }
 
 func (s *Service) deleteObjects(ctx context.Context, keys []string) error {
