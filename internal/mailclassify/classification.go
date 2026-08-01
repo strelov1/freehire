@@ -5,6 +5,8 @@
 // value" guard (and the prompt-injection guard for untrusted email bodies).
 package mailclassify
 
+import "github.com/strelov1/freehire/internal/userjob"
+
 // StatusSignal is the controlled vocabulary an email is classified into.
 type StatusSignal string
 
@@ -80,21 +82,6 @@ func (c Classification) Sanitize() Classification {
 	return c
 }
 
-// stageOrder is the forward pipeline rank of the active application stages a
-// classified email can advance to. Terminal outcomes (rejected/withdrawn) and
-// accepted are intentionally absent — they are never applied automatically.
-var stageOrder = map[string]int{
-	"applied": 1, "screening": 2, "responded": 3, "interview": 4, "offer": 5,
-}
-
-// terminalStages are the settled outcomes an automatic advance must never move a
-// job OUT of. They rank below `applied` in stageOrder (rank 0), so without this
-// guard any forward signal would "advance" a rejected/accepted/withdrawn job back
-// into the active pipeline — resurrecting a dead application.
-var terminalStages = map[string]bool{
-	"rejected": true, "accepted": true, "withdrawn": true,
-}
-
 // signalStage maps a status signal to the application stage it implies and
 // whether that stage may be applied automatically. Negative/terminal outcomes
 // (rejection) and non-progress signals (info_request, other) are never auto.
@@ -106,21 +93,21 @@ var signalStage = map[StatusSignal]string{
 	SignalOffer:               "offer",
 }
 
-// AdvanceStage returns the stage a signal should move `current` to and whether
-// an automatic change should occur. It advances only strictly forward in the
-// pipeline; a backward, terminal, or non-progress signal returns ("", false).
-// An empty `current` ranks below every stage, so a first classified email can
-// seed the stage.
+// AdvanceStage returns the stage a signal should move `current` to and whether an automatic
+// change should occur.
+//
+// The two halves belong to different packages and this is the seam. Which stage a SIGNAL implies
+// is mail's own question — it is about what an employer's email means. Whether an application may
+// MOVE from one stage to another is a tracking rule, and internal/userjob owns it along with the
+// vocabulary itself, so a stage added there cannot leave this package computing an order that no
+// longer matches.
 func AdvanceStage(current string, sig StatusSignal) (string, bool) {
-	if terminalStages[current] {
-		return "", false // a settled application is never resurrected automatically
-	}
 	target, ok := signalStage[sig]
 	if !ok {
 		return "", false
 	}
-	if stageOrder[target] > stageOrder[current] {
-		return target, true
+	if !userjob.Forward(current, target) {
+		return "", false
 	}
-	return "", false
+	return target, true
 }

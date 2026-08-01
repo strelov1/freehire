@@ -6,18 +6,21 @@ import (
 	"github.com/strelov1/freehire/internal/userjob"
 )
 
-// TestStageTargetsAreValidStages guards the coupling: every stage this package
-// maps a signal to must be a real user_jobs stage, so the vocabulary can't drift
-// out from under the tracking pipeline.
+// TestStageTargetsAreValidStages guards what remains of the coupling: every stage this package
+// maps a signal to must be a real user_jobs stage, so the mail vocabulary cannot drift out from
+// under the tracking pipeline.
+//
+// The other direction — every tracking stage is ranked or terminal — now lives in internal/userjob
+// with the rule itself, which is the point of the move. It used to be missing entirely, and that
+// gap is what let a stage inserted into Stages rank below `applied`.
 func TestStageTargetsAreValidStages(t *testing.T) {
 	for sig, stage := range signalStage {
 		if !userjob.ValidStage(stage) {
 			t.Errorf("signal %q maps to invalid stage %q", sig, stage)
 		}
-	}
-	for stage := range stageOrder {
-		if !userjob.ValidStage(stage) {
-			t.Errorf("stageOrder has invalid stage %q", stage)
+		if userjob.IsTerminal(stage) {
+			t.Errorf("signal %q maps to the terminal stage %q; deciding an application is settled "+
+				"is never an inference from mail", sig, stage)
 		}
 	}
 }
