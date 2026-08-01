@@ -20,10 +20,10 @@ would fingerprint a NULL posted time while writing a real one.
 
 ## 3. The moderator create path
 
-- [ ] 3.1 `internal/db/queries/jobs.sql`: add `content_hash` and `role_fingerprint` to
+- [x] 3.1 `internal/db/queries/jobs.sql`: add `content_hash` and `role_fingerprint` to
   `UpsertManualJob`'s insert column list and its `ON CONFLICT DO UPDATE` set; run
   `make sqlc`.
-- [ ] 3.2 `internal/job/job.go`: `Fields.UpsertManualParams` fills both derived columns
+- [x] 3.2 `internal/job/job.go`: `Fields.UpsertManualParams` fills both derived columns
   by fingerprinting `f.UpsertParams()`, so a manual write and an automated write of the
   same content produce the same two values.
 

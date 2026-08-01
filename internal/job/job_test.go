@@ -242,3 +242,32 @@ func TestUpsertParams_PostedAtMovesContentHashButNotRoleFingerprint(t *testing.T
 		t.Errorf("RoleFingerprint = %q and %q; the role identity must not move with posted_at", a.RoleFingerprint.String, b.RoleFingerprint.String)
 	}
 }
+
+// A posting carries the same two fingerprints for the same content whatever wrote it:
+// the moderator mapping and the automated one share one computation, so a hand-curated
+// vacancy is comparable with the crawled copy of the same role rather than sitting
+// outside clustering with NULL columns.
+func TestUpsertManualParams_DerivedColumnsMatchTheAutomatedMapping(t *testing.T) {
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:      "workatastartup",
+		ExternalID:  "https://acme.example/jobs/1",
+		Title:       "Senior Go Developer",
+		Company:     "Acme",
+		Location:    "Berlin",
+		Description: "We use Golang.",
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	f := j.Fields()
+
+	automated := f.UpsertParams()
+	moderator := f.UpsertManualParams(7)
+
+	if moderator.ContentHash != automated.ContentHash {
+		t.Errorf("ContentHash = %v, want %v", moderator.ContentHash, automated.ContentHash)
+	}
+	if moderator.RoleFingerprint != automated.RoleFingerprint {
+		t.Errorf("RoleFingerprint = %v, want %v", moderator.RoleFingerprint, automated.RoleFingerprint)
+	}
+}

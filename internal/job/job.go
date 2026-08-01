@@ -221,6 +221,11 @@ func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
 // path shares the one column mapping instead of re-listing them. It additionally
 // seeds the salary_*_manual columns from the authoritative ManualSalary (nil when
 // none) and stamps the moderator's id as created_by/updated_by.
+//
+// The derived columns are taken from UpsertParams rather than recomputed, so a
+// hand-curated posting and a crawled one carry identical fingerprints for identical
+// content — which is what lets the two cluster as one role instead of the manual copy
+// sitting outside clustering.
 func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 	var salMin, salMax *int
 	var salCurrency, salPeriod string
@@ -228,6 +233,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		salMin, salMax = f.ManualSalary.Min, f.ManualSalary.Max
 		salCurrency, salPeriod = f.ManualSalary.Currency, f.ManualSalary.Period
 	}
+	derived := f.UpsertParams()
 	return db.UpsertManualJobParams{
 		Source:      f.Source,
 		ExternalID:  f.ExternalID,
@@ -259,6 +265,9 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		SalaryMaxManual:      pgconv.Int4(salMax),
 		SalaryCurrencyManual: salCurrency,
 		SalaryPeriodManual:   salPeriod,
+
+		ContentHash:     derived.ContentHash,
+		RoleFingerprint: derived.RoleFingerprint,
 
 		CreatedBy: actorID,
 		UpdatedBy: actorID,
