@@ -151,6 +151,12 @@ No schema migration: `content_hash` and `role_fingerprint` already exist on `job
 Deploy order is unconstrained — the change only starts writing two columns that readers
 already tolerate as NULL.
 
+One-time effect on the first crawl after deploy: Telegram-extracted and link-imported
+rows written before this change carry `content_hash` NULL, and `NULL IS DISTINCT FROM
+<value>` is true, so their next re-ingest reports `changed` and pushes them to the live
+search index once. That is a bounded, self-limiting backlog over two small sources — and
+it is the change signal starting to work for paths where it never had, not a regression.
+
 Existing rows, after deploy:
 
 1. `role_fingerprint` on legacy manual rows — already handled by the next scheduled

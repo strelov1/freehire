@@ -14,7 +14,6 @@ import (
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
-	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/telegram"
 	"github.com/strelov1/freehire/internal/vocab"
@@ -47,9 +46,7 @@ func buildParams(source, externalID, url, title, company, loc string, remote boo
 	if err != nil {
 		return db.UpsertJobParams{}, err
 	}
-	params := j.Fields().UpsertParams()
-	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
-	return params, nil
+	return j.Fields().UpsertParams(), nil
 }
 
 // maxAttempts is the retry budget per post: the first failure leaves the post

@@ -23,7 +23,6 @@ import (
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobdedup"
 	"github.com/strelov1/freehire/internal/jobderive"
-	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/search"
@@ -200,7 +199,6 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 		return Result{}, false, err
 	}
 	params := j.Fields().UpsertParams()
-	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
 	tx, err := im.pool.Begin(ctx)
 	if err != nil {

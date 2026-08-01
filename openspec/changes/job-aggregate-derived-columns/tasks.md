@@ -11,11 +11,11 @@ would fingerprint a NULL posted time while writing a real one.
 
 ## 2. The write mapping owns the derived columns
 
-- [ ] 2.1 `internal/job/job.go`: `Fields.UpsertParams` computes `ContentHash`
+- [x] 2.1 `internal/job/job.go`: `Fields.UpsertParams` computes `ContentHash`
   (`jobhash.Of`) and `RoleFingerprint` (`jobhash.RoleFingerprint`) on the params it
   returns; rewrite the doc comment so it states the mapping owns every derived
   column instead of instructing callers to set them afterwards.
-- [ ] 2.2 Delete the now-redundant post-mapping assignments in `cmd/ingest/store.go`,
+- [x] 2.2 Delete the now-redundant post-mapping assignments in `cmd/ingest/store.go`,
   `cmd/tg-extract/store.go` and `internal/linkimport/linkimport.go`.
 
 ## 3. The moderator create path

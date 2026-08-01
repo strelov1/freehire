@@ -10,9 +10,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/pgconv"
 )
@@ -162,14 +165,17 @@ func New(d Draft) (Job, error) {
 // fields alias the aggregate's; callers treat the result as read-only.
 func (j Job) Fields() Fields { return j.f }
 
-// UpsertParams maps the Fields-derived columns of a job to the generated UpsertJob
-// params, so every write path (ingest, telegram extraction) shares one mapping
-// instead of re-listing the columns. It covers only the fields carried on Fields;
-// columns a caller derives separately (ContentHash, RoleFingerprint, or a PostedAt
-// supplied outside the aggregate) are set on the returned struct after this call.
+// UpsertParams maps a job to the generated UpsertJob params, so every write path
+// (ingest, telegram extraction, link import) shares one mapping instead of re-listing
+// the columns. It owns the DERIVED columns too — content_hash and role_fingerprint are
+// computed here rather than bolted on by each caller afterwards, so a write path cannot
+// persist a posting missing either one by forgetting a step. A posted time supplied
+// outside the deterministic derivation therefore belongs on the Draft, before this
+// mapping runs: content_hash fingerprints posted_at, so setting it on the returned
+// struct would fingerprint a value other than the one written.
 // Enrichment columns are deliberately excluded — SetJobEnrichment owns those.
 func (f Fields) UpsertParams() db.UpsertJobParams {
-	return db.UpsertJobParams{
+	p := db.UpsertJobParams{
 		Source:      f.Source,
 		ExternalID:  f.ExternalID,
 		URL:         f.URL,
@@ -196,6 +202,18 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
 	}
+	return withDerived(p)
+}
+
+// withDerived stamps the two fingerprints a persisted posting carries onto a mapped
+// params struct. content_hash covers the indexed content (posted_at included), so the
+// upsert can report whether a re-ingest changed anything searchable; role_fingerprint
+// is the repost IDENTITY and deliberately excludes posted_at/url/slug, so a reposted
+// role clusters with its original for the reality signal.
+func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
+	p.ContentHash = pgtype.Text{String: jobhash.Of(p), Valid: true}
+	p.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(p), Valid: true}
+	return p
 }
 
 // UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the

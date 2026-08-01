@@ -3,6 +3,7 @@ package job_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
@@ -175,5 +176,69 @@ func TestNew_NoManualSalaryByDefault(t *testing.T) {
 	}
 	if j.Fields().ManualSalary != nil {
 		t.Errorf("ManualSalary = %v, want nil (none supplied)", j.Fields().ManualSalary)
+	}
+}
+
+// The write mapping owns every derived column a persisted posting carries. A write
+// path cannot omit the content fingerprint or the role fingerprint by forgetting a
+// step, because there is no step to forget.
+func TestUpsertParams_FillsDerivedColumns(t *testing.T) {
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:      "manual",
+		ExternalID:  "https://acme.example/jobs/1",
+		Title:       "Senior Go Developer",
+		Company:     "Acme",
+		Description: "We use Golang.",
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	params := j.Fields().UpsertParams()
+
+	if !params.ContentHash.Valid || params.ContentHash.String == "" {
+		t.Errorf("ContentHash = %v, want a fingerprint", params.ContentHash)
+	}
+	if !params.RoleFingerprint.Valid || params.RoleFingerprint.String == "" {
+		t.Errorf("RoleFingerprint = %v, want a fingerprint", params.RoleFingerprint)
+	}
+}
+
+// The two derived columns answer different questions, and posted_at is what separates
+// them: content_hash fingerprints the indexed content (posted_at included, so a
+// re-ingest with a bumped date counts as changed), while role_fingerprint is the role
+// IDENTITY and deliberately excludes it, so a repost still clusters with its original.
+func TestUpsertParams_PostedAtMovesContentHashButNotRoleFingerprint(t *testing.T) {
+	draft := func(postedAt *time.Time) job.Draft {
+		return job.Draft{
+			Input: jobderive.Input{
+				Source:      "manual",
+				ExternalID:  "https://acme.example/jobs/1",
+				Title:       "Senior Go Developer",
+				Company:     "Acme",
+				Description: "We use Golang.",
+			},
+			PostedAt: postedAt,
+		}
+	}
+	earlier := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	later := time.Date(2026, 4, 5, 6, 7, 8, 0, time.UTC)
+
+	first, err := job.New(draft(&earlier))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	second, err := job.New(draft(&later))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	a, b := first.Fields().UpsertParams(), second.Fields().UpsertParams()
+
+	if a.ContentHash.String == b.ContentHash.String {
+		t.Errorf("ContentHash unchanged across posted_at = %q; the hash does not cover the posted time actually written", a.ContentHash.String)
+	}
+	if a.RoleFingerprint.String != b.RoleFingerprint.String {
+		t.Errorf("RoleFingerprint = %q and %q; the role identity must not move with posted_at", a.RoleFingerprint.String, b.RoleFingerprint.String)
 	}
 }

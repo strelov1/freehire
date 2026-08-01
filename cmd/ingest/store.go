@@ -12,7 +12,6 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobdedup"
-	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
@@ -81,13 +80,9 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 
 	// The aggregate's read projection carries every persistable field; the write path
 	// never touches enrichment (SetJobEnrichment owns those columns), so it is not mapped.
+	// The mapping also stamps content_hash — which the upsert reports back as
+	// inserted/changed, driving the incremental index push below — and role_fingerprint.
 	params := j.Fields().UpsertParams()
-	// Fingerprint the indexed fields so the upsert can report whether this write
-	// changed searchable content (drives incremental indexing below).
-	params.ContentHash = pgtype.Text{String: jobhash.Of(params), Valid: true}
-	// role_fingerprint is the repost IDENTITY (excludes posted_at/url/slug), so a
-	// reposted role clusters for the job-reality signal — distinct from content_hash.
-	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
 	qtx := s.q.WithTx(tx)
 	saved, err := qtx.UpsertJob(ctx, params)
