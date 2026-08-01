@@ -54,8 +54,8 @@
 
 ## 9. Production rollout
 
-- [ ] 9.1 Apply migration `0068` on production before deploying
-- [ ] 9.2 Run `cmd/backfill-resume-structured --dry-run`, review the 40 users, then run it for real
-- [ ] 9.3 Run `cmd/backfill-resume-geo --dry-run`, then run it for real
-- [ ] 9.4 Verify: produce the country distribution in one query, and confirm a second `backfill-resume-geo` run changes nothing
-- [ ] 9.5 Record the final coverage number (resolved / consciously empty) across all users with a stored CV
+- [x] 9.1 Apply migration `0068` on production before deploying
+- [x] 9.2 Run `cmd/backfill-resume-structured --dry-run`, review the 40 users, then run it for real
+- [x] 9.3 Run `cmd/backfill-resume-geo --dry-run`, then run it for real
+- [x] 9.4 Verify: produce the country distribution in one query, and confirm a second `backfill-resume-geo` run changes nothing
+- [x] 9.5 Record the final coverage number (resolved / consciously empty) across all users with a stored CV
