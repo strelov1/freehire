@@ -137,6 +137,29 @@ func TestSpeedrunMembers_AMarketTierCompanyEarnsNoA16zTag(t *testing.T) {
 	}
 }
 
+func TestFetchSpeedrunDirectory_NamesItselfInTheUserAgent(t *testing.T) {
+	// The directory rejects Go's default client outright — an unnamed
+	// `Go-http-client/2.0` gets the connection dropped, while any identified agent is
+	// served. Naming ourselves is both what unblocks the fetch and what lets the
+	// network's operators see who is calling.
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("User-Agent")
+		fmt.Fprint(w, directoryPage(0, 1))
+	}))
+	defer srv.Close()
+
+	if _, err := fetchSpeedrunDirectory(context.Background(), srv.Client(), srv.URL); err != nil {
+		t.Fatalf("fetchSpeedrunDirectory: %v", err)
+	}
+	if !strings.Contains(got, "freehire") {
+		t.Errorf("User-Agent = %q, want it to name freehire", got)
+	}
+	if strings.Contains(got, "Go-http-client") {
+		t.Errorf("User-Agent = %q — the default client is what the directory blocks", got)
+	}
+}
+
 func TestFetchSpeedrunDirectory_AMidWalkFailureIsAnError(t *testing.T) {
 	// A short read is indistinguishable from a shrunken directory, and would
 	// reconcile the tag off every company on the pages that were never reached.

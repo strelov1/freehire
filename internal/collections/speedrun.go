@@ -16,6 +16,12 @@ const speedrunDirectoryURL = "https://speedrun-talent-network.com/api/v1/compani
 // speedrunSourceTag identifies us to the API, matching internal/sources/speedrun.go.
 const speedrunSourceTag = "freehire"
 
+// speedrunUserAgent names us to the directory. Not optional politeness: the network
+// drops the connection for Go's default `Go-http-client/2.0` while serving any
+// identified agent, so an unnamed request fails with a bare 500. Matches the agent
+// string the liveness prober uses.
+const speedrunUserAgent = "freehire/0.1 (+https://freehire.me)"
+
 // speedrunPageLimit bounds the walk. The directory reports its own page count, but a
 // malformed or hostile response could report an unbounded one; 9 pages is the live
 // size, so this leaves a wide margin while keeping the run finite.
@@ -133,6 +139,7 @@ func fetchSpeedrunPage(ctx context.Context, client *http.Client, base string, pa
 	if err != nil {
 		return speedrunPage{}, err
 	}
+	req.Header.Set("User-Agent", speedrunUserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return speedrunPage{}, fmt.Errorf("collections: speedrun page %d: %w", page, err)
