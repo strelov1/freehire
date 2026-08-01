@@ -14,17 +14,17 @@
 
 ## 3. The card carries no controls
 
-- [ ] 3.1 Strip `BoardCard` to indicators: remove the stretched open overlay, the follow-up button and the rehearse button; keep the stage badge, the silence marker, the mail count and the notes mark
-- [ ] 3.2 Make the card one `role="button" tabindex="0"` element that opens the application on click and on Enter/Space. A card that cannot be opened from the keyboard is a regression, not a detail
-- [ ] 3.3 Drop the now-unused `onfollowup`/`onrehearse` props from `BoardCard` and `BoardColumn`, and the `canRehearse` stage gate from `web/src/lib/rehearsal.ts`
-- [ ] 3.4 Confirm in a browser: the card drags from its body, its badge row and its title alike, and a click still opens the application. The defect was invisible to every existing test and cannot be signed off by one
+- [x] 3.1 Strip `BoardCard` to indicators: remove the stretched open overlay, the follow-up button and the rehearse button; keep the stage badge, the silence marker, the mail count and the notes mark
+- [x] 3.2 Make the card one `role="button" tabindex="0"` element that opens the application on click and on Enter/Space. A card that cannot be opened from the keyboard is a regression, not a detail
+- [x] 3.3 Drop the now-unused `onfollowup`/`onrehearse` props from `BoardCard` and `BoardColumn`, and the `canRehearse` stage gate from `web/src/lib/rehearsal.ts`
+- [x] 3.4 Confirm in a browser: the card drags from its body, its badge row and its title alike, and a click still opens the application. The defect was invisible to every existing test and cannot be signed off by one
 
 ## 4. The opened application carries the actions
 
-- [ ] 4.1 Add the action row to `JobDrawer`, below the meta pills and above the tabs, so it shows on every tab and does not fight `View job` for the corner
-- [ ] 4.2 Wire Rehearse (moved from `JobBoard.startRehearsal`, offered at any stage) and Follow up (opening the existing `FollowUpDialog`, keeping its `canFollowUp` gate)
-- [ ] 4.3 Wire Analyze to switch to the existing Job Match tab, and Tailor CV to navigate to `/tailor/[slug]`
-- [ ] 4.4 Hide Rehearse, Analyze and Tailor CV when `item.job` is null — absent, not disabled, as `View job` already is. Follow up stays: the chase is addressed to the employer, which the application knows by itself
+- [x] 4.1 Add the action row to `JobDrawer`, below the meta pills and above the tabs, so it shows on every tab and does not fight `View job` for the corner
+- [x] 4.2 Wire Rehearse (moved from `JobBoard.startRehearsal`, offered at any stage) and Follow up (opening the existing `FollowUpDialog`, keeping its `canFollowUp` gate)
+- [x] 4.3 Wire Analyze to switch to the existing Job Match tab, and Tailor CV to navigate to `/tailor/[slug]`
+- [x] 4.4 Hide Rehearse, Analyze and Tailor CV when `item.job` is null — absent, not disabled, as `View job` already is. Follow up stays: the chase is addressed to the employer, which the application knows by itself
 
 ## 5. Point the board's writes at the new routes
 

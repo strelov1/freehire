@@ -262,10 +262,6 @@
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your board." />
 {:else}
-  {#if rehearsalError}
-    <!-- The board is still usable, so this reports beside it rather than replacing it. -->
-    <p class="mb-2 text-sm text-warning-strong" role="alert">{rehearsalError}</p>
-  {/if}
   <div class="flex gap-3 overflow-x-auto pb-2">
     {#each BOARD_COLUMNS as col (col.id)}
       <BoardColumn
@@ -275,8 +271,6 @@
         {onconsider}
         {onfinalize}
         onopen={openDrawer}
-        onfollowup={openFollowUp}
-        onrehearse={startRehearsal}
       />
     {/each}
   </div>
@@ -292,6 +286,11 @@
       onchooseoutcome={chooseOutcome}
       onremove={remove}
       onclose={closeDrawer}
+      onrehearse={startRehearsal}
+      onfollowup={openFollowUp}
+      {rehearsing}
+      {rehearsalError}
+      blocked={!!followUpItem}
     />
   {/key}
 {/if}
