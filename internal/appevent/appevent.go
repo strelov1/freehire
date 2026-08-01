@@ -1,6 +1,7 @@
 // Package appevent holds the application-event vocabulary shared by the paths that
-// record into the ledger — internal/maillink, internal/inbox, internal/jobtracking —
-// and by the aggregates that read it.
+// record into the ledger — internal/inbox (which owns the mail reconcile both the
+// interactive paths and cmd/classify-mail call) and internal/jobtracking — and by the
+// aggregates that read it.
 //
 // It is vocabulary and rules only, in the shape internal/userjob uses for stages: no
 // database access, so every caller can validate before it writes and the rules are

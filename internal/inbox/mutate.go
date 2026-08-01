@@ -192,23 +192,8 @@ func (s *Service) mutate(ctx context.Context, userID, id int64, do func() (int64
 // primary result. A failure here is logged, never surfaced — the reconcile is idempotent
 // and the next mutation, or the backfill, will carry it out.
 func (s *Service) syncLedger(ctx context.Context, userID, id int64, mailSource string) {
-	source, err := appevent.SourceForMail(mailSource)
-	if err != nil {
+	if err := ReconcileMailEvent(ctx, s.q, userID, id, mailSource); err != nil {
 		log.Printf("inbox: ledger sync user=%d email=%d: %v", userID, id, err)
-		return
-	}
-	// Order matters: the retraction must land before the insert, or the insert's
-	// conflict check still sees the superseded row as live. See the query comments.
-	if _, err := s.q.RetractSupersededEmailEvent(ctx, db.RetractSupersededEmailEventParams{
-		ID: id, UserID: userID,
-	}); err != nil {
-		log.Printf("inbox: ledger retract user=%d email=%d: %v", userID, id, err)
-		return
-	}
-	if err := s.q.RecordEmailApplicationEvent(ctx, db.RecordEmailApplicationEventParams{
-		ID: id, UserID: userID, EventSource: source,
-	}); err != nil {
-		log.Printf("inbox: ledger record user=%d email=%d: %v", userID, id, err)
 	}
 }
 
