@@ -17,7 +17,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -60,7 +59,7 @@ func run() int {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
 	}
 
-	raw, companyByBoard, err := resolveCandidates(ctx, p, client, seedPath)
+	raw, expected, err := resolveCandidates(ctx, p, client, seedPath)
 	if err != nil {
 		log.Printf("harvest-boards: %v", err)
 		return 1
@@ -81,8 +80,8 @@ func run() int {
 	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
 		provider, len(raw), len(existing), len(candidates))
 
-	kept, failures, mismatches := probeAll(ctx, client, p, candidates, companyByBoard, *workers)
-	log.Printf("harvest-boards: live boards found=%d probe-failures=%d name-mismatches=%d refused=%d answered=%d",
+	kept, failures, mismatches := probeAll(ctx, client, p, candidates, expected, *workers)
+	log.Printf("harvest-boards: live boards found=%d probe-failures=%d mismatches=%d refused=%d answered=%d",
 		len(kept), failures, mismatches, client.refused(), client.answered())
 	// A run the platform mostly turned away found nothing because it was not allowed to look.
 	// The probers cannot say so — they report a refusal as an absent board — so this is the
@@ -102,12 +101,13 @@ func run() int {
 		return 1
 	}
 	// Every live board disagreeing with its seed means the gate itself is wrong — a prober
-	// that started reporting a platform-wide name, or a seed built against the wrong
-	// employers — not "no new boards". Same reasoning as the all-probes-failed guard: an
-	// empty harvest that is really a broken one must not exit 0. A single rejection is the
-	// gate working, not failing, so the alarm needs more than one.
+	// that started reporting a platform-wide name, a seed built against the wrong employers,
+	// or ids drawn from a different id space than the platform's — not "no new boards". Same
+	// reasoning as the all-probes-failed guard: an empty harvest that is really a broken one
+	// must not exit 0. A single rejection is the gate working, not failing, so the alarm
+	// needs more than one.
 	if mismatches > 1 && len(kept) == 0 {
-		log.Printf("harvest-boards: every live board (%d) disagreed with its expected employer", mismatches)
+		log.Printf("harvest-boards: every live board (%d) disagreed with what its seed expected", mismatches)
 		return 1
 	}
 	if len(kept) == 0 {
@@ -144,7 +144,7 @@ func run() int {
 // candidates come from the seed file, mapped through the prober. This is the only step that
 // differs between a discovery provider and a seed-list one — dedup, probe, and append are
 // shared downstream.
-func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, map[string]string, error) {
+func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath string) ([]string, map[string]expectation, error) {
 	if seedPath == "" {
 		d, ok := p.(discoverer)
 		if !ok {
@@ -162,28 +162,29 @@ func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath str
 		tokens[i] = it.Board
 	}
 	boards := mapSeeds(p, tokens)
-	companyByBoard := make(map[string]string)
+	expected := make(map[string]expectation)
 	for i, b := range boards {
-		if items[i].Company != "" {
-			companyByBoard[b] = items[i].Company
+		if items[i].Company != "" || items[i].ExpectID != "" {
+			expected[b] = expectation{company: items[i].Company, postingID: items[i].ExpectID}
 		}
 	}
-	return boards, companyByBoard, nil
+	return boards, expected, nil
 }
 
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
 // emit-ready entries sorted by board, the number of candidates whose probe errored, and the
-// number rejected because the board named a different employer than the seed expected.
+// number rejected because the board did not match what the seed expected of it.
 // A probe error is logged and the candidate skipped, so one dead board never aborts the
 // harvest; the caller uses the failure count to fail the run when EVERY probe errored
-// (a broken probe or outage, not a legitimately empty harvest). companyByBoard supplies the
-// employer each candidate is expected to belong to: it gates the board when the platform
-// reports a name of its own, and labels it when the platform reports none (chooseCompany).
+// (a broken probe or outage, not a legitimately empty harvest). expected supplies what the
+// seed claims about each candidate: the employer it should belong to, which gates the board
+// when the platform reports a name of its own and labels it when it reports none
+// (chooseCompany), and/or the id of a posting the board should carry.
 //
 // Mismatches are counted apart from failures because they mean something else entirely — a
 // dead board is noise, while a wave of mismatches means the candidates or the prober's name
 // extraction are wrong, and burying them in the failure count would hide that.
-func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string, workers int) ([]entry, int, int) {
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, expected map[string]expectation, workers int) ([]entry, int, int) {
 	sem := make(chan struct{}, workers)
 	var (
 		mu         sync.Mutex
@@ -209,20 +210,17 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 			if n == 0 {
 				return
 			}
-			// The board is live. It still has to be the board we were looking for, and only
-			// a name the platform publishes itself can confirm that. An expected name that
-			// normalizes to nothing (punctuation alone) states no expectation at all, and is
-			// treated as such rather than rejecting every board it is paired with.
-			expected := companyByBoard[slug]
-			if normalize.CompanyKey(expected) != "" && name != "" && !normalize.SameCompany(expected, name) {
-				log.Printf("harvest-boards: %s: expected %q, board reports %q — skipped", slug, expected, name)
+			// The board is live. It still has to be the board we were looking for.
+			want := expected[slug]
+			if reason := mismatchReason(ctx, client, p, slug, name, want); reason != "" {
+				log.Printf("harvest-boards: %s: %s — skipped", slug, reason)
 				mu.Lock()
 				mismatches++
 				mu.Unlock()
 				return
 			}
 			mu.Lock()
-			kept = append(kept, entry{Company: chooseCompany(name, expected, slug), Board: slug})
+			kept = append(kept, entry{Company: chooseCompany(name, want.company, slug), Board: slug})
 			mu.Unlock()
 		}(slug)
 	}

@@ -42,13 +42,13 @@ func TestProbeAllNameGate(t *testing.T) {
 		// not an expectation, so the board must be kept rather than rejected.
 		"unnameable": {company: "Real Employer", openJobs: 2},
 	}
-	seed := map[string]string{
-		"adoreal":                            "Adoreal",
-		"prequel":                            "Prequel",
-		"nameless":                           "Nameless Co",
-		"broken":                             "Broken",
-		"acme.wd1.myworkdayjobs.com/careers": "Acme Corporation",
-		"unnameable":                         "???",
+	seed := map[string]expectation{
+		"adoreal":                            {company: "Adoreal"},
+		"prequel":                            {company: "Prequel"},
+		"nameless":                           {company: "Nameless Co"},
+		"broken":                             {company: "Broken"},
+		"acme.wd1.myworkdayjobs.com/careers": {company: "Acme Corporation"},
+		"unnameable":                         {company: "???"},
 	}
 	candidates := []string{
 		"adoreal", "prequel", "nameless", "unclaimed", "broken", "unnameable",

@@ -10,9 +10,15 @@ import (
 // board tokens (Company empty) or an array of {board, company} objects — the latter lets a
 // discovery source that already knows the employer (e.g. harvest-role, which reads it from
 // role.com's JSON-LD) supply a name for providers whose own API exposes none (Oracle).
+//
+// ExpectID names a posting the board is expected to contain, in the platform's own id space.
+// A discovery source that read the id off a posting elsewhere (harvest-linkedin, harvest-role)
+// can supply it, and the probe then identifies the board by that evidence instead of by a
+// name resemblance — which is what makes a slug guessed offline safe to propose.
 type seedItem struct {
-	Board   string `json:"board"`
-	Company string `json:"company"`
+	Board    string `json:"board"`
+	Company  string `json:"company"`
+	ExpectID string `json:"expect_id"`
 }
 
 // loadSeedItems reads a seed file in either supported shape: a JSON array of strings or a

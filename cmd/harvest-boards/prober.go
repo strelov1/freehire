@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/sources"
@@ -37,10 +38,49 @@ type prober interface {
 	probe(ctx context.Context, c httpClient, slug string) (company string, openJobs int, err error)
 }
 
+// idProber is the optional half of the prober contract: it reports the ids of a board's live
+// postings, in the platform's own id space, so a seed that knows one posting's id can identify
+// the board by evidence instead of by a name resemblance.
+//
+// It is optional because the check reads a missing id as "wrong board", which is only sound
+// where one request yields the COMPLETE live list. A prober that pages, or that asks for a
+// single posting to settle liveness, must not implement it — its silence leaves the expected
+// id inert, which is the safe reading of partial evidence.
+//
+// This re-requests the listing probe already fetched, rather than widening prober's return to
+// carry ids through the ~35 implementations that have no use for them. The extra request is
+// only spent on the seeds that name a posting — the offline-derived candidates, which are a
+// minority and which produce no board at all without it.
+type idProber interface {
+	postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error)
+}
+
 // greenhouseProber probes the Greenhouse public boards API. The jobs endpoint lists only
 // live postings, so a non-empty list means a live board. The company name comes from the
 // board-metadata endpoint, fetched only once a board is known to have jobs.
 type greenhouseProber struct{}
+
+func greenhouseJobsURL(slug string) string {
+	return fmt.Sprintf("%s/%s/jobs", greenhouseBoardsAPI, slug)
+}
+
+// postingIDs lists the board's live posting ids. The jobs endpoint returns every live posting
+// in one response, so an id it does not carry is genuinely not on the board.
+func (greenhouseProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
+	var jr struct {
+		Jobs []struct {
+			ID int64 `json:"id"`
+		} `json:"jobs"`
+	}
+	if err := c.GetJSON(ctx, greenhouseJobsURL(slug), &jr); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(jr.Jobs))
+	for _, j := range jr.Jobs {
+		ids = append(ids, strconv.FormatInt(j.ID, 10))
+	}
+	return ids, nil
+}
 
 func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var jr struct {
@@ -50,7 +90,7 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 	}
 	// A missing/moved board returns 4xx and the client surfaces it as an error. For harvest
 	// that simply means "not a live greenhouse board" — skip silently, do not propagate.
-	if err := c.GetJSON(ctx, fmt.Sprintf("%s/%s/jobs", greenhouseBoardsAPI, slug), &jr); err != nil {
+	if err := c.GetJSON(ctx, greenhouseJobsURL(slug), &jr); err != nil {
 		return "", 0, nil
 	}
 	if len(jr.Jobs) == 0 {
@@ -72,11 +112,31 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 // the name falls back to the slug.
 type leverProber struct{}
 
+func leverPostingsURL(slug string) string {
+	return fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", slug)
+}
+
+// postingIDs lists the board's live posting ids. The JSON-mode endpoint returns every live
+// posting in one array, so an id it does not carry is genuinely not on the board.
+func (leverProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
+	var postings []struct {
+		ID string `json:"id"`
+	}
+	if err := c.GetJSON(ctx, leverPostingsURL(slug), &postings); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(postings))
+	for _, p := range postings {
+		ids = append(ids, p.ID)
+	}
+	return ids, nil
+}
+
 func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var postings []struct {
 		ID string `json:"id"`
 	}
-	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", slug), &postings); err != nil {
+	if err := c.GetJSON(ctx, leverPostingsURL(slug), &postings); err != nil {
 		return "", 0, nil
 	}
 	if len(postings) == 0 {
@@ -90,13 +150,35 @@ func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string
 // slug, which Ashby itself uses as the board identity.
 type ashbyProber struct{}
 
+func ashbyBoardURL(slug string) string {
+	return fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", slug)
+}
+
+// postingIDs lists the board's live posting ids. The list endpoint returns every live posting
+// in one response, so an id it does not carry is genuinely not on the board.
+func (ashbyProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
+	var resp struct {
+		Jobs []struct {
+			ID string `json:"id"`
+		} `json:"jobs"`
+	}
+	if err := c.GetJSON(ctx, ashbyBoardURL(slug), &resp); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(resp.Jobs))
+	for _, j := range resp.Jobs {
+		ids = append(ids, j.ID)
+	}
+	return ids, nil
+}
+
 func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var resp struct {
 		Jobs []struct {
 			ID string `json:"id"`
 		} `json:"jobs"`
 	}
-	if err := c.GetJSON(ctx, fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", slug), &resp); err != nil {
+	if err := c.GetJSON(ctx, ashbyBoardURL(slug), &resp); err != nil {
 		return "", 0, nil
 	}
 	if len(resp.Jobs) == 0 {
@@ -286,6 +368,28 @@ func (smartRecruitersProber) probe(ctx context.Context, c httpClient, slug strin
 // against the name the seed expected rather than accepted on liveness alone.
 type recruiteeProber struct{}
 
+func recruiteeOffersURL(slug string) string {
+	return fmt.Sprintf("https://%s.recruitee.com/api/offers/", slug)
+}
+
+// postingIDs lists the board's live posting ids. The offers endpoint returns every live offer
+// in one response, so an id it does not carry is genuinely not on the board.
+func (recruiteeProber) postingIDs(ctx context.Context, c httpClient, slug string) ([]string, error) {
+	var resp struct {
+		Offers []struct {
+			ID int64 `json:"id"`
+		} `json:"offers"`
+	}
+	if err := c.GetJSON(ctx, recruiteeOffersURL(slug), &resp); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(resp.Offers))
+	for _, o := range resp.Offers {
+		ids = append(ids, strconv.FormatInt(o.ID, 10))
+	}
+	return ids, nil
+}
+
 func (recruiteeProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var resp struct {
 		Offers []struct {
@@ -293,7 +397,7 @@ func (recruiteeProber) probe(ctx context.Context, c httpClient, slug string) (st
 			CompanyName string `json:"company_name"`
 		} `json:"offers"`
 	}
-	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.recruitee.com/api/offers/", slug), &resp); err != nil {
+	if err := c.GetJSON(ctx, recruiteeOffersURL(slug), &resp); err != nil {
 		return "", 0, nil
 	}
 	if len(resp.Offers) == 0 {

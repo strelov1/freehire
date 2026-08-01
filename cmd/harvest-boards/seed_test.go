@@ -46,6 +46,18 @@ func TestLoadSeedItemsObjectArray(t *testing.T) {
 	}
 }
 
+func TestLoadSeedItemsExpectedPostingID(t *testing.T) {
+	path := writeTemp(t, `[{"board":"x","expect_id":"4698693006"},{"board":"y","company":"Y Co"}]`)
+	got, err := loadSeedItems(path)
+	if err != nil {
+		t.Fatalf("loadSeedItems: %v", err)
+	}
+	want := []seedItem{{Board: "x", ExpectID: "4698693006"}, {Board: "y", Company: "Y Co"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "seed.json")
