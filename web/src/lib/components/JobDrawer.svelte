@@ -10,6 +10,7 @@
   import { tablist } from '$lib/actions/tablist';
   import { cardTags } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
+  import JobDescription from './JobDescription.svelte';
   import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
   import NoteEditor from './NoteEditor.svelte';
@@ -20,6 +21,7 @@
   import { avatarInitials, avatarColor } from '$lib/avatar';
   import type { MyJob, ApplicationEmail } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
+  import { lockScroll, unlockScroll } from '$lib/scrollLock';
 
   let {
     item,
@@ -161,14 +163,17 @@
     ].filter((x): x is { label: string; at: string } => x !== null),
   );
 
-  // Lock background scroll while the fullscreen panel is open, restored on unmount
+  // Lock background scroll while the fullscreen panel is open, released on unmount
   // (close / job switch). A DOM side-effect — the legitimate use of $effect.
+  //
+  // Through the shared reference-counted lock rather than by writing body.overflow here: a
+  // direct write is exactly what desynchronizes a refcount that only acts on the 0↔1
+  // transition. The drawer happens to cover the header today (fixed inset-0 z-50), so nothing
+  // else can be holding the lock — but that is a layout fact, and the next layout change should
+  // not be able to leave the page unscrollable.
   $effect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    lockScroll();
+    return () => unlockScroll();
   });
 
   // Close the panel, first blurring whatever is focused so a pending notes edit is
@@ -445,9 +450,7 @@
               This posting is no longer listed. Your application, its stage and your notes are kept.
             </p>
           {:else if item.job.description}
-            <!-- Description is server-sanitized HTML (see internal/sources), safe to render. -->
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -- server-sanitized; the rule flags every {@html} regardless -->
-            <div class="job-description text-sm leading-relaxed">{@html item.job.description}</div>
+            <JobDescription html={item.job.description} />
           {:else}
             <p class="text-sm text-muted-foreground">No description available.</p>
           {/if}
@@ -491,48 +494,5 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
-  }
-
-  /* Descriptions are arbitrary scraped HTML: a long URL — or words glued by
-     non-breaking spaces — must wrap instead of forcing a horizontal scroll.
-     Styles mirror JobView's .job-description so the read matches the job page. */
-  .job-description {
-    overflow-wrap: break-word;
-  }
-
-  .job-description :global(h1),
-  .job-description :global(h2),
-  .job-description :global(h3),
-  .job-description :global(h4) {
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-  }
-
-  .job-description :global(p) {
-    margin: 0.5rem 0;
-  }
-
-  .job-description :global(ul),
-  .job-description :global(ol) {
-    margin: 0.5rem 0;
-    padding-left: 1.25rem;
-  }
-
-  .job-description :global(li) {
-    display: list-item;
-    list-style: disc outside;
-    margin: 0.25rem 0;
-  }
-
-  /* ATS boards (e.g. Greenhouse) wrap each <li> in a block <p>; collapse its
-     margins so the bullet sits beside the text instead of on its own line. */
-  .job-description :global(li) > :global(p) {
-    margin: 0;
-  }
-
-  .job-description :global(b),
-  .job-description :global(strong) {
-    font-weight: 600;
   }
 </style>
