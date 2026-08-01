@@ -1,18 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { CATEGORY_VALUES } from './generated/contracts';
 import { CATEGORY_LABELS, RELOCATION_LABELS, categoryLabel, titleCase } from './labels';
 
+// Exhaustiveness over the generated vocabulary is enforced by the type checker rather
+// than here: CATEGORY_LABELS carries `satisfies Record<Category, string>`, so
+// `pnpm run check` fails in BOTH directions — a category added to the backend and left
+// unlabelled (TS1360) and a label left behind after a category is removed (TS2353).
+// These cases pin the wordings that were product decisions rather than mechanical ones.
 describe('CATEGORY_LABELS', () => {
-  // The category map is the one label map that must be exhaustive: three surfaces
-  // render it through two different fallbacks (facets.ts title-cases every word,
-  // enrichment.ts capitalizes only the first), so any code the map omits renders two
-  // ways by construction. This test is what keeps the map bound to the backend
-  // vocabulary — a new category fails here instead of quietly rendering twice.
-  it('labels every category in the generated vocabulary', () => {
-    const unlabelled = CATEGORY_VALUES.filter((value) => !(value in CATEGORY_LABELS));
-    expect(unlabelled).toEqual([]);
-  });
-
   it('names AI engineering as a discipline, not a job title', () => {
     expect(CATEGORY_LABELS.ai_engineering).toBe('AI Engineering');
   });

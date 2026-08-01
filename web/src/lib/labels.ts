@@ -9,6 +9,8 @@
 // fallback. CATEGORY_LABELS is the deliberate exception and is exhaustive; the reason
 // is recorded above it.
 
+import type { Category } from './generated/contracts';
+
 /** A title-cased fallback label for a code with no explicit label
  *  (e.g. "network_engineering" → "Network Engineering"). Lives here, with the maps,
  *  so "how a label is produced" has one home; enrichment.ts keeps a separate
@@ -79,8 +81,13 @@ export const RELOCATION_LABELS: Record<string, string> = {
 // word, enrichment.ts capitalizes only the first). Any code left to the fallback
 // therefore renders two ways by construction, which is what previously forked an
 // entire second map into insights.ts. Listing every code removes the fallback from the
-// path instead of asking three call sites to agree. labels.test.ts binds this map to
-// CATEGORY_VALUES, so a new backend category fails the suite until it is named here.
+// path instead of asking three call sites to agree.
+//
+// `satisfies Record<Category, string>` is what keeps it exhaustive: adding a category
+// to the backend vocabulary and regenerating contracts fails `pnpm run check` (TS1360,
+// naming the code) until it is labelled here, and removing one fails the same check
+// (TS2353) rather than leaving a stale entry. The declared type stays
+// Record<string, string> because the `label(map, value)` helpers take that shape.
 export const CATEGORY_LABELS: Record<string, string> = {
   backend: 'Backend',
   frontend: 'Frontend',
@@ -119,7 +126,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   operations: 'Operations',
   customer_success: 'Customer Success',
   other: 'Other',
-};
+} satisfies Record<Category, string>;
 
 /** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the filter
  *  panel, the profile view and the /insights pages. The map above is exhaustive over

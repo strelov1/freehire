@@ -5,6 +5,7 @@
   import GrowthArea from '$lib/components/GrowthArea.svelte';
   import { OPEN_FAQ } from '$lib/openFaq';
   import { breadcrumbJsonLd, datasetJsonLd, faqPageJsonLd, jsonLdScript } from '$lib/seo';
+  import { SENIORITY_LABELS, WORK_MODE_LABELS } from '$lib/labels';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -51,7 +52,13 @@
       return code.toUpperCase();
     }
   }
-  const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
+  // Skills are an open vocabulary with no shared map, so they keep the local
+  // sentence-cased fallback. Seniority and work mode are closed vocabularies that
+  // labels.ts already names — reading it here is what stops this page printing
+  // "C level" and "Onsite" while the rest of the app prints "C-level" and "On-site".
+  const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ');
+  const labelled = (map: Record<string, string>) => (code: string) =>
+    map[code] ?? sentenceCase(code);
 
   type Bar = { label: string; count: number };
   function top(facet: Record<string, number> | undefined, n: number, label: (k: string) => string): Bar[] {
@@ -64,9 +71,9 @@
 
   const facets = $derived(data.facets);
   const countries = $derived(top(facets?.countries, 8, countryName));
-  const skills = $derived(top(facets?.skills, 8, titleCase));
-  const seniority = $derived(top(facets?.seniority, 6, titleCase));
-  const workMode = $derived(top(facets?.work_mode, 3, titleCase));
+  const skills = $derived(top(facets?.skills, 8, sentenceCase));
+  const seniority = $derived(top(facets?.seniority, 6, labelled(SENIORITY_LABELS)));
+  const workMode = $derived(top(facets?.work_mode, 3, labelled(WORK_MODE_LABELS)));
 
   // The snapshot endpoint always returns the four facet keys (empty maps before the
   // daily rollup's first run), so `facets` is truthy even when there's nothing to

@@ -28,8 +28,9 @@ fork exists precisely because neither fallback was trustworthy enough to rely on
 
 - `CATEGORY_LABELS` becomes **exhaustive** over the generated `CATEGORY_VALUES`, so the
   fallback cannot fire for that closed vocabulary and the two fallback styles stop mattering
-  for categories. A unit test binds the map to the generated vocabulary, so a new backend
-  category fails the suite instead of silently rendering two ways.
+  for categories. `satisfies Record<Category, string>` binds the map to the generated
+  vocabulary in both directions, so an unlabelled new category and a stale leftover label
+  each fail `pnpm run check` — which `main`'s required `web` CI job runs.
 - The `/insights` pages lose their private `CATEGORY_LABELS` and `SENIORITY_LABELS`; they read
   the shared maps. Their category-page titles, H1s and auto-intro sentences keep rendering the
   same strings they render today.
@@ -48,8 +49,15 @@ somewhere:
 
 - The filter panel and the job page start saying "AI Engineering" and "Full-Stack".
 - The filter panel's relocation pill starts saying "Not supported" instead of "None".
-- ~15 multi-word categories on the job page gain their missing capital
-  ("Network engineering" → "Network Engineering"), matching the panel and the indexed pages.
+- Seven multi-word categories on the job page gain their missing capital
+  (`network_engineering`, `engineering_design`, `business_analysis`,
+  `solutions_engineering`, `developer_relations`, `technical_writing`,
+  `customer_success`), matching the panel and the indexed pages.
+- `/open` starts saying "C-level" and "On-site" in its seniority and work-mode
+  distributions, matching every other surface.
+
+`/insights` page titles, H1s and intro sentences are byte-identical apart from the two
+settled category wordings.
 
 No **BREAKING** API change: these are display strings in the SPA. The filter *values* sent to
 the API are the underlying codes and are untouched.
@@ -76,8 +84,11 @@ governs how the codes themselves are derived, and neither is affected.
 - `web/src/lib/facets.ts` — loses its local `humanize` and `categoryLabel`, and its inline
   relocation overrides.
 - `web/src/lib/enrichment.ts` — loses its inline `RELOCATION`; `humanize` renamed.
+- `web/src/routes/open/+page.svelte` — its seniority and work-mode buckets read the shared
+  maps instead of a private fallback; skills keep the local one, being an open vocabulary.
 - Import sites: `web/src/lib/filterSections.ts`, `web/src/lib/components/ProfileForm.svelte`,
   and the three `web/src/routes/insights/*/[category]/+page.server.ts` loaders.
-- Tests: `web/src/lib/insights.test.ts` (the `categoryLabel` cases move), plus a new
-  `web/src/lib/labels.test.ts` holding the vocabulary-coverage guard.
+- Tests: `web/src/lib/insights.test.ts` (the `categoryLabel` cases move, a
+  `seniorityLabel` case is added), plus a new `web/src/lib/labels.test.ts` pinning the
+  settled wordings and the fallback.
 - No backend, database, API or Meilisearch change. No migration.

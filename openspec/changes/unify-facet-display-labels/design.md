@@ -8,6 +8,13 @@ Three SPA modules render closed-vocabulary facet codes:
 | `enrichment.ts` | job-detail facet rows | `labels.CATEGORY_LABELS` | local `humanize` — **Sentence case** |
 | `insights.ts` | indexed `/insights` pages | **its own 35-entry map** | local title-case regex |
 
+A fourth surface was missed in the first pass and found in review: `routes/open/+page.svelte`
+labels its seniority and work-mode distributions with a private fallback and consults no
+shared map at all, so the sitemap'd `/open` page prints "C level" and "Onsite" where the rest
+of the app prints "C-level" and "On-site". Different vocabularies from the ones this change
+set out to fix, same defect — so it is fixed here rather than left as a known divergence that
+would falsify the first requirement on the day it is archived.
+
 `labels.ts` states its rule in its opening comment: "only the codes whose label differs from
 the title-cased fallback are listed here". That rule is coherent for exactly one fallback.
 With two, every multi-word code the map omits is rendered two ways by construction — which is
@@ -63,17 +70,34 @@ testable.
 apparent violation of its own "only the differing codes" rule. The rule is amended in the
 comment for this one map, with the reason recorded in place.
 
-### The vocabulary-coverage test is the enforcement
+### `satisfies Record<Category, string>` is the enforcement
 
-`CATEGORY_VALUES` is generated from the Go vocabulary by `cmd/gen-contracts`. A unit test
-asserting that every generated value is a key of `CATEGORY_LABELS` converts "keep this map in
-sync" from a comment into a build failure the moment contract regeneration adds a code.
+`CATEGORY_VALUES` is generated from the Go vocabulary by `cmd/gen-contracts`, and
+`contracts.ts` exports the matching `Category` union. Writing
 
-**Alternative considered — declare the map as `Record<Category, string>`** and let the
-compiler demand totality. Stronger in principle, and rejected in practice: `CATEGORY_LABELS`
-is consumed by `label(map, value)` helpers typed `Record<string, string>`, so narrowing the
-declaration ripples into those signatures for no gain, and a type error at the regeneration
-site is a worse diagnostic than a test that names the unlabelled code.
+```ts
+export const CATEGORY_LABELS: Record<string, string> = { … } satisfies Record<Category, string>;
+```
+
+converts "keep this map in sync" from a comment into a compile error, in **both**
+directions — verified against this repo's own tsc: a missing code fails with `TS1360`
+naming the property, an extra one with `TS2353`. The declared type stays
+`Record<string, string>`, so the `label(map, value)` helpers and the `options()` call sites
+are untouched; `satisfies` constrains the literal without widening or narrowing the binding.
+
+It runs in the required gate: `main`'s branch protection requires the `web` job, which runs
+`pnpm run check` (`svelte-check`).
+
+**Alternative considered — a unit test asserting `CATEGORY_VALUES ⊆ keys(CATEGORY_LABELS)`.**
+That was the first implementation and it worked, but it is strictly weaker: it is
+one-directional (a label left behind after a category is removed goes undetected), and it is
+a bespoke assertion where the type system already expresses totality. Dropped in favour of
+the one-line constraint.
+
+**Alternative considered — declaring the map as `Record<Category, string>` outright.** Also
+total, but it changes the exported binding's type, which would ripple into the helper
+signatures and force a cast at the direct-index site. `satisfies` gets the check without the
+ripple, which is exactly what it exists for.
 
 ### One title-case helper, owned by `labels.ts`
 

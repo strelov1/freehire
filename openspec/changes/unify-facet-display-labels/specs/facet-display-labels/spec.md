@@ -2,11 +2,17 @@
 
 ### Requirement: A facet code renders as one string on every surface
 
-The SPA SHALL resolve a closed-vocabulary facet code to its display text through a single
-shared label map, so the filter panel, the job-detail facet rows, and the indexed
-`/insights` pages cannot render the same code under different names. A surface MUST NOT
-declare its own map for a vocabulary the shared module already owns, and MUST NOT reach a
-shared map through a fallback of its own.
+The SPA SHALL resolve a closed-vocabulary facet code to its display text through the
+shared label maps in `labels.ts`, so no two surfaces render the same code under different
+names. A surface MUST NOT declare a competing map for a vocabulary the shared module
+already owns, and MUST NOT label a code from such a vocabulary without consulting that
+map.
+
+A surface MAY keep its own fallback for codes *outside* the map — the job-detail rows
+sentence-case where the filter panel title-cases, because those rows read as prose. That
+freedom is only safe where it cannot reach a real code, which is why the category
+vocabulary is labelled exhaustively (next requirement). Open vocabularies with no shared
+map at all, such as skill tags, are outside this requirement.
 
 #### Scenario: The same category on three surfaces
 
@@ -20,24 +26,29 @@ shared map through a fallback of its own.
   Relocation row of a job's detail page
 - **THEN** both read "Not supported"
 
+#### Scenario: The open-startup page's facet buckets
+
+- **WHEN** the `/open` page renders its seniority and work-mode distributions, whose codes
+  come from the same closed vocabularies
+- **THEN** it reads "C-level" and "On-site", not "C level" and "Onsite"
+
 ### Requirement: The category vocabulary is labelled exhaustively
 
 The shared category label map SHALL carry an entry for every value in the generated
 `CATEGORY_VALUES` vocabulary, so no category is ever rendered through a fallback. The
-binding between map and vocabulary SHALL be enforced by an automated check rather than by
-convention, so adding a category to the backend vocabulary fails the suite until the SPA is
-given its display text.
-
-#### Scenario: Every generated category has a label
-
-- **WHEN** the label suite runs
-- **THEN** it asserts that each value of `CATEGORY_VALUES` is a key of the shared category map
+binding between map and vocabulary SHALL be enforced mechanically rather than by
+convention, in both directions, and the enforcement MUST run in the required CI gate.
 
 #### Scenario: A new backend category arrives without a label
 
 - **WHEN** a category is added to the backend vocabulary and the generated contracts are
   regenerated, but no display text is added
-- **THEN** the label suite fails, naming the unlabelled code
+- **THEN** the type check fails, naming the unlabelled code
+
+#### Scenario: A category leaves the vocabulary
+
+- **WHEN** a category is removed from the backend vocabulary but its label is left behind
+- **THEN** the type check fails, naming the stale label
 
 ### Requirement: An unrecognised code still renders as readable text
 

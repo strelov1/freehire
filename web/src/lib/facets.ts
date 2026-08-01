@@ -203,13 +203,13 @@ async function subindustrySearch(query: string): Promise<FacetOption[]> {
 // Role facet values are canonical slugs (senior_backend, founding_engineer); the
 // live distribution carries no display name, so map them through the generated
 // ROLE_LABELS catalog (the roletag dictionary is the source of truth), falling
-// back to a humanized slug for a value the catalog somehow lacks.
+// back to a title-cased slug for a value the catalog somehow lacks.
 export function roleLabel(slug: string): string {
   return (ROLE_LABELS as Record<string, string>)[slug] ?? titleCase(slug);
 }
 
 /** Display label for a dynamic facet value: country code → name, company slug →
- *  humanized name, else the value. */
+ *  title-cased name, else the value. */
 export function dynamicLabel(param: string, value: string): string {
   if (param === 'countries') return countryLabel(value);
   if (param === 'posting_language') return languageLabel(value);
@@ -321,7 +321,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
- *  used by the dynamic source select; falls back to the humanized slug. */
+ *  used by the dynamic source select; falls back to the title-cased slug. */
 export function sourceLabel(value: string): string {
   return SOURCE_LABELS[value] ?? titleCase(value);
 }
