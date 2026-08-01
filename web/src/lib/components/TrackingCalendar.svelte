@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
   import {
@@ -79,6 +79,19 @@
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const CELL_MARKS = 4;
 
+  // A month of mostly-empty cells is tall, so on a laptop the panel opens below the fold
+  // and the click reads as having done nothing. Only scrolls when it actually is out of
+  // view, and only as far as it must — an unconditional jump is worse than the problem.
+  async function selectDay(key: string) {
+    selectedKey = selectedKey === key ? null : key;
+    if (!selectedKey) return;
+    await tick();
+    const panel = document.getElementById('calendar-day-panel');
+    if (panel && panel.getBoundingClientRect().bottom > window.innerHeight) {
+      panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
   function step(by: number) {
     const d = new Date(year, month + by, 1);
     void show(d.getFullYear(), d.getMonth());
@@ -155,7 +168,7 @@
           {@const marks = splitDayEvents(day.events, CELL_MARKS)}
           <button
             type="button"
-            onclick={() => (selectedKey = selectedKey === day.key ? null : day.key)}
+            onclick={() => selectDay(day.key)}
             aria-expanded={selectedKey === day.key}
             aria-controls={selectedKey === day.key ? 'calendar-day-panel' : undefined}
             aria-label={cellLabel(day)}
@@ -192,7 +205,7 @@
       {#each grid.daysWithEvents as day (day.key)}
         <button
           type="button"
-          onclick={() => (selectedKey = selectedKey === day.key ? null : day.key)}
+          onclick={() => selectDay(day.key)}
           aria-pressed={selectedKey === day.key}
           class="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left text-sm
                  {selectedKey === day.key ? 'border-primary' : ''}"

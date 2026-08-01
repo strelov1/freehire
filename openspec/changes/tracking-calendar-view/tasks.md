@@ -88,7 +88,7 @@
       tests.
 - [x] 6.2 `web/`: install the linked design system first, then `svelte-check`, `eslint` and
       `vitest`; all green against the repository's existing baseline.
-- [ ] 6.3 Visual check against a running authed stack: the tab is selected and reload-safe at
+- [x] 6.3 Visual check against a running authed stack: the tab is selected and reload-safe at
       `/my/tracking/calendar`; a month with events renders marks; selecting a day opens the
       panel with no network request in the devtools panel; a mail event links to the message
       and a deleted-message event does not; the narrow layout lists days.
