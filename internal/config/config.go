@@ -71,6 +71,25 @@ type Settings struct {
 	LLMAPIKey  string
 	LLMModel   string
 
+	// LLMAdminURL and LLMAdminKey reach the gateway's administrative API, which mints
+	// the per-user credential each account's calls are spent under. They are named
+	// apart from LLMBaseURL/LLMAPIKey for two reasons: the endpoints genuinely differ
+	// (inference is served under /v1, administration at the root), and separating them
+	// is what later lets LLMAPIKey stop being an administrative credential without a
+	// code change. Either empty disables attribution entirely — every call then goes
+	// out on LLMAPIKey exactly as it did before.
+	LLMAdminURL string
+	LLMAdminKey string
+
+	// LLMUserMaxBudget and LLMUserRPMLimit bound one account at the gateway. Both are
+	// unset by default and omitted from a minted credential when zero: a ceiling
+	// chosen before the spend distribution is known is a guess, and a guess that
+	// refuses people is expensive to be wrong about. LLMUserBudgetWindow is the period
+	// a budget resets over ("30d"); it only matters once a budget exists.
+	LLMUserMaxBudget    float64
+	LLMUserRPMLimit     int
+	LLMUserBudgetWindow string
+
 	// AssistantModel is the model the in-app agent runs on. It is separate from
 	// LLMModel because the two jobs differ: LLMModel is chosen for cheap, one-shot
 	// JSON extraction, while the assistant needs reliable tool calling and a large
@@ -193,6 +212,12 @@ func Load() Settings {
 		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
 		LLMModel:   os.Getenv("LLM_MODEL"),
 
+		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
+		LLMAdminKey:         os.Getenv("LLM_ADMIN_KEY"),
+		LLMUserMaxBudget:    envFloat("LLM_USER_MAX_BUDGET", 0),
+		LLMUserRPMLimit:     envInt("LLM_USER_RPM_LIMIT", 0),
+		LLMUserBudgetWindow: env("LLM_USER_BUDGET_WINDOW", "30d"),
+
 		AssistantModel:    os.Getenv("ASSISTANT_MODEL"),
 		AssistantMaxSteps: envInt("ASSISTANT_MAX_STEPS", 0),
 
@@ -304,6 +329,15 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	// also falls back.
 	if d, err := time.ParseDuration(env(key, "")); err == nil {
 		return d
+	}
+	return fallback
+}
+
+func envFloat(key string, fallback float64) float64 {
+	// Same "unset or empty -> fallback" rule as envInt; an unparseable value also
+	// falls back, which for a spend ceiling means "no ceiling" rather than "no spend".
+	if f, err := strconv.ParseFloat(env(key, ""), 64); err == nil {
+		return f
 	}
 	return fallback
 }

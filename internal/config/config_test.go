@@ -17,6 +17,72 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_GatewayAdminFromEnv(t *testing.T) {
+	t.Setenv("LLM_ADMIN_URL", "https://gw.example")
+	t.Setenv("LLM_ADMIN_KEY", "admin-123")
+
+	s := Load()
+	if s.LLMAdminURL != "https://gw.example" || s.LLMAdminKey != "admin-123" {
+		t.Errorf("admin settings = %q/%q, want the env values", s.LLMAdminURL, s.LLMAdminKey)
+	}
+}
+
+// The administrative endpoint is NOT the inference one: the gateway serves chat under
+// /v1 and administration at its root. Defaulting one from the other would encode a guess
+// about how an operator wrote a URL, and would foreclose keeping the admin API off the
+// public host entirely.
+func TestLoad_GatewayAdminIsNotDerivedFromTheInferenceURL(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "https://gw.example/v1")
+	t.Setenv("LLM_API_KEY", "key-123")
+	t.Setenv("LLM_ADMIN_URL", "")
+	t.Setenv("LLM_ADMIN_KEY", "")
+
+	s := Load()
+	if s.LLMAdminURL != "" || s.LLMAdminKey != "" {
+		t.Errorf("admin settings = %q/%q, want both empty — an unset admin API disables attribution",
+			s.LLMAdminURL, s.LLMAdminKey)
+	}
+}
+
+// A ceiling is policy this change deliberately ships without. Zero is what the gateway
+// client reads as "send no limit at all", so the default must be zero rather than some
+// number nobody chose.
+func TestLoad_NoPerUserCeilingByDefault(t *testing.T) {
+	t.Setenv("LLM_USER_MAX_BUDGET", "")
+	t.Setenv("LLM_USER_RPM_LIMIT", "")
+
+	s := Load()
+	if s.LLMUserMaxBudget != 0 || s.LLMUserRPMLimit != 0 {
+		t.Errorf("ceiling = %v/%v, want no ceiling until one is chosen", s.LLMUserMaxBudget, s.LLMUserRPMLimit)
+	}
+	if s.LLMUserBudgetWindow != "30d" {
+		t.Errorf("budget window = %q, want the 30d default — it only matters once a budget exists",
+			s.LLMUserBudgetWindow)
+	}
+}
+
+func TestLoad_PerUserCeilingFromEnv(t *testing.T) {
+	t.Setenv("LLM_USER_MAX_BUDGET", "2.5")
+	t.Setenv("LLM_USER_RPM_LIMIT", "60")
+	t.Setenv("LLM_USER_BUDGET_WINDOW", "7d")
+
+	s := Load()
+	if s.LLMUserMaxBudget != 2.5 || s.LLMUserRPMLimit != 60 || s.LLMUserBudgetWindow != "7d" {
+		t.Errorf("ceiling = %v/%v/%q, want the env values",
+			s.LLMUserMaxBudget, s.LLMUserRPMLimit, s.LLMUserBudgetWindow)
+	}
+}
+
+// An unparseable ceiling must read as "no ceiling", never as "nothing is allowed": a typo
+// in an environment variable should not refuse every call the deployment makes.
+func TestLoad_AnUnparseableCeilingIsNoCeiling(t *testing.T) {
+	t.Setenv("LLM_USER_MAX_BUDGET", "two dollars")
+
+	if s := Load(); s.LLMUserMaxBudget != 0 {
+		t.Errorf("max budget = %v, want 0 so a typo cannot refuse every call", s.LLMUserMaxBudget)
+	}
+}
+
 func TestLoad_STTModelHasNoDefault(t *testing.T) {
 	t.Setenv("STT_MODEL", "")
 
