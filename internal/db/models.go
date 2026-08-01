@@ -670,6 +670,7 @@ type User struct {
 	TokenVersion               int32              `json:"token_version"`
 	PhotoObjectKey             pgtype.Text        `json:"photo_object_key"`
 	PhotoUploadedAt            pgtype.Timestamptz `json:"photo_uploaded_at"`
+	LlmKey                     pgtype.Text        `json:"llm_key"`
 }
 
 type UserEmailCode struct {

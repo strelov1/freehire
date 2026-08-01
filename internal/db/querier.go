@@ -164,6 +164,15 @@ type Querier interface {
 	// worker died (stale claimed_at), so no separate reaper process is needed.
 	// Oldest post first so a backlog drains in posting order.
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
+	// Store a freshly minted credential, but only if this account still has none, and report
+	// what is now stored. NO ROWS means somebody else claimed first — the caller re-reads the
+	// winner's credential and deletes the one it minted, which would otherwise sit at the
+	// gateway forever spending nothing and appearing in every listing.
+	//
+	// The `IS NULL` guard is the whole race resolution: two concurrent first calls both mint,
+	// the row lock serializes them, and the loser's UPDATE re-evaluates the guard against the
+	// committed row and matches nothing.
+	ClaimUserLLMKey(ctx context.Context, arg ClaimUserLLMKeyParams) (string, error)
 	// Withdraw the absence stamp: the role turned up on the company's board after all.
 	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
 	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
@@ -188,6 +197,11 @@ type Querier interface {
 	// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
 	// the index: a closed job has no vector in either place.
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
+	// Forget a credential the gateway no longer recognises, so the next call mints a
+	// replacement. Conditional on the value we believe is stored: a concurrent call may have
+	// already re-minted, and clearing unconditionally would throw away that good credential
+	// and leave it orphaned at the gateway.
+	ClearUserLLMKey(ctx context.Context, arg ClearUserLLMKeyParams) error
 	// Clear the user's headshot pointer, after deleting the object from storage.
 	ClearUserPhoto(ctx context.Context, id int64) error
 	// Clear the user's résumé pointer (after deleting the object from storage), any
@@ -922,6 +936,10 @@ type Querier interface {
 	// The caller's current stage for one application (empty string when unset), so the
 	// worker can decide a monotonic-forward advancement.
 	GetUserJobStage(ctx context.Context, arg GetUserJobStageParams) (string, error)
+	// The gateway credential this account is known by, or "" when none has been minted.
+	// coalesce keeps the empty string as the single "not minted" signal, so callers test a
+	// string rather than unwrapping a nullable through pgtype on every model call.
+	GetUserLLMKey(ctx context.Context, id int64) (string, error)
 	// The account's stored password hash, for verifying a current password on change.
 	// NULL when the account is passwordless (OAuth-only), which the caller treats the same
 	// as a wrong password: there is nothing to verify against.
