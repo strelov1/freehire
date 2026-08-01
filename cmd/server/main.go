@@ -101,7 +101,12 @@ func main() {
 		EnableStackTrace:  true,
 		StackTraceHandler: func(c *fiber.Ctx, _ any) { c.Locals(handler.LocalPanicReported, true) },
 	}))
-	app.Use(logger.New())
+	// The request log goes to journald and on into /var/log/syslog, never to a terminal, so
+	// Fiber's default colours are ANSI escapes written into a file nobody reads in a terminal.
+	// They were ~28% of syslog's lines on prod, where the API's per-request log is ~71% of a
+	// file that reaches 3.9 GB a week — on a host whose facet reindex refuses to run below a
+	// 70 GiB free-space floor it clears by about 1 GiB. They also make the log ungreppable.
+	app.Use(logger.New(logger.Config{DisableColors: true}))
 
 	// Sentry request middleware, wired only when error reporting is configured. It
 	// sits AFTER recover.New so its deferred capture runs first on a panic (reporting
