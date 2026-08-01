@@ -44,15 +44,15 @@
 
 ## 5. The sync worker
 
-- [ ] 5.1 Add `internal/calsync` mirroring `gmailsync`: `Connection`, a narrow `Store`,
+- [x] 5.1 Add `internal/calsync` mirroring `gmailsync`: `Connection`, a narrow `Store`,
       `CalendarReader` behind a `ReaderFactory`, and `Worker.RunOnce` over the ±90-day
       window.
-- [ ] 5.2 RED first, and this is the privacy invariant: a fake reader returning personal
+- [x] 5.2 RED first, and this is the privacy invariant: a fake reader returning personal
       events plus one matched interview must leave the store holding exactly one row.
       Assert the store, not the log.
-- [ ] 5.3 A rejected token marks that connection `needs_reconsent` and the run continues;
+- [x] 5.3 A rejected token marks that connection `needs_reconsent` and the run continues;
       a connection whose recorded scopes lack the calendar is skipped without an API call.
-- [ ] 5.4 Reschedule updates in place; cancellation marks; a re-run changes nothing
+- [x] 5.4 Reschedule updates in place; cancellation marks; a re-run changes nothing
       (idempotent on `(user_id, ical_uid)`).
 - [ ] 5.5 Add `cmd/cal-sync` with `worker.Bootstrap`, reporting failure through its exit
       code the way `cmd/classify-mail` now does.

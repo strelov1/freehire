@@ -50,6 +50,7 @@ func TestUpsertApplicationInterview_MovesInPlaceAndStaysOneRow(t *testing.T) {
 			EndsAt:        ts(at.Add(time.Hour)),
 			Title:         title,
 			JoinUrl:       "https://meet.google.com/abc-defg-hij",
+			Status:        "confirmed",
 			Source:        "calendar_google",
 		}); err != nil {
 			t.Fatalf("upsert: %v", err)
@@ -95,7 +96,8 @@ func TestCancelApplicationInterview_MarksRatherThanDeletes(t *testing.T) {
 	_, appID := seedApplication(t, q, user, "iv-cancel-1", "derq")
 	if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
 		UserID: user, ApplicationID: appID, IcalUid: "cancel-me@ashbyhq.com",
-		StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)), Source: "calendar_google",
+		StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
+		Status:   "confirmed", Source: "calendar_google",
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -182,5 +184,49 @@ func TestListCalendarMatchCandidates_CarriesTheLinkedInvitationsIdentifiers(t *t
 	}
 	if len(other) != 0 {
 		t.Errorf("a user with no applications got %d candidates", len(other))
+	}
+}
+
+// The identifier that linked a meeting is a fact, and a later sync that only recognises
+// the title has learned nothing new. Letting it downgrade would flip a settled interview
+// back into a question the candidate has to answer again, every run.
+func TestUpsertApplicationInterview_AConfirmedMeetingNeverFallsBackToASuggestion(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-status@example.test", true)
+	_, appID := seedApplication(t, q, user, "iv-status-1", "derq")
+	at := ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC))
+	upsert := func(status string) {
+		t.Helper()
+		if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+			UserID: user, ApplicationID: appID, IcalUid: "status@ashbyhq.com",
+			StartsAt: at, Status: status, Source: "calendar_google",
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", status, err)
+		}
+	}
+	read := func() string {
+		t.Helper()
+		var s string
+		if err := q.db.QueryRow(ctx,
+			`SELECT status FROM application_interviews WHERE user_id = $1`, user).Scan(&s); err != nil {
+			t.Fatalf("read status: %v", err)
+		}
+		return s
+	}
+
+	upsert("suggested")
+	if got := read(); got != "suggested" {
+		t.Fatalf("status = %q, want suggested", got)
+	}
+	upsert("confirmed") // the invitation's identifier turned up
+	if got := read(); got != "confirmed" {
+		t.Fatalf("status = %q, want confirmed", got)
+	}
+	upsert("suggested") // a later run recognises only the title
+	if got := read(); got != "confirmed" {
+		t.Errorf("status = %q, want it to stay confirmed", got)
 	}
 }

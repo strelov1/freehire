@@ -221,11 +221,12 @@ func (q *Queries) SetConnectionScopes(ctx context.Context, arg SetConnectionScop
 
 const upsertApplicationInterview = `-- name: UpsertApplicationInterview :one
 INSERT INTO application_interviews (
-    user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, source
+    user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, status, source
 )
 VALUES (
     $1, $2, $3,
-    $4, $5, $6, $7, $8
+    $4, $5, $6, $7,
+    $8, $9
 )
 ON CONFLICT (user_id, ical_uid) DO UPDATE
 SET application_id = EXCLUDED.application_id,
@@ -233,7 +234,12 @@ SET application_id = EXCLUDED.application_id,
     ends_at        = EXCLUDED.ends_at,
     title          = EXCLUDED.title,
     join_url       = EXCLUDED.join_url,
-    status         = 'confirmed',
+    -- A confirmed meeting never falls back to a suggestion: the identifier that linked it
+    -- is a fact, and a later sync that only sees the title has learned nothing new.
+    status         = CASE
+                         WHEN application_interviews.status = 'confirmed' THEN 'confirmed'
+                         ELSE EXCLUDED.status
+                     END,
     updated_at     = now()
 RETURNING id
 `
@@ -246,6 +252,7 @@ type UpsertApplicationInterviewParams struct {
 	EndsAt        pgtype.Timestamptz `json:"ends_at"`
 	Title         string             `json:"title"`
 	JoinUrl       string             `json:"join_url"`
+	Status        string             `json:"status"`
 	Source        string             `json:"source"`
 }
 
@@ -256,8 +263,11 @@ type UpsertApplicationInterviewParams struct {
 // A meeting that moved carries a new time under the same identity, which is exactly what
 // the ledger could not have expressed.
 //
-// Re-appearing after a cancellation sets the status back to confirmed: an organiser who
-// reinstates a meeting has un-cancelled it, and the candidate needs to see that.
+// The status is the matcher's tier rendered: `confirmed` when the invitation's identifier
+// attached it, `suggested` when only the title did. A re-sync that upgrades a suggestion
+// to a link may overwrite the status; one that would downgrade a confirmed meeting to a
+// suggestion must not, so the caller passes what it resolved and the conflict branch keeps
+// the stronger of the two.
 func (q *Queries) UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error) {
 	row := q.db.QueryRow(ctx, upsertApplicationInterview,
 		arg.UserID,
@@ -267,6 +277,7 @@ func (q *Queries) UpsertApplicationInterview(ctx context.Context, arg UpsertAppl
 		arg.EndsAt,
 		arg.Title,
 		arg.JoinUrl,
+		arg.Status,
 		arg.Source,
 	)
 	var id int64

@@ -67,9 +67,18 @@ CREATE TABLE IF NOT EXISTS application_interviews (
     -- field here is one we would have to justify holding.
     title          text        NOT NULL DEFAULT '',
     join_url       text        NOT NULL DEFAULT '',
-    -- confirmed | cancelled. A cancellation marks rather than deletes: an empty Thursday
-    -- cannot be told apart from a calendar that failed to load.
-    status         text        NOT NULL DEFAULT 'confirmed',
+    -- suggested | confirmed | cancelled.
+    --
+    -- `confirmed` is a meeting the invitation's own identifier attached, which needs no
+    -- asking. `suggested` is one whose title named exactly one of this candidate's
+    -- employers — worth offering and not worth acting on, the same bargain emails strike
+    -- with suggested_job_id. A title matching two applications names neither and is not
+    -- stored at all, so a suggestion still points at one application and the NOT NULL
+    -- above still holds.
+    --
+    -- A cancellation marks rather than deletes: an empty Thursday cannot be told apart
+    -- from a calendar that failed to load.
+    status         text        NOT NULL DEFAULT 'suggested',
     -- Where the meeting was read from, in the manner of application_events.source. One
     -- value today; an ICS subscription would be a second without changing anything here.
     source         text        NOT NULL,

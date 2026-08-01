@@ -2420,8 +2420,11 @@ type Querier interface {
 	// A meeting that moved carries a new time under the same identity, which is exactly what
 	// the ledger could not have expressed.
 	//
-	// Re-appearing after a cancellation sets the status back to confirmed: an organiser who
-	// reinstates a meeting has un-cancelled it, and the candidate needs to see that.
+	// The status is the matcher's tier rendered: `confirmed` when the invitation's identifier
+	// attached it, `suggested` when only the title did. A re-sync that upgrades a suggestion
+	// to a link may overwrite the status; one that would downgrade a confirmed meeting to a
+	// suggestion must not, so the caller passes what it resolved and the conflict branch keeps
+	// the stronger of the two.
 	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
 	// Apply one external-dataset company-info record, matched by slug. A new slug is
 	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
