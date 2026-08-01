@@ -170,6 +170,20 @@ var All = []Collection{
 		Dataset:     &Dataset{URL: techstarsDatasetURL, Parse: names(ParseTechstarsCSV)},
 	},
 	{
+		Slug:        "a16z-portfolio",
+		Title:       "a16z",
+		Description: "Open roles at companies in the Andreessen Horowitz portfolio.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{Records: speedrunMembers(speedrunTierPortfolio)},
+	},
+	{
+		Slug:        "a16z-speedrun",
+		Title:       "a16z Speedrun",
+		Description: "Open roles at companies from the a16z Speedrun accelerator's cohorts.",
+		Kind:        KindBacker,
+		Dataset:     &Dataset{Records: speedrunMembers(speedrunTierAccelerator)},
+	},
+	{
 		Slug:        "european",
 		Title:       "European Startups",
 		Description: "Open roles at European startups across the continent's tech hubs.",

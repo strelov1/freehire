@@ -9,16 +9,16 @@
 
 ## 2. The Speedrun directory as a membership source
 
-- [ ] 2.1 Parse one directory page into records (name plus tier), from a fixture of
+- [x] 2.1 Parse one directory page into records (name plus tier), from a fixture of
       the real payload. Test asserts an entry missing a name or tier is dropped
       rather than yielding a nameless record.
-- [ ] 2.2 Walk every page: read `total_pages` and fetch each, failing the whole
+- [x] 2.2 Walk every page: read `total_pages` and fetch each, failing the whole
       fetch when any page fails. Test asserts a mid-walk failure is an error, not a
       short membership.
-- [ ] 2.3 Filter by tier, one resolver per tag. Test named for what it prevents:
+- [x] 2.3 Filter by tier, one resolver per tag. Test named for what it prevents:
       a `market`-tier company (fixture uses a real one, e.g. Walmart) earns neither
       a16z tag.
-- [ ] 2.4 Register `a16z-portfolio` and `a16z-speedrun` with their titles,
+- [x] 2.4 Register `a16z-portfolio` and `a16z-speedrun` with their titles,
       descriptions and `Records` sources. Registry test asserts both resolve to
       the expected tier.
 

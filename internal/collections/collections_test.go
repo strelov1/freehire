@@ -365,7 +365,7 @@ func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
 	// An accelerator or fund that picked the company is a different sort of tag from a
 	// theme we curate ourselves: it names an outside selector, so it renders as that
 	// brand's mark rather than as one more filter chip.
-	for _, slug := range []string{"yc", "techstars"} {
+	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun"} {
 		c, ok := Lookup(slug)
 		if !ok {
 			t.Errorf("registry missing %q", slug)
@@ -374,6 +374,35 @@ func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
 		if c.Kind != KindBacker {
 			t.Errorf("collection %q kind = %q, want %q", slug, c.Kind, KindBacker)
 		}
+		if c.Title == "" || c.Description == "" {
+			t.Errorf("collection %q missing display copy: %+v", slug, c)
+		}
+	}
+}
+
+func TestRegistry_TheTwoA16zTagsAreSeparateCollections(t *testing.T) {
+	// Being held in the fund's portfolio and having been selected into its
+	// accelerator are different facts of different strength. Merging them would
+	// present a seed-stage cohort company and OpenAI as carrying the same signal.
+	portfolio, ok := Lookup("a16z-portfolio")
+	if !ok {
+		t.Fatal("a16z-portfolio missing")
+	}
+	speedrun, ok := Lookup("a16z-speedrun")
+	if !ok {
+		t.Fatal("a16z-speedrun missing")
+	}
+	for _, c := range []Collection{portfolio, speedrun} {
+		if c.Dataset == nil || c.Dataset.Records == nil {
+			t.Errorf("%s does not source its membership from the directory: %+v", c.Slug, c.Dataset)
+			continue
+		}
+		if !c.Dataset.Valid() {
+			t.Errorf("%s declares more than one payload source", c.Slug)
+		}
+	}
+	if portfolio.Title == speedrun.Title {
+		t.Errorf("both a16z tags share the title %q — a reader cannot tell them apart", portfolio.Title)
 	}
 }
 
