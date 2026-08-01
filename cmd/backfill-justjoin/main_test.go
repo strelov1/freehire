@@ -61,7 +61,7 @@ func TestBackfillUpdatesOnlyChangedDescriptions(t *testing.T) {
 	}
 	// The content_hash must be the fingerprint of the row's indexed fields WITH the new
 	// description, so the row re-indexes (and is stable on a re-run).
-	want := jobhash.Of(hashParams(store.jobs[0], "New body A"))
+	want := jobhash.OfRow(store.jobs[0], "New body A")
 	if !u.ContentHash.Valid || u.ContentHash.String != want {
 		t.Errorf("ContentHash = %+v, want %q", u.ContentHash, want)
 	}

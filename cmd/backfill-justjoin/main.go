@@ -93,7 +93,7 @@ func backfillAll(ctx context.Context, store jobStore, fetch descriptionFetcher) 
 			if desc == j.Description {
 				continue // already current — idempotent skip
 			}
-			hash := jobhash.Of(hashParams(j, desc))
+			hash := jobhash.OfRow(j, desc)
 			if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
 				ID:          j.ID,
 				Description: desc,
@@ -109,31 +109,4 @@ func backfillAll(ctx context.Context, store jobStore, fetch descriptionFetcher) 
 		}
 	}
 	return scanned, updated, failed, nil
-}
-
-// hashParams builds the content_hash inputs for a row with a replaced description — the exact
-// indexed fields jobhash.Of fingerprints (see internal/jobhash), so the recomputed hash matches
-// what the ingest write path would produce for the same row.
-func hashParams(j db.Job, description string) db.UpsertJobParams {
-	return db.UpsertJobParams{
-		URL:                j.URL,
-		Title:              j.Title,
-		Company:            j.Company,
-		CompanySlug:        j.CompanySlug,
-		Location:           j.Location,
-		Remote:             j.Remote,
-		Description:        description,
-		PostedAt:           j.PostedAt,
-		PublicSlug:         j.PublicSlug,
-		Countries:          j.Countries,
-		Regions:            j.Regions,
-		WorkMode:           j.WorkMode,
-		Skills:             j.Skills,
-		Seniority:          j.Seniority,
-		Category:           j.Category,
-		PostingLanguage:    j.PostingLanguage,
-		EmploymentType:     j.EmploymentType,
-		EducationLevel:     j.EducationLevel,
-		ExperienceYearsMin: j.ExperienceYearsMin,
-	}
 }

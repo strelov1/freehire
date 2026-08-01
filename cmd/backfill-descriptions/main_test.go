@@ -87,7 +87,7 @@ func TestBackfillDecodesOnlyEncodedDescriptions(t *testing.T) {
 	}
 	// content_hash must fingerprint the row with the decoded description, matching what a
 	// re-ingest of the fixed adapter would produce.
-	want1 := jobhash.Of(hashParams(store.jobs[0], u1.Description))
+	want1 := jobhash.OfRow(store.jobs[0], u1.Description)
 	if !u1.ContentHash.Valid || u1.ContentHash.String != want1 {
 		t.Errorf("job 1 ContentHash = %+v, want %q", u1.ContentHash, want1)
 	}
@@ -155,7 +155,7 @@ func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
 	if strings.Contains(u.Description, "&lt;") {
 		t.Errorf("job 1 still entity-encoded: %q", u.Description)
 	}
-	want := jobhash.Of(hashParams(store.jobs[0], u.Description))
+	want := jobhash.OfRow(store.jobs[0], u.Description)
 	if !u.ContentHash.Valid || u.ContentHash.String != want {
 		t.Errorf("job 1 ContentHash = %+v, want %q", u.ContentHash, want)
 	}
@@ -199,7 +199,7 @@ func TestBackfillStripsHimalayasSelfPromo(t *testing.T) {
 		t.Errorf("greenhouse Description = %q, want %q", got[2].Description, want)
 	}
 	// The row re-indexes only if content_hash moves with the text.
-	want := jobhash.Of(hashParams(store.jobs[0], got[1].Description))
+	want := jobhash.OfRow(store.jobs[0], got[1].Description)
 	if !got[1].ContentHash.Valid || got[1].ContentHash.String != want {
 		t.Errorf("ContentHash = %+v, want %q", got[1].ContentHash, want)
 	}

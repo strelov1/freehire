@@ -114,3 +114,82 @@ func TestOf_FieldsAreDelimited(t *testing.T) {
 		t.Error("field boundary not delimited: content shifted across fields collides")
 	}
 }
+
+// fullRow is a db.Job with every hashed field set to something distinctive, so a mapping that
+// drops a field is visible as a hash that does not move when that field does.
+func fullRow() db.Job {
+	return db.Job{
+		URL:                "https://example.com/j/1",
+		Title:              "Backend Engineer",
+		Company:            "Acme",
+		CompanySlug:        "acme",
+		Location:           "Berlin",
+		Remote:             true,
+		Description:        "the stored description",
+		PostedAt:           pgtype.Timestamptz{Time: time.Unix(1700000000, 0).UTC(), Valid: true},
+		PublicSlug:         "backend-engineer-acme-abc123",
+		Countries:          []string{"de"},
+		Regions:            []string{"eu"},
+		WorkMode:           "remote",
+		Skills:             []string{"go"},
+		Seniority:          "senior",
+		Category:           "backend",
+		PostingLanguage:    "en",
+		EmploymentType:     "full_time",
+		EducationLevel:     "bachelor",
+		ExperienceYearsMin: pgtype.Int4{Int32: 5, Valid: true},
+	}
+}
+
+// TestOfRow_CarriesEveryFieldTheHashReads is the guard the duplication used to need a reviewer
+// for. Of names the fields the fingerprint covers; OfRow names where each comes from on a stored
+// row. They are one decision in two halves, so a field added to Of and forgotten in OfRow leaves
+// a backfill computing the OLD fingerprint — the rewritten rows then carry a hash the ingest path
+// will not reproduce, and the next crawl of each reports `changed` once for nothing.
+//
+// Each case mutates ONE field of a fully-populated row. If OfRow does not carry that field, the
+// hash cannot move, and the case fails naming the field.
+func TestOfRow_CarriesEveryFieldTheHashReads(t *testing.T) {
+	base := OfRow(fullRow(), "the stored description")
+
+	mutations := map[string]func(*db.Job){
+		"url":                  func(j *db.Job) { j.URL = "https://example.com/j/2" },
+		"title":                func(j *db.Job) { j.Title = "Frontend Engineer" },
+		"company":              func(j *db.Job) { j.Company = "Globex" },
+		"company_slug":         func(j *db.Job) { j.CompanySlug = "globex" },
+		"location":             func(j *db.Job) { j.Location = "Munich" },
+		"remote":               func(j *db.Job) { j.Remote = false },
+		"posted_at":            func(j *db.Job) { j.PostedAt = pgtype.Timestamptz{Time: time.Unix(1800000000, 0).UTC(), Valid: true} },
+		"public_slug":          func(j *db.Job) { j.PublicSlug = "backend-engineer-acme-zzz999" },
+		"countries":            func(j *db.Job) { j.Countries = []string{"fr"} },
+		"regions":              func(j *db.Job) { j.Regions = []string{"latam"} },
+		"work_mode":            func(j *db.Job) { j.WorkMode = "onsite" },
+		"skills":               func(j *db.Job) { j.Skills = []string{"rust"} },
+		"seniority":            func(j *db.Job) { j.Seniority = "junior" },
+		"category":             func(j *db.Job) { j.Category = "frontend" },
+		"posting_language":     func(j *db.Job) { j.PostingLanguage = "de" },
+		"employment_type":      func(j *db.Job) { j.EmploymentType = "contract" },
+		"education_level":      func(j *db.Job) { j.EducationLevel = "master" },
+		"experience_years_min": func(j *db.Job) { j.ExperienceYearsMin = pgtype.Int4{Int32: 9, Valid: true} },
+	}
+
+	for field, mutate := range mutations {
+		t.Run(field, func(t *testing.T) {
+			row := fullRow()
+			mutate(&row)
+			if OfRow(row, "the stored description") == base {
+				t.Errorf("changing %s left the fingerprint unchanged — OfRow does not carry it, "+
+					"so a backfill would rewrite rows with a hash ingest will not reproduce", field)
+			}
+		})
+	}
+
+	// The description is OfRow's separate argument, not read off the row, because replacing it
+	// is what a backfill is for.
+	if OfRow(fullRow(), "a different body") == base {
+		t.Error("changing the description left the fingerprint unchanged")
+	}
+	if OfRow(fullRow(), "the stored description") != base {
+		t.Error("OfRow is not deterministic for the same input")
+	}
+}
