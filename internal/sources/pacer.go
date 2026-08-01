@@ -114,6 +114,22 @@ func limitedTrudvsemGetter(c JSONGetter) JSONGetter {
 	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, trudvsemMaxInFlight)}
 }
 
+// portal-api.emagine.org serves a single detail request in ~0.9s and tolerates a burst (80
+// back-to-back at 8-way all returned 200), but a whole-catalogue hydration — 1025 details in one
+// run — starts refusing CONNECTIONS near the end: `dial tcp: i/o timeout`, already past the
+// client's own three attempts, on ~1% of postings clustered in the run's tail. So the trigger is
+// sustained concurrency over a long run, not rate, and the loss is permanent: a posting ingested
+// list-only is seen on the next crawl and never re-fetches its detail. Four in flight halves the
+// pressure while keeping a full first crawl inside the ingest window; later crawls hydrate only
+// new postings, so the cap costs nothing in steady state. Tune from the observed loss rate.
+const emagineMaxInFlight = 4
+
+// limitedEmagineGetter wraps a getter with a fresh semaphore shared across one registry build, so
+// the whole detail fan-out of a run competes for the same few in-flight slots.
+func limitedEmagineGetter(c JSONGetter) JSONGetter {
+	return concurrencyLimitedJSONGetter{inner: c, sem: make(chan struct{}, emagineMaxInFlight)}
+}
+
 // The WhatJobs feed serves sequential requests happily — a dozen back-to-back from one IP never
 // tripped anything — but the pipeline crawls board files in parallel, and on the provider's first
 // production run 8 of its 10 keyword boards failed with HTTP 429. So the trigger is simultaneity, not

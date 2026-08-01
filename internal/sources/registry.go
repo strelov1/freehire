@@ -226,6 +226,7 @@ func All(c HTTPClient) map[string]Source {
 		NewJobtech(c),
 		NewJobnet(c),
 		NewJobdanmark(c),
+		NewEmagine(c, limitedEmagineGetter(c)),
 		NewTyomarkkinatori(c),
 		NewLikeit(c),
 		NewArbeitsagentur(c),
