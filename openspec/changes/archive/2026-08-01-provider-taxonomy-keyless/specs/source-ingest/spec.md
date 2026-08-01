@@ -71,7 +71,7 @@ ingested, and SHALL mark an already-ingested posting for a liveness refresh inst
 re-fetching its detail. When the pipeline cannot supply a seen-set, the adapter SHALL
 fall back to fetching every unique job's detail.
 
-#### Scenario: Crawled only when the key is configured
+#### Scenario: Registered only when the key is configured
 
 - **WHEN** `REED_API_KEY` is unset and the crawl registry is assembled
 - **THEN** it does NOT contain `reed`

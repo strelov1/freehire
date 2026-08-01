@@ -970,11 +970,13 @@ synthesize the canonical `URL` from the posting `slug` as `https://justjoin.it/j
 ### Requirement: Reed is a registered keyed, keyword-scoped aggregator provider
 
 The ingest registry SHALL include a `reed` adapter over the Reed Jobseeker API
-(reed.co.uk), and it SHALL be registered only when the `REED_API_KEY` environment
-variable is set — like `usajobs`, the key is a secret read from the environment and
-never stored in a board file. The adapter SHALL be boardless (one API, no per-tenant
-board id) and SHALL declare itself an `aggregator`, taking each posting's employer
-from the API payload and remaining a value in the source facet.
+(reed.co.uk), and the crawl registry SHALL include it only when the `REED_API_KEY`
+environment variable is set — like `usajobs`, the key is a secret read from the
+environment and never stored in a board file. The taxonomy registry SHALL list `reed`
+regardless, per "The provider taxonomy is independent of crawl credentials". The adapter
+SHALL be boardless (one API, no per-tenant board id) and SHALL declare itself an
+`aggregator`, taking each posting's employer from the API payload and remaining a value
+in the source facet.
 
 Because the Reed API filters only by free-text keywords (it exposes no sector
 filter) and freehire is an IT job board, the adapter SHALL enumerate a topical IT
@@ -995,10 +997,15 @@ fall back to fetching every unique job's detail.
 
 #### Scenario: Registered only when the key is configured
 
-- **WHEN** `REED_API_KEY` is unset
-- **THEN** `All()` does NOT register `reed`
+- **WHEN** `REED_API_KEY` is unset and the crawl registry is assembled
+- **THEN** it does NOT contain `reed`
 - **AND WHEN** `REED_API_KEY` is set
-- **THEN** `All()` registers `reed` and it appears in the source facet
+- **THEN** the crawl registry contains `reed` carrying that key
+
+#### Scenario: Listed in the source facet whatever the environment holds
+
+- **WHEN** the source-facet provider list is built with `REED_API_KEY` unset
+- **THEN** `reed` is listed
 
 #### Scenario: Keyword matches are deduped by job id
 
@@ -1661,3 +1668,45 @@ before.
 
 - **WHEN** the pipeline cannot supply a seen-set (e.g. a non-DB caller)
 - **THEN** the adapter fetches every listed posting's detail, as before
+
+### Requirement: The provider taxonomy is independent of crawl credentials
+
+The registry constructor SHALL answer two separable questions and MUST NOT conflate them: which
+providers this process can crawl (a runtime fact about configured credentials and transport) and
+what kind of source each provider is (a static fact about the adapter type, expressed by its
+`Provider()` key and its marker interfaces).
+
+The registry SHALL therefore be assembled in two modes by the same constructor:
+
+- Assembled **with an HTTP client** — the crawl registry — it SHALL omit any provider whose
+  credential is not configured, so a board file naming that provider fails config validation
+  before any request is made.
+- Assembled **without an HTTP client** — the taxonomy registry — it SHALL be total: every
+  adapter the binary knows about is present with its markers, whatever the environment holds. A
+  credential-bearing adapter SHALL be registered here with an empty credential, which is safe
+  because the taxonomy path never fetches.
+
+Consumers that classify rather than crawl — the source facet's provider list, the status
+page's provider kind, and the aggregator set used by the cross-source dedup pass — SHALL read
+the taxonomy registry, and their answers SHALL NOT vary with the environment's credentials.
+
+#### Scenario: The taxonomy registry lists a keyed provider without its credential
+
+- **WHEN** `USAJOBS_API_KEY`, `REED_API_KEY` and `WHATJOBS_PUBLISHER_ID` are all unset and the
+  registry is assembled without an HTTP client
+- **THEN** the registry contains `usajobs`, `reed` and `whatjobs`, each carrying its markers
+- **AND** the source facet's provider list, the aggregator set and each provider's kind are the
+  same as they are in a fully configured environment
+
+#### Scenario: The crawl registry still omits an unconfigured provider
+
+- **WHEN** `WHATJOBS_PUBLISHER_ID` is unset and the registry is assembled with an HTTP client
+- **THEN** the registry has no `whatjobs` entry
+- **AND** validating a board file that names `whatjobs` fails before any request is made
+
+#### Scenario: An aggregator is suppressed against its ATS twin on any host
+
+- **WHEN** the reindex pass computes the aggregator set on a host that has no ingest credentials
+- **THEN** `whatjobs` is in that set, so a `whatjobs` posting duplicating a first-party ATS
+  posting of the same company, title and country is marked a duplicate of the ATS row
+

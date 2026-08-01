@@ -12,12 +12,9 @@ inventory is resold copies of first-party ATS postings, and production holds 6,2
 those duplicates stay unsuppressed in search. `cmd/ghost-crosscheck` reads the same registry
 with the same leak, and `/api/v1/status` reports all three providers as kind `other`.
 
-The generated `SOURCE_VALUES` in `web/src/lib/generated/contracts.ts` is missing the same three
-values, because `cmd/gen-contracts` was last run without the credentials in the environment.
-That one is cosmetic: the source facet is distribution-driven (`facets.ts:532` marks it
-`dynamic: true`, options come from `/api/v1/jobs/facets`), and no web code reads `SOURCE_VALUES`
-or the `Source` type at all. It is recorded here because a generated constant that silently
-varies with the operator's environment is a trap for whoever does start reading it.
+The generated `SOURCE_VALUES` is missing the same three values for the same reason. That one is
+cosmetic — the source facet is distribution-driven and nothing reads the constant — but a
+generated file that varies with the operator's environment is a trap for whoever starts.
 
 ## What Changes
 

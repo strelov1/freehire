@@ -10,12 +10,12 @@ taxonomy registry — the one assembled without an HTTP client — SHALL contain
 regardless, carrying an empty publisher id, so the provider's kind, its place in the aggregator
 set and its source-facet value do not depend on the local environment.
 
-#### Scenario: Configured environment registers the provider for crawling
+#### Scenario: Configured environment registers the provider
 
 - **WHEN** `WHATJOBS_PUBLISHER_ID` is set and the crawl registry is assembled
 - **THEN** the registry contains a `whatjobs` adapter carrying that publisher id
 
-#### Scenario: Unconfigured environment omits the provider from the crawl registry
+#### Scenario: Unconfigured environment omits the provider
 
 - **WHEN** `WHATJOBS_PUBLISHER_ID` is unset or empty and the crawl registry is assembled
 - **THEN** the registry has no `whatjobs` entry, and a board file naming that provider fails
