@@ -77,6 +77,7 @@ Each is self-contained and can be read independently.
 | **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **Speech to text** (dictation into the composer, the filename rule, spend bounds) | [internal/speech/AGENTS.md](internal/speech/AGENTS.md) |
+| **LLM spend attribution** (per-user gateway credential, feature tags, fail-open) | [internal/llmkey/AGENTS.md](internal/llmkey/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Job-match scoring** (deterministic CV-vs-vacancy score, the unverifiable rule) | [internal/cvmatch/AGENTS.md](internal/cvmatch/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/experience/AGENTS.md](internal/experience/AGENTS.md) |
@@ -107,7 +108,8 @@ Each is self-contained and can be read independently.
 - **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
-- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, open to every signed-in user. Tools act as the authenticated caller — no credential is minted for an agent. A turn is not metered against AI credits yet, so authentication is the only thing bounding the spend
+- **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, open to every signed-in user. Tools act as the authenticated caller — no credential is minted for an agent
+- **LLM spend attribution:** every model call made for a signed-in user goes out on that user's OWN gateway credential (`internal/llmkey` — minted lazily on first use, never shown to them) and carries a `feature:` tag. Work that belongs to nobody — enrichment, Telegram, embeddings — keeps the service credential, and a test enforces that background entrypoints never resolve a user's. Attribution fails open: it can never refuse or fail a call. It measures and does not bound — a turn is still not debited against AI credits
 - **Experience provenance:** every banked achievement records whether the CANDIDATE asserted it (`cv_import`/`stated_in_chat`/`manual`) or the MODEL did (`agent_inferred`). Only the former may be written into a CV, and the check lives in the service path, not in a system prompt
 - **Sentry:** Opt-in, env-gated, errors-only — `sentry.Init` with `SendDefaultPII:false`
 - **Naming — "CV", not "résumé":** Default new surfaces to **CV**. Don't mass-rename the existing `resume`/`resumeextract` packages and columns — churn without value

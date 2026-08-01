@@ -193,11 +193,35 @@ is never mistaken for the answer.
 4. Give errors a message the model can act on — name the invalid value and list
    the valid ones. That message is the model's only path to self-correction.
 
+**Whose spend a turn is.** Every turn goes out on the CALLER's own gateway credential,
+resolved by `internal/llmkey` and minted on their first AI call. The runner is built once
+at boot and cloned per turn (`Runner.With`), because the credential is per-user and the
+bounds are not. The call is tagged `feature:assistant` **and** `preset:<preset>`: the
+gateway files one spend row per tag, and a rehearsal, an unattended tailoring run and a
+question cost wildly different amounts, so the preset is what makes them comparable.
+
+Two rules hold the whole thing up, and both fail silently if broken:
+
+- **Attribution never costs a turn.** An unmintable credential, an unreachable admin API
+  and a rejected key all fall back to the service credential and the turn completes. A key
+  the gateway has forgotten is additionally retried once and reported, in `internal/llm`'s
+  transport — the only layer that sees a status code rather than langchaingo's error prose.
+- **A re-credentialed client must not share the schema-model cache.** See the comment on
+  `modelCache` in `internal/llm/schema.go`. Sharing it sends one user's schema-bound call
+  out on another user's key, successfully.
+
+CV tailoring has no tag of its own on purpose: `/me/cvs/tailor` makes no model call: it
+mints a CV and debits credits, and the work is a turn under the `tailor` preset. A second
+tag would double-count one spend.
+
 ## Limitations
-- **No metering.** A turn is free to the caller and billed to us. This was affordable
-  while the restricted-rollout gate held the audience to a handful of accounts; that
-  gate is gone and the assistant is open to every signed-in user, so nothing bounds
-  the spend now. `internal/credits` is the seam for a per-turn debit.
+- **Measured, not bounded.** A turn is now attributed to the account that ran it and its
+  cost is readable (`GET /me/usage`, and per-feature on the gateway), but nothing refuses
+  one. The gateway supports a per-account ceiling and `LLM_USER_MAX_BUDGET` passes one
+  through; it is deliberately unset, because a ceiling chosen before the spend
+  distribution is known is a guess. `internal/credits` remains the seam for a per-turn
+  debit — points price the product, a gateway budget is a fuse, and they are not the same
+  instrument.
 - No summarisation: a long session loses its oldest messages to the window rather
   than compacting them.
 - One tool round runs its calls sequentially. Parallel execution would need
