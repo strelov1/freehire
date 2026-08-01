@@ -67,3 +67,21 @@ export function matchesQuery(item: MyJob, query: string): boolean {
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[-_/.]+/g, ' ');
 }
+
+/** How the board addresses one application's row, given what a timeline event knows
+ *  about it — or null when the event names no application at all.
+ *
+ *  The listing mints two forms and neither is the bare application id: a row backed by a
+ *  posting is named by that posting's public slug, and only an application whose posting
+ *  cmd/prune removed is named `a<id>` (see ListInteractions in
+ *  internal/jobtracking/repository.go and the applicationRef contract in internal/handler).
+ *  `/my/tracking/[id]` opens its drawer by matching this id against the loaded rows, so a
+ *  link built from the bare integer matches nothing and fails silently — the drawer simply
+ *  does not open, with no error to notice. */
+export function boardRefFor(e: {
+  job_slug?: string;
+  application_id?: number;
+}): string | null {
+  if (e.job_slug) return e.job_slug;
+  return e.application_id ? `a${e.application_id}` : null;
+}

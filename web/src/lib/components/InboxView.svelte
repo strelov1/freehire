@@ -141,8 +141,10 @@
 
   onMount(() => {
     readConnectVerdict();
-    openAddressedMessage();
-    void load();
+    // After load(), not before: fetchFirstPage replaces pager.items wholesale, and
+    // openMessage patches the opened row to read INSIDE that list. Racing the two leaves
+    // the message the reader just opened still showing as unread.
+    void load().then(openAddressedMessage);
   });
   onDestroy(() => {
     destroyed = true;

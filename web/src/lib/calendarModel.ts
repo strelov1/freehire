@@ -35,7 +35,9 @@ export interface CalendarMonth {
   days: CalendarDay[];
   /** Only the cells holding something, for the narrow layout that lists days. */
   daysWithEvents: CalendarDay[];
-  /** How many events the grid holds in total — an empty month is not an empty account. */
+  /** How many events this month's OWN days hold. Deliberately not the whole grid: a
+   *  September whose only mark sits in its 31 August pad cell holds nothing of its own,
+   *  and counting the pad would suppress the message saying so. */
   total: number;
 }
 
@@ -89,8 +91,11 @@ export function buildCalendarMonth(
     if (bucket) bucket.push(e);
     else byDay.set(key, [e]);
   }
+  // Compared as instants, not as strings. Postgres keeps microseconds and Go trims
+  // trailing zeros, so one second can hold both "09:00:00Z" and "09:00:00.482913Z" — and
+  // lexically '.' sorts before 'Z', which would put the later event first.
   for (const bucket of byDay.values()) {
-    bucket.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+    bucket.sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at));
   }
 
   const { first, last } = gridBounds(year, month);
@@ -120,7 +125,7 @@ export function buildCalendarMonth(
     weeks,
     days,
     daysWithEvents: days.filter((d) => d.events.length > 0),
-    total: days.reduce((n, d) => n + d.events.length, 0),
+    total: days.reduce((n, d) => n + (d.inMonth ? d.events.length : 0), 0),
   };
 }
 

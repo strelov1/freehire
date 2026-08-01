@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_COLUMNS, columnOf, matchesQuery } from './board';
+import { BOARD_COLUMNS, boardRefFor, columnOf, matchesQuery } from './board';
 import type { MyJob } from './types';
 
 // columnOf reads only `stage` and `applied_at`; a minimal cast fixture suffices.
@@ -98,5 +98,22 @@ describe('matchesQuery', () => {
   // predicate resolves this, it must not depend on the user guessing the punctuation.
   it('does not make the user type the slug punctuation', () => {
     expect(matchesQuery(pruned('acme-corp', 'Backend Engineer'), 'acme corp')).toBe(true);
+  });
+});
+
+describe('boardRefFor', () => {
+  it('addresses a posting-backed application by its posting slug', () => {
+    expect(boardRefFor({ job_slug: 'senior-go-engineer-derq-1a2b', application_id: 42 })).toBe(
+      'senior-go-engineer-derq-1a2b',
+    );
+  });
+
+  // The bare id matches no row the listing mints, so the drawer would never open.
+  it('prefixes an application whose posting was pruned, never serving the bare id', () => {
+    expect(boardRefFor({ application_id: 42 })).toBe('a42');
+  });
+
+  it('addresses nothing when the event names no application', () => {
+    expect(boardRefFor({})).toBeNull();
   });
 });

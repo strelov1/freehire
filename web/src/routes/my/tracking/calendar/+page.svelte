@@ -9,4 +9,4 @@
   <title>Calendar — Tracking — freehire</title>
 </svelte:head>
 
-<TrackingCalendar events={data.events} />
+<TrackingCalendar prefetched={data.prefetched} />

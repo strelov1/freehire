@@ -14,5 +14,5 @@ export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
     const target = url.pathname + url.search;
     redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
   }
-  return { events: await loadTimeline(fetch, request.headers.get('cookie')) };
+  return { prefetched: await loadTimeline(fetch, request.headers.get('cookie')) };
 };

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ChevronLeft, ChevronRight } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
@@ -9,13 +10,16 @@
     splitDayEvents,
     type CalendarDay,
   } from '$lib/calendarModel';
+  import { boardRefFor } from '$lib/board';
   import type { TimelineEvent } from '$lib/types';
+  import { Button } from '$lib/ui';
   import States from './States.svelte';
 
-  // The server load hands over the current month; everything after that is fetched here,
-  // because only the browser knows the reader's timezone and therefore which month they
-  // are actually looking at. See calendarModel.
-  let { events }: { events: TimelineEvent[] | undefined } = $props();
+  // The server load hands over one month, fetched in ITS timezone; everything after that
+  // is fetched here, because only the browser knows the reader's. See calendarModel.
+  let {
+    prefetched,
+  }: { prefetched: { events: TimelineEvent[]; year: number; month: number } | undefined } = $props();
 
   const now = new Date();
   let year = $state(now.getFullYear());
@@ -25,12 +29,23 @@
   // its first value, and the two would then disagree after a navigation. Once the client
   // has fetched a month of its own, that is what the grid reads.
   let fetched = $state<TimelineEvent[] | null>(null);
-  const series = $derived(fetched ?? events ?? []);
-  // 'initial' means nothing has been asked for yet: the view is ready if the server load
-  // succeeded, and waiting on the mount fetch if it did not. Reading `events` here rather
-  // than in an initialiser is what keeps the prop live instead of frozen at its first value.
+  const series = $derived(fetched ?? prefetched?.events ?? []);
+  // 'initial' means nothing has been asked for yet: usable if the server load succeeded
+  // for the month on screen, waiting on the mount fetch otherwise. Reading the prop here
+  // rather than in an initialiser is what keeps it live instead of frozen at first value.
   let phase = $state<'initial' | 'loading' | 'ready' | 'error'>('initial');
-  const status = $derived.by(() => (phase === 'initial' ? (events ? 'ready' : 'loading') : phase));
+  const status = $derived.by(() => (phase === 'initial' ? (serverMonthIsOurs ? 'ready' : 'loading') : phase));
+
+  // The server's month is not necessarily the reader's — a render at 18:00 in Los Angeles
+  // on 31 July happens on 1 August in a UTC process. The margin rangeForMonth adds is
+  // sized for a day boundary and cannot absorb a month boundary, so when the two disagree
+  // the payload is for a month we are not drawing and has to be replaced.
+  const serverMonthIsOurs = $derived(prefetched?.year === year && prefetched?.month === month);
+
+  // Only the newest request may write. Stepping twice quickly leaves two in flight, and
+  // without this the slower one lands last and paints one month's events under another's
+  // grid — with phase 'ready' and nothing to say the data is not this month's.
+  let inFlight = 0;
 
   // Deliberately not an $effect: this function writes year and month, and an effect that
   // read them would re-run on its own writes. Navigation is the only thing that moves the
@@ -40,19 +55,23 @@
     month = m;
     selectedKey = null;
     phase = 'loading';
+    const generation = ++inFlight;
     const { from, to } = rangeForMonth(y, m);
     try {
-      fetched = await api.myTimeline(from, to);
+      const events = await api.myTimeline(from, to);
+      if (generation !== inFlight) return;
+      fetched = events;
       phase = 'ready';
     } catch {
+      if (generation !== inFlight) return;
       phase = 'error';
     }
   }
 
-  // The server render may have failed transiently, and its month is the server's UTC one
-  // rather than the reader's. One fetch on mount settles both — once, not reactively.
+  // One fetch on mount when the server load failed, or when it answered for a month other
+  // than the reader's. Once, not reactively.
   onMount(() => {
-    if (!events) void show(year, month);
+    if (!serverMonthIsOurs) void show(year, month);
   });
 
   const grid = $derived(buildCalendarMonth(year, month, series));
@@ -95,28 +114,26 @@
 
   const dayHeading = (d: CalendarDay) =>
     d.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  /** What a cell announces. An empty day says nothing about a count: "0 events" on the
+   *  thirty-odd empty cells is noise a screen reader has to walk through. */
+  function cellLabel(d: CalendarDay): string {
+    if (d.events.length === 0) return dayHeading(d);
+    const n = d.events.length;
+    return `${dayHeading(d)} — ${n} ${n === 1 ? 'event' : 'events'}`;
+  }
 </script>
 
 <div class="flex flex-col gap-3">
   <div class="flex items-center justify-between gap-3">
     <h2 class="text-lg font-medium">{monthLabel(year, month)}</h2>
     <div class="flex items-center gap-1">
-      <button
-        type="button"
-        onclick={() => step(-1)}
-        class="rounded-md border px-2.5 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
-        aria-label="Previous month"
-      >
-        ←
-      </button>
-      <button
-        type="button"
-        onclick={() => step(1)}
-        class="rounded-md border px-2.5 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
-        aria-label="Next month"
-      >
-        →
-      </button>
+      <Button variant="outline" size="icon" onclick={() => step(-1)} aria-label="Previous month">
+        <ChevronLeft class="size-4" />
+      </Button>
+      <Button variant="outline" size="icon" onclick={() => step(1)} aria-label="Next month">
+        <ChevronRight class="size-4" />
+      </Button>
     </div>
   </div>
 
@@ -139,8 +156,9 @@
           <button
             type="button"
             onclick={() => (selectedKey = selectedKey === day.key ? null : day.key)}
-            aria-pressed={selectedKey === day.key}
-            aria-label="{dayHeading(day)} — {day.events.length} events"
+            aria-expanded={selectedKey === day.key}
+            aria-controls={selectedKey === day.key ? 'calendar-day-panel' : undefined}
+            aria-label={cellLabel(day)}
             class="flex min-h-16 flex-col items-start gap-1 rounded-md border p-1.5 text-left transition-colors
                    {day.inMonth ? '' : 'opacity-45'}
                    {selectedKey === day.key ? 'border-primary bg-accent' : 'hover:bg-accent'}"
@@ -171,11 +189,6 @@
     </div>
 
     <div class="flex flex-col gap-2 sm:hidden">
-      {#if grid.daysWithEvents.length === 0}
-        <p class="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-          Nothing recorded in {monthLabel(year, month)}.
-        </p>
-      {/if}
       {#each grid.daysWithEvents as day (day.key)}
         <button
           type="button"
@@ -194,7 +207,7 @@
       <!-- Assembled from the events already fetched for the range. Selecting a day issues
            no request, which is also what keeps this panel from ever reaching the message
            endpoint — that one marks mail read. -->
-      <div class="rounded-lg border bg-card p-4">
+      <div id="calendar-day-panel" role="region" aria-live="polite" class="rounded-lg border bg-card p-4">
         <h3 class="mb-3 text-sm font-medium">
           {dayHeading(selected)}
           <span class="font-normal text-muted-foreground">· {selected.events.length} events</span>
@@ -225,10 +238,11 @@
                     {:else}
                       recorded by you
                     {/if}
-                    {#if e.application_id}
-                      · <a class="underline hover:no-underline" href={resolve(`/my/tracking/${e.application_id}`)}
-                        >application</a
-                      >
+                    {#if boardRefFor(e)}
+                      · <a
+                          class="underline hover:no-underline"
+                          href={resolve('/my/tracking/[id]', { id: boardRefFor(e) ?? '' })}>application</a
+                        >
                     {/if}
                     {#if e.email_id}
                       ·
