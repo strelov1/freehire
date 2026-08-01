@@ -49,4 +49,4 @@
 
 - [x] 8.1 `go build ./... && go vet ./... && go test ./...`, and the web checks
 - [x] 8.2 Walk the whole surface in a browser: drag a card, open an application and use each of its four actions, switch to the list, search from both views, and reload on a searched list
-- [ ] 8.3 Offer a `/blog` changelog entry — the drag repair and the list view are both user-facing
+- [x] 8.3 Offer a `/blog` changelog entry — the drag repair and the list view are both user-facing
