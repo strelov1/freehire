@@ -51,6 +51,21 @@ type ApplicationEvent struct {
 	ApplicationID pgtype.Int8        `json:"application_id"`
 }
 
+type ApplicationInterview struct {
+	ID            int64              `json:"id"`
+	UserID        int64              `json:"user_id"`
+	ApplicationID int64              `json:"application_id"`
+	IcalUid       string             `json:"ical_uid"`
+	StartsAt      pgtype.Timestamptz `json:"starts_at"`
+	EndsAt        pgtype.Timestamptz `json:"ends_at"`
+	Title         string             `json:"title"`
+	JoinUrl       string             `json:"join_url"`
+	Status        string             `json:"status"`
+	Source        string             `json:"source"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type AssistantMessage struct {
 	SessionID uuid.UUID          `json:"session_id"`
 	Seq       int32              `json:"seq"`
@@ -227,6 +242,7 @@ type Email struct {
 	ClassificationModel pgtype.Text        `json:"classification_model"`
 	DeletedAt           pgtype.Timestamptz `json:"deleted_at"`
 	ApplicationID       pgtype.Int8        `json:"application_id"`
+	IcalUid             string             `json:"ical_uid"`
 }
 
 type EmailClassificationOutbox struct {
@@ -298,6 +314,7 @@ type GmailConnection struct {
 	SyncCursor      int64              `json:"sync_cursor"`
 	ConnectedAt     pgtype.Timestamptz `json:"connected_at"`
 	LastSyncedAt    pgtype.Timestamptz `json:"last_synced_at"`
+	Scopes          []string           `json:"scopes"`
 }
 
 type InsightsCompanyGrowth struct {

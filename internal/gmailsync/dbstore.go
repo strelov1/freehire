@@ -47,6 +47,7 @@ func (s *DBStore) UpsertEmail(ctx context.Context, e StoredEmail) error {
 		BodyText:   e.Message.BodyText,
 		BodyHtml:   e.Message.BodyHTML,
 		ReceivedAt: pgtype.Timestamptz{Time: e.Message.ReceivedAt, Valid: true},
+		IcalUid:    e.Message.CalendarUID,
 	})
 }
 

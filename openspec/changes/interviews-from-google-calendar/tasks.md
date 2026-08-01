@@ -1,26 +1,26 @@
 ## 1. Schema
 
-- [ ] 1.1 Write `migrations/0070_interview_schedule.sql` — `emails.ical_uid text`,
+- [x] 1.1 Write `migrations/0070_interview_schedule.sql` — `emails.ical_uid text`,
       `gmail_connections.scopes text[] NOT NULL DEFAULT '{}'`, and
       `application_interviews (id, user_id, application_id, job_id, ical_uid, starts_at,
       ends_at, title, join_url, status, source, created_at, updated_at)` with
       `UNIQUE (user_id, ical_uid)` and the per-user index the cascade needs. Comment each
       column with the reasoning the spec carries, in the manner of 0062 and 0064.
       Confirm 0069 is the newest applied on production before choosing the number.
-- [ ] 1.2 Add the queries in `internal/db/queries/` and run `make sqlc`: upsert a matched
+- [x] 1.2 Add the queries in `internal/db/queries/` and run `make sqlc`: upsert a matched
       meeting keyed on `(user_id, ical_uid)`, mark one cancelled, list a caller's meetings
       in a range, resolve an application by an email's `ical_uid`, and read/write
       `gmail_connections.scopes`.
 
 ## 2. The invitation's UID
 
-- [ ] 2.1 RED: a unit test over the MIME/part extraction proving a `text/calendar` part's
+- [x] 2.1 RED: a unit test over the MIME/part extraction proving a `text/calendar` part's
       `UID` is captured, that a message without one yields empty, and that a malformed
       part does not fail the message.
-- [ ] 2.2 Capture the UID in `internal/gmailsync` (the API reader's parts) and in
+- [x] 2.2 Capture the UID in `internal/gmailsync` (the API reader's parts) and in
       `internal/mailingest` (the MIME walk), and persist it through the existing upserts.
       `UpsertExternalEmail` must keep refreshing content columns only.
-- [ ] 2.3 Integration test: an ingested invitation carrying an ICS part stores its UID;
+- [x] 2.3 Integration test: an ingested invitation carrying an ICS part stores its UID;
       re-ingesting the same message does not change it.
 
 ## 3. The calendar grant

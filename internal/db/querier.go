@@ -40,6 +40,18 @@ type Querier interface {
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
 	AppendAssistantMessage(ctx context.Context, arg AppendAssistantMessageParams) (AssistantMessage, error)
+	// Which application a calendar event belongs to, by the identifier its invitation carried.
+	//
+	// This is the one automatic link the feature makes. The invitation is already tied to an
+	// application by the deterministic mail matcher, and the UID says the calendar entry is
+	// that same meeting — so nothing here is inferred from a company name or a domain.
+	//
+	// Owner-scoped, and that is load-bearing rather than routine: one candidate's invitation
+	// says nothing about another's applications, and a UID is not a secret.
+	//
+	// Deleted mail still resolves. Deletion hides the message; it does not un-schedule the
+	// meeting it announced — the same position the ledger takes on a deleted reply.
+	ApplicationForCalendarUID(ctx context.Context, arg ApplicationForCalendarUIDParams) (pgtype.Int8, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
@@ -95,6 +107,11 @@ type Querier interface {
 	// Whether a builder CV is owned by a user — the authorization check before attaching a
 	// 'built' CV to a request, so a seeker cannot reference someone else's cv_id.
 	CVBelongsToUser(ctx context.Context, arg CVBelongsToUserParams) (bool, error)
+	// Mark a meeting cancelled. Deliberately not a delete: a candidate who remembers an
+	// interview on Thursday and finds an empty Thursday cannot tell a cancellation from a
+	// calendar that failed to load. The scheduling still happened, and the ledger's
+	// `interview_scheduled` stands.
+	CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error)
 	// Cancel the pending reminder for one (user, job): the per-job "turn off" control,
 	// and the eager cleanup wired into apply and unsave. Idempotent — no pending row
 	// affects 0 rows and is never an error. Cancelled rows are retained as history.
@@ -1098,6 +1115,11 @@ type Querier interface {
 	// caption an interview with an unrelated rejection. The three names arrive as parameters
 	// rather than being written here, so the vocabulary stays in Go where a pin test guards it.
 	ListApplicationEventsInRange(ctx context.Context, arg ListApplicationEventsInRangeParams) ([]ListApplicationEventsInRangeRow, error)
+	// One caller's meetings over a date range, for the tracking calendar's second layer.
+	//
+	// Cancelled meetings are returned and marked rather than filtered: the view shows them
+	// struck through, because a silently missing interview reads as a fault.
+	ListApplicationInterviewsInRange(ctx context.Context, arg ListApplicationInterviewsInRangeParams) ([]ListApplicationInterviewsInRangeRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
@@ -1128,6 +1150,11 @@ type Querier interface {
 	ListCVRevisionsInBatch(ctx context.Context, arg ListCVRevisionsInBatchParams) ([]CvRevision, error)
 	// A user's CVs as metadata (no data blob), newest edit first.
 	ListCVsByUser(ctx context.Context, userID int64) ([]ListCVsByUserRow, error)
+	// The candidates whose grant actually covers the calendar. The scope check belongs in the
+	// query rather than in the worker's loop: a connection that cannot answer is not a
+	// connection to retry, and calling the API to find that out costs a quota unit per user
+	// per run for an answer we already hold.
+	ListCalendarConnections(ctx context.Context, calendarScope string) ([]ListCalendarConnectionsRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count
@@ -2144,6 +2171,9 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	// Record which Google scopes a grant carries, so the calendar worker can skip a connection
+	// that predates the calendar consent instead of discovering it from a 403 every run.
+	SetConnectionScopes(ctx context.Context, arg SetConnectionScopesParams) error
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
@@ -2382,6 +2412,16 @@ type Querier interface {
 	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
 	// No matching owner-scoped row returns no row (the handler maps that to 404).
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
+	// Record a meeting the sync attached to an application, or move the one already recorded.
+	//
+	// The sync re-reads its whole window every run, so this must be idempotent: the unique
+	// index on (user_id, ical_uid) makes a second sighting an update rather than a second row.
+	// A meeting that moved carries a new time under the same identity, which is exactly what
+	// the ledger could not have expressed.
+	//
+	// Re-appearing after a cancellation sets the status back to confirmed: an organiser who
+	// reinstates a meeting has un-cancelled it, and the candidate needs to see that.
+	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
 	// Apply one external-dataset company-info record, matched by slug. A new slug is
 	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
 	// (job-backed or a prior reference) has only its company-info columns refreshed —

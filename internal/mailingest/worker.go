@@ -27,6 +27,9 @@ type HostedMessage struct {
 	BodyText   string
 	BodyHTML   string
 	ReceivedAt time.Time
+	// CalendarUID identifies the meeting an invitation attaches, and is "" for the mail
+	// that carries none — see internal/ical.
+	CalendarUID string
 }
 
 // Store is the db-free persistence the worker needs (faked in tests). A db-backed
@@ -132,15 +135,16 @@ func (w *Worker) handle(ctx context.Context, in Inbound) error {
 	}
 
 	return w.store.InsertMessage(ctx, HostedMessage{
-		UserID:     userID,
-		ExternalID: externalID,
-		S3Key:      in.S3Key,
-		FromAddr:   parsed.FromAddr,
-		FromName:   parsed.FromName,
-		Subject:    parsed.Subject,
-		BodyText:   parsed.TextBody,
-		BodyHTML:   parsed.HTMLBody,
-		ReceivedAt: receivedAt,
+		UserID:      userID,
+		ExternalID:  externalID,
+		S3Key:       in.S3Key,
+		FromAddr:    parsed.FromAddr,
+		FromName:    parsed.FromName,
+		Subject:     parsed.Subject,
+		BodyText:    parsed.TextBody,
+		BodyHTML:    parsed.HTMLBody,
+		ReceivedAt:  receivedAt,
+		CalendarUID: parsed.CalendarUID,
 	})
 }
 

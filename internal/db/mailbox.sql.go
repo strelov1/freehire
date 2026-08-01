@@ -56,8 +56,8 @@ func (q *Queries) GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, 
 const insertHostedMessage = `-- name: InsertHostedMessage :exec
 INSERT INTO emails (
     user_id, source, external_id, s3_key, from_addr, from_name,
-    subject, body_text, body_html, received_at
-) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9)
+    subject, body_text, body_html, received_at, ical_uid
+) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (user_id, source, external_id) DO NOTHING
 `
 
@@ -71,6 +71,7 @@ type InsertHostedMessageParams struct {
 	BodyText   string             `json:"body_text"`
 	BodyHtml   string             `json:"body_html"`
 	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	IcalUid    string             `json:"ical_uid"`
 }
 
 // Store a message received at a hosted mailbox, idempotent by
@@ -86,6 +87,7 @@ func (q *Queries) InsertHostedMessage(ctx context.Context, arg InsertHostedMessa
 		arg.BodyText,
 		arg.BodyHtml,
 		arg.ReceivedAt,
+		arg.IcalUid,
 	)
 	return err
 }

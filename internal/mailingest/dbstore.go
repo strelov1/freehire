@@ -40,5 +40,6 @@ func (s *DBStore) InsertMessage(ctx context.Context, m HostedMessage) error {
 		BodyText:   m.BodyText,
 		BodyHtml:   m.BodyHTML,
 		ReceivedAt: pgtype.Timestamptz{Time: m.ReceivedAt, Valid: true},
+		IcalUid:    m.CalendarUID,
 	})
 }

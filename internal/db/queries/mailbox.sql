@@ -20,6 +20,6 @@ DELETE FROM mailboxes WHERE user_id = $1;
 -- (user_id, source, external_id) with source fixed to 'hosted'.
 INSERT INTO emails (
     user_id, source, external_id, s3_key, from_addr, from_name,
-    subject, body_text, body_html, received_at
-) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9)
+    subject, body_text, body_html, received_at, ical_uid
+) VALUES ($1, 'hosted', $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(ical_uid))
 ON CONFLICT (user_id, source, external_id) DO NOTHING;

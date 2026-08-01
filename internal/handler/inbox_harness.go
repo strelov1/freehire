@@ -133,6 +133,12 @@ func (m ingestMessage) upsertParams(userID int64) db.UpsertExternalEmailParams {
 		BodyText:   m.BodyText,
 		BodyHtml:   m.BodyHTML,
 		ReceivedAt: pgtype.Timestamptz{Time: receivedAt, Valid: true},
+		// No meeting identifier: this tier receives a JSON projection, not MIME, so
+		// there is no text/calendar part to read one out of. Pushed mail therefore
+		// yields no automatic calendar link, which is the same shape as the tier's
+		// existing bargain — it is never classified server-side either. Accepting a
+		// caller-supplied ical_uid would change the ingest contract and can wait for
+		// a harness that wants it.
 	}
 }
 

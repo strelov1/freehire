@@ -45,8 +45,8 @@ DELETE FROM emails WHERE user_id = $1 AND source = $2;
 -- source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 INSERT INTO emails (
     user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, body_text, body_html, received_at
-) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9)
+    subject, body_text, body_html, received_at, ical_uid
+) VALUES ($1, 'gmail', $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(ical_uid))
 ON CONFLICT (user_id, source, external_id) DO NOTHING;
 
 -- name: UpsertExternalEmail :one
@@ -61,8 +61,8 @@ ON CONFLICT (user_id, source, external_id) DO NOTHING;
 -- agent's triage verdict.
 INSERT INTO emails (
     user_id, source, external_id, thread_id, from_addr, from_name,
-    subject, body_text, body_html, received_at
-) VALUES ($1, 'external', $2, $3, $4, $5, $6, $7, $8, $9)
+    subject, body_text, body_html, received_at, ical_uid
+) VALUES ($1, 'external', $2, $3, $4, $5, $6, $7, $8, $9, sqlc.arg(ical_uid))
 ON CONFLICT (user_id, source, external_id) DO UPDATE
 SET thread_id   = EXCLUDED.thread_id,
     from_addr   = EXCLUDED.from_addr,
@@ -70,7 +70,11 @@ SET thread_id   = EXCLUDED.thread_id,
     subject     = EXCLUDED.subject,
     body_text   = EXCLUDED.body_text,
     body_html   = EXCLUDED.body_html,
-    received_at = EXCLUDED.received_at
+    received_at = EXCLUDED.received_at,
+    -- A content column like the rest: the meeting identifier belongs to the message,
+    -- not to the reader, so a re-sync may refresh it. The reader's own state — read_at,
+    -- deleted_at, every classification column — still stays out of this list.
+    ical_uid    = EXCLUDED.ical_uid
 RETURNING id, (xmax = 0)::boolean AS inserted;
 
 -- name: ListEmails :many
