@@ -293,7 +293,7 @@ func TestCompany_CarriesTheAttributesAGateNeeds(t *testing.T) {
 	}
 }
 
-func TestDataset_SourceIsExactlyOneOfURLDataResolver(t *testing.T) {
+func TestDataset_SourceIsExactlyOneOfURLDataResolverRecords(t *testing.T) {
 	cases := []struct {
 		name string
 		ds   Dataset
@@ -302,9 +302,16 @@ func TestDataset_SourceIsExactlyOneOfURLDataResolver(t *testing.T) {
 		{"url only", Dataset{URL: "https://x/y.json"}, true},
 		{"data only", Dataset{Data: []byte("x")}, true},
 		{"resolver only", Dataset{ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil }}, true},
+		{"records only", Dataset{Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, true},
 		{"none", Dataset{}, false},
 		{"url and data", Dataset{URL: "https://x", Data: []byte("x")}, false},
 		{"url and resolver", Dataset{URL: "https://x", ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil }}, false},
+		{"url and records", Dataset{URL: "https://x", Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, false},
+		{"data and records", Dataset{Data: []byte("x"), Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, false},
+		{"resolver and records", Dataset{
+			ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil },
+			Records:    func(context.Context, *http.Client) ([]Record, error) { return nil, nil },
+		}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

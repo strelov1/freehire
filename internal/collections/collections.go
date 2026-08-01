@@ -43,7 +43,14 @@ type Dataset struct {
 	URL        string
 	Data       []byte
 	ResolveURL func(context.Context, *http.Client) (string, error)
-	Parse      func([]byte) ([]Record, error)
+	// Records is set instead of the other three by a source no single payload can
+	// express — a directory paginated across many responses, say. It fetches and
+	// parses itself, so Parse is unused alongside it. It must read its source
+	// completely and return an error otherwise: a partial read is indistinguishable
+	// from a shrunken source, and would reconcile the tag off every company it
+	// failed to reach.
+	Records func(context.Context, *http.Client) ([]Record, error)
+	Parse   func([]byte) ([]Record, error)
 	// IdentityKey names the Record.Meta field that tells two same-named
 	// organisations apart in this source — the UK register's town, the Dutch
 	// register's KvK number. Read by the import worker's ambiguity guard (see
@@ -63,6 +70,9 @@ func (d Dataset) Valid() bool {
 		n++
 	}
 	if d.ResolveURL != nil {
+		n++
+	}
+	if d.Records != nil {
 		n++
 	}
 	return n == 1

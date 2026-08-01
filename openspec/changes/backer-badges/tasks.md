@@ -3,7 +3,7 @@
 - [x] 1.1 Add `KindBacker` to `internal/collections`, and move `yc` and `techstars`
       onto it. Registry test asserts every entry's kind is one of the three, and
       that `yc`/`techstars` are backers.
-- [ ] 1.2 Extend `Dataset` with the self-fetching `Records` form and teach `Valid()`
+- [x] 1.2 Extend `Dataset` with the self-fetching `Records` form and teach `Valid()`
       to reject it alongside any other payload form. Test covers each single form
       accepted and each two-form combination rejected.
 
