@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strelov1/freehire/internal/worker"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // Claimed is one outbox entry leased to this run.
@@ -120,7 +120,7 @@ func (rn *run) process(ctx context.Context, entry Claimed) {
 		// A corrupted row (XX001) is permanently unreadable — retrying across cron
 		// runs would only burn the attempt budget on a job that can never load, so
 		// dead-letter it immediately (maxAttempts=1) instead.
-		if worker.IsCorruptedRow(err) {
+		if pgerr.IsDataCorrupted(err) {
 			rn.failN(ctx, entry, fmt.Errorf("load job: %w", err), 1)
 			log.Printf("enrich: job=%d dead-lettered (corrupted row) in %s: %v", entry.JobID, time.Since(start).Round(time.Millisecond), err)
 			return

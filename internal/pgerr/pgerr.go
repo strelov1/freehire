@@ -14,6 +14,10 @@ import (
 const (
 	codeUniqueViolation     = "23505"
 	codeForeignKeyViolation = "23503"
+	// codeDataCorrupted is XX001 (data_corrupted): a row cannot be read because its
+	// on-disk storage is damaged — most visibly a "missing chunk number N for toast
+	// value ..." on a broken TOAST pointer.
+	codeDataCorrupted = "XX001"
 )
 
 // IsUniqueViolation reports whether err is (or wraps) a unique-constraint violation
@@ -28,4 +32,14 @@ func IsUniqueViolation(err error) bool {
 func IsForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeForeignKeyViolation
+}
+
+// IsDataCorrupted reports whether err is (or wraps) a Postgres data-corruption error
+// (SQLSTATE XX001). It is deliberately narrow: recognizing the condition is this package's
+// job, but deciding what to do about it is the caller's — internal/worker's resilient scan
+// is what chooses to skip such a row, and only XX001 opts a read into that path, so every
+// other failure still surfaces unchanged.
+func IsDataCorrupted(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == codeDataCorrupted
 }

@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -43,7 +42,9 @@ func (f *fakeReader) Row(_ context.Context, id int64) (db.Job, error) {
 	return f.rowResults[id], nil
 }
 
-func corruptErr() error { return &pgconn.PgError{Code: corruptDataSQLState} }
+// corruptErr is the SQLSTATE the resilient scan degrades on. The classification itself is
+// pgerr's (and pgerr tests it); what these tests exercise is the POLICY built on it.
+func corruptErr() error { return &pgconn.PgError{Code: "XX001"} }
 
 func TestResilientPage_HealthyBatch(t *testing.T) {
 	r := &fakeReader{batchRows: []db.Job{{ID: 1}, {ID: 2}, {ID: 5}}}
@@ -140,26 +141,5 @@ func TestResilientPage_NonCorruptionRowErrorPropagates(t *testing.T) {
 	_, _, _, err := ResilientPage(context.Background(), r, 19, 2000)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("expected sentinel propagated from per-row read, got %v", err)
-	}
-}
-
-func TestIsCorruptedRow(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"nil", nil, false},
-		{"plain error", errors.New("boom"), false},
-		{"data corruption XX001", &pgconn.PgError{Code: "XX001"}, true},
-		{"wrapped XX001", fmt.Errorf("read batch: %w", &pgconn.PgError{Code: "XX001"}), true},
-		{"other pg error", &pgconn.PgError{Code: "23505"}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsCorruptedRow(tt.err); got != tt.want {
-				t.Errorf("IsCorruptedRow(%v) = %v, want %v", tt.err, got, tt.want)
-			}
-		})
 	}
 }

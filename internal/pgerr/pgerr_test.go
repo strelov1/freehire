@@ -1,0 +1,96 @@
+package pgerr
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
+	tests := []struct {
+		name              string
+		err               error
+		unique, fk, corpt bool
+	}{
+		{name: "nil"},
+		{name: "plain error", err: errors.New("boom")},
+		{name: "unique violation", err: &pgconn.PgError{Code: "23505"}, unique: true},
+		{name: "foreign key violation", err: &pgconn.PgError{Code: "23503"}, fk: true},
+		{name: "data corrupted", err: &pgconn.PgError{Code: "XX001"}, corpt: true},
+		// Wrapping is the case that matters in practice: a repository returns
+		// fmt.Errorf("read batch: %w", err) and the caller still has to classify it.
+		{name: "wrapped data corrupted", err: fmt.Errorf("read batch: %w", &pgconn.PgError{Code: "XX001"}), corpt: true},
+		{name: "wrapped unique violation", err: fmt.Errorf("insert: %w", &pgconn.PgError{Code: "23505"}), unique: true},
+		{name: "an unrelated pg error is none of them", err: &pgconn.PgError{Code: "42703"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsUniqueViolation(tt.err); got != tt.unique {
+				t.Errorf("IsUniqueViolation = %v, want %v", got, tt.unique)
+			}
+			if got := IsForeignKeyViolation(tt.err); got != tt.fk {
+				t.Errorf("IsForeignKeyViolation = %v, want %v", got, tt.fk)
+			}
+			if got := IsDataCorrupted(tt.err); got != tt.corpt {
+				t.Errorf("IsDataCorrupted = %v, want %v", got, tt.corpt)
+			}
+		})
+	}
+}
+
+// This package's doc calls it "the single home for the SQLSTATE constants". That claim was
+// false: internal/worker declared XX001 and repeated the errors.As unwrap, and the predicted
+// consequence had already happened — internal/enrich and internal/embed pulled in the whole
+// bootstrap dependency tree (config, database, observability) to classify one SQLSTATE.
+//
+// So the claim is a test now. A package that unwraps *pgconn.PgError is classifying, whatever
+// it calls the function; that is this package's job, and a second copy is how the taxonomy
+// splits again.
+func TestOnlyThisPackageUnwrapsAPgError(t *testing.T) {
+	const marker = "pgconn.PgError"
+
+	var scanned, offenders int
+	err := filepath.WalkDir(filepath.Join("..", ".."), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Vendored and generated trees are nobody's taxonomy to keep.
+			if name := d.Name(); name == "node_modules" || name == ".git" || name == "archive" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		scanned++
+		if !strings.Contains(string(body), marker) {
+			return nil
+		}
+		if strings.Contains(filepath.ToSlash(path), "internal/pgerr/") {
+			return nil
+		}
+		offenders++
+		t.Errorf("%s unwraps *pgconn.PgError; SQLSTATE classification belongs in internal/pgerr, "+
+			"whose doc claims to be its single home. Add a predicate there and call it.", path)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if scanned < 100 {
+		t.Fatalf("only %d Go files scanned — the walk is not seeing the repo, so a second "+
+			"classifier would pass unnoticed", scanned)
+	}
+	_ = offenders
+}

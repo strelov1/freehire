@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/worker"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
 
 // Claimed is one outbox entry leased to this run. Closed marks whether the job is now
@@ -179,7 +179,7 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 	if err != nil {
 		// A corrupted row (XX001) can never load — dead-letter it immediately rather
 		// than burning the attempt budget across cron runs (mirrors enrich).
-		if worker.IsCorruptedRow(err) {
+		if pgerr.IsDataCorrupted(err) {
 			rn.failN(entry, fmt.Errorf("load job: %w", err), 1)
 			return
 		}

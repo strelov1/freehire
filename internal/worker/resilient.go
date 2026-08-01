@@ -7,24 +7,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgerr"
 )
-
-// corruptDataSQLState is Postgres SQLSTATE XX001 (data_corrupted), raised when a
-// row cannot be read because its on-disk storage is damaged — most visibly a
-// "missing chunk number N for toast value ..." on a broken TOAST pointer.
-const corruptDataSQLState = "XX001"
-
-// IsCorruptedRow reports whether err is (or wraps) a Postgres data-corruption
-// error. It is deliberately narrow: only XX001 opts a read into the skip path, so
-// every other failure still surfaces to the caller unchanged.
-func IsCorruptedRow(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == corruptDataSQLState
-}
 
 // PageReader is the narrow slice of DB access ResilientPage needs: a wide keyset
 // batch (the fast path), an id-only projection of the same window (the degrade
@@ -113,7 +100,7 @@ func ResilientPage(ctx context.Context, r PageReader, afterID int64, batchSize i
 		}
 		return rows, rows[len(rows)-1].ID, nil, nil
 	}
-	if !IsCorruptedRow(err) {
+	if !pgerr.IsDataCorrupted(err) {
 		return nil, 0, nil, err
 	}
 
@@ -129,7 +116,7 @@ func ResilientPage(ctx context.Context, r PageReader, afterID int64, batchSize i
 	for _, id := range ids {
 		job, rowErr := r.Row(ctx, id)
 		if rowErr != nil {
-			if IsCorruptedRow(rowErr) {
+			if pgerr.IsDataCorrupted(rowErr) {
 				skipped = append(skipped, id)
 				log.Printf("resilient scan: skipping corrupted row id=%d: %v", id, rowErr)
 				continue
