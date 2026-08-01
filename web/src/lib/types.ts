@@ -852,3 +852,34 @@ export type ExperienceBank = {
   employments: ExperienceEmploymentWithAtoms[];
   unplaced: ExperienceAtom[];
 };
+
+/** One thing that happened to one application, as GET /me/timeline serves it.
+ *
+ *  `kind` and `signal` are values from the server's vocabularies rather than a closed
+ *  union: `application_events` splits the two precisely so a growing vocabulary is not a
+ *  change to a table that must not change, and a union here would make every addition a
+ *  change to the SPA as well. Render an unrecognised kind, do not drop it.
+ *
+ *  `occurred_at` is an instant, not a day. Which day it falls on depends on the reader's
+ *  clock — see calendarModel.
+ *
+ *  `observed` is the server's verdict on the source: mail-derived events carry a date
+ *  somebody other than the candidate set, a stage they moved themselves carries the date
+ *  they got around to recording it. Never re-derive this from `source` here; the rule
+ *  lives in Go and a second copy would drift from it. */
+export interface TimelineEvent {
+  id: number;
+  kind: string;
+  signal?: string;
+  source: string;
+  observed: boolean;
+  occurred_at: string;
+  company_slug: string;
+  role_title?: string;
+  application_id?: number;
+  job_slug?: string;
+  /** Absent for an event with no message, and for one whose message was deleted — the
+   *  deletion hides the content and leaves the event standing. */
+  email_id?: number;
+  email_subject?: string;
+}

@@ -35,6 +35,7 @@ import type {
   MyJob,
   MyJobCounts,
   PipelineStats,
+  TimelineEvent,
   User,
   UserJob,
   VoteResult,
@@ -774,6 +775,18 @@ export function createApi(
    *  counts aggregated server-side, for the Pipeline tab's Sankey and rate cards. */
   async function getMyPipeline(): Promise<PipelineStats> {
     return requestData<PipelineStats>('/api/v1/me/tracking/pipeline');
+  }
+
+  /** What happened to the caller's applications between two instants, oldest first —
+   *  the application-event ledger behind the Tracking → Calendar view.
+   *
+   *  Both bounds are RFC3339 instants and the server does not group them into days: which
+   *  day an event falls on depends on the reader's clock, so calendarModel does that here.
+   *  Bounds are percent-encoded because a bare `+` in an offset decodes as a space. */
+  async function myTimeline(from: string, to: string): Promise<TimelineEvent[]> {
+    return requestData<TimelineEvent[]>(
+      `/api/v1/me/timeline?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    );
   }
 
   /** The jobs the current user has run the AI fit analysis on (newest first), plus their
@@ -1643,6 +1656,7 @@ export function createApi(
     untrackApplication,
     listMyJobs,
     getMyPipeline,
+    myTimeline,
     myAnalyses,
     myCredits,
     myCreditsHistory,

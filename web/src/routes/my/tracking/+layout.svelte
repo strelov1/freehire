@@ -16,9 +16,16 @@
   const boardActive = $derived(path === '/my/tracking');
   const listActive = $derived(path.startsWith('/my/tracking/list'));
   const pipelineActive = $derived(path.startsWith('/my/tracking/pipeline'));
+  const calendarActive = $derived(path.startsWith('/my/tracking/calendar'));
   // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
   const activeTabId = $derived(
-    pipelineActive ? 'tracking-tab-pipeline' : listActive ? 'tracking-tab-list' : 'tracking-tab-board',
+    calendarActive
+      ? 'tracking-tab-calendar'
+      : pipelineActive
+        ? 'tracking-tab-pipeline'
+        : listActive
+          ? 'tracking-tab-list'
+          : 'tracking-tab-board',
   );
 
   const tabClass = (active: boolean) =>
@@ -68,6 +75,16 @@
       class={tabClass(pipelineActive)}
     >
       Pipeline
+    </a>
+    <a
+      role="tab"
+      id="tracking-tab-calendar"
+      aria-selected={calendarActive}
+      aria-controls="tracking-tabpanel"
+      href={resolve('/my/tracking/calendar')}
+      class={tabClass(calendarActive)}
+    >
+      Calendar
     </a>
   </div>
 

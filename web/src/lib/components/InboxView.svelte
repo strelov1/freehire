@@ -125,8 +125,23 @@
   }
 
   let destroyed = false;
+  // A message addressed from outside the inbox — the tracking calendar links each
+  // mail-derived event to the message behind it. Opening it here marks it read, which is
+  // correct: read_at means a human saw the message, and this arrival is a person clicking
+  // through to it. What must never mark mail read is a view that merely lists events, and
+  // that is why the calendar reaches the subject through a join and links here instead of
+  // fetching bodies itself.
+  function openAddressedMessage() {
+    const id = Number(page.url.searchParams.get('message'));
+    if (!Number.isInteger(id) || id <= 0) return;
+    void openMessage(id);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
+    replaceState(page.url.pathname, {});
+  }
+
   onMount(() => {
     readConnectVerdict();
+    openAddressedMessage();
     void load();
   });
   onDestroy(() => {

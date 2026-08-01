@@ -48,45 +48,45 @@
 
 ## 4. The month model
 
-- [ ] 4.1 Add `web/src/lib/calendarModel.ts`: pure functions turning a flat event series into a
+- [x] 4.1 Add `web/src/lib/calendarModel.ts`: pure functions turning a flat event series into a
       month grid — the weeks and days of a given month, each day's events, and the fetch range
       for a month with one day of margin on each side. Follow `activityChart.ts`: the
       bug-prone arithmetic lives here so it is testable without rendering.
-- [ ] 4.2 Group by the reader's local day, not by UTC. The model takes instants and derives the
+- [x] 4.2 Group by the reader's local day, not by UTC. The model takes instants and derives the
       day from them locally; nothing in it formats a date server-side.
-- [ ] 4.3 Vitest for `calendarModel.ts`: an event at 23:40 UTC lands on the next local day for
+- [x] 4.3 Vitest for `calendarModel.ts`: an event at 23:40 UTC lands on the next local day for
       a reader ahead of UTC; the first and last cells of a month receive events that fall in
       them only under the local offset; an empty month yields a full grid of empty days; a day
       with more events than the cell holds reports the remainder.
 
 ## 5. The calendar view
 
-- [ ] 5.1 Add the Calendar tab to `web/src/routes/my/tracking/+layout.svelte`, following the
+- [x] 5.1 Add the Calendar tab to `web/src/routes/my/tracking/+layout.svelte`, following the
       existing `tablist` pattern and its `aria-selected` / `activeTabId` handling.
-- [ ] 5.2 Add `web/src/routes/my/tracking/calendar/+page.server.ts` fetching the current UTC
+- [x] 5.2 Add `web/src/routes/my/tracking/calendar/+page.server.ts` fetching the current UTC
       month plus margin through a `loadTimeline` helper in `web/src/lib/server/tracking.ts`,
       returning `undefined` on a transient failure the way `loadBoard` does.
-- [ ] 5.3 Add the timeline call to `web/src/lib/api.ts` and the event type to the web types,
+- [x] 5.3 Add the timeline call to `web/src/lib/api.ts` and the event type to the web types,
       matching how the contract types are generated or declared for the other `/me` reads.
-- [ ] 5.4 Add `web/src/routes/my/tracking/calendar/+page.svelte` and a `TrackingCalendar`
+- [x] 5.4 Add `web/src/routes/my/tracking/calendar/+page.svelte` and a `TrackingCalendar`
       component rendering the model: month grid, previous/next month, per-kind marks with
       observed drawn filled and hand-recorded drawn outlined, and an overflow count.
-- [ ] 5.5 Day panel beneath the grid, filtered from data already loaded — no fetch on select.
+- [x] 5.5 Day panel beneath the grid, filtered from data already loaded — no fetch on select.
       Each entry shows employer, role, what happened, the subject when there is one, and links
       to the application and, when the message still exists, to it in `/my/inbox`.
-- [ ] 5.6 Render an unrecognised kind generically (date, employer, role) rather than dropping
+- [x] 5.6 Render an unrecognised kind generically (date, employer, role) rather than dropping
       it or throwing, so the interview kind can arrive without a change here.
-- [ ] 5.7 Narrow viewport: present the month as a list of days holding events instead of a
+- [x] 5.7 Narrow viewport: present the month as a list of days holding events instead of a
       seven-column grid.
-- [ ] 5.8 Empty state: a caller with no events at all is told so and pointed at the board,
+- [x] 5.8 Empty state: a caller with no events at all is told so and pointed at the board,
       rather than shown an empty month.
 
 ## 6. Verify
 
-- [ ] 6.1 `go build ./...`, `go vet ./...`, `go test ./...`, and `go test -tags=integration
+- [x] 6.1 `go build ./...`, `go vet ./...`, `go test ./...`, and `go test -tags=integration
       ./internal/db/` — both runs, since the untagged run does not compile the integration
       tests.
-- [ ] 6.2 `web/`: install the linked design system first, then `svelte-check`, `eslint` and
+- [x] 6.2 `web/`: install the linked design system first, then `svelte-check`, `eslint` and
       `vitest`; all green against the repository's existing baseline.
 - [ ] 6.3 Visual check against a running authed stack: the tab is selected and reload-safe at
       `/my/tracking/calendar`; a month with events renders marks; selecting a day opens the

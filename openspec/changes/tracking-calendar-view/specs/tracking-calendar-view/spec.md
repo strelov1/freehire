@@ -108,15 +108,21 @@ candidate updated their board as for the day somebody answered.
 On a viewport too narrow for seven columns the view SHALL present the month as a list of the
 days that hold events rather than a grid.
 
-Where the caller has no events at all, the view SHALL say so and point at the board rather than
-render an empty month, which reads as a fault in the calendar rather than as an empty history.
+Where the month on screen holds nothing, the view SHALL name that month, say that nothing was
+recorded in it, and offer the tracking board — rather than render a bare empty grid, which
+reads as a fault in the calendar rather than as a quiet month.
+
+The message SHALL be about the month and not about the account. The view fetches one month at
+a time and cannot tell an empty history from a quiet August without a second read of the whole
+ledger; a message claiming the stronger thing would be a guess.
 
 #### Scenario: A narrow viewport lists days
 
 - **WHEN** the calendar renders on a viewport too narrow for a seven-column grid
 - **THEN** the month is presented as a list of days holding events
 
-#### Scenario: A caller with no history is pointed at the board
+#### Scenario: An empty month explains itself
 
-- **WHEN** a signed-in user with no application events opens the calendar
-- **THEN** the view explains that there is nothing recorded yet and offers the tracking board
+- **WHEN** the caller opens a month in which nothing was recorded
+- **THEN** the view names that month, says nothing was recorded in it, and offers the tracking
+  board, while the month controls stay usable so another month can be looked at
