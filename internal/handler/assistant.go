@@ -124,9 +124,10 @@ func (h *assistantHandlers) withKeys(keys *llmkey.Resolver) {
 // the session JWT the connect flow minted, or a full-scope API key to one user.
 // Authentication is the whole gate: every signed-in user reaches the assistant. The
 // beta-tester restriction that used to sit here was written when the agent ran on the
-// candidate's own machine, and did not survive the move in-process. Note what left
-// with it — nothing meters a turn, so until credit metering lands, being signed in is
-// all that bounds our inference spend.
+// candidate's own machine, and did not survive the move in-process. A turn is now
+// attributed — it spends on the caller's own gateway credential, tagged with its preset —
+// but it is still not BOUNDED: nothing refuses one, so being signed in remains all that
+// caps our inference spend.
 func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/assistant/sessions", mw.key, h.CreateAssistantSession)
 	api.Get("/assistant/sessions", mw.key, h.ListAssistantSessions)
