@@ -21,17 +21,25 @@ export default {
     // (<script type="application/ld+json">) is non-executable and unaffected.
     // style-src is left unset (no default-src), so styles and fonts are unrestricted.
     //
-    // The anti-FOUC theme script in app.html is author-written, so SvelteKit does NOT
+    // The anti-FOUC script in app.html is author-written, so SvelteKit does NOT
     // nonce it — it is allowed by the SHA-256 of its exact contents below. WARNING:
-    // editing that <script> in app.html changes its hash and will silently break the
-    // no-flash theme load; recompute and update this hash when you touch it.
+    // editing that <script> in app.html changes its hash and will silently break
+    // BOTH no-flash passes it carries (the theme and the Product Hunt strip): the
+    // browser blocks the whole block, nothing errors, and the only symptom is a
+    // flash of the wrong theme. Recompute whenever you touch it —
+    //
+    //   python3 -c "import re,hashlib,base64;b=re.findall(r'<script>(.*?)</script>',
+    //     open('src/app.html').read(),re.S)[0];
+    //     print('sha256-'+base64.b64encode(hashlib.sha256(b.encode()).digest()).decode())"
+    //
+    // — and verify in a real browser: a CSP block shows up only in the console.
     csp: {
       mode: 'auto',
       directives: {
         'script-src': [
           'self',
-          // Anti-FOUC theme script in app.html (see WARNING above).
-          'sha256-qvzE1AlG+fDQlxleonlMQaOrsjjgE6qfHfnkE0pD/bo=',
+          // Anti-FOUC script in app.html — theme + Product Hunt strip (see WARNING above).
+          'sha256-MW6zpEdH1zWlGWKLAC6RP63TxcORvBoLwbJTeRL+HD0=',
           // Google Analytics: the gtag.js host. GA now loads from the same-origin
           // bundle ($lib/analytics, consent-gated), so no inline-script hash is
           // needed — only the external host it injects.

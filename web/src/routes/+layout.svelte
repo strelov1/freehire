@@ -13,6 +13,7 @@
     trackSignupIfNew,
   } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
+  import ProductHuntBanner from '$lib/components/ProductHuntBanner.svelte';
   import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
@@ -98,6 +99,11 @@
 
   <!-- Self-gating: renders only for a signed-in, unverified account. -->
   <EmailVerificationBanner />
+
+  <!-- Self-gating: renders until the Product Hunt launch day is over, unless
+       dismissed. Below the verification prompt on purpose — a promo strip must not
+       push a security notice further from the header. -->
+  <ProductHuntBanner />
 
   <main class="flex-1">
     {@render children()}
