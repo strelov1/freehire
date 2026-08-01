@@ -5,10 +5,12 @@
 // redistributed dataset. Run-once host tool; review the diff before ingesting.
 //
 //	go run ./cmd/harvest-boards <provider> <seed.json>
+//	go run ./cmd/harvest-boards -pace 2 -workers 4 workable seed.json   # rate-limited platform
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -19,22 +21,31 @@ import (
 	"github.com/strelov1/freehire/internal/sources"
 )
 
-// probeWorkers bounds the concurrent probe fan-out. The shared client handles 429 backoff,
-// so this stays polite under load without a per-request delay.
-const probeWorkers = 16
+// defaultProbeWorkers bounds the concurrent probe fan-out. It bounds the BURST only; a
+// platform whose budget is per-window needs -pace as well (see pacer.go).
+const defaultProbeWorkers = 16
 
 func main() { os.Exit(run()) }
 
 func run() int {
-	// 3 args = seed path; 2 args = discovery (the prober must support it).
-	if len(os.Args) != 2 && len(os.Args) != 3 {
-		log.Printf("usage: harvest-boards <provider> [seed.json]")
+	// Flags precede the positional arguments, which stay as they were: 1 = discovery (the
+	// prober must support it), 2 = provider plus seed path.
+	pace := flag.Float64("pace", 0, "cap the probe rate at this many requests per second (0 = unpaced)")
+	workers := flag.Int("workers", defaultProbeWorkers, "concurrent probes in flight")
+	flag.Parse()
+	args := flag.Args()
+	if len(args) != 1 && len(args) != 2 {
+		log.Printf("usage: harvest-boards [-pace N] [-workers N] <provider> [seed.json]")
 		return 2
 	}
-	provider := os.Args[1]
+	provider := args[0]
 	seedPath := ""
-	if len(os.Args) == 3 {
-		seedPath = os.Args[2]
+	if len(args) == 2 {
+		seedPath = args[1]
+	}
+	if *workers < 1 {
+		log.Printf("harvest-boards: -workers must be at least 1")
+		return 2
 	}
 
 	p, ok := probers[provider]
@@ -44,7 +55,10 @@ func run() int {
 	}
 
 	ctx := context.Background()
-	client := sources.NewClient()
+	client := paced(sources.NewClient(), *pace)
+	if *pace > 0 {
+		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
+	}
 
 	raw, companyByBoard, err := resolveCandidates(ctx, p, client, seedPath)
 	if err != nil {
@@ -67,7 +81,7 @@ func run() int {
 	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
 		provider, len(raw), len(existing), len(candidates))
 
-	kept, failures, mismatches := probeAll(ctx, client, p, candidates, companyByBoard)
+	kept, failures, mismatches := probeAll(ctx, client, p, candidates, companyByBoard, *workers)
 	log.Printf("harvest-boards: live boards found=%d probe-failures=%d name-mismatches=%d",
 		len(kept), failures, mismatches)
 	// Every candidate erroring means the probe itself is broken (an API change, an
@@ -159,8 +173,8 @@ func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath str
 // Mismatches are counted apart from failures because they mean something else entirely — a
 // dead board is noise, while a wave of mismatches means the candidates or the prober's name
 // extraction are wrong, and burying them in the failure count would hide that.
-func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) ([]entry, int, int) {
-	sem := make(chan struct{}, probeWorkers)
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string, workers int) ([]entry, int, int) {
+	sem := make(chan struct{}, workers)
 	var (
 		mu         sync.Mutex
 		kept       []entry

@@ -55,7 +55,7 @@ func TestProbeAllNameGate(t *testing.T) {
 		"acme.wd1.myworkdayjobs.com/careers",
 	}
 
-	kept, failures, mismatches := probeAll(context.Background(), nil, prober, candidates, seed)
+	kept, failures, mismatches := probeAll(context.Background(), nil, prober, candidates, seed, defaultProbeWorkers)
 
 	got := make(map[string]string, len(kept))
 	for _, e := range kept {
