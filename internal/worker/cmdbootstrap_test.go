@@ -1,6 +1,9 @@
 package worker_test
 
 import (
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,6 +59,17 @@ func TestPoolOpeningCommandsUseSharedBootstrap(t *testing.T) {
 			t.Errorf("cmd/%s opens a database pool without worker.Bootstrap: it gets no Sentry init, "+
 				"no SIGTERM-cancellable context, and its deferred cleanup is at the mercy of os.Exit. "+
 				"Convert it to worker.Main(run) + worker.Bootstrap, or add it to exemptFromBootstrap with a reason.", name)
+			continue
+		}
+
+		// Bootstrap alone is not enough: it registers the pool close and the worker's own
+		// telemetry flush as deferred calls, and os.Exit — which log.Fatal calls — runs no
+		// deferred function. A worker that bootstraps and then log.Fatals still drops both,
+		// on exactly the failed run whose traces would explain it.
+		if strings.Contains(src, "log.Fatal") || strings.Contains(src, "os.Exit") {
+			t.Errorf("cmd/%s uses worker.Bootstrap but still calls log.Fatal or os.Exit: neither runs a "+
+				"deferred function, so the pool close and any buffered telemetry flush are skipped. "+
+				"Return a non-zero code from run() and let worker.Main exit.", name)
 		}
 	}
 
@@ -66,23 +80,32 @@ func TestPoolOpeningCommandsUseSharedBootstrap(t *testing.T) {
 	}
 }
 
-// packageSource concatenates the non-test Go sources of one package directory.
+// packageSource concatenates the non-test Go sources of one package directory with the
+// comments stripped, by re-printing each parsed file. Matching raw text would let a
+// `// TODO: move this to worker.Bootstrap` satisfy the check — which is precisely the
+// comment someone deferring the migration would leave behind.
 func packageSource(dir string) (string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", err
 	}
+	fset := token.NewFileSet()
 	var b strings.Builder
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, name))
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
 		if err != nil {
 			return "", err
 		}
-		b.Write(data)
+		// printer.Fprint on the *ast.File alone omits comments — they live in File.Comments
+		// and are only emitted for a printer.CommentedNode.
+		if err := printer.Fprint(&b, fset, file); err != nil {
+			return "", err
+		}
+		b.WriteByte('\n')
 	}
 	return b.String(), nil
 }

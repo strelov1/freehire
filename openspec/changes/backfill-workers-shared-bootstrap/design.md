@@ -77,9 +77,18 @@ last time. The whole reason this change exists is that three written requirement
 two workers drifting out of compliance.
 
 The test reads source text rather than building an import graph. Coarser, but it depends on no
-build tooling, runs in milliseconds, and cannot be defeated by anything short of deliberately
-aliasing the import — for which the honest answer is that the test states an intent, not a
-security boundary.
+build tooling and runs in milliseconds. It parses each file and re-prints it without comments
+before matching, because matching raw text would let a `// TODO: move this to worker.Bootstrap`
+satisfy the check — exactly the comment someone deferring the migration would leave. What it
+still cannot see is a pool obtained through a helper package that mentions neither
+`database.Connect` nor `pgxpool`; the honest answer there is that the test is a ratchet against
+the common case, not a proof.
+
+The same walk also asserts the second half of the rule: a package that uses `worker.Bootstrap`
+must contain no `log.Fatal` or `os.Exit`. Bootstrapping is not enough on its own — a worker
+that bootstraps and then fatals still skips its deferred pool close and telemetry flush, which
+is half the defect being fixed here. That assertion is green across the fleet today, so it
+costs nothing and holds the line.
 
 ### `worker.ExitCode`, not a hand-written comparison
 
@@ -91,7 +100,11 @@ same and neither restates the convention.
 
 - **`SIGTERM` now cancels in-flight work where it previously did not.** → That is the intended
   behaviour and matches every other worker. Both workers are idempotent by construction, so a
-  cancelled run is safe to re-run; a partially-completed run needs no reconciliation.
+  cancelled run is safe to re-run; a partially-completed run needs no reconciliation. Each
+  per-user loop checks `ctx.Err()` at the top and stops, following
+  `cmd/backfill-applications/main.go:84` — without that the loop would run to the end of the
+  list turning every remaining user into a logged failure, reporting one cancellation as a
+  fleet of them. A cancelled run exits non-zero and says how many targets it left.
 - **`backfill-resume-structured` starts exiting non-zero on partial failure**, so a cron entry
   that previously looked green may start alerting. → That is the requirement, and a silent
   partial failure on a worker that spends money is the worse outcome.

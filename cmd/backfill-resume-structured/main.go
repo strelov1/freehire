@@ -141,7 +141,17 @@ func run() int {
 	log.Printf("backfill-resume-structured: %d eligible user(s)%s", len(targets), dryRunSuffix(dryRun))
 
 	var ok, failed int
-	for _, t := range targets {
+	var cancelled bool
+	for i, t := range targets {
+		// The root context is signal-bound, so a redeploy's SIGTERM cancels it mid-run.
+		// Without this the loop would run to the end of the list turning every remaining
+		// user into a logged failure, reporting one cancellation as a fleet of them.
+		if ctx.Err() != nil {
+			log.Printf("backfill-resume-structured: cancelled — %d user(s) left unprocessed; the worker "+
+				"is idempotent, so re-running finishes them", len(targets)-i)
+			cancelled = true
+			break
+		}
 		text, err := store.Text(ctx, t.id)
 		if err != nil {
 			log.Printf("user %d: read CV text: %v", t.id, err)
@@ -171,6 +181,9 @@ func run() int {
 		ok++
 	}
 	log.Printf("backfill-resume-structured: done — %d succeeded, %d failed", ok, failed)
+	if cancelled {
+		return 1
+	}
 	return worker.ExitCode(failed, 0)
 }
 

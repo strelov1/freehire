@@ -102,7 +102,17 @@ func run() int {
 	}
 
 	var seeded, skipped, failed int
-	for _, t := range targets {
+	var cancelled bool
+	for i, t := range targets {
+		// The root context is signal-bound, so a redeploy's SIGTERM cancels it mid-run.
+		// Without this the loop would run to the end of the list turning every remaining
+		// user into a logged failure, reporting one cancellation as a fleet of them.
+		if ctx.Err() != nil {
+			log.Printf("backfill-experience: cancelled — %d target(s) left unprocessed; the import is "+
+				"idempotent, so re-running finishes them", len(targets)-i)
+			cancelled = true
+			break
+		}
 		st, err := resolveStructured(ctx, t, extractor, resumeStore)
 		if err != nil {
 			log.Printf("user %d: %v", t.id, err)
@@ -137,6 +147,9 @@ func run() int {
 	}
 
 	log.Printf("backfill-experience: done — %d seeded, %d skipped, %d failed", seeded, skipped, failed)
+	if cancelled {
+		return 1
+	}
 	return worker.ExitCode(failed, 0)
 }
 

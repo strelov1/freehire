@@ -10,9 +10,11 @@ stored user CVs**:
 - `cmd/backfill-experience`
 - `cmd/backfill-resume-structured`
 
-Neither calls `observability.Init`, so a panic or a run-ending error in either is invisible to
-Sentry — the exact gap `worker.Bootstrap` exists to close, and one that `error-tracking`'s
-"Worker error capture with guaranteed delivery" already requires them to close.
+Neither calls `observability.Init`, so a panic in either is invisible to Sentry — the exact gap
+`worker.Bootstrap` exists to close, and one that `error-tracking`'s "Worker error capture with
+guaranteed delivery" already requires them to close. (Run-ending *errors* are still only logged
+here as everywhere else: no worker in the fleet calls `sentry.CaptureException`. This change
+brings these two to parity with the other 34, it does not raise the fleet's bar.)
 
 The consequences are not theoretical:
 
