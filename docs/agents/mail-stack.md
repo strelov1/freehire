@@ -108,9 +108,13 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   A linked message records an `employer_reply` in `application_events`, and that ledger —
   not this table — is what the per-company response rate reads. Five paths change the
   pairing (`SetEmailClassification`, `AgentTriageEmail`, `ConfirmEmailLink`,
-  `LinkEmailToJob`, `UnlinkEmail`), so the rule is one reconcile with five callers: the
-  inbox's four funnel through `mutate`, `Triage` calls it directly because it writes
-  status, link and provenance in a single update. **Deleting a message changes nothing** —
+  `LinkEmailToJob`, `UnlinkEmail`), and the classification worker is a sixth. The rule is
+  one reconcile — `inbox.ReconcileMailEvent` — and it now really is one: the worker used to
+  carry its own copy of the same three steps, inside a `cmd/` main where no domain test
+  could reach it, under a comment asserting the rule had one home. The callers differ only
+  in what they do with the error: the inbox's paths are best-effort (the mutation the user
+  asked for already succeeded, and the reconcile is idempotent), while the worker propagates
+  it to roll back the transaction that persisted the link. **Deleting a message changes nothing** —
   it hides content, it does not un-happen the reply — while **re-linking retracts and
   re-records**, because a wrong link left standing poisons a named company's public rate
   permanently (the Workable case above). The reconcile is deliberately **two statements in

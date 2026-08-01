@@ -100,6 +100,26 @@ func TestRecognize(t *testing.T) {
 		{"workday bare host no site", "https://generalmotors.wd5.myworkdayjobs.com", "", "", "", false},
 		// a URL carrying only a locale has no derivable site — unrecognized, not a false "en-US" board
 		{"workday locale only no site", "https://salesforce.wd12.myworkdayjobs.com/en-US", "", "", "", false},
+		// Both halves of these were wrong before atsdetect.FromURL was folded into this table:
+		// the lowercase locale read as a career site, and a per-job path with no site read as
+		// the site "job". Each produced a board that does not exist — which the contribution
+		// flow records as new and pays for, the exact failure this package's doc warns about.
+		{"workday lowercase locale is still a locale", "https://trumpf.wd3.myworkdayjobs.com/en-us/trumpf_students/job/apodaca/ar_r1", "workday", "trumpf.wd3.myworkdayjobs.com/trumpf_students", "https://trumpf.wd3.myworkdayjobs.com/trumpf_students", true},
+		{"workday mixed-case locale is still a locale", "https://wmg.wd1.myworkdayjobs.com/de-De/wmgglobal/job/berlin/artist_jr1", "workday", "wmg.wd1.myworkdayjobs.com/wmgglobal", "https://wmg.wd1.myworkdayjobs.com/wmgglobal", true},
+		{"workday per-job path with no site", "https://acme.wd1.myworkdayjobs.com/job/Berlin/Engineer_R-1", "", "", "", false},
+		{"workday details path with no site", "https://acme.wd1.myworkdayjobs.com/details/Engineer_R-1", "", "", "", false},
+		{"workday locale then per-job with no site", "https://acme.wd1.myworkdayjobs.com/en-US/job/Berlin/Engineer_R-1", "", "", "", false},
+
+		// Three hosts this table matched but had no test for, each of which named a board that
+		// does not exist. atsdetect.FromURL already declined all three; folding it in surfaced
+		// them. A false board is the expensive direction — the contribution flow records it as
+		// new and pays for it.
+		{"workable per-job shortlink carries no board", "https://apply.workable.com/j/EF5014296F/apply", "", "", "", false},
+		{"workable company board still resolves", "https://apply.workable.com/acme/j/EF5014296F/", "workable", "acme", "https://apply.workable.com/acme/j/EF5014296F", true},
+		{"pageup non-numeric segment is not an institution", "https://careers.pageuppeople.com/cw/en/search", "", "", "", false},
+		{"pageup numeric institution id", "https://careers.pageuppeople.com/513/en/job/12345", "pageup", "513", "https://careers.pageuppeople.com/513/en/job/12345", true},
+		{"cornerstone regional host has no single-label tenant", "https://uk-ext.eu.csod.com/ux/ats/careersite/1/home", "", "", "", false},
+		{"cornerstone plain tenant still resolves", "https://acme.csod.com/ux/ats/careersite/4/home", "cornerstone", "acme", "https://acme.csod.com", true},
 		{"ashby bare host no board", "https://jobs.ashbyhq.com", "", "", "", false},
 		{"recruitee bare apex no tenant", "https://recruitee.com/", "", "", "", false},
 		{"personio bare apex no tenant", "https://jobs.personio.com", "", "", "", false},

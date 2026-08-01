@@ -10,6 +10,7 @@
     matchTeaser,
     teaserChips,
     partitionBlockers,
+    claimSkill,
   } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import type { BlockerSeverity, Job, JobMatchResult } from '$lib/types';
@@ -41,10 +42,23 @@
     }),
   );
 
+  // A claim in progress or already made. `overlay` is the match as it reads once a skill
+  // is claimed, rendered in place of the fetched one until the server's own answer lands;
+  // `claimed` keeps the pre-claim match so undo can put it back.
+  let claiming = $state<string | null>(null);
+  let overlay = $state.raw<JobMatchResult | null>(null);
+  let claimed = $state.raw<{ skill: string; before: JobMatchResult } | null>(null);
+  let failed = $state<string | null>(null);
+  let pending = $state(false);
+
   // Fetch the real match only when ready; re-fetch on navigation to another job.
   $effect(() => {
     const slug = job.public_slug; // track the current job
     match = null;
+    overlay = null;
+    claiming = null;
+    claimed = null;
+    failed = null;
     if (blockState !== 'ready') return;
     api.getJobMatch(slug)
       .then((m) => {
@@ -53,8 +67,78 @@
       .catch(() => {});
   });
 
-  const segments = $derived(match ? matchBarSegments(match) : { exact: 0, adjacent: 0 });
-  const blockers = $derived(partitionBlockers(match?.blockers));
+  // What the block renders: the optimistic reading while a claim is unreconciled, the
+  // fetched match otherwise.
+  const view = $derived(overlay ?? match);
+
+  /** Put the block back to a reading it showed before — dropping the overlay when that
+   *  reading is the fetched match itself, so an abandoned claim leaves no overlay behind. */
+  function restore(reading: JobMatchResult | null) {
+    overlay = reading === match ? null : reading;
+  }
+
+  /** Replace the optimistic reading with the server's own, which also accounts for any
+   *  skill the claim newly made adjacent. A failed refetch keeps the overlay: the write
+   *  landed, so reverting would misreport the profile. */
+  async function reconcile(slug: string) {
+    try {
+      const fresh = await api.getJobMatch(slug);
+      if (job.public_slug !== slug) return;
+      match = fresh;
+      overlay = null;
+    } catch {
+      // Keep showing the optimistic reading.
+    }
+  }
+
+  async function claim(skill: string) {
+    const before = view;
+    if (!before || pending) return;
+    const slug = job.public_slug;
+    pending = true;
+    failed = null;
+    claiming = null;
+    overlay = claimSkill(before, skill);
+    try {
+      await profileStore.addSkill(skill);
+      // Navigated on mid-write: the claim stands, but its confirmation belongs to the job
+      // that was open, and the next job's block has already reset itself.
+      if (job.public_slug !== slug) return;
+      claimed = { skill, before };
+      await reconcile(slug);
+    } catch {
+      if (job.public_slug !== slug) return;
+      restore(before);
+      failed = skill;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function undoClaim() {
+    if (!claimed || pending) return;
+    const { skill, before } = claimed;
+    const shown = view;
+    const slug = job.public_slug;
+    pending = true;
+    failed = null;
+    overlay = before;
+    claimed = null;
+    try {
+      await profileStore.removeSkill(skill);
+      await reconcile(slug);
+    } catch {
+      if (job.public_slug !== slug) return;
+      restore(shown);
+      claimed = { skill, before };
+      failed = skill;
+    } finally {
+      pending = false;
+    }
+  }
+
+  const segments = $derived(view ? matchBarSegments(view) : { exact: 0, adjacent: 0 });
+  const blockers = $derived(partitionBlockers(view?.blockers));
 
   // Warning tone by severity: hard constraints (work auth, certs) read as blocking,
   // fit constraints (location, language) as softer cautions.
@@ -87,9 +171,47 @@
   const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
   const adjChip = `${chip} border-warning/30 bg-warning/10 text-warning-strong`;
   const missChip = `${chip} border-destructive/30 bg-destructive/10 text-destructive`;
+  // A not-held chip is a control: pressing it asks whether the viewer holds the skill
+  // after all. The ring marks which one the open claim row belongs to.
+  const claimable = (base: string, open: boolean) =>
+    `${base} transition-shadow hover:brightness-95 disabled:opacity-60 ${open ? 'ring-2 ring-foreground/30' : ''}`;
 
   const profileHref = resolve('/my/profile');
+
+  /** Open the claim row for a skill, or close it if it is already the open one. Only one
+   *  is open at a time — the row names its skill, which is what keeps it tied to the chip
+   *  without anchoring a floating layer inside a narrow column. */
+  function toggleClaimRow(skill: string) {
+    claiming = claiming === skill ? null : skill;
+  }
 </script>
+
+{#snippet claimRow(skill: string)}
+  <!-- The claim row expands under the group rather than floating over it: the sidebar
+       column is too narrow for an anchored popover, and naming the skill in the row's own
+       text keeps it tied to the chip that opened it. Styled as ReminderChip's disclosure —
+       a bare row of pills, not a panel — so the two inline disclosures in the app read the
+       same, and the affordance stays the weight of the chips it sits under. -->
+  <div class="flex flex-wrap items-center gap-1.5">
+    <span class="text-xs text-muted-foreground">
+      Do you have <span class="font-medium text-foreground">{skill}</span>?
+    </span>
+    <button
+      type="button"
+      disabled={pending}
+      onclick={() => claim(skill)}
+      class="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-brand-muted px-2.5 py-1 text-xs font-medium text-brand-strong transition-colors hover:brightness-95 disabled:opacity-50"
+    >
+      <Check class="size-3.5" aria-hidden="true" /> Add to profile
+    </button>
+  </div>
+{/snippet}
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && claiming) claiming = null;
+  }}
+/>
 
 <section
   class="flex flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
@@ -155,13 +277,13 @@
            be repeated. -->
       <MatchSummary slug={job.public_slug} />
     {/if}
-  {:else if blockState === 'ready' && match}
+  {:else if blockState === 'ready' && view}
     <!-- Real match: percent + two-colour bar + three skill groups. -->
     <div class="flex items-baseline justify-between gap-2">
-      <span class="text-2xl font-bold tabular-nums leading-none">{match.coverage_percent}%</span>
+      <span class="text-2xl font-bold tabular-nums leading-none">{view.coverage_percent}%</span>
       <span class="text-xs text-muted-foreground">
-        {match.exact_count} of {match.total} skills{#if match.adjacent_count}
-          · {match.adjacent_count} close{/if}
+        {view.exact_count} of {view.total} skills{#if view.adjacent_count}
+          · {view.adjacent_count} close{/if}
       </span>
     </div>
     <div class="flex h-2 overflow-hidden rounded bg-secondary">
@@ -169,39 +291,80 @@
       <div class="h-full bg-warning transition-all" style="width: {segments.adjacent}%"></div>
     </div>
 
-    {#if match.matched.length}
+    {#if view.matched.length}
       <div class="flex flex-col gap-1.5">
         <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <span class="size-1.5 rounded-full bg-brand"></span>You have
         </span>
         <div class="flex flex-wrap gap-1.5">
-          {#each match.matched as skill (skill)}<span class={haveChip}>{skill}</span>{/each}
+          {#each view.matched as skill (skill)}<span class={haveChip}>{skill}</span>{/each}
         </div>
       </div>
     {/if}
 
-    {#if match.adjacent.length}
+    {#if view.adjacent.length}
       <div class="flex flex-col gap-1.5">
         <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <span class="size-1.5 rounded-full bg-warning"></span>Close — you have a related skill
         </span>
         <div class="flex flex-wrap gap-1.5">
-          {#each match.adjacent as a (a.name)}
-            <span class={adjChip}>{a.name} <span class="opacity-70">· you have {a.via}</span></span>
+          {#each view.adjacent as a (a.name)}
+            <button
+              type="button"
+              class={claimable(adjChip, claiming === a.name)}
+              aria-expanded={claiming === a.name}
+              disabled={pending}
+              onclick={() => toggleClaimRow(a.name)}
+            >
+              {a.name} <span class="opacity-70">· you have {a.via}</span>
+            </button>
           {/each}
         </div>
+        {#if claiming && view.adjacent.some((a) => a.name === claiming)}
+          {@render claimRow(claiming)}
+        {/if}
       </div>
     {/if}
 
-    {#if match.missing.length}
+    {#if view.missing.length}
       <div class="flex flex-col gap-1.5">
         <span class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <span class="size-1.5 rounded-full bg-destructive"></span>Missing
         </span>
         <div class="flex flex-wrap gap-1.5">
-          {#each match.missing as skill (skill)}<span class={missChip}>{skill}</span>{/each}
+          {#each view.missing as skill (skill)}
+            <button
+              type="button"
+              class={claimable(missChip, claiming === skill)}
+              aria-expanded={claiming === skill}
+              disabled={pending}
+              onclick={() => toggleClaimRow(skill)}
+            >
+              {skill}
+            </button>
+          {/each}
         </div>
+        {#if claiming && view.missing.includes(claiming)}
+          {@render claimRow(claiming)}
+        {/if}
       </div>
+    {/if}
+
+    {#if claimed}
+      <p class="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+        <Check class="size-3.5 shrink-0 text-brand" />
+        <span><span class="font-medium text-foreground">{claimed.skill}</span> added to your profile.</span>
+        <button
+          type="button"
+          class="font-medium underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+          disabled={pending}
+          onclick={undoClaim}>Undo</button
+        >
+      </p>
+    {/if}
+
+    {#if failed}
+      <p class="text-xs text-destructive">Could not update {failed} in your profile. Try again.</p>
     {/if}
 
     {#if blockers.unmet.length || blockers.met.length}

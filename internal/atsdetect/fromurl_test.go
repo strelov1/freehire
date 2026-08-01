@@ -1,6 +1,10 @@
 package atsdetect
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/strelov1/freehire/internal/atsboard"
+)
 
 func TestFromURL(t *testing.T) {
 	cases := []struct {
@@ -187,6 +191,41 @@ func TestFromURL(t *testing.T) {
 			}
 			if ok && (p != tc.provider || b != tc.board) {
 				t.Errorf("got (%q, %q), want (%q, %q)", p, b, tc.provider, tc.board)
+			}
+		})
+	}
+}
+
+// TestLocalShapesStayOutsideTheSharedTable guards the split that remains.
+//
+// FromURL delegates to atsboard.Recognize and keeps only the five shapes atsboard deliberately
+// excludes. That exclusion is load-bearing, not an oversight: atsboard is the accept-set for
+// internal/contribution, which PAYS for onboarded boards, so moving one of these in is a
+// money-affecting decision that needs its own proposal — not a tidy-up.
+//
+// So the two sets must stay disjoint in both directions. If a shape here starts being recognised
+// by the shared table, this package's case for it is dead code silently shadowed by the
+// delegation above it; and the widening happened without anyone arguing for it.
+func TestLocalShapesStayOutsideTheSharedTable(t *testing.T) {
+	local := map[string]string{
+		"icims":  "https://careers-acme.icims.com/jobs/1234/engineer/job",
+		"oracle": "https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1234",
+		"taleo":  "https://valero.taleo.net/careersection/2/jobsearch.ftl",
+		"neogov": "https://www.governmentjobs.com/careers/cityofboise/jobs/4567",
+		"paycom": "https://www.paycomonline.net/v4/ats/web.php/portal/0123456789abcdef0123456789abcdef/jobs",
+	}
+	for provider, rawurl := range local {
+		t.Run(provider, func(t *testing.T) {
+			if src, board, _, ok := atsboard.Recognize(rawurl); ok {
+				t.Errorf("atsboard now recognises the %s shape as (%q, %q). Either this package's "+
+					"case is dead code shadowed by the delegation, or the contribution accept-set "+
+					"widened without a proposal — decide which, do not just delete one.",
+					provider, src, board)
+			}
+			got, _, ok := FromURL(rawurl)
+			if !ok || got != provider {
+				t.Errorf("FromURL(%q) = (%q, ok=%v), want %q — this package still owns the shape",
+					rawurl, got, ok, provider)
 			}
 		})
 	}
