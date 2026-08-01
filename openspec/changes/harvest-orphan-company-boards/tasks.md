@@ -71,9 +71,9 @@ carrying an expected employer, a Workday run would have rejected every live boar
 
 Review of sections 2–4 found two more silent, one-directional defects.
 
-- [x] 4a.1 `sources.AllAggregatorProviders` answers aggregator membership independently of
-      credentials; the crawl registry keeps answering "which can this process crawl". Both
-      `cmd/harvest-orphans` and `cmd/reindex`'s suppression pass use it
+- [x] 4a.1 Read aggregator membership from the credential-independent taxonomy rather than the
+      crawl registry. Found independently and fixed on main as `sources.Taxonomy()` (#1403)
+      while this change was in flight; the duplicate added here was dropped for it on rebase
 - [x] 4a.2 Contest candidates on the folded name, so one employer's two catalogue spellings
       keep the board id they agree on instead of discarding it
 - [x] 4a.3 Bound the worklist scan with a `statement_timeout` on a pinned connection

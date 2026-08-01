@@ -121,10 +121,9 @@ by Reed look ATS-covered whenever the tool runs without Reed's key, which is eve
 tool needs `DATABASE_URL` and nothing else. The failure is silent and one-directional —
 genuine orphans vanish from the worklist, exit code 0.
 
-So `sources.AllAggregatorProviders()` answers the classification question independently of
-credentials, and the crawl registry keeps answering the capability one. `cmd/reindex`'s
-suppression pass asks the same classification question and now uses it too; on prod, where
-the credentials are set, its behaviour is unchanged.
+`sources.Taxonomy()` (landed on main in parallel with this change, #1403) answers the
+classification question independently of credentials, and `All(c)` keeps answering the
+capability one. This tool reads the taxonomy.
 
 ### The worklist query asks for absence of ATS, not presence of aggregator
 
