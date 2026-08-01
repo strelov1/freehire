@@ -28,8 +28,8 @@
 
 ## 5. Point the board's writes at the new routes
 
-- [ ] 5.1 Add the client calls to `web/src/lib/api.ts` and switch `JobBoard`'s `persistMove`, `setStage`, `saveNotes` and `remove` onto them
-- [ ] 5.2 Verify by hand that a posting-less application now moves between columns and stays put — before this change it reverted, which is the bug the routes were added for
+- [x] 5.1 Add the client calls to `web/src/lib/api.ts` and switch `JobBoard`'s `persistMove`, `setStage`, `saveNotes` and `remove` onto them
+- [ ] 5.2 Verify by hand that a posting-less application now moves between columns and stays put — before this change it reverted, which is the bug the routes were added for. **Folded into 8.2:** it needs the same local stack, and standing that up twice buys nothing
 
 ## 6. The list view
 

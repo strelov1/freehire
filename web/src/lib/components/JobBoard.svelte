@@ -117,15 +117,15 @@
       switch (to) {
         case 'applied':
           item.stage = 'applied';
-          await api.trackJob(item.id, { stage: 'applied' });
+          await api.trackApplication(item.id, { stage: 'applied' });
           break;
         case 'interview':
           item.stage = 'interview';
-          await api.trackJob(item.id, { stage: 'interview' });
+          await api.trackApplication(item.id, { stage: 'interview' });
           break;
         case 'offer':
           item.stage = 'offer';
-          await api.trackJob(item.id, { stage: 'offer' });
+          await api.trackApplication(item.id, { stage: 'offer' });
           break;
         case 'closed':
           // Outcome unknown until the user picks: open the drawer, require a choice.
@@ -144,7 +144,7 @@
     item.stage = outcome;
     pendingOutcome = false;
     try {
-      await api.trackJob(item.id, { stage: outcome });
+      await api.trackApplication(item.id, { stage: outcome });
     } catch {
       await load();
     }
@@ -174,10 +174,13 @@
       // Empty stage is not a vocabulary value — clearing progress keeps the saved
       // mark but removes the application, so the job leaves the board.
       if (stage) {
-        await api.trackJob(item.id, { stage });
+        await api.trackApplication(item.id, { stage });
       } else {
-        await api.saveJob(item.id);
-        await api.clearJobStage(item.id);
+        // Keeping the bookmark only means something while there is a posting to
+        // bookmark. An application whose posting was removed has no saved mark to
+        // preserve, and saveJob is addressed by a slug it does not have.
+        if (item.job) await api.saveJob(item.job.public_slug);
+        await api.clearApplicationStage(item.id);
       }
     } catch {
       await load();
@@ -188,7 +191,7 @@
     if (!openItem) return;
     openItem.notes = notes;
     try {
-      await api.trackJob(openItem.id, { notes });
+      await api.trackApplication(openItem.id, { notes });
     } catch {
       /* keep optimistic value; a transient failure shouldn't drop the edit */
     }
@@ -204,7 +207,7 @@
     }
     openItem = null;
     try {
-      await api.untrackJob(item.id);
+      await api.untrackApplication(item.id);
     } catch {
       await load();
     }
