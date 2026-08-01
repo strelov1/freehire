@@ -6,9 +6,13 @@ import (
 )
 
 func TestToSeedEntries(t *testing.T) {
-	got := toSeedEntries(map[string]string{
-		"edzz.fa.em3.oraclecloud.com/CX_6001":  "University of Birmingham",
-		"mcgill.wd3.myworkdayjobs.com/careers": "McGill University",
+	got := toSeedEntries(map[string]seedEntry{
+		"edzz.fa.em3.oraclecloud.com/CX_6001": {
+			Board: "edzz.fa.em3.oraclecloud.com/CX_6001", Company: "University of Birmingham",
+		},
+		"mcgill.wd3.myworkdayjobs.com/careers": {
+			Board: "mcgill.wd3.myworkdayjobs.com/careers", Company: "McGill University",
+		},
 	})
 	want := []seedEntry{
 		// sorted by board so the emitted seed is deterministic

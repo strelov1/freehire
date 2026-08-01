@@ -23,13 +23,13 @@
 
 ## 3. Offline candidate slugs for unresolved companies (`cmd/harvest-ats`)
 
-- [ ] 3.1 Add a pure function deriving candidate board slugs from a company's domain,
+- [x] 3.1 Add a pure function deriving candidate board slugs from a company's domain,
   profile slug and name, bounded to a small fixed number and performing no I/O
-- [ ] 3.2 Add a pure function narrowing an ATS-native posting id to the providers its shape
+- [x] 3.2 Add a pure function narrowing an ATS-native posting id to the providers its shape
   is consistent with, yielding nothing for shapes that narrow to none
-- [ ] 3.3 Emit derived candidates into each narrowed provider's seed carrying the expected
+- [x] 3.3 Emit derived candidates into each narrowed provider's seed carrying the expected
   posting id, only when the careers walk found no board and an id is present
-- [ ] 3.4 Carry the new input fields (`linkedin`, `external_id`) through the resolve input
+- [x] 3.4 Carry the new input fields (`linkedin`, `external_id`) through the resolve input
   without disturbing the existing `{name, website}` worklists
 
 ## 4. LinkedIn discovery tool (`cmd/harvest-linkedin`)

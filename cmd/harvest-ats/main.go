@@ -149,10 +149,9 @@ func runResolve(inputFile string) int {
 		return client.GetText(ctx, u)
 	}
 
-	type hit struct{ provider, slug, company string }
 	var (
 		mu     sync.Mutex
-		byProv = map[string]map[string]string{} // provider -> board -> company (first wins)
+		byProv = map[string]map[string]seedEntry{} // provider -> board -> entry (first wins)
 		done   atomic.Int64
 		jobs   = make(chan companySite)
 		wg     sync.WaitGroup
@@ -161,10 +160,10 @@ func runResolve(inputFile string) int {
 		mu.Lock()
 		defer mu.Unlock()
 		if byProv[h.provider] == nil {
-			byProv[h.provider] = map[string]string{}
+			byProv[h.provider] = map[string]seedEntry{}
 		}
 		if _, seen := byProv[h.provider][h.slug]; !seen {
-			byProv[h.provider][h.slug] = h.company
+			byProv[h.provider][h.slug] = seedEntry{Board: h.slug, Company: h.company, ExpectID: h.expectID}
 		}
 	}
 	for i := 0; i < resolveWorkers; i++ {
@@ -174,6 +173,10 @@ func runResolve(inputFile string) int {
 			for site := range jobs {
 				if p, s, ok := resolve(site.Website, fetch); ok {
 					record(hit{provider: p, slug: s, company: site.Name})
+				} else {
+					for _, h := range guessedCandidates(site) {
+						record(h)
+					}
 				}
 				if n := done.Add(1); n%200 == 0 {
 					log.Printf("harvest-ats: resolved %d/%d", n, len(sites))
@@ -209,14 +212,18 @@ func runResolve(inputFile string) int {
 type seedEntry struct {
 	Board   string `json:"board"`
 	Company string `json:"company,omitempty"`
+	// ExpectID names a posting the board must carry for harvest-boards to keep it. It is set
+	// only on the offline-derived candidates, whose slug is a guess: the id is what turns that
+	// guess into something the platform's own API can confirm or refute.
+	ExpectID string `json:"expect_id,omitempty"`
 }
 
-// toSeedEntries turns a board->company map into board-sorted seed entries, so a run's
-// output is deterministic regardless of goroutine completion order.
-func toSeedEntries(byBoard map[string]string) []seedEntry {
+// toSeedEntries returns the provider's entries board-sorted, so a run's output is
+// deterministic regardless of goroutine completion order.
+func toSeedEntries(byBoard map[string]seedEntry) []seedEntry {
 	out := make([]seedEntry, 0, len(byBoard))
-	for board, company := range byBoard {
-		out = append(out, seedEntry{Board: board, Company: company})
+	for _, e := range byBoard {
+		out = append(out, e)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Board < out[j].Board })
 	return out

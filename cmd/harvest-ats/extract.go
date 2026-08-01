@@ -14,6 +14,12 @@ import (
 type companySite struct {
 	Name    string `json:"name"`
 	Website string `json:"website"`
+	// LinkedIn and ExternalID are supplied by a discovery source that read them off a live
+	// posting (harvest-linkedin); the dataset and university worklists leave them empty. They
+	// feed the offline candidate-slug fallback for companies whose careers pages yield no
+	// board — the profile slug is a spelling to try, and the id is what proves it.
+	LinkedIn   string `json:"linkedin,omitempty"`
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // siteParsers maps a collection slug to a parser that extracts (name, website)
