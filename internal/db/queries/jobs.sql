@@ -1079,8 +1079,7 @@ WHERE j.id = m.id
 -- The display name is the modal `company` across the aggregator rows, since two aggregators
 -- may spell the same employer differently and the name is what the harvest gate compares.
 SELECT j.company_slug,
-       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company,
-       count(*) AS open_jobs
+       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company
 FROM jobs j
 WHERE j.closed_at IS NULL
   AND j.company_slug <> ''

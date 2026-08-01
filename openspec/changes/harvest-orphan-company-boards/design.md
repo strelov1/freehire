@@ -112,6 +112,20 @@ are different questions and the second must be able to discard. Putting the deci
 `chooseCompany` a pure labelling function and leaves the rejection counter next to the
 existing failure counter.
 
+### Aggregator membership is a taxonomy question, not a capability one
+
+`sources.All(c)` registers usajobs, reed and whatjobs only when their credentials are in the
+environment — deliberate, so an unconfigured process does not list a provider it cannot
+crawl. Deriving the exclusion set from that registry would therefore make a company held only
+by Reed look ATS-covered whenever the tool runs without Reed's key, which is every run: the
+tool needs `DATABASE_URL` and nothing else. The failure is silent and one-directional —
+genuine orphans vanish from the worklist, exit code 0.
+
+So `sources.AllAggregatorProviders()` answers the classification question independently of
+credentials, and the crawl registry keeps answering the capability one. `cmd/reindex`'s
+suppression pass asks the same classification question and now uses it too; on prod, where
+the credentials are set, its behaviour is unchanged.
+
 ### The worklist query asks for absence of ATS, not presence of aggregator
 
 A company qualifies on `NOT EXISTS (a non-aggregator open posting)`, evaluated against the
@@ -141,6 +155,20 @@ that using a partial aggregator list inflated its results roughly fourfold.
   → The operator was explicit that the queue should absorb it. Board files reach prod as
   bind-mounted data, so no image rebuild is involved and a bad batch is reverted by
   reverting the YAML.
+- **The worklist scan is one long read over `jobs`.** Measured on the production catalogue
+  (2026-08-01): a Nested Loop Anti Join driven by `jobs_source_id_open_idx` with
+  `jobs_open_company_created_at_id_idx` on the inner side, **5.8s for 8,562 companies** — no
+  sequential scan. The risk is a future planner flip to a hash anti-join, whose inner
+  relation is the whole open table; the tool pins one connection with a 10-minute
+  `statement_timeout` so that cannot become an unbounded read holding a snapshot open.
+- **A URL-imported posting counts as ATS coverage.** `weblink` (a one-off user link import)
+  is not an aggregator, so a company whose only non-aggregator row came from one is excluded
+  even though no board of theirs is crawled. Conservative in the safe direction — a missed
+  candidate, never a wrong board — and left as-is rather than special-cased.
+- **A stripped name can shrink to a short generic token.** "Sky Co" yields the candidate
+  `sky`. On the platforms that publish no employer name such a board is accepted on liveness
+  alone, so the PR diff is the only backstop. Raising the minimum length would cost the real
+  three-letter employers (ibm, sap), which is the worse trade.
 - **A harvest run and a reindex must not collide.** → Onboarding is a normal deploy plus
   per-provider ingest; any manual reindex that follows must stop `freehire-reindexw.timer`
   first, per the standing rule.

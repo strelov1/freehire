@@ -38,6 +38,9 @@ func TestProbeAllNameGate(t *testing.T) {
 		"unclaimed": {company: "Some Other Name", openJobs: 7},
 		// A candidate whose probe errored.
 		"broken": {err: errors.New("transport failed")},
+		// A live board whose seed names an employer that folds to nothing. Punctuation is
+		// not an expectation, so the board must be kept rather than rejected.
+		"unnameable": {company: "Real Employer", openJobs: 2},
 	}
 	seed := map[string]string{
 		"adoreal":                            "Adoreal",
@@ -45,9 +48,10 @@ func TestProbeAllNameGate(t *testing.T) {
 		"nameless":                           "Nameless Co",
 		"broken":                             "Broken",
 		"acme.wd1.myworkdayjobs.com/careers": "Acme Corporation",
+		"unnameable":                         "???",
 	}
 	candidates := []string{
-		"adoreal", "prequel", "nameless", "unclaimed", "broken",
+		"adoreal", "prequel", "nameless", "unclaimed", "broken", "unnameable",
 		"acme.wd1.myworkdayjobs.com/careers",
 	}
 
@@ -72,6 +76,10 @@ func TestProbeAllNameGate(t *testing.T) {
 	if got["acme.wd1.myworkdayjobs.com/careers"] != "Acme Corporation" {
 		t.Errorf("a platform reporting no name must keep the seed label, got %q",
 			got["acme.wd1.myworkdayjobs.com/careers"])
+	}
+	if got["unnameable"] != "Real Employer" {
+		t.Errorf("an expected name that folds to nothing states no expectation, got %q",
+			got["unnameable"])
 	}
 	if mismatches != 1 {
 		t.Errorf("mismatches = %d, want 1", mismatches)

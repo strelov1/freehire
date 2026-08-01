@@ -80,8 +80,9 @@ func run() int {
 	// Every live board disagreeing with its seed means the gate itself is wrong — a prober
 	// that started reporting a platform-wide name, or a seed built against the wrong
 	// employers — not "no new boards". Same reasoning as the all-probes-failed guard: an
-	// empty harvest that is really a broken one must not exit 0.
-	if mismatches > 0 && len(kept) == 0 {
+	// empty harvest that is really a broken one must not exit 0. A single rejection is the
+	// gate working, not failing, so the alarm needs more than one.
+	if mismatches > 1 && len(kept) == 0 {
 		log.Printf("harvest-boards: every live board (%d) disagreed with its expected employer", mismatches)
 		return 1
 	}

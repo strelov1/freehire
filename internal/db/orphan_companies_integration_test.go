@@ -56,9 +56,12 @@ func TestOrphanAggregatorCompanies(t *testing.T) {
 		// Held by an aggregator AND its own ATS — already crawled, must be excluded.
 		orphanJob("himalayas", "h2", "Covered Co", "covered"),
 		orphanJob("greenhouse", "g1", "Covered Co", "covered"),
-		// Held by two aggregators, no ATS — must appear exactly once.
+		// Held by two aggregators, no ATS — must appear exactly once. The two spell the
+		// employer differently, as aggregators do; the reported name must be the modal
+		// spelling, since it is what the harvest gate compares against the ATS's own.
 		orphanJob("himalayas", "h3", "Twice Listed", "twice"),
-		orphanJob("remoteok", "r1", "Twice Listed", "twice"),
+		orphanJob("himalayas", "h4", "Twice Listed", "twice"),
+		orphanJob("remoteok", "r1", "Twice Listed Ltd.", "twice"),
 		// Held only by an aggregator OUTSIDE the requested set.
 		orphanJob("gulftalent", "gt1", "Gulf Only", "gulfonly"),
 	}
@@ -79,6 +82,9 @@ func TestOrphanAggregatorCompanies(t *testing.T) {
 	}
 	if _, ok := got["twice"]; !ok {
 		t.Error("a company held by two aggregators and no ATS must qualify")
+	}
+	if got["twice"] != "Twice Listed" {
+		t.Errorf("name = %q, want the modal spelling %q", got["twice"], "Twice Listed")
 	}
 	if _, ok := got["gulfonly"]; ok {
 		t.Error("a company held only outside the requested aggregators must not be reported")

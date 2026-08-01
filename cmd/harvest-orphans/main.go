@@ -35,6 +35,10 @@ var remoteAggregators = []string{
 	"workingnomads", "4dayweek", "jobicy", "remotive",
 }
 
+// queryTimeout bounds the worklist scan. It is a backstop against a planner flip, not a
+// budget: the query runs in seconds on the production catalogue.
+const queryTimeout = "10min"
+
 func main() { worker.Main(run) }
 
 func run() int {
@@ -64,7 +68,22 @@ func run() int {
 		return 2
 	}
 
-	rows, err := db.New(pool).OrphanAggregatorCompanies(ctx, db.OrphanAggregatorCompaniesParams{
+	// One pinned connection with a bounded statement time. The worklist scan is a single
+	// long read over the whole jobs table, and an unbounded one held open against prod is the
+	// snapshot hazard that has taken the site down before; measured at ~6s on the production
+	// catalogue, so a cap this generous only ever fires on a plan that has gone wrong.
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		log.Printf("harvest-orphans: acquire: %v", err)
+		return 1
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, "SET statement_timeout = '"+queryTimeout+"'"); err != nil {
+		log.Printf("harvest-orphans: set statement_timeout: %v", err)
+		return 1
+	}
+
+	rows, err := db.New(conn).OrphanAggregatorCompanies(ctx, db.OrphanAggregatorCompaniesParams{
 		Requested:   from,
 		Aggregators: all,
 	})
@@ -98,9 +117,12 @@ func run() int {
 }
 
 // allAggregatorProviders is every provider the pipeline treats as an aggregator — the set the
-// exclusion test is evaluated against, and the set a requested source must belong to.
+// exclusion test is evaluated against, and the set a requested source must belong to. It reads
+// the taxonomy, not the crawl registry: this tool needs only DATABASE_URL, so a
+// credential-gated aggregator (reed, usajobs, whatjobs) would otherwise be absent and its
+// postings would read as the first-party ATS coverage that disqualifies a company.
 func allAggregatorProviders() []string {
-	return sources.AggregatorProviders(sources.All(nil))
+	return sources.AggregatorProviders(sources.Taxonomy())
 }
 
 // splitList parses a comma-separated flag, dropping blanks so a trailing comma is harmless.

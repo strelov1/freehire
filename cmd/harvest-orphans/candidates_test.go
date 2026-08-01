@@ -50,8 +50,8 @@ func TestCandidates(t *testing.T) {
 		},
 		{
 			name: "non-latin name is transliterated",
-			slug: "iandeks", company: "Яндекс",
-			want: []string{"iandeks"},
+			slug: "yandex-ru", company: "Яндекс",
+			want: []string{"yandex-ru", "iandeks"},
 		},
 	}
 	for _, tt := range tests {
@@ -101,26 +101,52 @@ func TestSeedEntriesShape(t *testing.T) {
 	}
 }
 
+// One employer routinely reaches the catalogue under two spellings — company_slug is
+// normalize.Slug, which deliberately keeps legal forms, so "Stripe" on one aggregator and
+// "Stripe, Inc." on another are two worklist rows. Their shared candidate is the SAME
+// employer's board, and the highest-confidence one the tool can produce: two independent
+// sources agreeing on the id. Contesting on the raw display name would throw it away and
+// keep only the junk renderings.
+func TestSeedEntriesKeepsCandidateSharedByOneEmployersSpellings(t *testing.T) {
+	got := seedEntries([]orphan{
+		{Slug: "stripe", Company: "Stripe"},
+		{Slug: "stripe-inc", Company: "Stripe, Inc."},
+	})
+	var boards []string
+	for _, e := range got {
+		boards = append(boards, e.Board)
+	}
+	found := false
+	for _, b := range boards {
+		if b == "stripe" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the candidate both spellings agree on must survive, got %v", boards)
+	}
+}
+
 // Two companies can propose the same candidate board (a shared short name). Emitting it
 // twice would probe it twice and, worse, let whichever entry sorted last decide which
 // employer the gate compares against — so a contested candidate is dropped rather than
 // silently attributed to one of them.
 func TestSeedEntriesDropsContestedCandidates(t *testing.T) {
+	// A catalogue slug is not always derived from the display name (a board file can set a
+	// squished one), so an unrelated employer's name-derived candidate can collide with it.
 	got := seedEntries([]orphan{
-		{Slug: "acme-inc", Company: "Acme Inc"},
-		{Slug: "acme-llc", Company: "Acme LLC"},
+		{Slug: "nova", Company: "Nova Systems"},
+		{Slug: "nova-labs", Company: "Nova"},
 	})
+	var boards []string
 	for _, e := range got {
-		if e.Board == "acme" {
+		boards = append(boards, e.Board)
+		if e.Board == "nova" {
 			t.Errorf("candidate %q is claimed by two employers and must be dropped", e.Board)
 		}
 	}
 	// The candidates that are not contested still survive.
-	var boards []string
-	for _, e := range got {
-		boards = append(boards, e.Board)
-	}
-	if len(boards) != 2 {
+	if len(boards) != 3 {
 		t.Errorf("uncontested candidates should remain, got %v", boards)
 	}
 }

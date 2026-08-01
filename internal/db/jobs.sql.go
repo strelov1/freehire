@@ -1596,8 +1596,7 @@ func (q *Queries) MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpir
 
 const orphanAggregatorCompanies = `-- name: OrphanAggregatorCompanies :many
 SELECT j.company_slug,
-       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company,
-       count(*) AS open_jobs
+       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company
 FROM jobs j
 WHERE j.closed_at IS NULL
   AND j.company_slug <> ''
@@ -1620,7 +1619,6 @@ type OrphanAggregatorCompaniesParams struct {
 type OrphanAggregatorCompaniesRow struct {
 	CompanySlug string `json:"company_slug"`
 	Company     string `json:"company"`
-	OpenJobs    int64  `json:"open_jobs"`
 }
 
 // Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
@@ -1645,7 +1643,7 @@ func (q *Queries) OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggre
 	items := []OrphanAggregatorCompaniesRow{}
 	for rows.Next() {
 		var i OrphanAggregatorCompaniesRow
-		if err := rows.Scan(&i.CompanySlug, &i.Company, &i.OpenJobs); err != nil {
+		if err := rows.Scan(&i.CompanySlug, &i.Company); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
