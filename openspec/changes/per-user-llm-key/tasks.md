@@ -19,14 +19,19 @@
 
 ## 4. Reading it and erasing it
 
-- [x] 4.1 Add `GET /api/v1/me/usage` reading `/key/info` for the caller's key.
-- [x] 4.2 Handler tests: a caller with spend, a caller with none (200 and zeroes, not 404), owner scoping across two accounts, 401 without a credential, and an unreachable gateway answering 200 with zeroes rather than an error.
+- [x] 4.1 Add `GET /api/v1/me/usage`. **Reshaped after review**: it reads the gateway's daily-activity rollup, not `/key/info`, and reports model calls / failures / tokens rather than cost. The gateway's figure is a list price on a mixed pool — not our cost and not the caller's price, which is credits over the same calendar. The read is scoped by account id, so it needs no credential at all.
+- [x] 4.2 Handler tests: a caller with activity, a caller with none (200 and zeroes, not 404), owner scoping across two accounts, 401 without a credential, an unreachable gateway answering 200 with zeroes, the period matching the credits calendar, and no money-shaped field anywhere in the response.
 - [x] 4.3 Delete the gateway key in `accountdelete`, before `DeleteUser` — the column is about to vanish. Test that a failing gateway does not stop the account from being deleted.
 
 ## 5. Configuration
 
 - [x] 5.1 Add `LLM_ADMIN_URL`, `LLM_ADMIN_KEY`, `LLM_USER_MAX_BUDGET`, `LLM_USER_RPM_LIMIT`, `LLM_USER_BUDGET_WINDOW`. Test that an unset admin API disables the whole path — no minting, no resolution, every call on `LLM_API_KEY` exactly as today. **`LLM_ADMIN_URL` was not in the original plan**: the admin routes live at the gateway root and `/v1/key/*` answers 404, so the endpoint cannot be derived from `LLM_BASE_URL`.
 - [x] 5.2 Test that no ceiling is sent when none is configured, and that a configured one is passed through on mint.
+
+## 5b. The panel
+
+- [x] 5b.1 `GET /me/usage` in the SPA API client plus its type.
+- [x] 5b.2 An activity panel on the credits page, gated on `beta_tester` — the balance is what you may spend, the panel is what you did. It loads on its own request and fails on its own, so a network blip cannot take the balance and history with it, and it states outright that one conversation is several calls.
 
 ## 6. Close out
 

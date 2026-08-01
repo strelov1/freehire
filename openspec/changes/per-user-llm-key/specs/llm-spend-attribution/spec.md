@@ -120,23 +120,37 @@ gateway can only report a model, and every feature runs on the same one.
 - **WHEN** more than one feature has run over a period
 - **THEN** their spend can be summed per feature for that period
 
-### Requirement: A caller can read their own spend
+### Requirement: A caller can see what their own account did
 
-`GET /api/v1/me/usage` SHALL report the authenticated caller's own AI spend for the current
-period. It MUST report only theirs, MUST answer a caller with no spend as zeroes rather than
-as an error or a 404, and MUST NOT fail the request when the gateway is unreachable.
+`GET /api/v1/me/usage` SHALL report the authenticated caller's own AI activity for the
+current period — model calls, failures and tokens. It MUST report only theirs, MUST answer
+a caller with no activity as zeroes rather than as an error or a 404, and MUST NOT fail the
+request when the gateway is unreachable.
 
-#### Scenario: A caller with spend
+It SHALL NOT report cost in any currency. The gateway prices from a list against a mixed
+upstream pool, so the figure is neither what the operator pays nor what the caller pays —
+their price is credits, reported over this same calendar month. Two numbers in two
+currencies for one thing would leave the fictional one indistinguishable from the real one.
+
+The period SHALL be the calendar month the credits balance already resets on, so a balance
+and an activity count are never reported against different months.
+
+#### Scenario: A caller with activity
 
 - **WHEN** a caller who has used AI this period reads the endpoint
-- **THEN** the response carries their spend for the period and when the period resets
+- **THEN** the response carries their call count, failures, tokens, and when the period resets
+
+#### Scenario: The response carries no money
+
+- **WHEN** any caller reads the endpoint
+- **THEN** no field of the response states a cost, in any currency
 
 #### Scenario: A caller with none
 
 - **WHEN** a caller who has never used AI reads the endpoint
 - **THEN** the response is `200` with zeroes
 
-#### Scenario: Spend is owner-scoped
+#### Scenario: Activity is owner-scoped
 
 - **WHEN** two accounts have both used AI
 - **THEN** each sees only its own
@@ -150,6 +164,11 @@ as an error or a 404, and MUST NOT fail the request when the gateway is unreacha
 
 - **WHEN** the gateway cannot be read
 - **THEN** the response is `200` with zeroes rather than an error
+
+#### Scenario: The reader is shown it only in beta
+
+- **WHEN** an account that is not a beta tester opens the credits page
+- **THEN** the activity panel is not rendered, and the balance and history are unchanged
 
 ### Requirement: No ceiling is imposed unless one is configured
 
