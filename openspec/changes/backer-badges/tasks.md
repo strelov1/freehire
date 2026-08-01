@@ -66,12 +66,31 @@
 
 ## 6. Verify and ship
 
-- [ ] 6.1 `cmd/import-collections -dry-run` against the live catalogue. Read the
+- [x] 6.1 `cmd/import-collections -dry-run` against the live catalogue. Read the
       report for both new tags and spot-check matched names for slug collisions on
       short ones (`Dex`, `Sekai`, `Emanate`); add a gate from the directory's
       `location` field if they show up. Only then run the import for real, followed
       by `make reindex`, and confirm the `collections` facet shows both new tags.
-- [ ] 6.2 Visual check of the feed, job page, company page and filter modal at
+- [x] 6.2 Visual check of the feed, job page, company page and filter modal at
       <500px and at desktop width (headless Chrome; `--window-size` is unreliable
       below 500px, so verify the narrow case deliberately).
-- [ ] 6.3 Offer a `/blog` changelog entry for the shipped feature.
+- [x] 6.3 Offer a `/blog` changelog entry for the shipped feature.
+
+## Outcome (2026-08-01)
+
+Shipped as #1383 + #1384. Import on prod: `a16z-portfolio` 258 companies of 281,
+`a16z-speedrun` 33 of 36 — 324 companies and 25,422 jobs updated. The dry-run's
+collision check came back clean: of 317 directory names 213 are short or
+single-word, but only `convex` matched the wrong company (convex.com, not a16z's
+convex.dev) and it carries zero jobs, so the catalogue never shows it.
+
+Two things the run itself uncovered:
+
+- The directory drops the connection for Go's default user agent, which surfaced
+  as a bare `status 500` while `curl` from the same host returned 200. Fixed in
+  #1384. The abort held: both failed runs wrote nothing.
+- `freehire-reindexw.service` had been **failed since 2026-07-31** — the disk
+  floor (`REINDEX_MIN_FREE_GB=70`) against 68 GiB free — so prod facets had been
+  frozen for four days and nothing reported it. Freed by rotating a 3.9 GiB
+  `/var/log/syslog`; rebuild then started with the timer stopped per the
+  collision rule, with a watcher unit to restart the timer when it finishes.
