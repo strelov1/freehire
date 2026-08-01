@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobfacts"
 	"github.com/strelov1/freehire/internal/matchanalysis"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -87,7 +86,7 @@ func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Jo
 // the caller asserted no base country of their own (see candidateCountry).
 func buildHardConstraintInputs(job db.Job, cv resumeextract.Professional, loc userprofile.LocationPreferences, derivedCountries []string) (hardconstraint.JobRequirements, hardconstraint.CVEvidence) {
 	jr := hardconstraint.JobRequirements{
-		ExperienceYearsMin:     int4Ptr(job.ExperienceYearsMin),
+		ExperienceYearsMin:     pgconv.IntPtr(job.ExperienceYearsMin),
 		EducationLevel:         job.EducationLevel,
 		DegreeOptional:         jobfacts.DegreeOptional(job.Description),
 		EnglishLevel:           job.EnglishLevel,
@@ -144,15 +143,6 @@ func jobVisaSponsorship(raw json.RawMessage) *bool {
 		return nil
 	}
 	return e.VisaSponsorship
-}
-
-// int4Ptr converts a pgtype.Int4 to an optional int, mapping SQL NULL to nil.
-func int4Ptr(v pgtype.Int4) *int {
-	if !v.Valid {
-		return nil
-	}
-	n := int(v.Int32)
-	return &n
 }
 
 // candidateCountry decides which country the hard-constraint evaluator judges the caller

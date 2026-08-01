@@ -12,6 +12,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // apiKeyResponse is the public, secret-free shape of an API key: the display prefix
@@ -95,12 +96,7 @@ func (h *authHandlers) CreateAPIKey(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "name is required")
 	}
 
-	var expiresAt pgtype.Timestamptz
-	if in.ExpiresAt != nil {
-		expiresAt = pgtype.Timestamptz{Time: *in.ExpiresAt, Valid: true}
-	}
-
-	token, row, err := h.mintAPIKey(c.Context(), userID, name, expiresAt)
+	token, row, err := h.mintAPIKey(c.Context(), userID, name, pgconv.Timestamptz(in.ExpiresAt))
 	if err != nil {
 		return err
 	}

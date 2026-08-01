@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/matchanalysis"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/userprofile"
@@ -283,7 +284,7 @@ func (h *matchHandlers) cacheAnalysis(ctx context.Context, userID int64, job db.
 		JobID:          job.ID,
 		Analysis:       blob,
 		Model:          h.matchAnalysis.ModelID(),
-		CvUploadedAt:   tsFromPtr(cvUploadedAt),
+		CvUploadedAt:   pgconv.Timestamptz(cvUploadedAt),
 		JobContentHash: job.ContentHash,
 	}); err != nil {
 		log.Printf("matchanalysis: cache analysis for user %d job %d: %v", userID, job.ID, err)
@@ -419,11 +420,4 @@ func decodeAnalysis(blob []byte) *matchanalysis.Analysis {
 		return nil
 	}
 	return &a
-}
-
-func tsFromPtr(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
