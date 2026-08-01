@@ -3,10 +3,10 @@
 Must land before the mapping computes the content hash, or the two callers below
 would fingerprint a NULL posted time while writing a real one.
 
-- [ ] 1.1 `cmd/tg-extract/store.go`: pass the Telegram post's timestamp through
+- [x] 1.1 `cmd/tg-extract/store.go`: pass the Telegram post's timestamp through
   `job.Draft.PostedAt` (converting `pgtype.Timestamptz` → `*time.Time` at the draft
   boundary) instead of overwriting `params.PostedAt` after `UpsertParams()` returns.
-- [ ] 1.2 `internal/linkimport/linkimport.go`: pass `r.Job.PostedAt` through
+- [x] 1.2 `internal/linkimport/linkimport.go`: pass `r.Job.PostedAt` through
   `job.Draft.PostedAt` instead of overwriting the mapped params.
 
 ## 2. The write mapping owns the derived columns

@@ -171,11 +171,11 @@ func (im *Importer) resolveVanityDomain(ctx context.Context, raw string) (linkso
 	return linksource.Resolved{Source: source, Job: job}, true
 }
 
-// write persists one resolved job through the Job aggregate factory and the canonical
-// UpsertJob, enqueuing it for enrichment in the same transaction — the same write path as
-// ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
-func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
-	j, err := job.New(job.Draft{
+// draftFrom maps a resolved vacancy onto the aggregate's draft. The destination
+// adapter's posted date rides the draft rather than being written over the mapped
+// params, so the derived columns fingerprint the posted_at that is actually stored.
+func draftFrom(r linksource.Resolved) job.Draft {
+	return job.Draft{
 		Input: jobderive.Input{
 			Source:      r.Source,
 			ExternalID:  r.Job.ExternalID,
@@ -185,16 +185,21 @@ func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, b
 			Description: r.Job.Description,
 			WorkMode:    r.Job.WorkMode,
 		},
-		URL:    r.Job.URL,
-		Remote: r.Job.Remote,
-	})
+		URL:      r.Job.URL,
+		Remote:   r.Job.Remote,
+		PostedAt: r.Job.PostedAt,
+	}
+}
+
+// write persists one resolved job through the Job aggregate factory and the canonical
+// UpsertJob, enqueuing it for enrichment in the same transaction — the same write path as
+// ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
+func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
+	j, err := job.New(draftFrom(r))
 	if err != nil {
 		return Result{}, false, err
 	}
 	params := j.Fields().UpsertParams()
-	if r.Job.PostedAt != nil {
-		params.PostedAt = pgtype.Timestamptz{Time: *r.Job.PostedAt, Valid: true}
-	}
 	params.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(params), Valid: true}
 
 	tx, err := im.pool.Begin(ctx)
