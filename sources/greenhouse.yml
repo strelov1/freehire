@@ -995,7 +995,7 @@
   board: humansignal
 - company: HunterDouglas
   board: hunterdouglas
-- company: Hyperstack
+- company: NexGen Cloud
   board: nexgencloud
 - company: IBKR External
   board: ibkrexternal
@@ -2491,8 +2491,6 @@
   board: advertisingspecialtyinstitute
 - company: Advocates for Children of New York
   board: advocatesforchildrenofnewyork
-- company: Adyen
-  board: adyen
 - company: Aegis Ventures
   board: aegisventures
 - company: AE Studio
@@ -6169,8 +6167,6 @@
   board: liquidinstruments
 - company: Liquid Personnel
   board: liquidpersonnel
-- company: Lirio
-  board: lirio
 - company: Local Initiatives Support Corporation
   board: lisc
 - company: Lithic
@@ -13281,8 +13277,6 @@
   board: newcastleinvestors
 - company: Newtone
   board: newtone
-- company: NexGen Cloud
-  board: nexgencloud
 - company: Nexus Communications
   board: nexuscommunications
 - company: Nexxiot
@@ -14065,8 +14059,6 @@
   board: indiciumai
 - company: FxPro
   board: fxpro
-- company: N26
-  board: n26
 
 # --- startupvalleys.com import (companies + discovered career pages) ---
 - company: "Informal Systems"

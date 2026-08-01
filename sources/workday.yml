@@ -677,8 +677,6 @@
   board: faithtechnologies.wd1.myworkdayjobs.com/fti
 - company: Terex
   board: terex.wd1.myworkdayjobs.com/terexcareers
-- company: Equifax
-  board: equifax.wd5.myworkdayjobs.com/external
 - company: Allegion
   board: allegion.wd5.myworkdayjobs.com/careers
 - company: Biogen
@@ -5149,8 +5147,6 @@
   board: fsra.wd3.myworkdayjobs.com/fsra_careers
 - company: ft
   board: ft.wd3.myworkdayjobs.com/ft_chinese_external_careers
-- company: fugro
-  board: fugro.wd3.myworkdayjobs.com/careers
 - company: fujifilm
   board: fujifilm.wd3.myworkdayjobs.com/ffme_hcme_cs
 - company: fullsail
@@ -8039,8 +8035,6 @@
   board: rayonier.wd501.myworkdayjobs.com/rayonier_careers
 - company: rba
   board: rba.wd105.myworkdayjobs.com/rba_careers
-- company: rbi
-  board: rbi.wd3.myworkdayjobs.com/rbi_external_career_site
 - company: rbnz
   board: rbnz.wd3.myworkdayjobs.com/rbnz
 - company: rcgt
@@ -9698,8 +9692,6 @@
 - company: virtus
   board: virtus.wd5.myworkdayjobs.com/virtuscareers
 - company: visa
-  board: visa.wd5.myworkdayjobs.com/visa
-- company: visa
   board: visa.wd5.myworkdayjobs.com/visa_early_careers
 - company: visitcatalinaisland
   board: visitcatalinaisland.wd12.myworkdayjobs.com/ico
@@ -11125,8 +11117,6 @@
   board: galileo.wd3.myworkdayjobs.com/galileo_global_education_italia_career_site
 - company: galvestoncountytx
   board: galvestoncountytx.wd503.myworkdayjobs.com/countyofgalvestoncareers
-- company: gatesfoundation
-  board: gatesfoundation.wd1.myworkdayjobs.com/gates%20
 - company: gcu
   board: gcu.wd1.myworkdayjobs.com/gcui
 - company: geisinger
