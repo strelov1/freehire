@@ -731,6 +731,12 @@ SET title        = sqlc.arg(title),
     education_level      = sqlc.arg(education_level),
     english_level        = sqlc.arg(english_level),
     experience_years_min = sqlc.arg(experience_years_min),
+    -- The edit re-derives the facets from the edited content, so both derived columns
+    -- move with it. content_hash is what makes the edit re-embed at all: the trigger is
+    -- `semantic_embedded_hash IS DISTINCT FROM content_hash`, so leaving the stored hash
+    -- behind would freeze the vector on the pre-edit text.
+    content_hash     = sqlc.arg(content_hash),
+    role_fingerprint = sqlc.arg(role_fingerprint),
     updated_by   = sqlc.arg(updated_by)::bigint,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL

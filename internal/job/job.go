@@ -274,5 +274,47 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 	}
 }
 
+// UpdateManualParams is the moderator-EDIT analogue of UpsertManualParams: it maps the
+// same Fields columns to the generated UpdateManualJob params, addressing the row by its
+// public slug and stamping the acting moderator. It deliberately carries no salary or
+// created_by — the edit query touches neither the manual salary nor the authorship of
+// the original create.
+//
+// Like the other two mappings it owns the derived columns, and the edit is the write
+// that most needs them: re-deriving facets from edited content is exactly when the
+// fingerprints move.
+func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJobParams {
+	derived := f.UpsertParams()
+	return db.UpdateManualJobParams{
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		PostedAt:    pgconv.Timestamptz(f.PostedAt),
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		ContentHash:     derived.ContentHash,
+		RoleFingerprint: derived.RoleFingerprint,
+
+		UpdatedBy:  actorID,
+		PublicSlug: slug,
+	}
+}
+
 // IsOpen reports whether the job is live (not soft-closed).
 func (j Job) IsOpen() bool { return j.f.ClosedAt == nil }

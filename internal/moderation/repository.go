@@ -10,7 +10,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
-	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/vocab"
 )
 
@@ -82,34 +81,11 @@ func (r *QueriesRepository) BySlug(ctx context.Context, slug string) (job.Job, j
 
 // Update writes the full resulting row for a moderator-authored job. The query's
 // created_by scope means a missing or non-moderator-created slug affects no row
-// (ErrNoRows → ErrJobNotFound).
+// (ErrNoRows → ErrJobNotFound). The Fields→params mapping lives on the aggregate
+// (job.Fields.UpdateManualParams), shared with every other write path, so the derived
+// columns move with the edited content instead of being left behind here.
 func (r *QueriesRepository) Update(ctx context.Context, slug string, f job.Fields, actorID int64) (job.Job, job.Extras, error) {
-	row, err := r.q.UpdateManualJob(ctx, db.UpdateManualJobParams{
-		PublicSlug:  slug,
-		Title:       f.Title,
-		Company:     f.Company,
-		CompanySlug: f.CompanySlug,
-		Location:    f.Location,
-		Remote:      f.Remote,
-		Description: f.Description,
-		PostedAt:    pgconv.Timestamptz(f.PostedAt),
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-		IsTech:      pgconv.Bool(f.IsTech),
-
-		PostingLanguage:    f.PostingLanguage,
-		EmploymentType:     f.EmploymentType,
-		EducationLevel:     f.EducationLevel,
-		EnglishLevel:       f.EnglishLevel,
-		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
-
-		UpdatedBy: actorID,
-	})
+	row, err := r.q.UpdateManualJob(ctx, f.UpdateManualParams(slug, actorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return job.Job{}, job.Extras{}, ErrJobNotFound
 	}

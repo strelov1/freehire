@@ -29,10 +29,10 @@ would fingerprint a NULL posted time while writing a real one.
 
 ## 4. The moderator edit path
 
-- [ ] 4.1 `internal/db/queries/jobs.sql`: add `content_hash` and `role_fingerprint` to
+- [x] 4.1 `internal/db/queries/jobs.sql`: add `content_hash` and `role_fingerprint` to
   `UpdateManualJob`'s SET list — the edit is exactly when re-derived content moves the
   fingerprints; run `make sqlc`.
-- [ ] 4.2 `internal/job/job.go`: add `Fields.UpdateManualParams(slug, actorID)` mirroring
+- [x] 4.2 `internal/job/job.go`: add `Fields.UpdateManualParams(slug, actorID)` mirroring
   `UpsertManualParams`, and have `internal/moderation/repository.go`'s `Update` call it
   instead of hand-building the `db.UpdateManualJobParams` literal.
 
