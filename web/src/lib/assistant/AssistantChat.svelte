@@ -10,6 +10,7 @@
     suggestFollowUps,
     SessionNotFound,
   } from '$lib/assistant/api';
+  import { track } from '$lib/analytics';
   import { forDisplay, shouldRequest } from '$lib/assistant/followups';
   import { openRehearsal, sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
@@ -544,6 +545,9 @@
   function submitText(raw: string) {
     const text = raw.trim();
     if (!text || phase !== 'ready' || switching || !activeId) return;
+    // Counted once per message the user sends, queued or dispatched — never the text
+    // itself. This measures usage only; what a turn costs is recorded server-side.
+    track('assistant_message');
     draft = '';
     if (turnActive || queue.length > 0) {
       enqueue(text);

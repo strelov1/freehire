@@ -15,6 +15,7 @@
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
+  import { track } from '$lib/analytics';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
@@ -224,6 +225,10 @@
       } else {
         // Bootstrap: reach the tailored CV for this vacancy (the backend returns the existing
         // one when there is one) and the conversation bound to it.
+        // Only the bootstrap is tracked as a run: it is the path that mints a tailored
+        // CV and spends credits. Re-opening an existing one (startTailorSession above)
+        // costs nothing and would inflate the count on every revisit.
+        track('tailor_run', { slug });
         const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
         job = j;
         cvId = tailor.tailor_cv_id;

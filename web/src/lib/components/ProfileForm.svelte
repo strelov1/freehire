@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowUp, Check, X } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
+  import { cvUploadReason, track } from '$lib/analytics';
   import {
     CATEGORY_OPTIONS,
     COUNTRY_OPTIONS,
@@ -142,6 +143,7 @@
     resumeNote = null;
     try {
       const cv = await api.extractResumeProfile(file);
+      track('cv_upload', { ok: true, origin: 'profile' });
       onCvUploaded?.();
 
       const beforeSkills = skills.length;
@@ -172,6 +174,13 @@
       else resumeNote = 'Everything from your CV was already listed.';
     } catch (err) {
       resumeError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
+      // The reason goes out as a bounded code, never the message itself: the copy is
+      // written for the user and rewording it must not split the metric in two.
+      track('cv_upload', {
+        ok: false,
+        origin: 'profile',
+        reason: err instanceof ApiError ? cvUploadReason(err.message) : 'other',
+      });
     } finally {
       resumeBusy = false;
     }

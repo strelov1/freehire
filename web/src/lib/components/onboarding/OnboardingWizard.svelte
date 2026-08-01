@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ArrowRight, FileUp, LoaderCircle, X } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
+  import { cvUploadReason, track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import {
@@ -84,6 +85,7 @@
     cvNote = null;
     try {
       const cv = await api.extractResumeProfile(file);
+      track('cv_upload', { ok: true, origin: 'onboarding' });
       if (gen !== cvGen) return; // superseded by another pick or a wizard reset
       const resolved = cv.categories.length > 0 || !!cv.seniority || cv.skills.length > 0;
       // Pre-fill the fields the dictionaries resolved and stay on step 1, so the user
@@ -101,6 +103,14 @@
       cvState = 'idle';
       cvNote = resolved ? 'Filled in what we found — review below.' : 'Couldn’t read details from that CV — pick below.';
     } catch (err) {
+      // Tracked before the supersede guard: the upload did fail, and dropping it
+      // because the user has since picked another file would understate the failure
+      // rate exactly where it is worst.
+      track('cv_upload', {
+        ok: false,
+        origin: 'onboarding',
+        reason: err instanceof ApiError ? cvUploadReason(err.message) : 'other',
+      });
       if (gen !== cvGen) return;
       cvState = 'error';
       cvError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';

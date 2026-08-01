@@ -112,6 +112,85 @@ export function isPrivateRoute(path: string): boolean {
   return path === '/my' || path.startsWith('/my/');
 }
 
+/** Why a CV upload was rejected, as a bounded code. `other` is deliberate: an
+ *  unrecognized failure still has to reach the funnel, and dropping it would make
+ *  the success rate read better than it is. */
+export type CvUploadReason = 'no_text' | 'missing_file' | 'unreadable' | 'bad_request' | 'other';
+
+// The server rejects with prose meant for the user, so matching on it directly would
+// tie the metric to copy — a reworded sentence would silently split one failure into
+// two. Substring matching (not equality) keeps the mapping working when a message
+// gains a suffix; the fragments are the stable part of each rejection.
+const CV_UPLOAD_REASONS: ReadonlyArray<readonly [string, CvUploadReason]> = [
+  ["couldn't read any text from this pdf", 'no_text'],
+  ['missing resume file', 'missing_file'],
+  ['cannot read resume file', 'unreadable'],
+  ['invalid request body', 'bad_request'],
+];
+
+/** Map a server rejection message to a bounded reason code for `cv_upload`. */
+export function cvUploadReason(message: string): CvUploadReason {
+  const text = message.trim().toLowerCase();
+  for (const [fragment, reason] of CV_UPLOAD_REASONS) {
+    if (text.includes(fragment)) return reason;
+  }
+  return 'other';
+}
+
+/** Whether an account was created just now, within `windowMs` of `now`.
+ *
+ *  OAuth sign-up is a full-page redirect, so the app comes back holding a session
+ *  with no way to tell a first-ever sign-in from the hundredth — a freshly stamped
+ *  `created_at` is the only signal the browser has. Creation slightly in the future
+ *  counts as fresh: that is clock skew between server and browser, not an old
+ *  account. An absent or unparseable stamp is treated as not fresh, so a missing
+ *  value can never manufacture a sign-up. */
+export function isFreshAccount(createdAt: string | null, now: number, windowMs: number): boolean {
+  if (!createdAt) return false;
+  const created = Date.parse(createdAt);
+  if (Number.isNaN(created)) return false;
+  return created > now - windowMs;
+}
+
+/** The slice of Storage the sign-up claim needs, so a test can hand it a map. */
+type SignupStore = Pick<Storage, 'getItem' | 'setItem'>;
+
+// How recently an account must have been created to read as a sign-up rather than a
+// returning sign-in. Wide enough to survive a slow first load and a redirect back
+// from an OAuth provider; far short of a session.
+const SIGNUP_WINDOW_MS = 2 * 60 * 1000;
+
+/** Claim the single `signup` event for an account: true exactly once, false on
+ *  every repeat. A storage failure also returns false — a browser that refuses
+ *  storage cannot be deduplicated, and inflating sign-ups is worse than missing
+ *  a few. */
+export function claimSignupOnce(userId: number, store: SignupStore): boolean {
+  const key = `fh:signup:${userId}`;
+  try {
+    if (store.getItem(key) !== null) return false;
+    store.setItem(key, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Capture `signup` when identity binds to an account that was just created.
+ *
+ *  This is the ONLY sign-up detector, and it deliberately covers both routes into
+ *  an account. Tracking at the password-registration call site as well would count
+ *  that account twice: it arrives here fresh too, just with `has_password` set. */
+export function trackSignupIfNew(user: {
+  id: number;
+  created_at: string | null;
+  has_password: boolean;
+}): void {
+  if (!isFreshAccount(user.created_at, Date.now(), SIGNUP_WINDOW_MS)) return;
+  if (typeof localStorage === 'undefined') return;
+  if (!claimSignupOnce(user.id, localStorage)) return;
+  track('signup', { method: user.has_password ? 'password' : 'oauth' });
+}
+
 /** Capture an explicit funnel event. No-op until the SDK has loaded. */
 export function track(event: string, props?: Record<string, unknown>): void {
   ph?.capture(event, props);

@@ -10,6 +10,7 @@
     syncReplayForRoute,
     identifyUser,
     resetIdentity,
+    trackSignupIfNew,
   } from '$lib/analytics';
   import TopBar from '$lib/components/TopBar.svelte';
   import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
@@ -64,8 +65,14 @@
     const id = page.data.user?.id ?? null;
     if (id === lastIdentified) return;
     lastIdentified = id;
-    if (page.data.user) identifyUser(page.data.user);
-    else resetIdentity();
+    if (page.data.user) {
+      identifyUser(page.data.user);
+      // Identity binding is the only place a sign-up is visible: OAuth returns
+      // through a full-page redirect, so the app cannot tell a first-ever sign-in
+      // from any other. A just-created account is the signal; the call itself is
+      // idempotent per account.
+      trackSignupIfNew(page.data.user);
+    } else resetIdentity();
   });
 </script>
 

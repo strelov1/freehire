@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { track } from '$lib/analytics';
   import { isAuthenticated } from '$lib/auth.svelte';
   import {
     verdictTone,
@@ -113,6 +114,10 @@
 
   function start() {
     stop();
+    // Tracked at the start, not on `final`: the run costs a credit the moment it
+    // begins, and an analysis that stalls or times out is exactly the one worth
+    // seeing in the funnel.
+    track('match_run', { slug: job.public_slug });
     stream = initMatchStream();
     streaming = true;
     showThinking = true;
