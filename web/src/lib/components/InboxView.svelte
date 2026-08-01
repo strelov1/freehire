@@ -723,7 +723,7 @@
                 {/if}
                 {#if linkState === 'linked' && s.linked_slug}
                   <a
-                    href={resolve('/my/tracking/[slug]', { slug: s.linked_slug })}
+                    href={resolve('/my/tracking/[id]', { id: s.linked_slug })}
                     class="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-brand-ring hover:text-foreground"
                   >
                     Linked to {s.linked_company || 'application'} ↗

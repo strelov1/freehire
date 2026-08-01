@@ -6,8 +6,8 @@
 </script>
 
 <svelte:head>
-  <title>Tracking — freehire</title>
+  <title>Tracking · List — freehire</title>
 </svelte:head>
 
-<!-- Same board as /my/tracking, but opened on the given application's drawer. -->
-<JobBoard initialSlug={data.slug} initial={data.board} />
+<!-- Same rows and the same application panel as the board, read as a list. -->
+<JobBoard view="list" initial={data.board} />

@@ -33,17 +33,17 @@
 
 ## 6. The list view
 
-- [ ] 6.1 Rename the route `web/src/routes/my/tracking/[slug]` to `[id]` and fix its `load` and its callers — it addresses a row, not a posting
-- [ ] 6.2 Add the List tab to `web/src/routes/my/tracking/+layout.svelte`, between Board and Pipeline
-- [ ] 6.3 Add `web/src/routes/my/tracking/list/` with the same server load the board uses — no second fetch path
-- [ ] 6.4 Build the row: employer, role, stage control, days silent, mail count; ordered by last activity, newest first; opening the same `JobDrawer`
-- [ ] 6.5 Exclude saved-only rows, the way the board excludes them — a bookmark is not an application
+- [x] 6.1 Rename the route `web/src/routes/my/tracking/[slug]` to `[id]` and fix its `load` and its callers — it addresses a row, not a posting
+- [x] 6.2 Add the List tab to `web/src/routes/my/tracking/+layout.svelte`, between Board and Pipeline
+- [x] 6.3 Add `web/src/routes/my/tracking/list/` with the same server load the board uses — no second fetch path
+- [x] 6.4 Build the row: employer, role, stage control, days silent, mail count; ordered by last activity, newest first; opening the same `JobDrawer`
+- [x] 6.5 Exclude saved-only rows, the way the board excludes them — a bookmark is not an application
 
 ## 7. Search over both views
 
-- [ ] 7.1 Implement the predicate in `web/src/lib/board.ts` against the tests from 1.1
-- [ ] 7.2 Add the search field, shared by the board and the list, synchronised to `?q=` — linkable and surviving a reload
-- [ ] 7.3 Verify that clearing the field restores every application and drops `q` from the URL
+- [x] 7.1 Implement the predicate in `web/src/lib/board.ts` against the tests from 1.1
+- [x] 7.2 Add the search field, shared by the board and the list, synchronised to `?q=` — linkable and surviving a reload
+- [x] 7.3 Verify that clearing the field restores every application and drops `q` from the URL
 
 ## 8. Finish
 

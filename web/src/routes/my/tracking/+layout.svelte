@@ -14,9 +14,12 @@
   const path = $derived(page.url.pathname);
   // Board (index) matches exactly so it is not also active on the child routes.
   const boardActive = $derived(path === '/my/tracking');
+  const listActive = $derived(path.startsWith('/my/tracking/list'));
   const pipelineActive = $derived(path.startsWith('/my/tracking/pipeline'));
   // The id of the active tab, so the routed panel can point back at it (aria-labelledby).
-  const activeTabId = $derived(pipelineActive ? 'tracking-tab-pipeline' : 'tracking-tab-board');
+  const activeTabId = $derived(
+    pipelineActive ? 'tracking-tab-pipeline' : listActive ? 'tracking-tab-list' : 'tracking-tab-board',
+  );
 
   const tabClass = (active: boolean) =>
     cn(
@@ -45,6 +48,16 @@
       class={tabClass(boardActive)}
     >
       Board
+    </a>
+    <a
+      role="tab"
+      id="tracking-tab-list"
+      aria-selected={listActive}
+      aria-controls="tracking-tabpanel"
+      href={resolve('/my/tracking/list')}
+      class={tabClass(listActive)}
+    >
+      List
     </a>
     <a
       role="tab"

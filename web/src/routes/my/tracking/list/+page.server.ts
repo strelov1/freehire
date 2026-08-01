@@ -1,0 +1,14 @@
+import { redirect } from '@sveltejs/kit';
+import { loadBoard } from '$lib/server/tracking';
+import type { PageServerLoad } from './$types';
+
+// /my/tracking/list is the board's rows read as a list. Same guard and same server
+// fetch as /my/tracking — one load, so the two views cannot show different data.
+export const load: PageServerLoad = async ({ parent, url, fetch, request }) => {
+  const { user } = await parent();
+  if (!user) {
+    const target = url.pathname + url.search;
+    redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
+  }
+  return { board: await loadBoard(fetch, request.headers.get('cookie')) };
+};
