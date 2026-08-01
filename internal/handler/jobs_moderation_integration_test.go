@@ -76,7 +76,7 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 
 	const validBody = `{"url":"https://acme.example/jobs/1","title":"Senior Go Developer","company":"Acme","location":"Germany","remote":true,"description":"We use Golang."}`
 
-	var createdSlug string
+	var createdSlug, createdHash string
 
 	t.Run("moderator creates a manual job (201)", func(t *testing.T) {
 		resp, err := app.Test(req(fiber.MethodPost, "/api/v1/jobs", modCookie, validBody))
@@ -119,6 +119,24 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 		body, _ := json.Marshal(out)
 		if bytes.Contains(body, []byte("created_by")) {
 			t.Error("wire response leaked created_by")
+		}
+
+		// The derived columns are written by the same mapping every other write path
+		// uses. A NULL role_fingerprint would keep the vacancy out of role clustering
+		// (RoleClusterCount filters role_fingerprint <> ''), and a NULL content_hash
+		// would make the re-embed comparison NULL IS DISTINCT FROM NULL — false —
+		// freezing its semantic vector on the text of the first embed.
+		var fingerprint string
+		if err := pool.QueryRow(ctx,
+			"SELECT coalesce(content_hash, ''), coalesce(role_fingerprint, '') FROM jobs WHERE public_slug = $1",
+			createdSlug).Scan(&createdHash, &fingerprint); err != nil {
+			t.Fatalf("read derived columns: %v", err)
+		}
+		if createdHash == "" {
+			t.Error("content_hash is NULL; a later edit could never re-embed")
+		}
+		if fingerprint == "" {
+			t.Error("role_fingerprint is NULL; the vacancy can never cluster with the crawled copy of its role")
 		}
 	})
 
@@ -190,6 +208,23 @@ func TestModeratorJobsEndToEnd(t *testing.T) {
 		}
 		if updatedBy != modID {
 			t.Errorf("updated_by = %d, want %d", updatedBy, modID)
+		}
+
+		// The edit re-derives the facets from the edited content, so the content
+		// fingerprint must move with them — it is what makes the semantic vector
+		// re-embed instead of describing the pre-edit text forever. The role
+		// fingerprint moves too here, because the edited field is the title.
+		var editedHash, editedFingerprint string
+		if err := pool.QueryRow(ctx,
+			"SELECT coalesce(content_hash, ''), coalesce(role_fingerprint, '') FROM jobs WHERE public_slug = $1",
+			createdSlug).Scan(&editedHash, &editedFingerprint); err != nil {
+			t.Fatalf("read derived columns: %v", err)
+		}
+		if editedHash == "" || editedHash == createdHash {
+			t.Errorf("content_hash = %q after the edit, want a new fingerprint (was %q)", editedHash, createdHash)
+		}
+		if editedFingerprint == "" {
+			t.Error("role_fingerprint is NULL after the edit")
 		}
 	})
 

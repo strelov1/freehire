@@ -38,5 +38,5 @@ would fingerprint a NULL posted time while writing a real one.
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./... && go vet ./... && go test ./...` green; `openspec validate
+- [x] 5.1 `go build ./... && go vet ./... && go test ./...` green; `openspec validate
   job-aggregate-derived-columns --strict` passes.
