@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/llmkey"
 )
 
 // assistantHandlers is the in-app agent. It owns the conversation store and the
@@ -38,6 +39,18 @@ type assistantHandlers struct {
 	// undo the only reason it is a separate call. Nil when unconfigured, which the
 	// endpoint answers as an empty list.
 	followUps *assistant.FollowUps
+
+	// llm is the agent's own client, kept beside the runner so a turn can be re-bound
+	// to the caller's gateway credential. The runner holds it as an interface and
+	// cannot be asked for it back.
+	llm *llm.Client
+	// keys resolves the credential a turn spends under. Nil in a deployment that does
+	// not attribute spend, which every path treats as "spend on the service credential".
+	keys *llmkey.Resolver
+	// followUpLLM binds the CHEAP model the suggestion strip runs on. Separate from the
+	// agent's own client for the same reason followUps is: they are different models,
+	// and one field holding both would eventually be handed the wrong one.
+	followUpLLM llmBinding
 
 	queries  *db.Queries
 	search   *searchHandlers
@@ -96,9 +109,18 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 		cvH.editor.WithEvidenceGate(bankGate{bank: h.experience})
 	}
 	if model != nil {
+		h.llm = model
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})
 	}
 	return h
+}
+
+// withKeys gives the assistant the resolver that names the caller on the gateway. Separate
+// from the constructor because a deployment without it is ordinary rather than degraded:
+// every turn then spends on the service credential, exactly as it did before.
+func (h *assistantHandlers) withKeys(keys *llmkey.Resolver) {
+	h.keys = keys
+	h.followUpLLM.keys = keys
 }
 
 // register mounts the assistant. A browser drives it, but not always the web app:
@@ -390,6 +412,8 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 	registry := h.registry(sess, uuid.New())
 	system := assistant.SystemPrompt(sess.Preset)
 
+	turnRunner := h.boundRunner(c.Context(), sess)
+
 	c.Set(fiber.HeaderContentType, "text/event-stream")
 	c.Set(fiber.HeaderCacheControl, "no-cache")
 	c.Set(fiber.HeaderConnection, "keep-alive")
@@ -453,7 +477,7 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 			}
 		}()
 
-		err := h.runner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
+		err := turnRunner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
 			mu.Lock()
 			defer mu.Unlock()
 			if !write(string(e.Kind), e) {
@@ -474,6 +498,27 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 		}
 	}))
 	return nil
+}
+
+// boundRunner returns the runner for one turn, spending under the session owner's own
+// gateway credential.
+//
+// The turn is tagged with the preset as well as the feature: a rehearsal, an unattended
+// tailoring pass and a question cost wildly different amounts, and the gateway files one
+// spend row per tag, so the preset is what makes them comparable. It resolves before the
+// stream opens — minting is a network call, and making it after the headers are out would
+// stall a stream the client is already reading.
+//
+// The nil check is load-bearing and is not the same as letting Runner.With see a nil. A
+// nil *llm.Client assigned into the Model INTERFACE is not a nil interface, so the runner
+// would believe it has a model and dereference it on the first round. That is a panic in
+// the stream goroutine, after the response has already begun.
+func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Session) *assistant.Runner {
+	bound := userLLM(ctx, h.keys, h.llm, sess.UserID, tagAssistant, "preset:"+sess.Preset)
+	if bound == nil {
+		return h.runner
+	}
+	return h.runner.With(bound)
 }
 
 // openingBrief starts a rehearsal. Like the autopilot's brief it is short on method and
@@ -600,6 +645,7 @@ func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.S
 // parameter list would invite passing the wrong one.
 func (h *assistantHandlers) withFollowUps(model *llm.Client) {
 	h.followUps = assistant.NewFollowUps(model)
+	h.followUpLLM.client = model
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.

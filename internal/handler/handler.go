@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/headshot"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/llmkey"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
@@ -82,10 +83,11 @@ type API struct {
 	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
 	// both ends of a channel are live connections to this process.
 	browserTools *browsertools.Hub
-	// autofillPlanner is the model the agent-driven autofill maps a profile onto a
-	// form with. Nil when the LLM is unconfigured: the run then reports the feature
-	// is off, and the extension's deterministic autofill still works.
-	autofillPlanner *llm.Client
+	// llm binds the model the agent-driven autofill maps a profile onto a form with,
+	// together with the resolver naming the account it is spent under. A nil client is
+	// the LLM being unconfigured: the run then reports the feature is off, and the
+	// extension's deterministic autofill still works.
+	llm llmBinding
 }
 
 // middleware bundles the auth gates the feature handlers mount their routes
@@ -180,6 +182,10 @@ type Config struct {
 	// AssistantMaxSteps bounds the tool-calling rounds of one turn; zero uses the
 	// assistant package's default.
 	AssistantMaxSteps int
+	// LLMKeys mints the per-user gateway credential each account's model calls are
+	// spent under. Nil is the deployment that does not attribute spend: every call goes
+	// out on the service credential exactly as it did before, and no behaviour changes.
+	LLMKeys *llmkey.Client
 	// Speech transcribes dictated audio for the composer. Nil is the deployment with
 	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
 	Speech *speech.Client
@@ -274,7 +280,7 @@ func Register(app *fiber.App, cfg Config) {
 	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	// The autofill planner is one cheap structured call per run; the shared client's
 	// default timeout is right for it.
-	a.autofillPlanner = cfg.LLM
+	a.llm.client = cfg.LLM
 	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
 	// client the crawlers use (sources.NewClient). That one client also backs the ingest
@@ -292,7 +298,10 @@ func Register(app *fiber.App, cfg Config) {
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
 	// to erase there, which must not stop a member from leaving.
-	authH.withAccountDeletion(accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant), queries)
+	// The gateway credential is the third external system erasure spans, after object
+	// storage and Google. It is attached below, once the resolver exists.
+	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant)
+	authH.withAccountDeletion(accountDeletion, queries)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.
 	var jobSearch searcher
@@ -326,6 +335,18 @@ func Register(app *fiber.App, cfg Config) {
 	// Suggestions run on LLM (cheap, one-shot) rather than on AssistantLLM: the whole
 	// argument for generating them outside the turn is that they cost almost nothing.
 	assistantH.withFollowUps(cfg.LLM)
+
+	// Who each model call is spent as. One resolver serves every per-user surface, so
+	// the account a call is attributed to is decided in one place rather than per
+	// feature. A nil gateway client leaves it inert and every call on the service
+	// credential.
+	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
+	assistantH.withKeys(llmKeys)
+	a.llm.keys = llmKeys
+	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
+	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
+	usageH := newUsageHandlers(llmKeys, cfg.LLMKeys)
+	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
@@ -468,6 +489,7 @@ func Register(app *fiber.App, cfg Config) {
 	communityH.register(api, mw)
 
 	creditsH.register(api, mw)
+	usageH.register(api, mw)
 
 	// API-key management and the auth surface (see authHandlers).
 	authH.register(api, mw)

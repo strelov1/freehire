@@ -37,7 +37,10 @@ func (h *assistantHandlers) PostAssistantFollowUps(c *fiber.Ctx) error {
 	if !ok {
 		return c.JSON(fiber.Map{"data": fiber.Map{"followups": []string{}}})
 	}
-	suggestions, err := h.followUps.Suggest(c.Context(), exchange)
+	// Tagged apart from the turn it follows: this runs on the cheap model, and rolling
+	// it into the assistant's own tag would hide how much of that number is the strip.
+	suggester := h.followUps.As(h.followUpLLM.bind(c.Context(), sess.UserID, tagFollowUps))
+	suggestions, err := suggester.Suggest(c.Context(), exchange)
 	if err != nil {
 		log.Printf("assistant: follow-ups for session %s: %v", sess.ID, err)
 		suggestions = nil

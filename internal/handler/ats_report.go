@@ -80,7 +80,8 @@ func (h *resumeHandlers) PostATSReport(c *fiber.Ctx) error {
 	// document, not the person: feeding it banked evidence would have it praise a CV for
 	// experience that appears nowhere in the CV. Absent structure ⇒ nil review ⇒ the
 	// deterministic report is served (below).
-	review, err := h.atsAnalyzer.Analyze(c.Context(), structuredResumeJSON(h.resume, c, userID))
+	analyzer := h.atsAnalyzer.As(h.llm.bind(c.Context(), userID, tagATSReview))
+	review, err := analyzer.Analyze(c.Context(), structuredResumeJSON(h.resume, c, userID))
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.
 		log.Printf("atscheck: review failed for user %d: %v", userID, err)

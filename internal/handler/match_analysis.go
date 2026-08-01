@@ -38,6 +38,9 @@ type matchHandlers struct {
 	// (candidate, job). Its client is nil when the LLM is unconfigured; Analyze then
 	// degrades to a no-op.
 	matchAnalysis *matchanalysis.Analyzer
+	// llm binds the model client and the credential resolver, so an analysis is spent
+	// under the account that asked for it.
+	llm llmBinding
 	// matchAnalysisCache reads/writes the per-(user, job) cached fit analysis
 	// (backed by *db.Queries).
 	matchAnalysisCache matchAnalysisStore
@@ -196,7 +199,8 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// (below) and the same list caps the served score (applyBlockers, after caching).
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	analysis, err := h.matchAnalysis.Analyze(c.Context(), matchanalysis.Input{
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	analysis, err := analyzer.Analyze(c.Context(), matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         h.companyInfo(c, job.CompanySlug),

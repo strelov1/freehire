@@ -37,6 +37,9 @@ type resumeHandlers struct {
 	facets facetCounter
 	// userProfile loads the caller's profile (skills + role the verdict scores against).
 	userProfile *userprofile.Service
+	// llm binds the model client and the credential resolver, so the extraction and the
+	// ATS review are both spent under the account that asked for them.
+	llm llmBinding
 	// atsAnalyzer runs the optional LLM qualitative review for the CV ATS report.
 	// Its client is nil when the LLM is unconfigured; Analyze then degrades to a no-op.
 	atsAnalyzer *atscheck.Analyzer
@@ -351,12 +354,15 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
 	defer cancel()
-	st, err := h.structuredExtractor.Extract(ctx, text)
+	// This runs after the upload has responded, on its own context — so the credential
+	// is resolved here rather than carried from a request that is already over.
+	extractor := h.structuredExtractor.As(h.llm.bind(ctx, userID, tagCVExtract))
+	st, err := extractor.Extract(ctx, text)
 	if err != nil {
 		log.Printf("resume structured: user %d: %v", userID, err)
 		return
 	}
-	if err := h.resume.SetStructured(ctx, userID, st, h.structuredExtractor.ModelID(), *uploadedAt); err != nil {
+	if err := h.resume.SetStructured(ctx, userID, st, extractor.ModelID(), *uploadedAt); err != nil {
 		log.Printf("resume structured persist: user %d: %v", userID, err)
 	}
 	// The bank is fed from the SAME extraction, inside the same guard: an unconfigured

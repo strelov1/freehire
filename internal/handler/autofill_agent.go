@@ -29,7 +29,7 @@ func (a *API) RunAgentAutofill(c *fiber.Ctx) error {
 	report, err := autofillagent.Run(
 		c.Context(),
 		caller,
-		autofillagent.LLMPlanner{Client: a.autofillPlanner},
+		autofillagent.LLMPlanner{Client: a.llm.bind(c.Context(), userID, tagAutofill)},
 		profileFields(profile),
 	)
 	if err != nil {

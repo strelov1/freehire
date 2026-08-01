@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/handler"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/llmkey"
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/search"
@@ -176,6 +177,20 @@ func main() {
 	// when the gateway is unset, which the composer reads as "no microphone here".
 	speechClient := speech.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.STTModel)
 
+	// The gateway's administrative API, which mints the per-user credential each
+	// account's model calls are spent under. Nil when unconfigured, and that is an
+	// ordinary deployment rather than a degraded one: every call then goes out on
+	// LLM_API_KEY exactly as it did before this existed. It is deliberately a separate
+	// endpoint and credential from inference — administration is served at the gateway
+	// root, and the key that mints keys has no business on a chat request.
+	llmKeys := llmkey.New(llmkey.Config{
+		BaseURL:      cfg.LLMAdminURL,
+		AdminKey:     cfg.LLMAdminKey,
+		MaxBudget:    cfg.LLMUserMaxBudget,
+		RPMLimit:     cfg.LLMUserRPMLimit,
+		BudgetWindow: cfg.LLMUserBudgetWindow,
+	})
+
 	// OAuth sign-in is optional: only providers with full credentials are
 	// enabled; the registry may be empty and the server still serves password
 	// auth. Redirect URLs are built per request from the request origin, so one
@@ -216,6 +231,7 @@ func main() {
 		LLM:               llmClient,
 		AssistantLLM:      assistantLLM,
 		AssistantMaxSteps: cfg.AssistantMaxSteps,
+		LLMKeys:           llmKeys,
 		Speech:            speechClient,
 		PIIDetector:       piiDetector,
 

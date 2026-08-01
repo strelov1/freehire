@@ -59,6 +59,10 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// holds the uncapped analysis and GET recomputes the cap on read.
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
+	// Bound before the stream opens: minting a credential is a network call, and making
+	// it after the headers are out would stall a stream the client is already reading.
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+
 	input := matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
@@ -134,7 +138,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			}
 		}()
 
-		analysis, err := h.matchAnalysis.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
+		analysis, err := analyzer.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
 			events++
 			stream.event(string(e.Kind), e)
 		})
