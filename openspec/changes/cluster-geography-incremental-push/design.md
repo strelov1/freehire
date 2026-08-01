@@ -60,10 +60,12 @@ geography, exactly as today, and the next full reindex repairs it.
 ### `RoleClusterGeo` mirrors `RoleClusterGeoAll`'s semantics exactly
 
 Same LATERAL-unnest-then-aggregate shape, same `<> ''` filtering, same open-rows-only scope. It
-returns empty arrays for a singleton or unknown cluster, which `MergeClusterGeography` already
-treats as "leave this facet alone" (`unionSorted` returns `own` when `extra` is empty). With
-`emit_empty_slices: true` in `sqlc.yaml`, a no-row case surfaces as empty slices rather than
-nil, so no caller needs a nil check.
+differs in one way beyond scope: it carries no `HAVING`, so it always answers with exactly one
+row. An unknown cluster aggregates over no rows and yields SQL `NULL` arrays, which pgx scans
+into nil slices; `MergeClusterGeography` treats those as "leave this facet alone" because
+`unionSorted` gates on `len(extra) == 0`, which nil satisfies. A singleton is different and
+worth stating plainly: it answers with the canon's *own* geography, so merging it is a
+self-union and a no-op — the callers skip it anyway on `mass <= 1`.
 
 ## Risks / Trade-offs
 

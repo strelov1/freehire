@@ -28,3 +28,17 @@
 - [x] 4.2 `go test -tags=integration ./internal/db/ ./cmd/ingest/` (Docker required).
 - [x] 4.3 Confirm the singleton path issues no second query: the merge sits behind `mass > 1`,
   which RoleClusterCount already answered, so a role with one open posting pays nothing.
+
+## 5. Close what review found
+
+- [x] 5.1 A failed `RoleClusterCount` degraded to `(1,1)`, which also skipped the geography
+  merge — reinstating the exact bug on that path. Skipping is destructive (the push replaces
+  the stored union), not conservative, so an unknown cluster size is now a reason to ask rather
+  than a reason to skip: only a KNOWN singleton skips.
+- [x] 5.2 `MergeClusterGeography`'s doc comment still said it is "called by the full reindex,
+  which alone has the whole cluster in view" — the premise this change overturns, and the one
+  comment a reader would trust. Rewritten to bind every writer.
+- [x] 5.3 Corrected two false statements in design.md: a singleton returns its own geography
+  (a self-union), not empty arrays; and `emit_empty_slices` governs what a `:many` query
+  returns, not how a column scans — an empty aggregate is SQL NULL and scans to a nil slice,
+  which `unionSorted` handles because it gates on `len(extra) == 0`.

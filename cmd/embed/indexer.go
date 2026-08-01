@@ -40,6 +40,10 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64
 		// immediately; a cluster-count lookup failure degrades to a unique role (1,1).
 		if !ix.pgOnly {
 			repost, mass := int64(1), int64(1)
+			// askGeo defaults to true because a FAILED count must not also suppress the
+			// geography merge below: skipping it is destructive (the push replaces the
+			// stored union), not conservative. Only a known singleton can safely skip.
+			askGeo := true
 			if c, err := ix.q.RoleClusterCount(ctx, db.RoleClusterCountParams{
 				CompanySlug:     job.CompanySlug,
 				RoleFingerprint: job.RoleFingerprint,
@@ -47,15 +51,16 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64
 				log.Printf("embed: role-cluster count for job %d: %v", job.ID, err)
 			} else {
 				repost, mass = c.RepostCount, c.MassCount
+				askGeo = mass > 1
 			}
 			reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
 			doc.Reality = &reality
 			// Widen the canon with its cluster's geography — the push is a field-level
 			// document update, so omitting this replaces the reindex's union with the
-			// canon's own narrow set. mass counts the cluster's open rows: at 1 there is
-			// nothing to widen with, which is also why this sits inside the !pgOnly branch
-			// alongside the count it reuses.
-			if mass > 1 {
+			// canon's own narrow set. mass counts the cluster's open rows: at a known 1
+			// there is nothing to widen with. This sits inside the !pgOnly branch alongside
+			// the count it reuses — pg-only builds no Meili document at all.
+			if askGeo {
 				if g, err := ix.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
 					CompanySlug:     job.CompanySlug,
 					RoleFingerprint: job.RoleFingerprint,

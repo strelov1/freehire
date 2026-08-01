@@ -79,8 +79,13 @@ func FromJob(j db.Job) (JobDocument, error) {
 // across its role cluster's open rows, so a collapsed multi-city/multi-country role
 // stays findable by every city and country it is open in — not only the canon's own.
 // Each facet becomes the sorted, deduped union of the document's own values and the
-// cluster's; an empty cluster slice leaves that facet unchanged. Called by the full
-// reindex (which alone has the whole cluster in view); the single-row FromJob cannot.
+// cluster's; an empty cluster slice leaves that facet unchanged.
+//
+// Every writer of a job document must call this, not only the full reindex. The push is a
+// field-level document update and these three facets are always present in the payload, so
+// a writer that skips the union does not merely fail to widen the canon — it replaces the
+// widened values with the canon's own. The reindex reads its cluster geography from the
+// whole-catalogue RoleClusterGeoAll; the per-row writers read theirs from RoleClusterGeo.
 func (d *JobDocument) MergeClusterGeography(countries, regions, cities []string) {
 	d.Countries = unionSorted(d.Countries, countries)
 	d.Regions = unionSorted(d.Regions, regions)

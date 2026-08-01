@@ -280,11 +280,16 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	// The job-reality signal needs this role's cluster counts; a lookup failure degrades
 	// to a unique role (counts 1) rather than skipping the push.
 	repost, mass := int64(1), int64(1)
+	// askGeo defaults to true because a FAILED count must not also suppress the geography
+	// merge below: skipping it is destructive (the push replaces the stored union), not
+	// conservative. Only a known singleton can safely skip — its union is its own geography.
+	askGeo := true
 	if c, err := im.q.RoleClusterCount(ctx, db.RoleClusterCountParams{
 		CompanySlug:     saved.Job.CompanySlug,
 		RoleFingerprint: saved.Job.RoleFingerprint,
 	}); err == nil {
 		repost, mass = c.RepostCount, c.MassCount
+		askGeo = mass > 1
 	}
 	doc, err := search.FromJob(saved.Job)
 	if err != nil {
@@ -295,8 +300,8 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	doc.Reality = &reality
 	// Widen the canon with its cluster's geography — the push is a field-level document
 	// update, so omitting this replaces the reindex's union with the canon's own narrow
-	// set. mass counts the cluster's open rows: at 1 there is nothing to widen with.
-	if mass > 1 {
+	// set. mass counts the cluster's open rows: at a known 1 there is nothing to widen with.
+	if askGeo {
 		if g, err := im.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
 			CompanySlug:     saved.Job.CompanySlug,
 			RoleFingerprint: saved.Job.RoleFingerprint,
