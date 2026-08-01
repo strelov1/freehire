@@ -15,16 +15,15 @@ import (
 	"github.com/strelov1/freehire/internal/browsertools"
 )
 
-// arrivalBudget bounds the waits for a frame that must arrive. It is deliberately far
-// longer than the relay needs (the package runs in ~1.6s locally): the budget only sets
-// how long a genuinely broken relay takes to report, so the cost of generosity is paid
-// only when the test is already failing. At 5s it instead measured the CI runner — the
-// waits expired at exactly 5.00s under CPU contention and reported a relay fault that
-// did not exist.
+// arrivalBudget bounds the waits for a frame that must arrive. It is far longer than the relay
+// needs (the package runs in ~1.6s locally); the budget only sets how long a genuinely broken
+// relay takes to report, so the cost of generosity is paid only when the test is already failing.
 //
-// The one wait that must stay short is the negative assertion below, which asserts a
-// frame does NOT arrive; widening that would only make the test slower at proving it.
-const arrivalBudget = 30 * time.Second
+// It was 5s, then 30s, on the theory that the waits were measuring a contended CI runner. They
+// were not: the frame was never coming (see awaitRelay), so each raise only bought a longer wait
+// before the same failure. With the precondition established explicitly, a wait that expires now
+// means a relay fault, and 10s is more than enough to say so.
+const arrivalBudget = 10 * time.Second
 
 // noKeys stands in for the API-key lookup: these tests authenticate with JWTs,
 // so every key is unknown. It exists so the middleware has something to call
@@ -73,16 +72,80 @@ func dial(t *testing.T, base, role, token string) *ws.Conn {
 	return conn
 }
 
-func readFrame(t *testing.T, conn *ws.Conn) string {
+// frames starts a reader for one end and delivers whatever arrives on it.
+//
+// A reader goroutine rather than a read deadline per assertion: in this library a read that
+// expires POISONS the connection — every later read returns the same timeout instantly, without
+// waiting — so a test that must sometimes wait in vain cannot use a deadline on a connection it
+// will read again. The buffer is larger than any test consumes, so the reader never blocks on a
+// frame nobody asked for.
+func frames(conn *ws.Conn) <-chan string {
+	out := make(chan string, 8)
+	go func() {
+		defer close(out)
+		for {
+			_, frame, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			out <- string(frame)
+		}
+	}()
+	return out
+}
+
+// await takes the next frame from an end, failing if none arrives within the budget.
+func await(t *testing.T, in <-chan string) string {
 	t.Helper()
-	if err := conn.SetReadDeadline(time.Now().Add(arrivalBudget)); err != nil {
-		t.Fatalf("set deadline: %v", err)
+	select {
+	case frame, ok := <-in:
+		if !ok {
+			t.Fatal("the connection closed before the frame arrived")
+		}
+		return frame
+	case <-time.After(arrivalBudget):
+		t.Fatal("no frame arrived within the budget")
+		return ""
 	}
-	_, frame, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("read: %v", err)
+}
+
+// awaitRelay blocks until the relay routes between the two ends — the precondition every
+// relaying assertion needs, and the one this file used to assume.
+//
+// The WebSocket handshake completes BEFORE the server registers the end: Join runs in the
+// connection goroutine, which the runtime need not have scheduled by the time dial returns. A
+// call sent in that window finds the channel half-open, and the hub then does exactly the right
+// thing — it answers the HARNESS "the browser extension is not connected". So the extension never
+// sees the call, and a wait on it expires at whatever budget it has. Reproduced deterministically
+// by sleeping 50ms before Join: the failure is identical to the one CI showed.
+//
+// Probed through the protocol rather than by reading the hub's state, because the protocol is
+// what these tests exercise: the probe either reaches the extension (both ends live) or comes
+// back to the harness (not yet). Exactly one of the two happens per attempt, from one Forward
+// call, so no stray answer can outlive the loop and be mistaken for a later result.
+func awaitRelay(t *testing.T, harness *ws.Conn, fromHarness, toExtension <-chan string) {
+	t.Helper()
+	const probe = `{"id":"__probe","tool":"__probe"}`
+
+	giveUp := time.After(arrivalBudget)
+	for {
+		if err := harness.WriteMessage(ws.TextMessage, []byte(probe)); err != nil {
+			t.Fatalf("probe write: %v", err)
+		}
+		select {
+		case got := <-toExtension:
+			if got != probe {
+				t.Fatalf("probe arrived as %q, want it verbatim", got)
+			}
+			return
+		case <-fromHarness:
+			// The hub answered the sender: the extension is not registered yet. The next
+			// attempt is a round trip away, so pause briefly rather than spin.
+			time.Sleep(2 * time.Millisecond)
+		case <-giveUp:
+			t.Fatal("the relay never routed between the two ends")
+		}
 	}
-	return string(frame)
 }
 
 func TestBrowserToolsWS_CarriesACallAndItsResultBetweenTheUsersOwnEnds(t *testing.T) {
@@ -95,12 +158,14 @@ func TestBrowserToolsWS_CarriesACallAndItsResultBetweenTheUsersOwnEnds(t *testin
 
 	extension := dial(t, base, "extension", token)
 	harness := dial(t, base, "harness", token)
+	toExtension, toHarness := frames(extension), frames(harness)
+	awaitRelay(t, harness, toHarness, toExtension)
 
 	call := `{"id":"c1","tool":"read_form","args":{}}`
 	if err := harness.WriteMessage(ws.TextMessage, []byte(call)); err != nil {
 		t.Fatalf("harness write: %v", err)
 	}
-	if got := readFrame(t, extension); got != call {
+	if got := await(t, toExtension); got != call {
 		t.Fatalf("extension got %q, want the call verbatim", got)
 	}
 
@@ -108,7 +173,7 @@ func TestBrowserToolsWS_CarriesACallAndItsResultBetweenTheUsersOwnEnds(t *testin
 	if err := extension.WriteMessage(ws.TextMessage, []byte(result)); err != nil {
 		t.Fatalf("extension write: %v", err)
 	}
-	if got := readFrame(t, harness); got != result {
+	if got := await(t, toHarness); got != result {
 		t.Fatalf("harness got %q, want the result verbatim", got)
 	}
 }
@@ -126,7 +191,7 @@ func TestBrowserToolsWS_AnswersACallWithNoExtensionInsteadOfHanging(t *testing.T
 		ID    string `json:"id"`
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal([]byte(readFrame(t, harness)), &answer); err != nil {
+	if err := json.Unmarshal([]byte(await(t, frames(harness))), &answer); err != nil {
 		t.Fatalf("answer is not JSON: %v", err)
 	}
 	if answer.ID != "c9" || answer.Error == "" {
@@ -142,21 +207,23 @@ func TestBrowserToolsWS_DoesNotBridgeBetweenUsers(t *testing.T) {
 
 	extensionB := dial(t, base, "extension", tokenB)
 	harnessA := dial(t, base, "harness", tokenA)
+	toExtensionB, toHarnessA := frames(extensionB), frames(harnessA)
 
-	if err := harnessA.WriteMessage(ws.TextMessage, []byte(`{"id":"c1","tool":"read_form"}`)); err != nil {
+	call := `{"id":"c1","tool":"read_form"}`
+	if err := harnessA.WriteMessage(ws.TextMessage, []byte(call)); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
-	// User A's harness is answered by the relay itself...
-	if got := readFrame(t, harnessA); got == `{"id":"c1","tool":"read_form"}` {
+	// User A's harness is answered by the relay itself — and here that answer is guaranteed
+	// whatever the scheduling, since user A HAS no extension to register.
+	if got := await(t, toHarnessA); got == call {
 		t.Fatal("the call came back to its sender")
 	}
 	// ...and user B's extension is never handed anything.
-	if err := extensionB.SetReadDeadline(time.Now().Add(300 * time.Millisecond)); err != nil {
-		t.Fatalf("set deadline: %v", err)
-	}
-	if _, frame, err := extensionB.ReadMessage(); err == nil {
+	select {
+	case frame := <-toExtensionB:
 		t.Fatalf("user B's extension received %q from user A's harness", frame)
+	case <-time.After(300 * time.Millisecond):
 	}
 }
 

@@ -20,6 +20,14 @@ against whatever page the user is on and sends results back.
   with no harness left is dropped (nobody is waiting).
 - **Last connection wins.** Re-joining in a role replaces the previous socket; the
   displaced connection's `leave` is a no-op, so it cannot evict its successor.
+- **A connected end is not yet a joined end.** `Join` runs in the websocket
+  handler's own goroutine, which starts *after* the 101 handshake the client sees.
+  So a call issued the instant a socket opens can find the channel half-open and
+  come back `{id, error: "the browser extension is not connected"}` — correct
+  behaviour, not a fault, and a caller that treats it as fatal is wrong to. This
+  cost the integration test two rounds of "widen the timeout" before anyone
+  reproduced it (sleep 50ms before `Join` and it is deterministic); the test now
+  waits for the relay to actually route before asserting on it.
 
 ## Who the harness is
 
