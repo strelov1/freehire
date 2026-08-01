@@ -64,7 +64,8 @@ same repository, under the same licence.
 | **Build on** | A keyless public API, a CLI, a form-filling browser extension, ChatGPT Actions |
 
 **[Full feature reference → `docs/features.md`](docs/features.md)** — what each one
-does, where it lives in the tree, and which need an LLM endpoint configured.
+does, where it lives in the tree, which need an LLM endpoint configured, and
+which draw on AI credits.
 
 ## Stack
 
