@@ -95,6 +95,19 @@ func cvToolsAPI(t *testing.T, doc string) (*assistantHandlers, *cvRepo) {
 	return &assistantHandlers{cv: &cvHandlers{cvStore: cv.NewStore(repo), editor: editor}}, repo
 }
 
+// cvToolsAPIWithBank is cvToolsAPI for the cases that exercise the evidence gate. The
+// editor is CONSTRUCTED with the gate, the way the production assembly builds it — the
+// gate is not something a caller can attach to an editor after the fact.
+func cvToolsAPIWithBank(t *testing.T, doc string, bank experienceBankTools) (*assistantHandlers, *cvRepo) {
+	t.Helper()
+	repo := &cvRepo{id: testCVID, userID: 3, jobID: 9, data: []byte(doc)}
+	editor := cvedit.NewEditor(&memRevisions{cv: repo}, bankGate{bank: bank})
+	return &assistantHandlers{
+		experience: bank,
+		cv:         &cvHandlers{cvStore: cv.NewStore(repo), editor: editor},
+	}, repo
+}
+
 // memRevisions is an in-memory cvedit.Repository over the same cvRepo the CV store uses, so
 // a tool test exercises the real editor — policy, evidence gate, apply, coalescing — without
 // a database. Writes land in cvRepo.written, which is what the cases assert on.
@@ -363,10 +376,8 @@ func TestCVEditToolSchemaNamesTheAddressableShapes(t *testing.T) {
 }
 
 func TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes(t *testing.T) {
-	a, _ := cvToolsAPI(t, oneExperienceCV)
 	bank := newStubBank()
-	a.experience = bank
-	a.cv.editor.WithEvidenceGate(bankGate{bank: bank})
+	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
 	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
@@ -380,14 +391,12 @@ func TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes(t *testing.T) {
 }
 
 func TestCVEditWritesACitedBullet(t *testing.T) {
-	a, repo := cvToolsAPI(t, oneExperienceCV)
 	bank := newStubBank()
 	atom := bank.add(3, experience.Atom{
 		Claim:      "Ran the payments Kafka cluster.",
 		Provenance: experience.ProvenanceStatedInChat,
 	})
-	a.experience = bank
-	a.cv.editor.WithEvidenceGate(bankGate{bank: bank})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
 	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(

@@ -263,7 +263,11 @@ func Register(app *fiber.App, cfg Config) {
 	// The profile read serves the structured résumé beside the profile, so it needs the
 	// résumé store — hence constructed after it.
 	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
-	experienceH := newExperienceHandlers(experience.NewStore(experience.NewQueriesRepository(queries)))
+	// One bank for the whole surface. It is stateless over the shared queries, but the
+	// single value is what keeps the evidence gate from being anyone's to attach later:
+	// the CV editor is constructed with it below, not handed it by the assistant.
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	experienceH := newExperienceHandlers(bank)
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)
@@ -286,7 +290,7 @@ func Register(app *fiber.App, cfg Config) {
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
-	cvH := newCVHandlers(cfg.Pool, queries, cfg.TypstBin, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH)
+	cvH := newCVHandlers(cfg.Pool, queries, cfg.TypstBin, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
@@ -321,7 +325,7 @@ func Register(app *fiber.App, cfg Config) {
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH)
+	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
 	cvH.withAssistantSessions(assistantH.store)
 	// Suggestions run on LLM (cheap, one-shot) rather than on AssistantLLM: the whole
 	// argument for generating them outside the turn is that they cost almost nothing.

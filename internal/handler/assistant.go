@@ -22,7 +22,6 @@ import (
 	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
-	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -70,9 +69,10 @@ type assistantHandlers struct {
 // unavailable, rather than the whole surface disappearing.
 func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
-	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers) *assistantHandlers {
+	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers,
+	bank experienceBankTools) *assistantHandlers {
 	h := &assistantHandlers{
-		experience:   experience.NewStore(experience.NewQueriesRepository(queries)),
+		experience:   bank,
 		store:        assistant.NewStore(queries),
 		queries:      queries,
 		search:       search,
@@ -89,11 +89,6 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	// would put a second reader outside that rule.
 	if mail != nil {
 		h.invitation = mail.inbox
-	}
-	// The editor refuses an agent's unevidenced claim, and the bank is what answers that
-	// question — it is wired here because this is where the bank comes into existence.
-	if cvH != nil && cvH.editor != nil {
-		cvH.editor.WithEvidenceGate(bankGate{bank: h.experience})
 	}
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})

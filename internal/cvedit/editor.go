@@ -118,18 +118,16 @@ type Editor struct {
 	now    func() time.Time
 }
 
-// NewEditor builds the editor over its repository. The gate may be nil, which means no
-// evidence is required — the CLI and the editor commit as the candidate, who is asserting
-// things about themselves.
+// NewEditor builds the editor over its repository and the gate an agent's claims answer
+// to. The gate is supplied here and nowhere else, so an editor that admits an uncited
+// agent claim cannot be produced by assembling things in the wrong order.
+//
+// A nil gate means CANDIDATE-authored editing only: requireEvidence exempts the candidate,
+// who is the source the bank exists to record. It is what the candidate-only test editors
+// pass, and it is not a configuration an agent write path may be built on.
 func NewEditor(repo Repository, gate EvidenceGate) *Editor {
 	return &Editor{repo: repo, policy: DefaultPolicy(), gate: gate, now: time.Now}
 }
-
-// WithEvidenceGate attaches the bank the agent's claims are checked against. Assigned after
-// construction because the bank is wired later than the CV handlers — the same shape the
-// other late-bound dependencies here use. Without it the agent can write unevidenced claims,
-// so it is a wiring mistake rather than a configuration choice.
-func (e *Editor) WithEvidenceGate(gate EvidenceGate) { e.gate = gate }
 
 // Commit applies a batch and records it. The document and its revision are written in one
 // transaction against a locked row, so a reader never sees one without the other.

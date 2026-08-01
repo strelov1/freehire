@@ -57,27 +57,28 @@ func (m *turnModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.To
 // server runs in production; existing callers pass none and are unaffected.
 func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, mws ...fiber.Handler) (*fiber.App, *assistantHandlers) {
 	queries := db.New(pool)
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	h := &assistantHandlers{
 		store: assistant.NewStore(queries), queries: queries,
 		// A rehearsal resolves its application through the same store the production
 		// wiring gives it; without this the ownership check reports the assistant
 		// unavailable and the 404 under test would never be reached.
 		stages: queries,
-		// The evidence gate answers from the bank, and the production wiring attaches it in
-		// newAssistantHandlers. Without it here the run could write an unevidenced claim and
-		// the test that says it cannot would pass for the wrong reason.
-		experience: experience.NewStore(experience.NewQueriesRepository(queries)),
+		// The evidence gate answers from the bank. Without it the run could write an
+		// unevidenced claim and the test that says it cannot would pass for the wrong
+		// reason — which is why the editor below is CONSTRUCTED with it, exactly as the
+		// production assembly does, rather than having it attached afterwards.
+		experience: bank,
 		// The tailoring tools and the autopilot run reach the CV store, so the assistant
 		// under test carries the same CV service the HTTP surface uses.
 		cv: &cvHandlers{
 			cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
-			editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil), queries: queries, jobReader: queries,
+			editor:  cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}), queries: queries, jobReader: queries,
 			// The run reads the cached fit analysis to lay down its plan, so the CV handlers
 			// under test carry the same cache the production wiring gives them.
 			matchAnalysisCache: queries,
 		},
 	}
-	h.cv.editor.WithEvidenceGate(bankGate{bank: h.experience})
 	if model != nil {
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 	}

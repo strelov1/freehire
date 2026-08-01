@@ -75,7 +75,7 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:    cv.NewStore(cv.NewQueriesRepository(queries)),
 		tracerSalt: tracerSalt,
@@ -87,9 +87,12 @@ func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, typstBin, tracerSalt
 				})
 			}), servedHosts),
 		tracerBaseURL: baseURL,
-		// The editor is the only thing that writes a stored CV. The evidence gate is
-		// attached later (withExperienceBank) because the bank is wired after this.
-		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		// The editor is the only thing that writes a stored CV, and the gate is what
+		// refuses an agent's uncited claim. It is a constructor argument rather than
+		// something attached afterwards: PATCH /me/cvs/:id edits as the agent for any
+		// API-key caller, so the wall cannot depend on which other features the assembly
+		// built.
+		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), gate),
 		jobReader:          queries,
 		resume:             resumeStore,
 		photos:             photoStore,

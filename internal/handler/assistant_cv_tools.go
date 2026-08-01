@@ -354,9 +354,6 @@ func cvToolError(err error) error {
 type bankGate struct{ bank experienceBankTools }
 
 func (g bankGate) Publishable(ctx context.Context, userID int64, evidenceID string) error {
-	if g.bank == nil {
-		return nil
-	}
 	id, err := uuid.Parse(evidenceID)
 	if err != nil {
 		return errors.New("evidence_id must be an achievement id from experience_search")
