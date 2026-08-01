@@ -157,7 +157,7 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions
-WHERE user_id = $1 AND preset IN ('chat', 'profile', 'browse', 'interview')
+WHERE user_id = $1 AND preset IN ('chat', 'profile', 'browse', 'interview', 'debrief')
 ORDER BY updated_at DESC, id DESC
 `
 
@@ -176,17 +176,17 @@ type ListAssistantChatSessionsRow struct {
 // Owner-scoped by construction — another user's sessions can never appear.
 //
 // The rail carries every conversation that can be continued on its own: chat, profile,
-// browse and interview alike. An experience interview is resumable and would otherwise be
-// lost the moment its author navigated away; a browsing conversation begun in the
-// extension's side panel is one the candidate can pick up at their desk, where it simply
-// cannot see a page any more; a rehearsal is opened days before the interview and closed
-// again, and it has to be somewhere they can find it.
+// browse, interview and debrief alike. An experience interview is resumable and would
+// otherwise be lost the moment its author navigated away; a browsing conversation begun in
+// the extension's side panel is one the candidate can pick up at their desk, where it
+// simply cannot see a page any more; a rehearsal is opened days before the interview and
+// closed again, and a debrief is written in one sitting and reread before the next round.
 //
-// A rehearsal is bound to a vacancy, so the test is not "binds to nothing" — it is whether
-// the conversation still works when reopened from here. It does: its context tool closes
-// over the vacancy id the session already carries. Tailoring conversations are excluded
-// for exactly that reason inverted — they belong to the CV that owns them, are reached
-// through the tailoring workspace, and cannot be continued without it.
+// A rehearsal and a debrief are bound to a vacancy, so the test is not "binds to nothing"
+// — it is whether the conversation still works when reopened from here. It does: their
+// context tool closes over the vacancy id the session already carries. Tailoring
+// conversations are excluded for exactly that reason inverted — they belong to the CV that
+// owns them, are reached through the tailoring workspace, and cannot be continued without it.
 func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error) {
 	rows, err := q.db.Query(ctx, listAssistantChatSessions, userID)
 	if err != nil {

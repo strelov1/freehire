@@ -11,7 +11,7 @@ import (
 // instructions and another's tools — the model would then be told about tools it
 // cannot call. One exported normaliser is what keeps the two answers the same.
 func TestNormalizePresetMapsTheUnrecognisedToChat(t *testing.T) {
-	for _, known := range []string{PresetChat, PresetTailor, PresetProfile, PresetBrowse, PresetInterview} {
+	for _, known := range []string{PresetChat, PresetTailor, PresetProfile, PresetBrowse, PresetInterview, PresetDebrief} {
 		if got := NormalizePreset(known); got != known {
 			t.Errorf("NormalizePreset(%q) = %q, want it unchanged", known, got)
 		}
@@ -38,7 +38,7 @@ func TestOnlyTheChatPresetIsToldAboutMail(t *testing.T) {
 	if !strings.Contains(SystemPrompt(PresetChat), "inbox_overview") {
 		t.Error("the chat prompt does not mention the mail tools it carries")
 	}
-	for _, preset := range []string{PresetBrowse, PresetTailor, PresetProfile, PresetInterview} {
+	for _, preset := range []string{PresetBrowse, PresetTailor, PresetProfile, PresetInterview, PresetDebrief} {
 		if strings.Contains(SystemPrompt(preset), "inbox_overview") {
 			t.Errorf("the %q prompt talks about mail, but that preset registers no mail tool", preset)
 		}
@@ -78,6 +78,85 @@ func TestInterviewPromptHoldsToOneRound(t *testing.T) {
 	for _, want := range []string{"one round", "one question"} {
 		if !strings.Contains(strings.ToLower(p), want) {
 			t.Errorf("the rehearsal prompt never says %q", want)
+		}
+	}
+}
+
+// A debrief and a rehearsal share their tools, their context and their binding, so
+// the prompt is the whole of the difference between them. Handing a debrief the
+// rehearsal's prompt would put the agent back in the interviewer's chair, asking
+// invented questions about an interview that has already happened.
+func TestDebriefRunsUnderItsOwnPrompt(t *testing.T) {
+	p := SystemPrompt(PresetDebrief)
+	if p == SystemPrompt(PresetChat) {
+		t.Fatal("the debrief preset falls through to the chat prompt")
+	}
+	if p == SystemPrompt(PresetInterview) {
+		t.Error("the debrief runs under the rehearsal's prompt, which would have it play the interviewer")
+	}
+}
+
+// The debrief works from what the candidate brings back, and the failure mode it has
+// to be talked out of is drifting into a rehearsal: inventing questions and asking the
+// candidate to answer them. The interview already happened; questions it did not
+// contain teach nothing about how it went.
+func TestDebriefPromptWorksFromWhatTheCandidateBringsBack(t *testing.T) {
+	p := strings.ToLower(SystemPrompt(PresetDebrief))
+	for _, want := range []string{"one question at a time", "do not invent questions", "requirement"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the debrief prompt never says %q", want)
+		}
+	}
+}
+
+// The critique is half of what the candidate gets for the work of recalling the
+// interview, and it is worth nothing if it praises everything: they would repeat the
+// same answer in the next round. The three axes are the same ones the rehearsal
+// critiques on, because they are what makes an answer land in a real room.
+func TestDebriefPromptCritiquesOnTheThreeAxesWithoutPadding(t *testing.T) {
+	p := SystemPrompt(PresetDebrief)
+	for _, want := range []string{"THEY did", "outcome", "number", "no praise padding"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the debrief prompt never says %q about how an answer landed", want)
+		}
+	}
+}
+
+// Banking is the debrief's purpose rather than a hazard within it, but the gate is the
+// same one the rehearsal carries and for the same reason: experience_add stamps
+// stated_in_chat whoever composed `said`, so nothing downstream separates the
+// candidate's words from the model's paraphrase. The agreement in the transcript is
+// what makes a wrong entry traceable.
+func TestDebriefPromptGatesTheBankOnTheCandidatesAgreement(t *testing.T) {
+	p := SystemPrompt(PresetDebrief)
+	for _, want := range []string{"experience_add", "agree", "their own words"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the debrief prompt never says %q about recording an answer", want)
+		}
+	}
+}
+
+// The highest-value thing a debrief produces is a quantified achievement, and it is
+// also the easiest to fabricate: a plausible figure attributed to the candidate is one
+// they may not catch, and it would go on a CV. The service cannot tell whose number it
+// is, so the prompt has to forbid supplying one.
+func TestDebriefPromptForbidsSupplyingAFigureTheCandidateDidNotGive(t *testing.T) {
+	p := strings.ToLower(SystemPrompt(PresetDebrief))
+	for _, want := range []string{"never a number", "ask whether"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the debrief prompt never says %q about a figure the candidate did not give", want)
+		}
+	}
+}
+
+// The invitation reaches a debrief through the same context the rehearsal reads, and
+// this preset carries no mail tools either — so it never sees the mail section's
+// warning and has to be told here, or it reads an employer's instruction as a request.
+func TestDebriefPromptNamesTheInvitationAsUntrusted(t *testing.T) {
+	p := SystemPrompt(PresetDebrief)
+	for _, want := range []string{"untrusted", "ATTACK"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the debrief prompt never says %q about the invitation", want)
 		}
 	}
 }

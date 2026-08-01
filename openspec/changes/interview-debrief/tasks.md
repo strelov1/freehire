@@ -1,23 +1,23 @@
 ## 1. The preset vocabulary
 
-- [ ] 1.1 Verify against production which migration number is free (0068 is taken on disk and the ledger has held numbers from unmerged branches), then add the migration widening the `assistant_sessions.preset` CHECK to admit `debrief`
-- [ ] 1.2 Add `PresetDebrief` and admit it in `NormalizePreset` and `SystemPrompt`, with the preset test covering the new value
-- [ ] 1.3 Admit `debrief` in `creatablePreset`, including the message naming the presets a client may mint
+- [x] 1.1 Verify against production which migration number is free (0068 is taken on disk and the ledger has held numbers from unmerged branches), then add the migration widening the `assistant_sessions.preset` CHECK to admit `debrief`
+- [x] 1.2 Add `PresetDebrief` and admit it in `NormalizePreset` and `SystemPrompt`, with the preset test covering the new value
+- [x] 1.3 Admit `debrief` in `creatablePreset`, including the message naming the presets a client may mint
 
 ## 2. The prompt
 
-- [ ] 2.1 Write `debriefPrompt`: the agent asks what was asked, maps each recalled question onto the context's requirements, and critiques against self-vs-team, concrete outcome, and unsaid figure
-- [ ] 2.2 State the banking rule in its debrief form — record only what the candidate confirms, in their own words, never a figure the agent supplied — and cover it with a prompt test
-- [ ] 2.3 State the untrusted-invitation rule and cover it with a prompt test
-- [ ] 2.4 Write the server-supplied opening brief, and assert it is not client-supplied
+- [x] 2.1 Write `debriefPrompt`: the agent asks what was asked, maps each recalled question onto the context's requirements, and critiques against self-vs-team, concrete outcome, and unsaid figure
+- [x] 2.2 State the banking rule in its debrief form — record only what the candidate confirms, in their own words, never a figure the agent supplied — and cover it with a prompt test
+- [x] 2.3 State the untrusted-invitation rule and cover it with a prompt test
+- [x] 2.4 Write the server-supplied opening brief, and assert it is not client-supplied
 
 ## 3. Handler wiring
 
-- [ ] 3.1 Generalise `CreateAssistantSession`'s two `preset == PresetInterview` branches into one notion of an application-bound preset, keeping rehearsal behaviour unchanged
-- [ ] 3.2 Register the interview tool set for `debrief`, with a test asserting both presets carry the same tools and that neither carries an inbox tool
-- [ ] 3.3 Widen `PostAssistantOpening` to the debrief, preserving the gate that refuses only an ANSWERED opening
-- [ ] 3.4 Cover creation: bound to the vacancy with no CV binding, labelled after the vacancy, 404 without an application, created regardless of stage, and repeatable for a second round
-- [ ] 3.5 Confirm the session rail lists debriefs
+- [x] 3.1 Generalise `CreateAssistantSession`'s two `preset == PresetInterview` branches into one notion of an application-bound preset, keeping rehearsal behaviour unchanged
+- [x] 3.2 Register the interview tool set for `debrief`, with a test asserting both presets carry the same tools and that neither carries an inbox tool
+- [x] 3.3 Widen `PostAssistantOpening` to the debrief, preserving the gate that refuses only an ANSWERED opening
+- [x] 3.4 Cover creation: bound to the vacancy with no CV binding, labelled after the vacancy, 404 without an application, created regardless of stage, and repeatable for a second round
+- [x] 3.5 Confirm the session rail lists debriefs
 
 ## 4. The web surface
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/getsentry/sentry-go"
@@ -67,9 +68,10 @@ type assistantHandlers struct {
 	// the agentic autofill drives, so the assistant is a second in-process harness on
 	// the user's channel rather than a second wire to their browser.
 	browserTools *browsertools.Hub
-	// stages and invitation back the rehearsal context. They are the two narrow reads
-	// the interview preset needs and no other preset does: which stage the application
-	// is at, and what the employer said when they invited the candidate.
+	// stages and invitation back the context a rehearsal and a debrief share. They are
+	// the two narrow reads the application-bound presets need and no other preset does:
+	// which stage the application is at, and what the employer said when they invited
+	// the candidate.
 	stages     applicationReader
 	invitation invitationReader
 }
@@ -202,13 +204,13 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// A rehearsal is the one creatable preset that binds to something. The client may
-	// name the vacancy because the binding is one the caller already owns — the
-	// application — and the server checks that rather than taking their word for it.
+	// The creatable presets that bind to something all bind to the same thing: an
+	// application. The client may name the vacancy because that binding is one the caller
+	// already owns, and the server checks it rather than taking their word for it.
 	var jobID *int64
 	var vacancy db.Job
-	if preset == assistant.PresetInterview {
-		job, err := h.rehearsalVacancy(c, userID)
+	if bindsToApplication(preset) {
+		job, err := h.applicationVacancy(c, userID)
 		if err != nil {
 			return err
 		}
@@ -218,17 +220,15 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Name a rehearsal after its vacancy, now, while we hold it. A session is otherwise
-	// named from its first user message — which for a rehearsal is the server's own brief,
-	// identical every time, so every rehearsal in the rail would carry the same string and
-	// none would say which interview it was.
-	if preset == assistant.PresetInterview {
-		if label := rehearsalLabel(vacancy); label != "" {
-			if err := h.store.LabelSession(c.Context(), sess.ID, label); err != nil {
-				log.Printf("assistant: could not name rehearsal %s: %v", sess.ID, err)
-			} else {
-				sess.Label = label
-			}
+	// Name it after its vacancy now, while we hold it. A session is otherwise named from
+	// its first user message — which for these presets is the server's own brief,
+	// identical every time, so every such session in the rail would carry the same string
+	// and none would say which interview it was.
+	if label := applicationSessionLabel(preset, vacancy); label != "" {
+		if err := h.store.LabelSession(c.Context(), sess.ID, label); err != nil {
+			log.Printf("assistant: could not name %s session %s: %v", preset, sess.ID, err)
+		} else {
+			sess.Label = label
 		}
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": sessionView(sess)})
@@ -240,31 +240,79 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 //
 // Tailoring is the one preset that cannot be minted here, because its binding is a CV
 // that does not exist yet — the tailoring bootstrap creates both together. A rehearsal
-// binds to an application the caller already has, so naming it is safe.
-func creatablePreset(asked string) (string, error) {
-	switch asked {
-	case "":
-		return assistant.PresetChat, nil
-	case assistant.PresetChat, assistant.PresetProfile, assistant.PresetBrowse, assistant.PresetInterview:
-		return asked, nil
-	default:
-		return "", fiber.NewError(fiber.StatusBadRequest,
-			fmt.Sprintf("preset %q cannot be created here; use %q, %q, %q or %q — a tailoring session is created from its CV",
-				asked, assistant.PresetChat, assistant.PresetProfile, assistant.PresetBrowse, assistant.PresetInterview))
-	}
+// and a debrief bind to an application the caller already has, so naming one is safe.
+//
+// The accepted list is a slice rather than a switch's case list because the refusal has
+// to recite it, and a preset added to one and forgotten in the other is a 400 that lies
+// about what the client may ask for.
+var creatablePresets = []string{
+	assistant.PresetChat,
+	assistant.PresetProfile,
+	assistant.PresetBrowse,
+	assistant.PresetInterview,
+	assistant.PresetDebrief,
 }
 
-// rehearsalVacancy resolves the `job_id` a rehearsal is asked for, and refuses one the
-// caller has no application against.
+func creatablePreset(asked string) (string, error) {
+	if asked == "" {
+		return assistant.PresetChat, nil
+	}
+	if slices.Contains(creatablePresets, asked) {
+		return asked, nil
+	}
+	return "", fiber.NewError(fiber.StatusBadRequest,
+		fmt.Sprintf("preset %q cannot be created here; use one of %q — a tailoring session is created from its CV",
+			asked, creatablePresets))
+}
+
+// bindsToApplication answers whether a preset is held against one application. Both
+// such presets carry a vacancy and no CV, and both are minted by naming a slug the
+// caller has applied to.
+//
+// The stage is deliberately not part of the answer. A debrief belongs after an
+// interview, but a candidate who sat one and never moved their application's stage is
+// exactly who it is for; where the button appears is the client's judgement, and
+// refusing them here would be a bug wearing a rule's clothes.
+func bindsToApplication(preset string) bool {
+	return preset == assistant.PresetInterview || preset == assistant.PresetDebrief
+}
+
+// applicationSessionLabel names such a session in the rail: what it is, the role, and
+// the company when the posting carries one. Empty for a vacancy with no title, which
+// leaves the ordinary naming-from-the-first-message in place rather than writing a label
+// that says nothing — and empty for any preset that is not bound to an application.
+func applicationSessionLabel(preset string, job db.Job) string {
+	var prefix string
+	switch preset {
+	case assistant.PresetInterview:
+		prefix = "Interview: "
+	case assistant.PresetDebrief:
+		prefix = "Debrief: "
+	default:
+		return ""
+	}
+	title := strings.TrimSpace(job.Title)
+	if title == "" {
+		return ""
+	}
+	label := prefix + title
+	if company := strings.TrimSpace(job.Company); company != "" {
+		label += " · " + company
+	}
+	return label
+}
+
+// applicationVacancy resolves the `job_id` such a session is asked for, and refuses one
+// the caller has no application against.
 //
 // The application row IS the authorisation: user_jobs holds one per (user, vacancy), so
 // its absence answers "not yours" and "no such thing" with the same 404 — the same way a
 // session the caller does not own is reported as missing.
-func (h *assistantHandlers) rehearsalVacancy(c *fiber.Ctx, userID int64) (db.Job, error) {
+func (h *assistantHandlers) applicationVacancy(c *fiber.Ctx, userID int64) (db.Job, error) {
 	slug := strings.TrimSpace(c.Query("job"))
 	if slug == "" {
 		return db.Job{}, fiber.NewError(fiber.StatusBadRequest,
-			"a rehearsal needs the `job` slug of an application you hold")
+			"this conversation needs the `job` slug of an application you hold")
 	}
 	if h.stages == nil {
 		return db.Job{}, fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
@@ -286,20 +334,6 @@ func (h *assistantHandlers) rehearsalVacancy(c *fiber.Ctx, userID int64) (db.Job
 		return db.Job{}, err
 	}
 	return job, nil
-}
-
-// rehearsalLabel names a rehearsal in the session rail: the role, and the company when
-// the posting carries one. Empty for a vacancy with no title, which leaves the ordinary
-// naming-from-the-first-message in place rather than writing a label that says nothing.
-func rehearsalLabel(job db.Job) string {
-	title := strings.TrimSpace(job.Title)
-	if title == "" {
-		return ""
-	}
-	if company := strings.TrimSpace(job.Company); company != "" {
-		return "Interview: " + title + " · " + company
-	}
-	return "Interview: " + title
 }
 
 // ListAssistantSessions returns the caller's chat conversations, newest activity
@@ -478,22 +512,40 @@ func (h *assistantHandlers) boundRunner(ctx context.Context, sess assistant.Sess
 	return h.runner.With(bound)
 }
 
-// openingBrief starts a rehearsal. Like the autopilot's brief it is short on method and
-// only says which conversation this is: how to open — read the context, name the vacancy
-// and the format, offer the rounds — is in the rehearsal's system prompt, stated once.
+// The opening briefs. Like the autopilot's they are short on method and only say which
+// conversation this is: how to open — read the context, name the vacancy, ask the first
+// question — is in each preset's system prompt, stated once.
 //
-// It exists because a turn does not begin until a message arrives, and the candidate has
+// They exist because a turn does not begin until a message arrives, and the candidate has
 // nothing to type. They opened this from an application; asking them to introduce their
 // own interview would be the questionnaire the assistant is supposed to save them.
-const openingBrief = "Let's rehearse this interview. Read the context and tell me what you see, " +
-	"then ask me which round to run."
+const (
+	rehearsalOpeningBrief = "Let's rehearse this interview. Read the context and tell me what you see, " +
+		"then ask me which round to run."
+	debriefOpeningBrief = "I've just had this interview. Read the context, then ask me what I was asked."
+)
 
-// PostAssistantOpening speaks first in a rehearsal, streaming one ordinary turn under a
-// server-side brief.
+// openingBriefFor answers with the brief an application-bound preset opens under, and
+// with the empty string for a preset that opens under none. The empty answer is what
+// PostAssistantOpening refuses on, so the set of presets that can speak first is stated
+// once rather than as a condition there and a constant here.
+func openingBriefFor(preset string) string {
+	switch preset {
+	case assistant.PresetInterview:
+		return rehearsalOpeningBrief
+	case assistant.PresetDebrief:
+		return debriefOpeningBrief
+	default:
+		return ""
+	}
+}
+
+// PostAssistantOpening speaks first in a rehearsal or a debrief, streaming one ordinary
+// turn under a server-side brief.
 //
-// It refuses a session that already has a transcript. The opening is the first turn of a
-// conversation, and a reload that re-ran it would restart the interview over whatever the
-// candidate had already said.
+// It refuses a session whose opening has already been answered. The opening is the first
+// turn of a conversation, and a reload that re-ran it would restart the interview over
+// whatever the candidate had already said.
 func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -502,11 +554,12 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	if h.runner == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	// The vacancy as well as the preset: the rehearsal tools are registered only for a
-	// session that carries one, so an unbound session would open on a context tool it
-	// does not have.
-	if sess.Preset != assistant.PresetInterview || sess.JobID == nil {
-		return fiber.NewError(fiber.StatusConflict, "this conversation is not an interview rehearsal")
+	// The vacancy as well as the preset: the context tool is registered only for a
+	// session that carries one, so an unbound session would open on a tool it does not
+	// have.
+	brief := openingBriefFor(sess.Preset)
+	if brief == "" || sess.JobID == nil {
+		return fiber.NewError(fiber.StatusConflict, "this conversation does not open by itself")
 	}
 	transcript, err := h.store.Transcript(c.Context(), sess.ID)
 	if err != nil {
@@ -515,14 +568,14 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 	// An ANSWERED opening, not any transcript at all. The runner records the brief before
 	// it calls the model, so a turn that dies upstream — a 502 from the proxy is an
 	// ordinary event — leaves exactly one message behind. Refusing on that would put the
-	// rehearsal in a state it can never leave: a conversation holding one line the
+	// session in a state it can never leave: a conversation holding one line the
 	// candidate did not write, no opening, and no way to retry.
 	for _, m := range transcript {
 		if m.Role == assistant.RoleAssistant {
-			return fiber.NewError(fiber.StatusConflict, "this rehearsal has already started")
+			return fiber.NewError(fiber.StatusConflict, "this conversation has already started")
 		}
 	}
-	return h.streamTurn(c, sess, openingBrief, assistant.TurnConfig{})
+	return h.streamTurn(c, sess, brief, assistant.TurnConfig{})
 }
 
 // autopilotMaxSteps bounds an unattended tailoring run. A run reads the fit analysis and

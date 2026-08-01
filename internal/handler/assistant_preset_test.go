@@ -127,6 +127,107 @@ func TestNoModeratorToolIsEverRegistered(t *testing.T) {
 	}
 }
 
+// A debrief binds to an application the caller already owns, so a client may name it
+// the same way it names a rehearsal. Tailoring stays out: its binding is a CV that does
+// not exist until the tailoring bootstrap makes one.
+func TestCreatablePresetsAdmitADebriefAndStillRefuseTailoring(t *testing.T) {
+	for _, asked := range []string{assistant.PresetDebrief, assistant.PresetInterview, assistant.PresetProfile, assistant.PresetBrowse, assistant.PresetChat} {
+		got, err := creatablePreset(asked)
+		if err != nil {
+			t.Errorf("creatablePreset(%q) refused a preset a client may mint: %v", asked, err)
+		}
+		if got != asked {
+			t.Errorf("creatablePreset(%q) = %q", asked, got)
+		}
+	}
+	if _, err := creatablePreset(assistant.PresetTailor); err == nil {
+		t.Error("creatablePreset admitted tailoring, whose binding this endpoint cannot supply")
+	}
+}
+
+// The rejection names what a client MAY ask for, because this endpoint serves the web
+// app and the extension both and a bare 400 leaves the author guessing. A preset added
+// to the switch and left out of the message is the failure this pins shut.
+func TestTheRefusalNamesEveryCreatablePreset(t *testing.T) {
+	_, err := creatablePreset("rehearsal")
+	if err == nil {
+		t.Fatal("creatablePreset admitted an unknown preset")
+	}
+	for _, want := range []string{assistant.PresetChat, assistant.PresetProfile, assistant.PresetBrowse, assistant.PresetInterview, assistant.PresetDebrief} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal never names %q as a preset a client may create: %s", want, err)
+		}
+	}
+}
+
+// The brief is what makes the agent speak first, and it is chosen server-side so a
+// client cannot dictate what the session is told to do. A debrief opened under the
+// rehearsal's brief would ask the candidate which round to rehearse — for an interview
+// they have already sat.
+func TestTheOpeningBriefFollowsThePreset(t *testing.T) {
+	rehearsal := openingBriefFor(assistant.PresetInterview)
+	debrief := openingBriefFor(assistant.PresetDebrief)
+
+	if rehearsal == "" || debrief == "" {
+		t.Fatal("an application-bound preset opens with no brief, so the agent never speaks first")
+	}
+	if rehearsal == debrief {
+		t.Error("the debrief opens under the rehearsal's brief, which asks which round to rehearse")
+	}
+	if !strings.Contains(strings.ToLower(debrief), "asked") {
+		t.Errorf("the debrief's brief does not ask what the candidate was asked: %q", debrief)
+	}
+}
+
+// A debrief and a rehearsal reason from the same material — the vacancy, the stage, the
+// requirements with the bank's evidence — so they carry the same tools, and the prompt
+// is the whole of the difference. This pins that: a tool added to one and forgotten in
+// the other is a debrief that cannot read the interview it is reviewing.
+func TestTheDebriefCarriesTheRehearsalsTools(t *testing.T) {
+	jobID := int64(9)
+	rehearsal := presetAPI().registry(assistant.Session{
+		UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID,
+	}, uuid.New())
+	debrief := presetAPI().registry(assistant.Session{
+		UserID: 3, Preset: assistant.PresetDebrief, JobID: &jobID,
+	}, uuid.New())
+
+	want, got := rehearsal.Names(), debrief.Names()
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(want, got) {
+		t.Errorf("the debrief's tools differ from the rehearsal's:\n debrief: %v\n rehearsal: %v", got, want)
+	}
+	if !slices.Contains(got, "interview_context") {
+		t.Errorf("the debrief cannot read the application it is reviewing; registered: %v", got)
+	}
+}
+
+// Without a vacancy there is nothing to review, so the context tool would be bound to
+// nothing — the same rule a CV-less tailoring session follows.
+func TestADebriefWithoutAVacancyHasNoContextTool(t *testing.T) {
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetDebrief}, uuid.New())
+
+	if slices.Contains(reg.Names(), "interview_context") {
+		t.Errorf("an unbound debrief offers interview_context, which points at no vacancy")
+	}
+}
+
+// The invitation reaches a debrief through its context, carrying its untrusted marking.
+// Handing it mail tools as well would give a prompt injection an outbound channel.
+func TestTheDebriefCannotReachTheMailbox(t *testing.T) {
+	jobID := int64(9)
+	reg := presetAPI().registry(assistant.Session{
+		UserID: 3, Preset: assistant.PresetDebrief, JobID: &jobID,
+	}, uuid.New())
+
+	for _, name := range reg.Names() {
+		if strings.HasPrefix(name, "inbox_") {
+			t.Errorf("the debrief offers the mail tool %q", name)
+		}
+	}
+}
+
 func TestRegistryCarriesTheResultCap(t *testing.T) {
 	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 	if reg.MaxResultBytes <= 0 {

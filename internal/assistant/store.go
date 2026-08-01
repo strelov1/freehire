@@ -30,6 +30,11 @@ const (
 	// tailoring session it is bound to a vacancy, but to no CV: it reads the CV and
 	// the fit analysis and edits neither.
 	PresetInterview = "interview"
+	// PresetDebrief reviews an interview that has already happened, bound to the same
+	// application a rehearsal is. It shares the rehearsal's tools and context; what
+	// differs is the prompt, and one rule inside it that inverts — a rehearsal guards
+	// against banking an improvisation, a debrief exists to bank a recollection.
+	PresetDebrief = "debrief"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that
