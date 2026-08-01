@@ -1,5 +1,7 @@
 package userjob
 
+import "time"
+
 // Silence states. An application reports one of these, or the empty string when
 // it is settled and so waiting on nobody — a caller must be able to tell "not
 // waiting" from "waiting and fine", which a reassuring `active` would hide.
@@ -47,6 +49,21 @@ var silenceThresholds = map[string]int{
 	"responded": 15,
 	"interview": 12,
 	"offer":     5,
+}
+
+// DaysSilent is whole days between last and now, floored at zero.
+//
+// Part-days do not count and a negative is impossible: clock skew, or a last-activity stamp a
+// moment in the future, must not report negative silence. It lives here beside the ladder it
+// feeds because three surfaces — the tracking board, the follow-up gate and the ghost signal —
+// each had their own copy, held together by comments naming one another. The ladder was already
+// shared; the arithmetic under it was not, and a day's disagreement between the badge and the
+// offer is exactly what the shared ladder exists to prevent.
+func DaysSilent(now, last time.Time) int {
+	if d := int(now.Sub(last).Hours() / 24); d > 0 {
+		return d
+	}
+	return 0
 }
 
 // SilenceThresholdDays returns how many days of silence `stage` tolerates, and

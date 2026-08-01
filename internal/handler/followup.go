@@ -45,7 +45,7 @@ func (h *inboxHandlers) GetApplicationFollowUp(c *fiber.Ctx) error {
 
 	days := 0
 	if app.LastActivityAt.Valid {
-		days = daysSilent(time.Now(), app.LastActivityAt.Time)
+		days = userjob.DaysSilent(time.Now(), app.LastActivityAt.Time)
 	}
 	if userjob.SilenceStateFor(pgStr(app.Stage), days, app.HasPendingSuggestion) != userjob.SilenceSilent {
 		return fiber.NewError(fiber.StatusConflict, "this application is not waiting on a reply")
@@ -87,15 +87,6 @@ func (h *inboxHandlers) RecordApplicationFollowUp(c *fiber.Ctx) error {
 		return err // ErrNoRows → 404: not an application of this caller's
 	}
 	return c.SendStatus(fiber.StatusNoContent)
-}
-
-// daysSilent is whole days since the application last moved, floored at zero so a clock skew
-// cannot report a negative silence.
-func daysSilent(now, last time.Time) int {
-	if d := int(now.Sub(last).Hours() / 24); d > 0 {
-		return d
-	}
-	return 0
 }
 
 // newestSender returns the address and display name of the most recent mail linked to the

@@ -6,17 +6,23 @@ Two independent delivery use cases share one channel abstraction:
 |---|---|---|
 | `internal/notify` | Filter subscriptions — new jobs matching a saved search | `cmd/notify` |
 | `internal/reminder` | Saved-job nudges — come back before the vacancy goes stale | `cmd/remind` |
-| `internal/emailnotify` | Email channel (SES) — implements both `Notifier` interfaces | — |
+| `internal/emailnotify` | Email channel (SES) — implements `notify.Notifier` (the reminder-side email transport lives in `internal/reminder/transports.go`) | — |
 | `internal/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
 
 ## Always true
 
-- **A new channel is a new `Notifier` implementation, never an engine change.** Both engines
-  depend only on their `Notifier` interface plus a `Router` (a `map[channel]Notifier`).
-  Adding webhooks means adding a package, not touching `notify` or `reminder`.
-- **`notify.Channels` is the single source of truth** for the channel vocabulary, shared by
-  the router's dispatch and the subscription use case's create-time allowlist so the two
-  cannot drift. Add a channel there or it will be creatable but undeliverable.
+- **A new channel is a new `Notifier` implementation — but there are TWO of them.** Each engine
+  depends only on its own `Notifier` interface plus a `Router` (a `map[channel]Notifier`); the
+  two interfaces share a signature and differ in payload, and `notify`/`reminder` each carry
+  their own `Router`, `ErrChannelNotConfigured` and `recipient`. So adding webhooks is a digest
+  notifier, a reminder transport in `internal/reminder/transports.go`, a case in BOTH `recipient`
+  functions and a wire-up in both `cmd` mains. That is the real cost; the earlier claim that it
+  "means adding a package, not touching `notify` or `reminder`" was not true. Collapsing the pair
+  is deliberately deferred until a third channel actually lands and shows which half generalises.
+- **`notify.Channels` is the single source of truth** for the channel vocabulary, and
+  `notify.ValidChannel` is the membership test both create-time gates use. Subscriptions and
+  reminders each built their own `map[string]bool` from the slice until the test was exported.
+  Add a channel there or it will be creatable but undeliverable.
 - **An unconfigured channel is a soft-skip, not a failure.** `Router.Send` returns
   `ErrChannelNotConfigured` (e.g. email while SES is unset) and the engine skips it. Don't
   promote that to a delivery error — it would fail every run in environments without SES.

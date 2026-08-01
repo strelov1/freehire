@@ -298,7 +298,14 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.not
             FROM emails e
            WHERE e.user_id = uj.user_id
              AND e.suggested_job_id = jobs.id
-             AND e.job_id IS NULL
+             -- "Pending" means the caller has not confirmed it, and confirming is what
+             -- attaches the application — the same test the follow-up gate, the ghost
+             -- signal and the inbox's link filter make, so the two cannot disagree about
+             -- one message. This used to ask `e.job_id IS NULL`, which is the same set
+             -- today only because every writer that sets job_id also either clears the
+             -- suggestion or attaches the application. Two spellings of one rule held
+             -- apart by that coincidence is not an invariant.
+             AND e.application_id IS NULL
              AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id

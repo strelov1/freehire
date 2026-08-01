@@ -299,3 +299,19 @@ func TestDeliver_UnlinkedTelegramIsSoftSkipped(t *testing.T) {
 		t.Errorf("soft skips = %d, want 1", stats.SoftSkips)
 	}
 }
+
+// ValidChannel is the membership test both create-time gates use. It exists because the slice
+// alone is not usable as an allowlist, so subscriptions and reminders each built the same map
+// from it — and a third caller would have built a third.
+func TestValidChannel(t *testing.T) {
+	for _, c := range Channels {
+		if !ValidChannel(c) {
+			t.Errorf("ValidChannel(%q) = false for a declared channel", c)
+		}
+	}
+	for _, c := range []string{"", "webhook", "Telegram", "e-mail"} {
+		if ValidChannel(c) {
+			t.Errorf("ValidChannel(%q) = true for an undeclared channel", c)
+		}
+	}
+}

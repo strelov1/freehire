@@ -70,7 +70,7 @@ func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Ev
 		// terminal stage, reads an unset stage as `applied`, softens a silence
 		// into a question when unconfirmed mail contradicts it, and applies the
 		// stage's own threshold. Only an outright `silent` is a fact.
-		state := userjob.SilenceStateFor(app.Stage, daysSince(now, app.LastActivityAt), app.HasPendingSuggestion)
+		state := userjob.SilenceStateFor(app.Stage, userjob.DaysSilent(now, app.LastActivityAt), app.HasPendingSuggestion)
 		if state != userjob.SilenceSilent {
 			continue
 		}
@@ -79,7 +79,7 @@ func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Ev
 
 	for _, report := range reports {
 		threshold, ok := appliedThresholdDays()
-		if !ok || daysSince(now, report.AppliedOn) <= threshold {
+		if !ok || userjob.DaysSilent(now, report.AppliedOn) <= threshold {
 			continue
 		}
 		record(report.JobID, report.UserID, func(ev *Evidence) { ev.Reports++ })
@@ -100,14 +100,4 @@ func Aggregate(now time.Time, apps []Application, reports []Report) map[int64]Ev
 // observed applications.
 func appliedThresholdDays() (int, bool) {
 	return userjob.SilenceThresholdDays("applied")
-}
-
-// daysSince is whole days elapsed, never negative. A part-day does not count,
-// matching jobtracking.Silence so the two surfaces cannot disagree by a day.
-func daysSince(now, t time.Time) int {
-	days := int(now.Sub(t).Hours() / 24)
-	if days < 0 {
-		return 0
-	}
-	return days
 }

@@ -45,10 +45,7 @@ func (j TrackedJob) Silence(now time.Time) *Silence {
 	if j.LastActivityAt != nil && j.LastActivityAt.After(last) {
 		last = *j.LastActivityAt
 	}
-	days := int(now.Sub(last).Hours() / 24)
-	if days < 0 {
-		days = 0
-	}
+	days := userjob.DaysSilent(now, last)
 	return &Silence{
 		LastActivityAt: last,
 		DaysSilent:     days,

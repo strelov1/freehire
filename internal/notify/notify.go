@@ -19,6 +19,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
+	"slices"
 )
 
 // ChannelTelegram and ChannelEmail are the delivery channels implemented today;
@@ -30,6 +31,14 @@ const ChannelTelegram = "telegram"
 // by the router's dispatch and the subscription use case's create-time allowlist,
 // so the two can never drift.
 var Channels = []string{ChannelTelegram, ChannelEmail}
+
+// ValidChannel reports whether c is a delivery channel. It exists because the slice alone is
+// not usable as an allowlist, so both create-time gates — subscriptions and reminders — built
+// the same map[string]bool from it. Exposing the membership test is what stops a third caller
+// building a third copy.
+func ValidChannel(c string) bool {
+	return slices.Contains(Channels, c)
+}
 
 // Digest is one subscription's batch of new matches, rendered by a Notifier into
 // a channel-specific message. Jobs is capped to the configured digest size; Total

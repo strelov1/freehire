@@ -1,6 +1,9 @@
 package userjob
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // TestEveryStageIsRankedOrTerminal is the direction the old cross-package test lacked. It checked
 // that every stage mailclassify named was a real stage; nothing checked the reverse, so a stage
@@ -93,6 +96,35 @@ func TestForward(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := Forward(tt.current, tt.target); got != tt.want {
 				t.Errorf("Forward(%q, %q) = %v, want %v", tt.current, tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+// DaysSilent is whole days, floored at zero. It was three separate copies — the tracking board,
+// the follow-up gate and the ghost signal — each with its own spelling of the same arithmetic,
+// held together by comments naming one another. The ladder above it was already shared, so a
+// day's disagreement between the badge and the offer was the one thing left that could split
+// them.
+func TestDaysSilent(t *testing.T) {
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name string
+		last time.Time
+		want int
+	}{
+		{"same instant", now, 0},
+		{"a part-day does not count", now.Add(-23 * time.Hour), 0},
+		{"exactly one day", now.Add(-24 * time.Hour), 1},
+		{"a day and a half is one day", now.Add(-36 * time.Hour), 1},
+		{"three weeks", now.AddDate(0, 0, -21), 21},
+		// Clock skew, or a stamp a moment in the future, must not report negative silence.
+		{"the future is not negative silence", now.Add(2 * time.Hour), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DaysSilent(now, tt.last); got != tt.want {
+				t.Errorf("DaysSilent(%v) = %d, want %d", tt.last, got, tt.want)
 			}
 		})
 	}

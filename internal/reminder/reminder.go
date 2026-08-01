@@ -41,16 +41,6 @@ var (
 	ErrNoReminder = errors.New("reminder: no pending reminder")
 )
 
-// validChannels is the channel allowlist, derived from the notify delivery-channel
-// vocabulary so reminders and subscriptions can never drift on what a channel is.
-var validChannels = func() map[string]bool {
-	m := make(map[string]bool, len(notify.Channels))
-	for _, c := range notify.Channels {
-		m[c] = true
-	}
-	return m
-}()
-
 // Settings is the account-level default rule. An absent stored row reads as this
 // zero-ish default (disabled, DefaultDelayDays, no channels).
 type Settings struct {
@@ -103,7 +93,7 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		return Settings{}, ErrInvalidDelay
 	}
 	for _, c := range in.Channels {
-		if !validChannels[c] {
+		if !notify.ValidChannel(c) {
 			return Settings{}, ErrInvalidChannel
 		}
 	}

@@ -38,16 +38,6 @@ const (
 	ChannelEmail    = notify.ChannelEmail
 )
 
-// validChannels is the create-time allowlist, derived from the notify
-// delivery-channel vocabulary so the two never drift.
-var validChannels = func() map[string]bool {
-	m := make(map[string]bool, len(notify.Channels))
-	for _, c := range notify.Channels {
-		m[c] = true
-	}
-	return m
-}()
-
 // Subscription is a stored filter subscription: the package domain type, decoupled from
 // the generated db row. The internal columns (user_id, the destination and start_at
 // cursor) are dropped — they are never on the wire — while created_at is kept as *time.Time
@@ -100,7 +90,7 @@ func (s *Service) List(ctx context.Context, userID int64) ([]SubscriptionListIte
 // account email for email). Ownership of the saved search is enforced in SQL (a
 // non-owned id surfaces as ErrSavedSearchNotFound).
 func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, channel string) (Subscription, error) {
-	if !validChannels[channel] {
+	if !notify.ValidChannel(channel) {
 		return Subscription{}, ErrInvalidChannel
 	}
 	return s.repo.Create(ctx, userID, savedSearchID, channel)
