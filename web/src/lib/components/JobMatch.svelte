@@ -189,16 +189,21 @@
 {#snippet claimRow(skill: string)}
   <!-- The claim row expands under the group rather than floating over it: the sidebar
        column is too narrow for an anchored popover, and naming the skill in the row's own
-       text keeps it tied to the chip that opened it. Same shape as ReminderChip. -->
-  <div
-    class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border px-2.5 py-2"
-  >
+       text keeps it tied to the chip that opened it. Styled as ReminderChip's disclosure —
+       a bare row of pills, not a panel — so the two inline disclosures in the app read the
+       same, and the affordance stays the weight of the chips it sits under. -->
+  <div class="flex flex-wrap items-center gap-1.5">
     <span class="text-xs text-muted-foreground">
       Do you have <span class="font-medium text-foreground">{skill}</span>?
     </span>
-    <Button variant="primary" size="sm" disabled={pending} onclick={() => claim(skill)}>
-      Add to profile
-    </Button>
+    <button
+      type="button"
+      disabled={pending}
+      onclick={() => claim(skill)}
+      class="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-brand-muted px-2.5 py-1 text-xs font-medium text-brand-strong transition-colors hover:brightness-95 disabled:opacity-50"
+    >
+      <Check class="size-3.5" aria-hidden="true" /> Add to profile
+    </button>
   </div>
 {/snippet}
 
