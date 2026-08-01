@@ -34,6 +34,19 @@ type Extractor struct {
 
 // NewExtractor wraps an llm.Client and the PII detector; either may be nil, which disables
 // extraction (ErrDisabled).
+// As returns an extractor that runs on a different client, so one extraction can be spent
+// under the caller's own gateway credential. The PII detector travels with it: redaction
+// is not the credential's business and must hold whoever is paying. Nil-safe both ways.
+func (e *Extractor) As(client *llm.Client) *Extractor {
+	if e == nil || client == nil {
+		return e
+	}
+	clone := *e
+	clone.client = client
+
+	return &clone
+}
+
 func NewExtractor(client *llm.Client, detector pii.Detector) *Extractor {
 	return &Extractor{client: client, detector: detector}
 }

@@ -34,6 +34,19 @@ type Analyzer struct {
 
 // NewAnalyzer wraps an llm.Client; client may be nil (LLM unconfigured), in which case the
 // analysis degrades to a no-op.
+// As returns an analyzer that runs on a different client, so one analysis can be spent
+// under the caller's own gateway credential. The analyzer is one field, so cloning it per
+// request costs nothing beside the model calls it is about to make. Nil-safe both ways.
+func (a *Analyzer) As(client *llm.Client) *Analyzer {
+	if a == nil || client == nil {
+		return a
+	}
+	clone := *a
+	clone.client = client
+
+	return &clone
+}
+
 func NewAnalyzer(client *llm.Client) *Analyzer {
 	return &Analyzer{client: client}
 }

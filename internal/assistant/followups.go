@@ -128,6 +128,16 @@ func NewFollowUps(c *llm.Client) *FollowUps {
 	return &FollowUps{gen: c}
 }
 
+// As returns a suggester that runs on a different client, so the suggestions under a
+// settled turn are spent under the same account the turn was. Nil-safe both ways: a nil
+// suggester stays nil, and an unresolved client leaves this one as it was.
+func (f *FollowUps) As(c *llm.Client) *FollowUps {
+	if f == nil || c == nil {
+		return f
+	}
+	return &FollowUps{gen: c}
+}
+
 // Suggest returns up to three questions the caller might ask next.
 //
 // The error is for the caller's logs, not for the caller's screen: whoever renders

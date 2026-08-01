@@ -109,6 +109,25 @@ func NewRunner(m Model, s *Store, cfg RunnerConfig) *Runner {
 	return &Runner{model: m, store: s, cfg: cfg}
 }
 
+// With returns a runner that drives a different model, leaving its bounds, its store and
+// everything else alone.
+//
+// It exists so a turn can run on the caller's own gateway credential: that credential is
+// per-user and per-turn, while the runner is built once at boot. A Runner is three fields,
+// so cloning one per turn costs nothing beside the model call it is about to make.
+//
+// Nil-safe both ways: a nil runner stays nil (the assistant is unavailable), and a nil
+// model leaves the runner as it was rather than producing one that cannot answer.
+func (r *Runner) With(m Model) *Runner {
+	if r == nil || m == nil {
+		return r
+	}
+	clone := *r
+	clone.model = m
+
+	return &clone
+}
+
 const (
 	defaultMaxSteps     = 8
 	defaultHistoryLimit = 60

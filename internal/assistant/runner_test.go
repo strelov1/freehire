@@ -94,6 +94,44 @@ func testRunner(m *scriptedModel, q *fakeQueries) *Runner {
 	return NewRunner(m, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
 }
 
+// A turn runs on the caller's own gateway credential, which means a different model
+// client per turn while the runner itself is built once at boot. Swapping the model must
+// leave the loop's bounds and its store exactly as configured — a turn that quietly got
+// the default ceiling instead of the raised one would cut an unattended run in half.
+func TestWithSwapsTheModelAndKeepsTheBounds(t *testing.T) {
+	original := &scriptedModel{replies: []*llms.ContentChoice{textReply("from the original")}}
+	replacement := &scriptedModel{replies: []*llms.ContentChoice{textReply("from the replacement")}}
+	q := &fakeQueries{}
+	r := NewRunner(original, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
+
+	bound := r.With(replacement)
+	if bound == r {
+		t.Fatal("With returned the same runner; the original must keep its own model")
+	}
+	if bound.cfg != r.cfg || bound.store != r.store {
+		t.Errorf("bounds or store changed: %+v against %+v", bound.cfg, r.cfg)
+	}
+
+	if _, err := collect(t, bound, Session{ID: sessionID, UserID: 3}, NewRegistry(), "hi"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if replacement.calls != 1 || original.calls != 0 {
+		t.Errorf("original called %d times, replacement %d — the turn must run on the bound model",
+			original.calls, replacement.calls)
+	}
+}
+
+// A nil model is what an unconfigured gateway resolves to. It must leave the runner alone
+// rather than produce one that cannot answer at all.
+func TestWithANilModelLeavesTheRunnerUsable(t *testing.T) {
+	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("still here")}}
+	r := testRunner(m, &fakeQueries{})
+
+	if got := r.With(nil); got != r {
+		t.Error("With(nil) should return the runner unchanged")
+	}
+}
+
 func TestTurnWithoutToolsEndsInAnAnswer(t *testing.T) {
 	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("Hello there.")}}
 	q := &fakeQueries{}
