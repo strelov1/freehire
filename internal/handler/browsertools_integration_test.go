@@ -15,6 +15,17 @@ import (
 	"github.com/strelov1/freehire/internal/browsertools"
 )
 
+// arrivalBudget bounds the waits for a frame that must arrive. It is deliberately far
+// longer than the relay needs (the package runs in ~1.6s locally): the budget only sets
+// how long a genuinely broken relay takes to report, so the cost of generosity is paid
+// only when the test is already failing. At 5s it instead measured the CI runner — the
+// waits expired at exactly 5.00s under CPU contention and reported a relay fault that
+// did not exist.
+//
+// The one wait that must stay short is the negative assertion below, which asserts a
+// frame does NOT arrive; widening that would only make the test slower at proving it.
+const arrivalBudget = 30 * time.Second
+
 // noKeys stands in for the API-key lookup: these tests authenticate with JWTs,
 // so every key is unknown. It exists so the middleware has something to call
 // rather than a nil interface.
@@ -48,7 +59,7 @@ func dial(t *testing.T, base, role, token string) *ws.Conn {
 	t.Helper()
 	dialer := ws.Dialer{
 		Subprotocols:     []string{auth.WSSubprotocolMarker, token},
-		HandshakeTimeout: 5 * time.Second,
+		HandshakeTimeout: arrivalBudget,
 	}
 	conn, resp, err := dialer.Dial(base+"?role="+role, nil)
 	if err != nil {
@@ -64,7 +75,7 @@ func dial(t *testing.T, base, role, token string) *ws.Conn {
 
 func readFrame(t *testing.T, conn *ws.Conn) string {
 	t.Helper()
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(arrivalBudget)); err != nil {
 		t.Fatalf("set deadline: %v", err)
 	}
 	_, frame, err := conn.ReadMessage()
@@ -152,7 +163,7 @@ func TestBrowserToolsWS_DoesNotBridgeBetweenUsers(t *testing.T) {
 func TestBrowserToolsWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 	base := wireServer(t, auth.NewIssuer("secret", time.Hour))
 
-	dialer := ws.Dialer{HandshakeTimeout: 5 * time.Second}
+	dialer := ws.Dialer{HandshakeTimeout: arrivalBudget}
 	conn, resp, err := dialer.Dial(base+"?role=extension", nil)
 	if err == nil {
 		_ = conn.Close()
