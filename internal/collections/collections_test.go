@@ -293,7 +293,7 @@ func TestCompany_CarriesTheAttributesAGateNeeds(t *testing.T) {
 	}
 }
 
-func TestDataset_SourceIsExactlyOneOfURLDataResolver(t *testing.T) {
+func TestDataset_SourceIsExactlyOneOfURLDataResolverRecords(t *testing.T) {
 	cases := []struct {
 		name string
 		ds   Dataset
@@ -302,9 +302,16 @@ func TestDataset_SourceIsExactlyOneOfURLDataResolver(t *testing.T) {
 		{"url only", Dataset{URL: "https://x/y.json"}, true},
 		{"data only", Dataset{Data: []byte("x")}, true},
 		{"resolver only", Dataset{ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil }}, true},
+		{"records only", Dataset{Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, true},
 		{"none", Dataset{}, false},
 		{"url and data", Dataset{URL: "https://x", Data: []byte("x")}, false},
 		{"url and resolver", Dataset{URL: "https://x", ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil }}, false},
+		{"url and records", Dataset{URL: "https://x", Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, false},
+		{"data and records", Dataset{Data: []byte("x"), Records: func(context.Context, *http.Client) ([]Record, error) { return nil, nil }}, false},
+		{"resolver and records", Dataset{
+			ResolveURL: func(context.Context, *http.Client) (string, error) { return "", nil },
+			Records:    func(context.Context, *http.Client) ([]Record, error) { return nil, nil },
+		}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -328,7 +335,7 @@ func TestRegistry_EveryEntryDeclaresAKind(t *testing.T) {
 	// renders in, so a forgotten one must fail here rather than silently defaulting.
 	for _, c := range All {
 		switch c.Kind {
-		case KindEditorial, KindCredential:
+		case KindEditorial, KindCredential, KindBacker:
 		default:
 			t.Errorf("collection %q declares no valid kind (got %q)", c.Slug, c.Kind)
 		}
@@ -336,8 +343,11 @@ func TestRegistry_EveryEntryDeclaresAKind(t *testing.T) {
 }
 
 func TestRegistry_CuratedThemesAreEditorial(t *testing.T) {
+	// A theme we assembled ourselves — by size, valuation, geography or sector. No
+	// outside body selected these members, which is what separates them from the
+	// backers (see TestRegistry_BackersNameWhoSelectedTheCompany).
 	for _, slug := range []string{
-		"yc", "techstars", "european", "ai", "mag7",
+		"european", "ai", "mag7",
 		"bigtech", "unicorn", "fortune500", "eastern-roots", "ai-native",
 	} {
 		c, ok := Lookup(slug)
@@ -348,6 +358,51 @@ func TestRegistry_CuratedThemesAreEditorial(t *testing.T) {
 		if c.Kind != KindEditorial {
 			t.Errorf("collection %q kind = %q, want %q", slug, c.Kind, KindEditorial)
 		}
+	}
+}
+
+func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
+	// An accelerator or fund that picked the company is a different sort of tag from a
+	// theme we curate ourselves: it names an outside selector, so it renders as that
+	// brand's mark rather than as one more filter chip.
+	for _, slug := range []string{"yc", "techstars", "a16z-portfolio", "a16z-speedrun"} {
+		c, ok := Lookup(slug)
+		if !ok {
+			t.Errorf("registry missing %q", slug)
+			continue
+		}
+		if c.Kind != KindBacker {
+			t.Errorf("collection %q kind = %q, want %q", slug, c.Kind, KindBacker)
+		}
+		if c.Title == "" || c.Description == "" {
+			t.Errorf("collection %q missing display copy: %+v", slug, c)
+		}
+	}
+}
+
+func TestRegistry_TheTwoA16zTagsAreSeparateCollections(t *testing.T) {
+	// Being held in the fund's portfolio and having been selected into its
+	// accelerator are different facts of different strength. Merging them would
+	// present a seed-stage cohort company and OpenAI as carrying the same signal.
+	portfolio, ok := Lookup("a16z-portfolio")
+	if !ok {
+		t.Fatal("a16z-portfolio missing")
+	}
+	speedrun, ok := Lookup("a16z-speedrun")
+	if !ok {
+		t.Fatal("a16z-speedrun missing")
+	}
+	for _, c := range []Collection{portfolio, speedrun} {
+		if c.Dataset == nil || c.Dataset.Records == nil {
+			t.Errorf("%s does not source its membership from the directory: %+v", c.Slug, c.Dataset)
+			continue
+		}
+		if !c.Dataset.Valid() {
+			t.Errorf("%s declares more than one payload source", c.Slug)
+		}
+	}
+	if portfolio.Title == speedrun.Title {
+		t.Errorf("both a16z tags share the title %q — a reader cannot tell them apart", portfolio.Title)
 	}
 }
 

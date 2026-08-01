@@ -79,3 +79,37 @@ func TestResolveNoAtsAndFetchError(t *testing.T) {
 		t.Error("ok=true on fetch error, want false")
 	}
 }
+
+func TestResolveDetectsSelfHostedCareerSite(t *testing.T) {
+	// A Radancy (TalentBrew) site on the employer's own domain: no ATS host in the URL and no
+	// ATS link in the page, so steps 1 and 2 find nothing. The board is the careers host, which
+	// is how radancy.yml and jobs.external_id name it.
+	html := `<html><head><script src="/assets/talentbrew/app.js"></script></head></html>`
+	src, board, canon, ok := resolver(html, nil).Resolve(context.Background(),
+		"https://jobs.intuit.com/job/mountain-view/staff-product-manager/27595/97850406528?src=x")
+	if !ok {
+		t.Fatal("ok=false, want the self-hosted radancy board detected")
+	}
+	if src != "radancy" || board != "jobs.intuit.com" {
+		t.Errorf("(source, board) = (%q, %q), want (radancy, jobs.intuit.com)", src, board)
+	}
+	if canon != "https://jobs.intuit.com/job/mountain-view/staff-product-manager/27595/97850406528" {
+		t.Errorf("canonical = %q, want the URL without query/fragment", canon)
+	}
+}
+
+func TestResolvePrefersAnEmbeddedBoardOverTheHost(t *testing.T) {
+	// Step 2 still wins when the page names a real board: a careers site that embeds another
+	// ATS must resolve to that board, not to its own host.
+	html := `<html><body>
+	  <a href="https://acme.recruitee.com/o/senior-go"></a>
+	  <script src="/talentbrew/app.js"></script>
+	</body></html>`
+	src, board, _, ok := resolver(html, nil).Resolve(context.Background(), "https://careers.acme.com/jobs/1")
+	if !ok {
+		t.Fatal("ok=false, want the embedded recruitee board")
+	}
+	if src != "recruitee" || board != "acme" {
+		t.Errorf("(source, board) = (%q, %q), want (recruitee, acme)", src, board)
+	}
+}

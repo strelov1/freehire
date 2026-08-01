@@ -51,8 +51,14 @@
       type="button"
       onclick={() => onToggle(opt.value)}
       title={pillTitle(included, excluded, excludable)}
-      class={pillClass(included || excluded, excluded, 'px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50')}
+      class={pillClass(included || excluded, excluded, 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50')}
     >
+      <!-- A brand mark, where the option has one (the backer collections). Purely
+           decorative: the label right beside it says the same thing, so announcing
+           the image too would only repeat it. -->
+      {#if opt.icon}
+        <img src={opt.icon} alt="" class="size-4 shrink-0 rounded-sm object-contain" />
+      {/if}
       {opt.label}{#if opt.count !== undefined}<span class="ml-1 opacity-60 tabular-nums">{opt.count.toLocaleString()}</span>{/if}
     </button>
   {/each}

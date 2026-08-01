@@ -25,7 +25,14 @@ contributions are URL-only, auto-validated, unmoderated.
   (`<host>/<site>` — Workday). For subdomain/host/hostpath the canonical URL collapses to the
   board itself. Whatever a mode yields, the platform's **own** product hosts (`app.`,
   `dashboard.`, …) are never a tenant — a career site links to them, and `boardresolve` takes
-  the first recognized ATS URL it finds in a page. This is
+  the first recognized ATS URL it finds in a page. The same is true along the path:
+  `reservedSegments` lists, per host, the platform words that are never a tenant, skipped in
+  path mode (Jobvite's `careers/<board>/jobs` portal segment) and declining the URL when nothing
+  else remains (Greenhouse's `embed/job_app`, whose board lives in the `for=` param). A separate
+  `apiBoards` table covers each ATS's **own API host**, where the board sits behind a fixed
+  prefix (`api.ashbyhq.com/posting-api/job-board/<board>`) — that XHR is often the only place a
+  vanity careers page names its board, and matching it first also stops
+  `boards-api.greenhouse.io` from being read as the tenant `v1`. This is
   deliberately a small local table, NOT a per-adapter method on `linksource` — adding an ATS is
   one row + a test. Covers ~37 multi-tenant ATS (greenhouse, lever, ashby, workable, recruitee,
   smartrecruiters, bamboohr, personio, peopleforce, gupy, freshteam, jazzhr, huntflow, deel,

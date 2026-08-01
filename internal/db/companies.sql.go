@@ -261,7 +261,7 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT slug, name, job_count, tagline, industries, hq_country
+SELECT slug, name, job_count, tagline, industries, hq_country, collections
 FROM companies
 WHERE job_count > 0
   AND ($1::text = '' OR name ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%')
@@ -305,12 +305,13 @@ type ListCompaniesParams struct {
 }
 
 type ListCompaniesRow struct {
-	Slug       string      `json:"slug"`
-	Name       string      `json:"name"`
-	JobCount   int32       `json:"job_count"`
-	Tagline    pgtype.Text `json:"tagline"`
-	Industries []string    `json:"industries"`
-	HqCountry  pgtype.Text `json:"hq_country"`
+	Slug        string      `json:"slug"`
+	Name        string      `json:"name"`
+	JobCount    int32       `json:"job_count"`
+	Tagline     pgtype.Text `json:"tagline"`
+	Industries  []string    `json:"industries"`
+	HqCountry   pgtype.Text `json:"hq_country"`
+	Collections []string    `json:"collections"`
 }
 
 // Catalog page: companies with their job counts, most active first. The job count
@@ -363,6 +364,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 			&i.Tagline,
 			&i.Industries,
 			&i.HqCountry,
+			&i.Collections,
 		); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,40 @@
+---
+title: The board drags again, and gains a list
+date: 2026-07-31
+summary: Cards on the tracking board can be picked up again, every action moved into the application itself, and there is now a list view with a search across your applications.
+type: changelog
+tags:
+  - tracking
+draft: false
+---
+
+Cards on the [tracking board](/my/tracking) could not be dragged. The whole card was covered
+by an invisible click target so that tapping anywhere would open the application, and the
+drag library refuses to start a drag that begins on something clickable. The only spot that
+still worked was the thin row of badges at the bottom, which nobody would think to grab.
+
+The card no longer carries anything to click. It drags from anywhere on it, and clicking it
+opens the application — which is where every action now lives:
+
+- **Rehearse** a mock interview, at any stage rather than only once a call is booked.
+- **Follow up** when an employer has gone quiet.
+- **Analyze** the fit against your CV.
+- **Tailor CV** for that specific role.
+
+They were crowded onto the card before, competing for room with the badges. In the open
+application there is space for all four, and the card is free to be a card.
+
+## A list, and a search
+
+Not everything reads well as four columns. There is now a **List** tab beside Board and
+Pipeline: one row per application, newest activity first, with the stage editable in place.
+Both views share one search box — type a company or a role and everything narrows as you go.
+Word order does not matter, so "go senior" finds your Senior Go Engineer application.
+
+## Applications outlive their postings
+
+When a job is removed from the catalogue, your application to it stays on your board. Its
+stage could not be changed, though — moving the card silently snapped it back. That is fixed:
+those applications can be moved, edited and linked to like any other. They keep the employer
+and role they were made to, and the actions that genuinely need the original posting are
+simply absent rather than broken.

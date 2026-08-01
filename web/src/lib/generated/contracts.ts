@@ -2463,7 +2463,7 @@ export const ROLE_ALIASES = {
   'content_creator': ['content creator', 'content producer', 'ugc creator'],
   'content_seo_specialist': ['content seo', 'content seo manager', 'content seo specialist'],
   'content_strategist': ['content marketer', 'content strategist'],
-  'copywriter': ['copywriter', 'копирайтер'],
+  'copywriter': ['copywriter'],
   'creative_director': ['creative director'],
   'customer_engineer': ['customer engineer'],
   'customer_success': ['client success', 'customer onboarding', 'customer success', 'implementation consultant', 'implementation specialist', 'onboarding manager', 'onboarding specialist', 'renewal manager', 'renewals manager', 'менеджер по работе с клиентами', 'менеджер по успеху клиентов', 'специалист по адаптации клиентов'],
@@ -2604,8 +2604,10 @@ export const ROLE_ALIASES = {
 } as const;
 export type RoleAliases = typeof ROLE_ALIASES;
 export const COLLECTIONS = [
-  { slug: 'yc', title: 'Y Combinator', description: 'Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.', kind: 'editorial' },
-  { slug: 'techstars', title: 'Techstars', description: 'Open roles at Techstars-backed companies.', kind: 'editorial' },
+  { slug: 'yc', title: 'Y Combinator', description: 'Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.', kind: 'backer' },
+  { slug: 'techstars', title: 'Techstars', description: 'Open roles at Techstars-backed companies.', kind: 'backer' },
+  { slug: 'a16z-portfolio', title: 'a16z', description: 'Open roles at companies in the Andreessen Horowitz portfolio.', kind: 'backer' },
+  { slug: 'a16z-speedrun', title: 'a16z Speedrun', description: 'Open roles at companies from the a16z Speedrun accelerator\'s cohorts.', kind: 'backer' },
   { slug: 'european', title: 'European Startups', description: 'Open roles at European startups across the continent\'s tech hubs.', kind: 'editorial' },
   { slug: 'ai', title: 'AI Companies', description: 'Open roles at AI-native companies — foundation-model labs, ML platforms and applied-AI products.', kind: 'editorial' },
   { slug: 'mag7', title: 'Magnificent Seven', description: 'Open roles at the Magnificent Seven — Apple, Microsoft, Alphabet, Amazon, Meta, Nvidia and Tesla.', kind: 'editorial' },

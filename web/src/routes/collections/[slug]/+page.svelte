@@ -3,6 +3,7 @@
   import JobsView from '$lib/components/JobsView.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { breadcrumbJsonLd, collectionPageJsonLd, jobListItems, jsonLdScript } from '$lib/seo';
+  import { backerBadges } from '$lib/backers';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -13,6 +14,9 @@
   const canonical = $derived(`${origin}/collections/${data.slug}`);
   // Template copy from the collection's display title (see design): "<title> jobs".
   const heading = $derived(`${data.collection.title} jobs`);
+  // The backing brand's mark, where this collection names one. A filter collection
+  // or an editorial theme has none, and then the heading stands alone.
+  const mark = $derived(backerBadges([data.slug])[0]?.mark ?? null);
   // Request hiding the facets the collection pins via `scope`. Note: this only
   // hides standalone facets; the collection facets that live in composite panes
   // (collections/work_mode/regions) stay visible in the filter UI for now, but
@@ -50,7 +54,14 @@
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
   <header class="mb-8">
-    <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+    <h1 class="flex items-center gap-2.5 text-2xl font-semibold tracking-tight">
+      <!-- Decorative: the heading right beside it names the same brand, so a screen
+           reader would only hear it twice. -->
+      {#if mark}
+        <img src={mark} alt="" class="size-7 shrink-0 rounded-md object-contain" />
+      {/if}
+      {heading}
+    </h1>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       {data.collection.description}
     </p>

@@ -243,6 +243,58 @@ func TestResolveOne_FetchesFromTheDatasetResolver(t *testing.T) {
 	}
 }
 
+func TestResolveOne_UsesASelfFetchingDatasetsRecords(t *testing.T) {
+	// A paginated directory cannot be expressed as one URL, so it fetches itself. The
+	// worker must route it the same as any other dataset — including through the
+	// zero-record guard below.
+	c := collections.Collection{
+		Slug: "a16z-portfolio",
+		Kind: collections.KindBacker,
+		Dataset: &collections.Dataset{
+			Records: func(context.Context, *http.Client) ([]collections.Record, error) {
+				return []collections.Record{{Name: "Anduril Industries"}}, nil
+			},
+		},
+	}
+	got, err := resolveOne(context.Background(), http.DefaultClient, c)
+	if err != nil {
+		t.Fatalf("resolveOne: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "Anduril Industries" {
+		t.Errorf("records = %+v, want the directory's one record", got)
+	}
+}
+
+func TestResolveOne_ASelfFetchingDatasetThatReadsNothingIsAFailure(t *testing.T) {
+	// Same reasoning as every other source: zero records parses just as cleanly as a
+	// genuinely empty directory would, and would reconcile the tag off every company.
+	c := collections.Collection{
+		Slug: "a16z-speedrun",
+		Kind: collections.KindBacker,
+		Dataset: &collections.Dataset{
+			Records: func(context.Context, *http.Client) ([]collections.Record, error) { return nil, nil },
+		},
+	}
+	if _, err := resolveOne(context.Background(), http.DefaultClient, c); err == nil {
+		t.Error("an empty directory read was accepted as an empty membership")
+	}
+}
+
+func TestResolveOne_PropagatesASelfFetchingDatasetFailure(t *testing.T) {
+	c := collections.Collection{
+		Slug: "a16z-portfolio",
+		Kind: collections.KindBacker,
+		Dataset: &collections.Dataset{
+			Records: func(context.Context, *http.Client) ([]collections.Record, error) {
+				return nil, errors.New("page 2: status 502")
+			},
+		},
+	}
+	if _, err := resolveOne(context.Background(), http.DefaultClient, c); err == nil {
+		t.Error("resolveOne swallowed a directory fetch failure")
+	}
+}
+
 func TestResolveOne_PropagatesAResolverFailure(t *testing.T) {
 	c := collections.Collection{
 		Slug: "x",

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { Button, Badge, cn } from '$lib/ui';
-  import { Trash2, X, ExternalLink } from '@lucide/svelte';
+  import { Trash2, X, ExternalLink, Mic, Send, Target, SquarePen } from '@lucide/svelte';
   import { STAGES, humanizeStage } from '$lib/stages';
+  import { canFollowUp } from '$lib/followup';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
   import { timeAgo, errorMessage } from '$lib/utils';
   import { tablist } from '$lib/actions/tablist';
@@ -27,6 +29,11 @@
     onchooseoutcome,
     onremove,
     onclose,
+    onrehearse,
+    onfollowup,
+    rehearsing = false,
+    rehearsalError = null,
+    blocked = false,
   }: {
     item: MyJob;
     pendingOutcome: boolean;
@@ -35,7 +42,39 @@
     onchooseoutcome: (o: ClosedOutcome) => void;
     onremove: () => void;
     onclose: () => void;
+    // The actions the card used to carry. They live here because a card carries no
+    // controls — one on its surface is what stopped it being dragged at all.
+    onrehearse: (item: MyJob) => void;
+    onfollowup: (item: MyJob) => void;
+    // A rehearsal is one round trip before the navigation; the board owns the flag so a
+    // second click in that window cannot mint a second conversation.
+    rehearsing?: boolean;
+    // ...and owns the failure too. It has to be rendered in here: this panel covers the
+    // viewport, so a message left behind on the board would be invisible to the person
+    // who pressed the button.
+    rehearsalError?: string | null;
+    // True while something is stacked above this panel — today, the follow-up dialog it
+    // now opens. Both listen for Escape on the window, so without this one press would
+    // close the dialog and the application underneath it in the same keystroke. The
+    // parent is the only thing that knows what is stacked, so it says.
+    blocked?: boolean;
   } = $props();
+
+  // Tailoring navigates away, and /tailor/[slug] owns its own bootstrap — so the wait is
+  // this component's to show.
+  let tailoring = $state(false);
+
+  async function startTailoring() {
+    if (!item.job || tailoring) return;
+    tailoring = true;
+    await goto(resolve('/tailor/[slug]', { slug: item.job.public_slug }));
+  }
+
+  // Rehearse, Analyze and Tailor all need the posting. Absent rather than disabled when
+  // it is gone — the same treatment View job gets. Follow up does not need one: the chase
+  // is addressed to the employer, which the application knows by itself.
+  const hasPosting = $derived(!!item.job);
+  const offersFollowUp = $derived(canFollowUp(item));
 
   type Tab = 'application' | 'fit' | 'description' | 'emails';
   // The Emails tab shows linked mail — open to every signed-in user.
@@ -150,7 +189,7 @@
   const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && close()} />
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
      header + pill tabs, a scrolling tab body, and a pinned View-job footer. -->
@@ -223,6 +262,46 @@
             {/if}
           {/each}
         </ol>
+      {/if}
+
+      <!-- What the candidate can do about this application, on every tab. The card used
+           to carry Rehearse and Follow up in a strip beside its badges, which is both
+           less room than they need and the reason the card could not be dragged. -->
+      {#if hasPosting || offersFollowUp}
+        <div class="flex flex-wrap items-center gap-2">
+          {#if hasPosting}
+            <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={rehearsing} class="gap-1.5">
+              <Mic class="size-3.5" />
+              {rehearsing ? 'Starting…' : 'Rehearse'}
+            </Button>
+          {/if}
+          {#if offersFollowUp}
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={() => onfollowup(item)}
+              class="gap-1.5 border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80"
+            >
+              <Send class="size-3.5" />
+              {item.followed_up_at ? 'Chase again' : 'Follow up'}
+            </Button>
+          {/if}
+          {#if hasPosting}
+            <!-- The analysis is already in this panel; sending the user to /match would
+                 close the application to show them something it contains. -->
+            <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class="gap-1.5">
+              <Target class="size-3.5" />
+              Analyze
+            </Button>
+            <Button variant="outline" size="sm" onclick={startTailoring} disabled={tailoring} class="gap-1.5">
+              <SquarePen class="size-3.5" />
+              {tailoring ? 'Preparing…' : 'Tailor CV'}
+            </Button>
+          {/if}
+        </div>
+      {/if}
+      {#if rehearsalError}
+        <p class="text-sm text-warning-strong" role="alert">{rehearsalError}</p>
       {/if}
 
       <div class="no-scrollbar overflow-x-auto">

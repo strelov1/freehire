@@ -329,3 +329,155 @@ func TestLinkedMailSurvivesAPrunedPosting(t *testing.T) {
 		t.Errorf("%d live reply events after the prune, want 1", live)
 	}
 }
+
+// The write path the board needs once the posting is gone. TrackJob resolves the row
+// through `jobs`, so after cmd/prune there is nothing left for it to join and the card
+// cannot be moved at all — the defect these queries exist to fix.
+func TestTrackApplicationByID_MovesAPostingLessApplication(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "movable@example.test", true)
+	job := seedResponseJob(t, q, "movable-1", "movableco")
+	appliedAt := time.Now().Add(-20 * 24 * time.Hour).UTC().Truncate(time.Second)
+
+	var appID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO applications (user_id, company_slug, role_title, job_id, applied_at, stage)
+		 VALUES ($1, 'movableco', 'Go Dev', $2, $3, 'applied') RETURNING id`,
+		user, job, appliedAt).Scan(&appID); err != nil {
+		t.Fatalf("seed application: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, job); err != nil {
+		t.Fatalf("prune the posting: %v", err)
+	}
+
+	row, err := q.TrackApplicationByID(ctx, TrackApplicationByIDParams{
+		ID:          appID,
+		UserID:      user,
+		Stage:       pgtype.Text{String: "interview", Valid: true},
+		EventSource: "user",
+	})
+	if err != nil {
+		t.Fatalf("TrackApplicationByID: %v", err)
+	}
+	if row.Stage.String != "interview" {
+		t.Errorf("stage = %q, want interview", row.Stage.String)
+	}
+	if row.JobID.Valid {
+		t.Errorf("job_id = %d, want NULL — the posting is gone", row.JobID.Int64)
+	}
+
+	// The ledger must record the move. It names the application, not the posting,
+	// which is the whole reason the correlation was moved off job_id.
+	var events int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM application_events
+		  WHERE application_id = $1 AND kind = 'stage_set' AND signal = 'interview'`,
+		appID).Scan(&events); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	if events != 1 {
+		t.Errorf("stage_set events = %d, want 1", events)
+	}
+
+	// Re-setting the same stage is not a transition and must not record a second one.
+	if _, err := q.TrackApplicationByID(ctx, TrackApplicationByIDParams{
+		ID: appID, UserID: user,
+		Stage:       pgtype.Text{String: "interview", Valid: true},
+		EventSource: "user",
+	}); err != nil {
+		t.Fatalf("TrackApplicationByID (repeat): %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM application_events WHERE application_id = $1 AND kind = 'stage_set'`,
+		appID).Scan(&events); err != nil {
+		t.Fatalf("recount events: %v", err)
+	}
+	if events != 1 {
+		t.Errorf("stage_set events = %d after re-setting the same stage, want 1 — the ledger holds transitions", events)
+	}
+
+	// A notes-only call leaves the stage alone (partial update) and records nothing.
+	if _, err := q.TrackApplicationByID(ctx, TrackApplicationByIDParams{
+		ID: appID, UserID: user,
+		Notes:       pgtype.Text{String: "call on Tuesday", Valid: true},
+		EventSource: "user",
+	}); err != nil {
+		t.Fatalf("TrackApplicationByID (notes): %v", err)
+	}
+	var stage, notes string
+	if err := pool.QueryRow(ctx, `SELECT stage, notes FROM applications WHERE id = $1`, appID).Scan(&stage, &notes); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if stage != "interview" || notes != "call on Tuesday" {
+		t.Errorf("stage/notes = %q/%q, want interview/'call on Tuesday'", stage, notes)
+	}
+}
+
+// Every application-addressed statement is scoped by user_id, so another user's row
+// matches nothing — the caller cannot tell it apart from one that never existed, which
+// is the answer they are owed in both cases.
+func TestApplicationWritesByID_AreScopedToTheirOwner(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	owner := seedResponseUser(t, q, "owner@example.test", true)
+	stranger := seedResponseUser(t, q, "stranger@example.test", true)
+
+	var appID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO applications (user_id, company_slug, role_title, applied_at, stage)
+		 VALUES ($1, 'scopedco', 'Go Dev', now(), 'applied') RETURNING id`, owner).Scan(&appID); err != nil {
+		t.Fatalf("seed application: %v", err)
+	}
+
+	if _, err := q.TrackApplicationByID(ctx, TrackApplicationByIDParams{
+		ID: appID, UserID: stranger,
+		Stage:       pgtype.Text{String: "offer", Valid: true},
+		EventSource: "user",
+	}); err == nil {
+		t.Error("a stranger's track returned no error, want no-rows")
+	}
+	if _, err := q.UntrackApplicationByID(ctx, UntrackApplicationByIDParams{ID: appID, UserID: stranger}); err == nil {
+		t.Error("a stranger's untrack returned no error, want no-rows")
+	}
+
+	var stage string
+	if err := pool.QueryRow(ctx, `SELECT stage FROM applications WHERE id = $1`, appID).Scan(&stage); err != nil {
+		t.Fatalf("the application must survive a stranger's writes: %v", err)
+	}
+	if stage != "applied" {
+		t.Errorf("stage = %q, want applied — nothing a stranger sent may land", stage)
+	}
+}
+
+// Clearing progress takes the application off the board (columnOf needs a stage or an
+// applied date) while the record and its notes stand.
+func TestClearApplicationProgressByID_KeepsTheRecord(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "cleared@example.test", true)
+	var appID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO applications (user_id, company_slug, role_title, applied_at, stage, notes)
+		 VALUES ($1, 'clearco', 'Go Dev', now(), 'offer', 'their offer was low') RETURNING id`,
+		user).Scan(&appID); err != nil {
+		t.Fatalf("seed application: %v", err)
+	}
+
+	row, err := q.ClearApplicationProgressByID(ctx, ClearApplicationProgressByIDParams{ID: appID, UserID: user})
+	if err != nil {
+		t.Fatalf("ClearApplicationProgressByID: %v", err)
+	}
+	if row.Stage.Valid || row.AppliedAt.Valid {
+		t.Errorf("stage/applied_at = %v/%v, want both NULL — that pair is what puts it on the board", row.Stage, row.AppliedAt)
+	}
+	if row.Notes.String != "their offer was low" {
+		t.Errorf("notes = %q, want them kept — reconsidering is not a claim it never happened", row.Notes.String)
+	}
+}

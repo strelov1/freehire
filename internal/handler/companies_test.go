@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/search"
 )
 
 // GetCompany returns a company together with a page of its jobs. The jobs must
@@ -40,5 +42,30 @@ func TestCompanyDetailHidesJobID(t *testing.T) {
 	}
 	if got := string(body.Jobs[0]["public_slug"]); got != `"go-developer-acme-t35nijto"` {
 		t.Errorf("public_slug: want the slug, got %s", got)
+	}
+}
+
+// The Meilisearch path and the Postgres path serve the same list endpoint, so a
+// field present in one and absent in the other makes the catalogue card render
+// differently depending on whether a search term was typed. Collections drive the
+// backer marks, so the omission would be visible: the marks would disappear the
+// moment a user searched.
+func TestCompanyRowFromDocCarriesCollections(t *testing.T) {
+	row := companyRowFromDoc(search.CompanyDocument{
+		Slug:        "euro-lab",
+		Name:        "Euro Lab",
+		Collections: []string{"yc", "a16z-portfolio"},
+	})
+	if !reflect.DeepEqual(row.Collections, []string{"yc", "a16z-portfolio"}) {
+		t.Errorf("collections = %+v, want [yc a16z-portfolio]", row.Collections)
+	}
+}
+
+// An absent array must serialize as [] like the Postgres '{}', not as null — the
+// same normalization industries already gets.
+func TestCompanyRowFromDocNormalizesAbsentCollections(t *testing.T) {
+	row := companyRowFromDoc(search.CompanyDocument{Slug: "x", Name: "X"})
+	if row.Collections == nil {
+		t.Error("absent collections stayed nil — it will serialize as null, unlike the Postgres path")
 	}
 }

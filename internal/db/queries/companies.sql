@@ -16,7 +16,7 @@
 -- actually hiring, excluding the ~92k job-less reference rows imported by the YC
 -- and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
 -- (partial index) instead of scanning the full 2.3 GB heap.
-SELECT slug, name, job_count, tagline, industries, hq_country
+SELECT slug, name, job_count, tagline, industries, hq_country, collections
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')

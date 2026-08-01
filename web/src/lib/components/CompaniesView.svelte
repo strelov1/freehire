@@ -15,6 +15,7 @@
   import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
+  import BackerBadge from './BackerBadge.svelte';
   import CountryFlag from './CountryFlag.svelte';
   import CompanyFilterSummary from './filters/CompanyFilterSummary.svelte';
   import CompanyFilterModal from './filters/CompanyFilterModal.svelte';
@@ -125,7 +126,11 @@
             <div class="flex min-w-0 flex-1 flex-col gap-1">
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate font-medium">{company.name}</span>
-                <Badge variant="outline" class="shrink-0">{company.job_count} jobs</Badge>
+                <!-- The whole card is a link, so the marks stay display-only here.
+                     They sit with the name because a backer is a fact about the
+                     company, the same placement the job feed card uses. -->
+                <BackerBadge collections={company.collections} class="ml-0.5" />
+                <Badge variant="outline" class="ml-auto shrink-0">{company.job_count} jobs</Badge>
               </div>
               {#if company.tagline}
                 <p class="line-clamp-1 text-sm text-muted-foreground">{company.tagline}</p>

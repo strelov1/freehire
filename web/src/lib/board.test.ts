@@ -1,10 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_COLUMNS, columnOf } from './board';
+import { BOARD_COLUMNS, columnOf, matchesQuery } from './board';
 import type { MyJob } from './types';
 
 // columnOf reads only `stage` and `applied_at`; a minimal cast fixture suffices.
 function job(fields: Partial<MyJob>): MyJob {
   return { stage: null, applied_at: null, saved_at: null, ...fields } as MyJob;
+}
+
+// An application with its posting still in the catalogue: the employer and role the
+// user reads come from `job`, while `company_slug`/`role_title` carry the copies the
+// application recorded when it was made.
+function listed(company: string, title: string): MyJob {
+  return {
+    company_slug: company.toLowerCase().replace(/\s+/g, '-'),
+    role_title: title,
+    job: { company, title },
+  } as MyJob;
+}
+
+// An application whose posting cmd/prune removed. There is no `job` to read, so the
+// employer survives only as the slug the application copied.
+function pruned(companySlug: string, title: string): MyJob {
+  return { company_slug: companySlug, role_title: title, job: null } as MyJob;
 }
 
 describe('BOARD_COLUMNS', () => {
@@ -28,5 +45,58 @@ describe('columnOf', () => {
   it('returns null for a saved-only row (not on the board)', () => {
     expect(columnOf(job({ saved_at: '2026-07-12T00:00:00Z' }))).toBeNull();
     expect(columnOf(job({}))).toBeNull();
+  });
+});
+
+describe('matchesQuery', () => {
+  const stripe = listed('Stripe', 'Senior Go Engineer');
+  const vercel = listed('Vercel', 'Platform Engineer');
+
+  it('keeps every application when the query is empty or blank', () => {
+    expect(matchesQuery(stripe, '')).toBe(true);
+    expect(matchesQuery(stripe, '   ')).toBe(true);
+  });
+
+  it('matches the employer, ignoring case', () => {
+    expect(matchesQuery(stripe, 'stripe')).toBe(true);
+    expect(matchesQuery(stripe, 'STRIPE')).toBe(true);
+    expect(matchesQuery(vercel, 'stripe')).toBe(false);
+  });
+
+  it('matches the role', () => {
+    expect(matchesQuery(stripe, 'engineer')).toBe(true);
+    expect(matchesQuery(stripe, 'designer')).toBe(false);
+  });
+
+  it('matches a partial word, so a search narrows as it is typed', () => {
+    expect(matchesQuery(stripe, 'stri')).toBe(true);
+    expect(matchesQuery(stripe, 'engin')).toBe(true);
+  });
+
+  // The discriminating case for the predicate's shape. A plain substring test over
+  // "Stripe Senior Go Engineer" answers false here, because the words are not
+  // adjacent in that order — and a candidate typing what they remember does not
+  // recall the word order.
+  it('requires every word of the query, in any order and across both fields', () => {
+    expect(matchesQuery(stripe, 'senior go')).toBe(true);
+    expect(matchesQuery(stripe, 'go senior')).toBe(true);
+    expect(matchesQuery(stripe, 'stripe engineer')).toBe(true);
+    expect(matchesQuery(stripe, 'stripe designer')).toBe(false);
+  });
+
+  // The posting is gone, so `job` is null and the employer is known only as the slug
+  // the application copied. Reading through `job` would throw here, and skipping the
+  // row would hide exactly the applications that are hardest to find another way.
+  it('searches a posting-less application by the slug and title it recorded', () => {
+    const orphan = pruned('acme-corp', 'Backend Engineer');
+    expect(matchesQuery(orphan, 'acme')).toBe(true);
+    expect(matchesQuery(orphan, 'backend')).toBe(true);
+    expect(matchesQuery(orphan, 'stripe')).toBe(false);
+  });
+
+  // A slug is written with dashes and the user types spaces. Whichever way the
+  // predicate resolves this, it must not depend on the user guessing the punctuation.
+  it('does not make the user type the slug punctuation', () => {
+    expect(matchesQuery(pruned('acme-corp', 'Backend Engineer'), 'acme corp')).toBe(true);
   });
 });

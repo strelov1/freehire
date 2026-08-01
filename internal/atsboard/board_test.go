@@ -25,6 +25,27 @@ func TestRecognize(t *testing.T) {
 		{"deel path", "https://jobs.deel.com/acme/jobs/123", "deel", "acme", "https://jobs.deel.com/acme/jobs/123", true},
 		{"jobvite path", "https://jobs.jobvite.com/acme/job/oABC", "jobvite", "acme", "https://jobs.jobvite.com/acme/job/oABC", true},
 
+		// Reserved segments — a platform path word is never a tenant. Jobvite serves the same
+		// board bare and behind a "careers" portal segment, so the first segment read the portal
+		// word as the board and onboarded nothing; Greenhouse's embed machinery has no board in
+		// the path at all (the slug is in the `for=` param, which atsdetect reads).
+		{"jobvite portal segment skipped", "https://jobs.jobvite.com/careers/ness/jobs", "jobvite", "ness", "https://jobs.jobvite.com/careers/ness/jobs", true},
+		{"greenhouse embed app has no board", "https://job-boards.greenhouse.io/embed/job_app?token=1", "", "", "", false},
+		{"greenhouse embed script has no board", "https://boards.greenhouse.io/embed/job_board/js?for=acme", "", "", "", false},
+
+		// Manatal's hosted career-page domain is path-based, not subdomain-based, and its boards
+		// live in manatal.yml — careerspage.yml is deliberately empty.
+		{"manatal careers-page posting", "https://www.careers-page.com/nearshore-business-solutions/job/5W939XW3", "manatal", "nearshore-business-solutions", "https://www.careers-page.com/nearshore-business-solutions/job/5W939XW3", true},
+		{"manatal careers-page listing", "https://www.careers-page.com/hiretidal", "manatal", "hiretidal", "https://www.careers-page.com/hiretidal", true},
+
+		// pathprefix — the ATS's OWN API host. A careers page on the employer's domain loads its
+		// listing over XHR, so the board is named in that API URL and nowhere else in the page.
+		{"ashby posting API", "https://api.ashbyhq.com/posting-api/job-board/phantom?includeCompensation=false", "ashby", "phantom", "https://api.ashbyhq.com/posting-api/job-board/phantom", true},
+		{"greenhouse boards API", "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs", "greenhouse", "anthropic", "https://boards-api.greenhouse.io/v1/boards/anthropic", true},
+		{"lever postings API", "https://api.lever.co/v0/postings/matchgroup?mode=json", "lever", "matchgroup", "https://api.lever.co/v0/postings/matchgroup", true},
+		{"api host without a board", "https://api.ashbyhq.com/posting-api/job-board", "", "", "", false},
+		{"api host off-prefix path", "https://api.lever.co/v1/something/else", "", "", "", false},
+
 		// SmartRecruiters serves a posting either bare (<company>/<posting>) or behind a portal
 		// segment (<portal>/<company>/<posting>). The employer is the segment before the
 		// posting, never the first one — reading the first turned a portal slug into a board.

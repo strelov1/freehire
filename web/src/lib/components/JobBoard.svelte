@@ -1,22 +1,42 @@
 <script lang="ts">
   import { goto, pushState } from '$app/navigation';
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { Search, X as XIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { UrlSyncedState, syncOnNavigation } from '$lib/urlSynced.svelte';
   import type { MyJob } from '$lib/types';
-  import { BOARD_COLUMNS, columnOf, type BoardColumnId, type BoardItem, type ClosedOutcome } from '$lib/board';
+  import {
+    BOARD_COLUMNS,
+    columnOf,
+    matchesQuery,
+    type BoardColumnId,
+    type BoardItem,
+    type ClosedOutcome,
+  } from '$lib/board';
   import { createRehearsal } from '$lib/assistant/api';
   import BoardColumn from './BoardColumn.svelte';
+  import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
   import FollowUpDialog from './FollowUpDialog.svelte';
   import States from './States.svelte';
 
-  // initialSlug (from /my/tracking/[slug]) opens that application's drawer once the
+  // initialId (from /my/tracking/[id]) opens that application's drawer once the
   // board has loaded, so a deep link / inbox link / refresh reopens the same card.
+  // It is the row id the listing served, which for a posting-backed row is that
+  // posting's slug — so the inbox's existing slug links keep resolving.
   // initial carries the board rows fetched in the route's server load, so the board
   // paints with the page (no client fetch on mount); a caller that omits it falls
   // back to a client fetch. Mutations still reload() client-side.
-  let { initialSlug, initial }: { initialSlug?: string; initial?: MyJob[] } = $props();
+  // `view` picks the presentation. This component owns the rows, the mutations and the
+  // application panel; the board and the list are two renderings of the same thing, and
+  // keeping one owner is what stops them drifting apart.
+  let {
+    initialId,
+    initial,
+    view = 'board',
+  }: { initialId?: string; initial?: MyJob[]; view?: 'board' | 'list' } = $props();
   let openedInitial = false;
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
@@ -63,11 +83,11 @@
     // Deep link: open the requested application's drawer once, after the board is
     // built. A slug that isn't on the board (untracked / saved-only) just leaves
     // the board showing.
-    if (initialSlug && !openedInitial) {
+    if (initialId && !openedInitial) {
       openedInitial = true;
       const found = Object.values(next)
         .flat()
-        .find((i) => i.id === initialSlug);
+        .find((i) => i.id === initialId);
       if (found) {
         openItem = found;
         pendingOutcome = false;
@@ -96,6 +116,42 @@
     if (!preloaded && isAuthenticated()) void load();
   });
 
+  // Search, mirrored into `?q=` so a shared or reloaded link shows the same rows.
+  // UrlSyncedState owns the transport: it writes the URL synchronously on every
+  // keystroke (the structural fix for the dropped-character race) and seeds from
+  // location.search rather than page.url, which lags after a shallow-routing
+  // back/forward. Filtering is local and instant, so there is nothing to debounce —
+  // setNow writes and applies together, and the view reads `value`.
+  const search = new UrlSyncedState<string>(page.url.searchParams, {
+    parse: (p) => p.get('q') ?? '',
+    serialize: (v) => new URLSearchParams(v ? { q: v } : {}),
+  });
+  syncOnNavigation(search);
+  const query = $derived(search.value);
+
+  const searching = $derived(query.trim().length > 0);
+  const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
+    searching
+      ? {
+          applied: columns.applied.filter((i) => matchesQuery(i, query)),
+          interview: columns.interview.filter((i) => matchesQuery(i, query)),
+          offer: columns.offer.filter((i) => matchesQuery(i, query)),
+          closed: columns.closed.filter((i) => matchesQuery(i, query)),
+        }
+      : columns,
+  );
+
+  // The list is the same rows, read in one sequence instead of four. Ordered by last
+  // activity — an application that moved yesterday is the one worth seeing first, which
+  // the columns cannot express because they order by stage.
+  const listItems = $derived(
+    Object.values(shown)
+      .flat()
+      .sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? '')),
+  );
+  const total = $derived(Object.values(columns).flat().length);
+  const matched = $derived(Object.values(shown).flat().length);
+
   function onconsider(id: BoardColumnId, items: BoardItem[]) {
     columns[id] = items; // live preview during the drag
   }
@@ -117,15 +173,15 @@
       switch (to) {
         case 'applied':
           item.stage = 'applied';
-          await api.trackJob(item.id, { stage: 'applied' });
+          await api.trackApplication(item.id, { stage: 'applied' });
           break;
         case 'interview':
           item.stage = 'interview';
-          await api.trackJob(item.id, { stage: 'interview' });
+          await api.trackApplication(item.id, { stage: 'interview' });
           break;
         case 'offer':
           item.stage = 'offer';
-          await api.trackJob(item.id, { stage: 'offer' });
+          await api.trackApplication(item.id, { stage: 'offer' });
           break;
         case 'closed':
           // Outcome unknown until the user picks: open the drawer, require a choice.
@@ -144,15 +200,19 @@
     item.stage = outcome;
     pendingOutcome = false;
     try {
-      await api.trackJob(item.id, { stage: outcome });
+      await api.trackApplication(item.id, { stage: outcome });
     } catch {
       await load();
     }
   }
 
+  // The drawer acts on whatever is open; a list row acts on itself. Same write either
+  // way, so the panel just names the open application.
   async function setStage(stage: string) {
-    if (!openItem) return;
-    const item = openItem;
+    if (openItem) await applyStage(openItem, stage);
+  }
+
+  async function applyStage(item: BoardItem, stage: string) {
     const prevCol = cardCol[item.id];
     item.stage = stage || null;
     if (!stage) item.applied_at = null; // "No stage" takes the job off the board (saved-only)
@@ -174,10 +234,13 @@
       // Empty stage is not a vocabulary value — clearing progress keeps the saved
       // mark but removes the application, so the job leaves the board.
       if (stage) {
-        await api.trackJob(item.id, { stage });
+        await api.trackApplication(item.id, { stage });
       } else {
-        await api.saveJob(item.id);
-        await api.clearJobStage(item.id);
+        // Keeping the bookmark only means something while there is a posting to
+        // bookmark. An application whose posting was removed has no saved mark to
+        // preserve, and saveJob is addressed by a slug it does not have.
+        if (item.job) await api.saveJob(item.job.public_slug);
+        await api.clearApplicationStage(item.id);
       }
     } catch {
       await load();
@@ -188,7 +251,7 @@
     if (!openItem) return;
     openItem.notes = notes;
     try {
-      await api.trackJob(openItem.id, { notes });
+      await api.trackApplication(openItem.id, { notes });
     } catch {
       /* keep optimistic value; a transient failure shouldn't drop the edit */
     }
@@ -204,7 +267,7 @@
     }
     openItem = null;
     try {
-      await api.untrackJob(item.id);
+      await api.untrackApplication(item.id);
     } catch {
       await load();
     }
@@ -252,8 +315,8 @@
     openItem = item as BoardItem;
     pendingOutcome = false;
     // Give the open application its own shareable URL without a full navigation.
-    // A card with no posting has no public URL to push; it opens in place.
-    if (item.job) pushState(resolve('/my/tracking/[slug]', { slug: item.job.public_slug }), {});
+    // Keyed by the row id, so an application whose posting was removed gets one too.
+    pushState(resolve('/my/tracking/[id]', { id: (item as BoardItem).id }), {});
   }
 </script>
 
@@ -262,24 +325,55 @@
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your board." />
 {:else}
-  {#if rehearsalError}
-    <!-- The board is still usable, so this reports beside it rather than replacing it. -->
-    <p class="mb-2 text-sm text-warning-strong" role="alert">{rehearsalError}</p>
-  {/if}
-  <div class="flex gap-3 overflow-x-auto pb-2">
-    {#each BOARD_COLUMNS as col (col.id)}
-      <BoardColumn
-        id={col.id}
-        label={col.label}
-        items={columns[col.id]}
-        {onconsider}
-        {onfinalize}
-        onopen={openDrawer}
-        onfollowup={openFollowUp}
-        onrehearse={startRehearsal}
+  <!-- One field over both views. It narrows what is already loaded: the listing is
+       bounded, and a request per keystroke would buy nothing. -->
+  <div class="mb-3 flex items-center gap-2">
+    <div class="relative flex-1 sm:max-w-xs">
+      <Search
+        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
       />
-    {/each}
+      <input
+        type="search"
+        value={query}
+        oninput={(e) => search.setNow(e.currentTarget.value)}
+        placeholder="Search company or role"
+        aria-label="Search applications by company or role"
+        class="w-full rounded-md border border-input bg-transparent py-1.5 pl-8 pr-8 text-sm"
+      />
+      {#if searching}
+        <button
+          type="button"
+          onclick={() => search.setNow('')}
+          aria-label="Clear search"
+          class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <XIcon class="size-3.5" />
+        </button>
+      {/if}
+    </div>
+    {#if searching}
+      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{matched} of {total}</span>
+    {/if}
   </div>
+
+  {#if view === 'list'}
+    <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
+  {:else}
+    <div class="flex gap-3 overflow-x-auto pb-2">
+      {#each BOARD_COLUMNS as col (col.id)}
+        <BoardColumn
+          id={col.id}
+          label={col.label}
+          items={shown[col.id]}
+          dragDisabled={searching}
+          {onconsider}
+          {onfinalize}
+          onopen={openDrawer}
+        />
+      {/each}
+    </div>
+  {/if}
 {/if}
 
 {#if openItem}
@@ -292,6 +386,11 @@
       onchooseoutcome={chooseOutcome}
       onremove={remove}
       onclose={closeDrawer}
+      onrehearse={startRehearsal}
+      onfollowup={openFollowUp}
+      {rehearsing}
+      {rehearsalError}
+      blocked={!!followUpItem}
     />
   {/key}
 {/if}

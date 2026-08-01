@@ -44,3 +44,26 @@ export type ClosedOutcome = (typeof CLOSED_OUTCOMES)[number];
 // svelte-dnd-action keys each draggable by a top-level `id`; MyJob has none, so
 // the board wraps each row with id = the job's public_slug.
 export type BoardItem = MyJob & { id: string };
+
+/** Whether an application answers the search query, matching on the employer and the
+ *  role. Shared by the board and the list — one field narrows whichever view is open.
+ *
+ *  A blank query keeps everything. An application whose posting the catalogue no
+ *  longer holds has no `job` to read: its employer survives only as `company_slug`
+ *  (which is punctuated, e.g. `acme-corp`) and its role as `role_title`. */
+export function matchesQuery(item: MyJob, query: string): boolean {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true; // a blank query narrows nothing
+  // Every token must appear, but anywhere and in any order: somebody typing what
+  // they remember of a role does not recall its word order, so "go senior" has to
+  // find "Senior Go Engineer". A substring test over the joined text cannot do that.
+  const haystack = normalize(`${item.job?.company || item.company_slug} ${item.job?.title || item.role_title}`);
+  return tokens.every((t) => haystack.includes(normalize(t)));
+}
+
+/** Lowercases and turns a slug's punctuation into the spaces a person types — the
+ *  dashes in `acme-corp` are how we store the employer, not how anyone recalls it,
+ *  and on an application whose posting is gone the slug is the only name we hold. */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[-_/.]+/g, ' ');
+}

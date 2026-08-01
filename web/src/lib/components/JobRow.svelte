@@ -16,6 +16,7 @@
   import { Badge } from '$lib/ui';
   import { supersedesReality } from '$lib/ghost';
   import CredentialBadge from './CredentialBadge.svelte';
+  import BackerBadge from './BackerBadge.svelte';
   import { credentialBadges } from '$lib/credentials';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
@@ -246,6 +247,11 @@
       <span class="truncate text-sm font-medium text-muted-foreground">
         {job.company || 'Unknown company'}
       </span>
+      <!-- Who backed the employer, next to the employer. A fact about the company,
+           so it reads with the company name rather than joining the signal row
+           below, which carries role-level facts and already wraps on a phone. The
+           whole card is a link, so the mark is display-only here. -->
+      <BackerBadge collections={job.collections} class="shrink-0" />
     </div>
     <div class="flex shrink-0 items-center gap-1.5 text-muted-foreground">
       {#if isViewed}

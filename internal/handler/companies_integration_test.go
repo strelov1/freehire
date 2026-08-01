@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http/httptest"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -241,6 +242,33 @@ func TestListCompaniesFacetFilterEndpoint(t *testing.T) {
 
 	t.Run("single facet filters by array membership", func(t *testing.T) {
 		assertSlugs(t, "/api/v1/companies?regions=europe", []string{"euro-corp", "euro-lab"})
+	})
+
+	t.Run("each row carries its collections", func(t *testing.T) {
+		// The catalogue card renders the backer marks (Y Combinator, a16z) from this
+		// field. Filtering by a collection while not returning it left the list unable
+		// to show what it had just filtered on.
+		req := httptest.NewRequest("GET", "/api/v1/companies?q=euro-lab", nil)
+		resp, err := app.Test(req, -1)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		defer resp.Body.Close()
+		var got struct {
+			Data []struct {
+				Slug        string   `json:"slug"`
+				Collections []string `json:"collections"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(got.Data) != 1 {
+			t.Fatalf("got %d rows, want 1: %+v", len(got.Data), got.Data)
+		}
+		if !reflect.DeepEqual(got.Data[0].Collections, []string{"yc"}) {
+			t.Errorf("collections = %+v, want [yc]", got.Data[0].Collections)
+		}
 	})
 
 	t.Run("multiple values within a facet are OR-ed", func(t *testing.T) {

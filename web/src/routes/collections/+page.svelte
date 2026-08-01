@@ -30,7 +30,14 @@
         class="group flex flex-col bg-background p-6 transition-colors hover:bg-secondary/40"
       >
         <div class="flex items-baseline justify-between gap-3">
-          <h2 class="text-lg font-semibold tracking-tight">{card.title}</h2>
+          <h2 class="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <!-- The backing brand's mark, where the collection names one. Decorative
+                 here: the heading beside it already says whose collection this is. -->
+            {#if card.mark}
+              <img src={card.mark} alt="" class="size-5 shrink-0 rounded-sm object-contain" />
+            {/if}
+            {card.title}
+          </h2>
           {#if card.count !== null}
             <span class="shrink-0 font-mono text-xs text-muted-foreground">
               {card.count.toLocaleString()} jobs

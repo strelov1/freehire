@@ -1,33 +1,23 @@
 <script lang="ts">
-  import { Clock, Mail, MessageSquare, Mic, Send } from '@lucide/svelte';
+  import { Clock, Mail, MessageSquare } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import { Badge } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
-  import { canFollowUp, chasedLabel, cvOpenedLabel } from '$lib/followup';
-  import { canRehearse } from '$lib/rehearsal';
+  import { chasedLabel, cvOpenedLabel } from '$lib/followup';
   import type { MyJob } from '$lib/types';
 
   let {
     item,
     onopen,
-    onfollowup,
-    onrehearse,
   }: {
     item: MyJob;
     onopen: (item: MyJob) => void;
-    onfollowup: (item: MyJob) => void;
-    onrehearse: (item: MyJob) => void;
   } = $props();
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // Both readings of a chased application, side by side: the badge says the employer
   // is still quiet, the label says we already prodded them. Neither replaces the other.
-  const offersFollowUp = $derived(canFollowUp(item));
   const chased = $derived(chasedLabel(item));
-  // Both can show at once: `screening` tolerates 18 days of silence, so an application
-  // waiting on a scheduled call that has gone quiet offers a chase AND a rehearsal. The
-  // row wraps, and the rehearsal is listed first because it is the one with a date on it.
-  const offersRehearsal = $derived(canRehearse(item));
   // A further reading, and like the chase it sits beside the silence badge rather than instead
   // of it: they read the CV and still have not answered.
   const cvOpened = $derived(cvOpenedLabel(item));
@@ -36,31 +26,60 @@
   // The employer and role are carried by the application itself for exactly this.
   const company = $derived(item.job?.company || item.company_slug);
   const title = $derived(item.job?.title || item.role_title);
+
+  // Enter and Space open the application. This runs in the CAPTURE phase, and that is
+  // load-bearing rather than a style choice.
+  //
+  // svelte-dnd-action binds its own keydown to the wrapper element the column puts
+  // around each card, and on Enter/Space it starts a keyboard-driven drag and calls
+  // stopPropagation. Svelte 5 *delegates* ordinary `onkeydown` to the app root, so a
+  // bubble-phase handler here would be reached only after that wrapper listener has
+  // already stopped the event — the card would begin a drag and never open. Capture
+  // listeners are not delegated, so this one runs first and claims the key.
+  //
+  // Nothing is lost: the library's guard skips any target whose `disabled` is defined,
+  // so while this card was a <button> its keyboard drag never ran either.
+  function openOnKey(e: KeyboardEvent) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault(); // Space would otherwise scroll the column
+    e.stopPropagation();
+    onopen(item);
+  }
 </script>
 
-<!-- The card is a div, not a button: the follow-up action is a second control, and a
-     button inside a button is invalid. The open action keeps the whole card clickable
-     via a stretched ::after overlay; the follow-up button sits above it on z-10. -->
+<!-- The card carries no controls: it is dragged, and it is opened. Every action on the
+     application lives in the panel that opens, which has the room for them.
+
+     That is not only a layout preference. svelte-dnd-action refuses to begin a drag
+     whose event target carries a `value` property — a guard written for <input>, which
+     a <button> also satisfies, its value being "" rather than undefined. This card used
+     to mount a button with `after:inset-0` stretched across its whole surface, so every
+     mousedown landed on that button and the card could not be picked up at all.
+
+     `role="button"` is an attribute, not an element, so this node has no `value` and the
+     guard passes anywhere on the card. The library suppresses the click that ends a real
+     drag, so opening and dragging do not collide. -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- The keyboard handler is `onkeydowncapture`, which the rule does not recognise. It
+     has to be on the capture phase (see openOnKey), and Enter and Space were both
+     confirmed to open the application in a browser. -->
 <div
-  class="relative flex w-full flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent"
+  role="button"
+  tabindex="0"
+  onclick={() => onopen(item)}
+  onkeydowncapture={openOnKey}
+  aria-label="Open {title} at {company || 'unknown company'}"
+  class="flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
-  <button
-    type="button"
-    onclick={() => onopen(item)}
-    aria-label="Open {title} at {company || 'unknown company'}"
-    class="flex flex-col gap-1.5 text-left after:absolute after:inset-0 after:content-['']"
-  >
-    <span class="flex items-center gap-1.5 text-sm font-semibold">
-      <CompanyLogo name={company} />
-      <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
-    </span>
-    <span class="line-clamp-2 text-sm">{title}</span>
-  </button>
-  <!-- The badge row rides above the open action's overlay so its title tooltips still
-       answer a hover. The cost is that this strip no longer opens the drawer; a lost
-       tooltip is the worse trade, since the badges are the card's only explanation of
-       what "24d" means. -->
-  <span class="relative z-10 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+  <span class="flex items-center gap-1.5 text-sm font-semibold">
+    <CompanyLogo name={company} />
+    <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
+  </span>
+  <span class="line-clamp-2 text-sm">{title}</span>
+  <!-- Indicators, every one of them. The silence marker used to be the way into the
+       follow-up draft; that offer moved into the opened application when the card gave
+       up its controls, and the marker went back to reporting. -->
+  <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
     {/if}
@@ -117,27 +136,6 @@
         <title>Has notes</title>
         <path d="M8 7h8M8 12h8M8 17h5" />
       </svg>
-    {/if}
-    {#if offersRehearsal}
-      <button
-        type="button"
-        onclick={() => onrehearse(item)}
-        class="relative z-10 ml-auto flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-      >
-        <Mic class="size-3 shrink-0" aria-hidden="true" />
-        Rehearse
-      </button>
-    {/if}
-    {#if offersFollowUp}
-      <button
-        type="button"
-        onclick={() => onfollowup(item)}
-        class:ml-auto={!offersRehearsal}
-        class="relative z-10 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted text-warning-strong dark:hover:bg-warning-muted/50"
-      >
-        <Send class="size-3 shrink-0" aria-hidden="true" />
-        {chased ? 'Chase again' : 'Follow up'}
-      </button>
     {/if}
   </span>
 </div>

@@ -47,3 +47,5 @@
 # --- contributed boards ---
 - company: Tidal
   board: hiretidal
+- company: Nearshore Business Solutions
+  board: nearshore-business-solutions

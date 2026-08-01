@@ -194,6 +194,13 @@ func resolveOne(ctx context.Context, client *http.Client, c collections.Collecti
 		return nonEmpty(c.Dataset.Parse(c.Dataset.Data))
 	}
 
+	// Self-fetching source (e.g. the a16z directory, paginated across responses): it
+	// owns its own reads, so there is no single body for the fetch-and-parse path
+	// below. The zero-record guard still applies — it is the same failure mode.
+	if c.Dataset.Records != nil {
+		return nonEmpty(c.Dataset.Records(ctx, client))
+	}
+
 	url, err := datasetURL(ctx, client, c)
 	if err != nil {
 		return nil, err

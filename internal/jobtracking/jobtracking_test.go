@@ -61,6 +61,9 @@ type fakeRepo struct {
 	listFilter jobtracking.Filter
 	trackStage *string
 	trackNotes *string
+	// The application-addressed writes record the id they were handed, so a test can
+	// pin that the service reached the application directly rather than by a slug.
+	appIDCalls []int64
 }
 
 func (f *fakeRepo) JobIDBySlug(_ context.Context, slug string) (int64, error) {
@@ -116,6 +119,23 @@ func (f *fakeRepo) ClearJobProgress(_ context.Context, _, _ int64) (jobtracking.
 }
 
 func (f *fakeRepo) UntrackJob(_ context.Context, _, _ int64) (jobtracking.Interaction, error) {
+	return f.untrackResult, f.untrackErr
+}
+
+func (f *fakeRepo) TrackApplication(_ context.Context, _, appID int64, stage, notes *string, _ string) (jobtracking.Interaction, error) {
+	f.appIDCalls = append(f.appIDCalls, appID)
+	f.trackStage = stage
+	f.trackNotes = notes
+	return f.trackResult, f.trackErr
+}
+
+func (f *fakeRepo) ClearApplicationProgress(_ context.Context, _, appID int64) (jobtracking.Interaction, error) {
+	f.appIDCalls = append(f.appIDCalls, appID)
+	return f.clearProgressResult, f.clearProgressErr
+}
+
+func (f *fakeRepo) UntrackApplication(_ context.Context, _, appID int64) (jobtracking.Interaction, error) {
+	f.appIDCalls = append(f.appIDCalls, appID)
 	return f.untrackResult, f.untrackErr
 }
 

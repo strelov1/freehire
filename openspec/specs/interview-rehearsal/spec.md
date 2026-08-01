@@ -3,19 +3,23 @@
 ## Purpose
 TBD - created by archiving change interview-rehearsal-preset. Update Purpose after archive.
 ## Requirements
-### Requirement: An application at the interview stage offers a rehearsal
+### Requirement: An opened application offers a rehearsal
 
-The tracking board SHALL offer a rehearsal on an application whose stage is
-`screening` or `interview`, and starting one SHALL create an assistant session bound
-to that application's vacancy. The session SHALL carry the `interview` preset and no
-CV binding, because a rehearsal reads a CV but never edits one. The creating endpoint
-SHALL resolve the application through the caller's own tracking record, so an
-application the caller does not own is reported as missing rather than as forbidden.
+The opened application SHALL offer a rehearsal whatever its stage, and starting one
+SHALL create an assistant session bound to that application's vacancy. The session
+SHALL carry the `interview` preset and no CV binding, because a rehearsal reads a CV
+but never edits one. The creating endpoint SHALL resolve the application through the
+caller's own tracking record, so an application the caller does not own is reported as
+missing rather than as forbidden.
 
-#### Scenario: Rehearsal offered on an interviewing application
+An application whose posting the catalogue no longer holds SHALL NOT offer a
+rehearsal: the session is bound to a vacancy, and there is none to bind.
 
-- **WHEN** the candidate opens the tracking board and an application sits in the `screening` or `interview` stage
-- **THEN** that application offers to start a rehearsal
+#### Scenario: Rehearsal offered whatever the stage
+
+- **WHEN** the candidate opens an application from the tracking board
+- **THEN** it offers to start a rehearsal, whether it sits in `applied`, `screening`,
+  `interview` or any other stage
 
 #### Scenario: The session is bound to the vacancy and to no CV
 
@@ -26,6 +30,12 @@ application the caller does not own is reported as missing rather than as forbid
 
 - **WHEN** a caller starts a rehearsal for a vacancy they have no application against
 - **THEN** the request is answered as not found, and no session is created
+
+#### Scenario: No posting, no rehearsal
+
+- **WHEN** the candidate opens an application whose posting the catalogue no longer
+  holds
+- **THEN** no rehearsal is offered
 
 ### Requirement: The agent opens the rehearsal
 

@@ -1,0 +1,35 @@
+---
+title: Who backed the company hiring you
+date: 2026-08-01
+summary: Job cards now carry the mark of the accelerator or fund that picked the company — Y Combinator, Techstars, a16z — and you can filter the feed by any of them.
+type: changelog
+tags:
+  - job-seekers
+  - filters
+---
+
+Whether a company was picked by Y Combinator says something a job description never
+will. Until now you could only know it by recognising the company name.
+
+Job cards now show the mark of the accelerator or fund that backed the employer, next
+to the company name: **Y Combinator**, **Techstars**, and **a16z**. The same mark
+appears on the job page, the company page, the company catalogue, and inside the
+filter chips, so you can narrow the feed to one of them and see at a glance which
+roles qualify.
+
+a16z arrives as two separate filters rather than one, because they are not the same
+fact. **a16z** is the fund's portfolio — companies it invested in, from seed-stage to
+OpenAI. **a16z Speedrun** is the accelerator's cohorts: early companies that went
+through its programme. A candidate choosing where to apply is looking at two very
+different kinds of company, and collapsing them into one badge would have hidden that.
+
+The other curated collections — Big Tech, Unicorns, Fortune 500, AI-Native and the
+rest — stay as filters without a mark. They are themes we assembled ourselves, by
+size or sector or geography; nobody selected their members, so there is no one whose
+mark it would be.
+
+One thing the badge does not say: it is a fact about the **company**, not about the
+role in front of you. A fund backing an employer tells you nothing about a particular
+posting's pay, its urgency, or whether anyone is reading the applications. It tells
+you who looked at this company and decided to put money behind it — which is worth
+knowing, and worth not over-reading.

@@ -89,3 +89,64 @@ func TestDetect(t *testing.T) {
 		})
 	}
 }
+
+// TestDetectSelfHosted covers the career sites served from the employer's own domain, where the
+// board is the host and only the vendor's bundle in the markup says which platform it is. The
+// markers are the ones sampled live off the boards already in radancy.yml / phenom.yml /
+// jibe.yml / teamtailor.yml.
+func TestDetectSelfHosted(t *testing.T) {
+	cases := []struct {
+		name     string
+		html     string
+		host     string
+		provider string
+		board    string
+		ok       bool
+	}{
+		{
+			name: "radancy talentbrew bundle", host: "jobs.intuit.com",
+			html:     `<script src="https://cdn.example.com/talentbrew/main.js"></script>`,
+			provider: "radancy", board: "jobs.intuit.com", ok: true,
+		},
+		{
+			name: "phenom widget config", host: "jobs.kuehne-nagel.com",
+			html:     `<script>var phApp={"ddoKey":"refineSearch"};</script><link href="//assets.phenompeople.com/x.css">`,
+			provider: "phenom", board: "jobs.kuehne-nagel.com", ok: true,
+		},
+		{
+			name: "jibe apply bundle", host: "careers.amd.com",
+			html:     `<div data-jibeapply="1"></div>`,
+			provider: "jibe", board: "careers.amd.com", ok: true,
+		},
+		{
+			name: "teamtailor on a custom domain", host: "careers.investengine.com",
+			html:     `<meta name="generator" content="Teamtailor">`,
+			provider: "teamtailor", board: "careers.investengine.com", ok: true,
+		},
+		// www is not part of the board: the adapters and board files store the bare careers host.
+		{
+			name: "www stripped from the board", host: "www.github.careers",
+			html:     `<script src="/jibeapply.js"></script>`,
+			provider: "jibe", board: "github.careers", ok: true,
+		},
+		// The vendor's own site carries its own marker; it is never an employer board. Nor is a
+		// tenant hosted on the vendor's domain — atsboard resolves that one from the URL alone.
+		{name: "vendor marketing site", host: "www.phenom.com", html: `phenompeople`, ok: false},
+		{name: "tenant on the vendor domain", host: "bryter.teamtailor.com", html: `Teamtailor`, ok: false},
+		// Another ATS's page must not be claimed.
+		{name: "greenhouse embed page", host: "acme.com", html: `<script src="https://boards.greenhouse.io/embed/job_board/js?for=acme"></script>`, ok: false},
+		{name: "plain careers page", host: "acme.com", html: `<h1>Join us</h1>`, ok: false},
+		{name: "no host", host: "", html: `talentbrew`, ok: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, b, ok := DetectSelfHosted(tc.html, tc.host)
+			if ok != tc.ok {
+				t.Fatalf("ok = %v, want %v (got provider=%q board=%q)", ok, tc.ok, p, b)
+			}
+			if ok && (p != tc.provider || b != tc.board) {
+				t.Errorf("got (%q, %q), want (%q, %q)", p, b, tc.provider, tc.board)
+			}
+		})
+	}
+}
