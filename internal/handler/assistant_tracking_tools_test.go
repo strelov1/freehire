@@ -84,6 +84,20 @@ func (r *trackingRepo) UntrackJob(_ context.Context, _, jobID int64) (jobtrackin
 	return jobtracking.Interaction{JobID: jobID}, nil
 }
 
+// The application-addressed writes are the board's, not the assistant's; these exist
+// to satisfy the interface.
+func (r *trackingRepo) TrackApplication(context.Context, int64, int64, *string, *string, string) (jobtracking.Interaction, error) {
+	return jobtracking.Interaction{}, nil
+}
+
+func (r *trackingRepo) ClearApplicationProgress(context.Context, int64, int64) (jobtracking.Interaction, error) {
+	return jobtracking.Interaction{}, nil
+}
+
+func (r *trackingRepo) UntrackApplication(context.Context, int64, int64) (jobtracking.Interaction, error) {
+	return jobtracking.Interaction{}, nil
+}
+
 func (r *trackingRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _, _ int32) ([]jobtracking.TrackedJob, error) {
 	r.listedFor = filter
 	return nil, nil

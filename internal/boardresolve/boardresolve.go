@@ -50,10 +50,12 @@ var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)
 // Resolve fetches rawURL and finds the ATS board it belongs to, returning the catalogue
 // (source, board) and a canonical URL to store. It looks two ways:
 //  1. the Greenhouse embed shape (script for=<board>) via atsdetect — which the URL recognizer
-//     can't parse (it would read the path word "embed" as the board);
+//     can't parse, since the board is in the query param and the path holds only machinery;
 //  2. any supported ATS apply/board URL embedded in the page, run through the full
 //     atsboard.Recognize (all ~40 ATS, all modes) — this catches a company careers page
-//     that links to its recruitee/peopleforce/zoho/workday board.
+//     that links to its recruitee/peopleforce/zoho/workday board;
+//  3. the platforms whose board IS the careers host (Radancy/Phenom/Jibe/Teamtailor), via
+//     atsdetect.DetectSelfHosted — a site that links to no ATS host because it is the ATS.
 //
 // ok=false when the fetch fails or no board is found.
 func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, canonical string, ok bool) {
@@ -67,11 +69,21 @@ func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, c
 		return provider, slug, stripTails(rawURL), true
 	}
 
-	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins;
-	//    a Greenhouse embed URL misparses to board "embed" (step 1 owns Greenhouse), so skip it.
+	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins.
 	for _, u := range absURLRe.FindAllString(html, -1) {
-		if s, b, _, matched := atsboard.Recognize(u); matched && b != "embed" {
+		if s, b, _, matched := atsboard.Recognize(u); matched {
 			return s, b, stripTails(rawURL), true
+		}
+	}
+
+	// 3. The host IS the board. Radancy, Phenom, Jibe and Teamtailor tenants serve from the
+	//    employer's own domain and need link out to no ATS host at all, so both steps above come
+	//    up empty however plainly the page is a career site. The platform's fingerprint in the
+	//    markup names the provider, and the fetched host is the board — which is exactly what
+	//    these adapters namespace jobs.external_id by, so it dedups against the catalogue.
+	if u, err := url.Parse(rawURL); err == nil {
+		if provider, board, ok := atsdetect.DetectSelfHosted(html, u.Hostname()); ok {
+			return provider, board, stripTails(rawURL), true
 		}
 	}
 	return "", "", "", false

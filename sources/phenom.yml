@@ -101,3 +101,7 @@
 # Phenom tenant from jobcrawls harvest (2026-07, refineSearch-validated 482 postings)
 - company: Exyte
   board: careers.exyte.net
+
+# Phenom tenant recovered from the contribution queue (2026-08, refineSearch 1135 postings)
+- company: Kuehne+Nagel
+  board: jobs.kuehne-nagel.com

@@ -53,6 +53,19 @@ func (h *trackingHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/jobs/:slug/stage", mw.key, h.ClearStage)
 	api.Delete("/jobs/:slug/track", mw.key, h.Untrack)
 
+	// The same three writes, addressed by the row id the tracking listing served.
+	// The board holds row ids, not slugs, and an application whose posting cmd/prune
+	// removed has no slug to hold — so the routes above cannot move its card.
+	//
+	// Its own namespace rather than /me/tracking/:id: that path is already mounted
+	// (see the inbox handlers) addressed by a posting slug, and one segment meaning
+	// different things depending on the method is a trap for the next reader.
+	//
+	// The slug-addressed routes stay: freehire-cli and freehire-mcp name postings.
+	api.Patch("/me/applications/:id", mw.key, h.TrackApplication)
+	api.Delete("/me/applications/:id", mw.key, h.UntrackApplication)
+	api.Delete("/me/applications/:id/stage", mw.key, h.ClearApplicationStage)
+
 	// User-scoped reads live under /me (consistent with /auth/me): the tracking
 	// listing joins the caller's interactions with the jobs they touch, viewed-slugs
 	// lets the SPA dim already-seen cards without authenticating the public browse
@@ -123,6 +136,8 @@ func trackingError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "filter must be one of: all, viewed, saved, applied, board")
 	case errors.Is(err, jobtracking.ErrEmptyTrack):
 		return fiber.NewError(fiber.StatusBadRequest, "provide stage and/or notes")
+	case errors.Is(err, jobtracking.ErrApplicationNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "application not found")
 	default:
 		return err
 	}
@@ -308,4 +323,79 @@ func (h *trackingHandlers) TrackJob(c *fiber.Ctx) error {
 		return trackingError(err)
 	}
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// TrackApplication is TrackJob for a caller naming the row rather than the posting.
+// The listing mints two id forms and this accepts both: the application form goes
+// straight to the application, the slug form takes the path TrackJob already takes.
+func (h *trackingHandlers) TrackApplication(c *fiber.Ctx) error {
+	userID, ref, err := applicationRefFor(c)
+	if err != nil {
+		return err
+	}
+
+	var in trackRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	var interaction jobtracking.Interaction
+	if ref.AppID != 0 {
+		interaction, err = h.tracking.TrackApplication(c.Context(), userID, ref.AppID, in.Stage, in.Notes, appevent.SourceUser)
+	} else {
+		interaction, err = h.tracking.Track(c.Context(), userID, ref.Slug, in.Stage, in.Notes, appevent.SourceUser)
+	}
+	if err != nil {
+		return trackingError(err)
+	}
+	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// UntrackApplication is Untrack addressed by the row id.
+func (h *trackingHandlers) UntrackApplication(c *fiber.Ctx) error {
+	userID, ref, err := applicationRefFor(c)
+	if err != nil {
+		return err
+	}
+	var interaction jobtracking.Interaction
+	if ref.AppID != 0 {
+		interaction, err = h.tracking.UntrackApplication(c.Context(), userID, ref.AppID)
+	} else {
+		interaction, err = h.tracking.Untrack(c.Context(), userID, ref.Slug)
+	}
+	if err != nil {
+		return trackingError(err)
+	}
+	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// ClearApplicationStage is ClearStage addressed by the row id.
+func (h *trackingHandlers) ClearApplicationStage(c *fiber.Ctx) error {
+	userID, ref, err := applicationRefFor(c)
+	if err != nil {
+		return err
+	}
+	var interaction jobtracking.Interaction
+	if ref.AppID != 0 {
+		interaction, err = h.tracking.ClearApplicationProgress(c.Context(), userID, ref.AppID)
+	} else {
+		interaction, err = h.tracking.ClearProgress(c.Context(), userID, ref.Slug)
+	}
+	if err != nil {
+		return trackingError(err)
+	}
+	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// applicationRefFor authenticates the caller and reads the row id from the path.
+func applicationRefFor(c *fiber.Ctx) (int64, applicationRef, error) {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return 0, applicationRef{}, err
+	}
+	ref, err := parseApplicationRef(c.Params("id"))
+	if err != nil {
+		return 0, applicationRef{}, err
+	}
+	return userID, ref, nil
 }

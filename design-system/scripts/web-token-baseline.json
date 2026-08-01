@@ -8,7 +8,6 @@
   "web/src/lib/components/AnalysesView.svelte": 2,
   "web/src/lib/components/AnalyticsView.svelte": 1,
   "web/src/lib/components/ATSReportView.svelte": 4,
-  "web/src/lib/components/BoardCard.svelte": 1,
   "web/src/lib/components/BoardColumn.svelte": 1,
   "web/src/lib/components/ChatGptView.svelte": 10,
   "web/src/lib/components/CliView.svelte": 7,

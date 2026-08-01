@@ -164,6 +164,10 @@ type Querier interface {
 	// worker died (stale claimed_at), so no separate reaper process is needed.
 	// Oldest post first so a backlog drains in posting order.
 	ClaimTelegramPosts(ctx context.Context, arg ClaimTelegramPostsParams) ([]ClaimTelegramPostsRow, error)
+	// Drop an application's pipeline progress while keeping the record — the notes are the
+	// candidate's own text, and reconsidering is not a claim the process never happened.
+	// Clearing both stage and applied_at is what takes it off the board (see columnOf).
+	ClearApplicationProgressByID(ctx context.Context, arg ClearApplicationProgressByIDParams) (ClearApplicationProgressByIDRow, error)
 	// Withdraw the absence stamp: the role turned up on the company's board after all.
 	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
 	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
@@ -2166,6 +2170,17 @@ type Querier interface {
 	// marked as the owner's own). Unauthenticated read — the token IS the credential, and it grants
 	// nothing but a redirect.
 	TracerLinkByToken(ctx context.Context, token string) (TracerLinkByTokenRow, error)
+	// Set an application's stage and/or notes, naming the application itself.
+	//
+	// The slug-addressed TrackJob cannot serve an application whose posting cmd/prune
+	// removed: it upserts through `jobs`, and there is no row left to join. That is not a
+	// corner case on the board — the card is there, and dragging it is the ordinary act
+	// that had no working write path.
+	//
+	// Partial update and the stage_set ledger event on a real transition, both exactly as
+	// TrackJob does them: `prior` reads the pre-update value, so re-setting the stage a row
+	// already carries, or a notes-only call, records nothing.
+	TrackApplicationByID(ctx context.Context, arg TrackApplicationByIDParams) (TrackApplicationByIDRow, error)
 	// Set an application's stage and/or notes for a user, idempotently. Upserts the
 	// (user, job) row (viewed_at defaults). Partial update: a NULL param leaves that
 	// column unchanged (COALESCE keeps the existing value), so the caller can set the
@@ -2192,6 +2207,12 @@ type Querier interface {
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
 	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UnsaveJobRow, error)
+	// Take an application off the board outright, naming the application itself.
+	//
+	// Deletes the record, matching UntrackJob: this is the candidate saying it is not a
+	// thing they are pursuing, which is a claim about their own record and theirs alone to
+	// make. cmd/prune has no such standing, which is why it may not do this.
+	UntrackApplicationByID(ctx context.Context, arg UntrackApplicationByIDParams) (UntrackApplicationByIDRow, error)
 	// Remove a job from the board: drop every pipeline mark, keep viewed_at so the
 	// job remains in the user's view history.
 	// Taking a job off the board clears the process outright — this is the candidate

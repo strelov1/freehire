@@ -182,6 +182,70 @@ func (r *QueriesRepository) UntrackJob(ctx context.Context, userID, jobID int64)
 	return toInteraction(assembledRow(row)), nil
 }
 
+// TrackApplication sets stage and/or notes on an application named by its own id.
+func (r *QueriesRepository) TrackApplication(
+	ctx context.Context,
+	userID, appID int64,
+	stage, notes *string,
+	source string,
+) (Interaction, error) {
+	row, err := r.q.TrackApplicationByID(ctx, db.TrackApplicationByIDParams{
+		ID:          appID,
+		UserID:      userID,
+		Stage:       textFromPtr(stage),
+		Notes:       textFromPtr(notes),
+		EventSource: source,
+	})
+	if err != nil {
+		return Interaction{}, applicationRowErr(err)
+	}
+	return applicationInteraction(row.JobID, row.AppliedAt, row.Stage, row.Notes), nil
+}
+
+// ClearApplicationProgress drops the application's stage and applied_at, which is
+// what takes it off the board, and keeps the record.
+func (r *QueriesRepository) ClearApplicationProgress(ctx context.Context, userID, appID int64) (Interaction, error) {
+	row, err := r.q.ClearApplicationProgressByID(ctx, db.ClearApplicationProgressByIDParams{ID: appID, UserID: userID})
+	if err != nil {
+		return Interaction{}, applicationRowErr(err)
+	}
+	return applicationInteraction(row.JobID, row.AppliedAt, row.Stage, row.Notes), nil
+}
+
+// UntrackApplication removes the application outright.
+func (r *QueriesRepository) UntrackApplication(ctx context.Context, userID, appID int64) (Interaction, error) {
+	row, err := r.q.UntrackApplicationByID(ctx, db.UntrackApplicationByIDParams{ID: appID, UserID: userID})
+	if err != nil {
+		return Interaction{}, applicationRowErr(err)
+	}
+	return applicationInteraction(row.JobID, row.AppliedAt, row.Stage, row.Notes), nil
+}
+
+// applicationRowErr maps "no row came back" to the not-found sentinel. Every one of
+// the three statements is scoped by `user_id`, so a row belonging to somebody else
+// matches nothing and arrives here indistinguishable from one that never existed —
+// which is the answer the caller is owed in both cases.
+func applicationRowErr(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrApplicationNotFound
+	}
+	return err
+}
+
+// applicationInteraction builds the interaction an application-addressed write
+// returns. The marks that live on user_jobs — viewed, saved, dismissed — are absent
+// rather than zeroed-and-implied: an application whose posting is gone has no
+// user_jobs row at all, and reporting `saved_at: null` for it would be a claim we
+// cannot make. The board writes optimistically and does not read this back.
+func applicationInteraction(jobID pgtype.Int8, appliedAt pgtype.Timestamptz, stage, notes pgtype.Text) Interaction {
+	return Interaction{
+		JobID:     jobID.Int64, // 0 once the posting is gone
+		AppliedAt: pgconv.TimePtr(appliedAt),
+		Stage:     textPtr(stage),
+		Notes:     textPtr(notes),
+	}
+}
+
 // ListInteractions returns the caller's interactions joined with the jobs in the
 // canonical jobview shape, narrowed by the already-validated filter.
 func (r *QueriesRepository) ListInteractions(

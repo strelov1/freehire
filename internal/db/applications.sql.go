@@ -72,6 +72,42 @@ func (q *Queries) BackfillEmailApplicationLinks(ctx context.Context, batchSize i
 	return result.RowsAffected(), nil
 }
 
+const clearApplicationProgressByID = `-- name: ClearApplicationProgressByID :one
+UPDATE applications
+   SET stage = NULL, applied_at = NULL
+ WHERE applications.id = $1 AND applications.user_id = $2
+RETURNING job_id, applied_at, stage, notes, followed_up_at
+`
+
+type ClearApplicationProgressByIDParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type ClearApplicationProgressByIDRow struct {
+	JobID        pgtype.Int8        `json:"job_id"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
+// Drop an application's pipeline progress while keeping the record — the notes are the
+// candidate's own text, and reconsidering is not a claim the process never happened.
+// Clearing both stage and applied_at is what takes it off the board (see columnOf).
+func (q *Queries) ClearApplicationProgressByID(ctx context.Context, arg ClearApplicationProgressByIDParams) (ClearApplicationProgressByIDRow, error) {
+	row := q.db.QueryRow(ctx, clearApplicationProgressByID, arg.ID, arg.UserID)
+	var i ClearApplicationProgressByIDRow
+	err := row.Scan(
+		&i.JobID,
+		&i.AppliedAt,
+		&i.Stage,
+		&i.Notes,
+		&i.FollowedUpAt,
+	)
+	return i, err
+}
+
 const listOrphanedApplications = `-- name: ListOrphanedApplications :many
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
        (SELECT count(*)
@@ -149,4 +185,108 @@ func (q *Queries) ListOrphanedApplications(ctx context.Context, arg ListOrphaned
 		return nil, err
 	}
 	return items, nil
+}
+
+const trackApplicationByID = `-- name: TrackApplicationByID :one
+WITH prior AS (
+    SELECT a.stage FROM applications a
+     WHERE a.id = $1 AND a.user_id = $2
+), upd AS (
+    UPDATE applications
+       SET stage = COALESCE($3, applications.stage),
+           notes = COALESCE($4, applications.notes)
+     WHERE applications.id = $1 AND applications.user_id = $2
+    RETURNING id, user_id, company_slug, role_title, job_id, applied_at, stage, notes, followed_up_at, created_at
+), event AS (
+    -- job_id and company_slug come off the application, not off a posting: this row may
+    -- have no posting at all, and the employer is denormalised here for that reason.
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT $2, u.id, u.job_id, u.company_slug, 'stage_set', u.stage, now(), $5::text
+      FROM upd u
+     WHERE u.stage IS NOT NULL
+       AND u.stage IS DISTINCT FROM (SELECT prior.stage FROM prior)
+)
+SELECT u.job_id, u.applied_at, u.stage, u.notes, u.followed_up_at FROM upd u
+`
+
+type TrackApplicationByIDParams struct {
+	ID          int64       `json:"id"`
+	UserID      int64       `json:"user_id"`
+	Stage       pgtype.Text `json:"stage"`
+	Notes       pgtype.Text `json:"notes"`
+	EventSource string      `json:"event_source"`
+}
+
+type TrackApplicationByIDRow struct {
+	JobID        pgtype.Int8        `json:"job_id"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
+// Set an application's stage and/or notes, naming the application itself.
+//
+// The slug-addressed TrackJob cannot serve an application whose posting cmd/prune
+// removed: it upserts through `jobs`, and there is no row left to join. That is not a
+// corner case on the board — the card is there, and dragging it is the ordinary act
+// that had no working write path.
+//
+// Partial update and the stage_set ledger event on a real transition, both exactly as
+// TrackJob does them: `prior` reads the pre-update value, so re-setting the stage a row
+// already carries, or a notes-only call, records nothing.
+func (q *Queries) TrackApplicationByID(ctx context.Context, arg TrackApplicationByIDParams) (TrackApplicationByIDRow, error) {
+	row := q.db.QueryRow(ctx, trackApplicationByID,
+		arg.ID,
+		arg.UserID,
+		arg.Stage,
+		arg.Notes,
+		arg.EventSource,
+	)
+	var i TrackApplicationByIDRow
+	err := row.Scan(
+		&i.JobID,
+		&i.AppliedAt,
+		&i.Stage,
+		&i.Notes,
+		&i.FollowedUpAt,
+	)
+	return i, err
+}
+
+const untrackApplicationByID = `-- name: UntrackApplicationByID :one
+DELETE FROM applications
+ WHERE applications.id = $1 AND applications.user_id = $2
+RETURNING job_id, applied_at, stage, notes, followed_up_at
+`
+
+type UntrackApplicationByIDParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type UntrackApplicationByIDRow struct {
+	JobID        pgtype.Int8        `json:"job_id"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
+// Take an application off the board outright, naming the application itself.
+//
+// Deletes the record, matching UntrackJob: this is the candidate saying it is not a
+// thing they are pursuing, which is a claim about their own record and theirs alone to
+// make. cmd/prune has no such standing, which is why it may not do this.
+func (q *Queries) UntrackApplicationByID(ctx context.Context, arg UntrackApplicationByIDParams) (UntrackApplicationByIDRow, error) {
+	row := q.db.QueryRow(ctx, untrackApplicationByID, arg.ID, arg.UserID)
+	var i UntrackApplicationByIDRow
+	err := row.Scan(
+		&i.JobID,
+		&i.AppliedAt,
+		&i.Stage,
+		&i.Notes,
+		&i.FollowedUpAt,
+	)
+	return i, err
 }

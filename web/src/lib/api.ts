@@ -686,6 +686,27 @@ export function createApi(
     return requestData<UserJob>(`/api/v1/jobs/${slug}/track`, jsonBody('PATCH', patch));
   }
 
+  /** Set an application's stage and/or notes, addressing it by the row `id` the tracking
+   *  listing served rather than by a posting slug.
+   *
+   *  The board holds row ids, and an application whose posting the catalogue has removed
+   *  has no slug to hold — `trackJob` cannot move it. Same body and same rules,
+   *  including the partial update. */
+  function trackApplication(id: string, patch: { stage?: string; notes?: string }): Promise<UserJob> {
+    return requestData<UserJob>(`/api/v1/me/applications/${encodeURIComponent(id)}`, jsonBody('PATCH', patch));
+  }
+
+  /** Drop an application's pipeline progress, keeping its saved mark — the board's
+   *  backward "move to Saved" drag, addressed by the listing's row id. */
+  function clearApplicationStage(id: string): Promise<UserJob> {
+    return requestData<UserJob>(`/api/v1/me/applications/${encodeURIComponent(id)}/stage`, { method: 'DELETE' });
+  }
+
+  /** Remove an application from the board entirely, addressed by the listing's row id. */
+  function untrackApplication(id: string): Promise<UserJob> {
+    return requestData<UserJob>(`/api/v1/me/applications/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
   /** Clear a job's saved mark. Idempotent: "already not saved" is success. */
   function unsaveJob(slug: string): Promise<UserJob> {
     return jobInteraction(slug, 'save', 'DELETE');
@@ -1609,6 +1630,9 @@ export function createApi(
     clearJobStage,
     untrackJob,
     trackJob,
+    trackApplication,
+    clearApplicationStage,
+    untrackApplication,
     listMyJobs,
     getMyPipeline,
     myAnalyses,

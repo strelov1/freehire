@@ -143,6 +143,11 @@ var (
 	ErrInvalidStage  = errors.New("jobtracking: invalid stage")
 	ErrInvalidFilter = errors.New("jobtracking: invalid filter")
 	ErrEmptyTrack    = errors.New("jobtracking: provide stage and/or notes")
+	// ErrApplicationNotFound is returned when an application id names nothing the
+	// caller holds. It carries no distinction between "no such row" and "somebody
+	// else's row" — the handler renders both as one 404, and the repository must not
+	// hand it the material to do otherwise.
+	ErrApplicationNotFound = errors.New("jobtracking: application not found")
 	// ErrNoInteraction is returned by Repository.UnsaveJob when there is no
 	// interaction row to clear. The Service converts it into a zero-interaction
 	// success; it is never surfaced to the caller.
@@ -196,6 +201,24 @@ type Repository interface {
 	// UntrackJob removes a job from the board entirely: clears saved_at, applied_at,
 	// stage, and notes, keeping viewed_at so the job stays in view history.
 	UntrackJob(ctx context.Context, userID, jobID int64) (Interaction, error)
+
+	// The three below address an application by its own id rather than through a
+	// posting. They exist because the posting is the part that can disappear: once
+	// cmd/prune removes it the slug-addressed writes above have nothing to resolve,
+	// and the card on the board becomes unmovable. Each returns
+	// ErrApplicationNotFound when the id names nothing the caller holds.
+
+	// TrackApplication sets stage and/or notes on the application. A nil pointer
+	// means "leave unchanged", and `source` is carried as TrackJob carries it.
+	TrackApplication(ctx context.Context, userID, appID int64, stage, notes *string, source string) (Interaction, error)
+
+	// ClearApplicationProgress drops stage and applied_at, keeping the record and its
+	// notes — the pair is what puts an application on the board.
+	ClearApplicationProgress(ctx context.Context, userID, appID int64) (Interaction, error)
+
+	// UntrackApplication removes the application outright, as UntrackJob does for a
+	// posting-backed one.
+	UntrackApplication(ctx context.Context, userID, appID int64) (Interaction, error)
 
 	// ListInteractions returns the caller's interactions joined with the jobs,
 	// narrowed by an already-validated filter, most recently touched first.
@@ -406,4 +429,27 @@ func (s *Service) Track(ctx context.Context, userID int64, slug string, stage, n
 		return Interaction{}, err
 	}
 	return s.repo.TrackJob(ctx, userID, jobID, stage, notes, source)
+}
+
+// TrackApplication is Track for a caller holding the application's own id. The same
+// validation runs first and for the same reason: a bad body is a bad request whichever
+// way the row was named, and rejecting it here keeps it off the database.
+func (s *Service) TrackApplication(ctx context.Context, userID, appID int64, stage, notes *string, source string) (Interaction, error) {
+	if stage == nil && notes == nil {
+		return Interaction{}, ErrEmptyTrack
+	}
+	if stage != nil && !userjob.ValidStage(*stage) {
+		return Interaction{}, ErrInvalidStage
+	}
+	return s.repo.TrackApplication(ctx, userID, appID, stage, notes, source)
+}
+
+// ClearApplicationProgress is ClearProgress for a caller holding the application's id.
+func (s *Service) ClearApplicationProgress(ctx context.Context, userID, appID int64) (Interaction, error) {
+	return s.repo.ClearApplicationProgress(ctx, userID, appID)
+}
+
+// UntrackApplication is Untrack for a caller holding the application's id.
+func (s *Service) UntrackApplication(ctx context.Context, userID, appID int64) (Interaction, error) {
+	return s.repo.UntrackApplication(ctx, userID, appID)
 }

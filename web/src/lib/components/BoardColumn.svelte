@@ -11,19 +11,21 @@
     onconsider,
     onfinalize,
     onopen,
-    onfollowup,
-    onrehearse,
+    dragDisabled = false,
   }: {
     id: BoardColumnId;
     label: string;
     items: BoardItem[];
+    // Set while the board is filtered by a search. The zone is handed the matching rows
+    // only, and svelte-dnd-action answers a drop with the array it was given — so a drop
+    // during a search would write the visible subset back as the whole column and lose
+    // every row the query hid.
+    dragDisabled?: boolean;
     onconsider: (id: BoardColumnId, items: BoardItem[]) => void;
     onfinalize: (id: BoardColumnId, items: BoardItem[]) => void;
     // BoardItem extends MyJob; the card calls back with the item it received,
     // which satisfies MyJob. The parent can widen back to BoardItem via cast.
     onopen: (item: MyJob) => void;
-    onfollowup: (item: MyJob) => void;
-    onrehearse: (item: MyJob) => void;
   } = $props();
 
   // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
@@ -44,13 +46,13 @@
        dropped — and the column header/count stay put. -->
   <div
     class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
-    use:dndzone={{ items, flipDurationMs: 150, type: 'board', dropTargetStyle }}
+    use:dndzone={{ items, flipDurationMs: 150, type: 'board', dropTargetStyle, dragDisabled }}
     onconsider={(e) => onconsider(id, e.detail.items as BoardItem[])}
     onfinalize={(e) => onfinalize(id, e.detail.items as BoardItem[])}
   >
     {#each items as item (item.id)}
       <div>
-        <BoardCard {item} {onopen} {onfollowup} {onrehearse} />
+        <BoardCard {item} {onopen} />
       </div>
     {/each}
   </div>

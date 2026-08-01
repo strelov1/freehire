@@ -19,6 +19,7 @@ package atsboard
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -75,6 +76,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
 	{"recruiting.ultipro.com", "ukg", modePath},
+	// Manatal's hosted career-page domain is PATH-based (careers-page.com/<tenant>/job/<id>),
+	// not a tenant subdomain, and its source is manatal: careerspage.yml is deliberately empty
+	// because every careers-page.com tenant is served by the Manatal adapter.
+	{"careers-page.com", "manatal", modePath},
 
 	// --- pathportal: board = the segment before the posting segment ---
 	{"jobs.smartrecruiters.com", "smartrecruiters", modePathPortal},
@@ -98,7 +103,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"applicantpro.com", "applicantpro", modeSubdomain},
 	{"isolvedhire.com", "isolvedhire", modeSubdomain},
 	{"careerplug.com", "careerplug", modeSubdomain},
-	{"careers-page.com", "careerspage", modeSubdomain},
 	{"catsone.com", "catsone", modeSubdomain},
 	{"csod.com", "cornerstone", modeSubdomain},
 	{"enlizt.me", "enlizt", modeSubdomain},
@@ -125,6 +129,36 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"myworkdayjobs.com", "workday", modeHostPath},
 }
 
+// apiBoards lists each ATS's OWN API host, where the board sits behind a fixed path prefix
+// rather than in the first segment. These are not links a person pastes; they are the XHR a
+// career site on the EMPLOYER's own domain makes to load its listing. That request often names
+// the board when nothing else on the page does — phantom.com/careers is a plain marketing page
+// whose only mention of the Ashby board "phantom" is the posting-api URL.
+//
+// Matched before atsBoards, which also settles a shadowing bug: boards-api.greenhouse.io is a
+// subdomain of greenhouse.io, so the path rule used to read the API version as the board and
+// hand back greenhouse/"v1" — a silently wrong board of exactly the kind this package's doc
+// comment warns about.
+var apiBoards = []struct{ host, source, prefix string }{
+	{"api.ashbyhq.com", "ashby", "posting-api/job-board"},
+	{"boards-api.greenhouse.io", "greenhouse", "v1/boards"},
+	{"api.lever.co", "lever", "v0/postings"},
+}
+
+// reservedSegments lists, per matched host entry, the leading path segments that are the
+// platform's own machinery and never a tenant. They are skipped in path mode; when nothing
+// but reserved segments remains the URL is declined rather than turned into a false board.
+//
+// Jobvite serves one board both bare (<board>/job/<id>) and behind a portal segment
+// (careers/<board>/jobs), so the first segment read "careers" as the employer — the same defect
+// SmartRecruiters got pathportal for. Greenhouse's embed URLs carry no board in the path at all
+// (the slug is in the `for=` query param, which atsdetect reads), so every one of their path
+// words is machinery.
+var reservedSegments = map[string][]string{
+	"jobs.jobvite.com": {"careers"},
+	"greenhouse.io":    {"embed", "job_app", "job_board", "js"},
+}
+
 // Recognize parses a pasted job link into the company board it belongs to: the source
 // (ATS provider), the board slug, and the canonical URL to store. ok=false when the host is
 // not a supported ATS or the URL carries no board segment/label.
@@ -134,6 +168,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return "", "", "", false
 	}
 	host := hostname(u)
+	if src, board, canonical, ok := recognizeAPI(u, host); ok {
+		return src, board, canonical, true
+	}
 	src, mode, apex, known := matchHost(host)
 	if !known {
 		return "", "", "", false
@@ -196,8 +233,8 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return src, board, u.String(), true
 	}
 
-	// modePath: the board is the first path segment.
-	board = firstPathSegment(u)
+	// modePath: the board is the first path segment that isn't platform machinery.
+	board = firstTenantSegment(u, reservedSegments[apex])
 	if board == "" {
 		return "", "", "", false
 	}
@@ -205,6 +242,28 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 	u.Fragment = ""
 	u.Path = strings.TrimSuffix(strings.TrimSuffix(u.Path, "/"), "/apply")
 	return src, board, u.String(), true
+}
+
+// recognizeAPI resolves a URL on an ATS's own API host, where the board is the segment right
+// after the entry's fixed path prefix. The canonical collapses to that prefix + board, so every
+// query-parametered variant of the same API call maps to one board.
+func recognizeAPI(u *url.URL, host string) (source, board, canonical string, ok bool) {
+	for _, a := range apiBoards {
+		if host != a.host {
+			continue
+		}
+		rest, found := strings.CutPrefix(strings.Trim(u.Path, "/"), a.prefix+"/")
+		if !found {
+			return "", "", "", false
+		}
+		if board, _, _ = strings.Cut(rest, "/"); board == "" {
+			return "", "", "", false
+		}
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + a.prefix + "/" + board
+		return a.source, board, u.String(), true
+	}
+	return "", "", "", false
 }
 
 // matchHost returns the ATS entry for a host. path/subdomain entries match the host exactly or
@@ -310,15 +369,18 @@ func hostname(u *url.URL) string {
 	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }
 
-// firstPathSegment returns u's first non-empty path segment ("/acme/jobs/1" → "acme",
-// "/acme" → "acme", "/" → "").
-func firstPathSegment(u *url.URL) string {
+// firstTenantSegment returns u's first path segment that is not one of reserved — the platform
+// path words that are never a tenant on this host. "/acme/jobs/1" → "acme"; "/careers/ness/jobs"
+// with reserved{"careers"} → "ness"; "/" or a path of nothing but reserved words → "".
+func firstTenantSegment(u *url.URL, reserved []string) string {
 	p := strings.Trim(u.Path, "/")
 	if p == "" {
 		return ""
 	}
-	if i := strings.IndexByte(p, '/'); i >= 0 {
-		return p[:i]
+	for _, seg := range strings.Split(p, "/") {
+		if !slices.Contains(reserved, seg) {
+			return seg
+		}
 	}
-	return p
+	return ""
 }
