@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -175,6 +176,50 @@ func (c *Client) Spend(ctx context.Context, secret string) (Spend, error) {
 		}
 	}
 	return spend, nil
+}
+
+// Activity is what an account did over a window: how many model calls it made, how many
+// of them failed, and the tokens they moved.
+//
+// Deliberately no money. This is what a person is shown about their own use, and the
+// gateway's cost figure is a list price against a mixed upstream pool — not our cost, and
+// certainly not their price, which is measured in credits.
+type Activity struct {
+	Requests int
+	Failed   int
+	Tokens   int
+}
+
+// Activity reports what one account did between two dates, inclusive.
+//
+// The gateway aggregates this per day and hands back a pre-computed total, so the window
+// costs one call however long it is. It is an administrative read keyed by the account id
+// we minted under — an internal number, not a secret, so it travels in the query string
+// where a credential could not.
+func (c *Client) Activity(ctx context.Context, userID int64, from, to time.Time) (Activity, error) {
+	if c == nil {
+		return Activity{}, fmt.Errorf("%w: no admin API configured", ErrUpstream)
+	}
+	query := url.Values{
+		"user_id":    {ownerPrefix + strconv.FormatInt(userID, 10)},
+		"start_date": {from.UTC().Format(time.DateOnly)},
+		"end_date":   {to.UTC().Format(time.DateOnly)},
+	}
+	var out struct {
+		Metadata struct {
+			Requests int `json:"total_api_requests"`
+			Failed   int `json:"total_failed_requests"`
+			Tokens   int `json:"total_tokens"`
+		} `json:"metadata"`
+	}
+	if err := c.get(ctx, "/user/daily/activity?"+query.Encode(), c.cfg.AdminKey, &out); err != nil {
+		return Activity{}, err
+	}
+	return Activity{
+		Requests: out.Metadata.Requests,
+		Failed:   out.Metadata.Failed,
+		Tokens:   out.Metadata.Tokens,
+	}, nil
 }
 
 // Block retires a credential without erasing it: it stops spending and stays in the

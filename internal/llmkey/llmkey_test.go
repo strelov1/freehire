@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 // captured is what the fake gateway saw, so a test can assert on the request the client
@@ -231,6 +233,58 @@ func TestSpendReportsAnUnknownKeyDistinctly(t *testing.T) {
 	_, err := c.Spend(context.Background(), "sk-forgotten")
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Errorf("error = %v, want ErrUnknownKey so the caller can re-mint", err)
+	}
+}
+
+func TestActivityCountsWhatTheAccountDid(t *testing.T) {
+	srv, got := gateway(t, http.StatusOK, `{"results":[],"metadata":{
+		"total_api_requests":128,"total_successful_requests":126,"total_failed_requests":2,
+		"total_tokens":450000,"total_spend":1.25}}`)
+	c := New(Config{BaseURL: srv.URL, AdminKey: "sk-admin"})
+
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	act, err := c.Activity(context.Background(), 42, from, to)
+	if err != nil {
+		t.Fatalf("Activity: %v", err)
+	}
+	if act.Requests != 128 || act.Failed != 2 || act.Tokens != 450000 {
+		t.Errorf("Activity = %+v, want 128 calls, 2 failed, 450000 tokens", act)
+	}
+	if got.path != "/user/daily/activity" || got.method != http.MethodGet {
+		t.Errorf("called %s %s, want GET /user/daily/activity", got.method, got.path)
+	}
+	// The account is named by the SAME namespaced id minting writes, or the read
+	// silently reports zero for an account that has been busy all month.
+	if !strings.Contains(got.query, "user_id=freehire-42") {
+		t.Errorf("query = %q, want the namespaced account id", got.query)
+	}
+	if !strings.Contains(got.query, "start_date=2026-08-01") || !strings.Contains(got.query, "end_date=2026-08-31") {
+		t.Errorf("query = %q, want the window as plain dates", got.query)
+	}
+}
+
+// An account the gateway has never seen is the ordinary "never used AI" case, and the
+// endpoint answers it with zeroes rather than an error.
+func TestActivityOfAnUnknownAccountIsZero(t *testing.T) {
+	srv, _ := gateway(t, http.StatusOK, `{"results":[],"metadata":{"total_api_requests":0,"total_failed_requests":0,"total_tokens":0}}`)
+	c := New(Config{BaseURL: srv.URL, AdminKey: "sk-admin"})
+
+	act, err := c.Activity(context.Background(), 42, time.Now(), time.Now())
+	if err != nil {
+		t.Fatalf("Activity: %v", err)
+	}
+	if act.Requests != 0 || act.Tokens != 0 {
+		t.Errorf("Activity = %+v, want zeroes", act)
+	}
+}
+
+func TestActivityReportsAFailure(t *testing.T) {
+	srv, _ := gateway(t, http.StatusInternalServerError, `{"error":"boom"}`)
+	c := New(Config{BaseURL: srv.URL, AdminKey: "sk-admin"})
+
+	if _, err := c.Activity(context.Background(), 42, time.Now(), time.Now()); err == nil {
+		t.Error("Activity must surface a gateway fault rather than report a false zero")
 	}
 }
 

@@ -218,14 +218,27 @@ func (s *Store) Reward(ctx context.Context, userID int64, ref string) (Balance, 
 	return Balance{Remaining: int(remaining), ResetsAt: resetsAt(now)}, nil
 }
 
-// periodKey is the calendar-month key (UTC) a grant and its debits share.
-func periodKey(t time.Time) string {
+// PeriodKey is the calendar-month key (UTC) a grant and its debits share.
+//
+// Exported so anything else that reports "this period" reports the SAME period. Points
+// and gateway usage are different instruments over one calendar, and two calendars would
+// put a user's balance and their usage on different months without either being wrong.
+func PeriodKey(t time.Time) string {
 	return t.Format("2006-01")
 }
 
-// resetsAt is midnight UTC on the first of the month after t — when the current
+// PeriodStart is midnight UTC on the first of the month t falls in.
+func PeriodStart(t time.Time) time.Time {
+	y, m, _ := t.Date()
+	return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
+}
+
+// ResetsAt is midnight UTC on the first of the month after t — when the current
 // period's grant lapses and a fresh grant is issued.
-func resetsAt(t time.Time) time.Time {
+func ResetsAt(t time.Time) time.Time {
 	y, m, _ := t.Date()
 	return time.Date(y, m+1, 1, 0, 0, 0, 0, time.UTC)
 }
+
+func periodKey(t time.Time) string   { return PeriodKey(t) }
+func resetsAt(t time.Time) time.Time { return ResetsAt(t) }
