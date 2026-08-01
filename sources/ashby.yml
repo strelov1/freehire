@@ -481,7 +481,7 @@
   board: goteleport
 - company: GPTZero
   board: GPTZero
-- company: granola.ai
+- company: Granola
   board: granola
 - company: Granted
   board: granted
@@ -679,7 +679,7 @@
   board: mach9
 - company: Magic School
   board: magicschool
-- company: magical
+- company: Magical
   board: magical
 - company: magiceden
   board: magiceden
@@ -1453,8 +1453,6 @@
   board: avra
 - company: Clipbook
   board: clipbook
-- company: Flock
-  board: flock
 - company: HavocAI
   board: havocai
 - company: Kyra
@@ -1533,8 +1531,6 @@
   board: adelphi-ai
 - company: adthena
   board: adthena
-- company: aerovect
-  board: aerovect
 - company: aescape
   board: aescape
 - company: agent
@@ -1723,8 +1719,6 @@
   board: atomic-invest
 - company: atomicindustries
   board: atomicindustries
-- company: atomicsemi
-  board: atomicsemi
 - company: atroposhealth
   board: atroposhealth
 - company: aufinity-group-gmbh
@@ -1741,8 +1735,6 @@
   board: avala
 - company: avelios-medical
   board: avelios-medical
-- company: aven
-  board: aven
 - company: avid4
   board: avid4
 - company: away
@@ -1779,8 +1771,6 @@
   board: base-operations
 - company: basiccapital
   board: basiccapital
-- company: bastion
-  board: bastion
 - company: baton
   board: baton
 - company: batoncorporation
@@ -1861,8 +1851,6 @@
   board: bliro
 - company: blockit
   board: blockit
-- company: blockworks
-  board: blockworks
 - company: blossom-health
   board: blossom-health
 - company: blp-digital
@@ -2021,8 +2009,6 @@
   board: chattermill
 - company: checkatrade
   board: checkatrade
-- company: chestnut
-  board: chestnut
 - company: chief
   board: chief
 - company: chromatic
@@ -2069,14 +2055,12 @@
   board: cleric
 - company: clinicallyai
   board: clinicallyai
-- company: close
+- company: Close
   board: close
 - company: cloudscaler
   board: cloudscaler
 - company: cloudtrucks
   board: cloudtrucks
-- company: cloudzero
-  board: cloudzero
 - company: clove
   board: clove
 - company: clubhouse
@@ -2087,7 +2071,7 @@
   board: cocodelivery
 - company: codat
   board: codat
-- company: coder
+- company: Coder
   board: coder
 - company: codes-health
   board: codes-health
@@ -2141,8 +2125,6 @@
   board: conduct
 - company: conductorai
   board: conductorai
-- company: conduit
-  board: conduit
 - company: conduit-health
   board: conduit-health
 - company: confiant
@@ -2227,8 +2209,6 @@
   board: cybret
 - company: cylinderhealth
   board: cylinderhealth
-- company: d-matrix
-  board: d-matrix
 - company: dailypay
   board: dailypay
 - company: dakota
@@ -2247,8 +2227,6 @@
   board: datastealth
 - company: datatonic
   board: datatonic
-- company: datologyai
-  board: datologyai
 - company: dave
   board: dave
 - company: davidenergy
@@ -2425,8 +2403,6 @@
   board: ernest
 - company: espresso
   board: espresso
-- company: etched
-  board: etched
 - company: euphoric
   board: euphoric
 - company: eventualcomputing
@@ -2457,7 +2433,7 @@
   board: faction
 - company: factory
   board: factory
-- company: falconer
+- company: Falconer
   board: falconer
 - company: farmersd40
   board: farmersd40
@@ -2595,14 +2571,10 @@
   board: furiosa-ai
 - company: further
   board: further
-- company: fuse
-  board: fuse
 - company: fuser
   board: fuser
 - company: fwd-people
   board: fwd-people
-- company: g2
-  board: g2
 - company: g2i
   board: g2i
 - company: gaiafamily
@@ -2635,7 +2607,7 @@
   board: geoforce
 - company: getground
   board: getground
-- company: gitbook
+- company: GitBook
   board: gitbook
 - company: glacier
   board: glacier
@@ -2679,8 +2651,6 @@
   board: govwell
 - company: govworx
   board: govworx
-- company: gptzero
-  board: gptzero
 - company: gradient
   board: gradient
 - company: gradient-labs
@@ -2909,7 +2879,7 @@
   board: innate
 - company: innatera
   board: innatera
-- company: inscribeai
+- company: InscribeAI
   board: inscribeai
 - company: inspectiv
   board: inspectiv
@@ -2973,8 +2943,6 @@
   board: jordandigitalmarketing
 - company: josys
   board: josys
-- company: joyteractive
-  board: joyteractive
 - company: jump
   board: jump
 - company: jump-app
@@ -3039,8 +3007,6 @@
   board: kodifly
 - company: kog
   board: kog
-- company: kognitos
-  board: kognitos
 - company: kognity
   board: kognity
 - company: koho
@@ -3189,8 +3155,6 @@
   board: luminovo
 - company: lunar
   board: lunar
-- company: lynk
-  board: lynk
 - company: lyric
   board: lyric
 - company: m-kopa
@@ -3227,8 +3191,6 @@
   board: mathgpt
 - company: matia
   board: matia
-- company: maticrobots
-  board: maticrobots
 - company: matter-intelligence
   board: matter-intelligence
 - company: maven-agi
@@ -3299,7 +3261,7 @@
   board: mindrobotics
 - company: mindvalley
   board: mindvalley
-- company: mintlify
+- company: Mintlify
   board: mintlify
 - company: mirelo
   board: mirelo
@@ -3349,12 +3311,8 @@
   board: moxfive
 - company: moxie
   board: moxie
-- company: mubi
-  board: mubi
 - company: mudflap
   board: mudflap
-- company: mui
-  board: mui
 - company: multiply
   board: multiply
 - company: munich-electrification
@@ -3369,12 +3327,8 @@
   board: mytomorrows
 - company: nabla
   board: nabla
-- company: nango
-  board: nango
 - company: nano-qt
   board: nano-qt
-- company: nash
-  board: nash
 - company: nationgraph
   board: nationgraph
 - company: natter
@@ -3457,8 +3411,6 @@
   board: nomic
 - company: northslope-technologies
   board: northslope-technologies
-- company: northwoodspace
-  board: northwoodspace
 - company: nory
   board: nory
 - company: nory-co
@@ -3479,8 +3431,6 @@
   board: nox-metals
 - company: noyo
   board: noyo
-- company: npx
-  board: npx
 - company: ntegrity
   board: ntegrity
 - company: numeric
@@ -3539,8 +3489,6 @@
   board: onoshealth
 - company: onramp
   board: onramp
-- company: ontic
-  board: ontic
 - company: ontologize
   board: ontologize
 - company: onton
@@ -3659,7 +3607,7 @@
   board: payscale
 - company: payzen-inc
   board: payzen-inc
-- company: pear-vc
+- company: Pear-VC
   board: pear-vc
 - company: pearlhealth
   board: pearlhealth
@@ -3677,8 +3625,6 @@
   board: peppr
 - company: percepta
   board: percepta
-- company: perchwell
-  board: perchwell
 - company: percona
   board: percona
 - company: perfect-venue
@@ -3721,8 +3667,6 @@
   board: plaud
 - company: playbook
   board: playbook
-- company: playlab
-  board: playlab
 - company: pleo
   board: pleo
 - company: plinth
@@ -3845,8 +3789,6 @@
   board: radiant-industries
 - company: raiku
   board: raiku
-- company: railway
-  board: railway
 - company: rainforest-pay
   board: rainforest-pay
 - company: range
@@ -3995,8 +3937,6 @@
   board: safety
 - company: sagecare
   board: sagecare
-- company: sahara
-  board: sahara
 - company: sailorhealth
   board: sailorhealth
 - company: sainapse
@@ -4029,8 +3969,6 @@
   board: scan-com
 - company: scarlet
   board: scarlet
-- company: scholarly
-  board: scholarly
 - company: schoolhouse-world
   board: schoolhouse-world
 - company: screenverse
@@ -4059,8 +3997,6 @@
   board: second-front-systems
 - company: second-nature
   board: second-nature
-- company: seconddinner
-  board: seconddinner
 - company: seifoundation
   board: seifoundation
 - company: sellfire
@@ -4095,8 +4031,6 @@
   board: shapr3d
 - company: shift
   board: shift
-- company: shiftkey
-  board: shiftkey
 - company: shiftsmart
   board: shiftsmart
 - company: shook
@@ -4123,8 +4057,6 @@
   board: simondata
 - company: simspace-corporation
   board: simspace-corporation
-- company: simular
-  board: simular
 - company: singular
   board: singular
 - company: sio-logistics
@@ -4189,8 +4121,6 @@
   board: sona
 - company: sonio
   board: sonio
-- company: sorare
-  board: sorare
 - company: sosafe
   board: sosafe
 - company: soshallwe
@@ -4209,7 +4139,7 @@
   board: spara
 - company: spare
   board: spare
-- company: speakeasy
+- company: Speakeasy
   board: speakeasy
 - company: spearbio
   board: spearbio
@@ -4339,8 +4269,6 @@
   board: sygaldry-technologies
 - company: sylvera
   board: sylvera
-- company: symbiotic
-  board: symbiotic
 - company: synthflow
   board: synthflow
 - company: tabs
@@ -4361,8 +4289,6 @@
   board: talentful
 - company: talentsafari
   board: talentsafari
-- company: talos-trading
-  board: talos-trading
 - company: tandem-health
   board: tandem-health
 - company: tandempv
@@ -4437,8 +4363,6 @@
   board: teya
 - company: teza-technologies
   board: teza-technologies
-- company: thatgamecompany
-  board: thatgamecompany
 - company: the-flex
   board: the-flex
 - company: the-studio
@@ -4575,8 +4499,6 @@
   board: unmind
 - company: unto-labs
   board: unto-labs
-- company: unwrap
-  board: unwrap
 - company: upcodes
   board: upcodes
 - company: upflow
@@ -4661,8 +4583,6 @@
   board: voize
 - company: voladynamics
   board: voladynamics
-- company: voldex
-  board: voldex
 - company: volition-capital
   board: volition-capital
 - company: volka
@@ -4775,7 +4695,7 @@
   board: yourco
 - company: yutori
   board: yutori
-- company: zania
+- company: Zania
   board: zania
 - company: zauber
   board: zauber
@@ -4791,8 +4711,6 @@
   board: zefir
 - company: zefr
   board: zefr
-- company: zello
-  board: zello
 - company: zencastr
   board: zencastr
 - company: zeromark
@@ -4837,21 +4755,21 @@
   board: safe
 - company: yeifinance
   board: yeifinance
-- company: Citizen%20Health
+- company: Citizen Health
   board: Citizen%20Health
-- company: Flock%20Safety
+- company: Flock Safety
   board: Flock%20Safety
 - company: GovSignals
   board: GovSignals
-- company: Hippocratic%20AI
+- company: Hippocratic AI
   board: Hippocratic%20AI
-- company: PAR%20Technology
+- company: PAR Technology
   board: PAR%20Technology
-- company: Resolve%20AI
+- company: Resolve AI
   board: Resolve%20AI
-- company: The%20Job%20Sauce
+- company: The Job Sauce
   board: The%20Job%20Sauce
-- company: Tools%20for%20Humanity
+- company: Tools for Humanity
   board: Tools%20for%20Humanity
 - company: blissway
   board: blissway
@@ -4881,7 +4799,7 @@
   board: tolan
 - company: treeswift
   board: treeswift
-- company: trunk%20tools
+- company: trunk tools
   board: trunk%20tools
 - company: 1x
   board: 1x
@@ -4889,46 +4807,8 @@
   board: 3e
 - company: 7gen
   board: 7gen
-- company: Browserbase
-  board: Browserbase
-- company: ChartHop
-  board: ChartHop
-- company: Close
-  board: Close
-- company: Coder
-  board: Coder
-- company: Falconer
-  board: Falconer
-- company: Felix
-  board: Felix
-- company: GitBook
-  board: GitBook
-- company: Granola
-  board: Granola
-- company: InscribeAI
-  board: InscribeAI
-- company: Linear
-  board: Linear
-- company: Magical
-  board: Magical
-- company: Mintlify
-  board: Mintlify
 - company: Outsmart
   board: Outsmart
-- company: Pear-VC
-  board: Pear-VC
-- company: Prompt
-  board: Prompt
-- company: SigNoz
-  board: SigNoz
-- company: Speakeasy
-  board: Speakeasy
-- company: Substack
-  board: Substack
-- company: Vanta
-  board: Vanta
-- company: Zania
-  board: Zania
 - company: absorblms
   board: absorblms
 - company: access
@@ -5029,8 +4909,6 @@
   board: augur
 - company: auror
   board: auror
-- company: authorium
-  board: authorium
 - company: avallon
   board: avallon
 - company: avantos
@@ -5769,7 +5647,7 @@
   board: pandektes
 - company: primer.io
   board: primer.io
-- company: protex%20ai
+- company: protex ai
   board: protex%20ai
 - company: rossum.ai
   board: rossum.ai
@@ -5791,9 +5669,9 @@
   board: vitable
 - company: whop
   board: whop
-- company: 1st%20formations
+- company: 1st formations
   board: 1st%20formations
-- company: abode%20money
+- company: abode money
   board: abode%20money
 - company: anyone-ai
   board: anyone-ai
@@ -5801,7 +5679,7 @@
   board: aplazo
 - company: b2spin
   board: b2spin
-- company: brodie%20rec%20league
+- company: brodie rec league
   board: brodie%20rec%20league
 - company: cascade
   board: cascade
@@ -5811,21 +5689,19 @@
   board: datasnipper.com
 - company: doctoralia-brasil
   board: doctoralia-brasil
-- company: dominion%20dynamics
+- company: dominion dynamics
   board: dominion%20dynamics
 - company: enter-ai
   board: enter-ai
 - company: freewill
   board: freewill
-- company: growthx%20ai
+- company: growthx ai
   board: growthx%20ai
-- company: harrison.ai
-  board: harrison.ai
 - company: hellyeah
   board: hellyeah
 - company: ignition
   board: ignition
-- company: infinite%20lambda
+- company: infinite lambda
   board: infinite%20lambda
 - company: integratedhealth
   board: integratedhealth
@@ -5863,7 +5739,7 @@
   board: socialscout
 - company: stealthhc
   board: stealthhc
-- company: stony%20creek%20homes
+- company: stony creek homes
   board: stony%20creek%20homes
 - company: surfshark
   board: surfshark
@@ -5881,9 +5757,9 @@
   board: znanylekarz
 - company: 3imembers
   board: 3imembers
-- company: 8090%20solutions%20inc
+- company: 8090 solutions inc
   board: 8090%20solutions%20inc
-- company: a1%20garage%20door%20service
+- company: A1 Garage Door Service
   board: a1%20garage%20door%20service
 - company: a16z-new-media
   board: a16z-new-media
@@ -5915,7 +5791,7 @@
   board: alterion
 - company: alva-energy
   board: alva-energy
-- company: american%20terawatt
+- company: american terawatt
   board: american%20terawatt
 - company: ampersand
   board: ampersand
@@ -5925,7 +5801,7 @@
   board: anysignal
 - company: apple-roofing
   board: apple-roofing
-- company: applied%20compute
+- company: applied compute
   board: applied%20compute
 - company: aquarianlp
   board: aquarianlp
@@ -5959,7 +5835,7 @@
   board: backflip.ai
 - company: beaconsoftware
   board: beaconsoftware
-- company: benchmark%20sports
+- company: benchmark sports
   board: benchmark%20sports
 - company: bicara-therapeutics
   board: bicara-therapeutics
@@ -5969,7 +5845,7 @@
   board: bivacor-inc
 - company: bizly-com
   board: bizly-com
-- company: blacksmith%20agency
+- company: Blacksmith Agency
   board: blacksmith%20agency
 - company: blank-metal
   board: blank-metal
@@ -6005,12 +5881,10 @@
   board: cernel
 - company: check-technologies
   board: check-technologies
-- company: checkbox%20technology
+- company: checkbox technology
   board: checkbox%20technology
-- company: cirrus%20systems
+- company: cirrus systems
   board: cirrus%20systems
-- company: citizen%20health
-  board: citizen%20health
 - company: clair
   board: clair
 - company: clarasight
@@ -6033,7 +5907,7 @@
   board: community-preservation-corporation
 - company: cooper-ai
   board: cooper-ai
-- company: coral%20care
+- company: coral care
   board: coral%20care
 - company: coralai
   board: coralai
@@ -6055,7 +5929,7 @@
   board: dataplor
 - company: david-ai
   board: david-ai
-- company: dealroom%20inc
+- company: dealroom inc
   board: dealroom%20inc
 - company: deeter-analytics
   board: deeter-analytics
@@ -6081,9 +5955,9 @@
   board: droyd
 - company: echomark
   board: echomark
-- company: edgesource%20corporation
+- company: edgesource corporation
   board: edgesource%20corporation
-- company: edison%20scientific
+- company: edison scientific
   board: edison%20scientific
 - company: edisyl
   board: edisyl
@@ -6127,15 +6001,13 @@
   board: finvari
 - company: fira-health
   board: fira-health
-- company: flock%20safety
-  board: flock%20safety
 - company: fluency
   board: fluency
-- company: foresight%20diagnostics%20inc.
+- company: foresight diagnostics inc.
   board: foresight%20diagnostics%20inc.
 - company: fortell
   board: fortell
-- company: forward%20financing
+- company: Forward Financing
   board: forward%20financing
 - company: foundry-robotics
   board: foundry-robotics
@@ -6153,15 +6025,13 @@
   board: genki
 - company: gigsafe
   board: gigsafe
-- company: govsignals
-  board: govsignals
 - company: grabagun
   board: grabagun
 - company: gravity
   board: gravity
-- company: gray%20swan%20ai
+- company: gray swan ai
   board: gray%20swan%20ai
-- company: grindr%20llc
+- company: grindr llc
   board: grindr%20llc
 - company: gritt
   board: gritt
@@ -6169,7 +6039,7 @@
   board: grow-therapy
 - company: growthprotocol
   board: growthprotocol
-- company: hamming%20ai
+- company: hamming ai
   board: hamming%20ai
 - company: happyscribe.com
   board: happyscribe.com
@@ -6185,13 +6055,11 @@
   board: hightop-health
 - company: hinoki
   board: hinoki
-- company: hippocratic%20ai
-  board: hippocratic%20ai
 - company: hiring-cafe
   board: hiring-cafe
 - company: hive-autonomy
   board: hive-autonomy
-- company: honey%20homes
+- company: honey homes
   board: honey%20homes
 - company: hudson-pacific-properties
   board: hudson-pacific-properties
@@ -6205,7 +6073,7 @@
   board: ibotta
 - company: iceye-us-jobs
   board: iceye-us-jobs
-- company: ideal%20dental
+- company: ideal dental
   board: ideal%20dental
 - company: imagineart
   board: imagineart
@@ -6217,15 +6085,13 @@
   board: ivai
 - company: ivo-inc
   board: ivo-inc
-- company: jerry.ai
-  board: jerry.ai
 - company: joyfulhealth
   board: joyfulhealth
 - company: kaigentic
   board: kaigentic
 - company: kairon-health
   board: kairon-health
-- company: karman%20industries
+- company: karman industries
   board: karman%20industries
 - company: kevins-natural-foods
   board: kevins-natural-foods
@@ -6245,7 +6111,7 @@
   board: kraken-kinetics
 - company: kubera-health
   board: kubera-health
-- company: latent%20defense
+- company: latent defense
   board: latent%20defense
 - company: leadx-pro
   board: leadx-pro
@@ -6257,7 +6123,7 @@
   board: linero
 - company: lndmrk
   board: lndmrk
-- company: local%20infusion
+- company: Local Infusion
   board: local%20infusion
 - company: logos-space
   board: logos-space
@@ -6295,7 +6161,7 @@
   board: medicircle
 - company: mend-io
   board: mend-io
-- company: merge%20labs
+- company: merge labs
   board: merge%20labs
 - company: mexdigital
   board: mexdigital
@@ -6315,7 +6181,7 @@
   board: moonlake
 - company: mostest
   board: mostest
-- company: multitude%20insights
+- company: multitude insights
   board: multitude%20insights
 - company: mydr
   board: mydr
@@ -6325,7 +6191,7 @@
   board: nace.ai
 - company: namespace
   board: namespace
-- company: nautilus%20biotechnology
+- company: nautilus biotechnology
   board: nautilus%20biotechnology
 - company: neocognition
   board: neocognition
@@ -6345,8 +6211,6 @@
   board: nomic.ai
 - company: noon-design
   board: noon-design
-- company: normalcomputing
-  board: normalcomputing
 - company: novaintelligence
   board: novaintelligence
 - company: novita-ai
@@ -6361,7 +6225,7 @@
   board: odin-dynamics
 - company: onme
   board: onme
-- company: onyx%20games%20llc
+- company: onyx games llc
   board: onyx%20games%20llc
 - company: openart
   board: openart
@@ -6371,8 +6235,6 @@
   board: optro
 - company: opus-medical
   board: opus-medical
-- company: outsmart
-  board: outsmart
 - company: overtone
   board: overtone
 - company: owner
@@ -6383,8 +6245,6 @@
   board: paceloangroup
 - company: pangramlabs
   board: pangramlabs
-- company: par%20technology
-  board: par%20technology
 - company: paradigm-health
   board: paradigm-health
 - company: parambil
@@ -6427,7 +6287,7 @@
   board: productgenius
 - company: proto-town
   board: proto-town
-- company: pulsora%20inc
+- company: pulsora inc
   board: pulsora%20inc
 - company: puzzle.io
   board: puzzle.io
@@ -6453,8 +6313,6 @@
   board: regulus-industries
 - company: reliable-robotics
   board: reliable-robotics
-- company: resolve%20ai
-  board: resolve%20ai
 - company: resurgent-industries
   board: resurgent-industries
 - company: revin
@@ -6485,8 +6343,6 @@
   board: scale-to-win-inc
 - company: scaled-cognition
   board: scaled-cognition
-- company: scribdinc
-  board: scribdinc
 - company: sekai
   board: sekai
 - company: sellerx
@@ -6507,9 +6363,9 @@
   board: skylo
 - company: smartleaf
   board: smartleaf
-- company: solana%20foundation
+- company: solana foundation
   board: solana%20foundation
-- company: solo%20funds
+- company: solo funds
   board: solo%20funds
 - company: spacepanda
   board: spacepanda
@@ -6549,13 +6405,13 @@
   board: tamr
 - company: tapcheck
   board: tapcheck
-- company: taste%20tech%20inc
+- company: taste tech inc
   board: taste%20tech%20inc
 - company: tembo-health
   board: tembo-health
 - company: tetrix
   board: tetrix
-- company: the%20zebra
+- company: the zebra
   board: the%20zebra
 - company: the-spire-school
   board: the-spire-school
@@ -6619,9 +6475,9 @@
   board: visiodigitalpartner
 - company: viz.ai
   board: viz.ai
-- company: voya%20energy
+- company: voya energy
   board: voya%20energy
-- company: vytalize%20health
+- company: vytalize health
   board: vytalize%20health
 - company: wand-ai
   board: wand-ai
@@ -6631,7 +6487,7 @@
   board: wffa-advisors-careers
 - company: whoop
   board: whoop
-- company: worktrace%20ai
+- company: worktrace ai
   board: worktrace%20ai
 - company: xdof
   board: xdof
@@ -6651,16 +6507,8 @@
   board: keystone
 - company: Culturello
   board: culturello
-- company: The Job Sauce
-  board: the job sauce
-- company: A1 Garage Door Service
-  board: a1 garage door service
 - company: Anatomy Financial
   board: anatomy-financial
-- company: Blacksmith Agency
-  board: blacksmith agency
-- company: Forward Financing
-  board: forward financing
 - company: KIMARU Talent
   board: kimarutalent
 - company: Spellbook
@@ -7277,8 +7125,6 @@
   board: substrate-bio
 - company: SunnyData
   board: sunnydata
-- company: Superhuman
-  board: superhuman%20platform%20inc
 - company: Superpilot
   board: superpilot-labs
 - company: SuperSeed
@@ -7299,8 +7145,6 @@
   board: textlayer
 - company: The Agency Fund
   board: the%20agency%20fund
-- company: The Browser Company
-  board: the%20browser%20company
 - company: The Learning Spectrum
   board: the-learning-spectrum
 - company: The Pinnacle School
@@ -7439,12 +7283,8 @@
   board: ineffable
 - company: VillageSQL
   board: villagesql
-- company: GigaML
-  board: GigaML
 - company: Calc-Engineering
   board: Calc-Engineering
-- company: Local Infusion
-  board: Local Infusion
 - company: TerraFirma-Inc
   board: TerraFirma-Inc
 - company: aiuc
@@ -7455,32 +7295,20 @@
   board: anomalo
 - company: axiombio
   board: axiombio
-- company: blackpoint cyber
-  board: blackpoint cyber
 - company: bolt-farm
   board: bolt-farm
 - company: brightstar-ai
   board: brightstar-ai
-- company: cirrus systems
-  board: cirrus systems
 - company: code-metal
   board: code-metal
 - company: curvionblue
   board: curvionblue
 - company: cygnify
   board: cygnify
-- company: dominion dynamics
-  board: dominion dynamics
-- company: edison scientific
-  board: edison scientific
 - company: fence-masters-inc
   board: fence-masters-inc
-- company: fermi ai
-  board: fermi ai
 - company: flipper
   board: flipper
-- company: flock safety
-  board: flock safety
 - company: freda
   board: freda
 - company: genpeach
@@ -7495,28 +7323,12 @@
   board: granular-energy.com
 - company: greenlight-workforce-solutions
   board: greenlight-workforce-solutions
-- company: grindr llc
-  board: grindr llc
-- company: hamming ai
-  board: hamming ai
-- company: hippocratic ai
-  board: hippocratic ai
 - company: hirehire
   board: hirehire
 - company: hiring-pros
   board: hiring-pros
-- company: ideal dental
-  board: ideal dental
-- company: infinite lambda
-  board: infinite lambda
-- company: jasper ai
-  board: jasper ai
-- company: karman industries
-  board: karman industries
 - company: knowledge-road
   board: knowledge-road
-- company: local infusion
-  board: local infusion
 - company: localstack
   board: localstack
 - company: marblehealth
@@ -7527,8 +7339,6 @@
   board: mergemoney
 - company: mirendil
   board: mirendil
-- company: multitude insights
-  board: multitude insights
 - company: mymoneymatters
   board: mymoneymatters
 - company: neonredwood
@@ -7541,30 +7351,20 @@
   board: orbitalindustries
 - company: outpostnow
   board: outpostnow
-- company: p-1 ai
-  board: p-1 ai
 - company: p2p.org
   board: p2p.org
-- company: par technology
-  board: par technology
 - company: paragon-mechanical
   board: paragon-mechanical
 - company: playground global
   board: playground global
 - company: preference-model
   board: preference-model
-- company: protex ai
-  board: protex ai
-- company: pulsora inc
-  board: pulsora inc
 - company: radical-numerics
   board: radical-numerics
 - company: rain-technologies
   board: rain-technologies
 - company: rarecandy
   board: rarecandy
-- company: redesign health
-  board: redesign health
 - company: remedy scientific
   board: remedy scientific
 - company: rnrs.solutions
@@ -7573,8 +7373,6 @@
   board: rose rocket
 - company: scale army careers
   board: scale army careers
-- company: solana foundation
-  board: solana foundation
 - company: solanalabs
   board: solanalabs
 - company: spector-ai
@@ -7591,14 +7389,10 @@
   board: tabz
 - company: teton
   board: teton
-- company: tools for humanity
-  board: tools for humanity
 - company: traysar
   board: traysar
 - company: volley-automation
   board: volley-automation
-- company: voya energy
-  board: voya energy
 - company: wafer
   board: wafer
 - company: watney
