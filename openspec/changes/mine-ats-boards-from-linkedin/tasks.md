@@ -61,8 +61,8 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `go build ./... && go vet ./... && go test ./...` clean
-- [ ] 6.2 Live smoke run of `harvest-linkedin` on two or three queries; confirm candidates
+- [x] 6.1 `go build ./... && go vet ./... && go test ./...` clean
+- [x] 6.2 Live smoke run of `harvest-linkedin` on two or three queries; confirm candidates
   are produced and report how many survive the catalogue filter
-- [ ] 6.3 Carry that output through `harvest-ats resolve` and `harvest-boards` for one
+- [x] 6.3 Carry that output through `harvest-ats resolve` and `harvest-boards` for one
   provider, and review the resulting `sources/*.yml` diff before proposing it

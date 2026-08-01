@@ -138,10 +138,32 @@ which run in production or touch the database. The `harvest-ats` detection swap 
 exactly as before. First use is a manual run whose diff to `sources/*.yml` is reviewed like
 any other harvest PR.
 
+## First run
+
+Two queries (golang/Germany, data engineer/Poland), one page each, at 1 req/s:
+
+- **19 candidate companies, 14 of them (74%) carrying an ATS-native posting id** — a better
+  yield than the design sample suggested.
+- `harvest-ats resolve` found a board on the careers pages of 15 of them, across workday,
+  ashby, lever and greenhouse.
+- The one greenhouse board (Nebius) was already in the catalogue — filtered out before probing,
+  as intended.
+- **The offline-derived slugs scored zero.** Twelve candidates were proposed across lever and
+  ashby; every one came back as a dead board, so the expected-id check never even got to run.
+  Delivery Hero's UUID is real, but its board is on neither platform under any of the three
+  spellings tried (verified by hand: 404).
+
+The gate behaved exactly as designed — nothing false was admitted — but the *guessing* half
+has yet to earn its keep. Two readings, and the next run should tell them apart: either the
+slug derivation is too timid (three spellings from name and domain may simply miss how boards
+are actually registered), or a UUID is a weaker signal than assumed and narrows to platforms
+beyond Lever and Ashby. The instrumentation to tell is already there — a wrong slug on a live
+board would have surfaced as an id mismatch rather than as an absent one, and none did.
+
 ## Open Questions
 
-- What share of discovered companies is genuinely new is unknown until the first run; the
-  design sample skewed toward large consultancies we almost certainly already have. The run's
-  own counters answer this, and the query worklist is the dial to adjust.
-- Which markets and keywords to seed the worklist with is deliberately left to the first
-  run's results rather than guessed now.
+- Which markets and keywords to put in the worklist. The starter set is a probe, not a plan;
+  the yield of new-versus-known companies per query should decide what stays.
+- Whether the UUID → {lever, ashby} narrowing is right. The first run gives no evidence either
+  way, since no candidate board existed at all. Worth revisiting against a company whose board
+  we can confirm independently.
