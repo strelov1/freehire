@@ -2,13 +2,10 @@ package atsdetect
 
 import (
 	"net/url"
-	"regexp"
 	"strings"
-)
 
-// localeSegment matches a Workday URL's optional locale path segment (e.g. "en-us",
-// "de-DE"), which sits before the career-site segment and is not part of the board id.
-var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Za-z]{2}$`)
+	"github.com/strelov1/freehire/internal/atsboard"
+)
 
 // FromURL classifies a single outbound job-application URL into the (provider, board)
 // pair one of our source adapters can crawl, returning ok=false when the URL is not a
@@ -16,7 +13,25 @@ var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Za-z]{2}$`)
 // (e.g. an ADP vanity path, a Join job link, or a Workable per-job shortlink). Unlike
 // Detect, which scans arbitrary HTML, this parses one known URL — the shape an
 // aggregator's apply link gives us directly.
+//
+// The shared table answers first. internal/atsboard is the ONE definition of "which board
+// does this URL address", read by the contribution flow, link resolution and boardresolve;
+// this package used to carry its own copy of eleven of those hosts, and the two had already
+// drifted in both directions — atsdetect read a SmartRecruiters portal segment as the board,
+// while atsboard read a lowercase Workday locale and a per-job "/job" path as career sites.
+// Delegating also means an ATS added to atsboard is immediately visible to the harvest tools,
+// which was the standing cost of the split.
+//
+// What stays here are the five shapes atsboard deliberately EXCLUDES. That exclusion is not an
+// oversight to correct: atsboard is the accept-set for internal/contribution, which PAYS for
+// onboarded boards, so widening it is a money-affecting decision that needs its own proposal.
+// These five are harvest-only, and the harvest path validates every candidate against the
+// platform's API before committing it.
 func FromURL(rawurl string) (provider, board string, ok bool) {
+	if src, brd, _, found := atsboard.Recognize(rawurl); found {
+		return src, brd, true
+	}
+
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return "", "", false
@@ -28,43 +43,6 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 	segs := pathSegments(u.Path)
 
 	switch {
-	case strings.HasSuffix(host, ".myworkdayjobs.com"):
-		if site := workdaySite(segs); site != "" {
-			return "workday", host + "/" + site, true
-		}
-	case host == "jobs.smartrecruiters.com":
-		if len(segs) >= 1 {
-			return "smartrecruiters", segs[0], true
-		}
-	case host == "job-boards.greenhouse.io", host == "boards.greenhouse.io",
-		host == "job-boards.eu.greenhouse.io", host == "boards.eu.greenhouse.io":
-		if len(segs) >= 1 && !reserved[segs[0]] {
-			return "greenhouse", segs[0], true
-		}
-	case host == "jobs.lever.co":
-		if len(segs) >= 1 {
-			return "lever", segs[0], true
-		}
-	case host == "jobs.ashbyhq.com":
-		if len(segs) >= 1 {
-			return "ashby", segs[0], true
-		}
-	case strings.HasSuffix(host, ".applytojob.com"):
-		if sub := subdomain(host, ".applytojob.com"); sub != "" {
-			return "jazzhr", sub, true
-		}
-	case strings.HasSuffix(host, ".recruitee.com"):
-		if sub := subdomain(host, ".recruitee.com"); sub != "" {
-			return "recruitee", sub, true
-		}
-	case strings.HasSuffix(host, ".pinpointhq.com"):
-		if sub := subdomain(host, ".pinpointhq.com"); sub != "" {
-			return "pinpoint", sub, true
-		}
-	case strings.HasSuffix(host, ".careerplug.com"):
-		if sub := subdomain(host, ".careerplug.com"); sub != "" {
-			return "careerplug", sub, true
-		}
 	case strings.HasSuffix(host, ".icims.com"):
 		// Our icims adapter builds the host "careers-<board>.icims.com", so only a
 		// careers-prefixed subdomain yields a crawlable board.
@@ -83,16 +61,6 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 		if section := segAfter(segs, "careersection"); section != "" {
 			return "taleo", host + "/" + section, true
 		}
-	case strings.HasSuffix(host, ".csod.com"):
-		// board is the tenant subdomain; a multi-label prefix is not a crawlable board.
-		if sub := subdomain(host, ".csod.com"); sub != "" {
-			return "cornerstone", sub, true
-		}
-	case host == "careers.pageuppeople.com":
-		// board is the numeric institution id, the first path segment on the canonical host.
-		if len(segs) >= 1 && isAllDigits(segs[0]) {
-			return "pageup", segs[0], true
-		}
 	case host == "www.governmentjobs.com", host == "www.schooljobs.com":
 		// board is "<domain>/<agency>"; the two domains are separate tenant spaces.
 		if agency := segAfter(segs, "careers"); agency != "" {
@@ -107,19 +75,6 @@ func FromURL(rawurl string) (provider, board string, ok bool) {
 	return "", "", false
 }
 
-// isAllDigits reports whether s is non-empty and only ASCII digits (a numeric board id).
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 // pathSegments splits a URL path into its non-empty segments.
 func pathSegments(p string) []string {
 	var out []string
@@ -129,27 +84,6 @@ func pathSegments(p string) []string {
 		}
 	}
 	return out
-}
-
-// workdaySite returns the career-site segment from a Workday URL's path, skipping the
-// optional leading locale segment. It returns "" when no site precedes the per-job
-// "/job" (or "/details") segment.
-func workdaySite(segs []string) string {
-	if len(segs) == 0 {
-		return ""
-	}
-	i := 0
-	if localeSegment.MatchString(segs[0]) {
-		i = 1
-	}
-	if i >= len(segs) {
-		return ""
-	}
-	site := segs[i]
-	if site == "job" || site == "details" {
-		return ""
-	}
-	return site
 }
 
 // subdomain returns the leftmost label of host once suffix is removed, or "" when the

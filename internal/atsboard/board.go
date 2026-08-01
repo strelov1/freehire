@@ -52,6 +52,10 @@ const (
 	modeSubdomainChain = "subdomainchain"
 	modeHost           = "host"
 	modeHostPath       = "hostpath"
+	// pathnumeric: like path, but the segment must be an all-digit id. PageUp's board is a
+	// numeric institution id, so its localisation and section segments (/cw/en/search) are not
+	// boards — reading one as a board names an institution that does not exist.
+	modePathNumeric = "pathnumeric"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -72,7 +76,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"jobs.jobvite.com", "jobvite", modePath},
 	{"jobs.quickin.io", "quickin", modePath},
 	{"jobs.talenthr.io", "talenthr", modePath},
-	{"careers.pageuppeople.com", "pageup", modePath},
+	{"careers.pageuppeople.com", "pageup", modePathNumeric},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
 	{"recruiting.ultipro.com", "ukg", modePath},
@@ -154,6 +158,14 @@ var apiBoards = []struct{ host, source, prefix string }{
 // SmartRecruiters got pathportal for. Greenhouse's embed URLs carry no board in the path at all
 // (the slug is in the `for=` query param, which atsdetect reads), so every one of their path
 // words is machinery.
+// noBoardFirstSegments lists, per matched host entry, leading path segments that mean the URL
+// carries NO board at all — unlike reservedSegments, which are skipped to reach the board behind
+// them. Workable's "/j/<id>" is a per-job shortlink: skipping "j" would take the JOB id as the
+// company slug, which is worse than declining.
+var noBoardFirstSegments = map[string][]string{
+	"apply.workable.com": {"j"},
+}
+
 var reservedSegments = map[string][]string{
 	"jobs.jobvite.com": {"careers"},
 	"greenhouse.io":    {"embed", "job_app", "job_board", "js"},
@@ -201,8 +213,12 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// a 404 landing) has no derivable site and is left unrecognized rather than taken as a false
 		// "en-US" board. Canonical strips to scheme://host/site.
 		site := firstSegmentAfterLocale(u)
-		if site == "" {
-			return "", "", "", false // bare host or locale-only, no site
+		// A Workday per-job URL can reach us with no site at all (host/job/... or
+		// host/details/...), and those segments are the POSTING, never a career site. Taking one
+		// as the site yields "<host>/job" — a board that does not exist but looks new, so the
+		// contribution flow records and pays for it.
+		if site == "" || site == "job" || site == "details" {
+			return "", "", "", false // bare host, locale-only, or a per-job path with no site
 		}
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + site
@@ -233,9 +249,16 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return src, board, u.String(), true
 	}
 
-	// modePath: the board is the first path segment that isn't platform machinery.
+	// modePath / modePathNumeric: the board is the first path segment that isn't platform
+	// machinery — declined outright when the path leads with a segment that carries no board.
+	if leadsWithNoBoard(u, noBoardFirstSegments[apex]) {
+		return "", "", "", false
+	}
 	board = firstTenantSegment(u, reservedSegments[apex])
 	if board == "" {
+		return "", "", "", false
+	}
+	if mode == modePathNumeric && !allDigits(board) {
 		return "", "", "", false
 	}
 	u.RawQuery = ""
@@ -298,10 +321,16 @@ func subdomainChain(host, apex string) string {
 
 // subdomainLabel returns the leftmost DNS label of host under apex:
 // "acme.recruitee.com","recruitee.com" → "acme"; "recruitee.com",… → "" (no tenant).
+//
+// A remainder with more than one label yields NO board, deliberately. These adapters crawl
+// "<board>.<apex>", so a regional or nested host like "uk-ext.eu.csod.com" has no such form —
+// taking "uk-ext" names a host that does not exist. That is the expensive direction: the
+// contribution flow pays for a board it believes is new. Where a platform genuinely nests a
+// tenant under an instance, the entry uses subdomainchain and keeps every label.
 func subdomainLabel(host, apex string) string {
 	sub := subdomainChain(host, apex)
-	if i := strings.IndexByte(sub, '.'); i >= 0 {
-		return sub[:i]
+	if strings.Contains(sub, ".") {
+		return ""
 	}
 	return sub
 }
@@ -344,7 +373,11 @@ func segmentBeforePosting(u *url.URL, isPosting *regexp.Regexp) string {
 // localeSegment matches an xx-XX language-COUNTRY locale (e.g. en-GB) — the optional leading
 // path segment Rippling's public board site inserts before the tenant. Tenant slugs are
 // lowercase (satomic, 360-fire-flood), so the uppercase country code never collides.
-var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Z]{2}$`)
+// The country half is matched case-insensitively: the canonical spelling is xx-XX, but the
+// lowercase form appears in real Workday links, and reading "en-us" as a career site produces
+// the board "<host>/en-us" — a board that does not exist, which the contribution flow would
+// record as new and pay for.
+var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Za-z]{2}$`)
 
 // firstSegmentAfterLocale returns the first path segment that isn't a leading xx-XX locale — the
 // tenant board in ats.rippling.com/<locale?>/<board>/… (Rippling) or the site in a Workday
@@ -383,4 +416,31 @@ func firstTenantSegment(u *url.URL, reserved []string) string {
 		}
 	}
 	return ""
+}
+
+// leadsWithNoBoard reports whether u's first path segment marks a URL shape that carries no
+// board (see noBoardFirstSegments).
+func leadsWithNoBoard(u *url.URL, none []string) bool {
+	if len(none) == 0 {
+		return false
+	}
+	p := strings.Trim(u.Path, "/")
+	if p == "" {
+		return false
+	}
+	first, _, _ := strings.Cut(p, "/")
+	return slices.Contains(none, first)
+}
+
+// allDigits reports whether s is non-empty and only ASCII digits.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
