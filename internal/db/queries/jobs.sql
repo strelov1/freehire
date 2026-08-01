@@ -1063,3 +1063,33 @@ WHERE j.id = m.id
   AND j.company_slug = sqlc.arg(company)
   AND j.closed_at IS NULL
   AND j.duplicate_of IS DISTINCT FROM m.canon_id;
+
+-- name: OrphanAggregatorCompanies :many
+-- Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
+-- turns into candidate ATS boards. A company qualifies when it has an open posting from one
+-- of the REQUESTED aggregators and no open posting from any source outside the FULL
+-- aggregator set.
+--
+-- The two provider sets are deliberately separate. Narrowing a run to one aggregator must
+-- not make another aggregator's posting look like first-party ATS coverage: the candidate
+-- scan uses `requested`, the exclusion test always uses `aggregators`. Auditing this same
+-- distinction with a partial list is what inflated the July aggregator-dedup leak count
+-- roughly fourfold.
+--
+-- The display name is the modal `company` across the aggregator rows, since two aggregators
+-- may spell the same employer differently and the name is what the harvest gate compares.
+SELECT j.company_slug,
+       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company,
+       count(*) AS open_jobs
+FROM jobs j
+WHERE j.closed_at IS NULL
+  AND j.company_slug <> ''
+  AND j.source = ANY(sqlc.arg(requested)::text[])
+  AND NOT EXISTS (
+    SELECT 1 FROM jobs ats
+    WHERE ats.company_slug = j.company_slug
+      AND ats.closed_at IS NULL
+      AND ats.source <> ALL(sqlc.arg(aggregators)::text[])
+  )
+GROUP BY j.company_slug
+ORDER BY count(*) DESC, j.company_slug;

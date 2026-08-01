@@ -1594,6 +1594,68 @@ func (q *Queries) MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpir
 	return i, err
 }
 
+const orphanAggregatorCompanies = `-- name: OrphanAggregatorCompanies :many
+SELECT j.company_slug,
+       (mode() WITHIN GROUP (ORDER BY j.company))::text AS company,
+       count(*) AS open_jobs
+FROM jobs j
+WHERE j.closed_at IS NULL
+  AND j.company_slug <> ''
+  AND j.source = ANY($1::text[])
+  AND NOT EXISTS (
+    SELECT 1 FROM jobs ats
+    WHERE ats.company_slug = j.company_slug
+      AND ats.closed_at IS NULL
+      AND ats.source <> ALL($2::text[])
+  )
+GROUP BY j.company_slug
+ORDER BY count(*) DESC, j.company_slug
+`
+
+type OrphanAggregatorCompaniesParams struct {
+	Requested   []string `json:"requested"`
+	Aggregators []string `json:"aggregators"`
+}
+
+type OrphanAggregatorCompaniesRow struct {
+	CompanySlug string `json:"company_slug"`
+	Company     string `json:"company"`
+	OpenJobs    int64  `json:"open_jobs"`
+}
+
+// Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
+// turns into candidate ATS boards. A company qualifies when it has an open posting from one
+// of the REQUESTED aggregators and no open posting from any source outside the FULL
+// aggregator set.
+//
+// The two provider sets are deliberately separate. Narrowing a run to one aggregator must
+// not make another aggregator's posting look like first-party ATS coverage: the candidate
+// scan uses `requested`, the exclusion test always uses `aggregators`. Auditing this same
+// distinction with a partial list is what inflated the July aggregator-dedup leak count
+// roughly fourfold.
+//
+// The display name is the modal `company` across the aggregator rows, since two aggregators
+// may spell the same employer differently and the name is what the harvest gate compares.
+func (q *Queries) OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error) {
+	rows, err := q.db.Query(ctx, orphanAggregatorCompanies, arg.Requested, arg.Aggregators)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OrphanAggregatorCompaniesRow{}
+	for rows.Next() {
+		var i OrphanAggregatorCompaniesRow
+		if err := rows.Scan(&i.CompanySlug, &i.Company, &i.OpenJobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const propagateCollectionsToJobs = `-- name: PropagateCollectionsToJobs :execrows
 UPDATE jobs
 SET collections = c.collections,

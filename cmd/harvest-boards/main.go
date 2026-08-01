@@ -15,6 +15,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -188,7 +189,7 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 			// normalizes to nothing (punctuation alone) states no expectation at all, and is
 			// treated as such rather than rejecting every board it is paired with.
 			expected := companyByBoard[slug]
-			if normalizeEmployer(expected) != "" && name != "" && !sameEmployer(expected, name) {
+			if normalize.CompanyKey(expected) != "" && name != "" && !normalize.SameCompany(expected, name) {
 				log.Printf("harvest-boards: %s: expected %q, board reports %q — skipped", slug, expected, name)
 				mu.Lock()
 				mismatches++

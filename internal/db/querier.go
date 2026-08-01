@@ -1601,6 +1601,20 @@ type Querier interface {
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
 	ObserveLearnedDomain(ctx context.Context, domain string) (int32, error)
+	// Companies the catalogue holds ONLY through aggregators — the worklist cmd/harvest-orphans
+	// turns into candidate ATS boards. A company qualifies when it has an open posting from one
+	// of the REQUESTED aggregators and no open posting from any source outside the FULL
+	// aggregator set.
+	//
+	// The two provider sets are deliberately separate. Narrowing a run to one aggregator must
+	// not make another aggregator's posting look like first-party ATS coverage: the candidate
+	// scan uses `requested`, the exclusion test always uses `aggregators`. Auditing this same
+	// distinction with a partial list is what inflated the July aggregator-dedup leak count
+	// roughly fourfold.
+	//
+	// The display name is the modal `company` across the aggregator rows, since two aggregators
+	// may spell the same employer differently and the name is what the harvest gate compares.
+	OrphanAggregatorCompanies(ctx context.Context, arg OrphanAggregatorCompaniesParams) ([]OrphanAggregatorCompaniesRow, error)
 	// Domains whose confident-hit count has reached the promotion threshold; the sync
 	// worker unions these into the Gmail search query.
 	PromotedDomains(ctx context.Context, threshold int32) ([]string, error)
