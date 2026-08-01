@@ -70,8 +70,20 @@ func Text(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
+// TextPtr maps a nullable DB text to a *string, preserving NULL as nil. Use this where the
+// distinction survives to the caller — a JSON response, where NULL must render as null and an
+// empty value as "" — and TextString where the domain has no use for it. Same shape as TimePtr
+// and IntPtr.
+func TextPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
+}
+
 // TextString maps a nullable DB text to a plain string: NULL becomes "", a valid value
-// its content. The read-side inverse of Text.
+// its content. The read-side inverse of Text, and lossy by design: a caller that needs to
+// tell NULL from "" wants TextPtr.
 func TextString(t pgtype.Text) string {
 	if !t.Valid {
 		return ""

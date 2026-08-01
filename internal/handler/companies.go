@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/search"
 )
 
@@ -168,9 +169,9 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// the Postgres substring path below, so /companies never depends on Meili being up.
 	if h.companySearch != nil && isCompanyFilter(search, collections, regions, countries,
 		domains, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
-		rows, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
+		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {
-			return listResponse(c, rows, total, limit, offset)
+			return listResponse(c, items, total, limit, offset)
 		}
 		log.Printf("companies: meili search fell back to postgres (q=%q): %v", search, err)
 	}
@@ -227,7 +228,11 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		return err
 	}
 
-	return listResponse(c, companies, total, limit, offset)
+	items := make([]companyListItem, len(companies))
+	for i, row := range companies {
+		items[i] = companyListItemFromRow(row)
+	}
+	return listResponse(c, items, total, limit, offset)
 }
 
 // isCompanyFilter reports whether a /companies request carries any name search or facet
@@ -329,11 +334,11 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 	}})
 }
 
-// companyHitsViaMeili runs the ranked company search and projects each hit back onto
-// the db.ListCompaniesRow wire shape, so the Meili path is byte-for-byte compatible
-// with the Postgres path. meta.total is Meilisearch's estimated filtered total, which
-// backs list pagination exactly as CountCompanies does on the Postgres path.
-func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]db.ListCompaniesRow, int64, error) {
+// companyHitsViaMeili runs the ranked company search and projects each hit onto the list wire
+// shape — the same type the Postgres path serves, so the two cannot disagree. meta.total is
+// Meilisearch's estimated filtered total, which backs list pagination exactly as CountCompanies
+// does on the Postgres path.
+func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query string, vals url.Values, limit, offset int) ([]companyListItem, int64, error) {
 	res, err := h.companySearch.SearchCompanies(ctx, search.CompanySearchParams{
 		Query:  query,
 		Filter: search.CompanyFilterFromValues(vals),
@@ -343,42 +348,76 @@ func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query strin
 	if err != nil {
 		return nil, 0, err
 	}
-	rows := make([]db.ListCompaniesRow, len(res.Hits))
+	items := make([]companyListItem, len(res.Hits))
 	for i, h := range res.Hits {
-		rows[i] = companyRowFromDoc(h)
+		items[i] = companyListItemFromDoc(h)
 	}
-	return rows, res.Total, nil
+	return items, res.Total, nil
 }
 
-// companyRowFromDoc projects a company search document onto the list wire shape,
-// re-wrapping the unwrapped scalar strings into pgtype.Text (empty → NULL) so the
-// response matches the Postgres path exactly. An absent array (industries,
-// collections) normalizes to an empty slice so it serializes as [] like the Postgres
-// '{}', not null — the two paths serve the same endpoint, and a field that differs
-// between them makes the catalogue card change shape the moment a user searches.
-func companyRowFromDoc(d search.CompanyDocument) db.ListCompaniesRow {
-	industries := d.Industries
-	if industries == nil {
-		industries = []string{}
+// companyListItem is the public projection of a company for the list endpoint. It exists so the
+// response shape is owned here rather than by sqlc: served straight, a generated row makes
+// `make sqlc` an API-changing operation — a renamed column or a changed SELECT alias would
+// rewrite the public JSON with nothing to compile against. Both backends project onto this one
+// type, so a field added for one cannot be silently missing from the other.
+//
+// The nullable columns are *string rather than pgtype.Text: identical on the wire in all three
+// states ("x", "", null — pinned by the golden bodies in companies_test.go), without putting a
+// persistence vocabulary on a public contract. A plain string would collapse null into "" and
+// change the response for every company with no tagline.
+type companyListItem struct {
+	Slug        string   `json:"slug"`
+	Name        string   `json:"name"`
+	JobCount    int32    `json:"job_count"`
+	Tagline     *string  `json:"tagline"`
+	Industries  []string `json:"industries"`
+	HqCountry   *string  `json:"hq_country"`
+	Collections []string `json:"collections"`
+}
+
+// companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
+// null-ness, so the two nullable columns pass through as-is.
+func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
+	return companyListItem{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		JobCount:    r.JobCount,
+		Tagline:     pgconv.TextPtr(r.Tagline),
+		Industries:  r.Industries,
+		HqCountry:   pgconv.TextPtr(r.HqCountry),
+		Collections: r.Collections,
 	}
-	collections := d.Collections
-	if collections == nil {
-		collections = []string{}
-	}
-	return db.ListCompaniesRow{
+}
+
+// companyListItemFromDoc projects a company search document onto the same shape, carrying the
+// two rules the search path has always needed. A document stores an absent scalar as the empty
+// string, which must serialize as null like the Postgres NULL; and an absent array arrives nil,
+// which must serialize as [] like the Postgres '{}'. Collections drive the backer marks, so an
+// array that came back null instead would make those marks disappear the moment a user searched.
+func companyListItemFromDoc(d search.CompanyDocument) companyListItem {
+	return companyListItem{
 		Slug:        d.Slug,
 		Name:        d.Name,
 		JobCount:    d.JobCount,
-		Tagline:     pgText(d.Tagline),
-		Industries:  industries,
-		HqCountry:   pgText(d.HqCountry),
-		Collections: collections,
+		Tagline:     presentOrNil(d.Tagline),
+		Industries:  orEmpty(d.Industries),
+		HqCountry:   presentOrNil(d.HqCountry),
+		Collections: orEmpty(d.Collections),
 	}
 }
 
-// pgText wraps a plain string as a pgtype.Text, treating the empty string as NULL —
-// the inverse of the FromCompany unwrap, so a round-tripped NULL scalar renders as
-// JSON null exactly as the Postgres row would.
-func pgText(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: s != ""}
+// presentOrNil treats the empty string as absent — the search document's way of spelling NULL.
+func presentOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// orEmpty normalizes a nil array so it serializes as [] rather than null.
+func orEmpty(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }

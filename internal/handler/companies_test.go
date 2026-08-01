@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
@@ -50,22 +52,76 @@ func TestCompanyDetailHidesJobID(t *testing.T) {
 // differently depending on whether a search term was typed. Collections drive the
 // backer marks, so the omission would be visible: the marks would disappear the
 // moment a user searched.
-func TestCompanyRowFromDocCarriesCollections(t *testing.T) {
-	row := companyRowFromDoc(search.CompanyDocument{
+func TestCompanyListItemFromDocCarriesCollections(t *testing.T) {
+	item := companyListItemFromDoc(search.CompanyDocument{
 		Slug:        "euro-lab",
 		Name:        "Euro Lab",
 		Collections: []string{"yc", "a16z-portfolio"},
 	})
-	if !reflect.DeepEqual(row.Collections, []string{"yc", "a16z-portfolio"}) {
-		t.Errorf("collections = %+v, want [yc a16z-portfolio]", row.Collections)
+	if !reflect.DeepEqual(item.Collections, []string{"yc", "a16z-portfolio"}) {
+		t.Errorf("collections = %+v, want [yc a16z-portfolio]", item.Collections)
 	}
 }
 
 // An absent array must serialize as [] like the Postgres '{}', not as null — the
 // same normalization industries already gets.
-func TestCompanyRowFromDocNormalizesAbsentCollections(t *testing.T) {
-	row := companyRowFromDoc(search.CompanyDocument{Slug: "x", Name: "X"})
-	if row.Collections == nil {
+func TestCompanyListItemFromDocNormalizesAbsentCollections(t *testing.T) {
+	item := companyListItemFromDoc(search.CompanyDocument{Slug: "x", Name: "X"})
+	if item.Collections == nil {
 		t.Error("absent collections stayed nil — it will serialize as null, unlike the Postgres path")
+	}
+}
+
+// The two golden bodies below ARE the /companies contract. They are asserted as bytes rather
+// than as Go values because the distinction that would break a client — a null tagline versus an
+// empty one — is invisible to a struct comparison, and because the field ORDER is part of what a
+// caller receives. Any change here is an API change and must be argued for, not merged as a
+// refactor.
+const (
+	goldenCompanyFull  = `{"slug":"euro-lab","name":"Euro Lab","job_count":12,"tagline":"We ship fridges","industries":["fintech"],"hq_country":"de","collections":["yc"]}`
+	goldenCompanyEmpty = `{"slug":"x","name":"X","job_count":0,"tagline":null,"industries":[],"hq_country":null,"collections":[]}`
+)
+
+// The endpoint has two backends and one response, so the assertion that matters is that they
+// agree byte for byte — a field one branch sets and the other forgets would make the catalogue
+// card change shape the moment a user typed a search term.
+func TestCompanyListItemJSONIsStableAcrossBothBackends(t *testing.T) {
+	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{
+		Slug: "euro-lab", Name: "Euro Lab", JobCount: 12,
+		Tagline:     pgtype.Text{String: "We ship fridges", Valid: true},
+		Industries:  []string{"fintech"},
+		HqCountry:   pgtype.Text{String: "de", Valid: true},
+		Collections: []string{"yc"},
+	})
+	fromSearch := companyListItemFromDoc(search.CompanyDocument{
+		Slug: "euro-lab", Name: "Euro Lab", JobCount: 12,
+		Tagline:     "We ship fridges",
+		Industries:  []string{"fintech"},
+		HqCountry:   "de",
+		Collections: []string{"yc"},
+	})
+
+	assertJSON(t, "postgres", fromPostgres, goldenCompanyFull)
+	assertJSON(t, "search", fromSearch, goldenCompanyFull)
+}
+
+// Absence is the half a struct comparison cannot see: a missing tagline must serialize as null
+// and a missing facet array as [], from either backend.
+func TestCompanyListItemJSONKeepsAbsenceShapes(t *testing.T) {
+	fromPostgres := companyListItemFromRow(db.ListCompaniesRow{Slug: "x", Name: "X", Industries: []string{}, Collections: []string{}})
+	fromSearch := companyListItemFromDoc(search.CompanyDocument{Slug: "x", Name: "X"})
+
+	assertJSON(t, "postgres", fromPostgres, goldenCompanyEmpty)
+	assertJSON(t, "search", fromSearch, goldenCompanyEmpty)
+}
+
+func assertJSON(t *testing.T, label string, v any, want string) {
+	t.Helper()
+	got, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("%s: marshal: %v", label, err)
+	}
+	if string(got) != want {
+		t.Errorf("%s body changed — this is an API change, not a refactor\n got: %s\nwant: %s", label, got, want)
 	}
 }
