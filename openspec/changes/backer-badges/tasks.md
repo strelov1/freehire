@@ -32,19 +32,21 @@
 
 ## 4. Frontend registry and badge
 
-- [ ] 4.1 Regenerate contracts (`cmd/gen-contracts`) and confirm `kind: 'backer'`
+- [x] 4.1 Regenerate contracts (`cmd/gen-contracts`) and confirm `kind: 'backer'`
       reaches `web/src/lib/generated/contracts.ts` with no generator change.
-- [ ] 4.1a Restore the collection filter options: `facets.ts:418` builds them from
+- [x] 4.1a Restore the collection filter options: `facets.ts:418` builds them from
       `kind === 'editorial'` plus `kind === 'credential'`, so regenerating drops
       `yc` and `techstars` out of the filters entirely. Test first — a backer
       collection must appear among the `collections` facet options.
-- [ ] 4.2 Commit the three brand SVGs under `web/src/lib/brands/` as Svelte
-      components taking a `class`.
-- [ ] 4.3 `web/src/lib/backers.ts` — resolve a collection list to badges in registry
+- [x] 4.2 Commit the three brand marks under `web/static/brands/` — each brand's own
+      square icon from its own site (PNG, 5.5 KB total). SVG was the plan; a16z's
+      mark is a circular figure that redrawing would only approximate, and the badge
+      renders at 16–20px where the raster is indistinguishable.
+- [x] 4.3 `web/src/lib/backers.ts` — resolve a collection list to badges in registry
       order. Vitest covers: a backer tag yields its badge; an editorial or
       credential tag yields nothing; an unknown backer slug with no committed mark
       yields nothing (no placeholder).
-- [ ] 4.4 `BackerBadge.svelte` — render the mark with an accessible name naming the
+- [x] 4.4 `BackerBadge.svelte` — render the mark with an accessible name naming the
       brand, no monogram fallback.
 
 ## 5. Surfaces

@@ -93,7 +93,19 @@ Cost: the directory is fetched twice per run (once per tag), 18 requests total.
 Acceptable for a daily worker; a shared cache is not worth its complexity until
 a third tag reads the same source.
 
-### Committed SVGs, not the logo proxy
+### Committed brand marks, not the logo proxy
+
+Each brand's own square mark, taken from the brand's own site and committed to
+`web/static/brands/`: `yc.png` (256×256, from ycombinator.com's icon), `a16z.png`
+(270×270, from a16z.com), `techstars.png` (164×164, from techstars.com). 5.5 KB
+in total.
+
+PNG rather than hand-drawn SVG, chosen deliberately: YC's mark has a public CC0
+vector, but a16z's is a circular four-point figure that redrawing would only
+approximate. A brand mark that is nearly right is worse than one that is exactly
+right, and the badge renders at 16–20px where the raster is indistinguishable.
+The trade-off accepted: three binaries in the repo, no dark-theme variant, and OG
+images would need their own path.
 
 `logo.freehire.me` resolves **by company name** (`logo.ts:6`). Tested against the
 three brands: `Y Combinator` → correct, `Techstars` → correct, `a16z` → **a
@@ -107,6 +119,11 @@ third party's control.
 
 Explicitly **no monogram fallback**, unlike `CompanyLogo`. A letter tile where the
 a16z mark belongs reads as a defect, not as graceful degradation.
+
+Committing the marks also sidesteps a live defect in the proxy: `logo.dev`'s
+`fallback=404` no longer works on its name endpoint, so an unresolvable name now
+returns 200 with an unrelated photograph instead of the 404 that would trigger a
+fallback. See Risks.
 
 ### Badge placement: beside the company, not in the signal row
 
