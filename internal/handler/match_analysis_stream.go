@@ -67,7 +67,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    h.candidateProfileJSON(c, userID),
+		StructuredResume:    h.candidateProfile(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,

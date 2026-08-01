@@ -27,7 +27,7 @@ func TestBuildHardConstraintInputs(t *testing.T) {
 	}
 	loc := userprofile.LocationPreferences{WorkModes: []string{"remote"}, Base: userprofile.BaseLocation{Country: "br"}}
 
-	jr, ev := buildHardConstraintInputs(job, cv, loc, nil)
+	jr, ev := buildHardConstraintInputs(job, cv.Professional(), loc, nil)
 
 	if jr.ExperienceYearsMin == nil || *jr.ExperienceYearsMin != 5 {
 		t.Errorf("ExperienceYearsMin = %v, want 5", jr.ExperienceYearsMin)

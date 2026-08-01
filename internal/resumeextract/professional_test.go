@@ -98,3 +98,52 @@ func TestProfessional_IsAWhitelist(t *testing.T) {
 			"without being reviewed for personal data", got, want)
 	}
 }
+
+// withheld names every Structured field the projection deliberately does NOT carry, with the
+// reason. TestProfessional_IsAWhitelist above guards the other direction — a field reaching the
+// projection unreviewed. This one guards the direction that actually bit: a field added to
+// Structured and never considered, which a blacklist-shaped filter would have disclosed by
+// default. Nothing in production reads this map; Professional's own field set is the mechanism.
+var withheld = map[string]string{
+	"full_name": "the candidate's name — a direct identifier",
+	"email":     "a direct identifier",
+	"phone":     "a direct identifier",
+	"links":     "profile URLs resolve to the person",
+}
+
+func TestProfessional_WithholdsOnlyDeclaredFields(t *testing.T) {
+	structured := jsonKeys(reflect.TypeOf(Structured{}))
+	projected := jsonKeys(reflect.TypeOf(Professional{}))
+
+	for _, name := range structured {
+		if slices.Contains(projected, name) || withheld[name] != "" {
+			continue
+		}
+		t.Errorf("Structured field %q reaches no model and is not declared in withheld.\n"+
+			"Decide: add it to Professional (a model may see it), or to withheld with the "+
+			"reason it must not. Left out of both, it is withheld by accident and the next "+
+			"reader cannot tell whether that was intended.", name)
+	}
+
+	for name := range withheld {
+		if !slices.Contains(structured, name) {
+			t.Errorf("withheld names %q, which Structured no longer has — stale entry", name)
+		}
+		if slices.Contains(projected, name) {
+			t.Errorf("%q is declared withheld but Professional carries it — the documentation "+
+				"and the projection disagree, and the projection is what runs", name)
+		}
+	}
+}
+
+// jsonKeys lists a struct's JSON key names, dropping the ",omitempty" suffix.
+func jsonKeys(t reflect.Type) []string {
+	out := make([]string, 0, t.NumField())
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		if name != "" && name != "-" {
+			out = append(out, name)
+		}
+	}
+	return out
+}

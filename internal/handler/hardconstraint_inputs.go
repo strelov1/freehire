@@ -70,19 +70,22 @@ func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Jo
 	if geo, ok, err := h.resume.Geography(ctx, userID); err == nil && ok {
 		derived = geo.Countries
 	}
-	jr, ev := buildHardConstraintInputs(job, cv, loc, derived)
+	jr, ev := buildHardConstraintInputs(job, cv.Professional(), loc, derived)
 	return hardconstraint.Evaluate(jr, ev)
 }
 
-// buildHardConstraintInputs assembles the pure evaluator's inputs from a job row,
-// the caller's structured résumé, and their location preferences. The job side reads
+// buildHardConstraintInputs assembles the pure evaluator's inputs from a job row, the caller's
+// contact-free résumé projection, and their location preferences. The projection rather than the
+// full structure because the blockers this produces carry their reasons into the fit prompt: the
+// CV side of a hard constraint is model-bound content, so it takes the same typed seam the
+// candidate context does. The job side reads
 // the deterministic requirement columns plus two compute-at-read jobfacts derivations
 // (required certifications and degree-optional); visa sponsorship comes from the
 // enrichment jsonb. The CV side reads the structured résumé and the profile's base
 // country / remote preference. Pure so it is unit-testable.
 // derivedCountries is the geography read off the caller's CV; it is consulted only when
 // the caller asserted no base country of their own (see candidateCountry).
-func buildHardConstraintInputs(job db.Job, cv resumeextract.Structured, loc userprofile.LocationPreferences, derivedCountries []string) (hardconstraint.JobRequirements, hardconstraint.CVEvidence) {
+func buildHardConstraintInputs(job db.Job, cv resumeextract.Professional, loc userprofile.LocationPreferences, derivedCountries []string) (hardconstraint.JobRequirements, hardconstraint.CVEvidence) {
 	jr := hardconstraint.JobRequirements{
 		ExperienceYearsMin:     int4Ptr(job.ExperienceYearsMin),
 		EducationLevel:         job.EducationLevel,

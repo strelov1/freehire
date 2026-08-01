@@ -204,7 +204,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    h.candidateProfileJSON(c, userID),
+		StructuredResume:    h.candidateProfile(c, userID),
 		Match:               jobmatch.Compute(job.Skills, profile.Skills),
 		JobWorkMode:         job.WorkMode,
 		JobRemote:           job.Remote,
@@ -303,11 +303,11 @@ func (h *matchHandlers) cvUploadedAt(c *fiber.Ctx, userID int64) (*time.Time, bo
 	return meta.UploadedAt, true
 }
 
-// structuredResumeJSON returns the caller's current structured résumé as JSON for the
-// fit input, or "" when the caller has none current (no résumé, unconfigured LLM, not
-// yet extracted, or stale) — the fit chain then produces no analysis (the raw CV is
-// never sent as a fallback). Best-effort: a read/marshal error degrades to "".
-func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string {
+// candidateProfile returns the caller's contact-free résumé projection for the fit input, or
+// the zero value when the caller has none current (no résumé, unconfigured LLM, not yet
+// extracted, or stale) — the fit chain then produces no analysis (the raw CV is never sent as
+// a fallback). Best-effort: a read error degrades to the zero value.
+func (h *matchHandlers) candidateProfile(c *fiber.Ctx, userID int64) resumeextract.Professional {
 	// The structured résumé still owns education, languages, the summary and the years
 	// estimate, and is read best-effort: a stale or absent structure now costs those
 	// sections, not the whole analysis.
@@ -320,25 +320,18 @@ func (h *matchHandlers) candidateProfileJSON(c *fiber.Ctx, userID int64) string 
 
 	bank := h.candidateBank()
 	if bank == nil {
-		return ""
+		return resumeextract.Professional{}
 	}
 	profile, err := bank.Professional(c.Context(), userID, st)
 	if err != nil {
 		log.Printf("candidate profile: user %d: %v", userID, err)
-		return ""
+		return resumeextract.Professional{}
 	}
-	// An empty bank is the one state that stops the chain. There is deliberately no
-	// fallback to the structure's own copy of the work history: scoring a candidate
-	// against experience nothing owns is worse than not scoring them, and a silent
-	// fallback would hide a failed backfill for months.
-	if len(profile.Experience) == 0 {
-		return ""
-	}
-	blob, err := json.Marshal(profile)
-	if err != nil {
-		return ""
-	}
-	return string(blob)
+	// Returned as-is, empty work history included — the chain is what refuses a candidate
+	// with no experience. There is deliberately no fallback here to the structure's own copy
+	// of that history: scoring somebody against experience nothing owns is worse than not
+	// scoring them, and a silent fallback would hide a failed backfill for months.
+	return profile
 }
 
 // candidateBank returns the bank the fit chain reads, building it from the handler's

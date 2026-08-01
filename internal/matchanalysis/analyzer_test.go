@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 // queuedModel returns canned responses in order, one per GenerateContent call — so a
@@ -93,10 +94,14 @@ func TestStreamStage_DoesNotRetryWhenTheCallerIsGone(t *testing.T) {
 
 func sampleInput() Input {
 	return Input{
-		JobTitle:            "Senior Go Engineer",
-		JobDescription:      "Build backends in Go. Kafka a plus.",
-		CompanyInfo:         `{"tagline":"We ship fridges"}`,
-		StructuredResume:    `{"summary":"Backend engineer, 5y Go at Acme.","experience":[{"company":"Acme","title":"Backend Engineer"}],"skills":["Go"]}`,
+		JobTitle:       "Senior Go Engineer",
+		JobDescription: "Build backends in Go. Kafka a plus.",
+		CompanyInfo:    `{"tagline":"We ship fridges"}`,
+		StructuredResume: resumeextract.Professional{
+			Summary:    "Backend engineer, 5y Go at Acme.",
+			Experience: []resumeextract.Experience{{Company: "Acme", Title: "Backend Engineer"}},
+			Skills:     []string{"Go"},
+		},
 		Match:               jobmatch.JobMatch{Matched: []string{"go"}, Missing: []string{"kafka"}, CoveragePercent: 50},
 		JobWorkMode:         "onsite",
 		JobLocation:         "Berlin, Germany",
@@ -121,6 +126,25 @@ func TestAnalyze_NilClientIsNoOp(t *testing.T) {
 	var nilAnalyzer *Analyzer
 	if id := nilAnalyzer.ModelID(); id != "" {
 		t.Errorf("nil-receiver ModelID = %q, want \"\"", id)
+	}
+}
+
+// A candidate with no banked work history stops the chain, and stops it BEFORE the first model
+// call — scoring somebody against experience nothing owns is worse than not scoring them, and
+// the raw CV is never a fallback. The rule lives here rather than in the handler because the
+// candidate context is now a typed value: "nothing to reason over" is a property of the input,
+// not of an empty string the producer happened to return.
+func TestAnalyze_NoBankedExperienceIsNoAnalysis(t *testing.T) {
+	m := &queuedModel{resp: []string{stage1JSON, stage2JSON, stage3JSON}}
+	in := sampleInput()
+	in.StructuredResume.Experience = nil
+
+	got, err := NewAnalyzer(llm.NewWithModel(m)).Analyze(context.Background(), in)
+	if err != nil || got != nil {
+		t.Fatalf("no banked experience = (%v,%v), want (nil,nil)", got, err)
+	}
+	if m.n != 0 {
+		t.Errorf("model calls = %d, want 0 — the chain must not run without a candidate", m.n)
 	}
 }
 

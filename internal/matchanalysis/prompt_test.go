@@ -1,37 +1,45 @@
 package matchanalysis
 
-import "strings"
+import (
+	"strings"
+	"testing"
 
-import "testing"
+	"github.com/strelov1/freehire/internal/resumeextract"
+)
 
 func TestStage1Prompt_SendsDeIdentifiedStructured(t *testing.T) {
-	in := Input{JobTitle: "Go Engineer", StructuredResume: `{"full_name":"Jane","email":"jane@x.com","summary":"Go dev"}`}
+	// The caller projects; the chain cannot be handed the contact-bearing structure at all.
+	structured := resumeextract.Structured{
+		FullName:   "Jane",
+		Email:      "jane@x.com",
+		Summary:    "Go dev",
+		Experience: []resumeextract.Experience{{Company: "Acme", Title: "Backend Engineer"}},
+	}
+	in := Input{JobTitle: "Go Engineer", StructuredResume: structured.Professional()}
 	got := stage1UserPrompt(in, candidateContext(in.StructuredResume))
 	if !strings.Contains(got, `"summary":"Go dev"`) {
 		t.Errorf("stage1 prompt missing the structured candidate context:\n%s", got)
 	}
 	if strings.Contains(got, "Jane") || strings.Contains(got, "jane@x.com") {
-		t.Errorf("contacts must be stripped from the candidate context:\n%s", got)
+		t.Errorf("contacts reached the candidate context:\n%s", got)
 	}
 }
 
-// TestCandidateContext_DropsFieldsOutsideTheProjection covers the field nobody has
-// added yet. The candidate context is built by projecting onto the résumé's
-// contact-free view, so a key the projection does not name falls away — including one
-// carrying personal data that no contact-key blacklist would have known to remove.
-func TestCandidateContext_DropsFieldsOutsideTheProjection(t *testing.T) {
-	got := candidateContext(`{"summary":"Go dev","national_id":"123-45-6789"}`)
-
-	if strings.Contains(got, "national_id") || strings.Contains(got, "123-45-6789") {
-		t.Errorf("a field outside the projection reached the candidate context:\n%s", got)
-	}
-	if !strings.Contains(got, "Go dev") {
-		t.Errorf("the projected fields must survive:\n%s", got)
+// The field nobody has added yet can no longer reach this package at all: the argument's type
+// names what a model may see. resumeextract's TestProfessional_WithholdsOnlyDeclaredFields is
+// what now fails when somebody adds a field to the structured résumé without deciding.
+//
+// What remains testable here is the chain's own rule: a candidate with no banked experience
+// yields no context, and the chain then produces no analysis rather than scoring against a
+// work history nothing owns.
+func TestCandidateContext_EmptyWithoutBankedExperience(t *testing.T) {
+	if got := candidateContext(resumeextract.Professional{Summary: "Go dev"}); got != "" {
+		t.Errorf("candidate context = %q, want empty without experience", got)
 	}
 }
 
 func TestStage1Prompt_OmitsCandidateBlockWhenNoStructured(t *testing.T) {
-	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer"}, candidateContext(""))
+	withEmpty := stage1UserPrompt(Input{JobTitle: "Go Engineer"}, candidateContext(resumeextract.Professional{}))
 	if strings.Contains(withEmpty, "Candidate (structured résumé") {
 		t.Errorf("stage1 prompt should omit the candidate block when there is no structured résumé:\n%s", withEmpty)
 	}

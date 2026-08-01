@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resume"
+	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/userprofile"
@@ -78,10 +79,15 @@ func (h *resumeHandlers) PostATSReport(c *fiber.Ctx) error {
 	// The qualitative review reads the de-identified structure OF THE UPLOADED FILE, never
 	// the raw CV — and deliberately not the experience bank. This report judges the
 	// document, not the person: feeding it banked evidence would have it praise a CV for
-	// experience that appears nowhere in the CV. Absent structure ⇒ nil review ⇒ the
-	// deterministic report is served (below).
+	// experience that appears nowhere in the CV.
+	candidate, ok := reviewableResume(h.resume, c, userID)
+	if !ok {
+		// No current structure to review: serve the deterministic report rather than
+		// asking the model to judge a document it cannot see.
+		return c.JSON(fiber.Map{"data": atsResponse{HasCV: true, Report: report}})
+	}
 	analyzer := h.atsAnalyzer.As(h.llm.bind(c.Context(), userID, tagATSReview))
-	review, err := analyzer.Analyze(c.Context(), structuredResumeJSON(h.resume, c, userID))
+	review, err := analyzer.Analyze(c.Context(), candidate)
 	if err != nil {
 		// Best-effort: log (never the CV text) and serve the deterministic report.
 		log.Printf("atscheck: review failed for user %d: %v", userID, err)
@@ -195,23 +201,21 @@ func topRoleSkills(facet map[string]int64, n int) []string {
 	return out
 }
 
-// structuredResumeJSON marshals the structure of the user's stored CV, or "" when there is
-// none, none current, or storage is unconfigured.
+// reviewableResume reads the structure of the user's stored CV as its contact-free projection,
+// reporting false when there is none, none current, or storage is unconfigured. The projection
+// is what a model may see; returning it rather than a serialization means no caller can hand
+// the contact-bearing structure to one.
 //
 // This is the FILE's structure, and it is what surfaces judging the document read. The fit
-// chain reads matchHandlers.candidateProfileJSON instead — a composition of the experience
-// bank and this structure — because it judges the candidate rather than their CV.
-func structuredResumeJSON(resumeStore *resume.Store, c *fiber.Ctx, userID int64) string {
+// chain reads matchHandlers.candidateProfile instead — a composition of the experience bank
+// and this structure — because it judges the candidate rather than their CV.
+func reviewableResume(resumeStore *resume.Store, c *fiber.Ctx, userID int64) (resumeextract.Professional, bool) {
 	if resumeStore == nil || !resumeStore.Enabled() {
-		return ""
+		return resumeextract.Professional{}, false
 	}
 	st, ok, err := resumeStore.Structured(c.Context(), userID)
 	if err != nil || !ok {
-		return ""
+		return resumeextract.Professional{}, false
 	}
-	blob, err := json.Marshal(st)
-	if err != nil {
-		return ""
-	}
-	return string(blob)
+	return st.Professional(), true
 }

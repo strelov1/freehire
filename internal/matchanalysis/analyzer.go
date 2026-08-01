@@ -68,10 +68,12 @@ type Input struct {
 	JobTitle       string
 	JobDescription string
 	CompanyInfo    string
-	// StructuredResume is the caller's de-identified structured résumé as JSON — the sole
-	// candidate context sent to the model (its contact fields are stripped by candidateContext).
-	// Empty when the caller has no current structured résumé, in which case no analysis runs.
-	StructuredResume string
+	// StructuredResume is the caller's contact-free résumé projection — the sole candidate
+	// context sent to the model. De-identification is this field's TYPE, not a step the chain
+	// performs: resumeextract.Professional names the fields a model may see, so a field added
+	// to the structured résumé is withheld until somebody adds it there too. A zero value (or
+	// one with no experience) means the caller has nothing to reason over and no analysis runs.
+	StructuredResume resumeextract.Professional
 	Match            jobmatch.JobMatch
 
 	// Job geography for the location dimension.
@@ -136,8 +138,9 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, nil
 	}
 
-	// The fit is scored from the de-identified structured résumé; without it there is nothing
-	// to reason over, so degrade to no analysis (the raw CV is never used as a fallback).
+	// The fit is scored from the candidate's banked work history; without it there is nothing
+	// to reason over, so degrade to no analysis (the raw CV is never used as a fallback, and
+	// neither is the structured résumé's own copy of the experience).
 	candidate := candidateContext(in.StructuredResume)
 	if candidate == "" {
 		return nil, nil
@@ -382,28 +385,24 @@ func writeJob(b *strings.Builder, in Input) {
 // compact summary, so a modest cap covers it while keeping the stage responsive.
 const maxStructuredRunes = 3000
 
-// candidateContext turns the stored structured-résumé JSON into the de-identified candidate
-// context sent to the model: the semantic résumé with its contact fields removed. Empty when
-// there is no structured résumé (the chain then produces no analysis) or the JSON is unusable.
+// candidateContext renders the candidate context sent to the model. Empty when the caller has
+// no banked experience — the chain then produces no analysis, and the raw CV is never a
+// fallback — or, defensively, when the projection will not marshal.
 //
-// The de-identification is resumeextract's own projection rather than a list of contact keys
-// to delete. Routing through the typed shape means a field the projection does not name never
-// reaches the prompt — including one that does not exist yet. Deleting known keys would have
-// sent every future addition to the model until somebody remembered to extend the list.
-func candidateContext(structuredJSON string) string {
-	s := strings.TrimSpace(structuredJSON)
-	if s == "" {
+// There is nothing to strip here and nothing to re-project: de-identification is the argument's
+// type. resumeextract.Professional names the fields a model may see, so a field the projection
+// does not name never reaches the prompt, including one that does not exist yet. Deleting known
+// contact keys would have sent every future addition to the model until somebody remembered to
+// extend the list.
+func candidateContext(candidate resumeextract.Professional) string {
+	if len(candidate.Experience) == 0 {
 		return ""
 	}
-	var structured resumeextract.Structured
-	if json.Unmarshal([]byte(s), &structured) != nil {
-		return ""
-	}
-	stripped, err := json.Marshal(structured.Professional())
+	blob, err := json.Marshal(candidate)
 	if err != nil {
 		return ""
 	}
-	return llm.TruncateRunes(string(stripped), maxStructuredRunes)
+	return llm.TruncateRunes(string(blob), maxStructuredRunes)
 }
 
 // writeCandidate appends the de-identified structured résumé as the candidate context.

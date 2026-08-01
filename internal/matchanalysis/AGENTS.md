@@ -26,7 +26,7 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 
 **Frontend:** a dedicated full-width analysis page SSRs a fresh cached analysis via `+page.server.ts` for instant paint; otherwise opens an `EventSource` with a stepper, thinking panel, and progressive sections. The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested). The Profile-match sidebar block (`MatchSummary.svelte`) is a compact summary linking to the page — it never computes inline.
 
-**Structured resume context:** the `resumeextract` wire shape (contact fields stripped) is the SOLE candidate context of the fit chain (`matchanalysis.Input.StructuredResume`) — the raw CV text is never sent to the model. A missing/failed extraction means NO analysis is produced (the endpoint degrades to `has_cv` with a null analysis); there is deliberately no text-only fallback.
+**Structured resume context:** `resumeextract.Professional` — the contact-free projection, as a TYPE, not a convention about a JSON string — is the SOLE candidate context of the fit chain (`matchanalysis.Input.StructuredResume`). The raw CV text is never sent to the model, and this package strips nothing: a field the projection does not name cannot arrive here. A candidate with no banked experience means NO analysis is produced (the endpoint degrades to `has_cv` with a null analysis); there is deliberately no text-only fallback and no fallback to the structure's own copy of the work history.
 
 **Code generation:** wire shape generated to TS via `cmd/gen-contracts`.
 

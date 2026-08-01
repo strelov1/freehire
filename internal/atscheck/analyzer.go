@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 const (
@@ -49,21 +50,23 @@ type Review struct {
 	Suggestions    []string `json:"suggestions"`
 }
 
-// Analyze asks the model, over the de-identified structured résumé, for a content-quality
-// score (0-100) and a few concrete improvement suggestions. It NEVER sends the raw CV, and
-// strips the contact fields from the structure first, so no direct identifier reaches the
-// model. Returns (nil, nil) when unconfigured or when there is no usable structured résumé,
-// so callers degrade to the deterministic score. The model is untrusted output — the score
-// is clamped and suggestions are trimmed, length-bounded, and capped.
-func (a *Analyzer) Analyze(ctx context.Context, structuredJSON string) (*Review, error) {
+// Analyze asks the model, over the candidate's contact-free résumé projection, for a
+// content-quality score (0-100) and a few concrete improvement suggestions. It NEVER sends the
+// raw CV. De-identification is the argument's type, not something this package performs: a
+// resumeextract.Professional names the fields a model may see, so a field added to the
+// structured résumé is withheld until somebody adds it there too. Returns (nil, nil) when
+// unconfigured — the caller decides whether it has a résumé to review at all — so callers
+// degrade to the deterministic score. The model is untrusted output: the score is clamped and
+// suggestions are trimmed, length-bounded, and capped.
+func (a *Analyzer) Analyze(ctx context.Context, candidate resumeextract.Professional) (*Review, error) {
 	if a == nil || a.client == nil {
 		return nil, nil
 	}
-	candidate := stripContacts(structuredJSON)
-	if candidate == "" {
-		return nil, nil
+	prompt, err := reviewUserPrompt(candidate)
+	if err != nil {
+		return nil, err
 	}
-	raw, err := a.client.GenerateJSON(ctx, reviewSystemPrompt(), reviewUserPrompt(candidate))
+	raw, err := a.client.GenerateJSON(ctx, reviewSystemPrompt(), prompt)
 	if err != nil {
 		return nil, fmt.Errorf("atscheck: analyze: %w", err)
 	}
@@ -107,29 +110,11 @@ func reviewSystemPrompt() string {
 	return b.String()
 }
 
-// reviewUserPrompt carries the (bounded) de-identified structured résumé.
-func reviewUserPrompt(structured string) string {
-	return "Résumé (structured, JSON):\n" + llm.TruncateRunes(structured, maxCVRunes) + "\n"
-}
-
-// stripContacts drops the contact fields from the structured-résumé JSON, returning the
-// de-identified remainder. Empty on empty or unparseable input (the caller then serves the
-// deterministic score only), so no raw/contact identifier can reach the model.
-func stripContacts(structuredJSON string) string {
-	s := strings.TrimSpace(structuredJSON)
-	if s == "" {
-		return ""
-	}
-	var m map[string]json.RawMessage
-	if json.Unmarshal([]byte(s), &m) != nil {
-		return ""
-	}
-	for _, k := range []string{"full_name", "email", "phone", "links"} {
-		delete(m, k)
-	}
-	b, err := json.Marshal(m)
+// reviewUserPrompt carries the (bounded) contact-free résumé projection.
+func reviewUserPrompt(candidate resumeextract.Professional) (string, error) {
+	blob, err := json.Marshal(candidate)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("atscheck: marshal candidate: %w", err)
 	}
-	return string(b)
+	return "Résumé (structured, JSON):\n" + llm.TruncateRunes(string(blob), maxCVRunes) + "\n", nil
 }
