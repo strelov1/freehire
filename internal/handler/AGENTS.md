@@ -88,9 +88,14 @@ client could forget to ask for is a run nobody can take back. Undoing it is
 `POST /me/cvs/:id/autopilot/undo` (also cookie-only), which restores the pre-run
 document and clears the run's report with it.
 
-The turn endpoint writes with `writeEvent`, which — unlike `writeSSE` — reports a
-failed write. That is how a streamed turn learns the client is gone: the failure
-cancels the loop's context, so it stops before spending another model call.
+Both SSE endpoints — the turn and the fit analysis — write through `sseStream`
+(`match_analysis_stream.go`), the one owner of the stream protocol: it serializes the
+heartbeat goroutine against the event callback and re-arms the write deadline before every
+write. `event` reports whether the frame reached the client, and a marshal failure reports
+**true** — an unencodable frame is our bug, not a dead reader. That is how a streamed turn
+learns the client is gone: the failure cancels the loop's context, so it stops before
+spending another model call. The fit analysis deliberately ignores the same signal — its run
+was paid for with an AI credit, so it finishes into the cache rather than aborting.
 
 `assistant_tools.go` / `assistant_tracking_tools.go` / `assistant_cv_tools.go` /
 `assistant_profile_tool.go` / `assistant_present_tool.go` / `assistant_page_tools.go`

@@ -3,13 +3,10 @@ package handler
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/getsentry/sentry-go"
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
@@ -144,11 +141,6 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 // assistantMaxPrompt bounds one user message. The agent's context is finite and a
 // pasted job board is not a question; the limit is generous for prose.
 const assistantMaxPrompt = 8000
-
-// assistantKeepalive is how often a silent turn emits an SSE comment. A model
-// thinking for a minute would otherwise let nginx's read timeout sever the
-// stream, and the client would show a bare "connection lost" mid-answer.
-const assistantKeepalive = 15 * time.Second
 
 // sessionResponse is the wire shape of one conversation.
 type sessionResponse struct {
@@ -410,10 +402,7 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 
 	turnRunner := h.boundRunner(c.Context(), sess)
 
-	c.Set(fiber.HeaderContentType, "text/event-stream")
-	c.Set(fiber.HeaderCacheControl, "no-cache")
-	c.Set(fiber.HeaderConnection, "keep-alive")
-	c.Set("X-Accel-Buffering", "no") // stop nginx buffering so events reach the browser promptly
+	sseHeaders(c)
 
 	// The server's write timeout would kill this long-lived stream mid-turn, so the SSE
 	// response carries its own, bounded deadline instead (captured while the request ctx
@@ -429,61 +418,33 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 	}
 
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		// Set the write deadline before EVERY write, not once up front: fasthttp runs
-		// this stream writer on its own goroutine while the serving goroutine arms the
-		// server's WriteTimeout, so a single set races with it and loses about half the
-		// time — the turn then dies at exactly ten seconds, mid-answer, for no reason the
-		// user can see. It is a bounded deadline rather than a cleared one because a
-		// cleared deadline is forever: a reader that stopped reading would block the
-		// write, and with it this goroutine, for the life of the process.
-		write := func(event string, data any) bool {
-			if conn != nil {
-				_ = conn.SetWriteDeadline(time.Now().Add(sseWriteTimeout))
-			}
-			return writeEvent(w, event, data)
-		}
+		// sseStream owns the write protocol both SSE endpoints need: it serializes the
+		// heartbeat goroutine against the event callback (bufio.Writer is not safe for
+		// concurrent use) and re-arms the write deadline before EVERY write. Per-write
+		// rather than once up front because fasthttp runs this stream writer on its own
+		// goroutine while the serving goroutine arms the server's WriteTimeout, so a single
+		// set races with it and loses about half the time — the turn then dies at exactly
+		// ten seconds, mid-answer, for no reason the user can see. Bounded rather than
+		// cleared because a cleared deadline is forever: a reader that stopped reading
+		// would block the write, and with it this goroutine, for the life of the process.
+		stream := newSSEStream(w, conn, sseWriteTimeout)
+
 		// The request context is gone once the handler returns, so the turn runs on
 		// its own cancellable context. Cancellation comes from the client going away,
 		// which shows up as a failed write below.
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		// The heartbeat goroutine and the event callback both write to w, which is not
-		// safe for concurrent use.
-		var mu sync.Mutex
-		stop := make(chan struct{})
-		var heartbeat sync.WaitGroup
-		heartbeat.Add(1)
-		go func() {
-			defer heartbeat.Done()
-			t := time.NewTicker(assistantKeepalive)
-			defer t.Stop()
-			for {
-				select {
-				case <-stop:
-					return
-				case <-t.C:
-					mu.Lock()
-					if conn != nil {
-						_ = conn.SetWriteDeadline(time.Now().Add(sseWriteTimeout))
-					}
-					writeComment(w, "keepalive")
-					mu.Unlock()
-				}
-			}
-		}()
+		stopHeartbeat := stream.keepalive(sseKeepalive)
 
 		err := turnRunner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
-			mu.Lock()
-			defer mu.Unlock()
-			if !write(string(e.Kind), e) {
+			if !stream.event(string(e.Kind), e) {
 				// The client is gone. Stop the loop at its next boundary rather than
 				// finishing a turn nobody is reading.
 				cancel()
 			}
 		})
-		close(stop)
-		heartbeat.Wait()
+		stopHeartbeat()
 		if err != nil {
 			// The loop has already emitted its terminal error event; this is for us —
 			// and for Sentry, which would otherwise never learn of it: this handler
@@ -669,28 +630,4 @@ func mapAssistantError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "session not found")
 	}
 	return err
-}
-
-// writeComment writes an SSE comment line — ignored by EventSource — as a heartbeat that
-// keeps the connection producing bytes through long, silent stages. A write error (client
-// gone) is swallowed: the turn learns a connection is dead from writeEvent, not from here.
-func writeComment(w *bufio.Writer, text string) {
-	if _, err := fmt.Fprintf(w, ": %s\n\n", text); err != nil {
-		return
-	}
-	_ = w.Flush()
-}
-
-// writeEvent writes one named SSE event, reporting whether the write reached the
-// client. Unlike writeComment it does not swallow the failure: a dead connection is
-// how a streamed turn learns to stop.
-func writeEvent(w *bufio.Writer, event string, data any) bool {
-	blob, err := json.Marshal(data)
-	if err != nil {
-		return true // an unencodable frame is our bug, not a dead client
-	}
-	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, blob); err != nil {
-		return false
-	}
-	return w.Flush() == nil
 }

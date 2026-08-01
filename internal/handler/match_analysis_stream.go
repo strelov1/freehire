@@ -78,10 +78,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		Blockers:            blockers,
 	}
 
-	c.Set(fiber.HeaderContentType, "text/event-stream")
-	c.Set(fiber.HeaderCacheControl, "no-cache")
-	c.Set(fiber.HeaderConnection, "keep-alive")
-	c.Set("X-Accel-Buffering", "no") // stop nginx buffering so events reach the browser promptly
+	sseHeaders(c)
 
 	// The server's 10s WriteTimeout would kill this long-lived stream mid-analysis, so the
 	// SSE response sets its own, per-write deadline instead (see sseStream). Captured here
@@ -121,29 +118,13 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// mid-analysis — the client sees a bare "Connection lost". A periodic SSE comment
 		// keeps bytes flowing so the stream survives silent stages. The ticker goroutine
 		// and the stage callback both write, which sseStream serializes.
-		stopHeartbeat := make(chan struct{})
-		var heartbeat sync.WaitGroup
-		heartbeat.Add(1)
-		go func() {
-			defer heartbeat.Done()
-			t := time.NewTicker(15 * time.Second)
-			defer t.Stop()
-			for {
-				select {
-				case <-stopHeartbeat:
-					return
-				case <-t.C:
-					stream.comment("keepalive")
-				}
-			}
-		}()
+		stopHeartbeat := stream.keepalive(sseKeepalive)
 
 		analysis, err := analyzer.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
 			events++
 			stream.event(string(e.Kind), e)
 		})
-		close(stopHeartbeat)
-		heartbeat.Wait()
+		stopHeartbeat()
 		if err != nil {
 			log.Printf("matchanalysis: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
 			reportStreamFault(hub, err)
@@ -214,32 +195,81 @@ func newSSEStream(w *bufio.Writer, conn net.Conn, timeout time.Duration) *sseStr
 	return &sseStream{w: w, conn: conn, timeout: timeout}
 }
 
-// event writes one named SSE event with a JSON data payload and flushes it.
-func (s *sseStream) event(name string, data any) {
+// event writes one named SSE event with a JSON data payload and flushes it, reporting
+// whether it reached the client. A marshal failure reports TRUE: an unencodable frame is
+// our bug, not a dead reader, and a caller that stops the work on false must not stop it
+// over our own encoding mistake.
+func (s *sseStream) event(name string, data any) bool {
 	blob, err := json.Marshal(data)
 	if err != nil {
-		return
+		return true
 	}
-	s.write(fmt.Sprintf("event: %s\ndata: %s\n\n", name, blob))
+	return s.write(fmt.Sprintf("event: %s\ndata: %s\n\n", name, blob))
 }
 
 // comment writes an SSE comment line — ignored by EventSource — as a heartbeat that keeps
-// the connection producing bytes through long, silent stages.
+// the connection producing bytes through long, silent stages. A failure is nothing to act
+// on: the next event will report it.
 func (s *sseStream) comment(text string) {
-	s.write(fmt.Sprintf(": %s\n\n", text))
+	_ = s.write(fmt.Sprintf(": %s\n\n", text))
 }
 
-// write emits one frame under the lock, with a fresh deadline. A write error (the reader
-// is gone) is swallowed — the stream is best-effort — but the deadline is what guarantees
-// the call RETURNS, so a reader that stopped reading cannot pin this goroutine.
-func (s *sseStream) write(frame string) {
+// sseKeepalive is how often a silent stream emits a comment. Both SSE endpoints go quiet
+// for the same reason — a model thinking — and would be severed by the same thing: nginx's
+// proxy_read_timeout, which shows the client a bare "connection lost" mid-answer. One
+// number because it answers one constraint.
+const sseKeepalive = 15 * time.Second
+
+// keepalive starts the heartbeat and returns the function that stops it. Stopping BLOCKS
+// until the goroutine has finished, so no comment can be written after the caller believes
+// the stream is done — both endpoints hand-rolled this ticker plus a WaitGroup, and getting
+// the ordering wrong writes into a closed body.
+//
+// The interval is an argument rather than the constant so that property can be tested at a
+// millisecond instead of the fifteen seconds production waits.
+func (s *sseStream) keepalive(every time.Duration) (stop func()) {
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-t.C:
+				s.comment("keepalive")
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		wg.Wait()
+	}
+}
+
+// write emits one frame under the lock, with a fresh deadline, and reports whether it
+// reached the client. The deadline is what guarantees the call RETURNS, so a reader that
+// stopped reading cannot pin this goroutine.
+func (s *sseStream) write(frame string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conn != nil {
 		_ = s.conn.SetWriteDeadline(time.Now().Add(s.timeout))
 	}
 	if _, err := s.w.WriteString(frame); err != nil {
-		return
+		return false
 	}
-	_ = s.w.Flush()
+	return s.w.Flush() == nil
+}
+
+// sseHeaders sets the response headers every SSE endpoint needs, so a new one cannot ship
+// with three of the four.
+func sseHeaders(c *fiber.Ctx) {
+	c.Set(fiber.HeaderContentType, "text/event-stream")
+	c.Set(fiber.HeaderCacheControl, "no-cache")
+	c.Set(fiber.HeaderConnection, "keep-alive")
+	c.Set("X-Accel-Buffering", "no") // stop nginx buffering so events reach the browser promptly
 }
