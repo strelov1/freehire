@@ -11,40 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const applicationForCalendarUID = `-- name: ApplicationForCalendarUID :one
-SELECT em.application_id
-  FROM emails em
- WHERE em.user_id        = $1
-   AND em.ical_uid       = $2
-   AND em.ical_uid      <> ''
-   AND em.application_id IS NOT NULL
- ORDER BY em.received_at DESC
- LIMIT 1
-`
-
-type ApplicationForCalendarUIDParams struct {
-	UserID  int64  `json:"user_id"`
-	IcalUid string `json:"ical_uid"`
-}
-
-// Which application a calendar event belongs to, by the identifier its invitation carried.
-//
-// This is the one automatic link the feature makes. The invitation is already tied to an
-// application by the deterministic mail matcher, and the UID says the calendar entry is
-// that same meeting — so nothing here is inferred from a company name or a domain.
-//
-// Owner-scoped, and that is load-bearing rather than routine: one candidate's invitation
-// says nothing about another's applications, and a UID is not a secret.
-//
-// Deleted mail still resolves. Deletion hides the message; it does not un-schedule the
-// meeting it announced — the same position the ledger takes on a deleted reply.
-func (q *Queries) ApplicationForCalendarUID(ctx context.Context, arg ApplicationForCalendarUIDParams) (pgtype.Int8, error) {
-	row := q.db.QueryRow(ctx, applicationForCalendarUID, arg.UserID, arg.IcalUid)
-	var application_id pgtype.Int8
-	err := row.Scan(&application_id)
-	return application_id, err
-}
-
 const cancelApplicationInterview = `-- name: CancelApplicationInterview :execrows
 UPDATE application_interviews
 SET status = 'cancelled', updated_at = now()
@@ -166,6 +132,65 @@ func (q *Queries) ListCalendarConnections(ctx context.Context, calendarScope str
 	for rows.Next() {
 		var i ListCalendarConnectionsRow
 		if err := rows.Scan(&i.UserID, &i.Email, &i.RefreshTokenEnc); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCalendarMatchCandidates = `-- name: ListCalendarMatchCandidates :many
+SELECT a.id AS application_id,
+       a.company_slug,
+       a.role_title,
+       coalesce(
+           array_agg(em.ical_uid) FILTER (WHERE em.ical_uid IS NOT NULL AND em.ical_uid <> ''),
+           '{}'
+       )::text[] AS ical_uids
+  FROM applications a
+  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id
+ WHERE a.user_id = $1
+ GROUP BY a.id, a.company_slug, a.role_title
+ ORDER BY a.id
+`
+
+type ListCalendarMatchCandidatesRow struct {
+	ApplicationID int64    `json:"application_id"`
+	CompanySlug   string   `json:"company_slug"`
+	RoleTitle     string   `json:"role_title"`
+	IcalUids      []string `json:"ical_uids"`
+}
+
+// The caller's applications a meeting could belong to, each with the identifiers of the
+// invitations already linked to it.
+//
+// One query per candidate rather than one lookup per calendar event: a sync window holds
+// far more events than a person has applications, and internal/calmatch is pure over what
+// it is handed. The UID array is what makes the deterministic tier possible — the mail
+// matcher already tied those invitations to these applications, so a calendar entry
+// carrying the same identifier is provably the same meeting.
+//
+// Deleted mail still contributes its identifier. Deletion hides the message; it does not
+// un-schedule the meeting it announced, the same position the ledger takes on a deleted
+// reply.
+func (q *Queries) ListCalendarMatchCandidates(ctx context.Context, userID int64) ([]ListCalendarMatchCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listCalendarMatchCandidates, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCalendarMatchCandidatesRow{}
+	for rows.Next() {
+		var i ListCalendarMatchCandidatesRow
+		if err := rows.Scan(
+			&i.ApplicationID,
+			&i.CompanySlug,
+			&i.RoleTitle,
+			&i.IcalUids,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -36,9 +36,9 @@
 
 ## 4. Matching
 
-- [ ] 4.1 Add `internal/calmatch` with the tier vocabulary, mirroring `internal/mailmatch`:
+- [x] 4.1 Add `internal/calmatch` with the tier vocabulary, mirroring `internal/mailmatch`:
       `TierUID` links, everything else suggests. Pure — no database access.
-- [ ] 4.2 Unit tests: a UID match links; a title naming a tracked employer suggests and
+- [x] 4.2 Unit tests: a UID match links; a title naming a tracked employer suggests and
       does not link; an organiser domain never links on its own; a UID belonging to
       another user's mail does not link.
 

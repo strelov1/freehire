@@ -36,26 +36,31 @@ WHERE user_id  = sqlc.arg(user_id)
   AND ical_uid = sqlc.arg(ical_uid)
   AND status  <> 'cancelled';
 
--- name: ApplicationForCalendarUID :one
--- Which application a calendar event belongs to, by the identifier its invitation carried.
+-- name: ListCalendarMatchCandidates :many
+-- The caller's applications a meeting could belong to, each with the identifiers of the
+-- invitations already linked to it.
 --
--- This is the one automatic link the feature makes. The invitation is already tied to an
--- application by the deterministic mail matcher, and the UID says the calendar entry is
--- that same meeting — so nothing here is inferred from a company name or a domain.
+-- One query per candidate rather than one lookup per calendar event: a sync window holds
+-- far more events than a person has applications, and internal/calmatch is pure over what
+-- it is handed. The UID array is what makes the deterministic tier possible — the mail
+-- matcher already tied those invitations to these applications, so a calendar entry
+-- carrying the same identifier is provably the same meeting.
 --
--- Owner-scoped, and that is load-bearing rather than routine: one candidate's invitation
--- says nothing about another's applications, and a UID is not a secret.
---
--- Deleted mail still resolves. Deletion hides the message; it does not un-schedule the
--- meeting it announced — the same position the ledger takes on a deleted reply.
-SELECT em.application_id
-  FROM emails em
- WHERE em.user_id        = sqlc.arg(user_id)
-   AND em.ical_uid       = sqlc.arg(ical_uid)
-   AND em.ical_uid      <> ''
-   AND em.application_id IS NOT NULL
- ORDER BY em.received_at DESC
- LIMIT 1;
+-- Deleted mail still contributes its identifier. Deletion hides the message; it does not
+-- un-schedule the meeting it announced, the same position the ledger takes on a deleted
+-- reply.
+SELECT a.id AS application_id,
+       a.company_slug,
+       a.role_title,
+       coalesce(
+           array_agg(em.ical_uid) FILTER (WHERE em.ical_uid IS NOT NULL AND em.ical_uid <> ''),
+           '{}'
+       )::text[] AS ical_uids
+  FROM applications a
+  LEFT JOIN emails em ON em.application_id = a.id AND em.user_id = a.user_id
+ WHERE a.user_id = sqlc.arg(user_id)
+ GROUP BY a.id, a.company_slug, a.role_title
+ ORDER BY a.id;
 
 -- name: ListApplicationInterviewsInRange :many
 -- One caller's meetings over a date range, for the tracking calendar's second layer.

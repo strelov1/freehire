@@ -40,18 +40,6 @@ type Querier interface {
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
 	AppendAssistantMessage(ctx context.Context, arg AppendAssistantMessageParams) (AssistantMessage, error)
-	// Which application a calendar event belongs to, by the identifier its invitation carried.
-	//
-	// This is the one automatic link the feature makes. The invitation is already tied to an
-	// application by the deterministic mail matcher, and the UID says the calendar entry is
-	// that same meeting — so nothing here is inferred from a company name or a domain.
-	//
-	// Owner-scoped, and that is load-bearing rather than routine: one candidate's invitation
-	// says nothing about another's applications, and a UID is not a secret.
-	//
-	// Deleted mail still resolves. Deletion hides the message; it does not un-schedule the
-	// meeting it announced — the same position the ledger takes on a deleted reply.
-	ApplicationForCalendarUID(ctx context.Context, arg ApplicationForCalendarUIDParams) (pgtype.Int8, error)
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// same delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
@@ -1155,6 +1143,19 @@ type Querier interface {
 	// connection to retry, and calling the API to find that out costs a quota unit per user
 	// per run for an answer we already hold.
 	ListCalendarConnections(ctx context.Context, calendarScope string) ([]ListCalendarConnectionsRow, error)
+	// The caller's applications a meeting could belong to, each with the identifiers of the
+	// invitations already linked to it.
+	//
+	// One query per candidate rather than one lookup per calendar event: a sync window holds
+	// far more events than a person has applications, and internal/calmatch is pure over what
+	// it is handed. The UID array is what makes the deterministic tier possible — the mail
+	// matcher already tied those invitations to these applications, so a calendar entry
+	// carrying the same identifier is provably the same meeting.
+	//
+	// Deleted mail still contributes its identifier. Deletion hides the message; it does not
+	// un-schedule the meeting it announced, the same position the ledger takes on a deleted
+	// reply.
+	ListCalendarMatchCandidates(ctx context.Context, userID int64) ([]ListCalendarMatchCandidatesRow, error)
 	// Catalog page: companies with their job counts, most active first. The job count
 	// is read from the denormalized companies.job_count column (maintained by
 	// cmd/recount-companies), so this read does not join jobs. Ordered by job_count

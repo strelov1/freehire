@@ -135,9 +135,10 @@ func TestApplicationInterviews_RefuseAMeetingWithNoApplication(t *testing.T) {
 	}
 }
 
-// The link the whole feature turns on: the invitation is already tied to an application,
-// and its UID says the calendar entry is that same meeting.
-func TestApplicationForCalendarUID_ResolvesThroughTheLinkedInvitation(t *testing.T) {
+// The link the whole feature turns on, assembled the way the sync reads it: one query
+// per candidate, each application carrying the identifiers of the invitations already
+// tied to it. calmatch then compares a calendar entry's own identifier against those.
+func TestListCalendarMatchCandidates_CarriesTheLinkedInvitationsIdentifiers(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -145,6 +146,7 @@ func TestApplicationForCalendarUID_ResolvesThroughTheLinkedInvitation(t *testing
 	mine := seedResponseUser(t, q, "iv-uid@example.test", true)
 	theirs := seedResponseUser(t, q, "iv-uid-other@example.test", true)
 	jobID, appID := seedApplication(t, q, mine, "iv-uid-1", "derq")
+	seedApplication(t, q, mine, "iv-uid-2", "vercel") // no invitation, so no identifier
 
 	if _, err := q.db.Exec(ctx,
 		`INSERT INTO emails (user_id, source, external_id, subject, received_at, job_id, application_id, ical_uid, status_signal)
@@ -153,75 +155,32 @@ func TestApplicationForCalendarUID_ResolvesThroughTheLinkedInvitation(t *testing
 		t.Fatalf("seed invitation: %v", err)
 	}
 
-	got, err := q.ApplicationForCalendarUID(ctx, ApplicationForCalendarUIDParams{
-		UserID: mine, IcalUid: "derq-interview@ashbyhq.com",
-	})
+	got, err := q.ListCalendarMatchCandidates(ctx, mine)
 	if err != nil {
-		t.Fatalf("resolve: %v", err)
+		t.Fatalf("list candidates: %v", err)
 	}
-	if got.Int64 != appID {
-		t.Errorf("resolved application %d, want %d", got.Int64, appID)
+	if len(got) != 2 {
+		t.Fatalf("got %d candidates, want 2", len(got))
 	}
-
-	// The same UID must not reach across accounts: one candidate's invitation says
-	// nothing about another candidate's applications.
-	if _, err := q.ApplicationForCalendarUID(ctx, ApplicationForCalendarUIDParams{
-		UserID: theirs, IcalUid: "derq-interview@ashbyhq.com",
-	}); err == nil {
-		t.Error("a UID resolved an application for a user whose mail does not carry it")
+	byApp := map[int64][]string{}
+	for _, c := range got {
+		byApp[c.ApplicationID] = c.IcalUids
 	}
-}
-
-// The identifier has to survive the write, not just the parse. Adding a field to a
-// generated params struct compiles whether or not any caller fills it, so the failure
-// this guards against is silent: mail keeps arriving, the column stays empty, and the
-// only automatic link the feature makes never fires.
-func TestEmailUpserts_CarryTheCalendarUID(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-
-	user := seedResponseUser(t, q, "iv-carry@example.test", true)
-	const uid = "carried@ashbyhq.com"
-	at := ts(time.Date(2026, 8, 10, 9, 0, 0, 0, time.UTC))
-
-	if err := q.UpsertEmail(ctx, UpsertEmailParams{
-		UserID: user, ExternalID: "g-1", Subject: "Interview", ReceivedAt: at, IcalUid: uid,
-	}); err != nil {
-		t.Fatalf("gmail upsert: %v", err)
+	if uids := byApp[appID]; len(uids) != 1 || uids[0] != "derq-interview@ashbyhq.com" {
+		t.Errorf("the invited application carries %v, want its one identifier", uids)
 	}
-	if err := q.InsertHostedMessage(ctx, InsertHostedMessageParams{
-		UserID: user, ExternalID: "h-1", Subject: "Interview", ReceivedAt: at, IcalUid: uid,
-	}); err != nil {
-		t.Fatalf("hosted insert: %v", err)
-	}
-
-	for _, source := range []string{"gmail", "hosted"} {
-		var got string
-		if err := q.db.QueryRow(ctx,
-			`SELECT ical_uid FROM emails WHERE user_id = $1 AND source = $2`, user, source).Scan(&got); err != nil {
-			t.Fatalf("read %s: %v", source, err)
-		}
-		if got != uid {
-			t.Errorf("%s stored ical_uid %q, want %q", source, got, uid)
+	for id, uids := range byApp {
+		if id != appID && len(uids) != 0 {
+			t.Errorf("application %d carries %v, want none — it has no invitation", id, uids)
 		}
 	}
 
-	// The pushed tier refreshes content columns on re-push, and the meeting identifier
-	// belongs to the message rather than to the reader — so it refreshes with them.
-	for _, want := range []string{"", "pushed@ashbyhq.com"} {
-		if _, err := q.UpsertExternalEmail(ctx, UpsertExternalEmailParams{
-			UserID: user, ExternalID: "x-1", Subject: "Interview", ReceivedAt: at, IcalUid: want,
-		}); err != nil {
-			t.Fatalf("external upsert: %v", err)
-		}
-		var got string
-		if err := q.db.QueryRow(ctx,
-			`SELECT ical_uid FROM emails WHERE user_id = $1 AND source = 'external'`, user).Scan(&got); err != nil {
-			t.Fatalf("read external: %v", err)
-		}
-		if got != want {
-			t.Errorf("external stored ical_uid %q, want %q", got, want)
-		}
+	// One candidate's invitation says nothing about another's applications.
+	other, err := q.ListCalendarMatchCandidates(ctx, theirs)
+	if err != nil {
+		t.Fatalf("list candidates for the other user: %v", err)
+	}
+	if len(other) != 0 {
+		t.Errorf("a user with no applications got %d candidates", len(other))
 	}
 }
