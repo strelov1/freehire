@@ -2,7 +2,7 @@
 // component so it is unit-testable (vitest) without a DOM: which of the four block
 // states to render, and how to size the two-colour progress bar.
 
-import type { Blocker } from './types';
+import type { Blocker, JobMatch } from './types';
 
 /** Split the hard-constraint blockers for display: the unmet ones (shown as warnings,
  *  hardest first — a lower score_cap is a harder blocker) and the met ones (shown as
@@ -138,6 +138,33 @@ export function teaserChips(jobSkills: string[], missing: Set<string>, limit: nu
     if (borrowed) return [...shown.slice(0, -1), borrowed];
   }
   return shown;
+}
+
+/** The match as it reads once the viewer claims a skill they were missing, before the
+ *  profile write settles. The skill joins the held group and leaves whichever group it
+ *  came from; the counts and the coverage are recomputed by the server's own weighting
+ *  (an exact match weighs 1, an adjacent one half), so the optimistic figure cannot drift
+ *  from what `jobmatch.Compute` will answer next.
+ *
+ *  It is a strict under-estimate: the adjacency dictionary lives on the backend, so a
+ *  claim that promotes some *other* missing skill to adjacent is invisible here. The block
+ *  refetches once the write lands and that is where such a promotion shows up.
+ *
+ *  A skill this job does not carry, or one already held, yields the match untouched. */
+export function claimSkill<M extends JobMatch>(match: M, skill: string): M {
+  if (!match.missing.includes(skill) && !match.adjacent.some((a) => a.name === skill)) return match;
+
+  const exact_count = match.exact_count + 1;
+  const adjacent = match.adjacent.filter((a) => a.name !== skill);
+  return {
+    ...match,
+    exact_count,
+    adjacent_count: adjacent.length,
+    coverage_percent: Math.round(((exact_count + 0.5 * adjacent.length) / match.total) * 100),
+    matched: [...match.matched, skill],
+    adjacent,
+    missing: match.missing.filter((s) => s !== skill),
+  };
 }
 
 /** The two progress-bar segment widths (in percent of the track): a full-weight

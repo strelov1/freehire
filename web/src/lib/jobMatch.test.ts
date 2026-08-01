@@ -6,6 +6,7 @@ import {
   matchTeaser,
   teaserChips,
   partitionBlockers,
+  claimSkill,
 } from './jobMatch';
 
 describe('resolveMatchState', () => {
@@ -222,6 +223,52 @@ describe('teaserChips', () => {
 
   it('has nothing to show for a job with no skills', () => {
     expect(teaserChips([], new Set(), 3)).toEqual([]);
+  });
+});
+
+describe('claimSkill', () => {
+  // A job of four skills the viewer holds one of exactly, one through a neighbour.
+  const match = {
+    total: 4,
+    exact_count: 1,
+    adjacent_count: 1,
+    coverage_percent: 38,
+    matched: ['docker'],
+    adjacent: [{ name: 'azure', via: 'aws' }],
+    missing: ['bash', 'powershell'],
+  };
+
+  it('moves a missing skill into the held group and recomputes the coverage', () => {
+    const after = claimSkill(match, 'bash');
+    expect(after.matched).toEqual(['docker', 'bash']);
+    expect(after.missing).toEqual(['powershell']);
+    expect(after.exact_count).toBe(2);
+    // round((2 + 0.5 × 1) / 4 × 100)
+    expect(after.coverage_percent).toBe(63);
+  });
+
+  it('stops half-weighting a claimed adjacent skill', () => {
+    const after = claimSkill(match, 'azure');
+    expect(after.matched).toEqual(['docker', 'azure']);
+    expect(after.adjacent).toEqual([]);
+    expect(after.adjacent_count).toBe(0);
+    expect(after.exact_count).toBe(2);
+    expect(after.coverage_percent).toBe(50);
+  });
+
+  it('leaves a match this job never carried alone', () => {
+    expect(claimSkill(match, 'kafka')).toEqual(match);
+  });
+
+  it('leaves an already-held skill alone', () => {
+    expect(claimSkill(match, 'docker')).toEqual(match);
+  });
+
+  it('does not mutate the match it was given', () => {
+    claimSkill(match, 'bash');
+    expect(match.matched).toEqual(['docker']);
+    expect(match.missing).toEqual(['bash', 'powershell']);
+    expect(match.coverage_percent).toBe(38);
   });
 });
 
