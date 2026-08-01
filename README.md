@@ -11,7 +11,7 @@
 
 **3.3M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
-[**Try it live →**](https://freehire.me) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
+[**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
 [![Live](https://img.shields.io/badge/live-freehire.me-0a0a0a)](https://freehire.me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -38,8 +38,9 @@
   seniority, skills and salary — derived from curated dictionaries, never guessed.
 - **Actually open.** MIT-licensed and self-hostable, pipeline and data both in the
   open. Adding a company is one line of YAML.
-- **Yours to build on.** A clean HTTP API, a CLI, Telegram digests, and per-user
-  application tracking — use the hosted site, run your own, or build on top.
+- **Yours to build on.** A clean HTTP API, a CLI, Telegram digests, and a whole
+  workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
+  Use the hosted site, run your own, or build on top.
 
 Aggregating **3.3M+ live postings** from **205,000+ companies** across **80+ ATS
 platforms** and a long tail of aggregators and direct feeds — see
@@ -47,6 +48,23 @@ platforms** and a long tail of aggregators and direct feeds — see
 
 > If freehire saves you time — or you just like the idea of jobs straight from the
 > source — a ⭐ helps other people find it.
+
+## Beyond the catalogue
+
+Finding the posting is half the problem. The other half — writing the CV,
+sending it, and knowing what happened to it — is built on the same data, in the
+same repository, under the same licence.
+
+| | |
+| --- | --- |
+| **Find** | Faceted search, curated collections, saved searches with email/Telegram digests, shared boards, market analytics, the ghost-job signal |
+| **Apply** | CV builder with ATS-safe PDF templates, deterministic CV↔vacancy scoring, AI fit analysis, CV tailoring that invents nothing, tracer links, referrals |
+| **Track** | An application board with stages, a mail inbox that links recruiter replies to the application they answer, an append-only event ledger, reminders |
+| **Ask** | An in-process agent with five presets — chat, browse, profile, CV tailoring, interview rehearsal — with no shell and no minted credential |
+| **Build on** | A keyless public API, a CLI, a form-filling browser extension, ChatGPT Actions |
+
+**[Full feature reference → `docs/features.md`](docs/features.md)** — what each one
+does, where it lives in the tree, and which need an LLM endpoint configured.
 
 ## Stack
 
@@ -134,6 +152,11 @@ internal/
   location/          geography parsed from free-text ATS location strings
   jobview/           the single public wire shape of a job
   normalize/         slug normalization
+  cv/ cvedit/        structured CVs + PDF rendering; cvedit is their only writer
+  experience/        durable employments + evidence atoms behind every CV claim
+  userjob/           per-user job tracking (view / apply / save / stages)
+  inbox/             recruiter mail → classify → link to an application
+  assistant/         the in-process agent: turn loop, tools, transcripts
 migrations/          SQL schema (source for both sqlc and initdb)
 ```
 
