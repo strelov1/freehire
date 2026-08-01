@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const backfillEmployerReplyEvents = `-- name: BackfillEmployerReplyEvents :one
@@ -74,6 +76,99 @@ func (q *Queries) BackfillEmployerReplyEvents(ctx context.Context, arg BackfillE
 	var i BackfillEmployerReplyEventsRow
 	err := row.Scan(&i.LastID, &i.Scanned, &i.Inserted)
 	return i, err
+}
+
+const listApplicationEventsInRange = `-- name: ListApplicationEventsInRange :many
+SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
+       ae.application_id, ae.job_id,
+       a.role_title,
+       j.public_slug AS job_slug,
+       em.id         AS email_id,
+       em.subject    AS email_subject
+  FROM application_events ae
+  LEFT JOIN applications a ON a.id = ae.application_id
+  LEFT JOIN jobs j         ON j.id = ae.job_id
+  LEFT JOIN emails em      ON em.id = ae.source_ref
+                          AND em.user_id = ae.user_id
+                          AND em.deleted_at IS NULL
+ WHERE ae.user_id      = $1
+   AND ae.retracted_at IS NULL
+   AND ae.occurred_at >= $2
+   AND ae.occurred_at <= $3
+ -- id breaks the tie so a day's events keep a stable order between requests; two events
+ -- sharing a timestamp is routine when a mailbox import lands a batch.
+ ORDER BY ae.occurred_at, ae.id
+`
+
+type ListApplicationEventsInRangeParams struct {
+	UserID int64              `json:"user_id"`
+	FromAt pgtype.Timestamptz `json:"from_at"`
+	ToAt   pgtype.Timestamptz `json:"to_at"`
+}
+
+type ListApplicationEventsInRangeRow struct {
+	ID            int64              `json:"id"`
+	Kind          string             `json:"kind"`
+	Signal        string             `json:"signal"`
+	Source        string             `json:"source"`
+	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
+	CompanySlug   string             `json:"company_slug"`
+	ApplicationID pgtype.Int8        `json:"application_id"`
+	JobID         pgtype.Int8        `json:"job_id"`
+	RoleTitle     pgtype.Text        `json:"role_title"`
+	JobSlug       pgtype.Text        `json:"job_slug"`
+	EmailID       pgtype.Int8        `json:"email_id"`
+	EmailSubject  pgtype.Text        `json:"email_subject"`
+}
+
+// One caller's live events over a date range, oldest first — the ledger's first dated
+// read, behind internal/apptimeline and the tracking calendar.
+//
+// Retracted rows are excluded here as they are in every other reader: a correction the
+// calendar still showed under the wrong employer would be a correction its author cannot
+// see they made.
+//
+// The employer is taken from the event's own denormalized slug, never through the posting.
+// cmd/prune clears job_id, and an event that had to join jobs for its company would drop
+// out of the range retroactively — the instability the ledger exists to remove. The
+// posting is joined only for the slug the SPA links with, and legitimately comes back
+// absent.
+//
+// The message is joined for its subject and nothing else. Its deletion is a condition OF
+// the join rather than a filter on the result, so a deleted message yields NULL on both
+// columns while the event itself stands: deletion hides content, it does not un-happen
+// the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+func (q *Queries) ListApplicationEventsInRange(ctx context.Context, arg ListApplicationEventsInRangeParams) ([]ListApplicationEventsInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listApplicationEventsInRange, arg.UserID, arg.FromAt, arg.ToAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApplicationEventsInRangeRow{}
+	for rows.Next() {
+		var i ListApplicationEventsInRangeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Signal,
+			&i.Source,
+			&i.OccurredAt,
+			&i.CompanySlug,
+			&i.ApplicationID,
+			&i.JobID,
+			&i.RoleTitle,
+			&i.JobSlug,
+			&i.EmailID,
+			&i.EmailSubject,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recordEmailApplicationEvent = `-- name: RecordEmailApplicationEvent :exec

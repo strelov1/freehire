@@ -324,6 +324,7 @@ func Register(app *fiber.App, cfg Config) {
 	searchH := newSearchHandlers(jobSearch, facets, queries)
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
+	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
 	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
@@ -465,6 +466,9 @@ func Register(app *fiber.App, cfg Config) {
 	// (see trackingHandlers). The interaction writes precede the vote routes,
 	// mirroring the previous registration order.
 	trackingH.register(api, mw)
+	// The ledger's dated read, behind the tracking calendar. Its own namespace, not a
+	// segment under /me/tracking — see the comment on its register.
+	timelineH.register(api, mw)
 	votesH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)

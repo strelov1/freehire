@@ -1,3 +1,41 @@
+-- name: ListApplicationEventsInRange :many
+-- One caller's live events over a date range, oldest first — the ledger's first dated
+-- read, behind internal/apptimeline and the tracking calendar.
+--
+-- Retracted rows are excluded here as they are in every other reader: a correction the
+-- calendar still showed under the wrong employer would be a correction its author cannot
+-- see they made.
+--
+-- The employer is taken from the event's own denormalized slug, never through the posting.
+-- cmd/prune clears job_id, and an event that had to join jobs for its company would drop
+-- out of the range retroactively — the instability the ledger exists to remove. The
+-- posting is joined only for the slug the SPA links with, and legitimately comes back
+-- absent.
+--
+-- The message is joined for its subject and nothing else. Its deletion is a condition OF
+-- the join rather than a filter on the result, so a deleted message yields NULL on both
+-- columns while the event itself stands: deletion hides content, it does not un-happen
+-- the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
+       ae.application_id, ae.job_id,
+       a.role_title,
+       j.public_slug AS job_slug,
+       em.id         AS email_id,
+       em.subject    AS email_subject
+  FROM application_events ae
+  LEFT JOIN applications a ON a.id = ae.application_id
+  LEFT JOIN jobs j         ON j.id = ae.job_id
+  LEFT JOIN emails em      ON em.id = ae.source_ref
+                          AND em.user_id = ae.user_id
+                          AND em.deleted_at IS NULL
+ WHERE ae.user_id      = $1
+   AND ae.retracted_at IS NULL
+   AND ae.occurred_at >= sqlc.arg(from_at)
+   AND ae.occurred_at <= sqlc.arg(to_at)
+ -- id breaks the tie so a day's events keep a stable order between requests; two events
+ -- sharing a timestamp is routine when a mailbox import lands a batch.
+ ORDER BY ae.occurred_at, ae.id;
+
 -- name: RetractSupersededEmailEvent :execrows
 -- Step 1 of reconciling one email with the ledger: retract the live event when the
 -- message is no longer linked, or is now linked to a different application.

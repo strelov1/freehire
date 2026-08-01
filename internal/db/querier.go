@@ -1070,6 +1070,24 @@ type Querier interface {
 	// Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 	// restricted to one source.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
+	// One caller's live events over a date range, oldest first — the ledger's first dated
+	// read, behind internal/apptimeline and the tracking calendar.
+	//
+	// Retracted rows are excluded here as they are in every other reader: a correction the
+	// calendar still showed under the wrong employer would be a correction its author cannot
+	// see they made.
+	//
+	// The employer is taken from the event's own denormalized slug, never through the posting.
+	// cmd/prune clears job_id, and an event that had to join jobs for its company would drop
+	// out of the range retroactively — the instability the ledger exists to remove. The
+	// posting is joined only for the slug the SPA links with, and legitimately comes back
+	// absent.
+	//
+	// The message is joined for its subject and nothing else. Its deletion is a condition OF
+	// the join rather than a filter on the result, so a deleted message yields NULL on both
+	// columns while the event itself stands: deletion hides content, it does not un-happen
+	// the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+	ListApplicationEventsInRange(ctx context.Context, arg ListApplicationEventsInRangeParams) ([]ListApplicationEventsInRangeRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.

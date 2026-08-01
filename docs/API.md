@@ -92,7 +92,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 | Param | Filter | Values |
 | --- | --- | --- |
-| `collections` | Collection | yc, techstars, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, ai-native |
+| `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor |
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
 | `is_tech` | Tech / Non-tech | tech, non_tech |
@@ -1283,6 +1283,57 @@ curl "https://freehire.me/api/v1/me/tracking/swipe" -H "Authorization: Bearer $F
 {
   "data": [ { "public_slug": "...", "title": "Senior Go Engineer", "...": "..." } ],
   "meta": { "total": 137, "limit": 20, "offset": 0 }
+}
+```
+
+### `GET /me/timeline`
+
+**Auth:** Session or API key
+
+What happened to your applications over a date range.
+
+The application-event ledger as a dated series, oldest first: applications sent, employer replies, follow-ups and stage changes. `occurred_at` is an instant, not a day — which day it falls on depends on your timezone, so group it client-side. `observed` says whether the date came from a source other than you: mail-derived events carry a date the employer set, while a stage you set yourself is dated from when you recorded it. `email_id` and `email_subject` are present only while the message exists; deleting it hides the content and leaves the event standing. Both bounds are required and may span at most 366 days.
+
+**Query parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `from` | string (RFC3339) | yes | Lower bound, inclusive. (e.g. `2026-08-01T00:00:00Z`) |
+| `to` | string (RFC3339) | yes | Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`) |
+
+```bash
+curl "https://freehire.me/api/v1/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": 7,
+      "kind": "employer_reply",
+      "signal": "interview_invitation",
+      "source": "mail_gmail",
+      "observed": true,
+      "occurred_at": "2026-08-13T09:41:00Z",
+      "company_slug": "derq",
+      "role_title": "Senior Go Engineer",
+      "application_id": 31,
+      "job_slug": "senior-go-engineer-derq-1a2b",
+      "email_id": 42,
+      "email_subject": "Invitation to interview"
+    },
+    {
+      "id": 8,
+      "kind": "stage_set",
+      "signal": "screening",
+      "source": "user",
+      "observed": false,
+      "occurred_at": "2026-08-13T21:15:00Z",
+      "company_slug": "linear",
+      "application_id": 33
+    }
+  ],
+  "meta": { "from": "2026-08-01T00:00:00Z", "to": "2026-08-31T23:59:59Z", "count": 2 }
 }
 ```
 
@@ -2806,14 +2857,14 @@ curl "https://freehire.me/api/v1/stats/user-growth"
 
 **Auth:** Public
 
-Jobs saved, applied to and viewed across all users.
+Jobs saved, applied to and viewed across all users, plus CV and inbox usage.
 
 ```bash
 curl "https://freehire.me/api/v1/stats/engagement"
 ```
 
 ```json
-{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400 } }
+{ "data": { "saved": 41200, "applied": 18730, "viewed": 903400, "cvs_uploaded": 2140, "cvs_tailored": 860, "match_analyses": 5310, "inboxes_connected": 410, "saved_searches": 1290 } }
 ```
 
 ### `GET /status`
@@ -3147,19 +3198,7 @@ curl -X PUT "https://freehire.me/api/v1/me/cvs/0f2c…" -b cookies.txt \
 
 Apply a batch of edits, addressed by path.
 
-An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — `summary`,
-`experience[2].bullets[1]`, `skills[0].items[3]`, `education[1].degree`, `style.font_size`.
-Indices are 0-based. The four kinds reach every field of the document, and the whole batch is
-applied or none of it is: an unknown path or an index past the end refuses the request without
-touching the CV.
-
-An API key edits as the tailoring agent, which means two things. The candidate's own fields —
-`header.full_name`, `header.email`, `header.phone`, `header.links`, `title`, `template_id` — are
-refused with a 403. And an edit that states something about the candidate (a summary, a bullet,
-a technology, a skill) must carry `evidence_id` from the experience bank.
-
-Every request is recorded in the CV's history and can be undone on its own; see
-`GET /me/cvs/{id}/revisions`.
+An edit is a `kind` (`set`, `insert`, `remove`, `move`) and a `path` into the CV — `summary`, `experience[2].bullets[1]`, `skills[0].items[3]`, `style.font_size`. Indices are 0-based. The whole batch applies or none of it does: an unknown path or an index past the end refuses the request without touching the CV. An API key edits as the tailoring agent, so the candidate's own fields are refused and a claim about them needs `evidence_id` from the experience bank. Every request lands in the CV's history and can be undone on its own.
 
 **Path parameters**
 
@@ -3172,11 +3211,11 @@ Every request is recorded in the CV's history and can be undone on its own; see
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `ops` | object[] | yes | The edits, applied in order. |
-| `ops[].kind` | string | yes | `set`, `insert`, `remove` or `move`. |
-| `ops[].path` | string | yes | Where to edit (e.g. `experience[0].bullets[1]`). |
+| `ops[].kind` | string | yes | `set`, `insert`, `remove` or `move`. (e.g. `set`) |
+| `ops[].path` | string | yes | Where to edit. (e.g. `experience[0].bullets[1]`) |
 | `ops[].value` | any | no | The new content, for `set` and `insert`. |
 | `ops[].to` | integer | no | The element's new position, for `move`. |
-| `ops[].evidence_id` | string | no | The banked achievement this rests on. Required for a claim about the candidate when editing with an API key. |
+| `ops[].evidence_id` | string | no | The banked achievement this rests on. |
 | `note` | string | no | One line on why, shown beside the entry in the history. |
 
 ```bash

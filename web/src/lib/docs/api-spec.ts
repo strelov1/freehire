@@ -973,6 +973,56 @@ ${BASE_URL}/auth/oauth/google/start`,
   "meta": { "total": 137, "limit": 20, "offset": 0 }
 }`,
       },
+      {
+        method: 'GET',
+        path: '/me/timeline',
+        auth: 'cookie-or-key',
+        summary: 'What happened to your applications over a date range.',
+        description:
+          'The application-event ledger as a dated series, oldest first: applications ' +
+          'sent, employer replies, follow-ups and stage changes. `occurred_at` is an ' +
+          'instant, not a day — which day it falls on depends on your timezone, so ' +
+          'group it client-side. `observed` says whether the date came from a source ' +
+          'other than you: mail-derived events carry a date the employer set, while a ' +
+          'stage you set yourself is dated from when you recorded it. `email_id` and ' +
+          '`email_subject` are present only while the message exists; deleting it hides ' +
+          'the content and leaves the event standing. Both bounds are required and may ' +
+          'span at most 366 days.',
+        query: [
+          { name: 'from', type: 'string (RFC3339)', required: true, description: 'Lower bound, inclusive.', example: '2026-08-01T00:00:00Z' },
+          { name: 'to', type: 'string (RFC3339)', required: true, description: 'Upper bound, inclusive.', example: '2026-08-31T23:59:59Z' },
+        ],
+        curl: `curl "${BASE_URL}/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{
+  "data": [
+    {
+      "id": 7,
+      "kind": "employer_reply",
+      "signal": "interview_invitation",
+      "source": "mail_gmail",
+      "observed": true,
+      "occurred_at": "2026-08-13T09:41:00Z",
+      "company_slug": "derq",
+      "role_title": "Senior Go Engineer",
+      "application_id": 31,
+      "job_slug": "senior-go-engineer-derq-1a2b",
+      "email_id": 42,
+      "email_subject": "Invitation to interview"
+    },
+    {
+      "id": 8,
+      "kind": "stage_set",
+      "signal": "screening",
+      "source": "user",
+      "observed": false,
+      "occurred_at": "2026-08-13T21:15:00Z",
+      "company_slug": "linear",
+      "application_id": 33
+    }
+  ],
+  "meta": { "from": "2026-08-01T00:00:00Z", "to": "2026-08-31T23:59:59Z", "count": 2 }
+}`,
+      },
     ],
   },
   {
