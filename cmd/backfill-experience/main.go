@@ -25,18 +25,17 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
-	"os"
 	"time"
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/config"
-	"github.com/strelov1/freehire/internal/database"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 // extractTimeout bounds a single structured-extraction LLM call, matching the on-upload
@@ -53,20 +52,25 @@ type target struct {
 }
 
 func main() {
+	worker.Main(run)
+}
+
+// run holds the whole worker so every exit is a return value: the Langfuse trace flush
+// and the pool close are deferred here, and os.Exit — which log.Fatalf calls — would
+// skip both on exactly the failed run whose traces explain the failure.
+func run() int {
 	var userID int64
 	var dryRun bool
 	flag.Int64Var(&userID, "user", 0, "seed a single user id (0 = every user with a stored CV)")
 	flag.BoolVar(&dryRun, "dry-run", false, "report what would be imported without writing")
 	flag.Parse()
 
-	cfg := config.Load()
-	ctx := context.Background()
-
-	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		log.Printf("database: %v", err)
+		return 1
 	}
-	defer pool.Close()
+	defer cleanup()
 	queries := db.New(pool)
 
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
@@ -78,7 +82,8 @@ func main() {
 
 	targets, err := eligible(ctx, queries, userID)
 	if err != nil {
-		log.Fatalf("query eligible users: %v", err)
+		log.Printf("query eligible users: %v", err)
+		return 1
 	}
 
 	var reusable, needExtract int
@@ -132,9 +137,7 @@ func main() {
 	}
 
 	log.Printf("backfill-experience: done — %d seeded, %d skipped, %d failed", seeded, skipped, failed)
-	if failed > 0 {
-		os.Exit(1)
-	}
+	return worker.ExitCode(failed, 0)
 }
 
 // resolveStructured returns the structured résumé to import for this target: the stored
