@@ -17,7 +17,7 @@ func TestProviderKind(t *testing.T) {
 		"justjoin":                  KindAggregator,
 		"definitely-not-a-provider": KindOther,
 	}
-	reg := All(nil)
+	reg := Taxonomy()
 	for provider, want := range cases {
 		if got := ProviderKind(reg, provider); got != want {
 			t.Errorf("ProviderKind(%q) = %q, want %q", provider, got, want)

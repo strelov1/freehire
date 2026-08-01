@@ -261,21 +261,19 @@ func TestWhatJobsNeverDatesAPostingFromAge(t *testing.T) {
 	}
 }
 
-// The publisher id is the account credential, so it lives in the environment and the provider is
-// absent without it — an unconfigured environment must leave a provider that cannot crawl
-// unregistered rather than register one that fails every board.
-func TestWhatJobsRegisteredOnlyWhenPublisherSet(t *testing.T) {
-	t.Setenv("WHATJOBS_PUBLISHER_ID", "")
-	if _, ok := All(nil)["whatjobs"]; ok {
-		t.Error("All() should NOT register whatjobs without WHATJOBS_PUBLISHER_ID")
+// The publisher id is the account credential, so it lives in the environment and gates the
+// CRAWL registry: an unconfigured host must not register a provider that would 410 every board.
+// It does NOT gate the taxonomy — whatjobs resells first-party ATS postings, so a keyless
+// reindex that could not see it as an aggregator would leave every copy unsuppressed.
+func TestWhatJobsPublisherIDGatesTheCrawlRegistry(t *testing.T) {
+	clearCrawlCredentials(t)
+	if _, ok := All(NewClient())["whatjobs"]; ok {
+		t.Error("All(client) should NOT register whatjobs without WHATJOBS_PUBLISHER_ID")
 	}
 
 	t.Setenv("WHATJOBS_PUBLISHER_ID", "7065")
-	if _, ok := All(nil)["whatjobs"]; !ok {
-		t.Error("All() should register whatjobs when WHATJOBS_PUBLISHER_ID is set")
-	}
-	if !slices.Contains(FilterableProviders(), "whatjobs") {
-		t.Error("FilterableProviders() should include whatjobs when configured")
+	if _, ok := All(NewClient())["whatjobs"]; !ok {
+		t.Error("WHATJOBS_PUBLISHER_ID should be the variable that admits whatjobs to the crawl registry")
 	}
 }
 

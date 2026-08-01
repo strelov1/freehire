@@ -414,15 +414,12 @@ func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) 
 // suppressAggregatorDuplicates marks each open aggregator posting that duplicates a
 // first-party ATS posting (same company, normalized title, compatible country) as a
 // duplicate of that ATS row, one company at a time. Returns the total rows re-marked.
-// The aggregator set comes from the source registry's aggregator() markers. Best-effort
-// and lock-scoped exactly like recomputeRoleDuplicates.
+// The aggregator set comes from the taxonomy registry's aggregator() markers, so it is the
+// same set here as on the ingest host: a keyed adapter whose credential lives only where the
+// crawl runs must still be classified, or its copies of an ATS posting go unsuppressed.
+// Best-effort and lock-scoped exactly like recomputeRoleDuplicates.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
-	// The aggregator set comes from the registry markers. usajobs is the one adapter
-	// sources.All only registers when USAJOBS_API_KEY is set, so a reindex without that
-	// key classifies existing usajobs rows as ATS. That is harmless here: federal postings
-	// have no corporate ATS twin, so they are never suppressed either way and would only
-	// ever be a target on an (essentially impossible) exact company+title+country collision.
-	aggregators := sources.AggregatorProviders(sources.All(nil))
+	aggregators := sources.AggregatorProviders(sources.Taxonomy())
 	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
 	if err != nil {
 		return 0, err

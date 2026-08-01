@@ -8,7 +8,7 @@ The ingest pipeline runner — fetch → normalize → dedup → upsert — and 
 - `cmd/ingest` processes one board file per run (path as the first argument — cron passes it — or `SOURCES_FILE`); it is a run-once-and-exit worker, never a long-lived process.
 - Validate every entry against the registry and fail fast — a misconfigured board never starts a run.
 - Adapters are read-only over public ATS JSON APIs; the per-board crawl is independent, so one failing board is counted (`stats.Failed`) but does not abort the rest.
-- Sources are keyless by default; `usajobs` is the lone exception — `sources.All` registers it only when `USAJOBS_API_KEY` is set. The key is a secret that lives in the env, never in a board file.
+- Sources are keyless by default; three (`usajobs`, `reed`, `whatjobs`) need an env credential, which gates the **crawl** registry `sources.All(client)` the pipeline builds — not the taxonomy. See [internal/sources/AGENTS.md](../sources/AGENTS.md) for the split.
 - After the run, the stale-job sweep runs per provider, and only for providers that ingested at least one job (so a total crawl outage can't mass-close a catalogue).
 - `board_health` holds ONLY runtime state — the set of boards and their cadence stay in the YAML board files (git owns the catalog); a stale row for a removed board is inert.
 - A board whose `cooldown_until` is in the future is skipped before touching its adapter (counted `Cooled`, not `Failed`).

@@ -82,7 +82,7 @@ func run() int {
 
 	// The provider taxonomy lives in Go adapter markers (sources.ProviderKind), so
 	// the two source lists are derived here rather than restated in SQL.
-	registry := sources.All(nil)
+	registry := sources.Taxonomy()
 	aggregators := sources.AggregatorProviders(registry)
 	boards := boardProviders(registry)
 	if len(aggregators) == 0 || len(boards) == 0 {

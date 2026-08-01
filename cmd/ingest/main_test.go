@@ -11,13 +11,14 @@ import (
 
 // The shared custom.yml must load and pass validation against the real adapter registry,
 // so a bad provider name or a missing board there fails the build, not a 2am cron run.
-// Validate never fetches, so a nil HTTP client is fine for building the registry.
+// Validate never fetches, so the taxonomy registry is the right one — it also spares the
+// test the crawl credentials a keyed provider's board file would otherwise need.
 func TestCustomYAMLValidates(t *testing.T) {
 	cfg, err := sources.LoadConfig("../../sources/custom.yml")
 	if err != nil {
 		t.Fatalf("load custom.yml: %v", err)
 	}
-	if err := cfg.Validate(sources.All(nil)); err != nil {
+	if err := cfg.Validate(sources.Taxonomy()); err != nil {
 		t.Fatalf("custom.yml failed validation against the real registry: %v", err)
 	}
 	if len(cfg.Sources) < 13 {

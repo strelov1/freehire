@@ -60,9 +60,7 @@ func AggregatorProviders(reg map[string]Source) []string {
 }
 
 // FilterableProviders returns the sorted provider keys the source facet offers.
-// Passing a nil client is safe: Provider() and the marker assertions never touch the
-// transport.
-func FilterableProviders() []string { return filterableProviders(All(nil)) }
+func FilterableProviders() []string { return filterableProviders(Taxonomy()) }
 
 // filterableProviders selects the source-facet provider keys from a registry. A
 // single-company boardless platform is redundant with the company filter and excluded;
@@ -81,8 +79,17 @@ func filterableProviders(registry map[string]Source) []string {
 	return out
 }
 
+// Taxonomy assembles the registry for classification rather than crawling: every adapter this
+// binary knows about, with its markers, whatever credentials the environment holds. Callers
+// that ask what KIND of source a provider is — the source facet, the status page's provider
+// kind, the cross-source dedup pass's aggregator set — use this, so their answers do not vary
+// by host. It carries no transport, so nothing reached through it may Fetch; crawlers call All
+// with a real client and get the credential-gated registry instead.
+func Taxonomy() map[string]Source { return All(nil) }
+
 // All assembles the registered adapters into a provider-keyed registry, sharing one
 // HTTP client across them. Adding a platform is a new adapter plus one line here.
+// A nil client builds the transport-free taxonomy registry — call Taxonomy for that.
 func All(c HTTPClient) map[string]Source {
 	registry := reg(
 		NewGreenhouse(c),
@@ -263,28 +270,29 @@ func All(c HTTPClient) map[string]Source {
 		NewVK(c),
 		NewTwoGIS(c),
 	)
-	// USAJobs and Reed are the keyed sources: register each only when its API key is
-	// configured, so unconfigured environments (tests, local dev) leave it absent rather than
-	// listing a provider that cannot crawl. The keys are secrets, read from the environment.
-	if key := os.Getenv("USAJOBS_API_KEY"); key != "" {
+	// usajobs, reed and whatjobs are the keyed sources: each needs a credential read from the
+	// environment, never from a board file. The credential gates the CRAWL registry only — a
+	// host without it must not register a provider whose every board would fail to authenticate,
+	// so its board file fails config validation before a request goes out. The taxonomy path
+	// (c == nil, see Taxonomy) registers all three regardless, empty credential included.
+	// Conflating the two classified whatjobs — a CPC reseller of first-party ATS postings — as
+	// an ATS on every keyless host, so none of its copies was ever suppressed.
+	if key := os.Getenv("USAJOBS_API_KEY"); c == nil || key != "" {
 		registry["usajobs"] = NewUSAJobs(c, key)
 	}
-	if key := os.Getenv("REED_API_KEY"); key != "" {
+	if key := os.Getenv("REED_API_KEY"); c == nil || key != "" {
 		registry["reed"] = NewReed(c, key)
 	}
-	// whatjobs is a CPC network freehire publishes for, so its credential is the publisher id rather
-	// than an API key — but it is registered the same way: only when configured, so an environment
-	// without it does not list a provider whose every board would 410. The id is per-country; this
-	// account serves US inventory.
-	// Its requests go through a shared in-flight cap: the feed rate-limits the pipeline's parallel
-	// board crawl (8 of 10 boards 429'd on the first prod run) though it serves sequential requests
-	// fine. On the transport-free listing path (c == nil) there is nothing to wrap.
-	if id := os.Getenv("WHATJOBS_PUBLISHER_ID"); id != "" {
-		if c == nil {
-			registry["whatjobs"] = NewWhatJobs(nil, id)
-		} else {
-			registry["whatjobs"] = NewWhatJobs(limitedWhatJobsGetter(c), id)
-		}
+	// whatjobs' credential is a publisher id rather than an API key; it is per-country, and this
+	// account serves US inventory. Its requests go through a shared in-flight cap: the feed
+	// rate-limits the pipeline's parallel board crawl (8 of 10 boards 429'd on the first prod
+	// run) though it serves sequential requests fine. On the taxonomy path there is nothing to
+	// wrap.
+	whatjobsID := os.Getenv("WHATJOBS_PUBLISHER_ID")
+	if c == nil {
+		registry["whatjobs"] = NewWhatJobs(nil, whatjobsID)
+	} else if whatjobsID != "" {
+		registry["whatjobs"] = NewWhatJobs(limitedWhatJobsGetter(c), whatjobsID)
 	}
 	// taleo needs a cookie-persisting client (its searchjobs POST requires the session cookie
 	// a careersection GET sets), so it cannot use the shared jar-less client. Build a dedicated

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/url"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -29,18 +28,16 @@ func TestReedIsBoardlessAggregator(t *testing.T) {
 	}
 }
 
-// Reed is keyed like usajobs: registered (and filterable) only when REED_API_KEY is set.
-func TestReedRegisteredOnlyWhenKeySet(t *testing.T) {
-	t.Setenv("REED_API_KEY", "")
-	if _, ok := All(nil)["reed"]; ok {
-		t.Error("All() should NOT register reed without REED_API_KEY")
+// reed is keyed like usajobs: REED_API_KEY gates the crawl registry, not the taxonomy.
+func TestReedKeyGatesTheCrawlRegistry(t *testing.T) {
+	clearCrawlCredentials(t)
+	if _, ok := All(NewClient())["reed"]; ok {
+		t.Error("All(client) should NOT register reed without REED_API_KEY")
 	}
+
 	t.Setenv("REED_API_KEY", "test-key")
-	if _, ok := All(nil)["reed"]; !ok {
-		t.Error("All() should register reed when REED_API_KEY is set")
-	}
-	if !slices.Contains(FilterableProviders(), "reed") {
-		t.Error("FilterableProviders() should include reed when configured")
+	if _, ok := All(NewClient())["reed"]; !ok {
+		t.Error("REED_API_KEY should be the variable that admits reed to the crawl registry")
 	}
 }
 

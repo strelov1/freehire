@@ -16,8 +16,8 @@ const (
 
 // ProviderKind classifies a provider by its adapter's markers. A provider absent
 // from reg (e.g. a non-adapter source such as a manual import or a Telegram feed)
-// is KindOther. Passing All(nil) as reg is safe — the marker assertions never touch
-// the transport.
+// is KindOther, so reg must be Taxonomy(): in a crawl registry a keyed adapter is
+// absent wherever its credential is unset, and would be misreported as KindOther.
 func ProviderKind(reg map[string]Source, provider string) string {
 	src, ok := reg[provider]
 	if !ok {

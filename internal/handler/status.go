@@ -119,8 +119,9 @@ func (h *statsHandlers) IngestStatus(c *fiber.Ctx) error {
 
 	now := time.Now().UTC()
 	// One registry per request to classify each provider by adapter kind (ATS /
-	// aggregator / company page). nil client is safe — only marker assertions run.
-	reg := sources.All(nil)
+	// aggregator / company page). Taxonomy, not a crawl registry — this host holds
+	// no ingest credentials.
+	reg := sources.Taxonomy()
 	providers := make([]statusProvider, len(rows))
 	rolls := make([]providerRollup, len(rows))
 	for i, r := range rows {

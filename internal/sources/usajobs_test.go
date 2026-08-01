@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -25,20 +24,18 @@ func TestUSAJobsIsBoardlessAggregator(t *testing.T) {
 	}
 }
 
-// USAJobs is the one keyed source: it is registered (and filterable) only when
-// USAJOBS_API_KEY is set, so other crawls stay unaffected when it is unconfigured.
-func TestUSAJobsRegisteredOnlyWhenKeySet(t *testing.T) {
-	t.Setenv("USAJOBS_API_KEY", "")
-	if _, ok := All(nil)["usajobs"]; ok {
-		t.Error("All() should NOT register usajobs without USAJOBS_API_KEY")
+// usajobs is a keyed source, and USAJOBS_API_KEY gates the CRAWL registry only — an
+// unconfigured host must not start a crawl that cannot authenticate. The taxonomy registry
+// lists it either way; TestTaxonomyIsTotalWithoutCrawlCredentials owns that half.
+func TestUSAJobsKeyGatesTheCrawlRegistry(t *testing.T) {
+	clearCrawlCredentials(t)
+	if _, ok := All(NewClient())["usajobs"]; ok {
+		t.Error("All(client) should NOT register usajobs without USAJOBS_API_KEY")
 	}
 
 	t.Setenv("USAJOBS_API_KEY", "test-key")
-	if _, ok := All(nil)["usajobs"]; !ok {
-		t.Error("All() should register usajobs when USAJOBS_API_KEY is set")
-	}
-	if !slices.Contains(FilterableProviders(), "usajobs") {
-		t.Error("FilterableProviders() should include usajobs when configured")
+	if _, ok := All(NewClient())["usajobs"]; !ok {
+		t.Error("USAJOBS_API_KEY should be the variable that admits usajobs to the crawl registry")
 	}
 }
 

@@ -322,6 +322,7 @@ const SOURCE_LABELS: Record<string, string> = {
   bamboohr: 'BambooHR', successfactors: 'SuccessFactors',
   workatastartup: 'Work at a Startup', remoteok: 'RemoteOK', arc: 'Arc',
   jobstash: 'JobStash', globalpayments: 'Global Payments',
+  usajobs: 'USAJobs', whatjobs: 'WhatJobs',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
