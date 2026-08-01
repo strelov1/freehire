@@ -15,10 +15,9 @@ about a board slug into a fact a provider's own API can confirm.
   job search, and emits the companies behind those postings — name, website, and the
   posting's ATS-native id — as the candidate worklist the existing harvest consumes.
   Companies already in the catalogue are dropped before any extra request is made.
-- `harvest-ats resolve` detects boards through `internal/boardresolve` instead of
-  `atsdetect.Detect` alone, widening detection from three providers to the full
-  `atsboard.Recognize` set plus the self-hosted platforms whose board *is* the careers
-  host (Teamtailor, Phenom, Radancy).
+- `harvest-ats resolve` gains the one detection step it lacks: the platforms whose board *is*
+  the careers host (Teamtailor, Phenom, Jibe, Radancy), which link out to no ATS domain and so
+  are invisible to any URL scan. Its existing scan already covers every URL-shaped board.
 - `harvest-ats resolve` additionally emits *candidate* board slugs, derived offline from
   the company's domain, LinkedIn slug and name, for companies whose careers page yields no
   board — today's dead end for JS-only careers pages, which the tool skips outright.

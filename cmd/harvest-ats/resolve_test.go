@@ -98,6 +98,20 @@ func TestResolve(t *testing.T) {
 		}
 	})
 
+	t.Run("detects a career site that is itself the board", func(t *testing.T) {
+		// No ATS host anywhere on the page — the platform's fingerprint names the provider and
+		// the careers host is the board, which is how these adapters key external_id.
+		pages := map[string]string{
+			"https://intuit.com":      `<a href="https://jobs.intuit.com">Careers</a>`,
+			"https://jobs.intuit.com": `<html><head><script src="/assets/talentbrew/app.js"></script></head></html>`,
+		}
+		fetch := func(u string) (string, error) { return pages[u], nil }
+		p, s, ok := resolve("https://intuit.com", fetch)
+		if !ok || p != "radancy" || s != "jobs.intuit.com" {
+			t.Fatalf("resolve = (%q,%q,%v), want (radancy,jobs.intuit.com,true)", p, s, ok)
+		}
+	})
+
 	t.Run("dead homepage skips career-path probes", func(t *testing.T) {
 		var calls int
 		fetch := func(u string) (string, error) {

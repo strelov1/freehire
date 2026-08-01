@@ -15,11 +15,11 @@
 
 ## 2. Wider board detection during resolution (`cmd/harvest-ats`)
 
-- [ ] 2.1 Replace the three `atsdetect.Detect` calls in `resolve.go` with detection through
-  `internal/boardresolve`, keeping the careers-page walk (paths, careers link, one deeper
-  hop) and the best-effort skip-on-error behaviour unchanged
-- [ ] 2.2 Cover the newly reachable cases: a careers page linking an ATS outside the narrow
-  scan, and a career site whose own host is the board
+- [x] 2.1 Add `atsdetect.DetectSelfHosted` as the fallback behind the existing URL scan in
+  `resolve.go`, applied at each page the careers walk fetches, keeping the walk (paths,
+  careers link, one deeper hop) and the best-effort skip-on-error behaviour unchanged
+- [x] 2.2 Cover the newly reachable case (a career site whose own host is the board) and the
+  precedence rule (a linked board wins over the host serving the page)
 
 ## 3. Offline candidate slugs for unresolved companies (`cmd/harvest-ats`)
 

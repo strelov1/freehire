@@ -79,12 +79,19 @@ them an absent id would mean "not on the page I looked at", and they are left in
 than made to reject boards on partial evidence. Everything else is untouched, and an expected id on a
 provider that cannot check it is inert rather than fatal.
 
-**`harvest-ats` detects through `internal/boardresolve`.** The narrow `atsdetect.Detect`
-recognises three providers; `boardresolve` runs the full `atsboard.Recognize` (~40 ATS) and
-`DetectSelfHosted` for platforms whose tenant host *is* the board. That package exists for
-the paste-a-link contribution flow and is SSRF-guarded, which the harvest wants anyway since
-it follows arbitrary company domains. This is a strict widening of an existing capability,
-useful to the dataset and university worklists too.
+**`harvest-ats` gains self-hosted detection, and nothing else.** The plan had been to detect
+through `internal/boardresolve`, on the belief that `atsdetect.Detect` recognised only three
+providers. Implementation disproved it: `atsdetect.Detect` falls back to scanning every URL
+on the page through `FromURL`, which *itself* calls `atsboard.Recognize` and then adds five
+harvest-only shapes on top. Routing the harvest through `boardresolve` would therefore have
+**narrowed** its coverage by those five, in exchange for one step it genuinely lacked.
+
+So the change is that one step: `atsdetect.DetectSelfHosted`, tried only after the URL scan
+comes up empty. Radancy, Phenom, Jibe and Teamtailor tenants serve from the employer's own
+domain and link to no ATS host, so no URL scan can ever see them; the vendor's bundle in the
+markup is the only tell, and the careers host is the board. Order matters — a careers site
+that merely embeds another ATS must resolve to that board, not to its own host — which is why
+the fallback is last rather than first. `boardresolve` stays untouched.
 
 **Company de-duplication happens before detail fetches.** The search card already names the
 employer and links its profile, so the catalogue filter and the collapse of many postings to

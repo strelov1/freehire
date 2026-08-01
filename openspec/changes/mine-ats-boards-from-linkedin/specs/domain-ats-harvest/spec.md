@@ -6,10 +6,11 @@ The system SHALL provide a resolve step that, for each input company, fetches a
 small fixed set of candidate career pages (the homepage, common careers/jobs paths,
 and a careers/jobs link discovered on the homepage) through the shared HTTP client,
 detects the ATS board each page belongs to, and stops at the first page that yields a
-board. Detection SHALL use the project's full board recognizer rather than the
-three-provider HTML scan alone, so a careers page that links to any supported ATS is
-resolved, and SHALL additionally recognise the platforms whose board *is* the careers
-host and which therefore link out to no ATS domain at all. It
+board. Detection SHALL first scan the page for the URL shapes that name a platform, and
+where that yields nothing SHALL additionally recognise the platforms whose board *is* the
+careers host and which therefore link out to no ATS domain at all — resolving them to that
+host. A page that both links a board and is served by such a platform SHALL resolve to the
+linked board. It
 SHALL accumulate the detected slugs per provider and write one seed file per
 provider (the input format the existing `harvest-boards` consumes). The run SHALL
 be best-effort: a failure fetching or parsing one company (timeout, bot-block,
@@ -23,11 +24,11 @@ before any board is committed.
 - **WHEN** a company's careers page links to `jobs.lever.co/acme`
 - **THEN** `acme` appears in the lever seed file
 
-#### Scenario: A careers page linking a provider outside the narrow scan is resolved
+#### Scenario: A linked board wins over the host serving the page
 
-- **WHEN** a company's careers page links to a supported ATS board that the
-  three-provider HTML scan does not recognise
-- **THEN** the board is detected and contributes to that provider's seed
+- **WHEN** a company's careers site is served by a platform whose tenant host is the board,
+  and the page also links to a different ATS board
+- **THEN** the linked board is detected, not the host
 
 #### Scenario: A career site that is itself the board is resolved
 
