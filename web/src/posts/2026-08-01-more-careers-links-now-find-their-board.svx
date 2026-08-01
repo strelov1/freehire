@@ -1,0 +1,36 @@
+---
+title: More careers links now find their board
+date: 2026-08-01
+summary: Paste a job link and freehire works out which employer's job board it belongs to, then crawls the whole board — it now recognises the career sites that used to come back unknown, starting with six employers and about 1,600 jobs.
+type: changelog
+tags:
+  - catalogue
+  - contributions
+---
+
+When you paste a job link into freehire, we do not save that one vacancy. We work out which
+employer's job board it sits on and start crawling the whole board, so every opening there —
+including the ones posted next month — shows up in the catalogue.
+
+That only worked when the board's name was somewhere in the link. Plenty of employers run their
+careers site on their own domain, where nothing in the address says which platform is behind it,
+and those links came back as "we don't recognise this one" and went to a manual pile. Big
+employers were the most affected, because they are the ones most likely to have a careers site
+of their own.
+
+freehire now reads the page instead of only the address. It recognises the platform running a
+careers site from the page itself, and it follows the request the page makes to fetch its own
+vacancy list — which often names the board when nothing else does. Six employers came in the
+moment it worked, about 1,600 jobs between them:
+
+- [Kuehne+Nagel](/companies/kuehne-nagel) — logistics, roughly 1,080 openings
+- [Intuit](/companies/intuit) — about 380
+- [Nearshore Business Solutions](/companies/nearshore-business-solutions)
+- [Ness Digital Engineering](/companies/ness-digital-engineering)
+- [InvestEngine](/companies/investengine)
+- [RE Partners Consulting](/companies/re-partners-consulting)
+
+Some pages still will not resolve. A careers site that draws its whole listing with JavaScript
+and carries no trace of the platform underneath gives us nothing to go on, and we would rather
+return nothing than guess at a board and crawl the wrong company. If a link of yours comes back
+unrecognised it goes to a queue we go through by hand, so it is still worth pasting.
