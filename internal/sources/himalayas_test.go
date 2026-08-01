@@ -113,15 +113,21 @@ func TestHimalayasErrorsWhenFirstPageFails(t *testing.T) {
 }
 
 func TestStripHimalayasSelfPromo(t *testing.T) {
-	// Bodies are stored post-sanitize, so the anchors carry the rel="nofollow" bluemonday
-	// adds; the raw feed serves them without it. Both shapes must strip.
+	// The trailer reaches this function in three shapes: unwrapped (what sanitizeHTML now
+	// hands the adapter), and still linked with or without the rel="nofollow" the sanitizer
+	// used to add — which is how the catalogue rows stored before the link strip look.
 	cases := []struct {
 		name string
 		in   string
 		want string
 	}{
 		{
-			name: "trailer as stored (sanitized, rel=nofollow)",
+			name: "trailer as sanitized today (link already unwrapped)",
+			in:   `<p>Apply today.</p><p>Originally posted on Himalayas</p>`,
+			want: `<p>Apply today.</p>`,
+		},
+		{
+			name: "trailer as stored before the link strip (rel=nofollow)",
 			in:   `<p>Apply today.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`,
 			want: `<p>Apply today.</p>`,
 		},
@@ -129,26 +135,6 @@ func TestStripHimalayasSelfPromo(t *testing.T) {
 			name: "trailer as served (raw feed, no rel)",
 			in:   `<p>Apply today.</p><p>Originally posted on <a href="https://himalayas.app">Himalayas</a></p>`,
 			want: `<p>Apply today.</p>`,
-		},
-		{
-			name: "company mention rewritten into a self-backlink is unwrapped to its text",
-			in:   `<p>At <a href="https://himalayas.app/companies/ptc" rel="nofollow">PTC</a>, we build things.</p>`,
-			want: `<p>At PTC, we build things.</p>`,
-		},
-		{
-			name: "unwrapping keeps the punctuation glued, which is what defeats fingerprinting",
-			in:   `<p>a signed agreement with <a href="https://himalayas.app/companies/oasis" rel="nofollow">Oasis</a>.</p>`,
-			want: `<p>a signed agreement with Oasis.</p>`,
-		},
-		{
-			name: "markup nested inside the self-backlink survives the unwrap",
-			in:   `<p><a href="https://himalayas.app/companies/x" rel="nofollow"><strong>Acme</strong></a> hires.</p>`,
-			want: `<p><strong>Acme</strong> hires.</p>`,
-		},
-		{
-			name: "the posting's own outbound links are left alone",
-			in:   `<p>Read our <a href="https://ptc.com/privacy" rel="nofollow">Privacy Policy</a>.</p>`,
-			want: `<p>Read our <a href="https://ptc.com/privacy" rel="nofollow">Privacy Policy</a>.</p>`,
 		},
 		{
 			name: "a body that merely names the mountains is not a promo trailer",
@@ -159,11 +145,6 @@ func TestStripHimalayasSelfPromo(t *testing.T) {
 			name: "a clean body is returned byte-for-byte",
 			in:   `<p>Build web.</p>`,
 			want: `<p>Build web.</p>`,
-		},
-		{
-			name: "trailer and self-backlinks in the same body both go",
-			in:   `<p>Join <a href="https://himalayas.app/companies/x" rel="nofollow">X</a>.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`,
-			want: `<p>Join X.</p>`,
 		},
 	}
 	for _, tc := range cases {
@@ -178,7 +159,7 @@ func TestStripHimalayasSelfPromo(t *testing.T) {
 func TestStripHimalayasSelfPromoIsIdempotent(t *testing.T) {
 	// The backfill re-runs over rows a previous run already cleaned, so a second pass must
 	// rewrite nothing.
-	in := `<p>At <a href="https://himalayas.app/companies/ptc" rel="nofollow">PTC</a>, we build.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`
+	in := `<p>At PTC, we build.</p><p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`
 	once := StripHimalayasSelfPromo(in)
 	if twice := StripHimalayasSelfPromo(once); twice != once {
 		t.Errorf("second pass changed the body:\n got %q\nwant %q", twice, once)

@@ -107,8 +107,12 @@ func TestArbeitnowDecodesEntityEncodedDescription(t *testing.T) {
 	if strings.Contains(got, "text-align") {
 		t.Errorf("Description kept a disallowed style attribute\ngot: %s", got)
 	}
-	// The board's live-HTML footer passes through untouched.
-	if !strings.Contains(got, `href="https://www.arbeitnow.co.uk/english-speaking-jobs"`) {
-		t.Errorf("Description lost the live footer link\ngot: %s", got)
+	// The board's live-HTML footer keeps its words but loses its link, like every other
+	// anchor in the catalogue.
+	if want := `<p>Find more jobs on Arbeitnow</p>`; !strings.Contains(got, want) {
+		t.Errorf("Description missing the unwrapped footer %q\ngot: %s", want, got)
+	}
+	if strings.Contains(got, "href=") {
+		t.Errorf("Description kept a link\ngot: %s", got)
 	}
 }

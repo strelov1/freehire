@@ -57,7 +57,7 @@ func TestBackfillDecodesOnlyEncodedDescriptions(t *testing.T) {
 		{ID: 3, Source: "icims", Title: "C", Description: `%3Cp%3EHello%3C%2Fp%3E`},
 	}}
 
-	scanned, updated, err := backfillAll(context.Background(), store, "")
+	scanned, updated, err := backfillAll(context.Background(), store, "", 0)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestBackfillScopedToSource(t *testing.T) {
 		{ID: 2, Source: "icims", Title: "B", Description: `%3Cp%3Ehi%3C%2Fp%3E`},
 	}}
 
-	scanned, updated, err := backfillAll(context.Background(), store, "taleo")
+	scanned, updated, err := backfillAll(context.Background(), store, "taleo", 0)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
 		{ID: 3, Source: "arbeitnow", Title: "C", Description: "<p>Clean HTML.</p>"},
 	}}
 
-	scanned, updated, err := backfillAll(context.Background(), store, "arbeitnow")
+	scanned, updated, err := backfillAll(context.Background(), store, "arbeitnow", 0)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
 	}
 
 	u := store.updates[0]
-	for _, want := range []string{"<h2>Role</h2>", "<li>Go</li>", `href="https://x.test/jobs"`} {
+	for _, want := range []string{"<h2>Role</h2>", "<li>Go</li>", "<p>Find more jobs</p>"} {
 		if !strings.Contains(u.Description, want) {
 			t.Errorf("job 1 missing decoded markup %q: %q", want, u.Description)
 		}
@@ -162,39 +162,103 @@ func TestBackfillDecodesEntityEncodedDescriptions(t *testing.T) {
 }
 
 // TestBackfillStripsHimalayasSelfPromo covers the third way a stored body carries text the
-// employer never wrote: Himalayas brands what it mirrors. Unlike the encoding repairs this one
-// is provider-scoped — the markers are Himalayas' own links, and only its rows may be rewritten
-// on sight of them. It is also the only repair that must fire on an otherwise well-formed body,
-// so it cannot ride on the "did anything decode?" gate the encoding repairs share.
+// employer never wrote: Himalayas brands what it mirrors with an "Originally posted on
+// Himalayas" trailer. Unlike the other repairs this one is provider-scoped — the same trailer
+// under another provider would be that employer's own words — and it must fire on an otherwise
+// well-formed body, so it cannot ride on the "did anything decode?" gate.
 func TestBackfillStripsHimalayasSelfPromo(t *testing.T) {
 	promo := `<p>Join <a href="https://himalayas.app/companies/x" rel="nofollow">X</a>.</p>` +
 		`<p>Originally posted on <a href="https://himalayas.app" rel="nofollow">Himalayas</a></p>`
 	store := &fakeStore{jobs: []db.Job{
 		{ID: 1, Source: "himalayas", Title: "A", Description: promo},
-		// Same body under another provider: not ours to rewrite. A greenhouse posting that
-		// genuinely links to himalayas.app is the employer's own text.
+		// Same body under another provider: its links go, like every other source's, but the
+		// trailer is left standing — under greenhouse those are the employer's own words.
 		{ID: 2, Source: "greenhouse", Title: "B", Description: promo},
 		// A himalayas row already cleaned by an earlier run must not be rewritten again.
 		{ID: 3, Source: "himalayas", Title: "C", Description: `<p>Join X.</p>`},
 	}}
 
-	scanned, updated, err := backfillAll(context.Background(), store, "")
+	scanned, updated, err := backfillAll(context.Background(), store, "", 0)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
-	if scanned != 3 || updated != 1 {
-		t.Fatalf("scanned=%d updated=%d, want 3/1 (only the himalayas promo row)", scanned, updated)
+	if scanned != 3 || updated != 2 {
+		t.Fatalf("scanned=%d updated=%d, want 3/2 (both linked rows, not the clean one)", scanned, updated)
 	}
-	if len(store.updates) != 1 || store.updates[0].ID != 1 {
-		t.Fatalf("updates = %+v, want only himalayas job 1", store.updates)
+	got := map[int64]db.UpdateJobDescriptionParams{}
+	for _, u := range store.updates {
+		got[u.ID] = u
 	}
-	if want := `<p>Join X.</p>`; store.updates[0].Description != want {
-		t.Errorf("Description = %q, want %q", store.updates[0].Description, want)
+	if _, rewritten := got[3]; rewritten {
+		t.Error("the already-clean himalayas row must not be rewritten")
+	}
+	if want := `<p>Join X.</p>`; got[1].Description != want {
+		t.Errorf("himalayas Description = %q, want %q", got[1].Description, want)
+	}
+	if want := `<p>Join X.</p><p>Originally posted on Himalayas</p>`; got[2].Description != want {
+		t.Errorf("greenhouse Description = %q, want %q", got[2].Description, want)
 	}
 	// The row re-indexes only if content_hash moves with the text.
-	want := jobhash.Of(hashParams(store.jobs[0], store.updates[0].Description))
-	if !store.updates[0].ContentHash.Valid || store.updates[0].ContentHash.String != want {
-		t.Errorf("ContentHash = %+v, want %q", store.updates[0].ContentHash, want)
+	want := jobhash.Of(hashParams(store.jobs[0], got[1].Description))
+	if !got[1].ContentHash.Valid || got[1].ContentHash.String != want {
+		t.Errorf("ContentHash = %+v, want %q", got[1].ContentHash, want)
+	}
+}
+
+// TestBackfillStripsLinksAcrossSources pins the universal repair: any stored description that
+// still carries an anchor is re-sanitized, whatever its provider, and a body that never had one
+// is left byte-for-byte alone.
+func TestBackfillStripsLinksAcrossSources(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{
+		{ID: 1, Source: "greenhouse", Title: "A",
+			Description: `<p>We use <a href="https://k8s.io" rel="nofollow">Kubernetes</a>.</p>`},
+		{ID: 2, Source: "lever", Title: "B",
+			Description: `<p>Apply: <a href="https://x.co/1" rel="nofollow">https://x.co/1</a></p>`},
+		{ID: 3, Source: "workday", Title: "C", Description: `<p>No links here.</p>`},
+	}}
+
+	scanned, updated, err := backfillAll(context.Background(), store, "", 0)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 3 || updated != 2 {
+		t.Fatalf("scanned=%d updated=%d, want 3/2 (the two linked rows)", scanned, updated)
+	}
+	got := map[int64]db.UpdateJobDescriptionParams{}
+	for _, u := range store.updates {
+		got[u.ID] = u
+	}
+	if want := `<p>We use Kubernetes.</p>`; got[1].Description != want {
+		t.Errorf("job 1 Description = %q, want %q", got[1].Description, want)
+	}
+	// The self-labelled anchor goes with its text, and the block it emptied goes too.
+	if want := `<p>Apply: </p>`; got[2].Description != want {
+		t.Errorf("job 2 Description = %q, want %q", got[2].Description, want)
+	}
+	if _, rewritten := got[3]; rewritten {
+		t.Error("the link-free row must not be rewritten")
+	}
+}
+
+// TestBackfillIsIdempotent asserts a second sweep over rows the first one repaired writes
+// nothing — the property that makes it safe to re-run an interrupted catalogue-wide pass.
+func TestBackfillIsIdempotent(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{
+		{ID: 1, Source: "himalayas", Title: "A",
+			Description: `<p>Join <a href="https://himalayas.app/companies/x">X</a>.</p><p>Originally posted on <a href="https://himalayas.app">Himalayas</a></p>`},
+		{ID: 2, Source: "taleo", Title: "B", Description: `%3Cp%3EApply at %3Ca href=%22https://x.co%22%3Ehttps://x.co%3C/a%3E%3C/p%3E`},
+	}}
+
+	if _, updated, err := backfillAll(context.Background(), store, "", 0); err != nil || updated != 2 {
+		t.Fatalf("first pass: updated=%d err=%v, want 2/nil", updated, err)
+	}
+	for i, u := range store.updates {
+		store.jobs[i].Description = u.Description
+	}
+	store.updates = nil
+
+	if _, updated, err := backfillAll(context.Background(), store, "", 0); err != nil || updated != 0 {
+		t.Fatalf("second pass: updated=%d err=%v, want 0/nil\nrewrote: %+v", updated, err, store.updates)
 	}
 }
 
@@ -205,7 +269,7 @@ func TestBackfillRepairsEncodedHimalayasBody(t *testing.T) {
 	store := &fakeStore{jobs: []db.Job{{ID: 1, Source: "himalayas", Title: "A",
 		Description: `&lt;p&gt;Join us.&lt;/p&gt;&lt;p&gt;Originally posted on &lt;a href="https://himalayas.app"&gt;Himalayas&lt;/a&gt;&lt;/p&gt;`}}}
 
-	if _, updated, err := backfillAll(context.Background(), store, "himalayas"); err != nil || updated != 1 {
+	if _, updated, err := backfillAll(context.Background(), store, "himalayas", 0); err != nil || updated != 1 {
 		t.Fatalf("backfillAll: updated=%d err=%v, want 1/nil", updated, err)
 	}
 	got := store.updates[0].Description

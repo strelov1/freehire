@@ -49,10 +49,6 @@
     margin: 0;
   }
 
-  .job-description :global(a) {
-    text-decoration: underline;
-  }
-
   .job-description :global(b),
   .job-description :global(strong) {
     font-weight: 600;

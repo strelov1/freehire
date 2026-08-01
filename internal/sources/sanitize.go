@@ -24,11 +24,16 @@ var noBreakSpaces = strings.NewReplacer(
 //
 // It is an explicit prose allowlist rather than bluemonday's UGCPolicy: descriptions
 // come from third-party ATS boards, so we keep only the structural formatting we
-// render (headings, paragraphs, lists, tables, emphasis, links) and drop everything
-// that triggers requests or execution — scripts, styles, forms, and crucially media
+// render (headings, paragraphs, lists, tables, emphasis) and drop everything that
+// triggers requests or execution — scripts, styles, forms, and crucially media
 // (`<img>`), which would otherwise let a posting fetch a tracking pixel against every
-// viewer when rendered with `{@html}`. Links are kept but marked nofollow so untrusted
-// postings cannot pass link authority.
+// viewer when rendered with `{@html}`.
+//
+// `a` is deliberately absent: a description is prose, not a set of exits. bluemonday
+// unwraps an element it does not allow rather than deleting its content, so an anchor
+// leaves its text — and any emphasis inside it — behind. That is what we want, because
+// aggregators weave backlinks through ordinary sentences and deleting the text with the
+// tag would punch holes in the prose.
 var descriptionPolicy = newDescriptionPolicy()
 
 func newDescriptionPolicy() *bluemonday.Policy {
@@ -40,17 +45,114 @@ func newDescriptionPolicy() *bluemonday.Policy {
 		"table", "thead", "tbody", "tr", "th", "td",
 		"strong", "em", "b", "i", "u",
 	)
-	p.AllowAttrs("href").OnElements("a")
-	p.AllowStandardURLs()          // http/https/mailto schemes only
-	p.RequireNoFollowOnLinks(true) // defang untrusted outbound links
 	return p
 }
 
-// sanitizeHTML returns s with active content and media removed, leaving HTML that is
-// safe to render directly in a browser. Adapters call it on their assembled description
+// sanitizeHTML returns s with active content, media, and links removed, leaving HTML that
+// is safe to render directly in a browser. Adapters call it on their assembled description
 // HTML before yielding a job, so the catalogue stores only sanitized markup.
+//
+// Self-labelled anchors are dropped BEFORE the policy runs, because that is the only point
+// at which an anchor's text can still be compared against its own destination — the policy
+// unwraps the tag and the two become indistinguishable from prose.
 func sanitizeHTML(s string) string {
-	return noBreakSpaces.Replace(descriptionPolicy.Sanitize(s))
+	stripped, dropped := dropSelfLabelledAnchors(s)
+	out := noBreakSpaces.Replace(descriptionPolicy.Sanitize(stripped))
+	if dropped {
+		// Only a drop can empty a block, so a body with nothing stripped is never rewritten.
+		out = dropEmptyBlocks(out)
+	}
+	return out
+}
+
+var (
+	// anchorTag matches one anchor: its attribute run and its inner HTML. Anchors cannot
+	// nest in HTML, so the non-greedy body cannot swallow a following link.
+	anchorTag = regexp.MustCompile(`(?is)<a\b([^>]*)>(.*?)</a>`)
+	// anchorHref reads the href value out of an attribute run, quoted either way or bare.
+	anchorHref = regexp.MustCompile(`(?is)\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+	// innerTag strips the markup nested inside an anchor, leaving its visible text.
+	innerTag = regexp.MustCompile(`<[^>]*>`)
+	// addressLikeText matches visible text that reads as a web address rather than prose:
+	// a scheme, a "www." host, or a dotted host with an optional path. It is only half the
+	// test — "Node.js" matches this too — and is paired with the destination comparison.
+	addressLikeText = regexp.MustCompile(`(?i)^(?:https?://|www\.)\S+$|^[\w-]+(?:\.[\w-]+)+(?:/\S*)?$`)
+	// emptyBlock matches a block element left with nothing in it. The pairs are spelled out
+	// because RE2 has no backreference; a heading may close on a different level, which is
+	// malformed input either way and empty in both readings.
+	emptyBlock = regexp.MustCompile(`(?is)<p>\s*</p>|<li>\s*</li>|<div>\s*</div>|<blockquote>\s*</blockquote>|<td>\s*</td>|<h[1-6]>\s*</h[1-6]>`)
+)
+
+// dropSelfLabelledAnchors removes anchors whose visible text merely repeats their own
+// destination ("<a href=x.co/1>https://x.co/1</a>"). Unwrapped, such an anchor leaves a
+// dead address sitting in the prose — it carries no information the link itself did not,
+// and unlike a worded link there is no sentence to keep whole. Every other anchor is left
+// for the policy to unwrap, text intact.
+//
+// The test is deliberately two-sided: the text must LOOK like an address and must MATCH
+// the href. Either half alone misfires — "Node.js" reads as a host, and a one-word label
+// can be a prefix of its own URL by chance.
+//
+// It reports whether anything was dropped, which is what gates the empty-block sweep.
+func dropSelfLabelledAnchors(s string) (string, bool) {
+	if !strings.Contains(s, "<a") && !strings.Contains(s, "<A") {
+		return s, false
+	}
+	dropped := false
+	out := anchorTag.ReplaceAllStringFunc(s, func(tag string) string {
+		m := anchorTag.FindStringSubmatch(tag)
+		if m == nil || !isSelfLabelled(m[1], m[2]) {
+			return tag
+		}
+		dropped = true
+		return ""
+	})
+	return out, dropped
+}
+
+// isSelfLabelled reports whether an anchor's text says nothing beyond its own address.
+// Only http(s) destinations qualify: a mailto's text is a contact address the reader
+// needs, and it survives the unwrap as prose.
+func isSelfLabelled(attrs, inner string) bool {
+	text := strings.TrimSpace(html.UnescapeString(innerTag.ReplaceAllString(inner, "")))
+	if !addressLikeText.MatchString(text) {
+		return false
+	}
+	m := anchorHref.FindStringSubmatch(attrs)
+	if m == nil {
+		return false
+	}
+	href := strings.ToLower(strings.TrimSpace(m[1] + m[2] + m[3]))
+	if !strings.HasPrefix(href, "http://") && !strings.HasPrefix(href, "https://") {
+		return false
+	}
+	label, target := normalizeAddress(text), normalizeAddress(href)
+	return strings.HasPrefix(label, target) || strings.HasPrefix(target, label)
+}
+
+// normalizeAddress reduces a web address to the part that carries its identity, so a label
+// and its href compare equal across the cosmetic differences between how a board writes the
+// two (scheme present or not, "www." present or not, trailing slash or not).
+func normalizeAddress(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimPrefix(s, "https://")
+	s = strings.TrimPrefix(s, "http://")
+	s = strings.TrimPrefix(s, "www.")
+	return strings.TrimSuffix(s, "/")
+}
+
+// dropEmptyBlocks removes block elements a dropped anchor left empty, which would otherwise
+// render as a stray gap in the description. It repeats until the body stops changing, so a
+// block whose only child was itself emptied ("<div><p></p></div>") goes too; each pass only
+// shortens the string, so the loop terminates.
+func dropEmptyBlocks(s string) string {
+	for {
+		next := emptyBlock.ReplaceAllString(s, "")
+		if next == s {
+			return s
+		}
+		s = next
+	}
 }
 
 // SanitizeHTML is the exported description sanitizer, for sibling packages that build

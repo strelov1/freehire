@@ -15,7 +15,7 @@ func TestSanitizeHTML(t *testing.T) {
 	got := sanitizeHTML(in)
 
 	// Structural formatting is preserved.
-	for _, want := range []string{"<h2>Role</h2>", "<strong>backend</strong>", "<li>Ship features</li>", `href="https://example.com"`} {
+	for _, want := range []string{"<h2>Role</h2>", "<strong>backend</strong>", "<li>Ship features</li>", "apply"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("sanitizeHTML dropped expected markup %q\ngot: %s", want, got)
 		}
@@ -28,9 +28,89 @@ func TestSanitizeHTML(t *testing.T) {
 		}
 	}
 
-	// Links are defanged so untrusted postings cannot pass link authority.
-	if !strings.Contains(got, `rel="nofollow"`) {
-		t.Errorf("sanitizeHTML should mark links nofollow\ngot: %s", got)
+	// Links carry no destination at all: the anchor is unwrapped to its text.
+	for _, bad := range []string{"<a ", "href=", "example.com", "nofollow"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("sanitizeHTML kept link markup %q\ngot: %s", bad, got)
+		}
+	}
+}
+
+// Descriptions are prose, not a link farm: every anchor is unwrapped to its text, so a
+// posting can neither route a reader off the catalogue nor pass link authority. What the
+// anchor SAID still matters, though — aggregators weave backlinks through ordinary
+// sentences ("we use <a>Kubernetes</a>"), and dropping the text with the tag would punch
+// holes in the prose. The one exception is an anchor whose text is itself a bare URL:
+// stripped of its href that is not prose at all, just an unclickable address, so it goes
+// with the tag.
+func TestSanitizeHTMLStripsLinks(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"anchor unwrapped to its text": {
+			`<p>We use <a href="https://k8s.io">Kubernetes</a> in prod.</p>`,
+			`<p>We use Kubernetes in prod.</p>`,
+		},
+		"nested markup survives the unwrap": {
+			`<p>See <a href="https://x.co"><strong>the docs</strong></a>.</p>`,
+			`<p>See <strong>the docs</strong>.</p>`,
+		},
+		// The unwrap deletes the tags rather than replacing them with a space, so a linked
+		// word keeps its punctuation glued exactly as the employer wrote it. Any drift here
+		// would change visible text and so change role_fingerprint (see internal/jobhash).
+		"unwrap keeps punctuation glued": {
+			`<p>an agreement with <a href="https://x.co">Oasis</a>.</p>`,
+			`<p>an agreement with Oasis.</p>`,
+		},
+		"bare URL text goes with the tag": {
+			`<p>Apply here: <a href="https://boards.x.co/1">https://boards.x.co/1</a></p>`,
+			`<p>Apply here: </p>`,
+		},
+		"schemeless www text goes too": {
+			`<p>More: <a href="https://www.x.co">www.x.co/jobs</a></p>`,
+			`<p>More: </p>`,
+		},
+		"bare domain text goes too": {
+			`<p>Visit <a href="https://arbeitnow.com">arbeitnow.com</a></p>`,
+			`<p>Visit </p>`,
+		},
+		// A contact address is prose the reader needs, even though it looks address-like.
+		"mailto text is kept": {
+			`<p>Send your CV to <a href="mailto:hr@x.co">hr@x.co</a></p>`,
+			`<p>Send your CV to hr@x.co</p>`,
+		},
+		// The aggregator footer the catalogue is full of: the words stay, the link does not.
+		"promo trailer keeps its words": {
+			`<p><a href="https://www.arbeitnow.com/">Find Jobs in Germany on Arbeitnow</a></p>`,
+			`<p>Find Jobs in Germany on Arbeitnow</p>`,
+		},
+		// A block left empty by a dropped bare-URL anchor would render as a stray gap.
+		"block emptied by the drop is removed": {
+			`<p>Role</p><p><a href="https://x.co/1">https://x.co/1</a></p>`,
+			`<p>Role</p>`,
+		},
+		"list item emptied by the drop is removed": {
+			`<ul><li>Go</li><li><a href="https://x.co/1">https://x.co/1</a></li></ul>`,
+			`<ul><li>Go</li></ul>`,
+		},
+		// Nothing to strip: a body without anchors must survive byte for byte.
+		"link-free body is untouched": {
+			`<p>Build <strong>things</strong>.</p>`,
+			`<p>Build <strong>things</strong>.</p>`,
+		},
+	}
+	for name, c := range cases {
+		if got := sanitizeHTML(c.in); got != c.want {
+			t.Errorf("%s: sanitizeHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		}
+	}
+}
+
+// The backfill re-runs this pipeline over rows the ingest path already sanitized, so a
+// second pass must be a no-op — otherwise every run would rewrite the whole catalogue.
+func TestSanitizeHTMLLinkStripIsIdempotent(t *testing.T) {
+	in := `<p>Apply: <a href="https://x.co/1">https://x.co/1</a> or ask <a href="mailto:hr@x.co">hr@x.co</a></p>`
+	once := sanitizeHTML(in)
+	if twice := sanitizeHTML(once); twice != once {
+		t.Errorf("sanitizeHTML is not idempotent:\nonce:  %q\ntwice: %q", once, twice)
 	}
 }
 

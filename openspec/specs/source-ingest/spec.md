@@ -182,7 +182,9 @@ The system SHALL provide a standalone `cmd/ingest` binary that loads configurati
 
 ### Requirement: Adapter descriptions are sanitized HTML
 
-Each adapter SHALL yield the job `description` as sanitized HTML assembled from the platform's authoritative HTML field(s), so the stored value is safe to render directly in a browser without further escaping. An adapter SHALL NOT yield raw or entity-encoded source markup, and SHALL NOT rely on a platform plain-text field that the platform may leave empty or partial. Sanitization SHALL run server-side before the description is persisted, stripping scripts, event handlers, and other active content while preserving structural formatting (headings, paragraphs, lists, emphasis, links).
+Each adapter SHALL yield the job `description` as sanitized HTML assembled from the platform's authoritative HTML field(s), so the stored value is safe to render directly in a browser without further escaping. An adapter SHALL NOT yield raw or entity-encoded source markup, and SHALL NOT rely on a platform plain-text field that the platform may leave empty or partial. Sanitization SHALL run server-side before the description is persisted, stripping scripts, event handlers, and other active content while preserving structural formatting (headings, paragraphs, lists, emphasis).
+
+A persisted description SHALL carry no links. Sanitization SHALL unwrap every anchor to its visible text, so a posting can neither route a reader off the catalogue nor pass link authority, while the sentence the link sat in stays whole. It SHALL discard an anchor whose visible text merely restates its own destination, together with any block element that leaves empty — stripped of its href such text is a dead address rather than prose.
 
 #### Scenario: Greenhouse entity-encoded HTML is decoded and sanitized
 
@@ -203,6 +205,16 @@ Each adapter SHALL yield the job `description` as sanitized HTML assembled from 
 
 - **WHEN** a source posting's HTML contains a `<script>` tag or an inline event handler (e.g. `onclick`)
 - **THEN** the persisted description contains neither the script nor the event handler, while its safe structural markup is retained
+
+#### Scenario: A worded link keeps its words and loses its destination
+
+- **WHEN** a source posting's HTML links a word inside a sentence (e.g. `We use <a href="https://k8s.io">Kubernetes</a> in prod.`)
+- **THEN** the persisted description reads `We use Kubernetes in prod.` with no anchor, href, or `rel` attribute
+
+#### Scenario: A link labelled with its own address is discarded
+
+- **WHEN** a source posting's HTML contains an anchor whose visible text restates its destination (e.g. `<p><a href="https://x.co/1">https://x.co/1</a></p>`)
+- **THEN** the persisted description contains neither the address nor the paragraph it stood alone in
 
 ### Requirement: Workable, Recruitee, and SmartRecruiters are registered providers
 

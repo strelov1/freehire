@@ -14,17 +14,27 @@
 // re-ingest; in-place repair is the only route.
 //
 // A third kind of damage is not an encoding at all: Himalayas brands the bodies it mirrors,
-// ending every posting with an "Originally posted on Himalayas" trailer and rewriting each
-// mention of the hiring company into a backlink to its own page. The adapter now strips both
-// (internal/sources.StripHimalayasSelfPromo); because the feed is a recency-ordered window the
+// ending every posting with an "Originally posted on Himalayas" trailer. The adapter now strips
+// it (internal/sources.StripHimalayasSelfPromo); because the feed is a recency-ordered window the
 // crawl only ever revisits its freshest slice, so the rows already in the catalogue can only be
 // repaired in place. Scope this one to its provider (`backfill-descriptions himalayas`).
 //
-// It pages by keyset and re-decodes every row whose description still carries an encoding marker
-// ("%3C" or "&lt;"), re-running the same sanitize+decode pipeline the fixed adapters use and
-// refreshing content_hash so the row re-indexes. The markers are source-agnostic: any encoded
-// description is repaired the same way, open or closed. Idempotent — a re-decoded row no longer
-// decodes to anything different, so a second run rewrites nothing.
+// The fourth repair is universal and by far the largest: descriptions no longer carry links at
+// all. sanitizeHTML unwraps every anchor to its text (and drops the ones whose text merely
+// repeated their own address), so a stored body that still contains "<a" predates that rule and
+// is re-sanitized here. Expect this to rewrite most of the catalogue on its first run — see the
+// pacing note below.
+//
+// It pages by keyset and rewrites every row whose description still carries a repair marker — an
+// encoding ("%3C" or "&lt;") or an anchor ("<a") — re-running the same sanitize+decode pipeline
+// the adapters use and refreshing content_hash so the row re-indexes. The markers are
+// source-agnostic: any such description is repaired the same way, open or closed. Idempotent — a
+// repaired row carries none of the markers, so a second run rewrites nothing.
+//
+// BACKFILL_PAUSE_MS (default 100) is how long the sweep waits after a page in which it actually
+// wrote rows. Postgres on the app host is untuned and a description lives in TOAST, so rewriting
+// millions of them back to back saturates disk I/O and takes the site down with it. Set it to 0
+// for a small, targeted repair; raise it if the host is already under load.
 //
 // With no argument it sweeps the whole catalogue (universal). Pass a source name as the first
 // argument (e.g. `backfill-descriptions taleo`) to scope the sweep to that provider — the
@@ -40,7 +50,9 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -53,14 +65,20 @@ import (
 // backfillBatchSize bounds how many rows are read per keyset page.
 const backfillBatchSize = 500
 
-// A description stored still encoded carries its "<" encoded one of two ways, each the
+// defaultPause is how long the sweep rests after a page in which it wrote rows, when
+// BACKFILL_PAUSE_MS says nothing. It is deliberately non-zero: the universal link strip
+// rewrites most of the catalogue, and each rewrite is a TOAST write.
+const defaultPause = 100 * time.Millisecond
+
+// A row needing repair announces it in its stored text. Two markers are encodings, each the
 // signature of a different upstream habit: percent-encoded ("%3C", the strict-PathUnescape
 // fallback the Taleo adapter used to hit) or HTML entity-encoded ("&lt;", which arbeitnow
-// serves for part of its feed). Either marker selects candidate rows cheaply, without a
-// content-scanning SQL predicate.
+// serves for part of its feed). The third is an anchor, which no description may carry any
+// more. Any of them selects candidate rows cheaply, without a content-scanning SQL predicate.
 const (
 	percentEncodedMarker = "%3C"
 	entityEncodedMarker  = "&lt;"
+	anchorMarker         = "<a"
 )
 
 // himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
@@ -94,7 +112,7 @@ func run() int {
 		source = os.Args[1]
 	}
 
-	scanned, updated, err := backfillAll(ctx, db.New(pool), source)
+	scanned, updated, err := backfillAll(ctx, db.New(pool), source, backfillPause())
 	if err != nil {
 		log.Printf("backfill-descriptions: %v", err)
 		return 1
@@ -108,11 +126,14 @@ func run() int {
 }
 
 // backfillAll pages jobs by keyset (id > last seen, so concurrent writes cannot skip or repeat
-// rows) and re-decodes the ones whose stored description still carries the encoded marker. An
-// empty source sweeps the whole table; a non-empty source scopes the sweep to that provider. The
-// decode reproduces the fixed adapter's pipeline exactly (LenientPercentUnescape then
-// SanitizeHTML), so the recomputed content_hash matches what a re-ingest would produce.
-func backfillAll(ctx context.Context, store jobStore, source string) (scanned, updated int, err error) {
+// rows) and repairs the ones whose stored description still carries a marker. An empty source
+// sweeps the whole table; a non-empty source scopes the sweep to that provider. The repair
+// reproduces the adapter pipeline exactly (decode then SanitizeHTML), so the recomputed
+// content_hash matches what a re-ingest would produce.
+//
+// pause rests between pages that wrote rows, keeping a catalogue-wide sweep from monopolising
+// the database's disk. A page that changed nothing costs nothing, so it does not wait.
+func backfillAll(ctx context.Context, store jobStore, source string, pause time.Duration) (scanned, updated int, err error) {
 	var afterID int64
 	for {
 		jobs, err := pageJobs(ctx, store, source, afterID)
@@ -124,11 +145,12 @@ func backfillAll(ctx context.Context, store jobStore, source string) (scanned, u
 		}
 		afterID = jobs[len(jobs)-1].ID
 
+		wrote := false
 		for _, j := range jobs {
 			scanned++
 			desc := repairDescription(j.Source, j.Description)
 			if desc == j.Description {
-				continue // clean row, or an encoding marker that turned out to be real prose
+				continue // clean row, or a marker that turned out to be real prose
 			}
 			hash := jobhash.Of(hashParams(j, desc))
 			if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
@@ -139,20 +161,36 @@ func backfillAll(ctx context.Context, store jobStore, source string) (scanned, u
 				return scanned, updated, err
 			}
 			updated++
+			wrote = true
 		}
 
 		if len(jobs) < backfillBatchSize {
 			break
 		}
+		if wrote {
+			select {
+			case <-ctx.Done():
+				return scanned, updated, ctx.Err()
+			case <-time.After(pause):
+			}
+		}
 	}
 	return scanned, updated, nil
 }
 
-// repairDescription reproduces the fixed adapters' pipeline for a stored description: decode
-// whichever encoding the row was stored with, then re-sanitize, then drop the branding the
-// serving aggregator added. It returns stored unchanged when there was nothing to repair, so a
-// clean row is never rewritten (and never re-sanitized, keeping the pass free of any dependence
-// on sanitizeHTML being byte-for-byte idempotent).
+// backfillPause reads the between-pages rest from BACKFILL_PAUSE_MS, falling back to
+// defaultPause for an unset or unparseable value. An explicit 0 disables the wait.
+func backfillPause() time.Duration {
+	if ms, err := strconv.Atoi(os.Getenv("BACKFILL_PAUSE_MS")); err == nil && ms >= 0 {
+		return time.Duration(ms) * time.Millisecond
+	}
+	return defaultPause
+}
+
+// repairDescription reproduces the adapters' pipeline for a stored description: decode whichever
+// encoding the row was stored with, then re-sanitize, then drop the branding the serving
+// aggregator added. It returns stored unchanged when there was nothing to repair, so a row with
+// no marker is never rewritten.
 //
 // Each decoder runs only when its own marker is present, so a row mangled by one encoding is
 // never put through the other's decoder — percent-decoding an entity-encoded body would rewrite
@@ -160,10 +198,17 @@ func backfillAll(ctx context.Context, store jobStore, source string) (scanned, u
 // outweighing live markup (see sources.UnescapeEncodedHTML), which is what leaves a posting that
 // merely writes "&lt;" as a less-than sign alone.
 //
-// The de-branding is keyed on source, not on a marker: the markers are the aggregator's own
-// links, and a posting from any other provider that links to them wrote that link itself. It
-// also runs on a body nothing decoded, which is the normal case — branding rides on well-formed
-// HTML — so it sits outside the decode gate.
+// A stored anchor also sends the body through the sanitizer, whatever its source: descriptions
+// carry no links any more (see internal/sources.sanitizeHTML), and the rows stored before that
+// rule can only be brought in line by re-running it. Unlike the decodes this path does lean on
+// the sanitizer being idempotent, which its own test pins. The marker is a plain prefix, so it
+// also matches "<abbr" and friends — those elements are not on the allowlist either, so the
+// sanitizer has work to do on such a row regardless.
+//
+// The de-branding is keyed on source, not on a marker: an "Originally posted on Himalayas"
+// trailer under any other provider is that employer's own text. It also runs on a body nothing
+// else touched, which is the normal case — branding rides on well-formed HTML — so it sits
+// outside the repair gate.
 func repairDescription(source, stored string) string {
 	decoded := stored
 	if strings.Contains(decoded, percentEncodedMarker) {
@@ -173,7 +218,7 @@ func repairDescription(source, stored string) string {
 		decoded = sources.UnescapeEncodedHTML(decoded)
 	}
 	repaired := stored
-	if decoded != stored {
+	if decoded != stored || strings.Contains(decoded, anchorMarker) {
 		repaired = sources.SanitizeHTML(decoded)
 	}
 	if source == himalayasSource {
