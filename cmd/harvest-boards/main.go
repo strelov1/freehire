@@ -6,6 +6,15 @@
 //
 //	go run ./cmd/harvest-boards <provider> <seed.json>
 //	go run ./cmd/harvest-boards -pace 2 -workers 4 workable seed.json   # rate-limited platform
+//
+// A seed entry is either a bare slug or an object. The object may claim two things about the
+// candidate, and a seed source that knows either should say so:
+//
+//	{"board": "acme", "company": "Acme Inc"}          # the employer it should belong to
+//	{"board": "acme", "expect_id": "4698693006"}      # a posting it must carry
+//
+// The id is the stronger claim — it identifies the board by evidence rather than by a name
+// resemblance — and is what makes a slug derived offline safe to propose at all.
 package main
 
 import (

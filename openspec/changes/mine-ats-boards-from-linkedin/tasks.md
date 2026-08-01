@@ -34,29 +34,29 @@
 
 ## 4. LinkedIn discovery tool (`cmd/harvest-linkedin`)
 
-- [ ] 4.1 Parse the query worklist YAML (keywords, location, jobage, pages) with bounded
+- [x] 4.1 Parse the query worklist YAML (keywords, location, jobage, pages) with bounded
   defaults, refusing an entry that names no market
-- [ ] 4.2 Parse the public search listing into postings carrying employer name, employer
+- [x] 4.2 Parse the public search listing into postings carrying employer name, employer
   profile URL and posting URL, one card at a time so a malformed card costs one posting
-- [ ] 4.3 Parse a posting's JSON-LD for the ATS-native identifier, and an employer profile's
+- [x] 4.3 Parse a posting's JSON-LD for the ATS-native identifier, and an employer profile's
   JSON-LD for the website
-- [ ] 4.4 Collapse postings to one candidate per employer and drop candidates whose
+- [x] 4.4 Collapse postings to one candidate per employer and drop candidates whose
   normalized-name slug is in the supplied company-slug set, both before any detail fetch
-- [ ] 4.5 Emit surviving candidates as `{name, website, linkedin, external_id}` JSON on
+- [x] 4.5 Emit surviving candidates as `{name, website, linkedin, external_id}` JSON on
   stdout, omitting those with no website and skipping-with-log those that fail to fetch
-- [ ] 4.6 Warn on a query that returns no postings and exit non-zero when every query does
-- [ ] 4.7 Wire the run through `sources.NewClient()` and the shared pacer, with a `-pace`
-  flag and a conservative default, and bootstrap the command per `worker.Bootstrap`
-  convention
+- [x] 4.6 Warn on a query that returns no postings and exit non-zero when every query does
+- [x] 4.7 Wire the run through `sources.NewClient()` behind a rate limiter, with a `-pace`
+  flag and a conservative default, following the run-once host-tool shape the other
+  `harvest-*` commands use (`func main() { os.Exit(run()) }`, no database)
 
 ## 5. Worklist file and documentation
 
-- [ ] 5.1 Add `harvest/linkedin-queries.yml` with a small starter set of keyword×market
+- [x] 5.1 Add `harvest/linkedin-queries.yml` with a small starter set of keyword×market
   queries
-- [ ] 5.2 Document the three-step run (`harvest-linkedin` → `harvest-ats resolve` →
+- [x] 5.2 Document the three-step run (`harvest-linkedin` → `harvest-ats resolve` →
   `harvest-boards`) in the command's package comment, matching how the other `harvest-*`
   tools document themselves
-- [ ] 5.3 Record the expected-id seed field where the harvest worklist conventions are
+- [x] 5.3 Record the expected-id seed field where the harvest worklist conventions are
   described, so a future seed source knows it can supply one
 
 ## 6. Verification

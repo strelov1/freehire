@@ -1,0 +1,33 @@
+# Worklist for cmd/harvest-linkedin: which markets to ask who is hiring right now.
+#
+# Each query pages LinkedIn's public job-search listing and yields the companies behind the
+# postings, which harvest-ats then follows to their ATS board. Keep this list small and
+# deliberate — pages are the multiplier on a run's request count, and the run is a discovery
+# pass, not a crawl.
+#
+#   keywords: what to search for (required)
+#   location: the market, a LinkedIn place string (required — a query without one is refused)
+#   jobage:   only postings from the last N days (optional, default 7)
+#   pages:    result pages to walk, 10 postings each (optional, default 1)
+#
+# This starter set is a first probe, not a considered coverage plan: run it, see how many of
+# the companies it surfaces are genuinely new, and let that decide what to add.
+queries:
+  - keywords: golang
+    location: Germany
+    pages: 3
+  - keywords: backend engineer
+    location: Netherlands
+    pages: 3
+  - keywords: data engineer
+    location: Poland
+    pages: 3
+  - keywords: frontend developer
+    location: Spain
+    pages: 2
+  - keywords: devops
+    location: United Kingdom
+    pages: 2
+  - keywords: product manager
+    location: Remote
+    pages: 2
