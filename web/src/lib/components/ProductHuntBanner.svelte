@@ -47,7 +47,9 @@
         {/if}
       </p>
 
-      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
+      <!-- Block form, not disable-next-line: the tag spans several lines, so the
+           href the rule fires on is not the line after the comment. -->
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
       <a
         href={PH_URL}
         target="_blank"
@@ -56,6 +58,7 @@
       >
         {phase === 'live' ? 'Support the launch' : 'Follow'} →
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
 
       <button
         type="button"
