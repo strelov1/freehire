@@ -66,3 +66,16 @@ carrying an expected employer, a Workday run would have rejected every live boar
       through `harvest-boards`'s own seed loader
 - [x] 4.3 Dry-check the gate end to end on a known-bad pair (a live board belonging to a
       different employer) and confirm it is reported as a mismatch, not as a skip
+
+## 4a. Second review fallout
+
+Review of sections 2–4 found two more silent, one-directional defects.
+
+- [x] 4a.1 `sources.AllAggregatorProviders` answers aggregator membership independently of
+      credentials; the crawl registry keeps answering "which can this process crawl". Both
+      `cmd/harvest-orphans` and `cmd/reindex`'s suppression pass use it
+- [x] 4a.2 Contest candidates on the folded name, so one employer's two catalogue spellings
+      keep the board id they agree on instead of discarding it
+- [x] 4a.3 Bound the worklist scan with a `statement_timeout` on a pinned connection
+- [x] 4a.4 Cover the branches no test could fail on: the folds-to-nothing gate, the modal
+      display name, and a transliteration test whose fixture made it vacuous
