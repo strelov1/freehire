@@ -9,7 +9,7 @@
 
 ### Every IT job, straight from the source.
 
-**3.3M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**3.4M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -21,7 +21,7 @@
 
 <br>
 
-<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.3M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
+<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.4M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
 
@@ -42,7 +42,7 @@
   workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
   Use the hosted site, run your own, or build on top.
 
-Aggregating **3.3M+ live postings** from **205,000+ companies** across **80+ ATS
+Aggregating **3.4M+ live postings** from **220,000+ companies** across **80+ ATS
 platforms** and a long tail of aggregators and direct feeds — see
 [Sources](#sources) for the full breakdown.
 
@@ -173,10 +173,9 @@ search-filter vocabulary: [freehire.me/docs/api](https://freehire.me/docs/api).*
 
 ## Sources
 
-Live catalogue snapshot — **3,367,408 open postings** across **209,111
-companies** (5,330,911 total incl. closed). Counts are open postings unless
-noted; a company crawled from two sources is counted under each. Every source is
-one of three kinds:
+Live catalogue snapshot — **3,458,772 open postings** across **222,652 companies**.
+Counts are open postings unless noted; a company crawled from two sources is
+counted under each. Every source is one of three kinds:
 
 - **ATS platforms** — one adapter per multi-tenant applicant-tracking system,
   each serving many companies (Workday, Greenhouse, Lever, iCIMS…).

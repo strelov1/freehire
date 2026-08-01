@@ -4,9 +4,39 @@
   import { Button } from '$lib/ui';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
 
-  const SKILL_URL =
-    'https://github.com/strelov1/freehire-cli/blob/main/skills/using-freehire/SKILL.md';
+  const SKILLS_URL = 'https://github.com/strelov1/freehire-cli/tree/main/skills';
   const INSTALL = 'curl -fsSL https://freehire.me/install.sh | sh';
+
+  // Agent skills, one per task rather than one per tool, so a host loads what the
+  // question needs instead of the whole surface. Mirrors freehire-cli's skills/
+  // directory; the plugin ships each one's slash command alongside it.
+  const skills = [
+    {
+      name: 'freehire-job-search',
+      slash: '/job-search',
+      desc: 'Read the saved profile, ground every filter in facets, search, and shortlist.',
+    },
+    {
+      name: 'freehire-track-applications',
+      slash: '/track-applications',
+      desc: 'Where each application stands, stage moves, and reporting one that never answered.',
+    },
+    {
+      name: 'freehire-market-fit',
+      slash: '/market-fit',
+      desc: 'Score a stack against live vacancy demand and put a number on every gap.',
+    },
+    {
+      name: 'freehire-tailor-cv',
+      slash: '/tailor-cv',
+      desc: 'Reframe a CV toward one vacancy — every claim cited, nothing invented.',
+    },
+    {
+      name: 'freehire-mail-triage',
+      slash: '/triage-inbox',
+      desc: 'Push a mail batch, judge each message, and drain the two link queues.',
+    },
+  ];
 
   // Command reference, mirroring the freehire-cli README/SKILL.md (the source of
   // truth). Discover the market and its jobs first, then track your interaction.
@@ -209,15 +239,10 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       <span class="font-mono text-foreground">withdrawn</span>.
     </p>
 
-    <!-- CV tailoring — a real feature, but CLI-only (no MCP tools yet). -->
+    <!-- CV tailoring. On both surfaces: the CLI edits by path, the MCP server
+         exposes cv_context/cv_get/cv_edit/cv_render. -->
     <div class="mt-8 max-w-2xl rounded-lg border border-border bg-secondary/40 p-4">
-      <h3 class="flex items-center gap-2 text-sm font-semibold">
-        Tailor a CV to a vacancy
-        <span
-          class="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
-          >CLI only</span
-        >
-      </h3>
+      <h3 class="text-sm font-semibold">Tailor a CV to a vacancy</h3>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
         After a fit analysis, <a href={resolve('/features/tailor')} class="font-medium text-foreground underline-offset-4 hover:underline">reframe your CV</a> toward one job — grounded in what you actually did, never
         fabricated — then export an ATS-ready PDF. <code class="font-mono text-foreground">cv context</code>
@@ -228,7 +253,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       <pre
         class="mt-3 overflow-x-auto rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"><span class="text-muted-foreground">freehire</span> cv context &lt;id&gt;        <span class="text-muted-foreground"># the fit analysis to reframe toward</span>
 <span class="text-muted-foreground">freehire</span> cv get &lt;id&gt;            <span class="text-muted-foreground"># the CV document as JSON</span>
-<span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --patch …  <span class="text-muted-foreground"># apply one field-level edit</span>
+<span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --set …   <span class="text-muted-foreground"># one edit by path (--ops for a batch)</span>
 <span class="text-muted-foreground">freehire</span> cv render &lt;id&gt; --out cv.pdf</pre>
     </div>
   </section>
@@ -284,26 +309,54 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
     </div>
   </section>
 
-  <!-- For AI agents — the drop-in skill and the machine-readable conventions. -->
+  <!-- For AI agents — the task-shaped skills, their slash commands, and the
+       machine-readable conventions underneath them. -->
   <section class="border-t border-border py-14 sm:py-16">
     <SectionLabel text="for ai agents" />
-    <p class="mt-6 max-w-2xl leading-relaxed text-muted-foreground">
-      A drop-in
-      <a
-        href={SKILL_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="font-medium text-foreground underline-offset-4 hover:underline">agent skill</a
-      >
-      teaches the discover → search → apply loop; drop it into a Claude Code (or compatible) skills directory.
-      Every command takes <code class="font-mono text-foreground">--json</code> for the raw API payload —
-      results go to <span class="font-mono text-foreground">stdout</span>, errors to
-      <span class="font-mono text-foreground">stderr</span>, and a non-zero exit code signals failure. The
-      same endpoints are documented in the
-      <a href={resolve('/docs/api')} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >API reference</a
-      >.
-    </p>
+
+    <div class="mt-6 grid gap-x-12 gap-y-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <div>
+        <h2 class="text-2xl font-semibold tracking-tight">Five skills, one per job</h2>
+        <p class="mt-4 max-w-md leading-relaxed text-muted-foreground">
+          Each
+          <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute GitHub URL, not a SvelteKit route -->
+          <a
+            href={SKILLS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-medium text-foreground underline-offset-4 hover:underline">agent skill</a
+          ><!-- eslint-enable svelte/no-navigation-without-resolve -->
+          is named for the task, not the tool, so a host loads what the question needs instead of the
+          whole surface. Drop them into a Claude Code (or compatible) skills directory — or install the
+          plugin and get the slash commands too.
+        </p>
+        <pre
+          class="mt-5 max-w-md overflow-x-auto rounded-lg border border-border bg-secondary/60 p-3 font-mono text-sm leading-relaxed">/plugin marketplace add strelov1/freehire-cli
+/plugin install freehire@freehire-cli</pre>
+        <p class="mt-4 max-w-md text-sm leading-relaxed text-muted-foreground">
+          Every command takes <code class="font-mono text-foreground">--json</code> for the raw API
+          payload — results to <span class="font-mono text-foreground">stdout</span>, errors to
+          <span class="font-mono text-foreground">stderr</span>, non-zero exit on failure. The same
+          endpoints are in the
+          <a
+            href={resolve('/docs/api')}
+            class="font-medium text-foreground underline-offset-4 hover:underline">API reference</a
+          >.
+        </p>
+      </div>
+
+      <dl class="space-y-4">
+        {#each skills as skill (skill.name)}
+          <div class="rounded-lg border border-border bg-secondary/40 p-4">
+            <dt class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span class="font-mono text-sm font-semibold text-foreground">{skill.slash}</span>
+              <span class="font-mono text-xs text-muted-foreground">{skill.name}</span>
+            </dt>
+            <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{skill.desc}</dd>
+          </div>
+        {/each}
+      </dl>
+    </div>
   </section>
 
   <!-- Moderators — gated authoring, kept to one line + two commands. -->

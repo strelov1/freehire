@@ -21,7 +21,7 @@
   // ATS breadth and licensing — that don't need a query. The ATS count mirrors the
   // /open stat-strip: registered adapters in internal/sources/source.go `All()`.
   const figures = $derived([
-    { value: compact(stats.jobs, '3.3M+'), label: 'open jobs' },
+    { value: compact(stats.jobs, '3.4M+'), label: 'open jobs' },
     { value: compact(stats.companies, '200K+'), label: 'companies' },
     { value: '166', label: 'ATS platforms' },
     { value: '100%', label: 'open source' },

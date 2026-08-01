@@ -93,7 +93,7 @@
   });
 
   const stats = $derived([
-    { value: fmt(data.scale.jobs, '3.3M+'), label: 'open jobs', href: '/api/v1/jobs' },
+    { value: fmt(data.scale.jobs, '3.4M+'), label: 'open jobs', href: '/api/v1/jobs' },
     { value: fmt(data.scale.companies, '200K+'), label: 'companies', href: '/api/v1/companies' },
     { value: nf.format(ATS_PLATFORMS), label: 'ATS platforms', href: null },
     { value: nf.format(TELEGRAM_CHANNELS), label: 'Telegram channels', href: null },
