@@ -23,10 +23,10 @@
 
 - [x] 4.1 Add a `createDebrief` call beside `createRehearsal` in the assistant API client (`ChatPreset` turned out to be the URL-mintable set, not the session presets — the rehearsal is already created by its own function)
 - [x] 4.2 Add the Debrief action to the application card, shown from the `interview` stage onward and absent when the catalogue no longer holds the posting, reusing the rehearsal's in-flight and error handling
-- [ ] 4.3 Verify the card visually at mobile and desktop widths — two actions in the strip beside the badges
+- [x] 4.3 Verify the card visually at mobile and desktop widths — two actions in the strip beside the badges
 
 ## 5. Documentation
 
-- [ ] 5.1 Update `internal/assistant/AGENTS.md` with the fifth preset and why the banking rule inverts between rehearsal and debrief
-- [ ] 5.2 Run the full test suite in both modes (`go test ./...` and `go test -tags=integration ./internal/db/`), plus `go vet ./...` and the web checks
-- [ ] 5.3 Offer a changelog entry on `/blog`
+- [x] 5.1 Update `internal/assistant/AGENTS.md` with the fifth preset and why the banking rule inverts between rehearsal and debrief
+- [x] 5.2 Run the full test suite in both modes (`go test ./...` and `go test -tags=integration ./internal/db/`), plus `go vet ./...` and the web checks
+- [x] 5.3 Offer a changelog entry on `/blog` (offered; the announcement is deliberately held back)
