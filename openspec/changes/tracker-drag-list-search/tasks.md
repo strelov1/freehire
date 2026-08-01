@@ -29,7 +29,7 @@
 ## 5. Point the board's writes at the new routes
 
 - [x] 5.1 Add the client calls to `web/src/lib/api.ts` and switch `JobBoard`'s `persistMove`, `setStage`, `saveNotes` and `remove` onto them
-- [ ] 5.2 Verify by hand that a posting-less application now moves between columns and stays put — before this change it reverted, which is the bug the routes were added for. **Folded into 8.2:** it needs the same local stack, and standing that up twice buys nothing
+- [x] 5.2 Verify by hand that a posting-less application now moves between columns and stays put — before this change it reverted, which is the bug the routes were added for. **Folded into 8.2:** it needs the same local stack, and standing that up twice buys nothing
 
 ## 6. The list view
 
@@ -47,6 +47,6 @@
 
 ## 8. Finish
 
-- [ ] 8.1 `go build ./... && go vet ./... && go test ./...`, and the web checks
-- [ ] 8.2 Walk the whole surface in a browser: drag a card, open an application and use each of its four actions, switch to the list, search from both views, and reload on a searched list
+- [x] 8.1 `go build ./... && go vet ./... && go test ./...`, and the web checks
+- [x] 8.2 Walk the whole surface in a browser: drag a card, open an application and use each of its four actions, switch to the list, search from both views, and reload on a searched list
 - [ ] 8.3 Offer a `/blog` changelog entry — the drag repair and the list view are both user-facing
