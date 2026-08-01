@@ -25,7 +25,7 @@
 
 ## 3. The calendar grant
 
-- [ ] 3.1 Extend `internal/gmailsync/connector.go` with a calendar consent URL and scope
+- [x] 3.1 Extend `internal/gmailsync/connector.go` with a calendar consent URL and scope
       set, leaving the Gmail consent's scopes untouched. Unit test: the mail consent URL
       requests no calendar scope, and the calendar one does.
 - [ ] 3.2 Record granted scopes on exchange; add the connect/callback routes for the
@@ -54,7 +54,7 @@
       a connection whose recorded scopes lack the calendar is skipped without an API call.
 - [x] 5.4 Reschedule updates in place; cancellation marks; a re-run changes nothing
       (idempotent on `(user_id, ical_uid)`).
-- [ ] 5.5 Add `cmd/cal-sync` with `worker.Bootstrap`, reporting failure through its exit
+- [x] 5.5 Add `cmd/cal-sync` with `worker.Bootstrap`, reporting failure through its exit
       code the way `cmd/classify-mail` now does.
 
 ## 6. The ledger and the reader

@@ -19,6 +19,16 @@ import (
 // Google verification for public use (testing-mode test users until then).
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly"
 
+// CalendarScope is the read-only calendar scope, asked for on its own consent.
+//
+// Declared here because every Google scope this service requests lives here, and because
+// two copies of the string would part ways exactly once and silently: internal/calsync
+// filters connections on the scopes recorded at consent, so a filter spelling it
+// differently would find nobody and the worker would report a clean run with nothing to
+// do. Sensitive rather than restricted, which is a smaller verification burden than
+// gmail.readonly already carries — and no smaller a privacy one.
+const CalendarScope = "https://www.googleapis.com/auth/calendar.readonly"
+
 const gmailProfileURL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
 
 // gmailHTTPTimeout bounds the OAuth exchange and Gmail API round-trips.
@@ -30,18 +40,24 @@ const gmailHTTPTimeout = 15 * time.Second
 // (which stores no tokens) — here we need offline access and a stored token.
 type Connector struct {
 	cfg *oauth2.Config
+	// calendarRedirect is the callback for the calendar consent. Its own path, because
+	// Google matches the redirect exactly and the two flows land in different handlers.
+	calendarRedirect string
 }
 
 // NewConnector builds the Gmail connector from the Google OAuth credentials. The
 // callback is origin + /api/v1/me/gmail/callback (register it on the client).
 func NewConnector(clientID, clientSecret, origin string) *Connector {
-	return &Connector{cfg: &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Endpoint:     endpoints.Google,
-		RedirectURL:  origin + "/api/v1/me/gmail/callback",
-		Scopes:       []string{gmailReadonlyScope},
-	}}
+	return &Connector{
+		cfg: &oauth2.Config{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Endpoint:     endpoints.Google,
+			RedirectURL:  origin + "/api/v1/me/gmail/callback",
+			Scopes:       []string{gmailReadonlyScope},
+		},
+		calendarRedirect: origin + "/api/v1/me/calendar/callback",
+	}
 }
 
 // AuthCodeURL builds the consent URL. offline + forced consent yield a refresh
@@ -49,6 +65,23 @@ func NewConnector(clientID, clientSecret, origin string) *Connector {
 // (incremental authorization).
 func (c *Connector) AuthCodeURL(state string) string {
 	return c.cfg.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("prompt", "consent"),
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+	)
+}
+
+// CalendarAuthCodeURL builds the consent URL for the calendar, on its own.
+//
+// Separate from AuthCodeURL because the two are separate costs and separate decisions: a
+// candidate who wants their mail read and not their calendar has to be able to say so,
+// and connecting a mailbox must never quietly ask for a diary. Incremental, so accepting
+// this keeps whatever they already granted — the returned refresh token then covers both.
+func (c *Connector) CalendarAuthCodeURL(state string) string {
+	cfg := *c.cfg
+	cfg.Scopes = []string{CalendarScope}
+	cfg.RedirectURL = c.calendarRedirect
+	return cfg.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "consent"),
 		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
