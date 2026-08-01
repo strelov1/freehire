@@ -14,7 +14,22 @@ import (
 // about résumés.
 
 // Professional composes the owner's de-identified candidate profile: work history from the
-// bank, everything else from the structured résumé.
+// bank, everything else from the structured résumé. It is what the fit chain scores and what
+// an API-key caller reads.
+//
+// The division is the point. Work history comes from the bank, which accumulates — so evidence
+// a candidate confirmed in a chat, and that appears in no uploaded file, is scored by the fit
+// chain and seeded into their next CV. Education, languages, the summary and the years estimate
+// keep coming from the structure, which owns them and has no accumulation problem.
+//
+// The structure's OWN experience is ignored rather than used as a fallback. A bank that failed
+// to seed produces no work history, and the fit chain treats that as "no analysis" — the correct
+// degradation: scoring a candidate against a work history nothing owns is worse than not scoring
+// them.
+//
+// Contacts never cross over. The projection's field set stays the whitelist
+// resumeextract.Professional already defines, so a field added there is withheld until it is
+// added deliberately.
 func (s *Store) Professional(ctx context.Context, userID int64, st resumeextract.Structured) (resumeextract.Professional, error) {
 	history, err := s.WorkHistory(ctx, userID)
 	if err != nil {
@@ -37,28 +52,6 @@ func (s *Store) WorkHistory(ctx context.Context, userID int64) ([]resumeextract.
 		return nil, err
 	}
 	return experienceFromBank(employments, atoms), nil
-}
-
-// ProfessionalFrom builds the candidate profile from a bank and a structured résumé.
-//
-// The division is the point of the whole change. Work history comes from the bank, which
-// accumulates — so evidence a candidate confirmed in a chat, and that appears in no
-// uploaded file, is scored by the fit chain and seeded into their next CV. Education,
-// languages, the summary and the years estimate keep coming from the structure, which owns
-// them and has no accumulation problem.
-//
-// The structure's OWN experience is ignored rather than used as a fallback. A bank that
-// failed to seed produces no work history, and the fit chain treats that as "no analysis"
-// — which is the correct degradation: scoring a candidate against a work history nothing
-// owns is worse than not scoring them.
-//
-// Contacts never cross over. The projection's field set stays the whitelist
-// resumeextract.Professional already defines, so a field added there is withheld until it
-// is added deliberately.
-func ProfessionalFrom(st resumeextract.Structured, employments []Employment, atoms []Atom) resumeextract.Professional {
-	out := st.Professional()
-	out.Experience = experienceFromBank(employments, atoms)
-	return out
 }
 
 // experienceFromBank renders the bank as work-history entries, in the order the store

@@ -23,7 +23,7 @@ Best-effort, read-only LLM parse of the stored user CV into a typed `Structured`
   (`cmd/backfill-resume-geo`, database-only), so a dictionary change reaches existing users.
 - **Deletion clears the columns** (`ClearUserResume`), geography included.
 - **No new env** — reuses `LLM_*`.
-- **The fit analysis reads a COMPOSITION, not this shape alone:** `experience.ProfessionalFrom` takes the work history from the bank and everything else from here, and that is the only candidate text `matchanalysis` sends. An empty bank means no analysis; a stale structure now costs education and languages rather than the whole thing. There is still deliberately no raw-CV fallback, and there is deliberately no fallback to this package's own copy of the experience either — a silent one would hide a failed backfill for months.
+- **The fit analysis reads a COMPOSITION, not this shape alone:** `experience.Store.Professional` takes the work history from the bank and everything else from here, and that is the only candidate text `matchanalysis` sends. (It named `ProfessionalFrom` until 2026-08-01 — a second implementation of the same composition that no production path called.) An empty bank means no analysis; a stale structure now costs education and languages rather than the whole thing. There is still deliberately no raw-CV fallback, and there is deliberately no fallback to this package's own copy of the experience either — a silent one would hide a failed backfill for months.
 
 ## How it works
 

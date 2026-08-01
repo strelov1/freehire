@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
@@ -26,17 +28,55 @@ func structuredWithoutExperience() resumeextract.Structured {
 	}
 }
 
-func TestProfessionalFromTakesExperienceFromTheBank(t *testing.T) {
-	employments := []Employment{{
+// seedBank fills a fresh store with the owner's employments and atoms and returns the store,
+// so these tests exercise the live composition — Store.Professional — rather than a
+// parameter-taking twin of it. Each atom's EmploymentID is an INDEX into employments, or -1 for
+// evidence with no place, because the ids are the store's to mint.
+func seedBank(t *testing.T, employments []Employment, atoms []Atom, placeOf []int) *Store {
+	t.Helper()
+	s, _ := newStore()
+	ctx := context.Background()
+
+	ids := make([]uuid.UUID, len(employments))
+	for i, e := range employments {
+		created, err := s.CreateEmployment(ctx, owner, e)
+		if err != nil {
+			t.Fatalf("CreateEmployment: %v", err)
+		}
+		ids[i] = created.ID
+	}
+	for i, a := range atoms {
+		if place := placeOf[i]; place >= 0 {
+			a.EmploymentID = &ids[place]
+		}
+		if _, err := s.AddAtom(ctx, owner, a); err != nil {
+			t.Fatalf("AddAtom: %v", err)
+		}
+	}
+	return s
+}
+
+// professionalOf is the assertion subject of every test below: the live path the fit chain and
+// the profile read both take.
+func professionalOf(t *testing.T, s *Store) resumeextract.Professional {
+	t.Helper()
+	got, err := s.Professional(context.Background(), owner, structuredWithoutExperience())
+	if err != nil {
+		t.Fatalf("Professional: %v", err)
+	}
+	return got
+}
+
+func TestProfessionalTakesExperienceFromTheBank(t *testing.T) {
+	s := seedBank(t, []Employment{{
 		Kind: KindJob, Company: "RingCentral", Role: "Senior Software Engineer",
 		Location: "USA, Remote", Start: "2023-09", End: "Present", Current: true,
 		Summary: "Global SaaS leader", Stack: []string{"go", "mongodb"},
-	}}
-	atoms := []Atom{{
-		EmploymentID: &employments[0].ID, Claim: "Cut latency 20s to 1s", Provenance: ProvenanceCVImport,
-	}}
+	}}, []Atom{
+		{Claim: "Cut latency 20s to 1s", Provenance: ProvenanceCVImport},
+	}, []int{0})
 
-	got := ProfessionalFrom(structuredWithoutExperience(), employments, atoms)
+	got := professionalOf(t, s)
 
 	if len(got.Experience) != 1 {
 		t.Fatalf("experience = %+v, want the bank's single role", got.Experience)
@@ -54,8 +94,8 @@ func TestProfessionalFromTakesExperienceFromTheBank(t *testing.T) {
 }
 
 // The non-experience sections have no home in the bank and keep coming from the structure.
-func TestProfessionalFromKeepsTheStructuresOtherSections(t *testing.T) {
-	got := ProfessionalFrom(structuredWithoutExperience(), nil, nil)
+func TestProfessionalKeepsTheStructuresOtherSections(t *testing.T) {
+	got := professionalOf(t, seedBank(t, nil, nil, nil))
 
 	if got.Headline != "Senior Backend Engineer" || got.Summary == "" || got.TotalYears != 14 {
 		t.Errorf("headline/summary/years lost: %+v", got)
@@ -67,8 +107,8 @@ func TestProfessionalFromKeepsTheStructuresOtherSections(t *testing.T) {
 
 // The whole point of the contact-free projection: identity never crosses over, and the
 // composition must not reopen the hole the whitelist closed.
-func TestProfessionalFromCarriesNoContacts(t *testing.T) {
-	got := ProfessionalFrom(structuredWithoutExperience(), nil, nil)
+func TestProfessionalCarriesNoContacts(t *testing.T) {
+	got := professionalOf(t, seedBank(t, nil, nil, nil))
 
 	rendered := got.Headline + got.Summary + strings.Join(got.Languages, " ")
 	for _, contact := range []string{"Ilya Strelov", "someone@example.test", "+00 000", "https://example.test"} {
@@ -80,14 +120,13 @@ func TestProfessionalFromCarriesNoContacts(t *testing.T) {
 
 // An agent's own inference is not evidence the candidate stands behind, so it must not
 // reach the model that scores their fit — nor any CV composed from this projection.
-func TestProfessionalFromWithholdsUnpublishableAtoms(t *testing.T) {
-	employments := []Employment{{Kind: KindJob, Company: "RingCentral", Role: "SWE"}}
-	atoms := []Atom{
-		{EmploymentID: &employments[0].ID, Claim: "Confirmed achievement", Provenance: ProvenanceStatedInChat},
-		{EmploymentID: &employments[0].ID, Claim: "The agent's guess", Provenance: ProvenanceAgentInferred},
-	}
+func TestProfessionalWithholdsUnpublishableAtoms(t *testing.T) {
+	s := seedBank(t, []Employment{{Kind: KindJob, Company: "RingCentral", Role: "SWE"}}, []Atom{
+		{Claim: "Confirmed achievement", Provenance: ProvenanceStatedInChat},
+		{Claim: "The agent's guess", Provenance: ProvenanceAgentInferred},
+	}, []int{0, 0})
 
-	got := ProfessionalFrom(structuredWithoutExperience(), employments, atoms)
+	got := professionalOf(t, s)
 
 	highlights := got.Experience[0].Highlights
 	if len(highlights) != 1 || highlights[0] != "Confirmed achievement" {
@@ -98,10 +137,12 @@ func TestProfessionalFromWithholdsUnpublishableAtoms(t *testing.T) {
 // Evidence with no place is still evidence. Dropping it would defeat the change's whole
 // claim — that the fit analysis begins to see what a candidate confirmed in chat — so it
 // is carried in an entry that names no place rather than a fabricated one.
-func TestProfessionalFromCarriesPlacelessEvidence(t *testing.T) {
-	atoms := []Atom{{Claim: "AWS Certified Solutions Architect", Provenance: ProvenanceStatedInChat}}
+func TestProfessionalCarriesPlacelessEvidence(t *testing.T) {
+	s := seedBank(t, nil, []Atom{
+		{Claim: "AWS Certified Solutions Architect", Provenance: ProvenanceStatedInChat},
+	}, []int{-1})
 
-	got := ProfessionalFrom(structuredWithoutExperience(), nil, atoms)
+	got := professionalOf(t, s)
 
 	if len(got.Experience) != 1 {
 		t.Fatalf("experience = %+v, want the placeless evidence carried", got.Experience)
@@ -117,10 +158,10 @@ func TestProfessionalFromCarriesPlacelessEvidence(t *testing.T) {
 
 // A role the bank holds with no evidence under it is still career history the fit chain
 // should see — a person's job titles matter even before their bullets do.
-func TestProfessionalFromKeepsARoleWithNoAtoms(t *testing.T) {
-	employments := []Employment{{Kind: KindJob, Company: "Sber", Role: "Team Lead"}}
+func TestProfessionalKeepsARoleWithNoAtoms(t *testing.T) {
+	s := seedBank(t, []Employment{{Kind: KindJob, Company: "Sber", Role: "Team Lead"}}, nil, nil)
 
-	got := ProfessionalFrom(structuredWithoutExperience(), employments, nil)
+	got := professionalOf(t, s)
 
 	if len(got.Experience) != 1 || got.Experience[0].Company != "Sber" {
 		t.Errorf("experience = %+v, want the role kept even with no highlights", got.Experience)
@@ -130,8 +171,8 @@ func TestProfessionalFromKeepsARoleWithNoAtoms(t *testing.T) {
 // An empty bank yields no experience at all rather than falling back to the structure's
 // copy. The fit chain treats that as "no analysis", which is the correct degradation:
 // scoring a candidate on a work history nothing owns is worse than not scoring them.
-func TestProfessionalFromDoesNotFallBackToTheStructure(t *testing.T) {
-	got := ProfessionalFrom(structuredWithoutExperience(), nil, nil)
+func TestProfessionalDoesNotFallBackToTheStructure(t *testing.T) {
+	got := professionalOf(t, seedBank(t, nil, nil, nil))
 
 	if len(got.Experience) != 0 {
 		t.Errorf("experience = %+v, want none — the structure's copy is not a fallback", got.Experience)
