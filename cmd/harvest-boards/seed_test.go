@@ -12,16 +12,12 @@ func TestChooseCompany(t *testing.T) {
 	if got := chooseCompany("Acme Inc", "Role Co", "acme"); got != "Acme Inc" {
 		t.Errorf("api name should win, got %q", got)
 	}
-	// When the prober only echoed the board id back, a seed-provided name is preferred.
-	if got := chooseCompany("acme", "Acme From Role", "acme"); got != "Acme From Role" {
-		t.Errorf("seed name should fill, got %q", got)
-	}
-	// Empty prober name with a seed name uses the seed name.
+	// A platform that publishes no employer name reports "", and the seed's name fills in.
 	if got := chooseCompany("", "Acme From Role", "acme"); got != "Acme From Role" {
 		t.Errorf("seed name should fill empty, got %q", got)
 	}
 	// No usable name anywhere falls back to the board id.
-	if got := chooseCompany("acme", "", "acme"); got != "acme" {
+	if got := chooseCompany("", "", "acme"); got != "acme" {
 		t.Errorf("should fall back to board, got %q", got)
 	}
 }
@@ -39,7 +35,12 @@ func TestSameEmployer(t *testing.T) {
 		{"legal suffix on the reported side", "Derq", "Derq, Inc.", true},
 		{"punctuation and spacing differ", "Much Better Adventures", "much-better_adventures", true},
 		{"ampersand spelled out is still a difference", "Ben & Jerry", "Ben and Jerry", false},
+		{"compound legal form", "Atlassian Pty Ltd", "Atlassian", true},
+		{"non-anglo legal form", "Siemens AG", "Siemens", true},
+		{"punctuated legal form", "Trafalgar A/S", "Trafalgar", true},
+		{"diacritics folded", "Grupo Éxito", "Grupo Exito", true},
 		{"different employers", "Prequel", "A. C. Coy", false},
+		{"both normalize to nothing", "???", "—", false},
 		{"placeholder tenant", "Anatta Design", "Fake job", false},
 		{"one name is a prefix of the other", "Base", "Basecamp", false},
 	}

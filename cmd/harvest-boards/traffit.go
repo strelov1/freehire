@@ -30,5 +30,5 @@ func (traffitProber) probe(ctx context.Context, c httpClient, slug string) (stri
 	if len(resp.Items) == 0 {
 		return "", 0, nil
 	}
-	return slug, resp.Count, nil
+	return "", resp.Count, nil
 }

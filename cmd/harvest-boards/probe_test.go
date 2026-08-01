@@ -30,18 +30,26 @@ func TestProbeAllNameGate(t *testing.T) {
 		"prequel": {company: "A. C. Coy", openJobs: 4},
 		// A live board on a platform that reports no name of its own.
 		"nameless": {company: "", openJobs: 3},
+		// The Workday shape: the prober used to answer with a token derived from the board
+		// id (the tenant), which is not a name the platform reported. Treating it as one
+		// armed the gate against every Workday seed harvest-ats writes.
+		"acme.wd1.myworkdayjobs.com/careers": {company: "", openJobs: 5},
 		// A live board reached from a seed that never named an expected employer.
 		"unclaimed": {company: "Some Other Name", openJobs: 7},
 		// A candidate whose probe errored.
 		"broken": {err: errors.New("transport failed")},
 	}
 	seed := map[string]string{
-		"adoreal":  "Adoreal",
-		"prequel":  "Prequel",
-		"nameless": "Nameless Co",
-		"broken":   "Broken",
+		"adoreal":                            "Adoreal",
+		"prequel":                            "Prequel",
+		"nameless":                           "Nameless Co",
+		"broken":                             "Broken",
+		"acme.wd1.myworkdayjobs.com/careers": "Acme Corporation",
 	}
-	candidates := []string{"adoreal", "prequel", "nameless", "unclaimed", "broken"}
+	candidates := []string{
+		"adoreal", "prequel", "nameless", "unclaimed", "broken",
+		"acme.wd1.myworkdayjobs.com/careers",
+	}
 
 	kept, failures, mismatches := probeAll(context.Background(), nil, prober, candidates, seed)
 
@@ -60,6 +68,10 @@ func TestProbeAllNameGate(t *testing.T) {
 	}
 	if got["unclaimed"] != "Some Other Name" {
 		t.Errorf("seed without an expected employer should not be gated, got %q", got["unclaimed"])
+	}
+	if got["acme.wd1.myworkdayjobs.com/careers"] != "Acme Corporation" {
+		t.Errorf("a platform reporting no name must keep the seed label, got %q",
+			got["acme.wd1.myworkdayjobs.com/careers"])
 	}
 	if mismatches != 1 {
 		t.Errorf("mismatches = %d, want 1", mismatches)

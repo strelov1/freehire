@@ -60,13 +60,38 @@ different names, since a name-derived candidate is the same string for every pla
 The cost is honest: ~21k candidates × ~20 providers ≈ 250k probes per full run. This is a
 run-once host tool and the probe fan-out is already bounded and polite.
 
+### A prober reports "" when the platform publishes no name
+
+The gate needs to tell "the platform published no employer name" from "the platform
+published a name that disagrees". The tool used to encode the first case as "the returned
+name equals the board id" — a slug echoed back. That inference is wrong for two probers:
+`workdayProber` returned the tenant and `opencatsCompanyName` the host, neither of which
+equals the board id, so both would have read as published names and armed the gate against a
+token the employer never chose. Since `cmd/harvest-ats` and `cmd/harvest-role` already emit
+seeds carrying an expected employer, a Workday run would have rejected every live board and
+exited 0.
+
+So the contract is explicit instead of inferred: a prober returns `""` when the platform
+publishes no name. That is behaviour-preserving for the ~14 probers whose fallback token was
+the board id — `chooseCompany` already treated those as nameless — and it fixes the two
+where the token was derived. `orSlug` and the equality inference are both gone.
+
 ### The gate compares normalized names, and only when both sides exist
 
-Rejecting a candidate needs both an expected name (from the seed) and a reported name (from
-the platform). When either is missing there is nothing to compare and behaviour is exactly
-today's: seeds without a company keep validating on live jobs alone, and platforms that
-report no name keep taking the seed's name as their label. This is what keeps every existing
-seed — Common Crawl, universities, wantapply — working unchanged.
+Rejecting a candidate needs both an expected name (from the seed) and a published name (from
+the platform). When either is missing there is nothing to compare: seeds without a company
+validate on live jobs alone, and platforms that publish no name take the seed's name as their
+label. An expected name that normalizes to nothing (punctuation alone) states no expectation
+either, and is treated as absent rather than rejecting the board.
+
+This limits where the gate can fire at all, and the limit is wide: of the tool's ~30 probers
+only greenhouse, workable, smartrecruiters, teamtailor, join, gupy, paycom, opencats and —
+newly — recruitee and breezy obtain a name. The rest were audited against their live APIs;
+Lever, Ashby, Personio, BambooHR, iCIMS, Traffit and the HTML-scraped platforms publish no
+employer name anywhere in their public payloads, so for them a board is still accepted on
+liveness alone and labelled from the seed. Extracting a name where one exists (recruitee's
+`company_name`, breezy's `company.name`, both verified against live boards) is part of this
+change; inventing one where it does not is not.
 
 Normalization is deliberately mild: case-fold, strip legal-form suffixes
 (`inc/llc/ltd/limited/gmbh/corp/co/bv/ab/oy/as`), collapse everything non-alphanumeric.
@@ -99,8 +124,11 @@ that using a partial aggregator list inflated its results roughly fourfold.
 
 - **A name-derived slug resolves to an unrelated tenant.** → The corroboration gate is
   exactly this defence, and it is the change's primary deliverable rather than a side
-  effect. Platforms that report no name at all (jazzhr and jobvite serve HTML) cannot be
-  gated and are simply not part of the run.
+  effect. It cannot cover everything: a platform that publishes no employer name gives the
+  gate nothing to test, and that is most of them. The orphan run's yield is concentrated in
+  Workable and SmartRecruiters, which both publish names, so the bulk of what this change
+  onboards is gated — but a board harvested on Lever or BambooHR is still accepted on
+  liveness alone and must be read as such in the PR diff.
 - **A probe answers for a demo or template tenant.** → Live jobs plus a matching company
   name is a much narrower target than live jobs alone; the sampled bamboohr "Fake job"
   tenant was rejected on the name.

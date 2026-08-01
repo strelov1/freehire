@@ -82,7 +82,7 @@ func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string
 	if len(postings) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(postings), nil
+	return "", len(postings), nil
 }
 
 // ashbyProber probes the Ashby public job-board API. The list endpoint returns the live
@@ -102,7 +102,7 @@ func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string
 	if len(resp.Jobs) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(resp.Jobs), nil
+	return "", len(resp.Jobs), nil
 }
 
 // bamboohrProber probes the BambooHR per-subdomain careers list. A non-empty result is a
@@ -121,7 +121,7 @@ func (bamboohrProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(list.Result) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(list.Result), nil
+	return "", len(list.Result), nil
 }
 
 // workdayProber probes Workday's public CXS listing (POST-only). The board id is
@@ -158,7 +158,7 @@ func (workdayProber) probe(ctx context.Context, c httpClient, boardID string) (s
 	if n == 0 {
 		return "", 0, nil
 	}
-	return tenant, n, nil
+	return "", n, nil
 }
 
 // icimsProber probes an iCIMS career site by its slug. iCIMS exposes no JSON list API, so
@@ -191,7 +191,7 @@ func (icimsProber) probe(ctx context.Context, c httpClient, slug string) (string
 	if n == 0 {
 		return "", 0, nil
 	}
-	return slug, n, nil
+	return "", n, nil
 }
 
 // discoverer is the opt-in capability of a prober whose boards are not available as a seed
@@ -231,15 +231,6 @@ func (workdayProber) boardID(seedToken string) string {
 	return fmt.Sprintf("%s.%s.myworkdayjobs.com/%s", parts[0], parts[1], parts[2])
 }
 
-// orSlug applies the slug-fallback doctrine the API probers share: the platform-reported
-// company name when present, else the slug (board id) itself.
-func orSlug(name, slug string) string {
-	if name != "" {
-		return name
-	}
-	return slug
-}
-
 // workableProber probes the Workable public widget API. A board is the account subdomain;
 // the widget endpoint returns the account name and its open jobs, so a non-empty jobs list
 // is a live board.
@@ -258,7 +249,7 @@ func (workableProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(resp.Jobs) == 0 {
 		return "", 0, nil
 	}
-	return orSlug(resp.Name, slug), len(resp.Jobs), nil
+	return resp.Name, len(resp.Jobs), nil
 }
 
 // smartRecruitersProber probes the SmartRecruiters public postings API. The listing carries
@@ -287,17 +278,19 @@ func (smartRecruitersProber) probe(ctx context.Context, c httpClient, slug strin
 		Name string `json:"name"`
 	}
 	_ = c.GetJSON(ctx, fmt.Sprintf("https://api.smartrecruiters.com/v1/companies/%s", slug), &meta)
-	return orSlug(meta.Name, slug), n, nil
+	return meta.Name, n, nil
 }
 
-// recruiteeProber probes the Recruitee per-subdomain offers API. A non-empty offers array
-// is a live board; the list carries no company name, so it falls back to the slug.
+// recruiteeProber probes the Recruitee per-subdomain offers API. A non-empty offers array is
+// a live board, and each offer carries the employer's own name, so the board can be gated
+// against the name the seed expected rather than accepted on liveness alone.
 type recruiteeProber struct{}
 
 func (recruiteeProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var resp struct {
 		Offers []struct {
-			ID int64 `json:"id"`
+			ID          int64  `json:"id"`
+			CompanyName string `json:"company_name"`
 		} `json:"offers"`
 	}
 	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.recruitee.com/api/offers/", slug), &resp); err != nil {
@@ -306,7 +299,7 @@ func (recruiteeProber) probe(ctx context.Context, c httpClient, slug string) (st
 	if len(resp.Offers) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(resp.Offers), nil
+	return resp.Offers[0].CompanyName, len(resp.Offers), nil
 }
 
 // pinpointProber probes the Pinpoint public postings API. A non-empty data array is a live
@@ -325,17 +318,21 @@ func (pinpointProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(resp.Data) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(resp.Data), nil
+	return "", len(resp.Data), nil
 }
 
 // breezyProber probes the Breezy per-subdomain JSON list (a bare array of postings). A
-// non-empty array is a live board; the list carries no company name, so it falls back to
-// the slug.
+// non-empty array is a live board, and each posting embeds the employer's own name, so the
+// board can be gated against the name the seed expected rather than accepted on liveness
+// alone.
 type breezyProber struct{}
 
 func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var postings []struct {
-		ID string `json:"id"`
+		ID      string `json:"id"`
+		Company struct {
+			Name string `json:"name"`
+		} `json:"company"`
 	}
 	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s.breezy.hr/json", slug), &postings); err != nil {
 		return "", 0, nil
@@ -343,7 +340,7 @@ func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (strin
 	if len(postings) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(postings), nil
+	return postings[0].Company.Name, len(postings), nil
 }
 
 // teamtailorProber probes a Teamtailor career site. The board is the site host, and its
@@ -364,7 +361,7 @@ func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (s
 	if len(feed.Items) == 0 {
 		return "", 0, nil
 	}
-	return orSlug(feed.Title, host), len(feed.Items), nil
+	return feed.Title, len(feed.Items), nil
 }
 
 // trakstarProber probes the Trakstar Hire per-subdomain RSS feed. A non-empty channel of
@@ -381,7 +378,7 @@ func (trakstarProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(feed.Items) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(feed.Items), nil
+	return "", len(feed.Items), nil
 }
 
 // personioProber probes the Personio public XML feed on the .com host (the host the adapter
@@ -400,7 +397,7 @@ func (personioProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(resp.Positions) == 0 {
 		return "", 0, nil
 	}
-	return slug, len(resp.Positions), nil
+	return "", len(resp.Positions), nil
 }
 
 // gemProbeQuery is the minimal list query (extId only) the Gem prober uses for liveness — a
@@ -433,7 +430,7 @@ func (gemProber) probe(ctx context.Context, c httpClient, slug string) (string, 
 	if n == 0 {
 		return "", 0, nil
 	}
-	return slug, n, nil
+	return "", n, nil
 }
 
 // deelJobLocPattern matches a Deel sitemap entry that is a job-detail page (the same shape
@@ -463,7 +460,7 @@ func (deelProber) probe(ctx context.Context, c httpClient, slug string) (string,
 	if n == 0 {
 		return "", 0, nil
 	}
-	return slug, n, nil
+	return "", n, nil
 }
 
 // freshteamJobPattern matches a Freshteam job permalink's /jobs/<12-char-id> segment, the
@@ -485,7 +482,7 @@ func (freshteamProber) probe(ctx context.Context, c httpClient, slug string) (st
 	if n == 0 {
 		return "", 0, nil
 	}
-	return slug, n, nil
+	return "", n, nil
 }
 
 // countMatchingLinks counts the <a href> values in the tree whose value matches pat. It is
@@ -533,7 +530,7 @@ func (joinProber) probe(ctx context.Context, c httpClient, id string) (string, i
 		Name string `json:"name"`
 	}
 	_ = c.GetJSON(ctx, fmt.Sprintf("https://join.com/api/public/companies/%s", id), &meta)
-	return orSlug(meta.Name, id), jobs.Pagination.RowCount, nil
+	return meta.Name, jobs.Pagination.RowCount, nil
 }
 
 // probers maps a provider key to its prober. Adding an ATS is one entry here plus the

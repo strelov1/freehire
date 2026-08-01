@@ -24,7 +24,9 @@ func TestTraffitProbe(t *testing.T) {
 		wantName string
 		wantN    int
 	}{
-		{"cloudfide", "cloudfide", 5},
+		// Traffit's list endpoint carries no employer name, so the prober reports none and
+		// the board takes its label from the seed.
+		{"cloudfide", "", 5},
 		{"empty", "", 0},
 		{"bogus", "", 0}, // unmapped URL (HTML placeholder in prod) -> getter error -> skip
 	}

@@ -27,5 +27,5 @@ func (jobviteProber) probe(ctx context.Context, c httpClient, slug string) (stri
 	if n == 0 {
 		return "", 0, nil
 	}
-	return slug, n, nil
+	return "", n, nil
 }

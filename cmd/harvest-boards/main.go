@@ -76,6 +76,14 @@ func run() int {
 		log.Printf("harvest-boards: all %d probes failed", failures)
 		return 1
 	}
+	// Every live board disagreeing with its seed means the gate itself is wrong — a prober
+	// that started reporting a platform-wide name, or a seed built against the wrong
+	// employers — not "no new boards". Same reasoning as the all-probes-failed guard: an
+	// empty harvest that is really a broken one must not exit 0.
+	if mismatches > 0 && len(kept) == 0 {
+		log.Printf("harvest-boards: every live board (%d) disagreed with its expected employer", mismatches)
+		return 1
+	}
 	if len(kept) == 0 {
 		return 0
 	}
@@ -175,12 +183,13 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 			if n == 0 {
 				return
 			}
-			// The board is live. It still has to be the board we were looking for: only a
-			// name the platform reports itself can confirm that, and only a seed that named
-			// an expected employer gives it something to confirm against.
-			expected, reported := companyByBoard[slug], reportedName(name, slug)
-			if expected != "" && reported != "" && !sameEmployer(expected, reported) {
-				log.Printf("harvest-boards: %s: expected %q, board reports %q — skipped", slug, expected, reported)
+			// The board is live. It still has to be the board we were looking for, and only
+			// a name the platform publishes itself can confirm that. An expected name that
+			// normalizes to nothing (punctuation alone) states no expectation at all, and is
+			// treated as such rather than rejecting every board it is paired with.
+			expected := companyByBoard[slug]
+			if normalizeEmployer(expected) != "" && name != "" && !sameEmployer(expected, name) {
+				log.Printf("harvest-boards: %s: expected %q, board reports %q — skipped", slug, expected, name)
 				mu.Lock()
 				mismatches++
 				mu.Unlock()

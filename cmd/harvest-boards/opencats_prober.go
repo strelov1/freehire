@@ -150,15 +150,13 @@ func opencatsEligibleHost(host string) bool {
 // opencatsTitleSuffix matches the "- Careers" tail installs append to the portal title.
 var opencatsTitleSuffix = regexp.MustCompile(`(?i)\s*[-–—|]\s*careers\s*$`)
 
-// opencatsCompanyName proposes a company name from the portal page title, falling back to the
-// host. The proposal is reviewed by hand in the harvest diff: an install that never changed
-// its title yields the hostname again, which reads as a name but is not one.
-func opencatsCompanyName(root *html.Node, board string) string {
-	name := strings.TrimSpace(opencatsTitleSuffix.ReplaceAllString(opencatsPageTitle(root), ""))
-	if name == "" {
-		return strings.Split(board, "/")[0]
-	}
-	return name
+// opencatsCompanyName proposes a company name from the portal page title, or "" when the
+// install never set one. Deriving a name from the host instead would be indistinguishable
+// from a name the portal actually published — and the name a prober returns is what the
+// corroboration gate tests, so a derived one would gate a board against a token the employer
+// never chose. An unnamed board falls back to the seed's name, then to the board id.
+func opencatsCompanyName(root *html.Node, _ string) string {
+	return strings.TrimSpace(opencatsTitleSuffix.ReplaceAllString(opencatsPageTitle(root), ""))
 }
 
 // opencatsPageTitle returns the document's <title> text, or "".

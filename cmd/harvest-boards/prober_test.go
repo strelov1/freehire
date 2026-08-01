@@ -113,9 +113,10 @@ func TestWorkdayProbe(t *testing.T) {
 		"https://aig.wd1.myworkdayjobs.com/wday/cxs/aig/early_careers/jobs": `{"total":9,"jobPostings":[{"title":"x"}]}`,
 		"https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/empty/jobs":       `{"total":0,"jobPostings":[]}`,
 	}
-	// live: name falls back to tenant, count = total
-	if name, n, err := p.probe(context.Background(), getter, "aig.wd1.myworkdayjobs.com/early_careers"); err != nil || name != "aig" || n != 9 {
-		t.Errorf("live: got (%q,%d,%v), want (aig,9,nil)", name, n, err)
+	// live: the tenant is a token derived from the board id, not a name Workday published,
+	// so the prober reports none; count = total
+	if name, n, err := p.probe(context.Background(), getter, "aig.wd1.myworkdayjobs.com/early_careers"); err != nil || name != "" || n != 9 {
+		t.Errorf("live: got (%q,%d,%v), want (\"\",9,nil)", name, n, err)
 	}
 	// empty board => skip
 	if name, n, err := p.probe(context.Background(), getter, "acme.wd5.myworkdayjobs.com/empty"); err != nil || name != "" || n != 0 {
@@ -160,9 +161,9 @@ func TestICIMSProbe(t *testing.T) {
 		),
 	}
 
-	// Live board: name == slug, jobs > 0.
-	if name, n, err := p.probe(context.Background(), getter, "acme"); err != nil || name != "acme" || n != 2 {
-		t.Errorf("acme: got (%q,%d,%v), want (acme,2,nil)", name, n, err)
+	// Live board: the sitemap carries no company name, so none is reported; jobs > 0.
+	if name, n, err := p.probe(context.Background(), getter, "acme"); err != nil || name != "" || n != 2 {
+		t.Errorf("acme: got (%q,%d,%v), want (\"\",2,nil)", name, n, err)
 	}
 	// 200-with-zero-jobs => skip.
 	if name, n, err := p.probe(context.Background(), getter, "empty"); err != nil || name != "" || n != 0 {
@@ -174,9 +175,12 @@ func TestICIMSProbe(t *testing.T) {
 	}
 }
 
-// The lever/ashby/bamboohr provers carry no company name in their payloads, so a live
-// board's name falls back to its slug; an empty or absent board is a ("",0,nil) skip.
-func TestSlugFallbackProbers(t *testing.T) {
+// These platforms publish no employer name in their payloads, so a live board reports "" as
+// its name and takes its label from the seed; an empty or absent board is a ("",0,nil) skip.
+// The empty name is the contract the corroboration gate relies on: a derived token here
+// (a slug, a tenant, a host) would be indistinguishable from a name the platform published,
+// and would gate the board against something the employer never chose.
+func TestNamelessProbers(t *testing.T) {
 	cases := []struct {
 		name   string
 		p      prober
@@ -212,29 +216,11 @@ func TestSlugFallbackProbers(t *testing.T) {
 			live: "acme", empty: "empty",
 		},
 		{
-			name: "recruitee",
-			p:    recruiteeProber{},
-			getter: fakeGetter{
-				"https://acme.recruitee.com/api/offers/":  `{"offers":[{"id":1},{"id":2}]}`,
-				"https://empty.recruitee.com/api/offers/": `{"offers":[]}`,
-			},
-			live: "acme", empty: "empty",
-		},
-		{
 			name: "pinpoint",
 			p:    pinpointProber{},
 			getter: fakeGetter{
 				"https://acme.pinpointhq.com/postings.json":  `{"data":[{"id":"1"}]}`,
 				"https://empty.pinpointhq.com/postings.json": `{"data":[]}`,
-			},
-			live: "acme", empty: "empty",
-		},
-		{
-			name: "breezy",
-			p:    breezyProber{},
-			getter: fakeGetter{
-				"https://acme.breezy.hr/json":  `[{"id":"a"},{"id":"b"}]`,
-				"https://empty.breezy.hr/json": `[]`,
 			},
 			live: "acme", empty: "empty",
 		},
@@ -288,10 +274,10 @@ func TestSlugFallbackProbers(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Live board: name == slug, jobs > 0.
+			// Live board: no name reported, jobs > 0.
 			name, n, err := tc.p.probe(context.Background(), tc.getter, tc.live)
-			if err != nil || name != tc.live || n == 0 {
-				t.Errorf("live: got (%q,%d,%v), want (%q,>0,nil)", name, n, err, tc.live)
+			if err != nil || name != "" || n == 0 {
+				t.Errorf("live: got (%q,%d,%v), want (\"\",>0,nil)", name, n, err)
 			}
 			// Empty board.
 			if name, n, err := tc.p.probe(context.Background(), tc.getter, tc.empty); err != nil || name != "" || n != 0 {
@@ -310,8 +296,10 @@ func TestSlugFallbackProbers(t *testing.T) {
 func TestGemProbe(t *testing.T) {
 	p := gemProber{}
 	live := fakeGetter{"https://jobs.gem.com/api/public/graphql": `{"data":{"oatsExternalJobPostings":{"jobPostings":[{"extId":"x"},{"extId":"y"}]}}}`}
-	if name, n, err := p.probe(context.Background(), live, "acme"); err != nil || name != "acme" || n != 2 {
-		t.Errorf("live: got (%q,%d,%v), want (\"acme\",2,nil)", name, n, err)
+	// Gem publishes no employer name, so the prober reports none — the contract that lets
+	// the corroboration gate tell "no name" from "a name that disagrees".
+	if name, n, err := p.probe(context.Background(), live, "acme"); err != nil || name != "" || n != 2 {
+		t.Errorf("live: got (%q,%d,%v), want (\"\",2,nil)", name, n, err)
 	}
 	empty := fakeGetter{"https://jobs.gem.com/api/public/graphql": `{"data":{"oatsExternalJobPostings":{"jobPostings":[]}}}`}
 	if name, n, err := p.probe(context.Background(), empty, "acme"); err != nil || name != "" || n != 0 {
@@ -387,4 +375,36 @@ func TestNamedProbers(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Recruitee and Breezy are the two platforms in this tool whose public list endpoint carries
+// the employer's own name. Extracting it is what lets the corroboration gate fire for them at
+// all, so the name — not just the liveness count — is the assertion that matters.
+func TestNameReportingProbers(t *testing.T) {
+	t.Run("recruitee", func(t *testing.T) {
+		getter := fakeGetter{
+			"https://11bitstudios.recruitee.com/api/offers/": `{"offers":[{"id":1,"company_name":"11 bit studios"},{"id":2,"company_name":"11 bit studios"}]}`,
+			"https://empty.recruitee.com/api/offers/":        `{"offers":[]}`,
+		}
+		p := recruiteeProber{}
+		if name, n, err := p.probe(context.Background(), getter, "11bitstudios"); err != nil || name != "11 bit studios" || n != 2 {
+			t.Errorf("live: got (%q,%d,%v), want (\"11 bit studios\",2,nil)", name, n, err)
+		}
+		if name, n, err := p.probe(context.Background(), getter, "empty"); err != nil || name != "" || n != 0 {
+			t.Errorf("empty: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+		}
+	})
+	t.Run("breezy", func(t *testing.T) {
+		getter := fakeGetter{
+			"https://accelone.breezy.hr/json": `[{"id":"a","company":{"name":"AccelOne"}},{"id":"b","company":{"name":"AccelOne"}}]`,
+			"https://empty.breezy.hr/json":    `[]`,
+		}
+		p := breezyProber{}
+		if name, n, err := p.probe(context.Background(), getter, "accelone"); err != nil || name != "AccelOne" || n != 2 {
+			t.Errorf("live: got (%q,%d,%v), want (\"AccelOne\",2,nil)", name, n, err)
+		}
+		if name, n, err := p.probe(context.Background(), getter, "empty"); err != nil || name != "" || n != 0 {
+			t.Errorf("empty: got (%q,%d,%v), want (\"\",0,nil)", name, n, err)
+		}
+	})
 }
