@@ -55,7 +55,7 @@ func run() int {
 	}
 
 	ctx := context.Background()
-	client := paced(sources.NewClient(), *pace)
+	client := newCountingClient(paced(sources.NewClient(), *pace))
 	if *pace > 0 {
 		log.Printf("harvest-boards: pacing probes at %.2f req/s with %d workers", *pace, *workers)
 	}
@@ -82,8 +82,18 @@ func run() int {
 		provider, len(raw), len(existing), len(candidates))
 
 	kept, failures, mismatches := probeAll(ctx, client, p, candidates, companyByBoard, *workers)
-	log.Printf("harvest-boards: live boards found=%d probe-failures=%d name-mismatches=%d",
-		len(kept), failures, mismatches)
+	log.Printf("harvest-boards: live boards found=%d probe-failures=%d name-mismatches=%d refused=%d answered=%d",
+		len(kept), failures, mismatches, client.refused(), client.answered())
+	// A run the platform mostly turned away found nothing because it was not allowed to look.
+	// The probers cannot say so — they report a refusal as an absent board — so this is the
+	// only guard that can tell a truncated harvest from an exhausted one. Committing the
+	// former is how a board file silently loses the boards nobody got to probe.
+	if refusalsDominated(client.refused(), client.answered()) {
+		log.Printf("harvest-boards: %d requests refused against %d answered — the platform is "+
+			"rate-limiting this run; nothing written. Retry later, or lower -pace",
+			client.refused(), client.answered())
+		return 1
+	}
 	// Every candidate erroring means the probe itself is broken (an API change, an
 	// auth wall, a network outage) — not "no new boards". Fail loudly so the empty
 	// result is not mistaken for an exhausted candidate list.
