@@ -50,7 +50,7 @@ var absURLRe = regexp.MustCompile(`https?://[^\s"'<>)\\]+`)
 // Resolve fetches rawURL and finds the ATS board it belongs to, returning the catalogue
 // (source, board) and a canonical URL to store. It looks two ways:
 //  1. the Greenhouse embed shape (script for=<board>) via atsdetect — which the URL recognizer
-//     can't parse (it would read the path word "embed" as the board);
+//     can't parse, since the board is in the query param and the path holds only machinery;
 //  2. any supported ATS apply/board URL embedded in the page, run through the full
 //     atsboard.Recognize (all ~40 ATS, all modes) — this catches a company careers page
 //     that links to its recruitee/peopleforce/zoho/workday board.
@@ -67,10 +67,9 @@ func (r *Resolver) Resolve(ctx context.Context, rawURL string) (source, board, c
 		return provider, slug, stripTails(rawURL), true
 	}
 
-	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins;
-	//    a Greenhouse embed URL misparses to board "embed" (step 1 owns Greenhouse), so skip it.
+	// 2. Any supported ATS URL in the page, via the full recognizer. First recognized wins.
 	for _, u := range absURLRe.FindAllString(html, -1) {
-		if s, b, _, matched := atsboard.Recognize(u); matched && b != "embed" {
+		if s, b, _, matched := atsboard.Recognize(u); matched {
 			return s, b, stripTails(rawURL), true
 		}
 	}
