@@ -24,6 +24,7 @@ import {
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
+import { backerBadges } from './backers';
 import { api } from './api';
 
 export interface FacetOption {
@@ -40,6 +41,9 @@ export interface FacetOption {
    *  serialization by param, so two facet entries sharing one param would double
    *  every value in the URL and in the active-filter count. */
   group?: string;
+  /** Image URL for a mark rendered inside the pill, left of the label. Used by the
+   *  backer collections, whose brand mark is recognised faster than their name. */
+  icon?: string;
 }
 
 export type FacetControl = 'pills' | 'select' | 'tokens' | 'remote';
@@ -422,6 +426,7 @@ const COLLECTION: FacetOption[] = [
   ...COLLECTIONS.filter((c) => c.kind !== 'credential').map((c) => ({
     value: c.slug,
     label: c.title,
+    icon: backerBadges([c.slug])[0]?.mark,
   })),
   ...COLLECTIONS.filter((c) => c.kind === 'credential').map((c) => ({
     value: c.slug,

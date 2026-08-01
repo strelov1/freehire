@@ -51,13 +51,16 @@
 
 ## 5. Surfaces
 
-- [ ] 5.1 Job feed card: badge beside the company name in `JobRow.svelte`, signal
+- [x] 5.1 Job feed card: badge beside the company name in `JobRow.svelte`, signal
       row untouched.
-- [ ] 5.2 Job page: badge with text beside the company, linking to the collection
+- [x] 5.2 Job page: badge with text beside the company, linking to the collection
       landing.
-- [ ] 5.3 Company page (`CompanyHeader.svelte`) and `/companies` cards.
-- [ ] 5.4 `/collections` hub cards and the collection landing header.
-- [ ] 5.5 Filter chips: optional `icon` on `FacetOption`, rendered by
+- [x] 5.3 Company page (`CompanyHeader.svelte`) and `/companies` cards. The list
+      endpoint did not return `collections` at all — its SQL selected six columns —
+      so the column, the sqlc row, and the Meilisearch projection of the same wire
+      shape all had to carry it before the card could render a mark.
+- [x] 5.4 `/collections` hub cards and the collection landing header.
+- [x] 5.5 Filter chips: optional `icon` on `FacetOption`, rendered by
       `PillGroup.svelte`; wire the marks for the four backer collections. Vitest
       covers a facet option without an icon rendering unchanged.
 

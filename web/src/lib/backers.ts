@@ -16,8 +16,6 @@ export type BackerBadge = {
   mark: string;
   /** Accessible name — the badge is an image, so this is its entire meaning. */
   alt: string;
-  /** The collection landing, so the badge can lead somewhere useful. */
-  href: string;
 };
 
 // Each brand's own mark, taken from the brand's own site. Not resolved at runtime
@@ -52,7 +50,6 @@ export function backerBadges(collections: string[] | undefined | null): BackerBa
         // picked the company. It says nothing about this role, which is the reading
         // a candidate would otherwise act on.
         alt: `Backed by ${c.title}`,
-        href: `/collections/${c.slug}`,
       },
     ];
   });

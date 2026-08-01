@@ -12,6 +12,7 @@
   import { Badge, Button } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
+  import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -228,6 +229,9 @@
           {job.company || 'Unknown company'}
         {/if}
       </p>
+      <!-- Who backed the employer. The page has room the feed card does not, so the
+           badge carries the brand name too and links to that collection's roles. -->
+      <BackerBadge collections={job.collections} withLabel />
     </div>
 
     <a

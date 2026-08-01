@@ -23,6 +23,16 @@ describe('the collections facet', () => {
     }
   });
 
+  it('carries the brand mark on a backer collection, and none on the others', () => {
+    // The chip is how most readers meet these collections; the orange Y is
+    // recognised well before the words beside it are read.
+    const byValue = new Map(collectionOptions().map((o) => [o.value, o]));
+    expect(byValue.get('yc')?.icon).toMatch(/\.png$/);
+    expect(byValue.get('a16z-speedrun')?.icon).toMatch(/\.png$/);
+    expect(byValue.get('bigtech')?.icon).toBeUndefined();
+    expect(byValue.get('uk-skilled-worker-sponsor')?.icon).toBeUndefined();
+  });
+
   it('groups credentials under their own heading, and leaves the rest ungrouped', () => {
     // A licence from a public register is not one of our curated picks; running the
     // two together would read as though we vouched for both the same way.

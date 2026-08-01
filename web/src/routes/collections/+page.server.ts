@@ -1,5 +1,6 @@
 import { serverApi } from '$lib/server/api';
 import { COLLECTIONS, FILTER_COLLECTIONS, toQuery } from '$lib/collections';
+import { backerBadges } from '$lib/backers';
 import type { PageServerLoad } from './$types';
 
 // One card on the /collections hub, normalized across both kinds of collection so
@@ -12,6 +13,10 @@ export type CollectionCard = {
   description: string;
   href: `/collections/${string}`;
   count: number | null;
+  // The backing brand's mark, for the collections that name one (Y Combinator,
+  // Techstars, a16z). Null for every other card — a filter collection has no brand,
+  // and an editorial theme has no mark of its own to show.
+  mark: string | null;
 };
 
 // Server-render the collection index. Company-collection counts come from the
@@ -39,7 +44,7 @@ export const load: PageServerLoad = async ({ fetch }) => {
       } catch {
         // Count is decorative — leave it null on failure.
       }
-      return { title: fc.title, description: fc.description, href: `/collections/${fc.slug}`, count };
+      return { title: fc.title, description: fc.description, href: `/collections/${fc.slug}`, count, mark: null };
     }),
   );
 
@@ -48,6 +53,7 @@ export const load: PageServerLoad = async ({ fetch }) => {
     description: c.description,
     href: `/collections/${c.slug}`,
     count: facetCounts ? (facetCounts[c.slug] ?? 0) : null,
+    mark: backerBadges([c.slug])[0]?.mark ?? null,
   }));
 
   // Feature two cards at the top of the grid — worldwide-remote first, then the

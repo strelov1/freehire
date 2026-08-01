@@ -5,6 +5,7 @@
   import type { Company } from '$lib/types';
   import CompanyLogo from './CompanyLogo.svelte';
   import CredentialBadge from './CredentialBadge.svelte';
+  import BackerBadge from './BackerBadge.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
   import VoteControl from './VoteControl.svelte';
 
@@ -50,11 +51,14 @@
       {#if company.tagline}
         <p class="mt-1 text-sm text-muted-foreground">{company.tagline}</p>
       {/if}
-      <!-- Register-backed credentials (visa-sponsor licences) sit under the identity,
-           where a fact about the employer belongs. Each carries its issuing body and
-           the disclaimer that the licence is not a promise about any given role. -->
+      <!-- Who backed the company, then the register-backed credentials (visa-sponsor
+           licences) — both facts about the employer, so both sit under the identity.
+           Backers lead: "picked by Y Combinator" is what a reader came to know.
+           Each credential carries its issuing body and the disclaimer that the
+           licence is not a promise about any given role. -->
       {#if company.collections?.length}
-        <div class="mt-2 flex flex-wrap gap-1.5">
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <BackerBadge collections={company.collections} withLabel />
           <CredentialBadge collections={company.collections} />
         </div>
       {/if}

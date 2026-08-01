@@ -352,20 +352,27 @@ func (h *companiesHandlers) companyHitsViaMeili(ctx context.Context, query strin
 
 // companyRowFromDoc projects a company search document onto the list wire shape,
 // re-wrapping the unwrapped scalar strings into pgtype.Text (empty → NULL) so the
-// response matches the Postgres path exactly. An absent industries array normalizes
-// to an empty slice so it serializes as [] like the Postgres '{}', not null.
+// response matches the Postgres path exactly. An absent array (industries,
+// collections) normalizes to an empty slice so it serializes as [] like the Postgres
+// '{}', not null — the two paths serve the same endpoint, and a field that differs
+// between them makes the catalogue card change shape the moment a user searches.
 func companyRowFromDoc(d search.CompanyDocument) db.ListCompaniesRow {
 	industries := d.Industries
 	if industries == nil {
 		industries = []string{}
 	}
+	collections := d.Collections
+	if collections == nil {
+		collections = []string{}
+	}
 	return db.ListCompaniesRow{
-		Slug:       d.Slug,
-		Name:       d.Name,
-		JobCount:   d.JobCount,
-		Tagline:    pgText(d.Tagline),
-		Industries: industries,
-		HqCountry:  pgText(d.HqCountry),
+		Slug:        d.Slug,
+		Name:        d.Name,
+		JobCount:    d.JobCount,
+		Tagline:     pgText(d.Tagline),
+		Industries:  industries,
+		HqCountry:   pgText(d.HqCountry),
+		Collections: collections,
 	}
 }
 

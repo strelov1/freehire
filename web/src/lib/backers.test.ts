@@ -20,8 +20,11 @@ describe('backerBadges', () => {
     }
   });
 
-  it('links each badge to its collection landing', () => {
-    expect(backerBadges(['a16z-speedrun'])[0]?.href).toBe('/collections/a16z-speedrun');
+  it('carries the slug so a caller can route to the collection landing', () => {
+    // The route is built by the component through resolve(), not spelled out here —
+    // a hand-written path bypasses SvelteKit's typed routing (and the lint rule that
+    // enforces it).
+    expect(backerBadges(['a16z-speedrun'])[0]?.slug).toBe('a16z-speedrun');
   });
 
   it('ignores editorial collections and credentials', () => {

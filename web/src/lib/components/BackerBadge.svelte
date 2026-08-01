@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { backerBadges } from '$lib/backers';
   import { cn } from '$lib/ui';
 
@@ -32,7 +33,7 @@
 {#each badges as badge (badge.slug)}
   {#if withLabel}
     <a
-      href={badge.href}
+      href={resolve('/collections/[slug]', { slug: badge.slug })}
       class={cn(
         'inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted',
         className,

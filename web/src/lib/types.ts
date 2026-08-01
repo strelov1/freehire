@@ -160,6 +160,8 @@ export interface CompanyListItem {
   tagline?: string | null;
   industries?: string[] | null;
   hq_country?: string | null;
+  /** Curated company tags — the catalogue card renders the backer marks from these. */
+  collections?: string[] | null;
 }
 
 /** Pagination metadata returned alongside list responses. */
