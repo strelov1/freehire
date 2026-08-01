@@ -21,6 +21,18 @@
 
 <br>
 
+<!-- Product Hunt: launching 26 August 2026. The badge is Product Hunt's own embed,
+     one SVG per theme, picked by prefers-color-scheme the same way the logo above is.
+     Its own utm_campaign so this traffic is separable from the site footer's badge. -->
+<a href="https://www.producthunt.com/products/freehire?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-readme">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&amp;theme=dark">
+    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&amp;theme=light" alt="freehire — every IT job, straight from the source | Product Hunt" width="250" height="54">
+  </picture>
+</a>
+
+<br>
+
 <img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.4M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
