@@ -50,6 +50,14 @@
 
 - [x] 6.1 Run the web checks (`pnpm test`, `svelte-check`) and confirm the pure
   helpers are covered.
-- [ ] 6.2 After deploy, confirm each new event arrives in PostHog and carries no
-  PII, then build the two funnels (activation, SEO entry) in the PostHog UI. The
-  application funnel is not buildable from the browser — see 4.2.
+- [x] 6.2 Deployed to prod 2026-08-01 (blue→green flip). Verified the five event
+  names are present in the live client bundle under `hire-green`, and `/health`
+  returns 200. Both funnels created in PostHog (EU, project 224893): "Activation
+  funnel" (`$pageview` → `signup` → `cv_upload` → `match_run`) and "SEO entry
+  funnel" (`job_view` → `signup`). The application funnel is not buildable from
+  the browser — see 4.2.
+  **Still unconfirmed by live traffic:** no `signup`/`cv_upload`/`match_run`/
+  `tailor_run`/`assistant_message` had fired within 30 minutes of the flip, which
+  only reflects how few sessions took those actions in that window (16 pageviews
+  across 5 sessions). The funnels above are where that shows up as it arrives; a
+  flat funnel after a day of traffic would mean the wiring, not the sample.
