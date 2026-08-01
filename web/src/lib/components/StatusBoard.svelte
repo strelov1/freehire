@@ -1,5 +1,9 @@
 <script lang="ts">
   import { timeAgo } from '$lib/utils';
+  // A provider key is a source facet code, so it renders through the one label map every
+  // other surface uses: a provider must not be "WhatJobs" on the filter panel and
+  // "Whatjobs" here.
+  import { sourceLabel } from '$lib/facets';
   import type { HealthStatus, IngestStatus, ProviderKind } from '$lib/types';
 
   // The presentational half of the /status page: given the ingest-fleet rollup (or
@@ -47,7 +51,6 @@
   // that actually appear in the data.
   const KIND_ORDER: ProviderKind[] = ['ats', 'aggregator', 'company', 'other'];
 
-  const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/[_-]/g, ' ');
   const nf = new Intl.NumberFormat('en');
 
   // Worst-first, then alphabetical — problem providers surface at the top.
@@ -75,7 +78,7 @@
     return providers.filter((p) => {
       if (kind !== 'all' && p.kind !== kind) return false;
       if (!q) return true;
-      return p.provider.toLowerCase().includes(q) || titleCase(p.provider).toLowerCase().includes(q);
+      return p.provider.toLowerCase().includes(q) || sourceLabel(p.provider).toLowerCase().includes(q);
     });
   });
 </script>
@@ -159,7 +162,7 @@
             <span class="h-2.5 w-2.5 shrink-0 rounded-full {meta.dot}"></span>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="font-medium">{titleCase(p.provider)}</span>
+                <span class="font-medium">{sourceLabel(p.provider)}</span>
                 <span class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                   {KIND_LABEL[p.kind]}
                 </span>

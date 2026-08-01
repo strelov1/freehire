@@ -38,7 +38,9 @@ varies with the operator's environment is a trap for whoever does start reading 
   the registry again.
 - Adjacent, not caused by this defect: `SOURCE_LABELS` in `web/src/lib/facets.ts` gains the two
   casing overrides the title-case fallback gets wrong, so the live facet stops rendering
-  `Usajobs` and `Whatjobs`.
+  `Usajobs` and `Whatjobs`. `StatusBoard.svelte` drops its own local `titleCase` for the shared
+  `sourceLabel` — it was a fifth surface rendering the same provider codes under different
+  names, which is the rule the label change in #1393 settled.
 
 ## Capabilities
 

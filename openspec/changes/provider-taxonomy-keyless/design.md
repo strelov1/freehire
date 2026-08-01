@@ -123,6 +123,15 @@ touches; the alternative is a separate PR for two strings.
 No migration. Deploy order is irrelevant: the change is a pure in-process registry fix plus a
 regenerated frontend constant. Rollback is the revert.
 
-The next `cmd/reindex` run after deploy re-marks `whatjobs` postings that duplicate a
-first-party ATS posting — a correction of existing rows through the already-scheduled path, not
-a backfill to run by hand.
+Two workers change what they see, both through paths that already run:
+
+- The next `cmd/reindex` re-marks `usajobs`, `reed` and `whatjobs` postings that duplicate a
+  first-party ATS posting of the same company, title and country. For `whatjobs` that is the
+  point of the change. For `usajobs` it is a no-op in practice — federal postings have no
+  corporate ATS twin, as the comment being deleted from `cmd/reindex` argued — and for `reed`
+  it is the same suppression every other aggregator already gets.
+- `cmd/ghost-crosscheck` gains the three as aggregator sources, so ~22.6k more postings enter
+  its population. The work is DB reads (`ListCompanyBoardTitles`), not crawling, and
+  `ghost.Crosscheck` returns every posting as *skipped* when the company has no board rows at
+  all — so a federal agency with no ATS board in the catalogue cannot be stamped absent by the
+  mere fact of being newly visible.
