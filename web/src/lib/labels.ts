@@ -1,10 +1,24 @@
-// Single source of display labels for the closed-vocabulary facet codes, shared
-// by the detail-page facet rows (enrichment.ts) and the filter panel (facets.ts).
-// Values come from the generated contracts; only the codes whose label differs
-// from the title-cased fallback are listed here. Keeping ONE map prevents the
-// drift that previously left stale region codes and inconsistent casing in two
-// places. REGIONS is the curated macro-region set (vocab.RegionValues) — keep it
-// in sync with the backend vocabulary.
+// Single source of display labels for the closed-vocabulary facet codes, shared by
+// the detail-page facet rows (enrichment.ts), the filter panel (facets.ts) and the
+// /insights pages (insights.ts). Values come from the generated contracts. Keeping
+// ONE map prevents the drift that previously left stale region codes and inconsistent
+// casing in two places. REGIONS is the curated macro-region set (vocab.RegionValues) —
+// keep it in sync with the backend vocabulary.
+//
+// Most maps here list only the codes whose label differs from the title-cased
+// fallback. CATEGORY_LABELS is the deliberate exception and is exhaustive; the reason
+// is recorded above it.
+
+/** A title-cased fallback label for a code with no explicit label
+ *  (e.g. "network_engineering" → "Network Engineering"). Lives here, with the maps,
+ *  so "how a label is produced" has one home; enrichment.ts keeps a separate
+ *  sentence-cased fallback for the facets it renders. */
+export function titleCase(value: string): string {
+  return value
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 // Region code → display names, one row per vocab.RegionValues entry. `short`
 // is the compact UI label (filter pills, facet rows); `long` is the full place
@@ -47,18 +61,72 @@ export const EMPLOYMENT_LABELS: Record<string, string> = {
 
 export const WORK_MODE_LABELS: Record<string, string> = { onsite: 'On-site' };
 
+// All three relocation values, not just the overrides: the filter panel and the
+// detail-page row previously spelled the negative one differently ("None" vs "Not
+// supported"), and "None" was ambiguous with "not stated". Spelling the whole facet
+// out here keeps the three values reading as one set.
+export const RELOCATION_LABELS: Record<string, string> = {
+  not_supported: 'Not supported',
+  supported: 'Supported',
+  required: 'Required',
+};
+
+// The one map that is EXHAUSTIVE rather than override-only, listed in the order of
+// the generated CATEGORY_VALUES so a diff against the vocabulary reads straight down.
+// Categories are the only vocabulary rendered on all three surfaces — the filter
+// panel, the job-detail facet row, and the indexed /insights pages — and those
+// surfaces reach a label through two different fallbacks (facets.ts title-cases every
+// word, enrichment.ts capitalizes only the first). Any code left to the fallback
+// therefore renders two ways by construction, which is what previously forked an
+// entire second map into insights.ts. Listing every code removes the fallback from the
+// path instead of asking three call sites to agree. labels.test.ts binds this map to
+// CATEGORY_VALUES, so a new backend category fails the suite until it is named here.
 export const CATEGORY_LABELS: Record<string, string> = {
-  ml_ai: 'ML / AI',
-  ai_engineering: 'AI Engineer',
+  backend: 'Backend',
+  frontend: 'Frontend',
+  fullstack: 'Full-Stack',
+  mobile: 'Mobile',
+  devops: 'DevOps',
+  sre: 'SRE',
+  network_engineering: 'Network Engineering',
   data_engineering: 'Data Engineering',
   data_science: 'Data Science',
   data_analytics: 'Data Analytics',
+  ml_ai: 'ML / AI',
+  ai_engineering: 'AI Engineering',
   qa: 'QA',
-  devops: 'DevOps',
-  sre: 'SRE',
+  security: 'Security',
+  hardware: 'Hardware',
+  embedded: 'Embedded',
+  blockchain: 'Blockchain',
+  architecture: 'Architecture',
+  design: 'Design',
+  engineering_design: 'Engineering Design',
+  product: 'Product',
   project_management: 'Project Management',
+  management: 'Management',
+  marketing: 'Marketing',
+  sales: 'Sales',
+  support: 'Support',
+  business_analysis: 'Business Analysis',
+  solutions_engineering: 'Solutions Engineering',
+  developer_relations: 'Developer Relations',
+  technical_writing: 'Technical Writing',
+  recruiting: 'Recruiting',
   hr: 'HR',
+  finance: 'Finance',
+  legal: 'Legal',
+  operations: 'Operations',
+  customer_success: 'Customer Success',
+  other: 'Other',
 };
+
+/** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the filter
+ *  panel, the profile view and the /insights pages. The map above is exhaustive over
+ *  the vocabulary, so the fallback only fires for a code the SPA has not been taught. */
+export function categoryLabel(value: string): string {
+  return CATEGORY_LABELS[value] ?? titleCase(value);
+}
 
 export const DOMAIN_LABELS: Record<string, string> = {
   fintech: 'FinTech',

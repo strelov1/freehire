@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { coveredCategories, isCovered, categoryLabel, rolesIntro } from '$lib/insights';
+import { coveredCategories, isCovered, rolesIntro } from '$lib/insights';
+import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
 
 // Per-category roles landing page: the category's seniorities ranked by open-job

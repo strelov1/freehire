@@ -1,6 +1,7 @@
 // Presentation helpers for a job's AI enrichment. Pure functions that turn the
-// controlled-vocabulary codes (validated server-side) into display labels.
-// Unknown codes fall back to a humanized form so a future vocabulary addition
+// controlled-vocabulary codes (validated server-side) into display labels, all of
+// them read from labels.ts so this page cannot disagree with the filter panel.
+// Unknown codes fall back to a sentence-cased form so a future vocabulary addition
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
@@ -8,6 +9,7 @@ import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
+  RELOCATION_LABELS,
 } from './labels';
 
 /** One value within a facet row: its display text and, when the facet maps to a
@@ -28,12 +30,6 @@ export interface Facet {
   values: FacetValue[];
 }
 
-const RELOCATION: Record<string, string> = {
-  not_supported: 'Not supported',
-  supported: 'Supported',
-  required: 'Required',
-};
-
 const CURRENCY_SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£' };
 
 const PERIOD_SUFFIX: Record<string, string> = {
@@ -43,15 +39,18 @@ const PERIOD_SUFFIX: Record<string, string> = {
   // `year` is the implicit default and reads cleaner without a suffix.
 };
 
-/** Title-case an unknown snake_case code (e.g. "data_engineering" → "Data engineering"). */
-function humanize(value: string): string {
+/** Sentence-case an unknown snake_case code (e.g. "data_engineering" → "Data
+ *  engineering"). Deliberately different from labels.ts's titleCase: the facet rows on
+ *  this page read as prose. Only reached by codes outside their map — the category
+ *  vocabulary is labelled exhaustively, so it never lands here. */
+function sentenceCase(value: string): string {
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** Look a code up in its label map, humanizing anything outside the map. */
+/** Look a code up in its label map, sentence-casing anything outside the map. */
 function label(map: Record<string, string>, value: string): string {
-  return map[value] ?? humanize(value);
+  return map[value] ?? sentenceCase(value);
 }
 
 /** The job-feed URL that filters by a single facet value. The feed lives at the
@@ -188,7 +187,7 @@ export function summaryFacets(job: Job): Facet[] {
   link('English', 'english_level', english, ENGLISH_LEVEL_LABELS);
   link('Category', 'category', e.category, CATEGORY_LABELS);
   links('Country', 'countries', job.countries, countryLabel, true);
-  link('Relocation', 'relocation', e.relocation, RELOCATION);
+  link('Relocation', 'relocation', e.relocation, RELOCATION_LABELS);
   if (e.visa_sponsorship === true) {
     facets.push({ label: 'Visa', values: [{ text: 'Sponsored', href: filterHref('visa_sponsorship', 'true') }] });
   }

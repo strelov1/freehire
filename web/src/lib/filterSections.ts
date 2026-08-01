@@ -9,7 +9,7 @@
 // silently fall out of the modal.
 
 import { CATEGORY_VALUES, type Category } from './generated/contracts';
-import { categoryLabel } from './facets';
+import { categoryLabel } from './labels';
 
 // `SAVED` heads the job modal's "My filters" tab; `FILTERS` heads the (single-section)
 // company modal rail. Both ride the same shell as the job sections below.

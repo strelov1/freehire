@@ -3,12 +3,12 @@
   import { api, ApiError, RESUME_MAX_MB } from '$lib/api';
   import {
     CATEGORY_OPTIONS,
-    categoryLabel,
     COUNTRY_OPTIONS,
     REGION_OPTIONS,
     WORK_MODE_OPTIONS,
     type FacetOption,
   } from '$lib/facets';
+  import { categoryLabel } from '$lib/labels';
   import { profileStore } from '$lib/profile.svelte';
   import type { LocationPreferences, UserProfile } from '$lib/types';
   import { Button, Input } from '$lib/ui';

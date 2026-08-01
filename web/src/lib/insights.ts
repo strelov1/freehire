@@ -1,57 +1,21 @@
 // Pure helpers behind the /insights SEO pages: the data-quality gate that decides
-// which categories get published pages, human labels for the enrichment category /
-// seniority tokens, and the deterministic auto-intro sentences. Kept free of fetch
-// and Svelte so it is unit-testable in isolation; the routes fetch via the API and
-// feed these functions.
+// which categories get published pages, the seniority rank order, and the
+// deterministic auto-intro sentences. Kept free of fetch and Svelte so it is
+// unit-testable in isolation; the routes fetch via the API and feed these functions.
+//
+// Display text is NOT owned here — these pages read the same labels.ts maps the
+// filter panel and the job page read, so a category cannot be spelled one way on an
+// indexed page and another way in the app. The one exception is the category-wide
+// seniority band, which is an /insights concept rather than a vocabulary value.
 
 import type { InsightRole, InsightSalaryBand, InsightSkill } from './api';
+import { SENIORITY_LABELS, categoryLabel, titleCase } from './labels';
 
 /** A category is published only when its open-job demand clears this floor, so no
  *  thin page ships. Tunable; deliberately conservative. */
 export const MIN_CATEGORY_OPEN = 25;
 
-/** Human labels for the lowercase enrichment category tokens. Unlisted tokens fall
- *  back to a title-cased form. `other` is intentionally never published. */
-export const CATEGORY_LABELS: Record<string, string> = {
-  backend: 'Backend',
-  frontend: 'Frontend',
-  fullstack: 'Full-Stack',
-  mobile: 'Mobile',
-  devops: 'DevOps',
-  sre: 'SRE',
-  network_engineering: 'Network Engineering',
-  data_engineering: 'Data Engineering',
-  data_science: 'Data Science',
-  data_analytics: 'Data Analytics',
-  ml_ai: 'ML / AI',
-  ai_engineering: 'AI Engineering',
-  qa: 'QA',
-  security: 'Security',
-  hardware: 'Hardware',
-  embedded: 'Embedded',
-  blockchain: 'Blockchain',
-  architecture: 'Architecture',
-  design: 'Design',
-  engineering_design: 'Engineering Design',
-  product: 'Product',
-  project_management: 'Project Management',
-  management: 'Management',
-  marketing: 'Marketing',
-  sales: 'Sales',
-  support: 'Support',
-  business_analysis: 'Business Analysis',
-  solutions_engineering: 'Solutions Engineering',
-  developer_relations: 'Developer Relations',
-  technical_writing: 'Technical Writing',
-  recruiting: 'Recruiting',
-  hr: 'HR',
-  finance: 'Finance',
-  legal: 'Legal',
-  operations: 'Operations',
-  customer_success: 'Customer Success',
-};
-
-/** Seniority tokens in rank order, with labels. '' is the category-wide band. */
+/** Seniority tokens in rank order. '' is the category-wide band. */
 export const SENIORITY_ORDER = [
   'intern',
   'junior',
@@ -63,24 +27,12 @@ export const SENIORITY_ORDER = [
   'c_level',
 ] as const;
 
-export const SENIORITY_LABELS: Record<string, string> = {
-  '': 'All levels',
-  intern: 'Intern',
-  junior: 'Junior',
-  middle: 'Middle',
-  senior: 'Senior',
-  lead: 'Lead',
-  staff: 'Staff',
-  principal: 'Principal',
-  c_level: 'C-level',
-};
-
-export function categoryLabel(category: string): string {
-  return CATEGORY_LABELS[category] ?? category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
+/** The seniority label for an /insights table row. Every real token resolves through
+ *  the shared vocabulary; the empty string is this capability's own category-wide
+ *  band, which is not a seniority value and so is not in the shared map. */
 export function seniorityLabel(seniority: string): string {
-  return SENIORITY_LABELS[seniority] ?? seniority;
+  if (seniority === '') return 'All levels';
+  return SENIORITY_LABELS[seniority] ?? titleCase(seniority);
 }
 
 export interface CoveredCategory {

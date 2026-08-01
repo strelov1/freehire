@@ -5,10 +5,11 @@
 //
 // SOURCE_VALUES and the other generated value arrays (WORK_MODE_VALUES, etc.)
 // in ./generated/contracts are the single source of truth for closed-vocabulary
-// option values. A new backend value appears automatically here (humanized);
-// only the label-override map below needs updating when the label differs from
-// the title-cased fallback. REGION and CURRENCY are curated subsets not driven
-// by generated arrays — leave those alone. Job language is a dynamic facet: its
+// option values, and labels.ts is the single source of their display text. A new
+// backend value appears automatically here, title-cased, unless labels.ts overrides
+// it — except for categories, whose map is exhaustive and fails its test until the
+// new value is named. REGION and CURRENCY are curated subsets not driven by
+// generated arrays — leave those alone. Job language is a dynamic facet: its
 // options come from the live distribution (any detected language), labelled via
 // languageLabel.
 
@@ -21,6 +22,7 @@ import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
+  RELOCATION_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
@@ -157,11 +159,11 @@ export function languageLabel(code: string): string {
 }
 
 // Company facet values are slugs (group-ib, epam); the live distribution carries
-// no display name, so humanize the slug for a readable label. Imperfect for
+// no display name, so title-case the slug for a readable label. Imperfect for
 // acronyms (group-ib → "Group Ib") but consistent with the other facets — a real
 // slug→name lookup would need a per-company fetch, which this facet forgoes.
 export function companyLabel(slug: string): string {
-  return humanize(slug.replace(/-/g, '_'));
+  return titleCase(slug.replace(/-/g, '_'));
 }
 
 // Option source for the Company facet's 'remote' control: the count-ordered
@@ -203,7 +205,7 @@ async function subindustrySearch(query: string): Promise<FacetOption[]> {
 // ROLE_LABELS catalog (the roletag dictionary is the source of truth), falling
 // back to a humanized slug for a value the catalog somehow lacks.
 export function roleLabel(slug: string): string {
-  return (ROLE_LABELS as Record<string, string>)[slug] ?? humanize(slug);
+  return (ROLE_LABELS as Record<string, string>)[slug] ?? titleCase(slug);
 }
 
 /** Display label for a dynamic facet value: country code → name, company slug →
@@ -301,17 +303,9 @@ export function optionMatches(
   return !!aliases && aliases.some((a) => fuzzyMatch(a, query));
 }
 
-/** A title-cased fallback label for a value with no explicit label. */
-function humanize(value: string): string {
-  return value
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
 /** Build facet options from generated values, overriding labels where given. */
 function options(values: readonly string[], labels: Record<string, string> = {}): FacetOption[] {
-  return values.map((value) => ({ value, label: labels[value] ?? humanize(value) }));
+  return values.map((value) => ({ value, label: labels[value] ?? titleCase(value) }));
 }
 
 // Label overrides for the source facet, where the display name differs from the
@@ -329,7 +323,7 @@ const SOURCE_LABELS: Record<string, string> = {
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
  *  used by the dynamic source select; falls back to the humanized slug. */
 export function sourceLabel(value: string): string {
-  return SOURCE_LABELS[value] ?? humanize(value);
+  return SOURCE_LABELS[value] ?? titleCase(value);
 }
 
 // The backend's `regions` reach vocabulary (vocab.RegionValues): one consistent
@@ -355,9 +349,7 @@ const WORK_MODE: FacetOption[] = options(WORK_MODE_VALUES, WORK_MODE_LABELS);
 const SENIORITY: FacetOption[] = options(SENIORITY_VALUES, SENIORITY_LABELS);
 const COMPANY_TYPE: FacetOption[] = options(COMPANY_TYPE_VALUES, COMPANY_TYPE_LABELS);
 const EMPLOYMENT: FacetOption[] = options(EMPLOYMENT_TYPE_VALUES, EMPLOYMENT_LABELS);
-const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, {
-  not_supported: 'None', supported: 'Supported', required: 'Required',
-});
+const RELOCATION: FacetOption[] = options(RELOCATION_VALUES, RELOCATION_LABELS);
 const ENGLISH: FacetOption[] = options(ENGLISH_LEVEL_VALUES, ENGLISH_LEVEL_LABELS);
 const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 
@@ -370,11 +362,6 @@ export const CATEGORY_OPTIONS: FacetOption[] = CATEGORY;
 export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
 export const REGION_OPTIONS: FacetOption[] = REGION;
 
-/** Display label for a category code (e.g. ml_ai → "ML / AI"), shared by the profile
- *  view; falls back to the humanized code. */
-export function categoryLabel(value: string): string {
-  return CATEGORY_LABELS[value] ?? humanize(value);
-}
 const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
 // The job-reality classes (internal/jobreality) — a small closed set, spelled out

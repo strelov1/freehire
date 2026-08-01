@@ -9,7 +9,7 @@ import {
   skillsIntro,
   rolesIntro,
   MIN_CATEGORY_OPEN,
-  categoryLabel,
+  seniorityLabel,
 } from './insights';
 
 const role = (category: string, seniority: string, open_count: number): InsightRole => ({
@@ -110,9 +110,16 @@ describe('auto-intros', () => {
   });
 });
 
-describe('categoryLabel', () => {
-  it('maps known tokens and title-cases unknowns', () => {
-    expect(categoryLabel('ml_ai')).toBe('ML / AI');
-    expect(categoryLabel('quantum_widgets')).toBe('Quantum Widgets');
+describe('seniorityLabel', () => {
+  // The category-wide band is an /insights concept, not a value of the seniority
+  // vocabulary — it must keep its label here even though every real token is now
+  // resolved through the shared map.
+  it('names the category-wide band', () => {
+    expect(seniorityLabel('')).toBe('All levels');
+  });
+
+  it('resolves a real seniority token through the shared vocabulary', () => {
+    expect(seniorityLabel('c_level')).toBe('C-level');
+    expect(seniorityLabel('senior')).toBe('Senior');
   });
 });
