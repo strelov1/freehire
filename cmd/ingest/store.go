@@ -166,6 +166,22 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 		} else {
 			reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
 			doc.Reality = &reality
+			// Widen the canon with its cluster's geography. The push is a field-level
+			// document update and the geography facets are always present in the payload,
+			// so skipping this would REPLACE the reindex's union with the canon's own
+			// narrow set and the role would stop being findable by the cities its reposts
+			// hold. mass counts the cluster's open rows: at 1 the canon is the only one, so
+			// the union is its own geography and there is nothing to ask for.
+			if mass > 1 {
+				if g, err := s.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
+					CompanySlug:     saved.Job.CompanySlug,
+					RoleFingerprint: saved.Job.RoleFingerprint,
+				}); err != nil {
+					log.Printf("ingest: role-cluster geography for job %d: %v", saved.Job.ID, err)
+				} else {
+					doc.MergeClusterGeography(g.Countries, g.Regions, g.Cities)
+				}
+			}
 			s.indexer.Add(ctx, doc)
 		}
 	}

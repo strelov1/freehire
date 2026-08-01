@@ -1810,6 +1810,59 @@ func (q *Queries) RoleClusterCountsFor(ctx context.Context, arg RoleClusterCount
 	return items, nil
 }
 
+const roleClusterGeo = `-- name: RoleClusterGeo :one
+SELECT
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL
+  AND o.company_slug = $1
+  AND o.role_fingerprint = $2
+  AND o.role_fingerprint <> ''
+`
+
+type RoleClusterGeoParams struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+}
+
+type RoleClusterGeoRow struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	Cities    []string `json:"cities"`
+}
+
+// The geography union across ONE role cluster's open rows — the per-row counterpart of
+// the whole-catalogue RoleClusterGeoAll, as RoleClusterCount is to RoleClusterCountsAll.
+// The incremental index writers (ingest, link import, embed) ask it so their push widens
+// a collapsed canon instead of narrowing it: the push is a field-level document update
+// and the three geography facets are always present in the payload, so a writer that
+// omits the union replaces the reindex's widened values with the canon's own.
+// Same shape as RoleClusterGeoAll: only OPEN rows count, a LATERAL tags each row's
+// countries/regions/cities into one unnested stream, and blanks are dropped by the FILTER.
+// Unlike the whole-catalogue query it carries no HAVING, so it ALWAYS answers with exactly
+// one row: aggregating over no matching rows yields empty arrays, which
+// MergeClusterGeography already treats as "leave this facet alone". That keeps the three
+// callers to one error branch instead of making them tell pgx.ErrNoRows (a singleton) apart
+// from a real failure. A singleton therefore returns its own geography — a self-union, and
+// a no-op — but callers skip the query entirely when the cluster has at most one open row,
+// which RoleClusterCount's mass_count already told them. A NULL/empty fingerprint never
+// clusters.
+func (q *Queries) RoleClusterGeo(ctx context.Context, arg RoleClusterGeoParams) (RoleClusterGeoRow, error) {
+	row := q.db.QueryRow(ctx, roleClusterGeo, arg.CompanySlug, arg.RoleFingerprint)
+	var i RoleClusterGeoRow
+	err := row.Scan(&i.Countries, &i.Regions, &i.Cities)
+	return i, err
+}
+
 const roleClusterGeoAll = `-- name: RoleClusterGeoAll :many
 SELECT
     o.company_slug,

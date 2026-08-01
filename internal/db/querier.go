@@ -1994,6 +1994,23 @@ type Querier interface {
 	// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
 	// fingerprint belonging to another of them simply has no rows.
 	RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error)
+	// The geography union across ONE role cluster's open rows — the per-row counterpart of
+	// the whole-catalogue RoleClusterGeoAll, as RoleClusterCount is to RoleClusterCountsAll.
+	// The incremental index writers (ingest, link import, embed) ask it so their push widens
+	// a collapsed canon instead of narrowing it: the push is a field-level document update
+	// and the three geography facets are always present in the payload, so a writer that
+	// omits the union replaces the reindex's widened values with the canon's own.
+	// Same shape as RoleClusterGeoAll: only OPEN rows count, a LATERAL tags each row's
+	// countries/regions/cities into one unnested stream, and blanks are dropped by the FILTER.
+	// Unlike the whole-catalogue query it carries no HAVING, so it ALWAYS answers with exactly
+	// one row: aggregating over no matching rows yields empty arrays, which
+	// MergeClusterGeography already treats as "leave this facet alone". That keeps the three
+	// callers to one error branch instead of making them tell pgx.ErrNoRows (a singleton) apart
+	// from a real failure. A singleton therefore returns its own geography — a self-union, and
+	// a no-op — but callers skip the query entirely when the cluster has at most one open row,
+	// which RoleClusterCount's mass_count already told them. A NULL/empty fingerprint never
+	// clusters.
+	RoleClusterGeo(ctx context.Context, arg RoleClusterGeoParams) (RoleClusterGeoRow, error)
 	// The whole-catalogue role-cluster geography union in one pass, so the reindex can widen
 	// each collapsed canon's countries/regions/cities with the union across its cluster's
 	// OPEN rows (a canon in one country must still be findable by the countries of the reposts

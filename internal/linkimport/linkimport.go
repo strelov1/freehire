@@ -293,6 +293,19 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	}
 	reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
 	doc.Reality = &reality
+	// Widen the canon with its cluster's geography — the push is a field-level document
+	// update, so omitting this replaces the reindex's union with the canon's own narrow
+	// set. mass counts the cluster's open rows: at 1 there is nothing to widen with.
+	if mass > 1 {
+		if g, err := im.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
+			CompanySlug:     saved.Job.CompanySlug,
+			RoleFingerprint: saved.Job.RoleFingerprint,
+		}); err != nil {
+			log.Printf("linkimport: role-cluster geography for job %d: %v", saved.Job.ID, err)
+		} else {
+			doc.MergeClusterGeography(g.Countries, g.Regions, g.Cities)
+		}
+	}
 	if err := im.idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {
 		log.Printf("linkimport: index job %d: %v", saved.Job.ID, err)
 	}

@@ -299,6 +299,40 @@ WHERE company_slug = sqlc.arg(company_slug)
   AND role_fingerprint = sqlc.arg(role_fingerprint)
   AND role_fingerprint <> '';
 
+-- name: RoleClusterGeo :one
+-- The geography union across ONE role cluster's open rows — the per-row counterpart of
+-- the whole-catalogue RoleClusterGeoAll, as RoleClusterCount is to RoleClusterCountsAll.
+-- The incremental index writers (ingest, link import, embed) ask it so their push widens
+-- a collapsed canon instead of narrowing it: the push is a field-level document update
+-- and the three geography facets are always present in the payload, so a writer that
+-- omits the union replaces the reindex's widened values with the canon's own.
+-- Same shape as RoleClusterGeoAll: only OPEN rows count, a LATERAL tags each row's
+-- countries/regions/cities into one unnested stream, and blanks are dropped by the FILTER.
+-- Unlike the whole-catalogue query it carries no HAVING, so it ALWAYS answers with exactly
+-- one row: aggregating over no matching rows yields empty arrays, which
+-- MergeClusterGeography already treats as "leave this facet alone". That keeps the three
+-- callers to one error branch instead of making them tell pgx.ErrNoRows (a singleton) apart
+-- from a real failure. A singleton therefore returns its own geography — a self-union, and
+-- a no-op — but callers skip the query entirely when the cluster has at most one open row,
+-- which RoleClusterCount's mass_count already told them. A NULL/empty fingerprint never
+-- clusters.
+SELECT
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL
+  AND o.company_slug = sqlc.arg(company_slug)
+  AND o.role_fingerprint = sqlc.arg(role_fingerprint)
+  AND o.role_fingerprint <> '';
+
 -- name: CompanyHasOtherJobs :one
 -- Whether the catalog carries this company beyond the one posting named by (source,
 -- external_id) — asked right after an import, to answer "is this company new to us?".

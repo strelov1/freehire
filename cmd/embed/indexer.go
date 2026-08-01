@@ -50,6 +50,21 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64
 			}
 			reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
 			doc.Reality = &reality
+			// Widen the canon with its cluster's geography — the push is a field-level
+			// document update, so omitting this replaces the reindex's union with the
+			// canon's own narrow set. mass counts the cluster's open rows: at 1 there is
+			// nothing to widen with, which is also why this sits inside the !pgOnly branch
+			// alongside the count it reuses.
+			if mass > 1 {
+				if g, err := ix.q.RoleClusterGeo(ctx, db.RoleClusterGeoParams{
+					CompanySlug:     job.CompanySlug,
+					RoleFingerprint: job.RoleFingerprint,
+				}); err != nil {
+					log.Printf("embed: role-cluster geography for job %d: %v", job.ID, err)
+				} else {
+					doc.MergeClusterGeography(g.Countries, g.Regions, g.Cities)
+				}
+			}
 		}
 		docs = append(docs, doc)
 	}

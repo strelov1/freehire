@@ -39,6 +39,18 @@ func (f *fakePusher) total() int {
 	return n
 }
 
+// all flattens the recorded batches in push order, so a test can assert on the content
+// of a pushed document and not only on how many were pushed.
+func (f *fakePusher) all() []search.JobDocument {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []search.JobDocument
+	for _, b := range f.batches {
+		out = append(out, b...)
+	}
+	return out
+}
+
 func docs(n int) []search.JobDocument {
 	out := make([]search.JobDocument, n)
 	for i := range out {
