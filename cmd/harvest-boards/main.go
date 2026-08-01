@@ -66,8 +66,9 @@ func run() int {
 	log.Printf("harvest-boards: %s candidates=%d existing=%d new-candidates=%d",
 		provider, len(raw), len(existing), len(candidates))
 
-	kept, failures := probeAll(ctx, client, p, candidates, companyByBoard)
-	log.Printf("harvest-boards: live boards found=%d probe-failures=%d", len(kept), failures)
+	kept, failures, mismatches := probeAll(ctx, client, p, candidates, companyByBoard)
+	log.Printf("harvest-boards: live boards found=%d probe-failures=%d name-mismatches=%d",
+		len(kept), failures, mismatches)
 	// Every candidate erroring means the probe itself is broken (an API change, an
 	// auth wall, a network outage) — not "no new boards". Fail loudly so the empty
 	// result is not mistaken for an exhausted candidate list.
@@ -137,18 +138,25 @@ func resolveCandidates(ctx context.Context, p prober, c httpClient, seedPath str
 }
 
 // probeAll probes every candidate concurrently (bounded), returning the live boards as
-// emit-ready entries sorted by board plus the number of candidates whose probe errored.
+// emit-ready entries sorted by board, the number of candidates whose probe errored, and the
+// number rejected because the board named a different employer than the seed expected.
 // A probe error is logged and the candidate skipped, so one dead board never aborts the
 // harvest; the caller uses the failure count to fail the run when EVERY probe errored
-// (a broken probe or outage, not a legitimately empty harvest). companyByBoard supplies
-// a fallback employer name for boards whose own API exposes none (see chooseCompany).
-func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) ([]entry, int) {
+// (a broken probe or outage, not a legitimately empty harvest). companyByBoard supplies the
+// employer each candidate is expected to belong to: it gates the board when the platform
+// reports a name of its own, and labels it when the platform reports none (chooseCompany).
+//
+// Mismatches are counted apart from failures because they mean something else entirely — a
+// dead board is noise, while a wave of mismatches means the candidates or the prober's name
+// extraction are wrong, and burying them in the failure count would hide that.
+func probeAll(ctx context.Context, client httpClient, p prober, candidates []string, companyByBoard map[string]string) ([]entry, int, int) {
 	sem := make(chan struct{}, probeWorkers)
 	var (
-		mu       sync.Mutex
-		kept     []entry
-		failures int
-		wg       sync.WaitGroup
+		mu         sync.Mutex
+		kept       []entry
+		failures   int
+		mismatches int
+		wg         sync.WaitGroup
 	)
 	for _, slug := range candidates {
 		wg.Add(1)
@@ -167,12 +175,23 @@ func probeAll(ctx context.Context, client httpClient, p prober, candidates []str
 			if n == 0 {
 				return
 			}
+			// The board is live. It still has to be the board we were looking for: only a
+			// name the platform reports itself can confirm that, and only a seed that named
+			// an expected employer gives it something to confirm against.
+			expected, reported := companyByBoard[slug], reportedName(name, slug)
+			if expected != "" && reported != "" && !sameEmployer(expected, reported) {
+				log.Printf("harvest-boards: %s: expected %q, board reports %q — skipped", slug, expected, reported)
+				mu.Lock()
+				mismatches++
+				mu.Unlock()
+				return
+			}
 			mu.Lock()
-			kept = append(kept, entry{Company: chooseCompany(name, companyByBoard[slug], slug), Board: slug})
+			kept = append(kept, entry{Company: chooseCompany(name, expected, slug), Board: slug})
 			mu.Unlock()
 		}(slug)
 	}
 	wg.Wait()
 	sort.Slice(kept, func(i, j int) bool { return kept[i].Board < kept[j].Board })
-	return kept, failures
+	return kept, failures, mismatches
 }
