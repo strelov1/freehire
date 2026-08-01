@@ -1,0 +1,37 @@
+---
+title: Your CV already said where you are
+date: 2026-08-01
+summary: The profile now asks where you're based no matter what work formats you accept, pre-filled from your CV — and the fit analysis can finally tell you when a job is closed to you for where you live.
+type: changelog
+tags:
+  - job-seekers
+  - profile
+---
+
+Where you live decides things a job description states plainly: whether the company
+would have to sponsor a visa, whether an on-site role is even reachable, which hours
+you overlap with the team. Your CV usually says it in the first line.
+
+Until now the profile only asked for it if you accepted on-site or hybrid work. Pick
+**Remote** alone and the question disappeared — and anything you had typed there was
+dropped when you saved. The assumption was that a remote worker has no particular
+location, which is exactly backwards: remote is where the country matters most.
+
+**"Where you're based" is now asked of everyone**, whatever work formats you accept,
+and it comes pre-filled from your CV so you confirm it rather than type it. It is
+separate from the two questions next to it — where you'd work remotely, and where
+you'd relocate to — because where you *are* is a fact, and those are preferences.
+
+Two things follow from it:
+
+- The fit analysis on a job page can now flag a role that is **closed to you for where
+  you live** — a position pinned to a country that doesn't sponsor visas, or an on-site
+  job in another country. It already knew how to check this; it just never had your
+  country to check against.
+- **Apply my profile** in the job filters no longer narrows your search to your home
+  country when you only want remote work. It still does for on-site and hybrid, where
+  the job does have to be near you.
+
+Your country is used to match you against jobs, and nothing else. It is not shown to
+companies, and the rest of the profile is unchanged — if you'd rather leave it blank,
+leave it blank.
