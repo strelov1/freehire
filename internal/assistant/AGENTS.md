@@ -62,7 +62,7 @@ refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
 rather than an echo (a tool result is replayed into context on every later turn).
 
-**Presets.** A session records `chat`, `tailor`, `profile`, `browse` or `interview`. The vocabulary
+**Presets.** A session records `chat`, `tailor`, `profile`, `browse`, `interview` or `debrief`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
 schema change and not just a Go constant. The preset selects the system prompt and the
 registered tools and nothing else, which is why one chat component serves
@@ -108,6 +108,30 @@ Three decisions carry it:
 The preset carries the discovery, tracking and bank tools plus `interview_context`, and
 NOT the CV tools, the mail tools or `read_current_page`. It runs on the ordinary step
 ceiling: a rehearsal is a dialogue, not an unattended pass.
+
+**Interview debrief** is the rehearsal's mirror: the review of an interview that has
+already happened, minted from `POST /assistant/sessions?preset=debrief&job=<slug>`. It
+shares everything with the rehearsal but the prompt — the same binding, the same
+`interview_context`, the same tool set, the same self-opening endpoint. Both are covered
+by one notion in the handler (`bindsToApplication`), and `openingBriefFor` is where the
+set of presets that speak first is written down; a preset that returns no brief is one
+`PostAssistantOpening` refuses.
+
+It is a preset of its own rather than a mode inside `interview` because of one rule that
+**inverts** between them. The rehearsal must police itself against banking what the
+candidate invented on the spot — improvising is what a rehearsal is for. In a debrief the
+candidate is recalling what they already said to an employer, banking it is the purpose
+of the session, and the instruction becomes "record what they confirm, never a number you
+supplied". One prompt holding both would leak each mode's instinct into the other.
+
+`TestTheDebriefCarriesTheRehearsalsTools` compares the two registries for equality. Two
+presets sharing a tool set is new here, and it is the prompt — not the tools — that is
+allowed to differ; a tool added to one and forgotten in the other would be a debrief that
+cannot read the interview it is reviewing.
+
+The stage governs where the client offers it (`offersDebrief` in `web/src/lib/stages.ts`:
+`interview`, `offer`, `accepted`, `rejected`), never what the endpoint accepts. Somebody
+who sat an interview and never moved their application's stage is exactly who it is for.
 
 `browse` is the one preset whose prompt **overrides** the one it extends, rather
 than only adding to it. The chat playbook opens with `get_profile` and a question

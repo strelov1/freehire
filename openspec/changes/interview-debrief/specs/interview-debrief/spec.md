@@ -2,11 +2,17 @@
 
 ### Requirement: An interviewed application offers a debrief
 
-An opened application SHALL offer a debrief once it has reached the `interview` stage,
-and starting one SHALL create an assistant session bound to that application's vacancy
-carrying the `debrief` preset and no CV binding. The creating endpoint SHALL resolve the
-application through the caller's own tracking record, so an application the caller does
-not own is reported as missing rather than as forbidden.
+An opened application SHALL offer a debrief when its stage says an interview may have
+happened — `interview`, `offer`, `accepted` or `rejected` — and starting one SHALL
+create an assistant session bound to that application's vacancy carrying the `debrief`
+preset and no CV binding. The creating endpoint SHALL resolve the application through
+the caller's own tracking record, so an application the caller does not own is reported
+as missing rather than as forbidden.
+
+`rejected` is included deliberately. A rejection that arrived after an interview is
+where a debrief is worth the most, and the alternative — hiding it from the candidate
+with the strongest reason to review — costs more than a button that occasionally sits
+on an application rejected at the screen.
 
 The stage SHALL govern the offer and not the endpoint. A candidate who interviewed
 without moving their application's stage is exactly the candidate this is for, so a
@@ -19,6 +25,11 @@ the session binds to a vacancy, and there is none to bind.
 
 - **WHEN** the candidate opens an application sitting in `interview`
 - **THEN** it offers to start a debrief alongside the rehearsal
+
+#### Scenario: A rejection still offers the debrief
+
+- **WHEN** the candidate opens an application sitting in `rejected`
+- **THEN** it offers to start a debrief
 
 #### Scenario: An earlier stage does not advertise it
 

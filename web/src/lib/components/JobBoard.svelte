@@ -15,7 +15,7 @@
     type BoardItem,
     type ClosedOutcome,
   } from '$lib/board';
-  import { createRehearsal } from '$lib/assistant/api';
+  import { createRehearsal, createDebrief } from '$lib/assistant/api';
   import BoardColumn from './BoardColumn.svelte';
   import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
@@ -56,10 +56,11 @@
   // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
   // the card's silence badge and closes back to the board.
   let followUpItem = $state.raw<BoardItem | null>(null);
-  // A rehearsal is one round trip before the navigation, so a second click in that
-  // window would mint a second conversation for the same interview.
-  let rehearsing = $state(false);
-  let rehearsalError = $state<string | null>(null);
+  // Starting a rehearsal or a debrief is one round trip before the navigation, so a
+  // second click in that window would mint a second conversation. One flag for both:
+  // they end in the same navigation, and only one of them can be underway.
+  let startingSession = $state(false);
+  let sessionError = $state<string | null>(null);
 
   // Lay the fetched rows out into the columns and open the deep-linked drawer once.
   // The 'board' filter returns saved ∪ applied ∪ stage; saved-only rows are dropped
@@ -287,22 +288,31 @@
     followUpItem = item as BoardItem;
   }
 
-  // Start a rehearsal and hand the conversation over to the assistant page, which opens
-  // it — the agent speaks first, so there is nothing to type on the way in. The board
-  // does not wait for the turn: creating the session is the whole of its job here.
-  async function startRehearsal(item: MyJob) {
-    if (rehearsing) return;
-    rehearsing = true;
+  // Start a conversation held against one application and hand it over to the assistant
+  // page, which opens it — the agent speaks first, so there is nothing to type on the way
+  // in. The board does not wait for the turn: creating the session is the whole of its
+  // job here.
+  async function startApplicationSession(
+    item: MyJob,
+    create: (slug: string) => Promise<{ id: string }>,
+    failure: string,
+  ) {
+    if (startingSession || !item.job) return;
+    startingSession = true;
     try {
-      if (!item.job) return;
-      const session = await createRehearsal(item.job.public_slug);
+      const session = await create(item.job.public_slug);
       await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
     } catch {
-      rehearsalError = 'Could not start the rehearsal.';
+      sessionError = failure;
     } finally {
-      rehearsing = false;
+      startingSession = false;
     }
   }
+
+  const startRehearsal = (item: MyJob) =>
+    startApplicationSession(item, createRehearsal, 'Could not start the rehearsal.');
+  const startDebrief = (item: MyJob) =>
+    startApplicationSession(item, createDebrief, 'Could not start the debrief.');
 
   // Stamp the recorded chase onto the card in place. The board holds the only copy
   // of the row, and reloading the whole listing to learn one timestamp is noise —
@@ -387,9 +397,10 @@
       onremove={remove}
       onclose={closeDrawer}
       onrehearse={startRehearsal}
+      ondebrief={startDebrief}
       onfollowup={openFollowUp}
-      {rehearsing}
-      {rehearsalError}
+      {startingSession}
+      {sessionError}
       blocked={!!followUpItem}
     />
   {/key}

@@ -48,14 +48,25 @@ export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSumma
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }
 
-/** Start a rehearsal for one application. The vacancy is named by the client because the
- *  binding is one the caller already holds — the backend resolves it through their own
- *  application and answers a vacancy they never applied to as not found. */
+/** Start a conversation held against one application: a rehearsal before the interview,
+ *  a debrief after it. The vacancy is named by the client because the binding is one the
+ *  caller already holds — the backend resolves it through their own application and
+ *  answers a vacancy they never applied to as not found. */
+function createApplicationSession(preset: string, slug: string): Promise<SessionSummary> {
+  return request<SessionSummary>(
+    `/sessions?preset=${preset}&job=${encodeURIComponent(slug)}`,
+    { method: 'POST', body: '{}' },
+  );
+}
+
+/** Rehearse the interview that is coming. */
 export function createRehearsal(slug: string): Promise<SessionSummary> {
-  return request<SessionSummary>(`/sessions?preset=interview&job=${encodeURIComponent(slug)}`, {
-    method: 'POST',
-    body: '{}',
-  });
+  return createApplicationSession('interview', slug);
+}
+
+/** Review the interview that already happened. */
+export function createDebrief(slug: string): Promise<SessionSummary> {
+  return createApplicationSession('debrief', slug);
 }
 
 /** The caller's conversations, most recently active first. */

@@ -2,8 +2,8 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, Badge, cn } from '$lib/ui';
-  import { Trash2, X, ExternalLink, Mic, Send, Target, SquarePen } from '@lucide/svelte';
-  import { STAGES, humanizeStage } from '$lib/stages';
+  import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
+  import { STAGES, humanizeStage, offersDebrief } from '$lib/stages';
   import { canFollowUp } from '$lib/followup';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
   import { timeAgo, errorMessage } from '$lib/utils';
@@ -32,9 +32,10 @@
     onremove,
     onclose,
     onrehearse,
+    ondebrief,
     onfollowup,
-    rehearsing = false,
-    rehearsalError = null,
+    startingSession = false,
+    sessionError = null,
     blocked = false,
   }: {
     item: MyJob;
@@ -47,14 +48,16 @@
     // The actions the card used to carry. They live here because a card carries no
     // controls — one on its surface is what stopped it being dragged at all.
     onrehearse: (item: MyJob) => void;
+    ondebrief: (item: MyJob) => void;
     onfollowup: (item: MyJob) => void;
-    // A rehearsal is one round trip before the navigation; the board owns the flag so a
-    // second click in that window cannot mint a second conversation.
-    rehearsing?: boolean;
-    // ...and owns the failure too. It has to be rendered in here: this panel covers the
-    // viewport, so a message left behind on the board would be invisible to the person
-    // who pressed the button.
-    rehearsalError?: string | null;
+    // Starting either conversation is one round trip before the navigation; the board
+    // owns the flag so a second click in that window cannot mint a second one. Both
+    // buttons share it because both end in the same navigation away from here.
+    startingSession?: boolean;
+    // ...and the board owns the failure too. It has to be rendered in here: this panel
+    // covers the viewport, so a message left behind on the board would be invisible to
+    // the person who pressed the button.
+    sessionError?: string | null;
     // True while something is stacked above this panel — today, the follow-up dialog it
     // now opens. Both listen for Escape on the window, so without this one press would
     // close the dialog and the application underneath it in the same keystroke. The
@@ -77,6 +80,10 @@
   // is addressed to the employer, which the application knows by itself.
   const hasPosting = $derived(!!item.job);
   const offersFollowUp = $derived(canFollowUp(item));
+  // The debrief reviews an interview that has already happened, so it appears only once
+  // the stage says one plausibly did. The backend takes it from any stage — this is
+  // where to advertise it, not who may have it.
+  const offersDebriefAction = $derived(hasPosting && offersDebrief(item.stage ?? ''));
 
   type Tab = 'application' | 'fit' | 'description' | 'emails';
   // The Emails tab shows linked mail — open to every signed-in user.
@@ -275,9 +282,16 @@
       {#if hasPosting || offersFollowUp}
         <div class="flex flex-wrap items-center gap-2">
           {#if hasPosting}
-            <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={rehearsing} class="gap-1.5">
+            <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={startingSession} class="gap-1.5">
               <Mic class="size-3.5" />
-              {rehearsing ? 'Starting…' : 'Rehearse'}
+              {startingSession ? 'Starting…' : 'Rehearse'}
+            </Button>
+          {/if}
+          {#if offersDebriefAction}
+            <!-- Sits next to Rehearse: the pair reads as before and after the interview. -->
+            <Button variant="outline" size="sm" onclick={() => ondebrief(item)} disabled={startingSession} class="gap-1.5">
+              <NotebookPen class="size-3.5" />
+              {startingSession ? 'Starting…' : 'Debrief'}
             </Button>
           {/if}
           {#if offersFollowUp}
@@ -305,8 +319,8 @@
           {/if}
         </div>
       {/if}
-      {#if rehearsalError}
-        <p class="text-sm text-warning-strong" role="alert">{rehearsalError}</p>
+      {#if sessionError}
+        <p class="text-sm text-warning-strong" role="alert">{sessionError}</p>
       {/if}
 
       <div class="no-scrollbar overflow-x-auto">

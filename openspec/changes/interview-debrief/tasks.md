@@ -21,8 +21,8 @@
 
 ## 4. The web surface
 
-- [ ] 4.1 Add `debrief` to `ChatPreset` and a `startDebrief` call beside `startRehearsal` in the assistant API client
-- [ ] 4.2 Add the Debrief action to the application card, shown from the `interview` stage onward and absent when the catalogue no longer holds the posting, reusing the rehearsal's in-flight and error handling
+- [x] 4.1 Add a `createDebrief` call beside `createRehearsal` in the assistant API client (`ChatPreset` turned out to be the URL-mintable set, not the session presets — the rehearsal is already created by its own function)
+- [x] 4.2 Add the Debrief action to the application card, shown from the `interview` stage onward and absent when the catalogue no longer holds the posting, reusing the rehearsal's in-flight and error handling
 - [ ] 4.3 Verify the card visually at mobile and desktop widths — two actions in the strip beside the badges
 
 ## 5. Documentation
