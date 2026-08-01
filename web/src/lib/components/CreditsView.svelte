@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
-  import type { AiCredits, CreditHistoryEntry } from '$lib/types';
+  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import type { AiCredits, AiUsage, CreditHistoryEntry } from '$lib/types';
   import States from './States.svelte';
 
   // The Credits page: the caller's AI-credits balance headline plus the transaction history
@@ -10,6 +10,23 @@
   let credits = $state<AiCredits | null>(null);
   let history = $state<CreditHistoryEntry[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
+
+  // Gateway activity is beta-only for now. It answers a different question from the
+  // balance — what the account DID, not what it may still spend — and the two want
+  // watching together for a while before everyone is shown a second number.
+  const showUsage = $derived(currentUser()?.beta_tester ?? false);
+  let usage = $state<AiUsage | null>(null);
+
+  $effect(() => {
+    if (!isAuthenticated() || !showUsage) return;
+    // Its own request, and its own failure: the endpoint answers zeroes rather than
+    // erroring, so a rejection here means the network went away — which must not take
+    // the balance and the history down with it.
+    api
+      .myUsage()
+      .then((u) => (usage = u))
+      .catch(() => (usage = null));
+  });
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -49,6 +66,29 @@
           <span class="text-sm text-muted-foreground">AI credits left this month</span>
         </div>
         <p class="mt-1 text-xs text-muted-foreground">Renews {fmtDate(credits.resets_at)}</p>
+      </div>
+    {/if}
+
+    {#if showUsage && usage}
+      <div class="flex flex-col gap-2">
+        <h2 class="text-sm font-medium text-muted-foreground">AI activity this month</h2>
+        <div class="rounded-lg border border-border px-5 py-4">
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl font-semibold tabular-nums">{usage.requests}</span>
+            <span class="text-sm text-muted-foreground">
+              model {usage.requests === 1 ? 'call' : 'calls'}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-muted-foreground">
+            {usage.tokens.toLocaleString()} tokens{usage.failed > 0
+              ? ` · ${usage.failed} failed`
+              : ''} · resets {fmtDate(usage.resets_at)}
+          </p>
+          <p class="mt-2 text-xs text-muted-foreground">
+            One conversation takes several calls — the assistant works in rounds. This counts
+            the work, not the price; credits above are what you spend.
+          </p>
+        </div>
       </div>
     {/if}
 

@@ -49,6 +49,18 @@ export interface AiCredits {
   resets_at: string;
 }
 
+/** What the caller's account did this period (`GET /api/v1/me/usage`), read from the LLM
+ *  gateway. Counts, never currency: the gateway's cost figure is a list price against a
+ *  mixed upstream pool, so it is neither what we pay nor what the caller pays — their
+ *  price is credits, over this same calendar month. */
+export interface AiUsage {
+  requests: number;
+  failed: number;
+  tokens: number;
+  period: string;
+  resets_at: string;
+}
+
 /** One row of the Credits transaction history (`GET /api/v1/me/credits/history`), newest
  *  first. `kind` is the ledger kind ('grant' | 'debit' | 'reward' | 'purchase'); `delta` is the
  *  signed change; `label` is the display name (e.g. "Monthly grant", "Match analysis") and

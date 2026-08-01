@@ -61,6 +61,7 @@ import type {
   JobMatchResult,
   MatchAnalysisResponse,
   AiCredits,
+  AiUsage,
   CreditHistoryEntry,
   MyAnalysisItem,
   ResumeProfile,
@@ -788,6 +789,13 @@ export function createApi(
    *  Never triggers the LLM. Powers the Credits page balance headline. */
   async function myCredits(): Promise<AiCredits> {
     return requestData<AiCredits>('/api/v1/me/credits');
+  }
+
+  /** What the caller's account did this period: model calls, failures and tokens, read
+   *  from the LLM gateway. Never fails for anything the caller can act on — an account
+   *  that has never used AI, and a gateway that is down, both answer zeroes. */
+  async function myUsage(): Promise<AiUsage> {
+    return requestData<AiUsage>('/api/v1/me/usage');
   }
 
   /** The caller's credit transaction history, newest first — grants, match/tailor debits,
@@ -1638,6 +1646,7 @@ export function createApi(
     myAnalyses,
     myCredits,
     myCreditsHistory,
+    myUsage,
     listViewedSlugs,
     listSavedSlugs,
     getReminderSettings,
