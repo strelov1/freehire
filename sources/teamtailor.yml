@@ -3096,3 +3096,8 @@
   board: tissium.teamtailor.com
 - company: InvestEngine
   board: careers.investengine.com
+# Palta hosts this site, but it brands as Simple Life App and the openings are Simple's;
+# teamtailor stamps the entry's company onto every job, so name it what the catalogue
+# already calls the employer rather than the holding company.
+- company: Simple
+  board: palta.teamtailor.com

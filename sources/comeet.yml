@@ -38,3 +38,11 @@
   board: dealhub/86.005
 - company: Sequoia Connect
   board: sequoiaconnect/45.004
+- company: CommIT
+  board: comm-it/76.008
+- company: TripleTen
+  board: tripleten/98.008
+- company: Muse Group
+  board: musegroup/FA.001
+- company: Zesty
+  board: zesty/06.000
