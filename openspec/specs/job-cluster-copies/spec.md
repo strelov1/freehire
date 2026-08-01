@@ -11,6 +11,12 @@ location, apply URL, and public slug, ordered by location and paginated. The anc
 itself is included. A job whose fingerprint is empty clusters with no one and returns an
 empty list. The endpoint is public.
 
+Its pagination SHALL be bounded the way every other list endpoint's is: a `limit` outside the
+endpoint's range is clamped into it, and an `offset` beyond the end of the result set — including
+one larger than the paginated column's storage range — SHALL yield an empty page rather than an
+error. A caller MUST NOT be able to make the endpoint fail by supplying an out-of-range
+pagination value.
+
 #### Scenario: Copies of a collapsed role list every open city
 
 - **WHEN** a client requests the copies of a canonical job whose cluster has N open
@@ -22,6 +28,13 @@ empty list. The endpoint is public.
 
 - **WHEN** the cluster has a closed member and the company has other unrelated roles
 - **THEN** neither appears in the copies list
+
+#### Scenario: An out-of-range offset is an empty page, not an error
+
+- **WHEN** a client requests the copies with an `offset` far beyond the cluster's size —
+  including one exceeding the range of the underlying paginated column
+- **THEN** the response is a successful empty list, exactly as the other list endpoints answer
+  the same request
 
 ### Requirement: The detail page shows the openings-by-location section
 
