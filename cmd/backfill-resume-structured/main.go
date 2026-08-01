@@ -73,14 +73,7 @@ func run() int {
 		return 1
 	}
 
-	llmClient, llmFlush, err := llm.NewClient(llm.Settings{
-		BaseURL:           cfg.LLMBaseURL,
-		APIKey:            cfg.LLMAPIKey,
-		Model:             cfg.LLMModel,
-		LangfuseBaseURL:   cfg.LangfuseBaseURL,
-		LangfusePublicKey: cfg.LangfusePublicKey,
-		LangfuseSecretKey: cfg.LangfuseSecretKey,
-	}, "resume-structured")
+	llmClient, llmFlush, err := llm.NewClient(cfg.LLM.Settings(cfg.LLM.Model), "resume-structured")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1

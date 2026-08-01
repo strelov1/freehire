@@ -25,9 +25,11 @@ func main() {
 
 func run() int {
 	// LLM and channel config are loaded first so a misconfigured worker fails before
-	// it opens the pool.
-	ecfg, err := config.LoadEnrich()
-	if err != nil {
+	// it opens the pool. Its OWN LLM config: this used to be config.LoadEnrich(), read
+	// purely to reach the six LLM values — which meant a Telegram extractor inherited the
+	// enrichment worker's ENRICH_* validation and would have broken if that changed.
+	lcfg := config.LoadLLM()
+	if err := lcfg.Require(); err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
@@ -43,14 +45,7 @@ func run() int {
 	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
 	// set, wires tracing (source "telegram"). flush drains buffered traces at run end
 	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
-	client, flush, err := llm.NewClient(llm.Settings{
-		BaseURL:           ecfg.LLMBaseURL,
-		APIKey:            ecfg.LLMAPIKey,
-		Model:             ecfg.LLMModel,
-		LangfuseBaseURL:   ecfg.LangfuseBaseURL,
-		LangfusePublicKey: ecfg.LangfusePublicKey,
-		LangfuseSecretKey: ecfg.LangfuseSecretKey,
-	}, "telegram")
+	client, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "telegram")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1

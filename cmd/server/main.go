@@ -146,14 +146,7 @@ func main() {
 	// shutdown. Nil client when unconfigured — the ATS score stays deterministic. A
 	// build error on a configured endpoint is fatal (a misconfigured gateway must not
 	// boot silently).
-	llmClient, llmFlush, err := llm.NewClient(llm.Settings{
-		BaseURL:           cfg.LLMBaseURL,
-		APIKey:            cfg.LLMAPIKey,
-		Model:             cfg.LLMModel,
-		LangfuseBaseURL:   cfg.LangfuseBaseURL,
-		LangfusePublicKey: cfg.LangfusePublicKey,
-		LangfuseSecretKey: cfg.LangfuseSecretKey,
-	}, "cv-ats")
+	llmClient, llmFlush, err := llm.NewClient(cfg.LLM.Settings(cfg.LLM.Model), "cv-ats")
 	if err != nil {
 		log.Fatalf("llm: %v", err)
 	}
@@ -163,14 +156,7 @@ func main() {
 	// reliable tool calling and a large context, where LLM_MODEL is chosen for cheap
 	// one-shot JSON extraction. Unset falls back to LLM_MODEL, so a single-model
 	// deployment still works. Traced under its own source label.
-	assistantLLM, assistantFlush, err := llm.NewClient(llm.Settings{
-		BaseURL:           cfg.LLMBaseURL,
-		APIKey:            cfg.LLMAPIKey,
-		Model:             cmp.Or(cfg.AssistantModel, cfg.LLMModel),
-		LangfuseBaseURL:   cfg.LangfuseBaseURL,
-		LangfusePublicKey: cfg.LangfusePublicKey,
-		LangfuseSecretKey: cfg.LangfuseSecretKey,
-	}, "assistant")
+	assistantLLM, assistantFlush, err := llm.NewClient(cfg.LLM.Settings(cmp.Or(cfg.AssistantModel, cfg.LLM.Model)), "assistant")
 	if err != nil {
 		log.Fatalf("llm (assistant): %v", err)
 	}
@@ -180,7 +166,7 @@ func main() {
 	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
 	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
 	// when the gateway is unset, which the composer reads as "no microphone here".
-	speechClient := speech.New(cfg.LLMBaseURL, cfg.LLMAPIKey, cfg.STTModel)
+	speechClient := speech.New(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.STTModel)
 
 	// The gateway's administrative API, which mints the per-user credential each
 	// account's model calls are spent under. Nil when unconfigured, and that is an

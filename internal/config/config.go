@@ -62,14 +62,12 @@ type Settings struct {
 	MeiliURL string
 	MeiliKey string
 
-	// LLM backs the optional CV ATS qualitative review on the HTTP server (the enrich
-	// worker reads its own LLM settings via config.Enrich). Optional and provider-
-	// agnostic: any empty field disables the AI layer — the server builds no LLM client
-	// and the ATS score stays deterministic (enforced at the cmd/server call site, not
-	// here). Langfuse tracing is optional observability, wired only when all three set.
-	LLMBaseURL string
-	LLMAPIKey  string
-	LLMModel   string
+	// LLM backs the optional CV ATS qualitative review and the in-app assistant. Optional
+	// and provider-agnostic: any empty field disables the AI layer — the server builds no
+	// LLM client and the ATS score stays deterministic (enforced at the cmd/server call
+	// site, not here, which is why Require is deliberately NOT called on it). The workers
+	// share the same six values and the same loader; what differs is that policy.
+	LLM
 
 	// LLMAdminURL and LLMAdminKey reach the gateway's administrative API, which mints
 	// the per-user credential each account's calls are spent under. They are named
@@ -114,10 +112,6 @@ type Settings struct {
 	// them entirely (no CV is sent to the LLM) rather than leaking PII — enforced at the
 	// call site, not here.
 	PIIFilterURL string
-
-	LangfuseBaseURL   string
-	LangfusePublicKey string
-	LangfuseSecretKey string
 
 	// S3 backs résumé storage (internal/blobstore). Optional and provider-agnostic:
 	// any S3-compatible endpoint works, and no bucket/host/provider is baked into code —
@@ -195,6 +189,7 @@ var oauthProviders = []string{"google", "github", "linkedin"}
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	return Settings{
+		LLM:            LoadLLM(),
 		Port:           env("PORT", "8080"),
 		DatabaseURL:    env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
 		FrontendOrigin: env("FRONTEND_ORIGIN", "http://localhost:5173"),
@@ -208,10 +203,6 @@ func Load() Settings {
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
 
-		LLMBaseURL: os.Getenv("LLM_BASE_URL"),
-		LLMAPIKey:  os.Getenv("LLM_API_KEY"),
-		LLMModel:   os.Getenv("LLM_MODEL"),
-
 		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
 		LLMAdminKey:         os.Getenv("LLM_ADMIN_KEY"),
 		LLMUserMaxBudget:    envFloat("LLM_USER_MAX_BUDGET", 0),
@@ -224,10 +215,6 @@ func Load() Settings {
 		STTModel: os.Getenv("STT_MODEL"),
 
 		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
-
-		LangfuseBaseURL:   os.Getenv("LANGFUSE_BASE_URL"),
-		LangfusePublicKey: os.Getenv("LANGFUSE_PUBLIC_KEY"),
-		LangfuseSecretKey: os.Getenv("LANGFUSE_SECRET_KEY"),
 
 		S3Endpoint:  os.Getenv("S3_ENDPOINT"),
 		S3Bucket:    os.Getenv("S3_BUCKET"),

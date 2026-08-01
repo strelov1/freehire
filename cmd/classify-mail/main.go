@@ -22,21 +22,17 @@ func main() {
 }
 
 func run() int {
-	// LLM config first, so a misconfigured worker fails before it opens the pool.
-	ecfg, err := config.LoadEnrich()
-	if err != nil {
+	// LLM config first, so a misconfigured worker fails before it opens the pool. Its OWN
+	// config: this used to be config.LoadEnrich(), read purely to reach the six LLM values
+	// — which meant a classifier inherited the enrichment worker's ENRICH_* validation and would
+	// have broken if that changed.
+	lcfg := config.LoadLLM()
+	if err := lcfg.Require(); err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
 
-	client, flush, err := llm.NewClient(llm.Settings{
-		BaseURL:           ecfg.LLMBaseURL,
-		APIKey:            ecfg.LLMAPIKey,
-		Model:             ecfg.LLMModel,
-		LangfuseBaseURL:   ecfg.LangfuseBaseURL,
-		LangfusePublicKey: ecfg.LangfusePublicKey,
-		LangfuseSecretKey: ecfg.LangfuseSecretKey,
-	}, "classify-mail")
+	client, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "classify-mail")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1
