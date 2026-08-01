@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"errors"
 	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/llmkey"
 )
 
@@ -14,69 +14,69 @@ import (
 // a table of ours: the gateway is what prices a call, and a second copy would be a second
 // number to disagree with.
 type usageHandlers struct {
-	keys    *llmkey.Resolver
 	gateway *llmkey.Client
 }
 
-func newUsageHandlers(keys *llmkey.Resolver, gateway *llmkey.Client) *usageHandlers {
-	return &usageHandlers{keys: keys, gateway: gateway}
+// newUsageHandlers takes the gateway and no resolver on purpose. The read is scoped by the
+// account id rather than by a credential, so it needs no key, cannot mint one, and still
+// reports a month during which the key was replaced.
+func newUsageHandlers(gateway *llmkey.Client) *usageHandlers {
+	return &usageHandlers{gateway: gateway}
 }
 
 func (h *usageHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/usage", mw.key, h.GetMyUsage)
 }
 
-// usageResponse is the wire shape of one account's spend for the current period.
+// usageResponse is the wire shape of what one account did this period.
 //
-// Spend is what the gateway's price list says these calls are worth, NOT an invoice: the
-// models behind it run on a mixed pool, so the figure compares one period or one feature
-// against another honestly and is wrong to quote as a bill. Limit is 0 when no ceiling is
-// configured, which is the ordinary deployment, and ResetsAt is absent when the gateway
-// reports no window.
+// It carries NO money, deliberately. The gateway's cost figure is a list price against a
+// mixed upstream pool: it is not what we pay, and it is certainly not what the caller
+// pays — their price is credits, reported by /me/credits over this same calendar. A second
+// number in dollars beside a points balance reads as a second currency for one thing, and
+// one of the two would be fiction.
 type usageResponse struct {
-	Spend    float64    `json:"spend"`
-	Limit    float64    `json:"limit"`
-	ResetsAt *time.Time `json:"resets_at,omitempty"`
+	Requests int       `json:"requests"`
+	Failed   int       `json:"failed"`
+	Tokens   int       `json:"tokens"`
+	Period   string    `json:"period"`
+	ResetsAt time.Time `json:"resets_at"`
 }
 
-// GetMyUsage reports the caller's AI spend for the current period.
+// GetMyUsage reports what the caller's account did this period.
 //
 // It cannot fail for any reason the caller could act on. An account that has never used
 // AI, a deployment with no gateway, and a gateway that is down all answer 200 with zeroes:
 // this is an informational read, and rendering an outage as an error would make an
-// unrelated fault look to the reader like a billing problem.
+// unrelated fault look to the reader like a problem with their account.
 //
-// It never mints. Looking at what you have spent is not spending.
+// It never mints. Looking at what you used is not using anything.
 func (h *usageHandlers) GetMyUsage(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": h.spend(c, userID)})
+	return c.JSON(fiber.Map{"data": h.usage(c, userID)})
 }
 
-// spend reads the gateway, or reports zeroes and says why in the log.
-func (h *usageHandlers) spend(c *fiber.Ctx, userID int64) usageResponse {
-	secret := h.keys.Stored(c.Context(), userID)
-	if secret == "" || h.gateway == nil {
-		return usageResponse{}
+// usage reads the gateway, or reports zeroes and says why in the log.
+//
+// The period is the calendar month credits already reset on, taken from that package so
+// the two cannot drift: a balance and a usage count on different months would both look
+// correct and disagree.
+func (h *usageHandlers) usage(c *fiber.Ctx, userID int64) usageResponse {
+	now := time.Now().UTC()
+	out := usageResponse{Period: credits.PeriodKey(now), ResetsAt: credits.ResetsAt(now)}
+	if h.gateway == nil {
+		return out
 	}
-	got, err := h.gateway.Spend(c.Context(), secret)
-	if errors.Is(err, llmkey.ErrUnknownKey) {
-		// The gateway has forgotten this credential. Clear it here rather than leaving
-		// the account to discover it on its next model call, which would spend a
-		// round trip finding out what this read already knows.
-		h.keys.Forget(c.Context(), userID, secret)
-		return usageResponse{}
-	}
+	// Scoped by the account id, not by the credential — so an account whose key was
+	// re-minted mid-month still reports everything it did, under both.
+	act, err := h.gateway.Activity(c.Context(), userID, credits.PeriodStart(now), now)
 	if err != nil {
-		log.Printf("usage: read spend for user %d: %v", userID, err)
-		return usageResponse{}
+		log.Printf("usage: read activity for user %d: %v", userID, err)
+		return out
 	}
-	out := usageResponse{Spend: got.Amount, Limit: got.Limit}
-	if !got.ResetsAt.IsZero() {
-		at := got.ResetsAt
-		out.ResetsAt = &at
-	}
+	out.Requests, out.Failed, out.Tokens = act.Requests, act.Failed, act.Tokens
 	return out
 }

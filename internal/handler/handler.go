@@ -345,7 +345,7 @@ func Register(app *fiber.App, cfg Config) {
 	a.llm.keys = llmKeys
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
-	usageH := newUsageHandlers(llmKeys, cfg.LLMKeys)
+	usageH := newUsageHandlers(cfg.LLMKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
 	// Referral notifications reuse the SES email transport (email is always present) and
