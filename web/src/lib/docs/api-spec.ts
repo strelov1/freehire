@@ -989,7 +989,7 @@ ${BASE_URL}/auth/oauth/google/start`,
           'the content and leaves the event standing. Both bounds are required and may ' +
           'span at most 366 days.',
         query: [
-          { name: 'from', type: 'string (RFC3339)', required: true, description: 'Lower bound, inclusive.', example: '2026-08-01T00:00:00Z' },
+          { name: 'from', type: 'string (RFC3339)', required: true, description: 'Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a space in a query string and will be rejected.', example: '2026-08-01T00:00:00Z' },
           { name: 'to', type: 'string (RFC3339)', required: true, description: 'Upper bound, inclusive.', example: '2026-08-31T23:59:59Z' },
         ],
         curl: `curl "${BASE_URL}/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T23:59:59Z" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,

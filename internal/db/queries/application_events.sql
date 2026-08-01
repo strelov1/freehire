@@ -16,18 +16,28 @@
 -- the join rather than a filter on the result, so a deleted message yields NULL on both
 -- columns while the event itself stands: deletion hides content, it does not un-happen
 -- the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+--
+-- The join is restricted to mail-derived sources because source_ref names an emails.id
+-- only for those — the column's comment in 0062 says so, and the idempotency index keys on
+-- (user_id, kind, source_ref) precisely because the referent is namespaced per kind. On the
+-- bare column, the next kind to carry a source_ref into some other table would be served
+-- whichever of the caller's messages happened to share that id, and the calendar would
+-- caption an interview with an unrelated rejection. The three names arrive as parameters
+-- rather than being written here, so the vocabulary stays in Go where a pin test guards it.
 SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
-       ae.application_id, ae.job_id,
+       ae.application_id,
        a.role_title,
        j.public_slug AS job_slug,
        em.id         AS email_id,
        em.subject    AS email_subject
   FROM application_events ae
   LEFT JOIN applications a ON a.id = ae.application_id
+                          AND a.user_id = ae.user_id
   LEFT JOIN jobs j         ON j.id = ae.job_id
   LEFT JOIN emails em      ON em.id = ae.source_ref
                           AND em.user_id = ae.user_id
                           AND em.deleted_at IS NULL
+                          AND ae.source IN (sqlc.arg(src_gmail), sqlc.arg(src_hosted), sqlc.arg(src_external))
  WHERE ae.user_id      = $1
    AND ae.retracted_at IS NULL
    AND ae.occurred_at >= sqlc.arg(from_at)

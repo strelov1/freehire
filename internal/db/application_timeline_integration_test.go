@@ -41,9 +41,12 @@ func linkedReply(t *testing.T, q *Queries, userID, jobID int64, subject string, 
 func wideRange(t *testing.T, q *Queries, userID int64) []ListApplicationEventsInRangeRow {
 	t.Helper()
 	rows, err := q.ListApplicationEventsInRange(context.Background(), ListApplicationEventsInRangeParams{
-		UserID: userID,
-		FromAt: ts(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
-		ToAt:   ts(time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)),
+		UserID:      userID,
+		FromAt:      ts(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
+		ToAt:        ts(time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)),
+		SrcGmail:    "mail_gmail",
+		SrcHosted:   "mail_hosted",
+		SrcExternal: "mail_external",
 	})
 	if err != nil {
 		t.Fatalf("list events: %v", err)
@@ -102,6 +105,73 @@ func TestListApplicationEventsInRange_DeletionHidesTheSubjectNotTheEvent(t *test
 	}
 }
 
+// source_ref names an emails.id only for a mail-derived event — the table's own comment
+// says so, and the idempotency index keys on (user_id, kind, source_ref) precisely because
+// the referent is namespaced per kind. A read that joined emails on the bare column would
+// hand the next kind's event whatever message happens to share its id.
+func TestListApplicationEventsInRange_OnlyMailEventsBorrowAMessage(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "timeline-ref@example.test", true)
+	job := seedResponseJob(t, q, "timeline-ref-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	emailID := linkedReply(t, q, user, job, "Unfortunately we are moving forward with others",
+		time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC))
+
+	// The shape a later kind takes: an event of the caller's own, carrying a source_ref
+	// into some other table that happens to collide with one of their message ids.
+	if _, err := q.db.Exec(ctx,
+		`INSERT INTO application_events (user_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref)
+		 VALUES ($1, $2, 'acme', 'interview_scheduled', '', $3, 'user', $4)`,
+		user, job, time.Date(2026, 7, 21, 15, 0, 0, 0, time.UTC), emailID); err != nil {
+		t.Fatalf("seed the next kind's event: %v", err)
+	}
+
+	for _, r := range wideRange(t, q, user) {
+		if r.Kind != "interview_scheduled" {
+			continue
+		}
+		if r.EmailSubject.Valid || r.EmailID.Valid {
+			t.Errorf("a non-mail event borrowed message %d (%q) — source_ref is only an emails.id for mail-derived events",
+				r.EmailID.Int64, r.EmailSubject.String)
+		}
+		return
+	}
+	t.Fatal("the seeded event is missing from the range — an unrecognised kind must still be served")
+}
+
+// Nothing in the range read may mark mail read. read_at means "a human saw this", and a
+// reader that browsed a month through the message endpoint would zero its owner's unread
+// count without anyone opening anything.
+func TestListApplicationEventsInRange_DoesNotMarkMailRead(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "timeline-unread@example.test", true)
+	job := seedResponseJob(t, q, "timeline-unread-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	emailID := linkedReply(t, q, user, job, "Thanks for applying", time.Date(2026, 7, 9, 7, 0, 0, 0, time.UTC))
+
+	if len(wideRange(t, q, user)) == 0 {
+		t.Fatal("the range served nothing to read")
+	}
+
+	var readAt *time.Time
+	if err := q.db.QueryRow(ctx, `SELECT read_at FROM emails WHERE id = $1`, emailID).Scan(&readAt); err != nil {
+		t.Fatalf("read read_at: %v", err)
+	}
+	if readAt != nil {
+		t.Errorf("reading the range marked the message read at %v — nobody opened it", *readAt)
+	}
+}
+
 // A retracted event is excluded from every aggregate that reads the ledger, and the dated
 // read is one of them: a correction that still showed the wrong employer on the calendar
 // would be a correction the reader cannot see they made.
@@ -136,14 +206,20 @@ func TestListApplicationEventsInRange_RetractedEventsAreNotServed(t *testing.T) 
 		t.Fatalf("re-record: %v", err)
 	}
 
-	var replies []string
+	var replies []ListApplicationEventsInRangeRow
 	for _, r := range wideRange(t, q, user) {
 		if r.Kind == "employer_reply" {
-			replies = append(replies, r.CompanySlug)
+			replies = append(replies, r)
 		}
 	}
-	if len(replies) != 1 || replies[0] != "derq" {
-		t.Errorf("the range served replies for %v, want exactly one for derq — the retracted row must not appear", replies)
+	if len(replies) != 1 || replies[0].CompanySlug != "derq" {
+		t.Fatalf("the range served %d replies (first for %q), want exactly one for derq — the retracted row must not appear",
+			len(replies), replies[0].CompanySlug)
+	}
+	// The correction moves who the reply belongs to, never when it arrived: the message's
+	// own received_at is the date, and re-linking is not a new event in time.
+	if want := time.Date(2026, 7, 2, 8, 0, 0, 0, time.UTC); !replies[0].OccurredAt.Time.Equal(want) {
+		t.Errorf("the replacement is dated %v, want the message's own %v", replies[0].OccurredAt.Time, want)
 	}
 }
 
@@ -189,6 +265,7 @@ func TestListApplicationEventsInRange_BoundsAreInclusiveAndExcludeTheRest(t *tes
 
 	rows, err := q.ListApplicationEventsInRange(ctx, ListApplicationEventsInRangeParams{
 		UserID: user, FromAt: ts(at(1)), ToAt: ts(at(15)),
+		SrcGmail: "mail_gmail", SrcHosted: "mail_hosted", SrcExternal: "mail_external",
 	})
 	if err != nil {
 		t.Fatalf("list: %v", err)

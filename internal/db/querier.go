@@ -1087,6 +1087,14 @@ type Querier interface {
 	// the join rather than a filter on the result, so a deleted message yields NULL on both
 	// columns while the event itself stands: deletion hides content, it does not un-happen
 	// the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+	//
+	// The join is restricted to mail-derived sources because source_ref names an emails.id
+	// only for those — the column's comment in 0062 says so, and the idempotency index keys on
+	// (user_id, kind, source_ref) precisely because the referent is namespaced per kind. On the
+	// bare column, the next kind to carry a source_ref into some other table would be served
+	// whichever of the caller's messages happened to share that id, and the calendar would
+	// caption an interview with an unrelated rejection. The three names arrive as parameters
+	// rather than being written here, so the vocabulary stays in Go where a pin test guards it.
 	ListApplicationEventsInRange(ctx context.Context, arg ListApplicationEventsInRangeParams) ([]ListApplicationEventsInRangeRow, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the

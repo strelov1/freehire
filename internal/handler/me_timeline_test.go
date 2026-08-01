@@ -143,6 +143,40 @@ func TestTimeline_RendersTheDocumentedEnvelope(t *testing.T) {
 	}
 }
 
+// A quiet month is an answer, not a fault: the series comes back empty, reporting the
+// range it answered for, so a reader can tell "nothing happened" from "I asked wrongly".
+// data must serialize as [] and not null — a reader iterating it should not have to guard.
+func TestTimeline_AQuietRangeAnswersEmptyAndNamesItsBounds(t *testing.T) {
+	app, token := meTimelineApp(t, timelineStore{})
+
+	status, body := getTimeline(t, app, "/me/timeline?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", status, body)
+	}
+	var got struct {
+		Data []timelineEvent `json:"data"`
+		Meta struct {
+			From  time.Time `json:"from"`
+			To    time.Time `json:"to"`
+			Count int       `json:"count"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if got.Data == nil {
+		t.Errorf("data came back as null in %s, want an empty array", body)
+	}
+	if got.Meta.Count != 0 {
+		t.Errorf("meta count = %d, want 0", got.Meta.Count)
+	}
+	wantFrom := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	wantTo := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	if !got.Meta.From.Equal(wantFrom) || !got.Meta.To.Equal(wantTo) {
+		t.Errorf("meta reports %v..%v, want the requested %v..%v", got.Meta.From, got.Meta.To, wantFrom, wantTo)
+	}
+}
+
 // A hand-recorded stage change carries no message, and the wire must say so by omission
 // rather than by inventing an id nobody can open.
 func TestTimeline_AHandRecordedEventCarriesNoMessage(t *testing.T) {

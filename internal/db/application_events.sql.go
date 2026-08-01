@@ -80,30 +80,35 @@ func (q *Queries) BackfillEmployerReplyEvents(ctx context.Context, arg BackfillE
 
 const listApplicationEventsInRange = `-- name: ListApplicationEventsInRange :many
 SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
-       ae.application_id, ae.job_id,
+       ae.application_id,
        a.role_title,
        j.public_slug AS job_slug,
        em.id         AS email_id,
        em.subject    AS email_subject
   FROM application_events ae
   LEFT JOIN applications a ON a.id = ae.application_id
+                          AND a.user_id = ae.user_id
   LEFT JOIN jobs j         ON j.id = ae.job_id
   LEFT JOIN emails em      ON em.id = ae.source_ref
                           AND em.user_id = ae.user_id
                           AND em.deleted_at IS NULL
+                          AND ae.source IN ($2, $3, $4)
  WHERE ae.user_id      = $1
    AND ae.retracted_at IS NULL
-   AND ae.occurred_at >= $2
-   AND ae.occurred_at <= $3
+   AND ae.occurred_at >= $5
+   AND ae.occurred_at <= $6
  -- id breaks the tie so a day's events keep a stable order between requests; two events
  -- sharing a timestamp is routine when a mailbox import lands a batch.
  ORDER BY ae.occurred_at, ae.id
 `
 
 type ListApplicationEventsInRangeParams struct {
-	UserID int64              `json:"user_id"`
-	FromAt pgtype.Timestamptz `json:"from_at"`
-	ToAt   pgtype.Timestamptz `json:"to_at"`
+	UserID      int64              `json:"user_id"`
+	SrcGmail    string             `json:"src_gmail"`
+	SrcHosted   string             `json:"src_hosted"`
+	SrcExternal string             `json:"src_external"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
 }
 
 type ListApplicationEventsInRangeRow struct {
@@ -114,7 +119,6 @@ type ListApplicationEventsInRangeRow struct {
 	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
 	CompanySlug   string             `json:"company_slug"`
 	ApplicationID pgtype.Int8        `json:"application_id"`
-	JobID         pgtype.Int8        `json:"job_id"`
 	RoleTitle     pgtype.Text        `json:"role_title"`
 	JobSlug       pgtype.Text        `json:"job_slug"`
 	EmailID       pgtype.Int8        `json:"email_id"`
@@ -138,8 +142,23 @@ type ListApplicationEventsInRangeRow struct {
 // the join rather than a filter on the result, so a deleted message yields NULL on both
 // columns while the event itself stands: deletion hides content, it does not un-happen
 // the reply. Reading a body instead would mean GET /me/emails/:id, which marks mail read.
+//
+// The join is restricted to mail-derived sources because source_ref names an emails.id
+// only for those — the column's comment in 0062 says so, and the idempotency index keys on
+// (user_id, kind, source_ref) precisely because the referent is namespaced per kind. On the
+// bare column, the next kind to carry a source_ref into some other table would be served
+// whichever of the caller's messages happened to share that id, and the calendar would
+// caption an interview with an unrelated rejection. The three names arrive as parameters
+// rather than being written here, so the vocabulary stays in Go where a pin test guards it.
 func (q *Queries) ListApplicationEventsInRange(ctx context.Context, arg ListApplicationEventsInRangeParams) ([]ListApplicationEventsInRangeRow, error) {
-	rows, err := q.db.Query(ctx, listApplicationEventsInRange, arg.UserID, arg.FromAt, arg.ToAt)
+	rows, err := q.db.Query(ctx, listApplicationEventsInRange,
+		arg.UserID,
+		arg.SrcGmail,
+		arg.SrcHosted,
+		arg.SrcExternal,
+		arg.FromAt,
+		arg.ToAt,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +174,6 @@ func (q *Queries) ListApplicationEventsInRange(ctx context.Context, arg ListAppl
 			&i.OccurredAt,
 			&i.CompanySlug,
 			&i.ApplicationID,
-			&i.JobID,
 			&i.RoleTitle,
 			&i.JobSlug,
 			&i.EmailID,

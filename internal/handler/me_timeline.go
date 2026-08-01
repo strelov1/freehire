@@ -21,12 +21,13 @@ func newTimelineHandlers(queries *db.Queries) *timelineHandlers {
 }
 
 func (h *timelineHandlers) register(api fiber.Router, mw middleware) {
-	// Its own namespace rather than /me/tracking/calendar, for the reason recorded above
-	// /me/applications/:id: GET /me/tracking/:slug is already mounted — from gmail.go,
-	// while its static siblings are registered in two other files — so a static segment
-	// under that prefix resolves only on the order the Register* calls happen to run in.
-	// Nothing enforces that order and the failure is quiet: the parameterised route would
-	// answer for a job slug that does not exist.
+	// Its own namespace rather than a segment under /me/tracking. GET /me/tracking/:slug
+	// is mounted from gmail.go and only avoids shadowing its static siblings because the
+	// registration order is deliberate — both sides say so (see the comment there and the
+	// one above inboxH.register). That arrangement is maintained by hand and by nothing
+	// else, and its failure is quiet: the parameterised route would answer for a job slug
+	// that does not exist. Every static segment added under that prefix is another thing
+	// the arrangement has to keep carrying, so this one is not added to it.
 	//
 	// mw.key like the rest of /me: a cookie or a full-scope key, so a caller's own harness
 	// can read its history.

@@ -1298,7 +1298,7 @@ The application-event ledger as a dated series, oldest first: applications sent,
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `from` | string (RFC3339) | yes | Lower bound, inclusive. (e.g. `2026-08-01T00:00:00Z`) |
+| `from` | string (RFC3339) | yes | Lower bound, inclusive. Use `Z`, or percent-encode a numeric offset — a bare `+` decodes as a space in a query string and will be rejected. (e.g. `2026-08-01T00:00:00Z`) |
 | `to` | string (RFC3339) | yes | Upper bound, inclusive. (e.g. `2026-08-31T23:59:59Z`) |
 
 ```bash

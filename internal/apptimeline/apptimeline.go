@@ -98,6 +98,11 @@ func (s *Service) Range(ctx context.Context, userID int64, from, to time.Time) (
 		UserID: userID,
 		FromAt: pgtype.Timestamptz{Time: from, Valid: true},
 		ToAt:   pgtype.Timestamptz{Time: to, Valid: true},
+		// Which sources carry an emails.id in source_ref. Passed rather than written into
+		// the statement so the vocabulary stays here, beside the trust rule that reads it.
+		SrcGmail:    appevent.SourceMailGmail,
+		SrcHosted:   appevent.SourceMailHosted,
+		SrcExternal: appevent.SourceMailExternal,
 	})
 	if err != nil {
 		return nil, err
