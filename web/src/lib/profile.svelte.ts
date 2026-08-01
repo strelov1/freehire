@@ -7,7 +7,13 @@
 // caller (a bad specialization or empty skills is a 400) so the UI can show them.
 
 import { api } from '$lib/api';
-import { withSkill, withoutSkill, type ProfileSkillSets } from '$lib/profileSkills';
+import {
+  withSkill,
+  withoutSkill,
+  withAvoidedSkill,
+  withoutAvoidedSkill,
+  type ProfileSkillSets,
+} from '$lib/profileSkills';
 import { serialQueue } from '$lib/serialQueue';
 import { UserResource } from '$lib/userResource.svelte';
 import type { LocationPreferences, UserProfile } from '$lib/types';
@@ -68,6 +74,17 @@ class ProfileStore extends UserResource<UserProfile | null> {
    *  after it survives. */
   removeSkill(skill: string): Promise<UserProfile> {
     return this.#queue(() => this.#writeSkills((sets) => withoutSkill(sets, skill)));
+  }
+
+  /** Record a skill as one to avoid — the match block's other answer to a missing skill. Also
+   *  drops it from the held skills, so the profile never claims and avoids the same token. */
+  avoidSkill(skill: string): Promise<UserProfile> {
+    return this.#queue(() => this.#writeSkills((sets) => withAvoidedSkill(sets, skill)));
+  }
+
+  /** Stop avoiding a skill. Lifts the exclusion only — it does not claim the skill. */
+  unavoidSkill(skill: string): Promise<UserProfile> {
+    return this.#queue(() => this.#writeSkills((sets) => withoutAvoidedSkill(sets, skill)));
   }
 
   /** Re-save the profile with edited skill sets. Reads `#profile` at call time — inside the

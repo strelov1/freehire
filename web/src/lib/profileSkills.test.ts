@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { withSkill, withoutSkill } from './profileSkills';
+import {
+  withSkill,
+  withoutSkill,
+  withAvoidedSkill,
+  withoutAvoidedSkill,
+} from './profileSkills';
 
 describe('withSkill', () => {
   it('appends the claimed skill', () => {
@@ -55,5 +60,62 @@ describe('withoutSkill', () => {
     const before = { skills: ['docker', 'bash'], excluded_skills: [] };
     withoutSkill(before, 'bash');
     expect(before).toEqual({ skills: ['docker', 'bash'], excluded_skills: [] });
+  });
+});
+
+describe('withAvoidedSkill', () => {
+  it('records the skill as one to avoid', () => {
+    expect(withAvoidedSkill({ skills: ['docker'], excluded_skills: [] }, 'wordpress')).toEqual({
+      skills: ['docker'],
+      excluded_skills: ['wordpress'],
+    });
+  });
+
+  it('adds nothing when the skill is already avoided, whatever its case', () => {
+    expect(withAvoidedSkill({ skills: [], excluded_skills: ['WordPress'] }, 'wordpress')).toEqual({
+      skills: [],
+      excluded_skills: ['WordPress'],
+    });
+  });
+
+  it('stops claiming a skill the viewer now avoids — never both lists at once', () => {
+    expect(withAvoidedSkill({ skills: ['PHP', 'go'], excluded_skills: [] }, 'php')).toEqual({
+      skills: ['go'],
+      excluded_skills: ['php'],
+    });
+  });
+
+  it('does not mutate what it was given', () => {
+    const before = { skills: ['php'], excluded_skills: [] };
+    withAvoidedSkill(before, 'php');
+    expect(before).toEqual({ skills: ['php'], excluded_skills: [] });
+  });
+});
+
+describe('withoutAvoidedSkill', () => {
+  it('lifts the avoid, leaving another one standing', () => {
+    expect(
+      withoutAvoidedSkill({ skills: ['go'], excluded_skills: ['php', 'wordpress'] }, 'php'),
+    ).toEqual({ skills: ['go'], excluded_skills: ['wordpress'] });
+  });
+
+  it('matches the avoided skill whatever its case', () => {
+    expect(withoutAvoidedSkill({ skills: [], excluded_skills: ['PHP'] }, 'php')).toEqual({
+      skills: [],
+      excluded_skills: [],
+    });
+  });
+
+  it('leaves the held skills alone — lifting an avoid does not claim the skill', () => {
+    expect(withoutAvoidedSkill({ skills: ['go'], excluded_skills: ['php'] }, 'php')).toEqual({
+      skills: ['go'],
+      excluded_skills: [],
+    });
+  });
+
+  it('does not mutate what it was given', () => {
+    const before = { skills: [], excluded_skills: ['php'] };
+    withoutAvoidedSkill(before, 'php');
+    expect(before).toEqual({ skills: [], excluded_skills: ['php'] });
   });
 });

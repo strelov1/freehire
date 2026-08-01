@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Check, FileText, Lock, TriangleAlert } from '@lucide/svelte';
+  import { Ban, Check, FileText, Lock, RotateCcw, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -42,14 +42,28 @@
     }),
   );
 
-  // A claim in progress or already made. `overlay` is the match as it reads once a skill
-  // is claimed, rendered in place of the fetched one until the server's own answer lands;
-  // `claimed` keeps the pre-claim match so undo can put it back.
+  // A write in progress or just made. `overlay` is the match as it reads once a skill is
+  // claimed, rendered in place of the fetched one until the server's own answer lands.
+  // `done` is the last write, which the confirmation line names and undoes: only a claim
+  // moved the match, so only it carries the reading to put back.
+  type Done =
+    | { kind: 'claim'; skill: string; before: JobMatchResult }
+    | { kind: 'avoid'; skill: string }
+    | { kind: 'unavoid'; skill: string };
+
   let claiming = $state<string | null>(null);
   let overlay = $state.raw<JobMatchResult | null>(null);
-  let claimed = $state.raw<{ skill: string; before: JobMatchResult } | null>(null);
+  let done = $state.raw<Done | null>(null);
   let failed = $state<string | null>(null);
   let pending = $state(false);
+
+  // The skills the viewer has said they want to avoid. Read straight off the profile the
+  // block already holds, so an avoided chip is marked on every job that asks for it without
+  // a request, and the mark updates the moment a write applies.
+  const avoided = $derived(
+    new Set((profileStore.profile?.excluded_skills ?? []).map((s) => s.toLowerCase())),
+  );
+  const isAvoided = (skill: string) => avoided.has(skill.toLowerCase());
 
   // Fetch the real match only when ready; re-fetch on navigation to another job.
   $effect(() => {
@@ -57,7 +71,7 @@
     match = null;
     overlay = null;
     claiming = null;
-    claimed = null;
+    done = null;
     failed = null;
     if (blockState !== 'ready') return;
     api.getJobMatch(slug)
@@ -104,7 +118,7 @@
       // Navigated on mid-write: the claim stands, but its confirmation belongs to the job
       // that was open, and the next job's block has already reset itself.
       if (job.public_slug !== slug) return;
-      claimed = { skill, before };
+      done = { kind: 'claim', skill, before };
       await reconcile(slug);
     } catch {
       if (job.public_slug !== slug) return;
@@ -115,23 +129,54 @@
     }
   }
 
-  async function undoClaim() {
-    if (!claimed || pending) return;
-    const { skill, before } = claimed;
+  /** Record (or lift) an avoid, answering whether it landed on the job still open. Nothing
+   *  about the match can change — the server scores against the profile's skills, not its
+   *  exclusions — so there is no overlay to apply and no refetch to make. The chip's mark
+   *  follows the store, which the write updates on success. */
+  async function writeAvoid(skill: string, avoid: boolean): Promise<boolean> {
+    if (pending) return false;
+    const slug = job.public_slug;
+    pending = true;
+    failed = null;
+    claiming = null;
+    try {
+      await (avoid ? profileStore.avoidSkill(skill) : profileStore.unavoidSkill(skill));
+      return job.public_slug === slug;
+    } catch {
+      if (job.public_slug === slug) failed = skill;
+      return false;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function setAvoided(skill: string, avoid: boolean) {
+    if (await writeAvoid(skill, avoid)) done = { kind: avoid ? 'avoid' : 'unavoid', skill };
+  }
+
+  /** Reverse the last write. Only a claim moved the match, so only it restores a reading. */
+  async function undoLast() {
+    if (!done || pending) return;
+    const last = done;
+    if (last.kind !== 'claim') {
+      // Undoing an avoid is the opposite write; a successful one leaves nothing to undo again.
+      if (await writeAvoid(last.skill, last.kind === 'unavoid')) done = null;
+      return;
+    }
     const shown = view;
     const slug = job.public_slug;
     pending = true;
     failed = null;
-    overlay = before;
-    claimed = null;
+    overlay = last.before;
+    done = null;
     try {
-      await profileStore.removeSkill(skill);
+      await profileStore.removeSkill(last.skill);
       await reconcile(slug);
     } catch {
       if (job.public_slug !== slug) return;
       restore(shown);
-      claimed = { skill, before };
-      failed = skill;
+      done = last;
+      failed = last.skill;
     } finally {
       pending = false;
     }
@@ -171,10 +216,21 @@
   const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
   const adjChip = `${chip} border-warning/30 bg-warning/10 text-warning-strong`;
   const missChip = `${chip} border-destructive/30 bg-destructive/10 text-destructive`;
-  // A not-held chip is a control: pressing it asks whether the viewer holds the skill
-  // after all. The ring marks which one the open claim row belongs to.
-  const claimable = (base: string, open: boolean) =>
-    `${base} transition-shadow hover:brightness-95 disabled:opacity-60 ${open ? 'ring-2 ring-foreground/30' : ''}`;
+  // A not-held chip is a control: pressing it asks whether the viewer holds the skill after
+  // all, or wants to be shown less of it. The ring marks which one the open row belongs to.
+  // An avoided skill keeps its place in the group — the job still asks for it and the score
+  // still counts it — but reads as struck out rather than merely unmet.
+  const claimable = (base: string, open: boolean, skill: string) =>
+    [
+      base,
+      'transition-shadow hover:brightness-95 disabled:opacity-60',
+      open && 'ring-2 ring-foreground/30',
+      isAvoided(skill) && 'line-through opacity-55',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+  const chipLabel = (skill: string) => (isAvoided(skill) ? `${skill} — you avoid this skill` : undefined);
 
   const profileHref = resolve('/my/profile');
 
@@ -187,23 +243,41 @@
 </script>
 
 {#snippet claimRow(skill: string)}
-  <!-- The claim row expands under the group rather than floating over it: the sidebar
-       column is too narrow for an anchored popover, and naming the skill in the row's own
-       text keeps it tied to the chip that opened it. Styled as ReminderChip's disclosure —
-       a bare row of pills, not a panel — so the two inline disclosures in the app read the
-       same, and the affordance stays the weight of the chips it sits under. -->
+  <!-- The row expands under the group rather than floating over it: the sidebar column is
+       too narrow for an anchored popover, and naming the skill in the row's own text keeps
+       it tied to the chip that opened it. Styled as ReminderChip's disclosure — a bare row
+       of pills, not a panel — so the two inline disclosures in the app read the same.
+       It names the skill instead of asking "do you have it?": that question fitted one
+       answer, and the row now carries two. -->
   <div class="flex flex-wrap items-center gap-1.5">
-    <span class="text-xs text-muted-foreground">
-      Do you have <span class="font-medium text-foreground">{skill}</span>?
-    </span>
+    <span class="text-xs font-medium text-foreground">{skill}</span>
     <button
       type="button"
       disabled={pending}
       onclick={() => claim(skill)}
       class="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-brand-muted px-2.5 py-1 text-xs font-medium text-brand-strong transition-colors hover:brightness-95 disabled:opacity-50"
     >
-      <Check class="size-3.5" aria-hidden="true" /> Add to profile
+      <Check class="size-3.5" aria-hidden="true" /> I have it
     </button>
+    {#if isAvoided(skill)}
+      <button
+        type="button"
+        disabled={pending}
+        onclick={() => setAvoided(skill, false)}
+        class="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-muted-foreground/40 disabled:opacity-50"
+      >
+        <RotateCcw class="size-3.5" aria-hidden="true" /> Stop avoiding
+      </button>
+    {:else}
+      <button
+        type="button"
+        disabled={pending}
+        onclick={() => setAvoided(skill, true)}
+        class="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-muted-foreground/40 disabled:opacity-50"
+      >
+        <Ban class="size-3.5" aria-hidden="true" /> Avoid
+      </button>
+    {/if}
   </div>
 {/snippet}
 
@@ -311,8 +385,9 @@
           {#each view.adjacent as a (a.name)}
             <button
               type="button"
-              class={claimable(adjChip, claiming === a.name)}
+              class={claimable(adjChip, claiming === a.name, a.name)}
               aria-expanded={claiming === a.name}
+              aria-label={chipLabel(a.name)}
               disabled={pending}
               onclick={() => toggleClaimRow(a.name)}
             >
@@ -335,8 +410,9 @@
           {#each view.missing as skill (skill)}
             <button
               type="button"
-              class={claimable(missChip, claiming === skill)}
+              class={claimable(missChip, claiming === skill, skill)}
               aria-expanded={claiming === skill}
+              aria-label={chipLabel(skill)}
               disabled={pending}
               onclick={() => toggleClaimRow(skill)}
             >
@@ -350,15 +426,30 @@
       </div>
     {/if}
 
-    {#if claimed}
+    {#if done}
       <p class="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-        <Check class="size-3.5 shrink-0 text-brand" />
-        <span><span class="font-medium text-foreground">{claimed.skill}</span> added to your profile.</span>
+        {#if done.kind === 'claim'}
+          <Check class="size-3.5 shrink-0 text-brand" />
+        {:else if done.kind === 'avoid'}
+          <Ban class="size-3.5 shrink-0" />
+        {:else}
+          <RotateCcw class="size-3.5 shrink-0" />
+        {/if}
+        <span>
+          <span class="font-medium text-foreground">{done.skill}</span>
+          {#if done.kind === 'claim'}
+            added to your profile.
+          {:else if done.kind === 'avoid'}
+            added to skills you avoid.
+          {:else}
+            is no longer avoided.
+          {/if}
+        </span>
         <button
           type="button"
           class="font-medium underline underline-offset-2 hover:text-foreground disabled:opacity-60"
           disabled={pending}
-          onclick={undoClaim}>Undo</button
+          onclick={undoLast}>Undo</button
         >
       </p>
     {/if}
