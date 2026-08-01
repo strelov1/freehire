@@ -1,0 +1,27 @@
+---
+title: Launching on Product Hunt on 26 August
+date: 2026-08-01
+summary: freehire goes up on Product Hunt on 26 August 2026 — the badge is in the footer, and the page is live to follow before launch day.
+type: changelog
+tags:
+  - product
+  - transparency
+---
+
+freehire has been shipping quietly for months: a job catalogue aggregated from
+hundreds of company boards, deduplicated, and filterable down to the region, the
+seniority, and the stack. On **26 August 2026** it goes up on
+[Product Hunt](https://www.producthunt.com/products/freehire?utm_source=blog&utm_medium=post&utm_campaign=launch-announcement).
+
+There is nothing to do yet. The product page is live now, so you can follow it and
+get a notification when the launch opens — that is the only thing that helps before
+the day, since votes only count once it goes live. The badge now sits in the footer
+of every page and links straight there.
+
+Why announce it three weeks early: a Product Hunt launch is a single day, and a
+single day is a bad way to find out whether anything is broken. Between now and then
+we would rather hear what does not work than collect a good number. If a filter
+misses jobs you know exist, a company page looks wrong, or a source you rely on is
+missing, tell us — on [GitHub](https://github.com/strelov1/freehire),
+[Telegram](https://t.me/freehiredev), or [Discord](https://discord.gg/aAXS2rghW).
+Everything reported before the 26th has a chance of being fixed by it.

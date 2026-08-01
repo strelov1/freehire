@@ -54,7 +54,14 @@ export default {
         // fetched under our own CSP, and job descriptions carry no images at all — the
         // ingest sanitizer strips them (internal/sources/sanitize.go). `data:` is here
         // for the handful of Tailwind utilities that inline an SVG.
-        'img-src': ['self', 'data:', 'https://logo.freehire.me'],
+        // api.producthunt.com serves the Product Hunt "featured" badge embedded in
+        // the footer (Footer.svelte) — a single static SVG per theme.
+        'img-src': [
+          'self',
+          'data:',
+          'https://logo.freehire.me',
+          'https://api.producthunt.com',
+        ],
         // Pinning img-src deliberately stopped there: connect-src was considered as
         // part of the same hardening and left out, because getting it wrong fails
         // silently — error reporting and analytics simply stop — and that deserves its

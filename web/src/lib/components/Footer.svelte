@@ -60,6 +60,19 @@
   ];
 
   const year = new Date().getFullYear();
+
+  // Product Hunt "featured" badge. Two embed URLs — one per theme — swapped by the
+  // `dark` class variant rather than by reading themeStore, so the right one is
+  // already in the SSR markup (the anti-FOUC script in app.html sets `.dark` before
+  // paint). Both URLs are Product Hunt's own, copied verbatim including the `t=`
+  // cache-buster it stamps per variant.
+  const productHunt = {
+    href: 'https://www.producthunt.com/products/freehire?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-freehire',
+    alt: 'freehire - The open-source job search that covers every board | Product Hunt',
+    light:
+      'https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&theme=light&t=1785605037608',
+    dark: 'https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&theme=dark&t=1785605357228',
+  };
 </script>
 
 <footer class="border-t border-border">
@@ -86,6 +99,28 @@
           </ul>
         </nav>
       {/each}
+    </div>
+
+    <div class="mt-8">
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
+      <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="inline-block">
+        <img
+          src={productHunt.light}
+          alt={productHunt.alt}
+          width="250"
+          height="54"
+          loading="lazy"
+          class="dark:hidden"
+        />
+        <img
+          src={productHunt.dark}
+          alt={productHunt.alt}
+          width="250"
+          height="54"
+          loading="lazy"
+          class="hidden dark:block"
+        />
+      </a>
     </div>
   </div>
 
