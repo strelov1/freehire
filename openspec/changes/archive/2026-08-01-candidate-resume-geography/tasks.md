@@ -44,7 +44,7 @@
 - [x] 7.2 Implement the seeding rule in `facetModel.ts` (`base` contributes only when the user accepts on-site or hybrid); confirm the existing mixed-mode scenario still passes
 - [x] 7.3 Un-gate the "where you're based" control in `ProfileForm.svelte` — visible for every user, and reaching `buildLocation()` regardless of accepted work modes
 - [x] 7.4 Pre-fill the base control from the derived geography when the user has stated no base; verify a stated base is never overwritten
-- [ ] 7.5 Visually verify the profile form in a headless browser at a real viewport width (the work-format section no longer gates two sub-forms)
+- [x] 7.5 Visually verify the profile form in a headless browser at a real viewport width (the work-format section no longer gates two sub-forms)
 
 ## 8. Documentation
 

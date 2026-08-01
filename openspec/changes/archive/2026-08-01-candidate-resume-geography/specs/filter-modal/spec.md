@@ -70,3 +70,13 @@ user has no saved profile, the header SHALL instead present a link to create one
   results**
 - **THEN** the staged selections become the live (URL-synced) filter state and the modal
   closes
+
+#### Scenario: No profile shows a create-profile link instead
+- **WHEN** a signed-in user who has no saved profile opens the jobs filter modal
+- **THEN** the header shows a link to create a profile at `/my/profile` and no
+  **Apply my profile** action
+
+#### Scenario: Signed-out users see neither action nor link
+- **WHEN** a signed-out user opens the jobs filter modal
+- **THEN** the header shows neither the **Apply my profile** action nor the
+  create-profile link

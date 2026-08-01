@@ -401,10 +401,18 @@ location facets by flattening the three blocks: `work_mode` from `work_modes`; `
 from the union of `remote.regions` and `relocation.regions`; `countries` from the union of
 `remote.countries`, `base.country`, and `relocation.countries`; `cities` from the union of
 `base.city` and `relocation.cities`; and `relocation` staged as `supported` and `required`
-when `relocation.open` is true. Empty or absent parts contribute nothing. The action
-SHALL only stage — it SHALL NOT change the live job list; the seeded selection is applied
-through the existing **Show results** commit, so the user previews (and MAY adjust) the
-profile-derived filters before applying.
+when `relocation.open` is true. Empty or absent parts contribute nothing.
+
+`base` SHALL contribute to the seeded `countries` and `cities` facets **only for a user
+who accepts on-site or hybrid work**. `base` states where the user lives, not where they
+want the work to be; for a user who accepts only remote work those are different places,
+and seeding their home country as a job-country filter would silently narrow their search
+to the one country they least need the work to be in. For a user who accepts physical
+work the two coincide — the job must be commutable — so the contribution is kept.
+
+The action SHALL only stage — it SHALL NOT change the live job list; the seeded selection
+is applied through the existing **Show results** commit, so the user previews (and MAY
+adjust) the profile-derived filters before applying.
 
 The action SHALL appear only on the full jobs filter modal (not on reuses that restrict
 the rail to a facet subset, such as the profile-comparison modal). When the signed-in
@@ -431,6 +439,13 @@ user has no saved profile, the header SHALL instead present a link to create one
 - **THEN** the staged filters include `work_mode` `[remote, onsite]`, `regions` `[latam]`,
   `countries` `[br]`, `cities` `["Florianópolis", "Berlin"]`, and `relocation`
   `[supported, required]`, and the job list is unchanged until **Show results** is activated
+
+#### Scenario: A remote-only user's base does not narrow their search
+- **WHEN** a signed-in user whose `work_modes` are `[remote]` alone, with `base`
+  `{country: co, city: "Manizales"}` and `remote.regions` `[latam]`, activates
+  **Apply my profile**
+- **THEN** the staged `regions` are `[latam]` and the staged `countries` and `cities` are
+  empty — their home country is not staged as a job-country filter
 
 #### Scenario: Applying a profile without location preferences seeds no location facets
 - **WHEN** a signed-in user whose profile has no `location_preferences` block activates
