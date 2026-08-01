@@ -328,7 +328,7 @@ func TestRegistry_EveryEntryDeclaresAKind(t *testing.T) {
 	// renders in, so a forgotten one must fail here rather than silently defaulting.
 	for _, c := range All {
 		switch c.Kind {
-		case KindEditorial, KindCredential:
+		case KindEditorial, KindCredential, KindBacker:
 		default:
 			t.Errorf("collection %q declares no valid kind (got %q)", c.Slug, c.Kind)
 		}
@@ -336,8 +336,11 @@ func TestRegistry_EveryEntryDeclaresAKind(t *testing.T) {
 }
 
 func TestRegistry_CuratedThemesAreEditorial(t *testing.T) {
+	// A theme we assembled ourselves — by size, valuation, geography or sector. No
+	// outside body selected these members, which is what separates them from the
+	// backers (see TestRegistry_BackersNameWhoSelectedTheCompany).
 	for _, slug := range []string{
-		"yc", "techstars", "european", "ai", "mag7",
+		"european", "ai", "mag7",
 		"bigtech", "unicorn", "fortune500", "eastern-roots", "ai-native",
 	} {
 		c, ok := Lookup(slug)
@@ -347,6 +350,22 @@ func TestRegistry_CuratedThemesAreEditorial(t *testing.T) {
 		}
 		if c.Kind != KindEditorial {
 			t.Errorf("collection %q kind = %q, want %q", slug, c.Kind, KindEditorial)
+		}
+	}
+}
+
+func TestRegistry_BackersNameWhoSelectedTheCompany(t *testing.T) {
+	// An accelerator or fund that picked the company is a different sort of tag from a
+	// theme we curate ourselves: it names an outside selector, so it renders as that
+	// brand's mark rather than as one more filter chip.
+	for _, slug := range []string{"yc", "techstars"} {
+		c, ok := Lookup(slug)
+		if !ok {
+			t.Errorf("registry missing %q", slug)
+			continue
+		}
+		if c.Kind != KindBacker {
+			t.Errorf("collection %q kind = %q, want %q", slug, c.Kind, KindBacker)
 		}
 	}
 }

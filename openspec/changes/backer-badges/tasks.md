@@ -1,6 +1,6 @@
 ## 1. Registry: the backer kind
 
-- [ ] 1.1 Add `KindBacker` to `internal/collections`, and move `yc` and `techstars`
+- [x] 1.1 Add `KindBacker` to `internal/collections`, and move `yc` and `techstars`
       onto it. Registry test asserts every entry's kind is one of the three, and
       that `yc`/`techstars` are backers.
 - [ ] 1.2 Extend `Dataset` with the self-fetching `Records` form and teach `Valid()`
@@ -35,6 +35,10 @@
 
 - [ ] 4.1 Regenerate contracts (`cmd/gen-contracts`) and confirm `kind: 'backer'`
       reaches `web/src/lib/generated/contracts.ts` with no generator change.
+- [ ] 4.1a Restore the collection filter options: `facets.ts:418` builds them from
+      `kind === 'editorial'` plus `kind === 'credential'`, so regenerating drops
+      `yc` and `techstars` out of the filters entirely. Test first — a backer
+      collection must appear among the `collections` facet options.
 - [ ] 4.2 Commit the three brand SVGs under `web/src/lib/brands/` as Svelte
       components taking a `class`.
 - [ ] 4.3 `web/src/lib/backers.ts` — resolve a collection list to badges in registry

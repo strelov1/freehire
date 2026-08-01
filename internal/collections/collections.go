@@ -86,11 +86,13 @@ func names(parse func([]byte) ([]string, error)) func([]byte) ([]Record, error) 
 	}
 }
 
-// Kind separates the two sorts of company tag the registry carries. An editorial
+// Kind separates the three sorts of company tag the registry carries. An editorial
 // collection is our own curated theme (Big Tech, Unicorns) — a judgement call. A
 // credential is a verifiable fact drawn from an authoritative public register (a
 // visa-sponsor licence), which carries an issuing body and a snapshot date and is
-// presented differently because a user may act on it.
+// presented differently because a user may act on it. A backer names the outside
+// accelerator or fund that selected the company (Y Combinator, a16z), which is why
+// it renders as that brand's own mark rather than as another filter chip.
 //
 // The zero value is deliberately invalid: Kind decides which group a tag renders
 // in, so a forgotten one must fail the registry test rather than default silently.
@@ -99,6 +101,7 @@ type Kind string
 const (
 	KindEditorial  Kind = "editorial"
 	KindCredential Kind = "credential"
+	KindBacker     Kind = "backer"
 )
 
 // Collection is one curated company tag: a URL slug, the display copy rendered on
@@ -146,14 +149,14 @@ var All = []Collection{
 		Slug:        "yc",
 		Title:       "Y Combinator",
 		Description: "Open roles at Y Combinator–backed companies, from current batches to graduated unicorns.",
-		Kind:        KindEditorial,
+		Kind:        KindBacker,
 		Dataset:     &Dataset{URL: ycDatasetURL, Parse: names(ParseYC)},
 	},
 	{
 		Slug:        "techstars",
 		Title:       "Techstars",
 		Description: "Open roles at Techstars-backed companies.",
-		Kind:        KindEditorial,
+		Kind:        KindBacker,
 		Dataset:     &Dataset{URL: techstarsDatasetURL, Parse: names(ParseTechstarsCSV)},
 	},
 	{
