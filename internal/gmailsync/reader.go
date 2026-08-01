@@ -15,6 +15,10 @@ type Message struct {
 	BodyText   string
 	BodyHTML   string
 	ReceivedAt time.Time
+	// CalendarUID identifies the meeting an invitation attaches, and is "" for the mail
+	// that carries none. It is what later proves a calendar entry is this same meeting —
+	// the only link calmatch may make without asking the candidate.
+	CalendarUID string
 }
 
 // GmailReader reads one user's ATS mail via the Gmail API. Behind an interface so

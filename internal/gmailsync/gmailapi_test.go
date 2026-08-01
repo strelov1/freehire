@@ -58,3 +58,49 @@ func TestParseMessageSinglePart(t *testing.T) {
 		t.Errorf("body = %q", m.BodyText)
 	}
 }
+
+// The Gmail API is the second way an invitation reaches us, and it must yield the same
+// meeting identifier the SES path does — the deterministic link is UID equality, and a
+// candidate whose mail arrives by Gmail would otherwise never get one.
+func TestParseMessageCapturesTheCalendarUID(t *testing.T) {
+	enc := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+	ics := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:derq-interview\r\n -folded@ashbyhq.com\r\n" +
+		"DTSTART:20260813T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	raw := fmt.Sprintf(`{
+      "id": "m2", "threadId": "t2", "internalDate": "1700000000000",
+      "payload": {
+        "mimeType": "multipart/mixed",
+        "headers": [{"name":"Subject","value":"Interview with Derq"}],
+        "parts": [
+          {"mimeType":"text/plain","body":{"data":%q}},
+          {"mimeType":"text/calendar","body":{"data":%q}}
+        ]
+      }
+    }`, enc("We would like to invite you."), enc(ics))
+
+	m, err := parseMessage([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if want := "derq-interview-folded@ashbyhq.com"; m.CalendarUID != want {
+		t.Errorf("CalendarUID = %q, want the unfolded %q", m.CalendarUID, want)
+	}
+	if m.BodyText == "" {
+		t.Error("the calendar part swallowed the text body")
+	}
+}
+
+func TestParseMessageLeavesTheCalendarUIDEmptyWithoutAMeeting(t *testing.T) {
+	enc := func(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+	raw := fmt.Sprintf(`{
+      "id": "m3", "payload": {"mimeType":"text/plain","body":{"data":%q}}
+    }`, enc("No meeting here."))
+
+	m, err := parseMessage([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if m.CalendarUID != "" {
+		t.Errorf("CalendarUID = %q, want empty", m.CalendarUID)
+	}
+}

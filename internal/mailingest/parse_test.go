@@ -70,3 +70,57 @@ func TestParseMissingHeaders(t *testing.T) {
 		t.Errorf("TextBody = %q", p.TextBody)
 	}
 }
+
+// An ATS invitation carries the meeting as a text/calendar part, and its UID is the one
+// thing that later proves the candidate's calendar entry is this same meeting. Losing it
+// here costs the only link internal/calmatch may make without asking.
+const invitationMIME = "From: Ashby <no-reply@ashbyhq.com>\r\n" +
+	"To: ivan@inbox.freehire.me\r\n" +
+	"Subject: Interview with Derq\r\n" +
+	"Message-ID: <inv-1@ashbyhq.com>\r\n" +
+	"Date: Mon, 12 Jul 2026 10:00:00 +0000\r\n" +
+	"Content-Type: multipart/mixed; boundary=\"m\"\r\n" +
+	"\r\n" +
+	"--m\r\n" +
+	"Content-Type: text/plain\r\n" +
+	"\r\n" +
+	"We would like to invite you to interview.\r\n" +
+	"--m\r\n" +
+	"Content-Type: text/calendar; method=REQUEST; charset=UTF-8\r\n" +
+	"Content-Disposition: attachment; filename=\"invite.ics\"\r\n" +
+	"\r\n" +
+	"BEGIN:VCALENDAR\r\n" +
+	"METHOD:REQUEST\r\n" +
+	"BEGIN:VEVENT\r\n" +
+	"UID:0400000082-derq-interview\r\n" +
+	" -continued@ashbyhq.com\r\n" +
+	"DTSTART:20260813T090000Z\r\n" +
+	"END:VEVENT\r\n" +
+	"END:VCALENDAR\r\n" +
+	"--m--\r\n"
+
+func TestParseCapturesTheInvitationsCalendarUID(t *testing.T) {
+	p, err := Parse([]byte(invitationMIME))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want := "0400000082-derq-interview-continued@ashbyhq.com"
+	if p.CalendarUID != want {
+		t.Errorf("CalendarUID = %q, want the unfolded %q", p.CalendarUID, want)
+	}
+	if p.TextBody == "" {
+		t.Error("the calendar part swallowed the text body")
+	}
+}
+
+// Most mail carries no meeting, and that must read as absence rather than as an error:
+// the ingest path may not start failing messages over a part they never had.
+func TestParseLeavesTheCalendarUIDEmptyWhenThereIsNoMeeting(t *testing.T) {
+	p, err := Parse([]byte(sampleMIME))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if p.CalendarUID != "" {
+		t.Errorf("CalendarUID = %q, want empty", p.CalendarUID)
+	}
+}

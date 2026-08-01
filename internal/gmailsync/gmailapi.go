@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/ical"
 )
 
 const gmailBaseURL = "https://gmail.googleapis.com/gmail/v1/users/me"
@@ -160,6 +162,7 @@ func parseMessage(raw []byte) (Message, error) {
 	m.Subject = headerValue(gm.Payload.Headers, "Subject")
 
 	m.BodyText, m.BodyHTML = bodies(gm.Payload)
+	m.CalendarUID = calendarUID(gm.Payload)
 	return m, nil
 }
 
@@ -192,6 +195,28 @@ func bodies(p gmailPart) (text, html string) {
 	}
 	walk(p)
 	return text, html
+}
+
+// calendarUID walks the MIME tree for a text/calendar part and reads the meeting's
+// identifier out of it. A part that carries none, or that does not parse, yields "" —
+// an invitation whose meeting we cannot identify is still an invitation, and the mail
+// must not be lost over it.
+func calendarUID(p gmailPart) string {
+	var found string
+	var walk func(part gmailPart)
+	walk = func(part gmailPart) {
+		if found != "" {
+			return
+		}
+		if strings.EqualFold(part.MimeType, "text/calendar") {
+			found = ical.UID([]byte(decodeB64URL(part.Body.Data)))
+		}
+		for _, sub := range part.Parts {
+			walk(sub)
+		}
+	}
+	walk(p)
+	return found
 }
 
 // decodeB64URL decodes Gmail's URL-safe base64 body, tolerating missing padding.
