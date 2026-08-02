@@ -19,7 +19,8 @@ import (
 
 // timelineStore answers with fixed rows so the envelope is asserted without a pool.
 type timelineStore struct {
-	rows []db.ListApplicationEventsInRangeRow
+	rows       []db.ListApplicationEventsInRangeRow
+	interviews []db.ListApplicationInterviewsInRangeRow
 }
 
 func (s timelineStore) ListApplicationEventsInRange(context.Context, db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error) {
@@ -206,5 +207,82 @@ func TestTimeline_AHandRecordedEventCarriesNoMessage(t *testing.T) {
 		if _, present := got.Data[0][absent]; present {
 			t.Errorf("%q was rendered for an event that has none: %v", absent, got.Data[0])
 		}
+	}
+}
+
+func (s timelineStore) ListApplicationInterviewsInRange(context.Context, db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error) {
+	return s.interviews, nil
+}
+
+// The second layer: what is arranged, served beside what happened. A cancelled meeting
+// comes back marked rather than withheld — an interview that simply vanished from a
+// Thursday cannot be told apart from a calendar that failed to load.
+func TestInterviews_ServesArrangedMeetingsIncludingCancelledOnes(t *testing.T) {
+	at := time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	store := timelineStore{interviews: []db.ListApplicationInterviewsInRangeRow{
+		{
+			ID: 3, ApplicationID: 31,
+			StartsAt: pgtype.Timestamptz{Time: at, Valid: true},
+			EndsAt:   pgtype.Timestamptz{Time: at.Add(time.Hour), Valid: true},
+			Title:    "Technical screen", JoinUrl: "https://meet.google.com/abc",
+			Status: "confirmed", CompanySlug: "derq", RoleTitle: "Senior Go Engineer",
+		},
+		{
+			ID: 4, ApplicationID: 32,
+			StartsAt: pgtype.Timestamptz{Time: at.AddDate(0, 0, 2), Valid: true},
+			Status:   "cancelled", CompanySlug: "vercel",
+		},
+	}}
+	h := &timelineHandlers{timeline: apptimeline.New(store)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/me/interviews", auth.RequireAuth(iss, testVersions), h.Interviews)
+
+	status, body := getTimeline(t, app, "/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", token)
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", status, body)
+	}
+	var got struct {
+		Data []scheduledInterview `json:"data"`
+		Meta struct {
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode %s: %v", body, err)
+	}
+	if len(got.Data) != 2 || got.Meta.Count != 2 {
+		t.Fatalf("served %d meetings (meta %d), want 2", len(got.Data), got.Meta.Count)
+	}
+	if !got.Data[0].StartsAt.Equal(at) || got.Data[0].JoinURL == "" || got.Data[0].Status != "confirmed" {
+		t.Errorf("first meeting = %+v", got.Data[0])
+	}
+	if got.Data[1].Status != "cancelled" {
+		t.Errorf("second meeting status = %q, want it served as cancelled", got.Data[1].Status)
+	}
+}
+
+func TestInterviews_RefusesABadRangeAndRequiresAuth(t *testing.T) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	h := &timelineHandlers{timeline: apptimeline.New(nil)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/me/interviews", auth.RequireAuth(iss, testVersions), h.Interviews)
+
+	if got, _ := getTimeline(t, app, "/me/interviews?from=2026-08-01T00:00:00Z&to=2026-08-31T00:00:00Z", ""); got != fiber.StatusUnauthorized {
+		t.Errorf("unauthenticated status = %d, want 401", got)
+	}
+	// Refused before the store is reached — the nil store proves it, as it does for the
+	// timeline read, and both share one bound rule so neither can accept what the other
+	// refuses.
+	if got, _ := getTimeline(t, app, "/me/interviews?from=2020-01-01T00:00:00Z&to=2026-08-01T00:00:00Z", token); got != fiber.StatusBadRequest {
+		t.Errorf("over-long range status = %d, want 400", got)
 	}
 }

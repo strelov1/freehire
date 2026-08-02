@@ -32,6 +32,13 @@ func (h *timelineHandlers) register(api fiber.Router, mw middleware) {
 	// mw.key like the rest of /me: a cookie or a full-scope key, so a caller's own harness
 	// can read its history.
 	api.Get("/me/timeline", mw.key, h.Timeline)
+	// The calendar's second layer, on its own path rather than folded into the timeline.
+	// /me/timeline is published with `data` as a list of events and is read by the CLI
+	// and MCP surfaces; a second list inside it would either break that shape or hide
+	// the meetings in `meta`. The day panel's no-fetch rule does not require ONE request
+	// — it requires the data to be in hand before a day is clicked, and the page asks
+	// for both ranges together.
+	api.Get("/me/interviews", mw.key, h.Interviews)
 }
 
 // timelineEvent is one ledger event on the wire — a projection of apptimeline.Event, and
@@ -97,6 +104,70 @@ func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
 			JobSlug:       e.JobSlug,
 			EmailID:       e.EmailID,
 			EmailSubject:  e.EmailSubject,
+		})
+	}
+	return c.JSON(fiber.Map{
+		"data": out,
+		"meta": fiber.Map{"from": from, "to": to, "count": len(out)},
+	})
+}
+
+// scheduledInterview is one arranged meeting on the wire.
+//
+// Separate from timelineEvent because it is a different kind of fact: an event happened
+// and cannot change, a meeting is arranged and can move or be called off. Rendering them
+// with one shape would invite the view to draw them with one meaning.
+type scheduledInterview struct {
+	ID            int64     `json:"id"`
+	ApplicationID int64     `json:"application_id"`
+	StartsAt      time.Time `json:"starts_at"`
+	EndsAt        time.Time `json:"ends_at,omitempty"`
+	Title         string    `json:"title,omitempty"`
+	JoinURL       string    `json:"join_url,omitempty"`
+	// Status is suggested | confirmed | cancelled — the matcher's certainty, and then
+	// the organiser's. A cancelled meeting is served, not withheld.
+	Status      string `json:"status"`
+	CompanySlug string `json:"company_slug"`
+	RoleTitle   string `json:"role_title,omitempty"`
+	JobSlug     string `json:"job_slug,omitempty"`
+}
+
+// Interviews serves the caller's arranged meetings whose start falls in the range.
+func (h *timelineHandlers) Interviews(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	from, err := timelineBound(c, "from")
+	if err != nil {
+		return err
+	}
+	to, err := timelineBound(c, "to")
+	if err != nil {
+		return err
+	}
+
+	found, err := h.timeline.Interviews(c.Context(), userID, from, to)
+	if err != nil {
+		if errors.Is(err, apptimeline.ErrInvalidRange) {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		return err
+	}
+
+	out := make([]scheduledInterview, 0, len(found))
+	for _, iv := range found {
+		out = append(out, scheduledInterview{
+			ID:            iv.ID,
+			ApplicationID: iv.ApplicationID,
+			StartsAt:      iv.StartsAt,
+			EndsAt:        iv.EndsAt,
+			Title:         iv.Title,
+			JoinURL:       iv.JoinURL,
+			Status:        iv.Status,
+			CompanySlug:   iv.CompanySlug,
+			RoleTitle:     iv.RoleTitle,
+			JobSlug:       iv.JobSlug,
 		})
 	}
 	return c.JSON(fiber.Map{

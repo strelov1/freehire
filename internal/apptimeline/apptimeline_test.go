@@ -15,7 +15,8 @@ import (
 // stubStore answers with a fixed set of rows, so the service's own rules — validation and
 // the observed verdict — are tested without a pool.
 type stubStore struct {
-	rows []db.ListApplicationEventsInRangeRow
+	rows       []db.ListApplicationEventsInRangeRow
+	interviews []db.ListApplicationInterviewsInRangeRow
 }
 
 func (s stubStore) ListApplicationEventsInRange(context.Context, db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error) {
@@ -109,4 +110,8 @@ func TestAnUnknownSourceIsNotObserved(t *testing.T) {
 	if events[0].Observed {
 		t.Error("an event from an unrecognised source reported as observed")
 	}
+}
+
+func (s stubStore) ListApplicationInterviewsInRange(context.Context, db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error) {
+	return s.interviews, nil
 }

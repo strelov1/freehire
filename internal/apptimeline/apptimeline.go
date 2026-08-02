@@ -34,6 +34,7 @@ import (
 // and read_at means "a human saw this", not "a calendar was scrolled past this".
 type Queries interface {
 	ListApplicationEventsInRange(ctx context.Context, arg db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error)
+	ListApplicationInterviewsInRange(ctx context.Context, arg db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error)
 }
 
 // MaxRangeDays caps one request at a year and a day — enough for any calendar span a
@@ -82,16 +83,26 @@ type Service struct{ q Queries }
 // New builds the service.
 func New(q Queries) *Service { return &Service{q: q} }
 
-// Range returns the caller's live events between from and to inclusive, oldest first.
-func (s *Service) Range(ctx context.Context, userID int64, from, to time.Time) ([]Event, error) {
+// validRange is the one bound rule, shared by both reads. Two copies would drift, and the
+// calendar asks them for the same window — a range one accepted and the other refused
+// would paint half a month with no way to tell why.
+func validRange(from, to time.Time) error {
 	if from.IsZero() || to.IsZero() {
-		return nil, fmt.Errorf("%w: both bounds are required", ErrInvalidRange)
+		return fmt.Errorf("%w: both bounds are required", ErrInvalidRange)
 	}
 	if to.Before(from) {
-		return nil, fmt.Errorf("%w: the upper bound precedes the lower one", ErrInvalidRange)
+		return fmt.Errorf("%w: the upper bound precedes the lower one", ErrInvalidRange)
 	}
 	if to.Sub(from) > MaxRangeDays*24*time.Hour {
-		return nil, fmt.Errorf("%w: a range may span at most %d days", ErrInvalidRange, MaxRangeDays)
+		return fmt.Errorf("%w: a range may span at most %d days", ErrInvalidRange, MaxRangeDays)
+	}
+	return nil
+}
+
+// Range returns the caller's live events between from and to inclusive, oldest first.
+func (s *Service) Range(ctx context.Context, userID int64, from, to time.Time) ([]Event, error) {
+	if err := validRange(from, to); err != nil {
+		return nil, err
 	}
 
 	rows, err := s.q.ListApplicationEventsInRange(ctx, db.ListApplicationEventsInRangeParams{
@@ -126,4 +137,61 @@ func (s *Service) Range(ctx context.Context, userID int64, from, to time.Time) (
 		})
 	}
 	return events, nil
+}
+
+// Interview is one meeting arranged for an application: what is going to happen, as
+// against the Events above, which are what already has.
+//
+// It is served separately from the ledger for the reason the schema separates them. A
+// meeting moves and is called off, so it cannot live in an append-only record; and its
+// time is in the future, so it cannot be an occurred_at without making that column mean
+// two different things.
+type Interview struct {
+	ID            int64
+	ApplicationID int64
+	StartsAt      time.Time
+	EndsAt        time.Time
+	Title         string
+	JoinURL       string
+	// Status is suggested | confirmed | cancelled. A cancelled meeting is served rather
+	// than filtered: an interview that simply vanished from a Thursday cannot be told
+	// apart from a calendar that failed to load.
+	Status      string
+	CompanySlug string
+	RoleTitle   string
+	JobSlug     string
+}
+
+// Interviews returns the caller's meetings starting inside the range, oldest first.
+//
+// Same bounds and the same validation as Range, so the calendar asks both reads for the
+// same window and a mistyped bound is refused by both in the same way.
+func (s *Service) Interviews(ctx context.Context, userID int64, from, to time.Time) ([]Interview, error) {
+	if err := validRange(from, to); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListApplicationInterviewsInRange(ctx, db.ListApplicationInterviewsInRangeParams{
+		UserID: userID,
+		FromAt: pgtype.Timestamptz{Time: from, Valid: true},
+		ToAt:   pgtype.Timestamptz{Time: to, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Interview, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Interview{
+			ID:            r.ID,
+			ApplicationID: r.ApplicationID,
+			StartsAt:      r.StartsAt.Time,
+			EndsAt:        r.EndsAt.Time,
+			Title:         r.Title,
+			JoinURL:       r.JoinUrl,
+			Status:        r.Status,
+			CompanySlug:   r.CompanySlug,
+			RoleTitle:     r.RoleTitle,
+			JobSlug:       r.JobSlug.String,
+		})
+	}
+	return out, nil
 }

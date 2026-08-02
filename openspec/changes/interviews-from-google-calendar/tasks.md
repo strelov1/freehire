@@ -64,7 +64,7 @@
 - [x] 6.2 Record the event once, dated at the observation, inside the statement that
       upserts the meeting — the same discipline that keeps `MarkJobApplied` and its event
       from drifting. Integration test: a reschedule leaves exactly one event.
-- [ ] 6.3 Serve scheduled meetings to the SPA: extend the timeline read, or add a sibling
+- [x] 6.3 Serve scheduled meetings to the SPA: extend the timeline read, or add a sibling
       read, so the calendar receives both layers in the one range request the day panel
       depends on.
 
