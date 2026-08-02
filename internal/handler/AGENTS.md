@@ -24,8 +24,20 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   behind: `optional` (attach caller, never reject), `key` (cookie or API key), `cookie`
   (cookie-only), `moderator` (role gate, stacked after `key`/`cookie`).
 - Services shared across features (résumé store, profile, credits, CV store/renderer,
-  match analyzer, contribution, moderation) are built once in `Register` and passed to
-  each constructor; single-feature services are built inside the feature's constructor.
+  conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
+  are built once in `Register` and passed to each constructor; single-feature services are
+  built inside the feature's constructor. **A constructor that builds a shared service is
+  the bug, not the `Register` line that digs it back out** — `cvH.cvStore` and
+  `assistantH.store` were both read out of a handler for a second consumer until the
+  service moved up. When a second feature needs one, hoist it; do not reach into the
+  first feature's struct.
+- **No post-construction setter for a dependency that exists before construction.** Three
+  of them (`withAssistantSessions`, `withFollowUps`, `withKeys`) existed only because of
+  the ownership above, and each made a handler's field nil for part of its life. The two
+  that survive — `withAccountDeletion`, `accounts.WithCodes`/`report.WithNotifier` — are
+  conditioned on an SES client built inside an `if`, which is a different thing: the
+  dependency genuinely does not exist yet. Two same-typed clients go in a named struct
+  (`assistantModels`), not as adjacent parameters — a swap there compiles.
 - Tests construct the feature struct directly with fakes/stubs (e.g.
   `&trackingHandlers{tracking: ...}`) and mount routes on a bare `fiber.App`.
 - Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, everything else→500.

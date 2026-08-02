@@ -76,16 +76,32 @@ type assistantHandlers struct {
 	invitation invitationReader
 }
 
-// newAssistantHandlers wires the agent. A nil LLM client leaves the runner nil:
-// old conversations stay readable and a new turn reports the assistant as
-// unavailable, rather than the whole surface disappearing.
-func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
+// assistantModels names the two model clients the assistant runs on and the resolver that
+// bills them. It exists because Agent and FollowUps are the SAME TYPE and different models
+// — as two adjacent parameters a swap would compile and quietly move every turn onto the
+// cheap model — so the call site names each one instead of relying on argument order.
+type assistantModels struct {
+	// Agent is the model the turn loop runs on. Nil leaves the runner nil: old
+	// conversations stay readable and a new turn reports the assistant as unavailable,
+	// rather than the whole surface disappearing.
+	Agent *llm.Client
+	// FollowUps is the cheap general-purpose model the suggestion strip runs on. The whole
+	// argument for generating suggestions outside the turn is that they cost almost nothing.
+	FollowUps *llm.Client
+	// Keys names the caller on the gateway. Nil is ordinary rather than degraded: every
+	// turn then spends on the service credential, exactly as it did before attribution.
+	Keys     *llmkey.Resolver
+	MaxSteps int
+}
+
+// newAssistantHandlers wires the agent.
+func newAssistantHandlers(queries *db.Queries, models assistantModels, store *assistant.Store,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
 	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers,
 	bank experienceBankTools) *assistantHandlers {
 	h := &assistantHandlers{
 		experience:   bank,
-		store:        assistant.NewStore(queries),
+		store:        store,
 		queries:      queries,
 		search:       search,
 		resume:       resumeH,
@@ -102,19 +118,14 @@ func newAssistantHandlers(queries *db.Queries, model *llm.Client, maxSteps int,
 	if mail != nil {
 		h.invitation = mail.inbox
 	}
-	if model != nil {
-		h.llm = model
-		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: maxSteps})
+	if models.Agent != nil {
+		h.llm = models.Agent
+		h.runner = assistant.NewRunner(models.Agent, h.store, assistant.RunnerConfig{MaxSteps: models.MaxSteps})
 	}
+	h.keys = models.Keys
+	h.followUps = assistant.NewFollowUps(models.FollowUps)
+	h.followUpLLM = llmBinding{client: models.FollowUps, keys: models.Keys}
 	return h
-}
-
-// withKeys gives the assistant the resolver that names the caller on the gateway. Separate
-// from the constructor because a deployment without it is ordinary rather than degraded:
-// every turn then spends on the service credential, exactly as it did before.
-func (h *assistantHandlers) withKeys(keys *llmkey.Resolver) {
-	h.keys = keys
-	h.followUpLLM.keys = keys
 }
 
 // register mounts the assistant. A browser drives it, but not always the web app:
@@ -647,15 +658,6 @@ func (h *assistantHandlers) layDownRunPlan(ctx context.Context, sess assistant.S
 	if err := h.cv.cvStore.SetAutopilotReport(ctx, *sess.CVID, sess.UserID, plan); err != nil {
 		log.Printf("assistant: could not lay down the run plan cv=%s: %v", sess.CVID, err)
 	}
-}
-
-// withFollowUps gives the assistant the model its suggestions run on. Separate from
-// the constructor because it is a DIFFERENT model from the agent's — the cheap
-// general-purpose one — and threading a second client through an already long
-// parameter list would invite passing the wrong one.
-func (h *assistantHandlers) withFollowUps(model *llm.Client) {
-	h.followUps = assistant.NewFollowUps(model)
-	h.followUpLLM.client = model
 }
 
 // ownedSession resolves the :id route param to a session the caller owns.

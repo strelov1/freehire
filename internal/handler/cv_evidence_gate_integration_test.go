@@ -18,6 +18,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -44,7 +45,10 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 
 	h := newCVHandlers(pool, queries, cv.NewStore(cv.NewQueriesRepository(queries)),
-		"", "test-salt", "https://freehire.test",
+		assistant.NewStore(queries),
+		// No renderer: this fixture exercises the edit path, and the PDF endpoint's 501
+		// gate is what a nil one means.
+		nil, "test-salt", "https://freehire.test",
 		[]string{"freehire.test"},
 		resume.New(nil, resume.NewQueriesRepository(queries)),
 		headshot.New(nil, headshot.NewQueriesRepository(queries)),
