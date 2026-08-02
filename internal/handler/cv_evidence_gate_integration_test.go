@@ -43,7 +43,8 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 
-	h := newCVHandlers(pool, queries, "", "test-salt", "https://freehire.test",
+	h := newCVHandlers(pool, queries, cv.NewStore(cv.NewQueriesRepository(queries)),
+		"", "test-salt", "https://freehire.test",
 		[]string{"freehire.test"},
 		resume.New(nil, resume.NewQueriesRepository(queries)),
 		headshot.New(nil, headshot.NewQueriesRepository(queries)),
