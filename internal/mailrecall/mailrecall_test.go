@@ -293,6 +293,11 @@ func TestMailRecallNamesNoLinkingSymbol(t *testing.T) {
 	forbidden := []string{
 		"LinkEmailToJob", "ConfirmEmailLink", "SetEmailClassification", "AgentTriageEmail",
 		"application_events", "ReconcileMailEvent", "MarkJobApplied", "AdvanceStage",
+		// And no calendar. The spec says the sweep reads none — the meetings arrive on the
+		// next cal-sync, which re-reads its own window — and a calendar holds medical
+		// appointments and a current employer's meetings. "We do not read it" is a claim
+		// worth a guard rather than a sentence.
+		"calsync", "ListEvents", "CalendarReader", "UpsertInterview",
 	}
 	entries, err := os.ReadDir(".")
 	if err != nil {
