@@ -8,6 +8,7 @@
 // viewed-jobs leak: the reset list lived apart from the store definitions).
 
 import { browser } from '$app/environment';
+import { SvelteSet } from 'svelte/reactivity';
 
 // Every UserResource registers here on construction; resetUserStores() (called from
 // the root layout on sign-out) drops them all, so a new per-user store participates
@@ -79,5 +80,45 @@ export abstract class UserResource<T> {
     this.clearState();
     this.#loaded = false;
     this.#loading = null;
+  }
+}
+
+/**
+ * SlugSet is a UserResource whose payload is a set of job slugs — "which jobs has this user
+ * saved / viewed / dismissed". All three answered that question with the same thirty lines:
+ * a SvelteSet in $state, `has`, `mark`, sometimes `unmark`, and the two hooks that swap the
+ * set on load and drop it on reset. Only the endpoint differed.
+ *
+ * A subclass supplies `load()` and nothing else. `unmark` is here rather than in the two
+ * subclasses that had it because the third simply never needed it — an absent caller is not a
+ * different rule.
+ *
+ * SvelteSet, not a plain Set: a plain Set in $state is not deeply reactive, so an in-place
+ * `.add`/`.delete` would not re-run readers. SvelteSet makes both the mutation and the load
+ * reassignment trigger dependent $derived/$effect.
+ */
+export abstract class SlugSet extends UserResource<string[]> {
+  #slugs = $state(new SvelteSet<string>());
+
+  has(slug: string): boolean {
+    return this.#slugs.has(slug);
+  }
+
+  /** Record a slug locally, so the card reacts immediately without re-fetching the set. */
+  mark(slug: string) {
+    this.#slugs.add(slug);
+  }
+
+  /** Drop a slug's mark locally, after the write that undid it succeeded. */
+  unmark(slug: string) {
+    this.#slugs.delete(slug);
+  }
+
+  protected apply(slugs: string[]) {
+    this.#slugs = new SvelteSet(slugs);
+  }
+
+  protected clearState() {
+    this.#slugs = new SvelteSet();
   }
 }

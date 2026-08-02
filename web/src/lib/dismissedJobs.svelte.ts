@@ -11,42 +11,12 @@
 // and the set stays empty for signed-out users. A failed load leaves the set empty —
 // nothing is excluded, the correct degraded state.
 
-import { SvelteSet } from 'svelte/reactivity';
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
+import { SlugSet } from '$lib/userResource.svelte';
 
-class DismissedJobs extends UserResource<string[]> {
-  // SvelteSet (not a plain Set): a plain Set in $state is not deeply reactive, so
-  // an in-place `.add`/`.delete` would not re-run readers. SvelteSet makes both the
-  // mutation and the load reassignment trigger dependent $derived/$effect (e.g.
-  // the feed's dismissed exclusion).
-  #slugs = $state(new SvelteSet<string>());
-
-  has(slug: string): boolean {
-    return this.#slugs.has(slug);
-  }
-
-  /** Mark a slug hidden locally (e.g. right after a successful dismiss), so its
-   *  card drops out of the feed immediately without re-fetching the whole set. */
-  mark(slug: string) {
-    this.#slugs.add(slug);
-  }
-
-  /** Clear a slug's hidden mark locally (e.g. right after a successful undo). */
-  unmark(slug: string) {
-    this.#slugs.delete(slug);
-  }
-
+class DismissedJobs extends SlugSet {
   protected load(): Promise<string[]> {
     return api.listDismissedSlugs();
-  }
-
-  protected apply(slugs: string[]) {
-    this.#slugs = new SvelteSet(slugs);
-  }
-
-  protected clearState() {
-    this.#slugs = new SvelteSet();
   }
 }
 

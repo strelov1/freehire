@@ -8,37 +8,12 @@
 // and the set stays empty for signed-out users. A failed load leaves the set empty —
 // nothing dims, the correct degraded state.
 
-import { SvelteSet } from 'svelte/reactivity';
 import { api } from '$lib/api';
-import { UserResource } from '$lib/userResource.svelte';
+import { SlugSet } from '$lib/userResource.svelte';
 
-class ViewedJobs extends UserResource<string[]> {
-  // SvelteSet (not a plain Set): a plain Set in $state is not deeply reactive, so
-  // an in-place `.add` in `mark` would not re-run readers. SvelteSet makes both
-  // the `.add` mutation and the load reassignment trigger dependent
-  // $derived/$effect (e.g. JobRow's `isViewed`).
-  #slugs = $state(new SvelteSet<string>());
-
-  has(slug: string): boolean {
-    return this.#slugs.has(slug);
-  }
-
-  /** Mark a slug viewed locally (e.g. right after recording a view), so its card
-   *  dims immediately without re-fetching the whole set. */
-  mark(slug: string) {
-    this.#slugs.add(slug);
-  }
-
+class ViewedJobs extends SlugSet {
   protected load(): Promise<string[]> {
     return api.listViewedSlugs();
-  }
-
-  protected apply(slugs: string[]) {
-    this.#slugs = new SvelteSet(slugs);
-  }
-
-  protected clearState() {
-    this.#slugs = new SvelteSet();
   }
 }
 
