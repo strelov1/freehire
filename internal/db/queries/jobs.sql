@@ -278,6 +278,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
     last_seen_at = now(),
     closed_at    = NULL,
+    closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
@@ -719,6 +720,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- A moderator re-create reopens the job; reset the strike count too so the
     -- two-strike liveness grace survives a reopen (see UpsertJob).
     closed_at    = NULL,
+    closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
 RETURNING *;
@@ -786,8 +788,9 @@ RETURNING *;
 -- touched. The caller passes the crawled slugs and owns the grace window (cutoff =
 -- now() - window), so neither a failed nor a partial crawl mass-closes a catalogue.
 UPDATE jobs
-SET closed_at  = now(),
-    updated_at = now()
+SET closed_at     = now(),
+    closed_reason = 'unseen',
+    updated_at    = now()
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff)
@@ -802,8 +805,9 @@ WHERE closed_at IS NULL
 -- of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 -- otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
 UPDATE jobs
-SET closed_at  = now(),
-    updated_at = now()
+SET closed_at     = now(),
+    closed_reason = 'unseen',
+    updated_at    = now()
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff);
@@ -816,8 +820,9 @@ WHERE closed_at IS NULL
 -- for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 -- upsert of the same (source, external_id) reopens it if the posting reappears.
 UPDATE jobs
-SET closed_at  = now(),
-    updated_at = now()
+SET closed_at     = now(),
+    closed_reason = 'feed_removed',
+    updated_at    = now()
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND external_id = sqlc.arg(external_id);
@@ -860,6 +865,7 @@ SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source) AND extern
 UPDATE jobs
 SET last_seen_at = now(),
     closed_at    = NULL,
+    closed_reason = '',
     -- A reopen resets the strike count so a single later expired probe can't immediately
     -- re-close it, mirroring UpsertJob.
     liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
@@ -875,9 +881,33 @@ RETURNING company_slug;
 -- status guard. A later ingest upsert may legitimately reopen a board job (reopen-on-
 -- reappear); that is the lifecycle's existing behavior, not a conflict.
 UPDATE jobs
-SET closed_at  = now(),
-    updated_at = now()
+SET closed_at     = now(),
+    closed_reason = 'moderated',
+    updated_at    = now()
 WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+
+-- name: CloseStaleUnsignalledJobs :execrows
+-- Age rule (see job-lifecycle): close open jobs from the sources that carry NO close
+-- signal at all — no re-crawl that could stop seeing them, no change feed, and no posting
+-- URL a probe could reach a verdict on. Today that is exactly `telegram`, whose stored URL
+-- is the post itself and outlives the vacancy (cmd/liveness's unsignalledSources).
+--
+-- This is the only close that rests on a guess rather than on evidence, which is why it is
+-- scoped by an explicit source list the CALLER passes rather than by "everything the sweep
+-- misses": a source must be opted in deliberately, so a new adapter can never drift into
+-- being closed by age. The caller also owns the window (cutoff = now() - window), the same
+-- division of labour the unseen sweep uses.
+--
+-- Strictly older than the cutoff, so a row exactly at the boundary survives one more run —
+-- under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
+-- WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
+UPDATE jobs
+SET closed_at     = now(),
+    closed_reason = 'expired',
+    updated_at    = now()
+WHERE closed_at IS NULL
+  AND source = ANY(sqlc.arg(sources)::text[])
+  AND COALESCE(posted_at, created_at) < sqlc.arg(cutoff);
 
 -- name: SelectOrphanLivenessCandidates :many
 -- Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
@@ -900,6 +930,10 @@ SET liveness_strikes = liveness_strikes + 1,
     closed_at = CASE
         WHEN liveness_strikes + 1 >= sqlc.arg(threshold) THEN now()
         ELSE closed_at
+    END,
+    closed_reason = CASE
+        WHEN liveness_strikes + 1 >= sqlc.arg(threshold) THEN 'probe_expired'
+        ELSE closed_reason
     END,
     updated_at = now()
 WHERE id = sqlc.arg(id)

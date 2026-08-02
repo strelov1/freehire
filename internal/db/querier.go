@@ -239,6 +239,21 @@ type Querier interface {
 	// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 	// upsert of the same (source, external_id) reopens it if the posting reappears.
 	CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error)
+	// Age rule (see job-lifecycle): close open jobs from the sources that carry NO close
+	// signal at all — no re-crawl that could stop seeing them, no change feed, and no posting
+	// URL a probe could reach a verdict on. Today that is exactly `telegram`, whose stored URL
+	// is the post itself and outlives the vacancy (cmd/liveness's unsignalledSources).
+	//
+	// This is the only close that rests on a guess rather than on evidence, which is why it is
+	// scoped by an explicit source list the CALLER passes rather than by "everything the sweep
+	// misses": a source must be opted in deliberately, so a new adapter can never drift into
+	// being closed by age. The caller also owns the window (cutoff = now() - window), the same
+	// division of labour the unseen sweep uses.
+	//
+	// Strictly older than the cutoff, so a row exactly at the boundary survives one more run —
+	// under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
+	// WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
+	CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleUnsignalledJobsParams) (int64, error)
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 	// by source because ingest runs per provider (a greenhouse run must not close jobs

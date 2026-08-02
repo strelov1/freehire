@@ -433,6 +433,7 @@ type Job struct {
 	UpvoteCount           int32              `json:"upvote_count"`
 	DownvoteCount         int32              `json:"downvote_count"`
 	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedReason          string             `json:"closed_reason"`
 }
 
 type JobDailyStat struct {
