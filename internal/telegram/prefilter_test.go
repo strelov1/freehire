@@ -12,13 +12,14 @@ func TestLooksLikeVacancy(t *testing.T) {
 		{"board template", "Senior Fullstack Engineer\n#удаленка #senior\nCompany: RugsDotFun\nSalary: $120k - $200k"},
 		{"required experience", "Требуется опыт от 2 лет, стек: Go, Postgres. Резюме в личку"},
 		{"recall bias: weak but plausible", "Команде нужен продакт. Подробности у @someone"},
-		// Ukrainian. None of these carry a RU or EN marker: "вакансія" cannot match the
-		// RU "ваканси" (і and и are distinct runes), and "зарплат" is kept out of the
-		// salary case so it rests on the hryvnia amount alone.
+		// Ukrainian. Each case rests on exactly ONE Ukrainian alternative, so removing
+		// that alternative fails this case and nothing else. None carries a RU or EN
+		// marker: "вакансія" cannot match the RU "ваканси" (і and и are distinct runes).
 		{"ua marker вакансія", "Вакансія: Golang розробник у продуктову команду"},
 		{"ua marker шукаємо", "Шукаємо QA Engineer у команду"},
-		{"ua experience + hryvnia amount", "Досвід роботи від 2 років, 60 000 грн на місяць"},
-		{"ua internship", "Запрошуємо на стажування студентів"},
+		{"ua marker запрошуємо", "Запрошуємо Java-інженера до продуктової команди"},
+		{"ua marker стажування", "Оплачуване стажування для студентів, Київ"},
+		{"ua marker досвід роботи", "Бекенд-інженер, досвід роботи від 3 років, Львів"},
 	}
 	for _, tc := range pass {
 		t.Run("pass/"+tc.name, func(t *testing.T) {
@@ -35,6 +36,9 @@ func TestLooksLikeVacancy(t *testing.T) {
 		{"empty-ish", "🔥🔥🔥"},
 		{"ua news digest", "Дайджест новин тижня: Google оновив пошук"},
 		{"ua course ad", "Знижка 50% на курс — встигни записатись"},
+		// A hryvnia amount is not a hiring signal: the editorial channels price event
+		// tickets in the same three-digit range a salary would occupy.
+		{"ua event ticket priced in hryvnia", "Встигніть купити квиток на DOU Day Picnic за 500 грн"},
 	}
 	for _, tc := range reject {
 		t.Run("reject/"+tc.name, func(t *testing.T) {

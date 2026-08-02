@@ -6,19 +6,27 @@
   Reject: «Дайджест новин тижня», «Знижка 50% на курс — встигни записатись». Confirm the pass
   cases fail today and the reject cases already hold.
 - [x] 1.2 Add the Ukrainian marker block to the regexp in `internal/telegram/prefilter.go`
-  (`вакансі|шукаємо|шукає|запрошуємо|стажуванн|досвід роботи`) with a comment recording why
-  `ваканси` does not reach it, and extend the currency alternation with `грн|₴`. Tests green.
+  (`вакансі|шукає|запрошуємо|стажуванн|досвід роботи`) with a comment recording why `ваканси`
+  does not reach it. Tests green.
+
+  `грн|₴` was scored as a candidate and **not** shipped: reading the posts it admitted on its
+  own showed seven event tickets, fundraisers and a raffle, and zero vacancies. A reject test
+  pins that decision.
 
 ## 2. Ukrainian geography resolves to a country
 
 - [x] 2.1 Add failing cases to `internal/location/location_test.go`, mirroring the existing
   `Київ` case: `Львів`, `Харків`, `Lviv, Ukraine`, and `Україна` → the expected `Geo`
   (countries `["ua"]`, regions `["eu"]`, city where a city is named).
-- [x] 2.2 Add the Latin entries (21 regional capitals) to `nameToCountry` in
-  `internal/location/dictionaries.go`, in the CIS block beside `kyiv`. Tests for the Latin
-  cases green.
+- [x] 2.2 Add the Latin entries (oblast centres, Ukrainian and Russian transliteration) to
+  `nameToCountry` in `internal/location/dictionaries.go`, in the CIS block beside `kyiv`.
+  Check every key against `cities15000.tsv` and omit the ones GeoNames places in more than
+  one country. Tests for the Latin cases green.
 - [x] 2.3 Add the Cyrillic entries — the same cities in Ukrainian and Russian spelling, plus
   `україна`/`украина` — in the Cyrillic block beside `київ`. All of 2.1 green.
+- [x] 2.4 Teach `cityMarkerPrefixes` the Ukrainian city marker (`м.`, `місто `) alongside the
+  Russian `г.`/`город `, with a regression case proving a city merely starting with `м`
+  (`Мурманск`) is untouched. Found in review: `м. Львів` resolved to nothing at all.
 
 ## 3. Channels and their mirror
 
@@ -30,6 +38,13 @@
   `88 channels (12 authored, 76 board)` to `95 channels (17 authored, 78 board)`. Note there
   why the source list's 97 group chats are unusable. Verify the table row count matches the
   YAML entry count.
+
+## 4. Rollout
+
+- [ ] 4.0 After deploy, run `cmd/backfill-derive` and then `make reindex`. Geography lives as
+  Meilisearch facets, so a dictionary change reaches existing rows only through a re-derive
+  (`internal/location/AGENTS.md`); without it only newly-ingested jobs get `ua`/`eu`. Stop
+  `freehire-reindexw.timer` first and never stack the reindex with `reindex-companies`.
 
 ## 4. Verification
 

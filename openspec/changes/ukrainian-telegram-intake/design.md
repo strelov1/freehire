@@ -53,13 +53,13 @@ Source of candidates: [nikit0ns/Ukrainian_IT_Communities](https://github.com/nik
   for itself. Revisit if it revives.
 - **Telegram vacancy expiry** — Telegram jobs are reached by none of the three lifecycle close
   mechanisms and never close. Catalogue-wide, independent of this change, own spec.
-- No schema change, no migration, no new dependency.
+- No schema change and no new dependency. The rollout is not a no-op — see Migration Plan.
 
 ## Decisions
 
 ### Extend the existing regexp rather than restructure it
 
-Ukrainian becomes a fourth commented block; `грн|₴` joins the currency alternation.
+Ukrainian becomes a fourth commented block alongside RU and EN.
 
 *Alternative — named per-language regexps combined at init.* Rejected: three languages do not
 justify four variables, and one regexp compiles to one automaton scanned once per post, where
@@ -88,12 +88,22 @@ counting only posts the current prefilter rejects:
 | `наймаємо` | 0 | 0 |
 | `зарплатн` | 0 | 0 |
 
-Adopted: the first six. Dropped: `наймаємо` and `зарплатн` (never fire — `зарплатн` is already
+Dropped on the numbers above: `наймаємо` and `зарплатн` (never fire — `зарплатн` is already
 covered by the RU prefix `зарплат`), `потрібен` and `відгук` (1:1 signal to noise).
 
-The shipped regexp writes `шукає` alone rather than `шукаємо|шукає`: the shorter stem is a
-prefix of the longer, so it matches everything the pair did. Each adopted marker is the
-shortest stem covering its inflections, for the same reason.
+**`грн`/`₴` was dropped after code review, and the scoring above is why it nearly shipped.**
+The table counts *marker matches inside job channels*, which is a proxy for "rescued a
+vacancy" — and the proxy breaks on this cohort, because five of the seven channels are
+editorial. Reading the posts the alternative admitted on its own: seven of seven are DOU Day
+Picnic ticket prices, an army fundraiser, and a vinyl raffle. Zero vacancies. The hryvnia is
+low-denomination, so the amount pattern's three-digit floor cannot separate «500 грн» for a
+ticket from a salary, where the same floor works for «250 000 руб» and «$120k». Its measured
+value on the shipped cohort is negative, so the currency alternation is left untouched.
+
+Adopted, therefore: `вакансі`, `шукає`, `запрошуємо`, `стажуванн`, `досвід роботи`. The
+regexp writes `шукає` rather than `шукаємо|шукає` — the shorter stem is a prefix of the
+longer, so it matches everything the pair did, while still excluding `шукаю`, the
+job-seeker form.
 
 The asymmetry settling the borderline cases: a false positive costs one LLM call returning
 `{"jobs": []}`; a false negative loses a vacancy permanently and silently.
@@ -101,8 +111,17 @@ The asymmetry settling the borderline cases: a false positive costs one LLM call
 ### Ukrainian geography goes into the curated map, not the generated one
 
 Two additions to `nameToCountry` in `internal/location/dictionaries.go`, in the blocks that
-already hold `kyiv` and `київ`: the 21 regional capitals in Latin, and the same in Ukrainian
-and Russian Cyrillic plus `україна`/`украина`.
+already hold `kyiv` and `київ`: the oblast centres in Latin (Ukrainian and Russian
+transliteration), and the same in Cyrillic plus `україна`/`украина`.
+
+A name is omitted where GeoNames places the alias in more than one country, the precedent the
+file already sets for `georgia` (the US state). The two blocks apply that test at different
+strengths, because a Latin location field can come from anywhere while a Cyrillic one comes
+from a Cyrillic-writing source: `odesa`/`odessa`, `lutsk`, `cherkasy`, `donetsk`, `nikolaev`
+are absent from the Latin block, and only the ones colliding with Belarus, Bulgaria, or
+Russia (`луцьк`, `черкассы`, `николаев`) are absent from the Cyrillic one. `donetsk` is
+ambiguous in both scripts and appears in neither. Those cities keep resolving to a bare city
+name — under-resolving is what the never-guess contract asks for.
 
 This keeps the dict-only contract intact — country still comes only from the curated map, and
 GeoNames still supplies nothing but a display name. With both sides agreeing on `ua`, the
@@ -120,23 +139,44 @@ instructs the model to split (`internal/telegram/llm.go:104`). The two recruiter
 
 ## Risks / Trade-offs
 
-- **More posts reach the metered LLM stage.** → Bounded by seven channels; the adopted set's
-  false-positive rate is 5 posts per 150 on channels carrying no vacancies at all.
+- **More posts reach the metered LLM stage.** → Bounded by seven channels: 16 posts to 39
+  across their latest 136. The five DOU verticals are editorial, so some of the additions are
+  course digests and event invitations; each costs one call returning `{"jobs": []}`, and the
+  extraction prompt already lists "course ad" as a negative.
 - **A broader alternation could admit noise in channels that already work.** → Extending an
   alternation is monotonic: it can only add matches, so this is the only way the change can do
   harm. The before/after measurement on the eight production RU channels must show no change.
-- **`досвід роботи` can appear in course advertising.** → 1 admission per 150 news posts,
-  accepted given the recall asymmetry. If it degrades, it is one alternative to remove.
+- **`досвід роботи` and `стажуванн` can appear in course advertising.** → Accepted given the
+  recall asymmetry; each is one alternative to remove if it degrades. Every adopted
+  alternative has a test that fails when it alone is deleted, so removing one is a
+  one-line change with immediate feedback.
 - **The docs mirror can drift from the YAML.** → Both edited in the same commit; the counts are
   in sync today (88 rows against 88 entries) and verified after the change (95).
-- **Ukrainian city names are added by hand.** → Confined to the 21 regional capitals; long-tail
-  towns keep resolving to a bare city name, the same as any other country's long tail.
+- **Ukrainian city names are added by hand.** → Confined to oblast centres; long-tail towns
+  keep resolving to a bare city name, the same as any other country's long tail.
+- **A curated name could collide with a place in another country.** → Every added key was
+  checked against `cities15000.tsv`; the ambiguous ones are omitted and listed in the code
+  comment. Verified after the fact: `Parse("Odesa, TX")` still resolves to `us` alone.
 
 ## Migration Plan
 
-No migration. The change is data plus one regexp; deploying it changes only which posts the
-next `cmd/tg-ingest` run enqueues. Rollback is reverting the commit — already-extracted jobs
-stay in the catalogue and are unaffected.
+No schema migration. The rollout is not a no-op, though: `internal/location/AGENTS.md` states
+that a dictionary change needs a re-derive to reach existing rows, because geography lives as
+Meilisearch facets rather than SQL columns. Without it the prefilter half takes effect on the
+next `cmd/tg-ingest` run while every job already in the catalogue with a Ukrainian location
+keeps its empty `countries`/`regions` — the precise benefit this change promises.
+
+Order:
+
+1. Deploy.
+2. `cmd/backfill-derive` — re-derives the facet columns from the new dictionary.
+3. `make reindex` — rebuilds the search index so the facets are served.
+
+Never stack step 3 with `reindex-companies`, and stop `freehire-reindexw.timer` before a
+manual reindex.
+
+Rollback is reverting the commit; the same two steps then restore the previous facets.
+Already-extracted jobs stay in the catalogue either way.
 
 ## Open Questions
 

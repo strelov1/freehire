@@ -10,12 +10,13 @@ look like the channels are weak rather than the filter blind.
 
 ## What Changes
 
-- Ukrainian hiring markers join the prefilter regexp as a fourth language block, and
-  `грн`/`₴` join its currency alternation. The marker set is the measured one: `вакансі`,
-  `шукаємо|шукає`, `запрошуємо`, `стажуванн`, `досвід роботи`. Candidates that never fired or
-  that scored 1:1 signal-to-noise over 306 live posts are excluded.
-- Ukraine's regional capitals and the native country spelling enter the curated
-  `nameToCountry` map, in Latin and in both Cyrillic spellings. Today only `kyiv`/`киев`/`київ`
+- Ukrainian hiring markers join the prefilter regexp as a fourth language block: `вакансі`,
+  `шукає`, `запрошуємо`, `стажуванн`, `досвід роботи`. Candidates that never fired or that
+  scored 1:1 signal-to-noise over 306 live posts are excluded, as is `грн`/`₴` — reading the
+  posts it admitted showed event tickets and fundraisers, not salaries.
+- Ukraine's oblast centres and the native country spelling enter the curated
+  `nameToCountry` map, in Latin and in both Cyrillic spellings, minus the names GeoNames
+  places in more than one country. Today only `kyiv`/`киев`/`київ`
   are present, so a Lviv or Kharkiv vacancy lands with a city name but no country and no
   region — invisible to `country=ua` and to the `eu` region filter.
 - Seven vetted Ukrainian channels join `sources/telegram.yml`: two job boards
@@ -51,7 +52,9 @@ would imply the rule changed.
 - `sources/telegram.yml` — 88 channels → 95
 - `docs/telegram-channels.md` — mirror and header count
 - Cost: the prefilter admits more posts to the metered LLM extraction stage, bounded by the
-  seven new channels. The measured false-positive rate of the adopted marker set is 5 posts
-  per 150 on channels that carry no vacancies at all.
+  seven new channels — 16 posts to 39 across their latest 136. Not all of the additions are
+  vacancies: the five DOU verticals are editorial, so course digests and event invitations
+  reach the LLM and come back as `{"jobs": []}`. That is one call each, and the extraction
+  prompt already lists "course ad" as a negative.
 - No effect on the 88 channels already crawled: the same measurement over eight of them
   showed zero posts rescued by Ukrainian markers, because they publish in Russian.

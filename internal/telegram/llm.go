@@ -96,7 +96,7 @@ func repairJSONControlChars(s string) string {
 // authored post may bundle several (or none — channels mix in ads and digests).
 func extractSystemPrompt(kind Kind) string {
 	var b strings.Builder
-	b.WriteString("You read a Telegram channel post (Russian or English) and decide whether it advertises job vacancies.\n")
+	b.WriteString("You read a Telegram channel post (Ukrainian, Russian, or English) and decide whether it advertises job vacancies.\n")
 	b.WriteString("Return ONLY a JSON object: {\"jobs\": [...]}. If the post is not a job advertisement ")
 	b.WriteString("(news, digest, course ad, meme), return {\"jobs\": []}.\n\n")
 

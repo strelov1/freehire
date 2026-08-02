@@ -96,16 +96,23 @@ var nameToCountry = map[string]string{
 	// the US state; the country resolves via its capital "tbilisi" only.
 	"russia": "ru", "moscow": "ru", "saint petersburg": "ru", "st petersburg": "ru",
 	"kyiv": "ua", "kiev": "ua",
-	// The remaining Ukrainian oblast centres, added with the Telegram UA cohort.
-	// "odessa" (the double-s transliteration) is deliberately absent — it collides
-	// with Odessa, Texas, the same reason "georgia" is absent above; the Ukrainian
-	// "odesa" carries the city on its own.
-	"lviv": "ua", "kharkiv": "ua", "odesa": "ua", "dnipro": "ua",
-	"vinnytsia": "ua", "ivano-frankivsk": "ua", "zaporizhzhia": "ua",
-	"chernivtsi": "ua", "ternopil": "ua", "uzhhorod": "ua", "rivne": "ua",
-	"lutsk": "ua", "poltava": "ua", "khmelnytskyi": "ua", "zhytomyr": "ua",
-	"cherkasy": "ua", "sumy": "ua", "mykolaiv": "ua", "chernihiv": "ua",
-	"kryvyi rih": "ua",
+	// Other Ukrainian oblast centres, added with the Telegram UA cohort, in the
+	// Ukrainian and the Russian transliteration. Every key here is Ukraine-only in
+	// cities15000.tsv. Omitted because GeoNames lists the alias in more than one
+	// country, the same reason "georgia" is omitted above: "odesa"/"odessa" (also
+	// Odessa, Texas), "lutsk" (Belarus), "cherkasy"/"cherkassy" and "donetsk"
+	// (Russia), "nikolaev" (Bulgaria, Russia). Those keep resolving to a bare city
+	// name — under-resolving is what the never-guess contract asks for.
+	"lviv": "ua", "lvov": "ua", "kharkiv": "ua", "kharkov": "ua",
+	"dnipro": "ua", "dnepr": "ua", "dnepropetrovsk": "ua",
+	"vinnytsia": "ua", "ivano-frankivsk": "ua",
+	"zaporizhzhia": "ua", "zaporozhye": "ua",
+	"chernivtsi": "ua", "chernovtsy": "ua", "ternopil": "ua", "ternopol": "ua",
+	"uzhhorod": "ua", "uzhgorod": "ua", "rivne": "ua", "rovno": "ua",
+	"poltava": "ua", "khmelnytskyi": "ua", "zhytomyr": "ua", "zhitomir": "ua",
+	"sumy": "ua", "mykolaiv": "ua", "chernihiv": "ua", "chernigov": "ua",
+	"kryvyi rih": "ua", "krivoy rog": "ua",
+	"kherson": "ua", "kropyvnytskyi": "ua", "luhansk": "ua",
 	"uzbekistan": "uz", "tashkent": "uz", "toshkent": "uz", "samarkand": "uz",
 	"kazakhstan": "kz", "almaty": "kz", "astana": "kz", "nur-sultan": "kz",
 	"kyrgyzstan": "kg", "bishkek": "kg",
@@ -156,15 +163,20 @@ var nameToCountry = map[string]string{
 	"киев": "ua", "київ": "ua", "україна": "ua", "украина": "ua",
 	// Oblast centres in both spellings: the Telegram UA channels write Ukrainian,
 	// the RU-segment ATS sources write Russian, and a location field carries either.
+	// A Cyrillic key is dropped only when GeoNames places the alias in another
+	// Cyrillic-writing country, since those are the postings that could carry this
+	// spelling: "луцьк"/"луцк" (Belarus), "черкассы" (Russia), "николаев" (Bulgaria,
+	// Russia). The Latin block above is stricter — a Latin field can come from
+	// anywhere, so "odesa" is absent there and present here.
 	"львів": "ua", "львов": "ua", "харків": "ua", "харьков": "ua",
 	"одеса": "ua", "одесса": "ua", "дніпро": "ua", "днепр": "ua",
 	"вінниця": "ua", "винница": "ua", "івано-франківськ": "ua", "ивано-франковск": "ua",
 	"запоріжжя": "ua", "запорожье": "ua", "чернівці": "ua", "черновцы": "ua",
 	"тернопіль": "ua", "тернополь": "ua", "ужгород": "ua", "рівне": "ua", "ровно": "ua",
-	"луцьк": "ua", "луцк": "ua", "полтава": "ua", "хмельницький": "ua", "хмельницкий": "ua",
-	"житомир": "ua", "черкаси": "ua", "черкассы": "ua", "суми": "ua", "сумы": "ua",
-	"миколаїв": "ua", "николаев": "ua", "чернігів": "ua", "чернигов": "ua",
-	"кривий ріг": "ua", "кривой рог": "ua",
+	"полтава": "ua", "хмельницький": "ua", "хмельницкий": "ua", "житомир": "ua",
+	"черкаси": "ua", "суми": "ua", "сумы": "ua", "миколаїв": "ua",
+	"чернігів": "ua", "чернигов": "ua", "кривий ріг": "ua", "кривой рог": "ua",
+	"херсон": "ua", "кропивницький": "ua", "луганськ": "ua",
 
 	// --- Country names: English + native + ES/PT/DE, seeded from the unresolved
 	// production strings. (Names already keyed above are not repeated.)

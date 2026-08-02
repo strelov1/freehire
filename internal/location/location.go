@@ -212,12 +212,13 @@ func resolveGeoName(tok string, countrySet, regionSet map[string]struct{}) bool 
 	return false
 }
 
-// cityMarkerPrefixes are the Russian "city" abbreviations that RU-segment ATS
-// data prepends to a bare city name ("г Москва", "город Самара"). Stripped from a
-// token before lookup so the city resolves; checked longest-first so "город "
-// wins over "г ". A city whose name merely starts with "г" ("Грозный") is
-// untouched — every prefix ends in a separator the name doesn't.
-var cityMarkerPrefixes = []string{"город ", "г. ", "г.", "г "}
+// cityMarkerPrefixes are the "city" abbreviations that Cyrillic-writing sources
+// prepend to a bare city name — Russian "г Москва" / "город Самара", Ukrainian
+// "м. Львів" / "місто Київ". Stripped from a token before lookup so the city
+// resolves; checked longest-first so "город " wins over "г ". A city whose name
+// merely starts with "г" or "м" ("Грозный", "Мурманск") is untouched — every
+// prefix ends in a separator the name doesn't.
+var cityMarkerPrefixes = []string{"город ", "місто ", "г. ", "м. ", "г.", "м.", "г ", "м "}
 
 // noiseTokenWords are dropped from a geography token so an embedded place still
 // resolves: work-mode words ("US Remote" -> "us") and site suffixes ("San
