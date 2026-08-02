@@ -12,7 +12,8 @@
     EmailBody,
   } from '$lib/api';
   import type { EmailLinking } from '$lib/types';
-  import { statusLabel, statusClass, STATUS_LABELS } from '$lib/emailStatus';
+  import { statusLabel, STATUS_LABELS } from '$lib/emailStatus';
+  import StatusChip from '$lib/components/StatusChip.svelte';
   import { inboxLinkState, type LastUnlinked } from '$lib/inboxLink';
   import { Paginator } from '$lib/paginated.svelte';
   import { Badge } from '$lib/ui';
@@ -655,11 +656,7 @@
                       {/if}
                       {#if statusLabel(m.status_signal) || m.linked_slug}
                         <div class="mt-1 flex items-center gap-1">
-                          {#if statusLabel(m.status_signal)}
-                            <span class="inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(m.status_signal)}">
-                              {statusLabel(m.status_signal)}
-                            </span>
-                          {/if}
+                          <StatusChip signal={m.status_signal} class="text-[10px] leading-4" />
                           {#if m.linked_slug}
                             <span class="truncate text-[10px] text-muted-foreground/70">· {m.linked_company}</span>
                           {:else if m.suggested_slug}
@@ -735,9 +732,7 @@
 
               {@const linkState = inboxLinkState(s, lastUnlinked)}
               <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
-                {#if statusLabel(s.status_signal)}
-                  <Badge variant="outline" class={statusClass(s.status_signal)}>{statusLabel(s.status_signal)}</Badge>
-                {/if}
+                <StatusChip signal={s.status_signal} />
                 {#if linkState === 'linked' && s.linked_slug}
                   <a
                     href={resolve('/my/tracking/[id]', { id: s.linked_slug })}

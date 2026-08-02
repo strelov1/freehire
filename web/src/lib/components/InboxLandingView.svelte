@@ -3,7 +3,7 @@
   import { Button } from '$lib/ui';
   import NumberedGrid from '$lib/components/NumberedGrid.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
-  import { statusClass, statusLabel } from '$lib/emailStatus';
+  import StatusChip from '$lib/components/StatusChip.svelte';
   import { INBOX_FAQ } from '$lib/inboxFaq';
   import { INBOX_STATUS_GUIDE } from '$lib/inboxStatusGuide';
 
@@ -93,12 +93,6 @@
   </div>
 {/snippet}
 
-{#snippet chip(signal: string, size: string)}
-  <span class="inline-block rounded border px-1.5 {size} {statusClass(signal)}">
-    {statusLabel(signal)}
-  </span>
-{/snippet}
-
 <div class="flex flex-col">
   <!-- Hero. Left: the pitch. Right: the inbox itself, chips and all. -->
   <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
@@ -137,7 +131,7 @@
               </div>
               <p class="mt-0.5 truncate text-sm text-muted-foreground">{m.subject}</p>
               <span class="mt-2 inline-block">
-                {@render chip(m.signal, 'text-[10px] leading-4')}
+                <StatusChip signal={m.signal} class="text-[10px] leading-4" />
               </span>
             </div>
           </li>
@@ -203,7 +197,7 @@
         <!-- The chip column is fixed-width so the descriptions line up down the
              grid instead of stepping in and out with each label's length. -->
         <div class="flex items-baseline gap-3 bg-background p-5 sm:p-6">
-          <dt class="w-28 shrink-0">{@render chip(s.signal, 'py-0.5 text-xs')}</dt>
+          <dt class="w-28 shrink-0"><StatusChip signal={s.signal} /></dt>
           <dd class="text-sm leading-relaxed text-muted-foreground">{s.description}</dd>
         </div>
       {/each}
@@ -241,7 +235,7 @@
             <p class="truncate font-medium">Tech Lead, Web Core Product</p>
             <p class="truncate text-sm text-muted-foreground">Speechify</p>
           </div>
-          <span class="ml-auto">{@render chip('interview_invitation', 'py-0.5 text-xs')}</span>
+          <span class="ml-auto"><StatusChip signal="interview_invitation" /></span>
         </div>
 
         <div class="mt-5 flex items-center gap-2 border-b border-border pb-3 text-sm">
@@ -258,7 +252,7 @@
                 <p class="truncate text-sm">{m.from}</p>
                 <p class="truncate text-xs text-muted-foreground">{m.subject}</p>
               </div>
-              <span class="shrink-0">{@render chip(m.signal, 'text-[10px] leading-4')}</span>
+              <span class="shrink-0"><StatusChip signal={m.signal} class="text-[10px] leading-4" /></span>
             </li>
           {/each}
         </ul>

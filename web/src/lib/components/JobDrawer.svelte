@@ -17,7 +17,8 @@
   import { api } from '$lib/api';
   import type { EmailBody } from '$lib/api';
   import { currentUser } from '$lib/auth.svelte';
-  import { statusLabel, statusClass, stageImplication } from '$lib/emailStatus';
+  import { statusLabel, stageImplication } from '$lib/emailStatus';
+  import StatusChip from '$lib/components/StatusChip.svelte';
   import { avatarInitials, avatarColor } from '$lib/avatar';
   import type { MyJob, ApplicationEmail, StageSuggestion } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
@@ -473,12 +474,14 @@
                       <!-- The chip, and what its signal means for the stage. The chip alone left
                            three different situations looking identical: the signal moved the
                            stage, it named one only the candidate may apply, or it was never
-                           about progress. Both sit in one wrapper carrying the size, so the
-                           explanation matches the chip without restating the class. -->
-                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-[10px] leading-4">
-                        <span class="inline-block rounded border px-1.5 {statusClass(e.status_signal)}">
-                          {statusLabel(e.status_signal)}
-                        </span>
+                           about progress.
+                           Both run at the chip's own size (text-xs) rather than at a 10px the
+                           wrapper used to impose: StatusChip renders a Badge, which carries its
+                           size, so pinning the wrapper smaller would leave the explanation off
+                           the chip's baseline — and this thread has the room the dense inbox
+                           list does not. -->
+                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-xs leading-4">
+                        <StatusChip signal={e.status_signal} />
                         {#if stageImplication(e.status_signal)}
                           <span class="text-muted-foreground">{stageImplication(e.status_signal)}</span>
                         {/if}

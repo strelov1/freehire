@@ -2,8 +2,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { cn } from '$lib/ui';
-  import { tablist } from '$lib/actions/tablist';
+  import { routeTabClass, tablist } from '$lib/actions/tablist';
 
   let { children }: { children: Snippet } = $props();
 
@@ -28,13 +27,6 @@
           : 'activity-tab-saved',
   );
 
-  const tabClass = (active: boolean) =>
-    cn(
-      'rounded-md px-3 py-1.5 text-sm transition-colors',
-      active
-        ? 'bg-secondary font-medium text-secondary-foreground'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-    );
 </script>
 
 <svelte:head>
@@ -52,7 +44,7 @@
       aria-selected={savedActive}
       aria-controls="activity-tabpanel"
       href={resolve('/my/activity')}
-      class={tabClass(savedActive)}
+      class={routeTabClass(savedActive)}
     >
       Saved
     </a>
@@ -62,7 +54,7 @@
       aria-selected={historyActive}
       aria-controls="activity-tabpanel"
       href={resolve('/my/activity/history')}
-      class={tabClass(historyActive)}
+      class={routeTabClass(historyActive)}
     >
       History
     </a>
@@ -72,7 +64,7 @@
       aria-selected={matchesActive}
       aria-controls="activity-tabpanel"
       href={resolve('/my/activity/matches')}
-      class={tabClass(matchesActive)}
+      class={routeTabClass(matchesActive)}
     >
       Matches
     </a>
@@ -82,7 +74,7 @@
       aria-selected={hiddenActive}
       aria-controls="activity-tabpanel"
       href={resolve('/my/activity/hidden')}
-      class={tabClass(hiddenActive)}
+      class={routeTabClass(hiddenActive)}
     >
       Hidden
     </a>

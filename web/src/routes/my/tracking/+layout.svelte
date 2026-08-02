@@ -2,8 +2,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { cn } from '$lib/ui';
-  import { tablist } from '$lib/actions/tablist';
+  import { routeTabClass, tablist } from '$lib/actions/tablist';
 
   let { children }: { children: Snippet } = $props();
 
@@ -28,13 +27,6 @@
           : 'tracking-tab-board',
   );
 
-  const tabClass = (active: boolean) =>
-    cn(
-      'rounded-md px-3 py-1.5 text-sm transition-colors',
-      active
-        ? 'bg-secondary font-medium text-secondary-foreground'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-    );
 </script>
 
 <svelte:head>
@@ -52,7 +44,7 @@
       aria-selected={boardActive}
       aria-controls="tracking-tabpanel"
       href={resolve('/my/tracking')}
-      class={tabClass(boardActive)}
+      class={routeTabClass(boardActive)}
     >
       Board
     </a>
@@ -62,7 +54,7 @@
       aria-selected={listActive}
       aria-controls="tracking-tabpanel"
       href={resolve('/my/tracking/list')}
-      class={tabClass(listActive)}
+      class={routeTabClass(listActive)}
     >
       List
     </a>
@@ -72,7 +64,7 @@
       aria-selected={pipelineActive}
       aria-controls="tracking-tabpanel"
       href={resolve('/my/tracking/pipeline')}
-      class={tabClass(pipelineActive)}
+      class={routeTabClass(pipelineActive)}
     >
       Pipeline
     </a>
@@ -82,7 +74,7 @@
       aria-selected={calendarActive}
       aria-controls="tracking-tabpanel"
       href={resolve('/my/tracking/calendar')}
-      class={tabClass(calendarActive)}
+      class={routeTabClass(calendarActive)}
     >
       Calendar
     </a>

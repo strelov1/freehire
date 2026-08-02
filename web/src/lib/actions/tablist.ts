@@ -63,3 +63,21 @@ export const tablist: Action<HTMLElement, unknown> = (node) => {
     destroy: () => node.removeEventListener('keydown', onKeydown),
   };
 };
+
+/**
+ * The pill treatment for a routed `/my/*` tab — the two segment strips over the tracking
+ * board and the activity lists. It lives beside the behaviour rather than in either layout
+ * because both had it, byte for byte, and a pill that drifts between two sibling sections
+ * of the same account area reads as a bug rather than as a choice.
+ *
+ * It is NOT the underline strip (`TabRow`) or the design system's `Tabs`: those weld the
+ * list to a panel, and these tabs are anchors driving a route.
+ */
+export function routeTabClass(active: boolean): string {
+  return [
+    'rounded-md px-3 py-1.5 text-sm transition-colors',
+    active
+      ? 'bg-secondary font-medium text-secondary-foreground'
+      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+  ].join(' ');
+}

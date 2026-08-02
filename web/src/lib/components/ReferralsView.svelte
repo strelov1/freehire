@@ -5,6 +5,7 @@
   import { replaceState } from '$app/navigation';
   import { FileText } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
+  import { tablist } from '$lib/actions/tablist';
   import { AsyncData } from '$lib/asyncData.svelte';
   import type {
     IncomingReferralRequest,
@@ -137,7 +138,10 @@
 </script>
 
 <div class="flex items-center justify-between gap-4">
-  <div class="flex gap-1 border-b border-border" role="tablist">
+  <!-- use:tablist is what makes role="tablist" true. Without it the group announces
+       itself as one widget and then cannot be stepped through: every tab stays in the
+       Tab sequence and the arrow keys do nothing — the promise without the behaviour. -->
+  <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={tab}>
     {#each [['requests', 'My requests'], ['offers', 'Offers to refer'], ['incoming', 'Incoming']] as [id, label] (id)}
       <button
         type="button"
