@@ -16,18 +16,20 @@
 
 ## 2. The second candidate source, in mailrecall
 
-- [ ] 2.1 Define a `Mailbox` interface — search for an employer's mail, and import one
+- [x] 2.1 Define a `Mailbox` interface — search for an employer's mail, and import one
       message by provider id — and note in the doc comment that it is the seam the fallback
       is chosen against. Nil means no searchable mailbox.
-- [ ] 2.2 Make `Recall` pick its source: search when a `Mailbox` is present, `ListForRecall`
+- [x] 2.2 Make `Recall` pick its source: search when a `Mailbox` is present, `ListForRecall`
       otherwise. Test-first: with a mailbox the store is never asked for candidates; without
       one the store is.
-- [ ] 2.3 Carry the provider message id on `Proposal` and stop writing suggestions on the
-      search path. Test that a search-path run performs zero writes.
-- [ ] 2.4 Add `ErrSearch` beside `ErrModel` so the handler can tell "could not look" from
+- [x] 2.3 Carry the provider message id on `Message` and stop writing suggestions on the
+      search path. Test that a search-path run performs zero writes. The model is now
+      addressed by POSITION rather than by id — a searched message has none of ours, and
+      the model never needed to see an internal identifier.
+- [x] 2.4 Add `ErrSearch` beside `ErrModel` so the handler can tell "could not look" from
       "could not judge", and test that a search failure is neither swallowed nor reported as
       an empty result.
-- [ ] 2.5 Extend `TestMailRecallCannotLink` and the source scan to cover the new interface:
+- [x] 2.5 Extend `TestMailRecallCannotLink` and the source scan to cover the new interface:
       a `Mailbox` that could link would break the rule as surely as a `Store` that could.
 
 ## 3. Link-and-import, in the handler

@@ -83,6 +83,12 @@ var appliedAt = time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
 // way mailclassify's tests do.
 func svc(store Store, g gen) *Service { return &Service{store: store, gen: g} }
 
+// svcWithMailbox is the search path: a mailbox present means the stored table is not the
+// source of candidates.
+func svcWithMailbox(store Store, g gen, m Mailbox) *Service {
+	return &Service{store: store, gen: g, mailbox: m}
+}
+
 func testApplication() Application {
 	return Application{JobID: 77, Company: "Derq", Role: "Backend Engineer", AppliedAt: appliedAt}
 }
@@ -113,6 +119,13 @@ func TestMailRecallCannotLink(t *testing.T) {
 	if iface.NumMethod() != len(allowed) {
 		t.Errorf("Store has %d methods, want %d", iface.NumMethod(), len(allowed))
 	}
+
+	// The mailbox is the second way out of this package, and it inherits the rule whole: a
+	// Mailbox that could attach anything would break it as surely as a Store that could.
+	box := reflect.TypeOf((*Mailbox)(nil)).Elem()
+	if box.NumMethod() != 1 || box.Method(0).Name != "Search" {
+		t.Errorf("Mailbox offers more than Search — it may look at a mailbox and nothing else")
+	}
 }
 
 // A model that names a message it was never shown gets nothing. Bodies are
@@ -121,8 +134,8 @@ func TestMailRecallCannotLink(t *testing.T) {
 func TestRecallDiscardsAVerdictOutsideTheBatch(t *testing.T) {
 	store := &fakeStore{messages: []Message{msg(1, "Thanks for applying to Derq")}}
 	gen := &fakeGen{verdicts: []verdict{
-		{EmailID: 1, Belongs: true, Confidence: 0.9},
-		{EmailID: 999, Belongs: true, Confidence: 0.99},
+		{Index: 1, Belongs: true, Confidence: 0.9},
+		{Index: 99, Belongs: true, Confidence: 0.99},
 	}}
 
 	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
@@ -133,7 +146,7 @@ func TestRecallDiscardsAVerdictOutsideTheBatch(t *testing.T) {
 		t.Fatalf("proposed %+v, want only the message that was actually offered", got.Proposed)
 	}
 	for _, c := range store.suggested {
-		if c.emailID == 999 {
+		if c.emailID == 99 {
 			t.Fatal("a message outside the batch was written to the database")
 		}
 	}
@@ -167,7 +180,7 @@ func TestRecallShowsTheModelTheHTMLBodyWhenThereIsNoTextPart(t *testing.T) {
 	m.BodyText = ""
 	m.BodyHTML = "<p>We would like to book a call about the Backend role.</p>"
 	store := &fakeStore{messages: []Message{m}}
-	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
 
 	if _, err := svc(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
@@ -183,7 +196,7 @@ func TestRecallTruncatesEachBody(t *testing.T) {
 	m := msg(1, "Long")
 	m.BodyText = strings.Repeat("a", maxBodyRunes*2)
 	store := &fakeStore{messages: []Message{m}}
-	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
 
 	if _, err := svc(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
@@ -222,9 +235,9 @@ func TestRecallBoundsTheWindowAtBothEnds(t *testing.T) {
 func TestRecallKeepsOnlyConfidentVerdicts(t *testing.T) {
 	store := &fakeStore{messages: []Message{msg(1, "Sure"), msg(2, "Unsure"), msg(3, "No")}}
 	gen := &fakeGen{verdicts: []verdict{
-		{EmailID: 1, Belongs: true, Confidence: 0.95},
-		{EmailID: 2, Belongs: true, Confidence: 0.69},
-		{EmailID: 3, Belongs: false, Confidence: 0.99},
+		{Index: 1, Belongs: true, Confidence: 0.95},
+		{Index: 2, Belongs: true, Confidence: 0.69},
+		{Index: 3, Belongs: false, Confidence: 0.99},
 	}}
 
 	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
@@ -255,9 +268,9 @@ func TestRecallCountsProposedInvitations(t *testing.T) {
 
 	store := &fakeStore{messages: []Message{withUID, plain, uncounted}}
 	gen := &fakeGen{verdicts: []verdict{
-		{EmailID: 1, Belongs: true, Confidence: 0.9},
-		{EmailID: 2, Belongs: true, Confidence: 0.9},
-		{EmailID: 3, Belongs: false, Confidence: 0.9},
+		{Index: 1, Belongs: true, Confidence: 0.9},
+		{Index: 2, Belongs: true, Confidence: 0.9},
+		{Index: 3, Belongs: false, Confidence: 0.9},
 	}}
 
 	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
@@ -325,7 +338,7 @@ func TestMailRecallNamesNoLinkingSymbol(t *testing.T) {
 // are two copies of one fact, which is what prompt_test.go exists for in mailclassify: a
 // key described but not decoded is an answer thrown away.
 func TestThePromptNamesTheKeysTheAnswerDecodes(t *testing.T) {
-	for _, key := range []string{"verdicts", "email_id", "belongs", "confidence"} {
+	for _, key := range []string{"verdicts", "index", "belongs", "confidence"} {
 		if !strings.Contains(systemPrompt, `"`+key+`"`) {
 			t.Errorf("the prompt never names %q, which the answer decodes", key)
 		}
@@ -352,7 +365,7 @@ func TestRecallRefusesATrackedJobThatWasNeverAppliedTo(t *testing.T) {
 // Reporting it anyway would draw a suggestion the database does not hold.
 func TestRecallDoesNotReportAProposalTheGuardRefused(t *testing.T) {
 	store := &fakeStore{messages: []Message{msg(1, "Thanks")}, suggestRows: new(int64)}
-	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
 
 	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 	if err != nil {
@@ -386,7 +399,7 @@ func TestRecallSurfacesEveryFailurePath(t *testing.T) {
 		}, true},
 		"the suggestion cannot be written": {func() (*fakeStore, *fakeGen) {
 			return &fakeStore{messages: []Message{msg(1, "Thanks")}, suggerr: errors.New("db down")},
-				&fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+				&fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
 		}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -403,5 +416,135 @@ func TestRecallSurfacesEveryFailurePath(t *testing.T) {
 					isModel, tc.isModel)
 			}
 		})
+	}
+}
+
+// fakeMailbox stands in for the connected mailbox.
+type fakeMailbox struct {
+	messages []Message
+	err      error
+	company  string
+	role     string
+	since    time.Time
+	until    time.Time
+	calls    int
+}
+
+func (m *fakeMailbox) Search(_ context.Context, _ int64, company, role string, since, until time.Time) ([]Message, error) {
+	m.calls++
+	m.company, m.role, m.since, m.until = company, role, since, until
+	return m.messages, m.err
+}
+
+func searched(id string, subject string) Message {
+	return Message{
+		ProviderID: id, FromAddr: "maria@derq.example", FromName: "Maria Alvarez",
+		Subject: subject, BodyText: "Could we book 45 minutes?",
+		ReceivedAt: appliedAt.Add(time.Hour),
+	}
+}
+
+// The whole point of the change. Where a mailbox can be searched, the stored table is not
+// the source of candidates — it could not answer "about this employer" at all, which is why
+// every application on production exceeded the cap and found nothing.
+func TestRecallPrefersTheMailboxOverStoredMail(t *testing.T) {
+	store := &fakeStore{messages: []Message{msg(1, "stored")}}
+	box := &fakeMailbox{messages: []Message{searched("g1", "Next step — a 45 minute call")}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
+
+	got, err := svcWithMailbox(store, gen, box).Recall(context.Background(), 5, testApplication())
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if box.calls != 1 {
+		t.Fatalf("the mailbox was searched %d times, want once", box.calls)
+	}
+	if store.limit != 0 {
+		t.Error("the stored table was asked for candidates while a mailbox was available")
+	}
+	if len(got.Proposed) != 1 || got.Proposed[0].Message.ProviderID != "g1" {
+		t.Fatalf("proposed %+v, want the searched message", got.Proposed)
+	}
+	if got.Scanned != 1 {
+		t.Errorf("scanned %d, want 1", got.Scanned)
+	}
+}
+
+// The search is handed the employer, the role and the window — the role because mail whose
+// only subject is the job title is a measured, real class that hiring words alone drop.
+func TestRecallHandsTheSearchTheEmployerTheRoleAndTheWindow(t *testing.T) {
+	box := &fakeMailbox{}
+	if _, err := svcWithMailbox(&fakeStore{}, &fakeGen{}, box).
+		Recall(context.Background(), 5, testApplication()); err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if box.company != "Derq" || box.role != "Backend Engineer" {
+		t.Errorf("searched for company=%q role=%q", box.company, box.role)
+	}
+	if !box.since.Equal(appliedAt.Add(-windowLead)) || !box.until.Equal(appliedAt.Add(windowTrail)) {
+		t.Errorf("window %s..%s", box.since, box.until)
+	}
+}
+
+// A caller with no searchable mailbox keeps the path that exists today.
+func TestRecallFallsBackToStoredMailWithoutAMailbox(t *testing.T) {
+	store := &fakeStore{messages: []Message{msg(1, "stored")}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.9}}}
+
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if store.limit != maxCandidates {
+		t.Error("the stored path did not run")
+	}
+	if len(got.Proposed) != 1 || got.Proposed[0].Message.ID != 1 {
+		t.Fatalf("proposed %+v, want the stored message", got.Proposed)
+	}
+}
+
+// A sweep over the mailbox plants nothing. What a person has not confirmed is not kept —
+// which is a change from the stored path, where a confident answer wrote a suggestion
+// whether or not anybody agreed with it.
+func TestRecallOverTheMailboxWritesNothing(t *testing.T) {
+	store := &fakeStore{}
+	box := &fakeMailbox{messages: []Message{searched("g1", "Thanks for applying")}}
+	gen := &fakeGen{verdicts: []verdict{{Index: 1, Belongs: true, Confidence: 0.99}}}
+
+	if _, err := svcWithMailbox(store, gen, box).Recall(context.Background(), 5, testApplication()); err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if len(store.suggested) != 0 {
+		t.Errorf("the sweep wrote %d suggestions", len(store.suggested))
+	}
+}
+
+// "We could not look" is a different sentence from "there was nothing to find", and the
+// caller is waiting for one of them.
+func TestRecallReportsASearchFailure(t *testing.T) {
+	box := &fakeMailbox{err: errors.New("gmail down")}
+	_, err := svcWithMailbox(&fakeStore{}, &fakeGen{}, box).Recall(context.Background(), 5, testApplication())
+	if !errors.Is(err, ErrSearch) {
+		t.Fatalf("got %v, want ErrSearch", err)
+	}
+}
+
+// The model is given positions, not identifiers, so a verdict naming one that was never
+// offered cannot resolve to anything — and a searched message, which has no id of ours,
+// is addressable at all.
+func TestRecallDiscardsAVerdictOutsideTheOfferedPositions(t *testing.T) {
+	box := &fakeMailbox{messages: []Message{searched("g1", "Thanks")}}
+	gen := &fakeGen{verdicts: []verdict{
+		{Index: 1, Belongs: true, Confidence: 0.9},
+		{Index: 7, Belongs: true, Confidence: 0.99},
+		{Index: 0, Belongs: true, Confidence: 0.99},
+	}}
+
+	got, err := svcWithMailbox(&fakeStore{}, gen, box).Recall(context.Background(), 5, testApplication())
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if len(got.Proposed) != 1 {
+		t.Fatalf("proposed %+v, want only the one offered position", got.Proposed)
 	}
 }
