@@ -133,7 +133,7 @@ already draws. `invitations` counts the suggested ones carrying an `ical_uid`.
 ## Spend
 
 The call goes out on the **caller's own gateway credential** (`internal/llmkey`),
-tagged `feature:mail_recall`. Searching a candidate's mailbox is work that belongs to
+tagged `feature:mail-recall`. Searching a candidate's mailbox is work that belongs to
 them, not to the service credential that pays for enrichment. Attribution fails open,
 per the package's rule: an unmintable credential falls back to the service one and the
 call completes.

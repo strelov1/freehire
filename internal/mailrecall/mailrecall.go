@@ -142,6 +142,15 @@ type gen interface {
 // matching on prose.
 var ErrNotAnApplication = errors.New("mailrecall: the tracked job has no recorded application date")
 
+// ErrModel wraps a failure of the adjudication call — unreachable, refused, or answering
+// something that cannot be read.
+//
+// It exists so a caller can tell "the model let us down" from "the database did". Both
+// return an error from Recall, and rendering them the same way blames the model for a lock
+// timeout AND hides the fault: an HTTP layer that answers 502 for everything reports a
+// routine gateway hiccup, so a Postgres error on this path reaches no error tracker at all.
+var ErrModel = errors.New("mailrecall: the model could not be consulted")
+
 // Service runs one recall.
 type Service struct {
 	store Store
@@ -251,11 +260,11 @@ func (s *Service) adjudicate(ctx context.Context, app Application, messages []Me
 	raw, err := s.gen.GenerateJSON(ctx, systemPrompt, userPrompt(app, messages),
 		llm.WithSchema(schemaName, schema))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrModel, err)
 	}
 	var out answer
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil, fmt.Errorf("mailrecall: parse: %w", err)
+		return nil, fmt.Errorf("%w: unreadable answer: %w", ErrModel, err)
 	}
 	byID := make(map[int64]verdict, len(out.Verdicts))
 	for _, v := range out.Verdicts {

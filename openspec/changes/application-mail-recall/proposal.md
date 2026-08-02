@@ -54,6 +54,6 @@ No breaking changes.
 - **Web**: the button and result list in `web/src/lib/components/JobDrawer.svelte`;
   types through `cmd/gen-contracts`.
 - **Spend**: one call per press on the caller's own gateway credential
-  (`internal/llmkey`), tagged `feature:mail_recall`. No credit debit.
+  (`internal/llmkey`), tagged `feature:mail-recall`. No credit debit.
 - **Unchanged**: `internal/maillink`, `internal/mailmatch`, `internal/mailclassify`,
   `internal/calmatch`, `internal/calsync`, and every existing mail endpoint.

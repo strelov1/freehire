@@ -156,7 +156,7 @@ and a missing-grant path for a result that arrives on its own.
 ### Spend is attributed, not metered
 
 The call goes out on the caller's own gateway credential (`internal/llmkey`), tagged
-`feature:mail_recall`: searching a candidate's mailbox is work that belongs to them, not to
+`feature:mail-recall`: searching a candidate's mailbox is work that belongs to them, not to
 the service credential that pays for enrichment. Attribution fails open, per that package's
 rule. No credit debit — `internal/credits` knows `match` and `tailor`, both expensive
 one-shot actions, and this is one cheap call; a price set before the spend distribution is

@@ -363,29 +363,39 @@ func TestRecallDoesNotReportAProposalTheGuardRefused(t *testing.T) {
 
 // Every failure the caller can meet is a failure, not an empty answer.
 func TestRecallSurfacesEveryFailurePath(t *testing.T) {
-	for name, build := range map[string]func() (*fakeStore, *fakeGen){
-		"the net cannot be read": func() (*fakeStore, *fakeGen) {
+	// Whether the failure is the MODEL's decides how the caller renders it: a gateway
+	// hiccup is a 502, while a dead pool or a cancelled request must stay ours so it
+	// reaches an error tracker instead of being filed as a routine bad gateway.
+	for name, tc := range map[string]struct {
+		build   func() (*fakeStore, *fakeGen)
+		isModel bool
+	}{
+		"the net cannot be read": {func() (*fakeStore, *fakeGen) {
 			return &fakeStore{listErr: errors.New("db down")}, &fakeGen{}
-		},
-		"the model is unreachable": func() (*fakeStore, *fakeGen) {
+		}, false},
+		"the model is unreachable": {func() (*fakeStore, *fakeGen) {
 			return &fakeStore{messages: []Message{msg(1, "Thanks")}}, &fakeGen{err: errors.New("gateway down")}
-		},
-		"the answer cannot be read": func() (*fakeStore, *fakeGen) {
+		}, true},
+		"the answer cannot be read": {func() (*fakeStore, *fakeGen) {
 			return &fakeStore{messages: []Message{msg(1, "Thanks")}}, &fakeGen{raw: "not json"}
-		},
-		"the suggestion cannot be written": func() (*fakeStore, *fakeGen) {
+		}, true},
+		"the suggestion cannot be written": {func() (*fakeStore, *fakeGen) {
 			return &fakeStore{messages: []Message{msg(1, "Thanks")}, suggerr: errors.New("db down")},
 				&fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
-		},
+		}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			store, gen := build()
+			store, gen := tc.build()
 			got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 			if err == nil {
 				t.Fatalf("%s reported success with %+v", name, got)
 			}
 			if len(got.Proposed) != 0 {
 				t.Errorf("a failed run still proposed %+v", got.Proposed)
+			}
+			if isModel := errors.Is(err, ErrModel); isModel != tc.isModel {
+				t.Errorf("errors.Is(err, ErrModel) = %v, want %v — the caller renders the two differently",
+					isModel, tc.isModel)
 			}
 		})
 	}

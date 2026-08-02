@@ -130,12 +130,21 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 	queries := db.New(pool)
 	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test")
 	if model != nil {
-		h = h.withRecall(mailrecall.New(mailrecall.NewDBStore(queries), llm.NewWithModel(model)), llmBinding{})
+		client := llm.NewWithModel(model)
+		// A real binding, not a zero one: it drives the whole userLLM path — resolve the
+		// caller's credential, fall open to the service one, tag the call — which a zero
+		// binding short-circuits before any of it runs.
+		h = h.withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
+			llmBinding{client: client})
 	}
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/api/v1/me/tracking/:slug/mail-recall", auth.RequireAuth(iss, testVersions), h.RecallApplicationMail)
+	// RequireAuthOrKey, not RequireAuth: production mounts this on mw.key, so a full-scope
+	// API key can press the button, and testing the cookie-only gate would leave the path
+	// that makes rate limiting matter unexercised.
+	app.Post("/api/v1/me/tracking/:slug/mail-recall",
+		auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), mailRecallLimiter(), h.RecallApplicationMail)
 
 	return app, iss
 }
@@ -218,8 +227,10 @@ func TestRecallApplicationMail_ProposesWithoutLinking(t *testing.T) {
 		`SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2`, fx.userID, fx.jobID).Scan(&stage); err != nil {
 		t.Fatalf("read stage: %v", err)
 	}
-	if stage != nil && *stage != "applied" {
-		t.Errorf("the stage moved to %q", *stage)
+	if stage == nil || *stage != "applied" {
+		// Asserting the value, not just "not something else": a nil stage would pass the
+		// looser check and cannot distinguish "did not move" from "never set".
+		t.Errorf("stage = %v, want it still at applied", stage)
 	}
 
 	var replies int

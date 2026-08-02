@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -56,9 +57,6 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if h.recall == nil {
-		return fiber.NewError(fiber.StatusServiceUnavailable, "mail recall is not configured")
-	}
 	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
 		return err // ErrNoRows → 404
@@ -67,6 +65,11 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		db.GetUserApplicationParams{UserID: userID, JobID: job.ID})
 	if err != nil {
 		return err // ErrNoRows → 404 (caller does not track this job)
+	}
+	// After the ownership reads, not before: a deployment with no model should still answer
+	// "no such application" for one that is not the caller's.
+	if h.recall == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "mail recall is not configured")
 	}
 
 	// The run goes out on the caller's own gateway credential. Attribution cannot fail: an
@@ -84,8 +87,19 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		// The verdict is the service's, so the in-process caller meets it too; the handler
 		// only chooses how to say it.
 		return fiber.NewError(fiber.StatusNotFound, "no application recorded for this job")
-	case err != nil:
+	case errors.Is(err, mailrecall.ErrModel):
+		// The gateway let us down. Logged rather than reported, because classify() marks
+		// every *fiber.Error routine and Sentry would never see it — and a 502 nobody
+		// records is how "the model had a bad day" and "the model has been down since
+		// Tuesday" come to look identical.
+		log.Printf("mail-recall: user %d: %v", userID, err)
 		return fiber.NewError(fiber.StatusBadGateway, "could not search your mail right now")
+	case err != nil:
+		// Anything else is ours: a dead pool, a lock timeout, a cancelled request. Returned
+		// bare so classify() can do its job — 499 for a closed tab, 500 AND Sentry for a
+		// fault. Wrapping these in a 502 would blame the model for a database error and
+		// silence the only signal that there was one.
+		return err
 	}
 
 	suggested := make([]recalledEmail, 0, len(result.Proposed))

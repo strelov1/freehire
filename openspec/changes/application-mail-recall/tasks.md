@@ -48,7 +48,7 @@
       an id list, and `GET /me/emails/:id` would mark each one READ. A model failure renders
       502 `{"error": ...}`; an unconfigured model renders 503.
 - [x] 3.3 Resolve the caller's gateway credential through `internal/llmkey` and tag the call
-      `feature:mail_recall`; unresolvable credential falls back to the service one.
+      `feature:mail-recall`; unresolvable credential falls back to the service one.
 - [x] 3.4 Add the integration test (`//go:build integration`): 404 for another user's
       application, a suggestion is written for the caller's, a linked message is unchanged,
       and no `application_events` row appears.

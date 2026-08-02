@@ -137,7 +137,9 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/emails/:id/application", mw.key, h.CreateApplicationFromEmail)
 	// The pull direction, beside the follow-up pair for the same reason they are there: it
 	// acts on one application and a keyed client drives it as legitimately as a browser.
-	api.Post("/me/tracking/:slug/mail-recall", mw.key, h.RecallApplicationMail)
+	// The limiter is the whole cost gate — this endpoint spends on the model and debits no
+	// credit — and is mounted after the auth gate so it can key on the caller.
+	api.Post("/me/tracking/:slug/mail-recall", mw.key, mailRecallLimiter(), h.RecallApplicationMail)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, not an XHR — so it is
