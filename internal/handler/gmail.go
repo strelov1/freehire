@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/inbox"
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/mailrecall"
 	"github.com/strelov1/freehire/internal/tokencrypt"
 )
 
@@ -50,6 +51,24 @@ type inboxHandlers struct {
 	// fetches this endpoint for its linked mail, so the history rides along rather than
 	// costing a second request.
 	timeline *apptimeline.Service
+	// recall is the pull direction — from an application, find its mail. Nil on a
+	// deployment with no model, and the endpoint reports the feature off rather than
+	// panicking.
+	recall *mailrecall.Service
+	// llm binds a run to the caller's own gateway credential. Its zero value is the
+	// unconfigured deployment, which every path already treats as "spend on the service
+	// credential".
+	llm llmBinding
+}
+
+// withRecall wires the mail-recall action after construction.
+//
+// Separate from newInboxHandlers because six test harnesses build these handlers for
+// surfaces that make no model call, and two more positional parameters on a
+// seven-parameter constructor would be paid by all of them for a field they leave nil.
+func (h *inboxHandlers) withRecall(recall *mailrecall.Service, binding llmBinding) *inboxHandlers {
+	h.recall, h.llm = recall, binding
+	return h
 }
 
 // trackingApplications adapts the tracking service to the one call the mail
@@ -116,6 +135,9 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/emails/:id/confirm", mw.key, h.ConfirmEmailLink)
 	api.Post("/me/emails/:id/reject", mw.key, h.RejectEmailLink)
 	api.Post("/me/emails/:id/application", mw.key, h.CreateApplicationFromEmail)
+	// The pull direction, beside the follow-up pair for the same reason they are there: it
+	// acts on one application and a keyed client drives it as legitimately as a browser.
+	api.Post("/me/tracking/:slug/mail-recall", mw.key, h.RecallApplicationMail)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, not an XHR — so it is

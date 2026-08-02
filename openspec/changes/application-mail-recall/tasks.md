@@ -39,16 +39,17 @@
 
 ## 3. HTTP
 
-- [ ] 3.1 Add `POST /me/tracking/:slug/mail-recall` beside the follow-up routes in
+- [x] 3.1 Add `POST /me/tracking/:slug/mail-recall` beside the follow-up routes in
       `internal/handler/gmail.go`, under `mw.key`. Resolve the slug to the caller's
       application; 404 for someone else's, for a missing one, and for a tracking row with
       `applied_at IS NULL`.
-- [ ] 3.2 Render the response as `{"data": {"scanned", "suggested", "invitations"}}`, with
-      `suggested` in the listing's own `inbox.Message` projection. A model failure renders
-      502 `{"error": ...}`.
-- [ ] 3.3 Resolve the caller's gateway credential through `internal/llmkey` and tag the call
+- [x] 3.2 Render the response as `{"data": {"scanned", "suggested", "invitations"}}`. The
+      proposed rows come from the run itself, not from a re-read: nothing fetches emails by
+      an id list, and `GET /me/emails/:id` would mark each one READ. A model failure renders
+      502 `{"error": ...}`; an unconfigured model renders 503.
+- [x] 3.3 Resolve the caller's gateway credential through `internal/llmkey` and tag the call
       `feature:mail_recall`; unresolvable credential falls back to the service one.
-- [ ] 3.4 Add the integration test (`//go:build integration`): 404 for another user's
+- [x] 3.4 Add the integration test (`//go:build integration`): 404 for another user's
       application, a suggestion is written for the caller's, a linked message is unchanged,
       and no `application_events` row appears.
 

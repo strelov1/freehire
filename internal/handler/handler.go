@@ -33,6 +33,7 @@ import (
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/llmkey"
+	"github.com/strelov1/freehire/internal/mailrecall"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
@@ -321,6 +322,14 @@ func Register(app *fiber.App, cfg Config) {
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
+	// The pull direction is wired only where there is a model to ask. Left nil, its endpoint
+	// reports the feature off — the same way an unconfigured deployment reports every other
+	// model-backed surface off, rather than failing at the first press.
+	if cfg.LLM != nil {
+		inboxH = inboxH.withRecall(
+			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
+			llmBinding{client: cfg.LLM, keys: llmKeys})
+	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
 	// to erase there, which must not stop a member from leaving.
