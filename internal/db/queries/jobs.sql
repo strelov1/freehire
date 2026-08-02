@@ -898,6 +898,11 @@ WHERE id = sqlc.arg(id) AND closed_at IS NULL;
 -- being closed by age. The caller also owns the window (cutoff = now() - window), the same
 -- division of labour the unseen sweep uses.
 --
+-- The ANY() form fails CLOSED on an empty or nil list: `source = ANY('{}')` is FALSE for
+-- every row (and ANY(NULL) is NULL), so a caller that passes nothing closes nothing. That is
+-- the exact mirror of SelectOrphanLivenessCandidates, where `<> ALL('{}')` is vacuously TRUE
+-- and therefore needs a guard. Do not invert this predicate without restoring one.
+--
 -- Strictly older than the cutoff, so a row exactly at the boundary survives one more run —
 -- under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
 -- WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
@@ -931,8 +936,11 @@ SET liveness_strikes = liveness_strikes + 1,
         WHEN liveness_strikes + 1 >= sqlc.arg(threshold) THEN now()
         ELSE closed_at
     END,
+    -- AND closed_at IS NULL: if another mechanism closed this row between candidate
+    -- selection and this write, its label is the true one. closed_at is overwritten
+    -- regardless (pre-existing behaviour), but the audit record must not be.
     closed_reason = CASE
-        WHEN liveness_strikes + 1 >= sqlc.arg(threshold) THEN 'probe_expired'
+        WHEN liveness_strikes + 1 >= sqlc.arg(threshold) AND closed_at IS NULL THEN 'probe_expired'
         ELSE closed_reason
     END,
     updated_at = now()

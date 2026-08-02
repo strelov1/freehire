@@ -160,3 +160,29 @@ func TestCloseStaleUnsignalledJobsFallsBackToCreatedAt(t *testing.T) {
 		t.Error("a row with no posted_at must age by created_at")
 	}
 }
+
+func TestCloseStaleUnsignalledJobsWithNoSourcesClosesNothing(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// The ANY() form fails closed where the sibling <> ALL() form fails OPEN — passing no
+	// sources must close nothing, not everything. Pinned because inverting the predicate
+	// would silently turn this into a catalogue-wide close by age.
+	id := seedJob(t, q, pool, "telegram", "tg:guard", time.Now().Add(-365*24*time.Hour))
+
+	n, err := q.CloseStaleUnsignalledJobs(ctx, CloseStaleUnsignalledJobsParams{
+		Sources: nil,
+		Cutoff:  pgTimestamptz(time.Now().Add(-45 * 24 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("age rule: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("empty source list closed %d jobs, want 0", n)
+	}
+	if isClosed(t, pool, id) {
+		t.Error("an empty source list must not close anything")
+	}
+}

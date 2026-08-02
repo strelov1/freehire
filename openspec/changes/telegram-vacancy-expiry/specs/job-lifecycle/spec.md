@@ -77,3 +77,8 @@ outcome without any persisted page content.
 
 - **WHEN** the liveness worker runs and an open job has `source = 'telegram'`
 - **THEN** that job is not selected for probing
+
+#### Scenario: Closed job is not probed
+
+- **WHEN** the liveness worker runs and an orphan job already has `closed_at` set
+- **THEN** that job is not selected for probing

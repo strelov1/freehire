@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -117,6 +118,18 @@ func run() int {
 		return 1
 	}
 
+	// Guard: an unsignalledSource must not be a source some other mechanism already
+	// closes on evidence. The age rule closes on a guess, so overlapping the ingest
+	// sweep would let a guess override evidence — and it would do so silently, since
+	// the probe exclusion for such a source is a no-op (it is excluded as a provider
+	// anyway). Refuse to run rather than mass-close a swept provider by age.
+	for _, s := range unsignalledSources {
+		if slices.Contains(atsProviders, s) {
+			log.Printf("liveness: %q is a registered ATS provider — refusing to run (the sweep owns its closes; age must not override evidence)", s)
+			return 1
+		}
+	}
+
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
 	excluded := append(atsProviders, unsignalledSources...)
@@ -135,10 +148,14 @@ func run() int {
 		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
 	})
 	if err != nil {
-		log.Printf("expire stale unsignalled jobs: %v", err)
-		return 1
+		// Log and carry on rather than return: the guess-half failing must not disable
+		// the evidence-half. A lock wait against a concurrent reindex would otherwise
+		// stop orphan probing on every subsequent cron run, silently and indefinitely.
+		log.Printf("liveness: expire stale unsignalled jobs: %v", err)
+	} else {
+		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
+			expired, int(expiryWindow.Hours()/24), len(unsignalledSources))
 	}
-	log.Printf("liveness: expired %d jobs older than %s from %d unsignalled sources", expired, expiryWindow, len(unsignalledSources))
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
 	// sources (telegram posts), so the probe must refuse internal/metadata targets.

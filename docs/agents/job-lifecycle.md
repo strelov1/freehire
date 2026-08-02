@@ -1,7 +1,7 @@
 # Job lifecycle conventions
 
 ## Scope
-The open/closed state of a job row, the three mechanisms that write `closed_at`, and the filtering semantics that depend on it.
+The open/closed state of a job row, the four mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
 - A job is open while `closed_at IS NULL`. Closing is a soft state, and the lifecycle never deletes.
@@ -16,7 +16,7 @@ The open/closed state of a job row, the three mechanisms that write `closed_at`,
 - Every close records WHICH mechanism wrote it in `closed_reason`; a reopen clears it. Rows closed before that column existed carry `''`, meaning unknown, and are never relabelled.
 
 ## How it works
-Closing is a soft state on one column (`closed_at`) written by three independent mechanisms, each covering a gap the others can't reach.
+Closing is a soft state on one column (`closed_at`) written by four independent mechanisms, each covering a gap the others can't reach. Three of them close on evidence; the fourth, the age rule, closes on a guess, which is why every close now records which one wrote it.
 
 One interaction with catalogue pruning is worth knowing. Once ingest starts rejecting a board's non-technical postings, the ones already stored stop being seen and the unseen sweep closes them after 48h — so `closed_at` fills with rows the campaign is about to delete. That is why `cmd/prune`'s scan covers closed rows: a scan over open jobs only would leave exactly the rows nothing will ever replace.
 
@@ -34,6 +34,7 @@ One interaction with catalogue pruning is worth knowing. Once ingest starts reje
 - A missed liveness cron run leaves orphans open longer; no reconciliation beyond the next run.
 - The liveness probe uses pure heuristics (no browser, no LLM) — a posting that returns a 200 with a "position filled" message in a language or phrasing not in the curated set stays open.
 - Self-closing sources trade missed-run safety for feed-accuracy: a skipped cron leaves orphans open until the next run's change window catches up.
+- The age rule is a guess, not a verdict: a Telegram vacancy still genuinely open at 46 days is closed anyway, and nothing reopens it. `closed_reason = 'expired'` is what makes that reversible — the rows it closed can be found and restored as a set.
 
 ## Catalogue pruning (cmd/prune)
 

@@ -189,3 +189,69 @@ func TestReopeningAJobClearsItsCloseReason(t *testing.T) {
 		t.Errorf("closed_reason after reopen = %q, want empty", got)
 	}
 }
+
+func TestTouchJobClearsItsCloseReason(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:7", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	ageJob(t, pool, job.ID, 72*time.Hour)
+	if _, err := q.CloseUnseenJobsBySource(ctx, CloseUnseenJobsBySourceParams{
+		Source: "greenhouse",
+		Cutoff: pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+	}); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if got := closeReason(t, pool, job.ID); got != "unseen" {
+		t.Fatalf("precondition: closed_reason = %q, want %q", got, "unseen")
+	}
+
+	// A hydrating source re-lists the offer without re-fetching its content: TouchJob is
+	// the reopen half of UpsertJob's ON CONFLICT, so it owes the same clearing.
+	if _, err := q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:7"}); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+	if isClosed(t, pool, job.ID) {
+		t.Fatal("touch must reopen the job")
+	}
+	if got := closeReason(t, pool, job.ID); got != "" {
+		t.Errorf("closed_reason after touch = %q, want empty", got)
+	}
+}
+
+func TestUpsertManualJobClearsItsCloseReason(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	author := insertUser(t, pool, "moderator@example.test")
+	manual := manualParams("https://example.test/manual", "Engineer", author, author)
+	job, err := q.UpsertManualJob(ctx, manual)
+	if err != nil {
+		t.Fatalf("manual upsert: %v", err)
+	}
+	if _, err := q.CloseJobByID(ctx, job.ID); err != nil {
+		t.Fatalf("moderator close: %v", err)
+	}
+	if got := closeReason(t, pool, job.ID); got != "moderated" {
+		t.Fatalf("precondition: closed_reason = %q, want %q", got, "moderated")
+	}
+
+	// Re-submitting the same posting re-asserts it. It must not carry the moderator's
+	// label into its second life.
+	if _, err := q.UpsertManualJob(ctx, manual); err != nil {
+		t.Fatalf("manual re-upsert: %v", err)
+	}
+	if isClosed(t, pool, job.ID) {
+		t.Fatal("manual re-upsert must reopen the job")
+	}
+	if got := closeReason(t, pool, job.ID); got != "" {
+		t.Errorf("closed_reason after manual re-upsert = %q, want empty", got)
+	}
+}
