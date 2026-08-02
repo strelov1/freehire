@@ -67,7 +67,15 @@ var standardFieldIDs = map[string][]string{
 
 // isStandard reports whether a field is one every application demands rather than
 // something this employer chose to ask.
+//
+// Two platforms answer it by their own convention rather than by a list, which is both
+// exact and immune to the platform adding profile fields later: Ashby prefixes every
+// standard field's path with `_systemfield_`, and Workable prefixes every EMPLOYER
+// question with `QA_` — the inverse marker, so for Workable the test is inverted too.
 func isStandard(provider string, f Field) bool {
+	if provider == "workable" {
+		return !strings.HasPrefix(f.ID, "QA_")
+	}
 	if strings.HasPrefix(f.ID, "_systemfield_") {
 		return true
 	}

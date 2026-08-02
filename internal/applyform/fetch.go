@@ -70,6 +70,7 @@ func NeedsRequestCapture(provider string) bool {
 var fetcherFor = map[string]func(Transport) Fetcher{
 	"greenhouse": func(t Transport) Fetcher { return greenhouseFetcher{http: t} },
 	"ashby":      func(t Transport) Fetcher { return ashbyFetcher{http: t} },
+	"workable":   func(t Transport) Fetcher { return workableFetcher{http: t} },
 }
 
 // Fetchers builds the per-provider fetcher registry over one transport.
@@ -126,6 +127,24 @@ func (g greenhouseFetcher) Fetch(ctx context.Context, board, postingID string) (
 		return Form{}, fmt.Errorf("greenhouse: fetch form for %s/%s: %w", board, postingID, asGone(err))
 	}
 	return FromGreenhouse(job), nil
+}
+
+// workableFormURL templates the form endpoint. It takes the posting's shortcode and
+// nothing else — no board, no account — so the board half of the stored external id is
+// not part of the request at all. That is why this fetcher ignores its board argument.
+const workableFormURL = "https://apply.workable.com/api/v1/jobs/%s/form"
+
+type workableFetcher struct{ http Transport }
+
+func (w workableFetcher) Fetch(ctx context.Context, _, postingID string) (Form, error) {
+	url := fmt.Sprintf(workableFormURL, postingID)
+
+	// The form arrives as a bare array of sections rather than an object.
+	var sections []WorkableSection
+	if err := w.http.GetJSON(ctx, url, &sections); err != nil {
+		return Form{}, fmt.Errorf("workable: fetch form for %s: %w", postingID, asGone(err))
+	}
+	return FromWorkable(sections), nil
 }
 
 // ashbyGraphQLURL is the job board's unauthenticated GraphQL endpoint. The op= parameter is

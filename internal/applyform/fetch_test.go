@@ -226,3 +226,39 @@ func TestAshbyFetcherMarksAnAbsentPostingAsGone(t *testing.T) {
 		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
 	}
 }
+
+func TestWorkableFetcher(t *testing.T) {
+	tr := &fakeTransport{body: `[
+	  {"name": "Personal information", "fields": [
+	    {"id": "email", "required": true, "label": "Email", "type": "email"}
+	  ]},
+	  {"name": "Details", "fields": [
+	    {"id": "QA_1", "required": true, "label": "Why this role?", "type": "paragraph"}
+	  ]}
+	]`}
+
+	form, err := Fetchers(tr)["workable"].Fetch(context.Background(), "1000heads", "9168DF8334")
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	// Addressed by the shortcode alone: Workable's form endpoint takes no board or
+	// account, so the board half of the external id is not part of the URL.
+	if !strings.Contains(tr.gotURL, "/jobs/9168DF8334/form") {
+		t.Errorf("requested %q, want the shortcode's form endpoint", tr.gotURL)
+	}
+	if strings.Contains(tr.gotURL, "1000heads") {
+		t.Errorf("requested %q, want the board left out — it addresses nothing here", tr.gotURL)
+	}
+	if form.Provider != "workable" || len(form.Fields) != 2 {
+		t.Errorf("form = %+v, want both controls decoded", form)
+	}
+}
+
+func TestWorkableFetcherMarksAGonePostingAsGone(t *testing.T) {
+	tr := &fakeTransport{err: statusErr{code: 404}}
+
+	if _, err := Fetchers(tr)["workable"].Fetch(context.Background(), "b", "GONE"); !errors.Is(err, ErrPostingGone) {
+		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
+	}
+}

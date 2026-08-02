@@ -280,3 +280,33 @@ func TestForDisplayFlattensHTMLInABasic(t *testing.T) {
 		t.Errorf("basics = %v, want the markup stripped", d.Basics)
 	}
 }
+
+// Workable marks an employer's question by prefixing its identifier — the platform's own
+// convention, the same kind of marker Ashby's `_systemfield_` provides. Everything else
+// is the standard profile every Workable application collects, and there is a lot of it:
+// name, contact details, CV, plus repeatable education and experience blocks.
+func TestForDisplaySeparatesWorkablesStandardProfile(t *testing.T) {
+	d := Form{
+		Provider: "workable",
+		Fields: []Field{
+			{ID: "firstname", Label: "First name", Type: TypeText, Required: true},
+			{ID: "email", Label: "Email", Type: TypeText, Required: true},
+			{ID: "phone", Label: "Phone", Type: TypeText, Required: true},
+			{ID: "resume", Label: "Resume", Type: TypeFile, Required: true},
+			{ID: "education", Label: "Education", RawType: "group"},
+			{ID: "experience", Label: "Experience", RawType: "group"},
+			{ID: "QA_1", Label: "Why this role?", Type: TypeTextarea, Required: true},
+			{ID: "QA_2", Label: "Which AWS services have you used?", Type: TypeMultiSelect},
+		},
+	}.ForDisplay()
+
+	got := questionTexts(d)
+	if len(got) != 2 || got[0] != "Why this role?" {
+		t.Errorf("questions = %v, want only the two the employer wrote", got)
+	}
+	// Six standard controls, stated once each — including the two history blocks, which
+	// are real work for a candidate and worth naming.
+	if len(d.Basics) != 6 {
+		t.Errorf("basics = %v, want all six standard controls", d.Basics)
+	}
+}
