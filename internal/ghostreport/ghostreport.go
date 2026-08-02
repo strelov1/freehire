@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -42,11 +44,6 @@ var (
 // day, so the cap costs them nothing while bounding what one account can do to
 // the catalogue. It bounds volume; it judges no single claim.
 const DailyCap = 20
-
-// maxClaimAgeDays is how old a stated apply date may be. A year-old application
-// says nothing about whether a posting is live now, so admitting one would let
-// stale history speak about the present.
-const maxClaimAgeDays = 365
 
 // Report is a stored claim. AppliedOn is the date the reporter states they
 // applied — their word, not an observation, which is why it never reaches the
@@ -99,15 +96,15 @@ func (s *Service) Retract(ctx context.Context, userID, jobID int64) error {
 	return s.repo.Retract(ctx, userID, jobID)
 }
 
-// validateAppliedOn bounds the stated date to the window in which it can mean
-// anything: not the future, and not so far back that it describes a different
-// hiring round.
+// validateAppliedOn bounds the stated date to the window in which it can mean anything: not the
+// future, and not so far back that it describes a different hiring round.
+//
+// The window itself belongs to internal/userjob, which the tracker's dated apply reads too. Only
+// the mapping onto this package's 400-sentinel stays here, so a claim and a tracked application
+// cannot come to disagree about which dates are believable.
 func validateAppliedOn(appliedOn, now time.Time) error {
-	if appliedOn.After(now) {
-		return fmt.Errorf("%w: the apply date is in the future", ErrInvalid)
-	}
-	if now.Sub(appliedOn) > maxClaimAgeDays*24*time.Hour {
-		return fmt.Errorf("%w: the apply date is more than a year ago", ErrInvalid)
+	if err := userjob.ValidateAppliedOn(appliedOn, now); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	return nil
 }

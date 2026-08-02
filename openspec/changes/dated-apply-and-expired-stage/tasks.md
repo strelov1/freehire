@@ -16,7 +16,7 @@
 
 ## 2. Believable dates, defined once
 
-- [ ] 2.1 Move the apply-date bounds (not in the future, not more than a year ago) into
+- [x] 2.1 Move the apply-date bounds (not in the future, not more than a year ago) into
   `internal/userjob` as an exported check, and have `internal/ghostreport` call it instead of
   its private copy. Its existing tests must pass unchanged.
 
