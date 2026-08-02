@@ -438,3 +438,19 @@
   board: propel
 - company: EdgeTrace
   board: edgetrace-ai
+- company: Chef Robotics
+  board: chef-robotics
+- company: Clipster
+  board: clipster
+- company: GrowthBook
+  board: growthbook
+- company: Mesh
+  board: mesh
+- company: MindTech
+  board: mindtech
+- company: Nimble
+  board: nimble
+- company: SoundHound Inc.
+  board: soundhound
+- company: Taro
+  board: taro
