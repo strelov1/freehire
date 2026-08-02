@@ -28,10 +28,10 @@
 - [x] 3.1 Extend `internal/gmailsync/connector.go` with a calendar consent URL and scope
       set, leaving the Gmail consent's scopes untouched. Unit test: the mail consent URL
       requests no calendar scope, and the calendar one does.
-- [ ] 3.2 Record granted scopes on exchange; add the connect/callback routes for the
+- [x] 3.2 Record granted scopes on exchange; add the connect/callback routes for the
       calendar alongside the Gmail pair, cookie-only for the same reason (it redirects a
       browser to Google).
-- [ ] 3.3 Handler tests: connecting the calendar leaves an existing mailbox connected, and
+- [x] 3.3 Handler tests: connecting the calendar leaves an existing mailbox connected, and
       a caller with no Google grant can start the calendar flow.
 
 ## 4. Matching

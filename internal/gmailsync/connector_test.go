@@ -53,7 +53,7 @@ func TestConsentURLsAskForOneThingEach(t *testing.T) {
 	if strings.Contains(mail, "calendar") {
 		t.Errorf("the mail consent requested a calendar scope: %s", mail)
 	}
-	if !strings.Contains(mail, url.QueryEscape(gmailReadonlyScope)) {
+	if !strings.Contains(mail, url.QueryEscape(GmailReadonlyScope)) {
 		t.Errorf("the mail consent did not request gmail.readonly: %s", mail)
 	}
 	if !strings.Contains(calendar, url.QueryEscape(CalendarScope)) {

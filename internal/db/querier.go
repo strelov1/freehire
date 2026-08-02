@@ -1891,6 +1891,10 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed entry is never reprocessed within the same run.
 	RecordEnrichmentFailure(ctx context.Context, arg RecordEnrichmentFailureParams) (RecordEnrichmentFailureRow, error)
+	// Note the scopes a grant carries without touching anything else, unioned for the same
+	// reason as above. The Gmail connect calls this so a mailbox connected before the calendar
+	// existed still records what it holds.
+	RecordGrantScopes(ctx context.Context, arg RecordGrantScopesParams) error
 	// Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 	// the first view creates the row, a repeat view touches viewed_at. Returns the
 	// row so the caller learns the current applied_at in the same round-trip. This
@@ -2172,9 +2176,6 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
-	// Record which Google scopes a grant carries, so the calendar worker can skip a connection
-	// that predates the calendar consent instead of discovering it from a 403 every run.
-	SetConnectionScopes(ctx context.Context, arg SetConnectionScopesParams) error
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
@@ -2436,6 +2437,20 @@ type Querier interface {
 	//     partial unique index — a re-sync, and a reschedule, add no second event. The
 	//     scheduling happened once.
 	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
+	// Store the grant a calendar consent produced, and record that it now covers the calendar.
+	//
+	// Three things this deliberately does not do. It does not touch `email`: a candidate who
+	// already connected a mailbox keeps its address, and one who granted only the calendar has
+	// none to record — the calendar flow never reads the Gmail profile, because that needs the
+	// mail scope they may not have given.
+	//
+	// It does not replace the scope list, it unions with it. The consent is incremental and
+	// the returned token covers everything granted so far, so overwriting would forget the
+	// mail scope and stop the mail sync at the moment the candidate added their calendar.
+	//
+	// And it does not distinguish insert from update, because both mean the same thing here:
+	// this person has granted us their calendar.
+	UpsertCalendarGrant(ctx context.Context, arg UpsertCalendarGrantParams) error
 	// Apply one external-dataset company-info record, matched by slug. A new slug is
 	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
 	// (job-backed or a prior reference) has only its company-info columns refreshed —

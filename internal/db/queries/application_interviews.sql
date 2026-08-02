@@ -106,11 +106,33 @@ SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.jo
    AND i.starts_at <= sqlc.arg(to_at)
  ORDER BY i.starts_at, i.id;
 
--- name: SetConnectionScopes :exec
--- Record which Google scopes a grant carries, so the calendar worker can skip a connection
--- that predates the calendar consent instead of discovering it from a 403 every run.
+-- name: UpsertCalendarGrant :exec
+-- Store the grant a calendar consent produced, and record that it now covers the calendar.
+--
+-- Three things this deliberately does not do. It does not touch `email`: a candidate who
+-- already connected a mailbox keeps its address, and one who granted only the calendar has
+-- none to record — the calendar flow never reads the Gmail profile, because that needs the
+-- mail scope they may not have given.
+--
+-- It does not replace the scope list, it unions with it. The consent is incremental and
+-- the returned token covers everything granted so far, so overwriting would forget the
+-- mail scope and stop the mail sync at the moment the candidate added their calendar.
+--
+-- And it does not distinguish insert from update, because both mean the same thing here:
+-- this person has granted us their calendar.
+INSERT INTO gmail_connections (user_id, email, refresh_token_enc, status, scopes)
+VALUES (sqlc.arg(user_id), '', sqlc.arg(refresh_token_enc), 'connected', sqlc.arg(scopes)::text[])
+ON CONFLICT (user_id) DO UPDATE
+SET refresh_token_enc = EXCLUDED.refresh_token_enc,
+    status            = 'connected',
+    scopes            = ARRAY(SELECT DISTINCT unnest(gmail_connections.scopes || EXCLUDED.scopes));
+
+-- name: RecordGrantScopes :exec
+-- Note the scopes a grant carries without touching anything else, unioned for the same
+-- reason as above. The Gmail connect calls this so a mailbox connected before the calendar
+-- existed still records what it holds.
 UPDATE gmail_connections
-SET scopes = sqlc.arg(scopes)::text[]
+SET scopes = ARRAY(SELECT DISTINCT unnest(scopes || sqlc.arg(scopes)::text[]))
 WHERE user_id = sqlc.arg(user_id);
 
 -- name: ListCalendarConnections :many

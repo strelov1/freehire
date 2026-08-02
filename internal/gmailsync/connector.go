@@ -15,9 +15,11 @@ import (
 	"github.com/strelov1/freehire/internal/safehttp"
 )
 
-// gmailReadonlyScope is the restricted read scope; its consent screen requires
-// Google verification for public use (testing-mode test users until then).
-const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly"
+// GmailReadonlyScope is the restricted read scope; its consent screen requires Google
+// verification for public use (testing-mode test users until then). Exported alongside
+// CalendarScope because the connection row records what a grant covers, and the handler
+// that writes that record must spell it the same way the worker's filter reads it.
+const GmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly"
 
 // CalendarScope is the read-only calendar scope, asked for on its own consent.
 //
@@ -54,7 +56,7 @@ func NewConnector(clientID, clientSecret, origin string) *Connector {
 			ClientSecret: clientSecret,
 			Endpoint:     endpoints.Google,
 			RedirectURL:  origin + "/api/v1/me/gmail/callback",
-			Scopes:       []string{gmailReadonlyScope},
+			Scopes:       []string{GmailReadonlyScope},
 		},
 		calendarRedirect: origin + "/api/v1/me/calendar/callback",
 	}
@@ -104,6 +106,27 @@ func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, em
 		return "", "", err
 	}
 	return tok.RefreshToken, email, nil
+}
+
+// ExchangeCalendar turns the calendar callback's code into a refresh token.
+//
+// Separate from Exchange because that one reads the mailbox address from the Gmail
+// profile API, which needs the mail scope. A candidate who granted only the calendar does
+// not have it, so asking would fail the connect for a field the calendar flow has no use
+// for. The token itself covers whatever they have granted in total — the consent is
+// incremental — so a candidate with both ends up with one grant covering both.
+func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshToken string, err error) {
+	cfg := *c.cfg
+	cfg.Scopes = []string{CalendarScope}
+	cfg.RedirectURL = c.calendarRedirect
+	tok, err := cfg.Exchange(guardedContext(ctx), code)
+	if err != nil {
+		return "", fmt.Errorf("calendar: exchange code: %w", err)
+	}
+	if tok.RefreshToken == "" {
+		return "", errors.New("calendar: no refresh token (consent was not offline)")
+	}
+	return tok.RefreshToken, nil
 }
 
 // TokenSource mints access tokens from a stored refresh token (used by the sync
