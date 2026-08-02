@@ -506,7 +506,12 @@ export interface ApplicationEmail {
 /** One message the mailbox sweep proposes for an application. It is a SUGGESTION, not a
  *  link: it is resolved through the same confirm/reject calls the inbox uses. */
 export interface RecalledEmail {
+  /** Our stored row's id, and 0 for a message the mailbox search found — that one is not
+   *  stored at all until you link it. */
   id: number;
+  /** Names the message at the mail provider. Present on the search path, and what the link
+   *  call is given. */
+  provider_id?: string;
   from_addr: string;
   from_name: string;
   subject: string;

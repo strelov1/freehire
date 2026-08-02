@@ -46,11 +46,11 @@
 
 ## 4. Web
 
-- [ ] 4.1 Point the Link button at the new call and carry the provider id through the
+- [x] 4.1 Point the Link button at the new call and carry the provider id through the
       response type.
-- [ ] 4.2 Say on the panel that the sweep searches the mailbox rather than importing it —
+- [x] 4.2 Say on the panel that the sweep searches the mailbox rather than importing it —
       the privacy boundary should be legible where it is crossed.
-- [ ] 4.3 Run `pnpm run check`, `pnpm run lint`, and the design-system ratchets.
+- [x] 4.3 Run `pnpm run check`, `pnpm run lint`, and the design-system ratchets.
 
 ## 5. Documentation and gates
 

@@ -1424,6 +1424,17 @@ export function createApi(
     );
   }
 
+  /** Import a message the sweep found in the mailbox and link it to the application.
+   *  The sweep itself stores nothing — a proposal lives on screen only — so this is the
+   *  call that makes the message ours, and it is idempotent: a message the mail sync had
+   *  already fetched is linked rather than copied. */
+  async function linkRecalledMail(slug: string, providerId: string): Promise<EmailBody> {
+    return requestData<EmailBody>(
+      `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall/link`,
+      { method: 'POST', body: JSON.stringify({ provider_id: providerId }) }
+    );
+  }
+
   /** The assembled follow-up draft for a silent application. 409 when the
    *  application is not waiting on a reply — the same verdict the board's badge
    *  renders, so a card that offers the draft never gets one. */
@@ -1796,6 +1807,7 @@ export function createApi(
     restoreEmail,
     getTrackedApplication,
     recallApplicationMail,
+    linkRecalledMail,
     getFollowUpDraft,
     recordFollowUp,
     confirmEmailLink,
