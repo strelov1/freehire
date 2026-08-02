@@ -1,29 +1,23 @@
 <script lang="ts">
   // A static, single-level Sankey snapshot for the landing page: one Applications
-  // source bar fanning into the status buckets, ribbon and node heights
+  // source bar fanning into the pipeline groups, ribbon and node heights
   // proportional to each count. Hand-built SVG — no charting dependency and no
   // live data; the counts are decorative props passed in by the homepage.
   //
-  // This mirrors the real My-jobs Pipeline funnel but is deliberately
-  // self-contained (the bucket vocabulary is inlined, not imported) because the
-  // Pipeline feature is not yet on main. Seam: when it lands, the two can fold
-  // into one shared presentational component.
+  // The geometry is still this file's own — the real funnel now draws a per-stage
+  // breakdown under each band, which a decorative preview has no use for. What the two
+  // share is the vocabulary, which is the part that must not drift.
+
+  import { PIPELINE_BANDS } from '$lib/pipeline';
 
   let { applications, buckets }: { applications: number; buckets: Record<string, number> } =
     $props();
 
-  // Bucket vocabulary in funnel order — status-conventional colors (greens
-  // positive, rose negative), matching the real Pipeline tab. Mid-tone hex so it
-  // reads on both the light and dark theme.
-  const VOCAB = [
-    { key: 'no_answer', label: 'No answer', color: '#cbd5e1' },
-    { key: 'in_progress', label: 'In progress', color: '#fcd34d' },
-    { key: 'interviewing', label: 'Interviewing', color: '#93c5fd' },
-    { key: 'offer', label: 'Offer', color: '#86efac' },
-    { key: 'accepted', label: 'Accepted', color: '#22c55e' },
-    { key: 'rejected', label: 'Rejected', color: '#fb7185' },
-    { key: 'declined', label: 'Declined', color: '#c4b5fd' },
-  ];
+  // The bands are the product's own, shared with the real Pipeline tab. The numbers below
+  // them are illustrative, but the words must not be: a landing page naming a stage the
+  // product does not have is a promise it cannot keep. This file used to carry a fourth
+  // copy of the vocabulary, and it had already drifted from the other three.
+  const VOCAB = PIPELINE_BANDS.map((b) => ({ key: b.id, label: b.label, color: b.color }));
 
   // SVG geometry, in viewBox units (the element scales to its container width).
   // The left source bar fills HH; the right nodes share the same heights but are

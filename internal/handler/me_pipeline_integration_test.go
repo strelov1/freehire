@@ -1,9 +1,9 @@
 //go:build integration
 
 // Integration test for the Pipeline aggregate endpoint: GET /api/v1/me/tracking/pipeline
-// must aggregate the caller's applications into the seven buckets server-side,
-// counting an applied-with-no-stage row as no_answer, excluding saved-only and
-// viewed-only rows, and requiring authentication. Run with:
+// must count the caller's applications per stage server-side, carrying every stage of the
+// vocabulary (zero included), counting an applied-with-no-stage row as `applied`, excluding
+// saved-only and viewed-only rows, and requiring authentication. Run with:
 // go test -tags=integration ./internal/handler/
 package handler
 
@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobtracking"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 func TestMyPipelineEndpoint(t *testing.T) {
@@ -90,7 +91,7 @@ func TestMyPipelineEndpoint(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/tracking/pipeline", auth.RequireAuth(iss, testVersions), h.TrackingPipeline)
 
-	t.Run("aggregates applications into buckets", func(t *testing.T) {
+	t.Run("counts applications by stage", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/tracking/pipeline", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 		resp, err := app.Test(req)
@@ -105,38 +106,53 @@ func TestMyPipelineEndpoint(t *testing.T) {
 
 		var body struct {
 			Data struct {
-				Applications int64 `json:"applications"`
-				Buckets      struct {
-					NoAnswer     int64 `json:"no_answer"`
-					InProgress   int64 `json:"in_progress"`
-					Interviewing int64 `json:"interviewing"`
-					Offer        int64 `json:"offer"`
-					Accepted     int64 `json:"accepted"`
-					Rejected     int64 `json:"rejected"`
-					Declined     int64 `json:"declined"`
-				} `json:"buckets"`
+				Applications int64            `json:"applications"`
+				Stages       map[string]int64 `json:"stages"`
+				// Buckets is asserted absent: the seven-bucket vocabulary was the third name
+				// for one state, and a response still carrying it would keep it alive for
+				// every reader that has not migrated.
+				Buckets json.RawMessage `json:"buckets"`
 			} `json:"data"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 			t.Fatalf("decode: %v", err)
 		}
 
-		b := body.Data.Buckets
 		if body.Data.Applications != 9 {
 			t.Errorf("applications = %d, want 9", body.Data.Applications)
 		}
-		if b.NoAnswer != 2 {
-			t.Errorf("no_answer = %d, want 2", b.NoAnswer)
+		if body.Data.Buckets != nil {
+			t.Errorf("data.buckets is still served (%s); it is replaced by data.stages", body.Data.Buckets)
 		}
-		if b.InProgress != 2 {
-			t.Errorf("in_progress = %d, want 2 (screening+responded)", b.InProgress)
+
+		// The applied-with-no-stage row counts as `applied` — it is an application waiting on a
+		// first reply, which is exactly what the stage says.
+		want := map[string]int64{
+			"applied": 2, "screening": 1, "responded": 1, "interview": 1,
+			"offer": 1, "accepted": 1, "rejected": 1, "withdrawn": 1,
 		}
-		if b.Interviewing != 1 || b.Offer != 1 || b.Accepted != 1 || b.Rejected != 1 || b.Declined != 1 {
-			t.Errorf("buckets = %+v, want each of interviewing/offer/accepted/rejected/declined = 1", b)
+		for stage, n := range want {
+			if body.Data.Stages[stage] != n {
+				t.Errorf("stages[%q] = %d, want %d", stage, body.Data.Stages[stage], n)
+			}
 		}
-		sum := b.NoAnswer + b.InProgress + b.Interviewing + b.Offer + b.Accepted + b.Rejected + b.Declined
+
+		// Every stage of the vocabulary is present, zero included: a caller must be able to
+		// read a count of nothing without telling it apart from a key the server forgot.
+		var sum int64
+		for _, s := range userjob.Stages {
+			n, ok := body.Data.Stages[s]
+			if !ok {
+				t.Errorf("stages is missing %q; every stage key is always present", s)
+			}
+			sum += n
+		}
 		if sum != body.Data.Applications {
-			t.Errorf("buckets sum = %d, want applications = %d", sum, body.Data.Applications)
+			t.Errorf("stage counts sum = %d, want applications = %d", sum, body.Data.Applications)
+		}
+		if len(body.Data.Stages) != len(userjob.Stages) {
+			t.Errorf("stages has %d keys, want %d — a key outside the vocabulary reached the wire",
+				len(body.Data.Stages), len(userjob.Stages))
 		}
 	})
 

@@ -14,14 +14,53 @@ import (
 // with the rule itself, which is the point of the move. It used to be missing entirely, and that
 // gap is what let a stage inserted into Stages rank below `applied`.
 func TestStageTargetsAreValidStages(t *testing.T) {
-	for sig, stage := range signalStage {
-		if !userjob.ValidStage(stage) {
-			t.Errorf("signal %q maps to invalid stage %q", sig, stage)
+	for sig, imp := range signalStage {
+		if !userjob.ValidStage(imp.Stage) {
+			t.Errorf("signal %q maps to invalid stage %q", sig, imp.Stage)
 		}
-		if userjob.IsTerminal(stage) {
-			t.Errorf("signal %q maps to the terminal stage %q; deciding an application is settled "+
-				"is never an inference from mail", sig, stage)
+		// A terminal stage may be IMPLIED — a rejection email plainly means `rejected`, and
+		// saying so is how the reader learns why nothing moved. It may never be ADVANCED to:
+		// deciding an application is settled stays the candidate's, made by pressing a button.
+		if imp.Advances && userjob.IsTerminal(imp.Stage) {
+			t.Errorf("signal %q auto-advances to the terminal stage %q; deciding an application "+
+				"is settled is never an inference from mail", sig, imp.Stage)
 		}
+	}
+}
+
+// Everything the reader is told about a signal comes from this one table, so a signal missing
+// from it renders as a bare label with nothing said about the stage. `other` is the deliberate
+// exception: it means "we could not tell", which implies no stage at all.
+func TestStageForCoversEverySignal(t *testing.T) {
+	for _, s := range SignalValues {
+		sig := StatusSignal(s)
+		stage, advances := StageFor(sig)
+		switch sig {
+		case SignalOther, SignalInfoRequest, SignalIncompleteApplication:
+			if stage != "" || advances {
+				t.Errorf("StageFor(%q) = (%q, %v), want no implied stage", sig, stage, advances)
+			}
+		default:
+			if stage == "" {
+				t.Errorf("StageFor(%q) implies no stage; the reader would see a label and no "+
+					"explanation of what it means for the application", sig)
+			}
+		}
+	}
+}
+
+// The suggestion exists because this is true: a rejection says what it says, and still moves
+// nothing by itself.
+func TestARejectionImpliesRejectedButNeverAdvances(t *testing.T) {
+	stage, advances := StageFor(SignalRejection)
+	if stage != "rejected" {
+		t.Errorf("StageFor(rejection) stage = %q, want %q", stage, "rejected")
+	}
+	if advances {
+		t.Error("StageFor(rejection) advances = true, want false")
+	}
+	if got, ok := AdvanceStage("screening", SignalRejection); ok || got != "" {
+		t.Errorf("AdvanceStage(screening, rejection) = (%q, %v), want (\"\", false)", got, ok)
 	}
 }
 

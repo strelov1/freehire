@@ -1,0 +1,46 @@
+---
+title: One state, one name
+date: 2026-08-02
+summary: A rejected application used to read as "Rejected" in the panel, sit under a column called "Closed", and be counted in a bucket named "rejected" — three names for one thing. Now there is one, and your mail explains what it did to the stage.
+type: changelog
+tags:
+  - job-seekers
+  - tracking
+---
+
+An application has one state. The tracker had three names for it.
+
+Open a rejected application and the panel said **Rejected**. On the board it sat under a
+column called **Closed**. On the Pipeline tab it was counted in a bucket named
+**rejected**, next to two more — *No answer* and *In progress* — that appeared nowhere
+else in the product. Nothing was broken, but you had to work out for yourself that all of
+it was the same application.
+
+**There is now one vocabulary.** The board's columns, the funnel's bands and the stage
+picker all read the same four groups — Applied, Interview, Offer, Closed — and every card
+in Closed still carries its own outcome, so you can see at a glance whether those 28
+settled applications were rejections or accepted offers. The stage picker groups its
+options the same way, so *Closed* reads as a heading over Accepted, Rejected and Withdrawn
+rather than as a fifth state competing with them.
+
+The Pipeline tab now shows each band broken down by stage instead of collapsing it. A
+`Closed 28` that turns out to be `Rejected 28` is a different month from one that reads
+`Accepted 2 · Rejected 26`.
+
+## Your mail now says what it did
+
+The other half of the confusion was quieter. Seven emails on an application, including a
+plain rejection, and the stage never moved — with nothing anywhere saying why.
+
+That was deliberate: we advance a stage from mail only forwards, and **never into a
+settled outcome**. Deciding an application is over is your call, not something we infer
+from a message. But the rule was invisible, so it looked like nothing was working.
+
+Every classified message on an application now says what it means for the stage —
+`Received → Applied`, or, on a rejection, plainly *does not move the stage*. And when the
+newest message disagrees with where the application sits, you get a one-press offer to
+move it. It applies nothing on its own; once you've set the stage yourself, the offer
+stops asking.
+
+If you use the API, `GET /me/tracking/pipeline` now returns counts per stage instead of
+the seven buckets — the same vocabulary you already set through the tracking endpoint.

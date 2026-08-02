@@ -766,11 +766,11 @@ func TestPipelineAggregates(t *testing.T) {
 	if got.Applications != 10 {
 		t.Errorf("Applications = %d, want 10", got.Applications)
 	}
-	if got.Buckets.NoAnswer != 7 { // applied 5 + null-stage 2
-		t.Errorf("NoAnswer = %d, want 7", got.Buckets.NoAnswer)
+	if got.Stages["applied"] != 7 { // applied 5 + null-stage 2
+		t.Errorf("Stages[applied] = %d, want 7", got.Stages["applied"])
 	}
-	if got.Buckets.Interviewing != 3 {
-		t.Errorf("Interviewing = %d, want 3", got.Buckets.Interviewing)
+	if got.Stages["interview"] != 3 {
+		t.Errorf("Stages[interview] = %d, want 3", got.Stages["interview"])
 	}
 }
 

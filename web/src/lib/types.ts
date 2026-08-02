@@ -6,6 +6,7 @@ import type {
   JobMatch,
   Blocker,
   Professional,
+  Stage,
   Report as ATSReportContract,
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
@@ -495,6 +496,16 @@ export interface ApplicationEmail {
   read: boolean;
 }
 
+/** An offer to move the application to the stage its newest classified message implies.
+ *  Present only when the two disagree and the candidate has not already answered — mail
+ *  never settles an application by itself, and this is how that rule is stated rather
+ *  than left to be inferred from a stage that did not move. */
+export interface StageSuggestion {
+  stage: string;
+  signal: string;
+  email_id: number;
+}
+
 /** The caller's application for one job slug, with the emails linked to it. */
 export interface TrackedApplication {
   job: Job;
@@ -509,6 +520,7 @@ export interface TrackedApplication {
    *  a recruiter reading a CV is not a reply. */
   cv_opened_at: string | null;
   emails: ApplicationEmail[];
+  stage_suggestion?: StageSuggestion;
 }
 
 /** The assembled follow-up message for a silent application. Deterministic and
@@ -533,23 +545,18 @@ export interface MyJobCounts {
   dismissed: number;
 }
 
-/** A snapshot of the caller's applications across the seven pipeline buckets.
- *  Buckets always sum to the application total. */
-export interface PipelineBuckets {
-  no_answer: number;
-  in_progress: number;
-  interviewing: number;
-  offer: number;
-  accepted: number;
-  rejected: number;
-  declined: number;
-}
+/** The caller's application count at each stage of the vocabulary. Every stage is
+ *  present, zero included, and the counts always sum to the application total —
+ *  so a count of nothing is readable without being confused for a missing key. */
+export type PipelineStageCounts = Record<Stage, number>;
 
 /** The application-pipeline snapshot for the Pipeline tab: the caller's total
- *  application count and its distribution across the status buckets. */
+ *  application count and the count at each stage. Grouping those stages into the
+ *  bands the funnel draws is the renderer's job, from the generated STAGE_GROUPS —
+ *  the server does not ship a second vocabulary alongside the first. */
 export interface PipelineStats {
   applications: number;
-  buckets: PipelineBuckets;
+  stages: PipelineStageCounts;
 }
 
 /** The bucketing period for the job-activity time series. */

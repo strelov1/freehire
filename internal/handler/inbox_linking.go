@@ -8,6 +8,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/inbox"
+	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/jobview"
 )
 
@@ -37,6 +38,11 @@ type applicationDetail struct {
 	// for never. It says nothing about whether anybody replied.
 	FollowedUpAt *time.Time         `json:"followed_up_at"`
 	Emails       []applicationEmail `json:"emails"`
+	// StageSuggestion is the stage the newest classified message implies when it differs
+	// from the current one, and null when there is nothing to offer. It changes nothing by
+	// itself: mail never settles an application, and this is how that rule is said out loud
+	// rather than left for the reader to infer from a stage that did not move.
+	StageSuggestion *jobtracking.StageSuggestion `json:"stage_suggestion,omitempty"`
 }
 
 // GetTrackedApplication returns the caller's application for a job slug together
@@ -66,22 +72,39 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 	}
 
 	emails := make([]applicationEmail, 0, len(rows))
+	forSuggestion := make([]jobtracking.SuggestionEmail, 0, len(rows))
 	for _, r := range rows {
 		emails = append(emails, applicationEmail{
 			ID: r.ID, Source: r.Source, FromAddr: r.FromAddr, FromName: r.FromName,
 			Subject: r.Subject, StatusSignal: pgStr(r.StatusSignal), LinkSource: pgStr(r.LinkSource),
 			ReceivedAt: r.ReceivedAt.Time, Read: r.Read,
 		})
+		forSuggestion = append(forSuggestion, jobtracking.SuggestionEmail{
+			ID: r.ID, Signal: pgStr(r.StatusSignal), ReceivedAt: r.ReceivedAt.Time,
+		})
 	}
+
+	// The candidate's own last word on the stage, which silences an offer they have already
+	// answered. A failure here must not cost them the application: the ledger read is an
+	// input to an optional prompt, not to the record itself, so it degrades to "never set" —
+	// the direction that shows the offer rather than hiding it.
+	lastStageSet, err := h.queries.LastStageSetAt(c.Context(), db.LastStageSetAtParams{
+		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
+	})
+	if err != nil {
+		lastStageSet = pgtype.Timestamptz{}
+	}
+
 	return c.JSON(fiber.Map{"data": applicationDetail{
-		Job:          jv,
-		ViewedAt:     tsPtr(app.ViewedAt),
-		SavedAt:      tsPtr(app.SavedAt),
-		AppliedAt:    tsPtr(app.AppliedAt),
-		Stage:        pgStr(app.Stage),
-		Notes:        pgStr(app.Notes),
-		FollowedUpAt: tsPtr(app.FollowedUpAt),
-		Emails:       emails,
+		Job:             jv,
+		ViewedAt:        tsPtr(app.ViewedAt),
+		SavedAt:         tsPtr(app.SavedAt),
+		AppliedAt:       tsPtr(app.AppliedAt),
+		Stage:           pgStr(app.Stage),
+		Notes:           pgStr(app.Notes),
+		FollowedUpAt:    tsPtr(app.FollowedUpAt),
+		Emails:          emails,
+		StageSuggestion: jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time),
 	}})
 }
 

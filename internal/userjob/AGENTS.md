@@ -14,7 +14,22 @@ Per-user job interactions: view/apply/save/track endpoints backed by the `user_j
 
 The per-user job-tracking use cases — **`RecordView`** (touches `viewed_at`), **`MarkApplied`** (sets `applied_at`; runs in a transaction that takes `LockJobForApply` first, so concurrent applies serialize and `jobs.applied_count` cannot double-bump — same pattern as `LockJobForVote` on the vote path), **`SaveJob`/`UnsaveJob`** (toggles the saved mark), **`TrackJob`** (sets application `stage` and/or `notes`) — live in **`internal/jobtracking`** (Fiber/pgx-free service; the HTTP handlers in `internal/handler/user_jobs.go` translate the wire format). The SPA records views silently — failures are swallowed and must not break the page.
 
-`internal/userjob` itself keeps the shared tracking vocabulary: `stages.go` defines the controlled stage vocabulary with validation (`ValidStage`), `buckets.go` provides the job-status buckets (saved, viewed, applied, etc.) used by the tracking UI and the pipeline aggregation, and `silence.go` holds the stage→threshold ladder plus the pure state mapping behind the tracking board's silence marker.
+`internal/userjob` itself keeps the shared tracking vocabulary, as **four tables keyed on one list of stages**, each answering a different question about them, and each bound to that list by a test:
+
+| file | question | guard |
+|---|---|---|
+| `stages.go` | which stages exist (`Stages`, `ValidStage`) | — |
+| `pipeline.go` | how far along is it, and is it settled (`activeRank`, `terminalStages`, `Forward`, `IsTerminal`) | `TestEveryStageIsRankedOrTerminal` |
+| `silence.go` | how long may it go quiet (`silenceThresholds`) | `TestSilenceThresholdsCoverExactlyTheActiveStages` |
+| `groups.go` | what coarse state does it show as, and what is it called (`Groups`, `GroupOf`, `Label`) | `TestEveryStageBelongsToExactlyOneGroup` |
+
+`counts.go` folds per-stage rows into the pipeline snapshot (`CountByStage`).
+
+**The labels and the group membership live here rather than in the SPA, and that is the point of `groups.go`.** They used to be restated in four frontend places — `board.ts`'s `STAGE_COLUMN`, the seven pipeline buckets, the funnel's own list, and a fourth copy inside `HomeFunnel.svelte` — so one settled application read as `Rejected` in the drawer, `Closed` on the board and `rejected` in a bucket, while two bucket names (`in_progress`, `declined`) appeared nowhere else in the product. All four now derive from `STAGE_GROUPS` / `STAGE_LABELS`, emitted by `cmd/gen-contracts`, with a `satisfies`-style check in the required `pnpm run check` gate. There is a second reader that is not a browser — the in-app assistant calls `internal/jobtracking` directly and never passes through Fiber — which is why the words are Go's and not TypeScript's.
+
+The four groups are `applied` (applied/screening/responded), `interview`, `offer`, and `closed` (accepted/rejected/withdrawn). A card in `Closed` still carries its own stage label, so the coarse column and the precise outcome are legible together; dropping a card there asks which outcome applies, because the group does not determine it.
+
+**There is no `buckets.go` any more.** It held a seven-value vocabulary (`no_answer`, `in_progress`, `interviewing`, `offer`, `accepted`, `rejected`, `declined`) that was a third name for one state. `GET /me/tracking/pipeline` now returns per-stage counts and no `buckets` object — a breaking change made deliberately rather than deprecating the field, since a deprecated field is the third vocabulary surviving in the code and the docs.
 
 **Silence thresholds carry their provenance at the point of definition.** Five specific numbers read as measurement whether or not they are one, and only two of these are: `applied` 21 is measured over 92 observed applications, `interview` 12 over six, `screening` 18 and `responded` 15 are interpolation stepping evenly between those anchors, and `offer` 5 is judgement — no application in the sample has ever reached that stage. Keep the per-value comments when tuning; a bare table invites the next reader to trust all five equally.
 

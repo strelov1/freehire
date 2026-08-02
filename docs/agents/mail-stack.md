@@ -66,6 +66,18 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **Only a deterministic tier (`TierThread` / `TierName`) can auto-link.** A confident LLM
   pick becomes a *suggestion*, never a link. Keep that asymmetry: the LLM reads untrusted
   text.
+- **What a signal IMPLIES and what it may APPLY are two fields, not one.** `mailclassify.StageFor`
+  returns both, and `rejection → {rejected, advances:false}` is why: the message plainly means
+  the application is over, and settling one stays the candidate's call. The table previously
+  encoded "never automatic" by simply omitting rejection, which also made the meaning unsayable —
+  so an application could hold seven messages including a plain rejection, sit at `interview`,
+  and say nothing anywhere about why nothing moved. The Emails tab now states the implication per
+  message, and `jobtracking.SuggestStage` offers the change in one press. It applies nothing by
+  itself; `AdvanceStage` is unchanged and still reads only `advances:true`.
+- **The suggestion is silenced by the ledger, not by a flag.** A `stage_set` in
+  `application_events` later than the message means the candidate has already answered — whichever
+  stage they chose. `LastStageSetAt` reads it. Do not add a dismissal column: it would be a second
+  store of a decision the ledger already holds, and the two would drift.
 - **The classifier prompt carries the same three lessons the matcher learned.** The
   sender display name is usually the ATS, not the employer; a calendar invite the
   candidate organised themselves is `other`, not `interview_invitation`; and an

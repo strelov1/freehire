@@ -1,12 +1,18 @@
 <script lang="ts">
-  import { PIPELINE_BUCKETS } from '$lib/pipeline';
-  import type { PipelineBuckets } from '$lib/types';
+  import { PIPELINE_BANDS, bandBreakdown, bandTotal } from '$lib/pipeline';
+  import { humanizeStage } from '$lib/stages';
+  import type { PipelineStats } from '$lib/types';
 
-  // A single-level Sankey snapshot: one Applications source fanning into the
-  // status buckets, ribbon and node heights proportional to each count. Hand-built
-  // SVG — no charting dependency. The parent guarantees applications > 0 (the
-  // empty state is handled there); we guard anyway.
-  let { applications, buckets }: { applications: number; buckets: PipelineBuckets } = $props();
+  // A single-level Sankey snapshot: one Applications source fanning into the four
+  // groups, ribbon and node heights proportional to each count. Hand-built SVG — no
+  // charting dependency. The parent guarantees applications > 0 (the empty state is
+  // handled there); we guard anyway.
+  //
+  // Each band carries its stages beneath it, because the coarse number alone hides the
+  // thing the reader came for: 28 Closed reads the same whether it is 28 rejections or
+  // 28 accepted offers.
+  let { stats }: { stats: PipelineStats } = $props();
+  const applications = $derived(stats.applications);
 
   // SVG geometry, in viewBox units (the element scales to its container width).
   // The left source bar fills HH; the right nodes share the same heights but are
@@ -35,12 +41,17 @@
     nodeY: number;
     nodeH: number;
     labelY: number;
+    breakdown: string;
   }
 
   const model = $derived.by(() => {
-    const visible = PIPELINE_BUCKETS.map((b) => ({ ...b, count: buckets[b.key] })).filter(
-      (b) => b.count > 0,
-    );
+    const visible = PIPELINE_BANDS.map((b) => ({
+      ...b,
+      count: bandTotal(stats, b),
+      // Only the stages actually holding something: a breakdown listing three outcomes
+      // where one happened is noise dressed as detail.
+      breakdown: bandBreakdown(stats, b).filter((s) => s.count > 0),
+    })).filter((b) => b.count > 0);
     if (applications <= 0 || visible.length === 0) {
       return { height: HH + PAD * 2, barY: PAD, ribbons: [] as Ribbon[] };
     }
@@ -60,10 +71,16 @@
       left = ly1;
       right = ry1 + GAP;
       return {
-        key: b.key,
+        key: b.id,
         label: b.label,
         color: b.color,
         count: b.count,
+        // Rendered only when the band holds more than one kind of thing: "Offer · Offer 2"
+        // says nothing the band label has not already said.
+        breakdown:
+          b.breakdown.length > 1
+            ? b.breakdown.map((s) => `${humanizeStage(s.stage)} ${s.count}`).join(' · ')
+            : '',
         path: `M ${LX + LW} ${ly0} C ${MID} ${ly0}, ${MID} ${ry0}, ${RX} ${ry0} L ${RX} ${ry1} C ${MID} ${ry1}, ${MID} ${ly1}, ${LX + LW} ${ly1} Z`,
         nodeY: ry0,
         nodeH: h,
@@ -87,8 +104,23 @@
   {#each model.ribbons as r (r.key)}
     <path d={r.path} fill={r.color} fill-opacity="0.5" />
     <rect x={RX} y={r.nodeY} width={RW} height={Math.max(r.nodeH, 1)} rx="2" fill={r.color} />
-    <text x={RX + RW + 10} y={r.labelY} dy="0.32em" class="fill-foreground text-[0.72rem]">
+    <text
+      x={RX + RW + 10}
+      y={r.breakdown ? r.labelY - 6 : r.labelY}
+      dy="0.32em"
+      class="fill-foreground text-[0.72rem]"
+    >
       {r.label}<tspan dx="6" class="fill-muted-foreground">{r.count}</tspan>
     </text>
+    {#if r.breakdown}
+      <text
+        x={RX + RW + 10}
+        y={r.labelY + 7}
+        dy="0.32em"
+        class="fill-muted-foreground text-[0.6rem]"
+      >
+        {r.breakdown}
+      </text>
+    {/if}
   {/each}
 </svg>

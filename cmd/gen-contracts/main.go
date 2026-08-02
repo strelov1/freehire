@@ -283,6 +283,16 @@ func genVocab() string {
 	var b strings.Builder
 	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
 	b.WriteString(emitVocab("Stage", "STAGE_VALUES", userjob.Stages))
+	// The stage's human label and the group it belongs to, generated for the same reason the
+	// mail signals are: the board, the funnel, the drawer's selector and the home page each kept
+	// their own copy, and three of the four disagreed about what to call a settled application.
+	// Built from Stages so a stage cannot reach the SPA labelled but ungrouped.
+	stageLabels := make(map[string]string, len(userjob.Stages))
+	for _, s := range userjob.Stages {
+		stageLabels[s] = userjob.Label(s)
+	}
+	b.WriteString(emitMap("StageLabels", "STAGE_LABELS", stageLabels))
+	b.WriteString(emitStageGroups(userjob.Groups))
 	b.WriteString(emitVocab("WorkMode", "WORK_MODE_VALUES", vocab.WorkModeValues))
 	b.WriteString(emitVocab("Seniority", "SENIORITY_VALUES", vocab.SeniorityValues))
 	b.WriteString(emitVocab("Category", "CATEGORY_VALUES", vocab.CategoryValues))
@@ -296,6 +306,7 @@ func genVocab() string {
 	// but missing from the SPA's maps rendered as a blank chip with every test green.
 	// Generated, the omission is a type error instead.
 	b.WriteString(emitVocab("EmailStatusSignal", "EMAIL_STATUS_SIGNAL_VALUES", mailclassify.SignalValues))
+	b.WriteString(emitSignalStages(mailclassify.SignalValues))
 	// Country→region grouping for the hierarchical location filter, derived from the
 	// location dictionary.
 	b.WriteString(emitMap("CountryRegionMap", "COUNTRY_REGION_MAP", location.CountryToRegion()))

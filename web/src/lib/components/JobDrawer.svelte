@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { Button, Badge, cn } from '$lib/ui';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
-  import { STAGES, humanizeStage, offersDebrief } from '$lib/stages';
+  import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
   import { canFollowUp } from '$lib/followup';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
   import { timeAgo, errorMessage } from '$lib/utils';
@@ -17,9 +17,9 @@
   import { api } from '$lib/api';
   import type { EmailBody } from '$lib/api';
   import { currentUser } from '$lib/auth.svelte';
-  import { statusLabel, statusClass } from '$lib/emailStatus';
+  import { statusLabel, statusClass, stageImplication } from '$lib/emailStatus';
   import { avatarInitials, avatarColor } from '$lib/avatar';
-  import type { MyJob, ApplicationEmail } from '$lib/types';
+  import type { MyJob, ApplicationEmail, StageSuggestion } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
 
@@ -96,6 +96,10 @@
   let emails = $state.raw<ApplicationEmail[] | null>(null);
   let emailsLoading = $state(false);
   let emailsError = $state<string | null>(null);
+  // The server's read of what the mail implies but has not applied. Cleared the moment the
+  // stage is set from here, so the offer disappears on the press rather than on the next
+  // load — the server would stop sending it, but not until something asks it again.
+  let stageSuggestion = $state.raw<StageSuggestion | null>(null);
   let expandedId = $state<number | null>(null);
   let expandedBody = $state.raw<EmailBody | null>(null);
   let bodyLoading = $state(false);
@@ -118,6 +122,7 @@
       if (!item.job) return;
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
+      stageSuggestion = app.stage_suggestion ?? null;
     } catch (e) {
       emailsError = errorMessage(e, 'Failed to load emails.');
     } finally {
@@ -378,8 +383,15 @@
               class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
             >
               <option value="">No stage</option>
-              {#each STAGES as s (s.value)}
-                <option value={s.value}>{s.label}</option>
+              <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
+                   as a fifth state competing with them — the same four groups the board's
+                   columns use, from the same generated table. -->
+              {#each groupedStages() as g (g.id)}
+                <optgroup label={g.label}>
+                  {#each g.options as s (s.value)}
+                    <option value={s.value}>{s.label}</option>
+                  {/each}
+                </optgroup>
               {/each}
             </select>
           </label>
@@ -398,6 +410,38 @@
         </div>
       {:else if tab === 'emails'}
         <div class="flex flex-col gap-2">
+          <!-- The mail says one thing, the stage says another, and nothing moved it. That is
+               the rule working — mail never settles an application — so the resolution is
+               offered rather than applied, and it goes through the ordinary stage change so
+               the ledger records the candidate as its source. -->
+          {#if stageSuggestion}
+            <div class="flex flex-wrap items-center gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
+              <span class="min-w-0 flex-1 text-sm">
+                This looks like <span class="font-medium">{statusLabel(stageSuggestion.signal).toLowerCase()}</span>,
+                but the stage is
+                <span class="font-medium">{item.stage ? humanizeStage(item.stage) : 'unset'}</span>.
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                class="shrink-0"
+                onclick={() => {
+                  const stage = stageSuggestion?.stage;
+                  stageSuggestion = null;
+                  if (stage) onsetstage(stage);
+                }}
+              >
+                Move to {humanizeStage(stageSuggestion.stage)}
+              </Button>
+              <button
+                type="button"
+                class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                onclick={() => (stageSuggestion = null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          {/if}
           {#if emailsLoading}
             <p class="text-sm text-muted-foreground">Loading emails…</p>
           {:else if emailsError}
@@ -426,8 +470,19 @@
                     </div>
                     <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
                     {#if statusLabel(e.status_signal)}
-                      <span class="mt-1 inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(e.status_signal)}">
-                        {statusLabel(e.status_signal)}
+                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5">
+                        <span class="inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(e.status_signal)}">
+                          {statusLabel(e.status_signal)}
+                        </span>
+                        <!-- What the signal means for the stage. The chip alone left three
+                             different situations looking identical: it moved the stage, it
+                             named one only the candidate may apply, or it was never about
+                             progress. -->
+                        {#if stageImplication(e.status_signal)}
+                          <span class="text-[10px] leading-4 text-muted-foreground">
+                            {stageImplication(e.status_signal)}
+                          </span>
+                        {/if}
                       </span>
                     {/if}
                   </div>

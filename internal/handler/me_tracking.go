@@ -113,9 +113,10 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 }
 
 // TrackingPipeline returns the authenticated caller's application-pipeline snapshot:
-// the total application count and its distribution across the seven status
-// buckets, aggregated server-side over all of the caller's applications. The SPA
-// Pipeline tab renders the Sankey and the interview/offer rate cards from this.
+// the total application count and the count at each stage of the vocabulary, aggregated
+// server-side over all of the caller's applications. The SPA Pipeline tab groups those
+// stages with the generated STAGE_GROUPS to draw the Sankey, and derives the
+// interview/offer rate cards from the same counts.
 func (h *trackingHandlers) TrackingPipeline(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

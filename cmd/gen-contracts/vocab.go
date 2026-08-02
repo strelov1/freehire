@@ -2,9 +2,12 @@ package main
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/collections"
+	"github.com/strelov1/freehire/internal/mailclassify"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 // emitVocab renders one closed vocabulary as a frozen value array plus a string-union
@@ -89,6 +92,63 @@ func emitMapOfSlices(typeName, constName string, m map[string][]string) string {
 // single quotes so a value like "N'Djamena" can't break the generated file.
 func quoteTS(s string) string {
 	return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(s) + "'"
+}
+
+// emitStageGroups renders the stage→group membership as an ordered array literal:
+//
+//	export const STAGE_GROUPS = [
+//	  { id: 'applied', label: 'Applied', stages: ['applied', 'screening', 'responded'] },
+//	  …
+//	] as const;
+//	export type StageGroup = (typeof STAGE_GROUPS)[number];
+//
+// An array rather than a map, and in the table's own order rather than sorted: that order IS the
+// board's column order and the funnel's band order. A map would hand the SPA the membership
+// while leaving it to restate the sequence — which is how the copy this replaces came about.
+func emitStageGroups(groups []userjob.Group) string {
+	var b strings.Builder
+	b.WriteString("export const STAGE_GROUPS = [\n")
+	for _, g := range groups {
+		stages := make([]string, len(g.Stages))
+		for i, s := range g.Stages {
+			stages[i] = quoteTS(s)
+		}
+		b.WriteString("  { id: " + quoteTS(g.ID) +
+			", label: " + quoteTS(g.Label) +
+			", stages: [" + strings.Join(stages, ", ") + "] },\n")
+	}
+	b.WriteString("] as const;\n")
+	b.WriteString("export type StageGroup = (typeof STAGE_GROUPS)[number];\n")
+	return b.String()
+}
+
+// emitSignalStages renders what each mail signal implies for the application stage:
+//
+//	export const SIGNAL_STAGE = {
+//	  'acknowledgement': { stage: 'applied', advances: true },
+//	  'rejection': { stage: 'rejected', advances: false },
+//	  …
+//	} as const;
+//
+// Every signal in the vocabulary is present, including the ones implying no stage (empty
+// `stage`), so the reader can say "does not move the stage" from the table rather than from a
+// list of exceptions it would have to keep in step by hand.
+//
+// Keys sorted, like emitMap: the output is committed, and Go iterates maps at random.
+func emitSignalStages(signals []string) string {
+	sorted := append([]string(nil), signals...)
+	sort.Strings(sorted)
+
+	var b strings.Builder
+	b.WriteString("export const SIGNAL_STAGE = {\n")
+	for _, s := range sorted {
+		stage, advances := mailclassify.StageFor(mailclassify.StatusSignal(s))
+		b.WriteString("  " + quoteTS(s) + ": { stage: " + quoteTS(stage) +
+			", advances: " + strconv.FormatBool(advances) + " },\n")
+	}
+	b.WriteString("} as const;\n")
+	b.WriteString("export type SignalStage = typeof SIGNAL_STAGE;\n")
+	return b.String()
 }
 
 // emitCollections renders the company-tag registry as a frozen array of objects

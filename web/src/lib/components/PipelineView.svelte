@@ -40,7 +40,7 @@
       <p class="mb-3 text-sm text-muted-foreground">
         {stats.applications} application{stats.applications === 1 ? '' : 's'}
       </p>
-      <PipelineFunnel applications={stats.applications} buckets={stats.buckets} />
+      <PipelineFunnel {stats} />
     </div>
     <p class="text-xs text-muted-foreground">
       A snapshot of where your applications stand now. Rates are a lower bound — a job rejected after

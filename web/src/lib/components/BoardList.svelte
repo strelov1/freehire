@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Clock, Mail } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
-  import { STAGES } from '$lib/stages';
+  import { groupedStages } from '$lib/stages';
   import { timeAgo } from '$lib/utils';
   import type { BoardItem } from '$lib/board';
   import type { MyJob } from '$lib/types';
@@ -73,8 +73,15 @@
             class="rounded-md border border-input bg-transparent px-2 py-1 text-xs"
           >
             <option value="">No stage</option>
-            {#each STAGES as s (s.value)}
-              <option value={s.value}>{s.label}</option>
+            <!-- Grouped exactly as the drawer's selector is: two stage pickers in one
+                 section that organise their options differently is the confusion this
+                 change is removing, in miniature. -->
+            {#each groupedStages() as g (g.id)}
+              <optgroup label={g.label}>
+                {#each g.options as s (s.value)}
+                  <option value={s.value}>{s.label}</option>
+                {/each}
+              </optgroup>
             {/each}
           </select>
         </span>

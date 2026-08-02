@@ -78,6 +78,37 @@ func (q *Queries) BackfillEmployerReplyEvents(ctx context.Context, arg BackfillE
 	return i, err
 }
 
+const lastStageSetAt = `-- name: LastStageSetAt :one
+SELECT max(occurred_at)::timestamptz AS last_stage_set_at
+  FROM application_events
+ WHERE user_id = $1
+   AND job_id = $2
+   AND kind = 'stage_set'
+   AND retracted_at IS NULL
+`
+
+type LastStageSetAtParams struct {
+	UserID int64       `json:"user_id"`
+	JobID  pgtype.Int8 `json:"job_id"`
+}
+
+// When the candidate last set this application's stage themselves, or NULL if never.
+//
+// This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
+// that prompted one means the question has already been answered — whichever stage they chose,
+// including choosing to leave it where it was and then moving it somewhere else entirely. The
+// alternative, a dismissal flag on the email, would be a second store of a decision this ledger
+// already records, and the two would eventually disagree.
+//
+// Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
+// predicate.
+func (q *Queries) LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, lastStageSetAt, arg.UserID, arg.JobID)
+	var last_stage_set_at pgtype.Timestamptz
+	err := row.Scan(&last_stage_set_at)
+	return last_stage_set_at, err
+}
+
 const listApplicationEventsInRange = `-- name: ListApplicationEventsInRange :many
 SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
        ae.application_id,

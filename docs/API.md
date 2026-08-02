@@ -1234,9 +1234,9 @@ curl "https://freehire.me/api/v1/me/tracking/saved" -H "Authorization: Bearer $F
 
 **Auth:** Session or API key
 
-Your application-pipeline snapshot (counts per stage bucket).
+Your application-pipeline snapshot (counts per stage).
 
-The total application count and its distribution across the seven status buckets, aggregated server-side over all of your applications.
+The total application count and the count at each stage, aggregated server-side over all of your applications. Every stage of the vocabulary is present, zero included, and the counts always sum to `applications`. An application with `applied_at` set but no explicit stage counts as `applied`.
 
 ```bash
 curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -1246,18 +1246,23 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
 {
   "data": {
     "applications": 12,
-    "buckets": {
-      "no_answer": 4,
-      "in_progress": 3,
-      "interviewing": 2,
+    "stages": {
+      "applied": 4,
+      "screening": 2,
+      "responded": 1,
+      "interview": 2,
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "declined": 0
+      "withdrawn": 0
     }
   }
 }
 ```
+
+Group the stages yourself if you want the four coarse states the tracking board shows: `applied`/`screening`/`responded` → **Applied**, `interview` → **Interview**, `offer` → **Offer**, `accepted`/`rejected`/`withdrawn` → **Closed**.
+
+> **Changed:** this response previously carried a `buckets` object with seven differently-named keys (`no_answer`, `in_progress`, `declined`, …). Those names existed nowhere else in the product and have been removed in favour of the stage vocabulary you already set through `PUT /me/tracking/:slug`.
 
 ### `GET /me/tracking/swipe`
 

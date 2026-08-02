@@ -1,30 +1,24 @@
 // Derives which Kanban column a tracked job belongs to. The column is NOT stored
-// — it is a view over the user_jobs row's applied_at / stage. The board shows only
+// — it is a view over the application's applied_at / stage. The board shows only
 // jobs in an active application state; a saved-only row (saved but never applied,
 // no stage) has no column and lives in the Activity → Saved list instead.
+//
+// The columns and their membership are the generated ones (internal/userjob →
+// cmd/gen-contracts). This file used to restate both, which is how the board and the
+// pipeline came to call the same settled application by two different names.
+import { STAGE_GROUPS } from './generated/contracts';
 import type { MyJob } from './types';
 
-export type BoardColumnId = 'applied' | 'interview' | 'offer' | 'closed';
+export type BoardColumnId = (typeof STAGE_GROUPS)[number]['id'];
 
-export const BOARD_COLUMNS: { id: BoardColumnId; label: string }[] = [
-  { id: 'applied', label: 'Applied' },
-  { id: 'interview', label: 'Interview' },
-  { id: 'offer', label: 'Offer' },
-  { id: 'closed', label: 'Closed' },
-];
+export const BOARD_COLUMNS: { id: BoardColumnId; label: string }[] = STAGE_GROUPS.map((g) => ({
+  id: g.id,
+  label: g.label,
+}));
 
-// Precise backend stage → column group. Stages not listed fall through to the
-// applied_at fallback in columnOf.
-const STAGE_COLUMN: Record<string, BoardColumnId> = {
-  applied: 'applied',
-  screening: 'applied',
-  responded: 'applied',
-  interview: 'interview',
-  offer: 'offer',
-  accepted: 'closed',
-  rejected: 'closed',
-  withdrawn: 'closed',
-};
+const STAGE_COLUMN: Record<string, BoardColumnId> = Object.fromEntries(
+  STAGE_GROUPS.flatMap((g) => g.stages.map((stage) => [stage, g.id])),
+);
 
 /** The column a tracked job currently sits in, or `null` when it is saved-only and
  *  therefore not on the board. Priority: precise stage, then a legacy

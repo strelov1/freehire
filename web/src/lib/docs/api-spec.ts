@@ -933,22 +933,25 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'GET',
         path: '/me/tracking/pipeline',
         auth: 'cookie-or-key',
-        summary: 'Your application-pipeline snapshot (counts per stage bucket).',
+        summary: 'Your application-pipeline snapshot (counts per stage).',
         description:
-          'The total application count and its distribution across the seven status ' +
-          'buckets, aggregated server-side over all of your applications.',
+          'The total application count and the count at each stage, aggregated server-side ' +
+          'over all of your applications. Every stage of the vocabulary is present, zero ' +
+          'included, and the counts always sum to `applications`. An application with ' +
+          '`applied_at` set but no explicit stage counts as `applied`.',
         curl: `curl "${BASE_URL}/me/tracking/pipeline" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
   "data": {
     "applications": 12,
-    "buckets": {
-      "no_answer": 4,
-      "in_progress": 3,
-      "interviewing": 2,
+    "stages": {
+      "applied": 4,
+      "screening": 2,
+      "responded": 1,
+      "interview": 2,
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "declined": 0
+      "withdrawn": 0
     }
   }
 }`,

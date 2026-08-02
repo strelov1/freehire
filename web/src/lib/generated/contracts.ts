@@ -1013,6 +1013,24 @@ export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
+export const STAGE_LABELS = {
+  'accepted': 'Accepted',
+  'applied': 'Applied',
+  'interview': 'Interview',
+  'offer': 'Offer',
+  'rejected': 'Rejected',
+  'responded': 'Responded',
+  'screening': 'Screening',
+  'withdrawn': 'Withdrawn',
+} as const;
+export type StageLabels = typeof STAGE_LABELS;
+export const STAGE_GROUPS = [
+  { id: 'applied', label: 'Applied', stages: ['applied', 'screening', 'responded'] },
+  { id: 'interview', label: 'Interview', stages: ['interview'] },
+  { id: 'offer', label: 'Offer', stages: ['offer'] },
+  { id: 'closed', label: 'Closed', stages: ['accepted', 'rejected', 'withdrawn'] },
+] as const;
+export type StageGroup = (typeof STAGE_GROUPS)[number];
 export const WORK_MODE_VALUES = ['remote', 'hybrid', 'onsite'] as const;
 export type WorkMode = (typeof WORK_MODE_VALUES)[number];
 export const SENIORITY_VALUES = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
@@ -1031,6 +1049,18 @@ export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gam
 export type Domain = (typeof DOMAIN_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
 export type EmailStatusSignal = (typeof EMAIL_STATUS_SIGNAL_VALUES)[number];
+export const SIGNAL_STAGE = {
+  'acknowledgement': { stage: 'applied', advances: true },
+  'assessment': { stage: 'screening', advances: true },
+  'incomplete_application': { stage: '', advances: false },
+  'info_request': { stage: '', advances: false },
+  'interview_invitation': { stage: 'interview', advances: true },
+  'offer': { stage: 'offer', advances: true },
+  'other': { stage: '', advances: false },
+  'rejection': { stage: 'rejected', advances: false },
+  'screening': { stage: 'screening', advances: true },
+} as const;
+export type SignalStage = typeof SIGNAL_STAGE;
 export const COUNTRY_REGION_MAP = {
   'ad': 'eu',
   'ae': 'mena',

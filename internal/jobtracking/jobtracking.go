@@ -302,15 +302,16 @@ func (s *Service) ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, er
 	return s.repo.ExcludedJobIDs(ctx, userID, excludedJobsCap)
 }
 
-// Pipeline returns the caller's application-pipeline snapshot: the per-stage
-// counts folded into the buckets and application total. The stage→bucket mapping
-// lives in userjob.Aggregate.
+// Pipeline returns the caller's application-pipeline snapshot: the count at each stage of the
+// vocabulary, plus the application total. Grouping those stages into the four the board and the
+// funnel draw is the reader's job, applied from userjob.Groups — the server does not pick a
+// second vocabulary on their behalf.
 func (s *Service) Pipeline(ctx context.Context, userID int64) (userjob.Pipeline, error) {
 	counts, err := s.repo.PipelineCounts(ctx, userID)
 	if err != nil {
 		return userjob.Pipeline{}, err
 	}
-	return userjob.Aggregate(counts), nil
+	return userjob.CountByStage(counts), nil
 }
 
 // RecordView resolves slug → jobID then delegates to the repository.

@@ -1050,6 +1050,17 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// When the candidate last set this application's stage themselves, or NULL if never.
+	//
+	// This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
+	// that prompted one means the question has already been answered — whichever stage they chose,
+	// including choosing to leave it where it was and then moving it somewhere else entirely. The
+	// alternative, a dismissal flag on the email, would be a second store of a decision this ledger
+	// already records, and the two would eventually disagree.
+	//
+	// Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
+	// predicate.
+	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
 	// Manually link (or relink) an email to a chosen application, overriding any
 	// auto-link or suggestion.
 	LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) (int64, error)

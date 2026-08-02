@@ -58,24 +58,6 @@ func TestSilenceThresholdsCoverExactlyTheActiveStages(t *testing.T) {
 	}
 }
 
-// Aggregate's stage→bucket mapping is a switch, so nothing can introspect it — but its shape is
-// still checkable. Exactly ONE stage is meant to fall to the default (`applied` → no_answer), so
-// a stage added to Stages and forgotten in the switch shows up as a second one landing there.
-func TestExactlyOneStageFallsToTheDefaultBucket(t *testing.T) {
-	var defaulted []string
-	for _, stage := range Stages {
-		p := Aggregate([]StageCount{{Stage: stage, Count: 1}})
-		if p.Buckets.NoAnswer == 1 {
-			defaulted = append(defaulted, stage)
-		}
-	}
-	if len(defaulted) != 1 || defaulted[0] != "applied" {
-		t.Errorf("stages landing in no_answer = %v, want exactly [applied]. A stage added to "+
-			"Stages without a case in Aggregate falls through the default and is counted as "+
-			"unanswered.", defaulted)
-	}
-}
-
 func TestForward(t *testing.T) {
 	tests := []struct {
 		name            string

@@ -82,15 +82,45 @@ func (c Classification) Sanitize() Classification {
 	return c
 }
 
-// signalStage maps a status signal to the application stage it implies and
-// whether that stage may be applied automatically. Negative/terminal outcomes
-// (rejection) and non-progress signals (info_request, other) are never auto.
-var signalStage = map[StatusSignal]string{
-	SignalAcknowledgement:     "applied",
-	SignalScreening:           "screening",
-	SignalAssessment:          "screening",
-	SignalInterviewInvitation: "interview",
-	SignalOffer:               "offer",
+// StageImplication is what a status signal says about the application: the stage the message
+// implies, and whether that implication may be acted on without asking.
+//
+// The two are separate because they have different answers for a rejection. It plainly implies
+// `rejected` — that is what the message says — and it must still never move the application by
+// itself. Collapsing them (as the previous table did, by simply omitting rejection) made the
+// implication unsayable, so the reader was shown a label and left to work out for themselves why
+// the stage had not changed.
+type StageImplication struct {
+	Stage    string
+	Advances bool
+}
+
+// signalStage maps a status signal to the stage it implies.
+//
+// Non-progress signals are absent on purpose: `info_request` and `incomplete_application` are
+// to-dos rather than movement, and `other` means the classifier could not tell — none of the
+// three implies a stage, and inventing one for them would put words in an employer's mouth.
+var signalStage = map[StatusSignal]StageImplication{
+	SignalAcknowledgement:     {Stage: "applied", Advances: true},
+	SignalScreening:           {Stage: "screening", Advances: true},
+	SignalAssessment:          {Stage: "screening", Advances: true},
+	SignalInterviewInvitation: {Stage: "interview", Advances: true},
+	SignalOffer:               {Stage: "offer", Advances: true},
+	SignalRejection:           {Stage: "rejected", Advances: false},
+}
+
+// StageFor reports the stage a signal implies and whether it may be applied automatically.
+// An empty stage means the signal implies none.
+//
+// Exported because the reader needs it: an email shown on its application says what its signal
+// means for the stage, and a suggestion is offered when the two disagree. Both are answers to
+// "what does this message imply", which is this package's question.
+func StageFor(sig StatusSignal) (stage string, advances bool) {
+	imp, ok := signalStage[sig]
+	if !ok {
+		return "", false
+	}
+	return imp.Stage, imp.Advances
 }
 
 // AdvanceStage returns the stage a signal should move `current` to and whether an automatic
@@ -102,8 +132,8 @@ var signalStage = map[StatusSignal]string{
 // vocabulary itself, so a stage added there cannot leave this package computing an order that no
 // longer matches.
 func AdvanceStage(current string, sig StatusSignal) (string, bool) {
-	target, ok := signalStage[sig]
-	if !ok {
+	target, advances := StageFor(sig)
+	if !advances {
 		return "", false
 	}
 	if !userjob.Forward(current, target) {

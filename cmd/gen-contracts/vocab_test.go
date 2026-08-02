@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/strelov1/freehire/internal/collections"
+	"github.com/strelov1/freehire/internal/mailclassify"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 func TestGenVocabEmitsRoleLabels(t *testing.T) {
@@ -57,6 +59,72 @@ func TestEmitMapEmpty(t *testing.T) {
 		"export type X = typeof X_MAP;\n"
 	if got != want {
 		t.Errorf("emitMap(empty) = %q, want %q", got, want)
+	}
+}
+
+// The groups are emitted as an ordered array rather than a map: pipeline order IS the board's
+// column order and the funnel's band order, and a map would hand the SPA the membership while
+// making it re-state the sequence.
+func TestEmitStageGroups(t *testing.T) {
+	got := emitStageGroups([]userjob.Group{
+		{ID: "applied", Label: "Applied", Stages: []string{"applied", "screening"}},
+		{ID: "offer", Label: "Offer", Stages: []string{"offer"}},
+	})
+	want := "export const STAGE_GROUPS = [\n" +
+		"  { id: 'applied', label: 'Applied', stages: ['applied', 'screening'] },\n" +
+		"  { id: 'offer', label: 'Offer', stages: ['offer'] },\n" +
+		"] as const;\n" +
+		"export type StageGroup = (typeof STAGE_GROUPS)[number];\n"
+	if got != want {
+		t.Errorf("emitStageGroups mismatch:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// Every stage the SPA knows must be placed by the emitted groups, and every stage the groups
+// name must be a real one. The Go-side binding test guards the table; this guards what actually
+// reaches the browser, which is the artifact the board reads.
+func TestGenVocabEmitsEveryStageInAGroup(t *testing.T) {
+	got := genVocab()
+	for _, stage := range userjob.Stages {
+		if !strings.Contains(got, "'"+stage+"'") {
+			t.Errorf("genVocab() never mentions stage %q", stage)
+		}
+		if userjob.GroupOf(stage) == "" {
+			t.Errorf("stage %q reaches the SPA in no group", stage)
+		}
+	}
+	if !strings.Contains(got, "export const STAGE_GROUPS = [") {
+		t.Errorf("genVocab() missing STAGE_GROUPS:\n%s", got)
+	}
+	if !strings.Contains(got, "export const STAGE_LABELS = {") {
+		t.Errorf("genVocab() missing STAGE_LABELS:\n%s", got)
+	}
+}
+
+// What a signal implies must reach the reader from the same table the classifier uses. A label
+// with nothing said about the stage is exactly the silence this change removes: seven emails on
+// an application, a stage that never moved, and no way to learn why.
+func TestGenVocabEmitsWhatEverySignalImplies(t *testing.T) {
+	got := genVocab()
+	if !strings.Contains(got, "export const SIGNAL_STAGE = {") {
+		t.Fatalf("genVocab() missing SIGNAL_STAGE:\n%s", got)
+	}
+	// A rejection implies `rejected` and still advances nothing — the pair the UI reads to
+	// say "does not move the stage" instead of leaving a bare chip.
+	if !strings.Contains(got, "'rejection': { stage: 'rejected', advances: false }") {
+		t.Errorf("SIGNAL_STAGE missing the rejection implication:\n%s", got)
+	}
+	if !strings.Contains(got, "'acknowledgement': { stage: 'applied', advances: true }") {
+		t.Errorf("SIGNAL_STAGE missing the acknowledgement implication:\n%s", got)
+	}
+	// `other` means the classifier could not tell, so it implies nothing.
+	if !strings.Contains(got, "'other': { stage: '', advances: false }") {
+		t.Errorf("SIGNAL_STAGE should carry `other` with no implied stage:\n%s", got)
+	}
+	for _, s := range mailclassify.SignalValues {
+		if !strings.Contains(got, "'"+s+"': { stage:") {
+			t.Errorf("SIGNAL_STAGE is missing signal %q", s)
+		}
 	}
 }
 

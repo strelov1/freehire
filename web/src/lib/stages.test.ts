@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { offersDebrief } from './stages';
+import { STAGE_VALUES } from './generated/contracts';
+import { groupedStages, offersDebrief } from './stages';
 
 // The debrief reviews an interview that has already happened, so the offer follows the
 // stage: it is noise on an application nobody has been interviewed for.
@@ -29,5 +30,24 @@ describe('offersDebrief', () => {
   it('hides it for a stage it does not know', () => {
     expect(offersDebrief('negotiating')).toBe(false);
     expect(offersDebrief('')).toBe(false);
+  });
+});
+
+// The selector groups its options so `Closed` reads as a heading over Accepted/Rejected/
+// Withdrawn rather than as a fifth state competing with them.
+describe('groupedStages', () => {
+  it('offers every stage exactly once, under its group', () => {
+    const seen = groupedStages().flatMap((g) => g.options.map((o) => o.value));
+    expect([...seen].sort()).toEqual([...STAGE_VALUES].sort());
+  });
+
+  it('keeps the generated pipeline order', () => {
+    expect(groupedStages().map((g) => g.id)).toEqual(['applied', 'interview', 'offer', 'closed']);
+  });
+
+  it('labels each option from the generated table', () => {
+    const closed = groupedStages().find((g) => g.id === 'closed');
+    expect(closed?.label).toBe('Closed');
+    expect(closed?.options.map((o) => o.label)).toEqual(['Accepted', 'Rejected', 'Withdrawn']);
   });
 });

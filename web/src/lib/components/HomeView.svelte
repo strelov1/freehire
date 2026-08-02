@@ -84,19 +84,15 @@
   ];
 
   // Illustrative application-pipeline snapshot for the funnel below — decorative,
-  // not live data. Counts sum to `applications`; the shape mirrors the real
-  // My-jobs Pipeline (PipelineBuckets), so the preview never promises a flow the
-  // product doesn't have.
+  // not live data. Counts sum to `applications`, and the keys are the product's own
+  // pipeline groups, so the preview never promises a flow the product doesn't have.
   const funnel = {
     applications: 42,
     buckets: {
-      no_answer: 12,
-      in_progress: 5,
-      interviewing: 9,
+      applied: 17,
+      interview: 9,
       offer: 4,
-      accepted: 2,
-      rejected: 9,
-      declined: 1,
+      closed: 12,
     },
   };
 

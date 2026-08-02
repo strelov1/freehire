@@ -155,3 +155,21 @@ SELECT COALESCE(max(b.id), 0)::bigint AS last_id,
        count(*)::bigint               AS scanned,
        (SELECT count(*) FROM ins)::bigint AS inserted
   FROM batch b;
+
+-- name: LastStageSetAt :one
+-- When the candidate last set this application's stage themselves, or NULL if never.
+--
+-- This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
+-- that prompted one means the question has already been answered — whichever stage they chose,
+-- including choosing to leave it where it was and then moving it somewhere else entirely. The
+-- alternative, a dismissal flag on the email, would be a second store of a decision this ledger
+-- already records, and the two would eventually disagree.
+--
+-- Retracted rows are excluded, and the (user_id, job_id, kind) index is partial on exactly that
+-- predicate.
+SELECT max(occurred_at)::timestamptz AS last_stage_set_at
+  FROM application_events
+ WHERE user_id = $1
+   AND job_id = $2
+   AND kind = 'stage_set'
+   AND retracted_at IS NULL;

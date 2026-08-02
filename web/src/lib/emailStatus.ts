@@ -7,7 +7,9 @@
 // here with every test still green. `Record<EmailStatusSignal, …>` turns the same
 // omission into a `pnpm check` failure.
 
-import type { EmailStatusSignal } from '$lib/generated/contracts';
+import { SIGNAL_STAGE } from './generated/contracts';
+import type { EmailStatusSignal } from './generated/contracts';
+import { humanizeStage } from './stages';
 
 export const STATUS_LABELS: Record<EmailStatusSignal, string> = {
   acknowledgement: 'Received',
@@ -45,4 +47,28 @@ export function statusLabel(signal?: string): string {
 /** The badge colour class for a status signal. */
 export function statusClass(signal?: string): string {
   return signal ? (STATUS_CLASSES[signal as EmailStatusSignal] ?? '') : '';
+}
+
+/**
+ * What a classified message means for the application's stage, as the phrase that goes
+ * beside the status chip — or `''` when the chip already says it.
+ *
+ * The cases:
+ * - the signal advances the stage, and names it differently (`Received → Applied`)
+ * - the signal advances the stage it is already named after (`Interview`) — nothing to
+ *   add, because `Interview → Interview` is noise standing where an explanation should be
+ * - the signal implies a stage but never applies it (a rejection), or implies none at all
+ *   (an information request) — both say `does not move the stage`, which is the fact the
+ *   reader is missing. The stage name is the chip's job.
+ *
+ * `''` also for an unclassified message, for `other`, and for a signal from a server ahead
+ * of this build: silence is the honest answer where we have no meaning to report.
+ */
+export function stageImplication(signal?: string): string {
+  if (!signal) return '';
+  const implication = SIGNAL_STAGE[signal as EmailStatusSignal];
+  if (!implication) return '';
+  if (!implication.advances) return 'does not move the stage';
+  const stage = humanizeStage(implication.stage);
+  return statusLabel(signal) === stage ? '' : `→ ${stage}`;
 }
