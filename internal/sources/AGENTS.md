@@ -22,6 +22,7 @@ Source ingest: board list, provider registry, board-file parsing/validation, per
 - **Dedup key is `jobs.UNIQUE (source, external_id)`.** `UpsertJob` is `ON CONFLICT` on it.
 - **`sources.SelfClosingProviders`** lists providers whose adapters implement the `selfClosing` marker — they emit `Job{Removed: true}` for taken-down postings and are excluded from the unseen-job sweep.
 - **Board health table holds ONLY runtime state** — the board catalog stays in YAML (git); a stale row for a removed board is inert.
+- **An adapter MAY yield the platform's application form (`Job.ApplyForm`), but only when its list endpoint already carries one.** Today that is `recruitee` alone: its `/api/offers/` response holds `open_questions` and the `options_*` standard-field flags beside the posting, so the form costs no extra request and `applyform.FromRecruitee` maps it in place. Every other adapter leaves it nil, which is not a failure. **An adapter must never issue a request to fill it** — a form that costs a request would make a crawl's duration a function of board size, and the adapter cannot tell which postings are new anyway (that answer exists only after `UpsertJob`'s `ON CONFLICT` resolves). Those platforms are captured after ingest by `cmd/capture-apply-form`; `applyform.NeedsRequestCapture` is the gate, and it and the fetcher registry read one map so the queue cannot fill with work nothing can drain.
 
 ## How it works
 
