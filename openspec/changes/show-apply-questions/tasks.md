@@ -12,9 +12,9 @@
 
 ## 3. The page
 
-- [ ] 3.1 Add the API client call and wire it into `+page.server.ts` as a fourth parallel request, degrading to nothing on any failure like `similar` and `copies` already do
-- [ ] 3.2 Add the component rendering the questions, and cover that it renders nothing when there is no form
-- [ ] 3.3 Place it on the job page beside the apply action and check it visually against a posting that has a form
+- [x] 3.1 Add the API client call and wire it into `+page.server.ts` as a fourth parallel request, degrading to nothing on any failure like `similar` and `copies` already do
+- [x] 3.2 Add the component rendering the questions. NOT unit-tested: vitest here runs in plain Node with no Svelte compilation (`vitest.config.ts`), so component tests are not a thing in this repo — the "renders nothing without a form" branch is verified visually in 3.3 instead
+- [x] 3.3 Place it on the job page beside the apply action and check it visually against a posting that has a form
 
 ## 4. Finish
 

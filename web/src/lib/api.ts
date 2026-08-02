@@ -10,7 +10,7 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { RevisionView } from '$lib/generated/contracts';
+import type { Display, RevisionView } from '$lib/generated/contracts';
 import type {
   CvAtsDelta,
   CvJobMatch,
@@ -338,6 +338,13 @@ export function createApi(
    *  renders them; the source job is excluded by the backend. */
   async function getSimilarJobs(slug: string): Promise<Job[]> {
     return requestData<Job[]>(`/api/v1/jobs/${slug}/similar`);
+  }
+
+  /** The questions this job's application will ask, as the ATS published them. 404s for
+   *  the majority of postings — a form can only be read from a few platforms — so callers
+   *  treat a failure as "not known" rather than as an error worth surfacing. */
+  async function getApplyForm(slug: string): Promise<Display> {
+    return requestData<Display>(`/api/v1/jobs/${slug}/apply-form`);
   }
 
   /** The open postings sharing this job's role cluster — the "openings across cities"
@@ -1656,6 +1663,7 @@ export function createApi(
     getJob,
     getSimilarJobs,
     getJobCopies,
+    getApplyForm,
     getJobMatch,
     getMatchAnalysis,
     runMatchAnalysis,

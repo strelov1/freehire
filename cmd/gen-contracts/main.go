@@ -77,6 +77,7 @@ func genStructs() (string, error) {
 	resumeextractTS := filepath.Join(tmp, "resumeextract.ts")
 	cvTS := filepath.Join(tmp, "cv.ts")
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
+	applyformTS := filepath.Join(tmp, "applyform.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -104,6 +105,15 @@ func genStructs() (string, error) {
 				OutputPath:   verdictTS,
 				IncludeFiles: []string{"verdict.go"},
 				TypeMappings: map[string]string{"skillbundle.Bundle": "Bundle"},
+			},
+			{
+				// The application-form display shape (Display + Question). Only display.go —
+				// the rest of the package is the capture: the stored Form keeps each
+				// platform's own identifiers and option values, which exist to be handed
+				// back to that platform and are of no use to a browser.
+				Path:         "github.com/strelov1/freehire/internal/applyform",
+				OutputPath:   applyformTS,
+				IncludeFiles: []string{"display.go"},
 			},
 			{
 				// The CV ATS-readiness report wire shape (Report + Check + Status) and the
@@ -224,7 +234,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody, nil
+	applyformBody, err := readBody(applyformTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

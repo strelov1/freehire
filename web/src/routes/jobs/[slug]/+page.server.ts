@@ -15,7 +15,12 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
   //
   // Similar jobs are a non-essential discovery aid: a failure (search disabled,
   // no neighbours yet) must not break the page, so it degrades to an empty list.
-  const [job, similar, copiesResult] = await Promise.all([
+  //
+  // The application form is known for a minority of postings — only a few ATS platforms
+  // publish one we can read — so its absence is the ordinary case, not a failure. It
+  // degrades to null for the same reason the two below degrade to empty: nothing on this
+  // page may be able to break the page.
+  const [job, similar, copiesResult, applyForm] = await Promise.all([
     api.getJob(params.slug).catch((e) => {
       if (e instanceof ApiError && e.status === 404) error(404, 'Job not found');
       throw e;
@@ -24,6 +29,13 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
     // A small preview of the other-locations tab (the full list is /jobs/:slug/copies).
     // Non-essential and only meaningful for a mass-posted role, so it degrades to empty.
     api.getJobCopies(params.slug, 10).catch(() => ({ copies: [], total: 0 })),
+    api.getApplyForm(params.slug).catch(() => null),
   ]);
-  return { job, similar, copies: copiesResult.copies, copiesTotal: copiesResult.total };
+  return {
+    job,
+    similar,
+    copies: copiesResult.copies,
+    copiesTotal: copiesResult.total,
+    applyForm,
+  };
 };

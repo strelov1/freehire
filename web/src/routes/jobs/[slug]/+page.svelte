@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import JobApplyForm from '$lib/components/JobApplyForm.svelte';
   import JobRelated from '$lib/components/JobRelated.svelte';
   import JobView from '$lib/components/JobView.svelte';
   import Seo from '$lib/components/Seo.svelte';
@@ -44,6 +45,8 @@
      back to the shared px-4 rhythm. -->
 <div class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-4">
   <JobView job={data.job} />
+
+  <JobApplyForm form={data.applyForm} />
 
   <JobRelated
     similar={data.similar}
