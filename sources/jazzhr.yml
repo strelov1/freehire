@@ -8239,3 +8239,9 @@
   board: longbowadvantage
 - company: LTD Global
   board: ltdglobal
+
+# --- boards behind an application history, live-validated 2026-08-02 ---
+- company: Cyclops
+  board: cyclopsio
+- company: ViaPeople
+  board: viapeople

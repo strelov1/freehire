@@ -7560,3 +7560,9 @@
   board: wonderly
 - company: Zego
   board: zego
+
+# --- boards behind an application history, live-validated 2026-08-02 ---
+# Ashby answers 200 for any spelling of a board, so the space is URL-encoded exactly as
+# the posting URL carries it — "it-labs" 404s, "it labs" is the real board.
+- company: IT Labs
+  board: it%20labs

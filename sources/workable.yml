@@ -1538,3 +1538,26 @@
   board: wavestrong
 - company: Yodeck
   board: yodeck
+
+# --- boards behind an application history, live-validated 2026-08-02 ---
+# Reached via apply.workable.com/j/<id> short-links and jobs.workable.com/view/<id>
+# marketplace pages, which name no board: the widget account was resolved from the
+# employer's own name/careers site, then confirmed against the widget API (jobs > 0).
+- company: DaCodes
+  board: dacodes-mx
+- company: Derq
+  board: derq
+- company: Exec
+  board: exec
+- company: Forager
+  board: forager
+- company: LMG Staffing Solutions
+  board: lmg-staffing-solutions
+- company: Seez
+  board: seezcareers
+- company: Sur
+  board: surglobal
+- company: Tenchi Security
+  board: tenchi-security
+- company: Walter
+  board: walter-careers

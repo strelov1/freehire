@@ -3111,3 +3111,17 @@
   board: jobs.paris64.com
 - company: Onwelo
   board: kariera.onwelo.com
+
+# --- boards behind an application history, live-validated 2026-08-02 ---
+# Custom-domain sites list under /jobs like a *.teamtailor.com board does; vairix is
+# deliberately absent — its /jobs listing is empty, so only cmd/resolve-url reaches it.
+- company: Cashea
+  board: cashea.na.teamtailor.com
+- company: CodiLime
+  board: jobs.codilime.com
+- company: Consultec-TI
+  board: empleo.consultec-ti.com
+- company: Keyrus Brazil
+  board: jobs.keyrus.com.br
+- company: Magoya
+  board: magoya-1732912701.na.teamtailor.com
