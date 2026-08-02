@@ -1,8 +1,11 @@
 package applyform
 
 import (
+	"html"
 	"slices"
 	"strings"
+
+	"github.com/microcosm-cc/bluemonday"
 )
 
 // Display is a captured form shaped for a candidate to read rather than for a
@@ -71,6 +74,31 @@ func isStandard(provider string, f Field) bool {
 	return slices.Contains(standardFieldIDs[provider], f.ID)
 }
 
+// labelPolicy strips all markup, leaving text. Compiled once, safe for concurrent use —
+// the same shape internal/sources uses for the same purpose.
+var labelPolicy = bluemonday.StrictPolicy()
+
+// asText flattens a label to plain text. Some platforms author question text as HTML —
+// Recruitee's consent questions arrive as a full <p> with an anchor inside — and the store
+// keeps what the platform sent, which is right. The reader shows text, so the tags come
+// off here.
+//
+// Deliberately flattened rather than rendered: this is employer-controlled markup, and a
+// block listing questions has no reason to be the one place it gets injected into our own
+// page.
+//
+// Not htmltext.ToText, which renders for reading and turns <b>CV</b> into *CV* — emphasis
+// markers are noise in a one-line label. Sanitize-then-unescape is what internal/sources
+// already does when it wants text rather than a rendering.
+func asText(label string) string {
+	if !strings.ContainsRune(label, '<') && !strings.ContainsRune(label, '&') {
+		return label
+	}
+	// Whitespace is normalized because stripping tags leaves the newlines and runs of
+	// spaces that were laying out the markup, not the sentence.
+	return strings.Join(strings.Fields(html.UnescapeString(labelPolicy.Sanitize(label))), " ")
+}
+
 // ForDisplay projects a captured form into what a candidate reads. It is pure: no
 // database, no network, so what it includes and what it refuses can be tested
 // without a fixture of either.
@@ -93,13 +121,13 @@ func (f Form) ForDisplay() Display {
 		case isStandard(f.Provider, field):
 			// One label may cover several controls (Greenhouse offers the CV as an
 			// upload OR pasted text under a single label), so the reader sees it once.
-			if !slices.Contains(d.Basics, field.Label) {
-				d.Basics = append(d.Basics, field.Label)
+			if label := asText(field.Label); !slices.Contains(d.Basics, label) {
+				d.Basics = append(d.Basics, label)
 			}
 
 		default:
 			d.Questions = append(d.Questions, Question{
-				Text:     field.Label,
+				Text:     asText(field.Label),
 				Required: field.Required,
 				Answer:   answerWords[field.Type],
 			})

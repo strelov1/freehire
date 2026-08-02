@@ -1,6 +1,9 @@
 package applyform
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func questionTexts(d Display) []string {
 	out := make([]string, 0, len(d.Questions))
@@ -218,5 +221,62 @@ func TestForDisplayKeepsTheFormsOrder(t *testing.T) {
 	got := questionTexts(d)
 	if len(got) != 2 || got[0] != "First" || got[1] != "Second" {
 		t.Errorf("questions = %v, want them in the platform's order", got)
+	}
+}
+
+// A question's text is not always plain text. Recruitee's consent questions arrive as
+// HTML — this one shipped to production and rendered as visible markup on the job page:
+//
+//	<p>Ik heb de <a href="...">privacyverklaring</a> van Pon Holding B.V. gelezen...</p>
+//
+// The store keeps what the platform sent, which is right; the reader shows text, so the
+// tags come off here. Not rendered as HTML: it is employer-controlled markup, and this
+// block has no reason to be the one place we inject it into our own page.
+func TestForDisplayFlattensHTMLInAQuestion(t *testing.T) {
+	d := Form{
+		Provider: "recruitee",
+		Fields: []Field{{
+			ID:    "q",
+			Label: `<p>Ik heb de <a href="https://example.test/privacy" target="_blank" rel="noopener">privacyverklaring</a> gelezen.</p>`,
+			Type:  TypeBoolean,
+		}},
+	}.ForDisplay()
+
+	if len(d.Questions) != 1 {
+		t.Fatalf("questions = %v, want one", questionTexts(d))
+	}
+	got := d.Questions[0].Text
+	if strings.Contains(got, "<") || strings.Contains(got, "href") {
+		t.Errorf("text = %q, want the markup stripped", got)
+	}
+	if !strings.Contains(got, "privacyverklaring") || !strings.Contains(got, "gelezen") {
+		t.Errorf("text = %q, want the words kept", got)
+	}
+}
+
+// Plain text is the overwhelming majority and must survive untouched — no stray
+// whitespace, no escaping, no reflowing.
+func TestForDisplayLeavesPlainTextAlone(t *testing.T) {
+	const plain = "What made you apply for this role?"
+	d := Form{
+		Provider: "greenhouse",
+		Fields:   []Field{{ID: "q", Label: plain, Type: TypeTextarea}},
+	}.ForDisplay()
+
+	if got := d.Questions[0].Text; got != plain {
+		t.Errorf("text = %q, want it unchanged (%q)", got, plain)
+	}
+}
+
+// The standard fields are labelled by our own mappers, but they go through the same
+// flattening — nothing should be able to put markup on the page by that route either.
+func TestForDisplayFlattensHTMLInABasic(t *testing.T) {
+	d := Form{
+		Provider: "recruitee",
+		Fields:   []Field{{ID: "cv", Label: "<b>CV</b>", Type: TypeFile}},
+	}.ForDisplay()
+
+	if len(d.Basics) != 1 || d.Basics[0] != "CV" {
+		t.Errorf("basics = %v, want the markup stripped", d.Basics)
 	}
 }
