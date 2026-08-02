@@ -3,6 +3,7 @@ package applyform
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 )
@@ -18,6 +19,7 @@ type fakeStore struct {
 	saved     map[int64]Form
 	failures  map[int64]string
 	attempts  map[int64]int
+	discarded []int64
 	maxClaims int
 }
 
@@ -375,5 +377,52 @@ func TestRunOutcomeSeparatesPostponedFromAbandoned(t *testing.T) {
 		if got := tc.stats.Degraded(); got != tc.degraded {
 			t.Errorf("%s: Degraded() = %v, want %v (%+v)", tc.name, got, tc.degraded, tc.stats)
 		}
+	}
+}
+
+func (s *fakeStore) Discard(_ context.Context, outboxID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.discarded = append(s.discarded, outboxID)
+	return nil
+}
+
+// A posting the platform no longer has is retired from the queue outright: there is
+// nothing to capture and no later run will do better, so retrying it three times to reach
+// the same answer only spends requests and leaves a dead letter that reads like a fault.
+func TestRunDiscardsAGonePosting(t *testing.T) {
+	store := newFakeStore([]Claimed{
+		claim(1, 100, "greenhouse", "b:live"),
+		claim(2, 200, "greenhouse", "b:gone"),
+	})
+	fetcher := &fakeFetcher{
+		forms: map[string]Form{"live": {Provider: "greenhouse"}},
+		errs:  map[string]error{"gone": fmt.Errorf("greenhouse: %w", ErrPostingGone)},
+	}
+
+	stats, err := Run(context.Background(), store, map[string]Fetcher{"greenhouse": fetcher}, testOptions())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if stats.Gone != 1 || stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want the gone posting counted apart and not failed", stats)
+	}
+	if len(store.discarded) != 1 || store.discarded[0] != 2 {
+		t.Errorf("discarded = %v, want the gone capture retired from the queue", store.discarded)
+	}
+	if store.failures[2] != "" {
+		t.Error("the gone capture was failed as well as discarded")
+	}
+	if _, ok := store.saved[100]; !ok {
+		t.Error("the live posting beside it was not captured")
+	}
+}
+
+// Postings going away is ordinary attrition, not a fault, so a run full of them is not a
+// run worth waking anyone for.
+func TestRunOfGonePostingsIsNotDegraded(t *testing.T) {
+	if (RunStats{Captured: 100, Gone: 40}).Degraded() {
+		t.Error("a run that retired taken-down postings reads as degraded, want it healthy")
 	}
 }

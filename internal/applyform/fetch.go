@@ -2,10 +2,38 @@ package applyform
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 )
+
+// ErrPostingGone marks a form the platform will never serve because the posting is no
+// longer on the board. It is not a failure to retry: the catalogue simply still holds a
+// posting the employer took down, and the unseen sweep closes it within 48h.
+//
+// The distinction earns its keep at scale. Across a backlog of a quarter of a million
+// postings there are thousands of these; retried, each burns three requests and then
+// dead-letters, and a queue steadily accumulating dead letters is indistinguishable from
+// one that is genuinely broken.
+var ErrPostingGone = errors.New("posting is gone")
+
+// statusCoder is any error carrying an HTTP status. Declared here rather than imported
+// because internal/sources imports THIS package (for the form its Recruitee adapter
+// yields), so the dependency cannot run both ways; sources.StatusError satisfies it.
+type statusCoder interface{ StatusCode() int }
+
+// asGone converts a not-found response into ErrPostingGone and leaves everything else
+// retryable. A 404 is the platform stating the posting does not exist; a 429 or a 5xx is
+// the platform declining to answer right now, which is a different thing entirely.
+func asGone(err error) error {
+	var sc statusCoder
+	if errors.As(err, &sc) && sc.StatusCode() == http.StatusNotFound {
+		return fmt.Errorf("%w: %v", ErrPostingGone, err)
+	}
+	return err
+}
 
 // Transport is the narrow HTTP role a fetcher needs: a JSON GET for Greenhouse's REST
 // endpoint and a JSON POST for Ashby's GraphQL one. It is declared here rather than
@@ -95,7 +123,7 @@ func (g greenhouseFetcher) Fetch(ctx context.Context, board, postingID string) (
 
 	var job GreenhouseJob
 	if err := g.http.GetJSON(ctx, url, &job); err != nil {
-		return Form{}, fmt.Errorf("greenhouse: fetch form for %s/%s: %w", board, postingID, err)
+		return Form{}, fmt.Errorf("greenhouse: fetch form for %s/%s: %w", board, postingID, asGone(err))
 	}
 	return FromGreenhouse(job), nil
 }
@@ -140,13 +168,13 @@ func (a ashbyFetcher) Fetch(ctx context.Context, board, postingID string) (Form,
 	}
 	headers := map[string]string{"content-type": "application/json"}
 	if err := a.http.PostJSONWithHeaders(ctx, ashbyGraphQLURL, headers, body, &resp); err != nil {
-		return Form{}, fmt.Errorf("ashby: fetch form for %s/%s: %w", board, postingID, err)
+		return Form{}, fmt.Errorf("ashby: fetch form for %s/%s: %w", board, postingID, asGone(err))
 	}
 	// A posting Ashby does not have answers 200 with a null jobPosting rather than an
 	// error, so an absent posting would otherwise be captured as an empty form — which
 	// reads as "this employer asks nothing" and is a lie.
 	if resp.Data.JobPosting == nil {
-		return Form{}, fmt.Errorf("ashby: no posting %s/%s", board, postingID)
+		return Form{}, fmt.Errorf("ashby: no posting %s/%s: %w", board, postingID, ErrPostingGone)
 	}
 	return FromAshby(resp.Data.JobPosting.ApplicationForm), nil
 }

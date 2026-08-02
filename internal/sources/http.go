@@ -405,6 +405,12 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("sources: %s %s: status %d", e.Method, e.URL, e.Code)
 }
 
+// StatusCode reports the response status. It exists so a package this one IMPORTS can
+// still branch on the code: internal/applyform is imported by the Recruitee adapter, so
+// it cannot import sources back, and a one-method interface it declares locally is
+// satisfied by this without either package naming the other.
+func (e *StatusError) StatusCode() int { return e.Code }
+
 // ChallengeError is an AWS-WAF Challenge response — a request the WAF answered with an
 // interactive JS proof-of-work shell instead of the real content (marked by the
 // "x-amzn-waf-action: challenge" header, served with HTTP 202). It is NOT a transient

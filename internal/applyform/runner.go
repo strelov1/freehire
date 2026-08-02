@@ -2,6 +2,7 @@ package applyform
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -29,6 +30,8 @@ type Store interface {
 	Save(ctx context.Context, outboxID, jobID int64, form Form) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// Discard retires an entry whose posting the platform no longer has, storing nothing.
+	Discard(ctx context.Context, outboxID int64) error
 }
 
 // RunOptions are the per-run knobs.
@@ -61,8 +64,12 @@ type RunOptions struct {
 // failure is a retry and a dead letter is work abandoned — a queue quietly filling with
 // the latter is not a healthy queue.
 type RunStats struct {
-	Captured     int
-	Failed       int
+	Captured int
+	Failed   int
+	// Gone counts postings the platform no longer has. They are retired from the queue
+	// rather than retried, and counted apart from Failed because they are ordinary
+	// attrition — an employer took the posting down and our sweep has not caught up yet.
+	Gone         int
 	DeadLettered int
 }
 
@@ -99,7 +106,7 @@ func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOpti
 		if opts.MaxPerRun > 0 {
 			// Never claim past the budget: a leased entry this run will not touch is one
 			// no other run can take until its lease lapses.
-			remaining := opts.MaxPerRun - (stats.Captured + stats.Failed)
+			remaining := opts.MaxPerRun - (stats.Captured + stats.Failed + stats.Gone)
 			if remaining <= 0 {
 				return stats, nil
 			}
@@ -117,6 +124,7 @@ func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOpti
 		wave := runWave(ctx, s, fetchers, opts, claims)
 		stats.Captured += wave.Captured
 		stats.Failed += wave.Failed
+		stats.Gone += wave.Gone
 		stats.DeadLettered += wave.DeadLettered
 
 		// A context cancellation shows up as every capture in the wave failing; stopping
@@ -150,6 +158,19 @@ func runWave(ctx context.Context, s Store, fetchers map[string]Fetcher, opts Run
 			if err == nil {
 				mu.Lock()
 				stats.Captured++
+				mu.Unlock()
+				return
+			}
+
+			// The platform does not have this posting and never will again. Retrying to
+			// reach the same answer spends requests and ends in a dead letter that reads
+			// like a fault, so the entry is retired instead.
+			if errors.Is(err, ErrPostingGone) {
+				if discardErr := s.Discard(ctx, c.OutboxID); discardErr != nil {
+					log.Printf("apply-form: retire gone capture %d: %v", c.OutboxID, discardErr)
+				}
+				mu.Lock()
+				stats.Gone++
 				mu.Unlock()
 				return
 			}

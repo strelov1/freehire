@@ -181,3 +181,48 @@ func TestAshbyFetcherKeepsAnUndecodableBoardName(t *testing.T) {
 		t.Errorf("organization = %q, want the literal name kept", got)
 	}
 }
+
+// A posting the platform no longer has is not a failure to retry. Our catalogue still
+// holds postings employers have taken down — the unseen sweep closes them within 48h — and
+// there will be thousands across a 226k backlog. Retried, each burns three requests and
+// then dead-letters, and a queue steadily accumulating dead letters is indistinguishable
+// from one that is genuinely broken.
+type statusErr struct{ code int }
+
+func (e statusErr) Error() string   { return "status" }
+func (e statusErr) StatusCode() int { return e.code }
+
+func TestGreenhouseFetcherMarksAGonePostingAsGone(t *testing.T) {
+	tr := &fakeTransport{err: statusErr{code: 404}}
+
+	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), "sentinellabs", "7819844003")
+
+	if !errors.Is(err, ErrPostingGone) {
+		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
+	}
+}
+
+// Anything else is worth another try: a 429 clears on its own, and giving up on it would
+// throw away a form the platform is perfectly willing to serve.
+func TestGreenhouseFetcherKeepsARateLimitRetryable(t *testing.T) {
+	tr := &fakeTransport{err: statusErr{code: 429}}
+
+	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), "b", "1")
+
+	if err == nil {
+		t.Fatal("Fetch() = nil error on a rate limit")
+	}
+	if errors.Is(err, ErrPostingGone) {
+		t.Errorf("Fetch() error = %v, want a rate limit kept retryable", err)
+	}
+}
+
+func TestAshbyFetcherMarksAnAbsentPostingAsGone(t *testing.T) {
+	tr := &fakeTransport{body: `{"data": {"jobPosting": null}}`}
+
+	_, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "n8n", "gone")
+
+	if !errors.Is(err, ErrPostingGone) {
+		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
+	}
+}

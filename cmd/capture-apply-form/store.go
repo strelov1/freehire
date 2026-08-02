@@ -75,6 +75,12 @@ func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, form applyfor
 	return tx.Commit(ctx)
 }
 
+// Discard retires a capture whose posting the platform no longer has. No form is stored:
+// there is nothing to store, and the posting itself will be closed by the unseen sweep.
+func (s *dbStore) Discard(ctx context.Context, outboxID int64) error {
+	return s.q.DeleteApplyFormEntry(ctx, outboxID)
+}
+
 func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (bool, error) {
 	row, err := s.q.RecordApplyFormFailure(ctx, db.RecordApplyFormFailureParams{
 		ID:          outboxID,
