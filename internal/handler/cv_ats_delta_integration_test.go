@@ -20,6 +20,7 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/resume"
 )
 
@@ -75,7 +76,7 @@ func newATSDeltaFixture(t *testing.T, pool *pgxpool.Pool) atsDeltaFixture {
 	}}
 	h := &cvHandlers{
 		queries: queries, jobReader: queries, cvStore: store,
-		editor:         cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		editor:         cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))}),
 		resume:         resume.New(nil, resume.NewQueriesRepository(queries)),
 		cvRenderer:     renderer,
 		extractPDFText: textFromPDF,

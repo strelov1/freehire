@@ -26,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -37,14 +38,19 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE cvs, users, jobs, user_job_analysis, api_keys, assistant_sessions RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE cvs, users, jobs, user_job_analysis, api_keys, assistant_sessions, experience_employments, experience_atoms RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	creditsStore := credits.NewStore(queries, pool, credits.Config{MonthlyGrant: 20, CostMatch: 1, CostTailor: 3})
 	h := &cvHandlers{queries: queries, jobReader: queries,
-		cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
-		editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), nil),
+		cvStore: cv.NewStore(cv.NewQueriesRepository(queries)),
+		// The REAL gate, built exactly as Register builds it. A nil gate here would be a
+		// configuration production does not have: newCVHandlers always receives
+		// bankGate{bank}, so an API-key PATCH edits as the agent and an uncited claim is
+		// refused. A fixture asserting otherwise tests nothing that ships.
+		editor: cvedit.NewEditor(cvedit.NewRepository(pool, queries),
+			bankGate{bank: experience.NewStore(experience.NewQueriesRepository(queries))}),
 		resume:             resume.New(nil, resume.NewQueriesRepository(queries)),
 		matchAnalysisCache: queries,
 		credits:            creditsStore,
@@ -273,13 +279,31 @@ func TestPatchCVViaKey(t *testing.T) {
 	ownerKey := cvScopedKey(t, h, owner)
 	otherKey := cvScopedKey(t, h, other)
 
-	// A valid batch applies. The key edits as the AGENT, so a bullet has to cite banked
-	// evidence — except that this fixture wires no bank, which is "no gate" rather than
-	// "gate that refuses" (the CLI is not a place to enforce provenance it cannot query).
+	// The key edits as the AGENT, so a bullet stating something about the candidate has to
+	// cite banked evidence. Uncited is refused — this is the rule the tailoring capability
+	// exists to enforce, and it must hold for an API-key caller with no assistant in sight.
 	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
 		"ops": []map[string]any{{"kind": "insert", "path": "experience[0].bullets[1]", "value": "Cut latency"}},
+	}); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("uncited patch = %d, want 403", resp.StatusCode)
+	}
+
+	// Cited by an atom the candidate asserted, the same batch applies — so the gate is a
+	// wall with a door, not a blanket refusal.
+	bank := experience.NewStore(experience.NewQueriesRepository(h.queries))
+	atom, err := bank.AddAtom(ctx, owner, experience.Atom{
+		Claim: "Cut latency", Provenance: experience.ProvenanceStatedInChat,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
+		"ops": []map[string]any{{
+			"kind": "insert", "path": "experience[0].bullets[1]",
+			"value": "Cut latency", "evidence_id": atom.ID.String(),
+		}},
 	}); resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("patch = %d, want 200", resp.StatusCode)
+		t.Fatalf("cited patch = %d, want 200", resp.StatusCode)
 	}
 	rec, _ := h.cvStore.Get(ctx, base.ID, owner)
 	if got := rec.Document.Experience[0].Bullets; len(got) != 2 || got[1] != "Cut latency" {
@@ -311,16 +335,35 @@ func TestPatchCVViaKey(t *testing.T) {
 		t.Fatalf("patch full_name via key = %d, want 403", resp.StatusCode)
 	}
 
-	// Bad addressing is a 422.
+	// Bad addressing is a 422 — but only once the evidence gate has let the op through. The
+	// gate is the OUTER check: an uncited claim is 403 whatever its path addresses, which the
+	// old nil-gate fixture could never show. Citing the banked atom is what makes this case
+	// about addressing again.
 	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
-		"ops": []map[string]any{{"kind": "set", "path": "experience[0].bullets[9]", "value": "x"}},
+		"ops": []map[string]any{{
+			"kind": "set", "path": "experience[0].bullets[9]",
+			"value": "x", "evidence_id": atom.ID.String(),
+		}},
 	}); resp.StatusCode != fiber.StatusUnprocessableEntity {
 		t.Fatalf("bad-patch = %d, want 422", resp.StatusCode)
 	}
 
-	// Another user's key cannot touch this CV (owner isolation → 404, not 403).
+	// And the ordering itself, pinned: the same malformed op WITHOUT evidence is refused by
+	// the gate rather than reaching the addressing check.
+	if resp := doBearer(t, app, fiber.MethodPatch, path, ownerKey, map[string]any{
+		"ops": []map[string]any{{"kind": "set", "path": "experience[0].bullets[9]", "value": "x"}},
+	}); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("uncited bad-patch = %d, want 403 — the gate runs before addressing", resp.StatusCode)
+	}
+
+	// Another user's key cannot touch this CV (owner isolation → 404, not 403). The op is a
+	// REMOVE because the evidence gate runs first and only gates claim-bearing set/insert:
+	// with a claim-bearing op the foreign caller is refused at the gate (403) and never
+	// reaches the ownership check. Isolation is intact either way — 403 is what an uncited
+	// claim gets whether or not the CV exists, so neither answer discloses one — but only a
+	// non-claiming op actually exercises the 404.
 	if resp := doBearer(t, app, fiber.MethodPatch, path, otherKey, map[string]any{
-		"ops": []map[string]any{{"kind": "set", "path": "summary", "value": "hijack"}},
+		"ops": []map[string]any{{"kind": "remove", "path": "experience[0].bullets[0]"}},
 	}); resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("foreign patch = %d, want 404", resp.StatusCode)
 	}

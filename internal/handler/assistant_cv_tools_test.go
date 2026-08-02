@@ -90,9 +90,15 @@ var testCVID = uuid.MustParse("55555555-5555-4555-8555-555555555555")
 // cvToolsAPI wires an API whose CV store serves one document owned by user 3.
 func cvToolsAPI(t *testing.T, doc string) (*assistantHandlers, *cvRepo) {
 	t.Helper()
+	// An EMPTY bank, not a nil gate. Production always constructs the editor with one
+	// (Register passes bankGate{bank}), so a nil gate is a configuration that does not ship
+	// — a fixture using it asserts behaviour nobody can reach. An empty bank is the honest
+	// stand-in: the gate is present and refuses every citation, which is what a user with
+	// nothing banked actually experiences.
 	repo := &cvRepo{id: testCVID, userID: 3, jobID: 9, data: []byte(doc)}
-	editor := cvedit.NewEditor(&memRevisions{cv: repo}, nil)
-	return &assistantHandlers{cv: &cvHandlers{cvStore: cv.NewStore(repo), editor: editor}}, repo
+	bank := newStubBank()
+	editor := cvedit.NewEditor(&memRevisions{cv: repo}, bankGate{bank: bank})
+	return &assistantHandlers{experience: bank, cv: &cvHandlers{cvStore: cv.NewStore(repo), editor: editor}}, repo
 }
 
 // cvToolsAPIWithBank is cvToolsAPI for the cases that exercise the evidence gate. The
@@ -265,11 +271,15 @@ func TestCVGetToolOmitsTheContactBlock(t *testing.T) {
 }
 
 func TestCVEditToolAppliesAPatch(t *testing.T) {
-	a, repo := cvToolsAPI(t, oneExperienceCV)
+	// Through a bank holding what the claim rests on, because the agent must cite: the tool
+	// runs as ActorAgent and production always constructs the editor with the gate.
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
 	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"}]}`))
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
 	if err != nil {
 		t.Fatalf("cv_edit: %v", err)
 	}
@@ -413,13 +423,18 @@ func TestCVEditWritesACitedBullet(t *testing.T) {
 // A batch is one entry in the candidate's history and one round of the turn's budget, which
 // is why closing a requirement no longer costs three calls.
 func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
-	a, repo := cvToolsAPI(t, oneExperienceCV)
+	// Every claim-bearing op in the batch cites, because one uncited op refuses the whole
+	// batch — that rule is why a batch is worth testing through the real gate at all.
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Ran the cluster", Provenance: experience.ProvenanceCVImport})
+	id := atom.ID.String()
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
 	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
-		`{"ops":[{"kind":"set","path":"summary","value":"Platform engineer"},`+
-			`{"kind":"insert","path":"experience[0].bullets[1]","value":"Ran the cluster"},`+
-			`{"kind":"set","path":"experience[0].company","value":"Acme Corp"}],"note":"under the Kubernetes requirement"}`))
+		`{"ops":[{"kind":"set","path":"summary","value":"Platform engineer","evidence_id":"`+id+`"},`+
+			`{"kind":"insert","path":"experience[0].bullets[1]","value":"Ran the cluster","evidence_id":"`+id+`"},`+
+			`{"kind":"set","path":"experience[0].company","value":"Acme Corp","evidence_id":"`+id+`"}],"note":"under the Kubernetes requirement"}`))
 	if err != nil {
 		t.Fatalf("cv_edit: %v", err)
 	}
