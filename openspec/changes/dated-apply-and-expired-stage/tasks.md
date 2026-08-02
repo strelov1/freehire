@@ -28,16 +28,19 @@
 - [x] 3.2 Add `MarkAppliedOn` to `internal/jobtracking`: in one transaction, mark applied with
   the stated instant, then re-date. Creating and correcting both end with the column and the
   ledger reporting the same instant.
-- [ ] 3.3 Add an integration test for the correction path: an application recorded today,
+- [x] 3.3 Add an integration test for the correction path. The create-with-a-date half needed
+  none: `MarkJobApplied` already carries it for the mail path, and
+  `TestMarkJobApplied_DatesTheEventFromTheMessage` covers it. Only the correction was new.
+  Original wording: an integration test for the correction path: an application recorded today,
   corrected to last month, has exactly one `applied` event, carrying the corrected date, and an
   unchanged `applied_count`.
 
 ## 4. The apply endpoint
 
-- [ ] 4.1 Parse an optional `{"applied_on": "YYYY-MM-DD"}` body in `MarkApplied`
+- [x] 4.1 Parse an optional `{"applied_on": "YYYY-MM-DD"}` body in `MarkApplied`
   (`internal/handler/user_jobs.go`), convert the day to noon UTC, and route to `MarkAppliedOn`.
   No body, or no date in the body, keeps today's behaviour.
-- [ ] 4.2 Add handler tests: a stated day is stored at noon UTC; a malformed date, a future
+- [x] 4.2 Add handler tests: a stated day is stored at noon UTC; a malformed date, a future
   date and one older than a year are each `400` with nothing recorded.
 
 ## 5. CLI

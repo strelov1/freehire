@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,5 +136,106 @@ func TestToResponse_JSONShape(t *testing.T) {
 		if got := string(fields[nullField]); got != "null" {
 			t.Errorf("%s = %s, want null", nullField, got)
 		}
+	}
+}
+
+// datedRepo captures what the dated apply path was handed, and which path ran at all: the
+// stated-date and now() paths reach different repository methods, and a test that could not
+// tell them apart would not notice the body being ignored.
+type datedRepo struct {
+	stubTrackingRepo
+	on    time.Time
+	plain bool
+}
+
+func (d *datedRepo) MarkApplied(context.Context, int64, int64, string) (jobtracking.Interaction, error) {
+	d.plain = true
+	return jobtracking.Interaction{JobID: 1}, nil
+}
+
+func (d *datedRepo) MarkAppliedOn(_ context.Context, _, _ int64, at time.Time, _ string) (jobtracking.Interaction, error) {
+	d.on = at
+	return jobtracking.Interaction{JobID: 1, AppliedAt: &at}, nil
+}
+
+func datedApplyApp(repo jobtracking.Repository) (*fiber.App, *auth.Issuer) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &trackingHandlers{tracking: jobtracking.New(repo)}
+	app := fiber.New()
+	app.Post("/jobs/:slug/apply", auth.RequireAuth(iss, testVersions), h.MarkApplied)
+	return app, iss
+}
+
+func postApply(t *testing.T, app *fiber.App, token, body string) int {
+	t.Helper()
+	req := httptest.NewRequest(fiber.MethodPost, "/jobs/go-dev/apply", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	return resp.StatusCode
+}
+
+// The wire carries a day; storage takes an instant. Noon is that instant because midnight would
+// render as the previous date for every reader west of Greenwich — the application would show a
+// day earlier than the one the person typed.
+func TestMarkApplied_StoresAStatedDayAtNoonUTC(t *testing.T) {
+	repo := &datedRepo{}
+	app, iss := datedApplyApp(repo)
+	token, _ := iss.Issue(7, testTokenVersion)
+
+	if got := postApply(t, app, token, `{"applied_on":"2026-07-27"}`); got != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", got)
+	}
+	want := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
+	if !repo.on.Equal(want) {
+		t.Errorf("repository received %v, want %v", repo.on, want)
+	}
+}
+
+// Without a body the endpoint is what it has always been. The dated path is an addition, not a
+// replacement, so an existing caller sending nothing must not start taking a different route.
+func TestMarkApplied_WithoutABodyKeepsTheUndatedPath(t *testing.T) {
+	for _, body := range []string{"", "{}"} {
+		repo := &datedRepo{}
+		app, iss := datedApplyApp(repo)
+		token, _ := iss.Issue(7, testTokenVersion)
+
+		if got := postApply(t, app, token, body); got != fiber.StatusOK {
+			t.Fatalf("body %q: status = %d, want 200", body, got)
+		}
+		if !repo.plain {
+			t.Errorf("body %q: the dated path ran, want the plain one", body)
+		}
+		if !repo.on.IsZero() {
+			t.Errorf("body %q: a date reached the repository", body)
+		}
+	}
+}
+
+// A date we cannot believe, or cannot read, is refused before anything is written. The window is
+// the service's, so this also proves the handler does not hold a second copy of it.
+func TestMarkApplied_RefusesAnUnusableDate(t *testing.T) {
+	cases := map[string]string{
+		"not a date":        `{"applied_on":"last tuesday"}`,
+		"a timestamp":       `{"applied_on":"2026-07-27T10:00:00Z"}`,
+		"in the future":     `{"applied_on":"` + time.Now().AddDate(0, 0, 2).Format("2006-01-02") + `"}`,
+		"older than a year": `{"applied_on":"` + time.Now().AddDate(0, 0, -400).Format("2006-01-02") + `"}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			repo := &datedRepo{}
+			app, iss := datedApplyApp(repo)
+			token, _ := iss.Issue(7, testTokenVersion)
+
+			if got := postApply(t, app, token, body); got != fiber.StatusBadRequest {
+				t.Errorf("status = %d, want 400", got)
+			}
+			if !repo.on.IsZero() || repo.plain {
+				t.Error("an unusable date reached the repository")
+			}
+		})
 	}
 }

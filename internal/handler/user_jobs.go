@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/reminder"
+	"github.com/strelov1/freehire/internal/userjob"
 )
 
 // trackingHandlers serves the per-user job interactions (view/apply/save/dismiss/
@@ -138,6 +139,10 @@ func trackingError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "provide stage and/or notes")
 	case errors.Is(err, jobtracking.ErrApplicationNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "application not found")
+	case errors.Is(err, userjob.ErrAppliedOnOutOfRange):
+		// The message names which bound was crossed; it is the service's words, not a second
+		// copy of the rule stated here.
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	default:
 		return err
 	}
@@ -157,18 +162,76 @@ func (h *trackingHandlers) RecordView(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
+// applyRequest is the optional body of an apply: the day the application was actually sent.
+//
+// A calendar date rather than a timestamp, matching the ghost report, because the caller is
+// stating a day. Asking for an instant would invite one bearing a timezone, which reads as a
+// different day either side of a border.
+type applyRequest struct {
+	AppliedOn string `json:"applied_on"`
+}
+
+// appliedOnHour is the hour of the stated day to store it at, read with appliedOnLayout — the
+// same layout the ghost report parses, since both take a day from a person. Noon, because
+// midnight UTC renders as the previous date for every reader west of Greenwich: the card would
+// show a day earlier than the one they typed.
+const appliedOnHour = 12
+
 // MarkApplied marks a job as applied for the authenticated user and returns the
 // updated interaction.
+//
+// The body is optional in both directions: absent, empty, or carrying no date, the request is
+// the undated apply it has always been, stamped now(). A date present is the caller's own
+// account of when they applied, and overrides one already recorded.
 func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
+	}
+	day, err := statedApplyDay(c)
+	if err != nil {
+		return err
+	}
+	if day != nil {
+		return h.markAppliedOn(c, userID, *day)
 	}
 	interaction, err := h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"), appevent.SourceUser)
 	if err != nil {
 		return trackingError(err)
 	}
 	// Applying ends the "come back and apply" intent, so drop any pending reminder.
+	h.cancelReminderBestEffort(c, userID, interaction.JobID)
+	return c.JSON(fiber.Map{"data": toResponse(interaction)})
+}
+
+// statedApplyDay reads the optional day out of the request, as the instant to store. It
+// answers nil for a request that states none — no body, an unparseable one, or a body whose
+// `applied_on` is empty — because apply has always been callable with nothing at all, and a
+// client that sends none is asking for today rather than making a mistake.
+//
+// A date that is present but unreadable is a mistake, and says so: silently stamping now()
+// would record a different application than the one the caller described.
+func statedApplyDay(c *fiber.Ctx) (*time.Time, error) {
+	var in applyRequest
+	if err := c.BodyParser(&in); err != nil || in.AppliedOn == "" {
+		return nil, nil
+	}
+	day, err := time.Parse(appliedOnLayout, in.AppliedOn)
+	if err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "applied_on must be a date like 2026-07-29")
+	}
+	at := time.Date(day.Year(), day.Month(), day.Day(), appliedOnHour, 0, 0, 0, time.UTC)
+	return &at, nil
+}
+
+// markAppliedOn records the application on the stated day. The believable-date window belongs
+// to the service, so an out-of-range day arrives here as an error to render rather than as a
+// rule this handler restates.
+func (h *trackingHandlers) markAppliedOn(c *fiber.Ctx, userID int64, at time.Time) error {
+	interaction, err := h.tracking.MarkAppliedOn(c.Context(), userID, c.Params("slug"), at, time.Now().UTC(), appevent.SourceUser)
+	if err != nil {
+		return trackingError(err)
+	}
 	h.cancelReminderBestEffort(c, userID, interaction.JobID)
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
