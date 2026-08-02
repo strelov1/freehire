@@ -64,10 +64,11 @@ func (s *DBStore) Candidates(ctx context.Context, userID int64) ([]calmatch.Cand
 
 func (s *DBStore) UpsertInterview(ctx context.Context, in StoredInterview) error {
 	_, err := s.q.UpsertApplicationInterview(ctx, db.UpsertApplicationInterviewParams{
-		UserID:        in.UserID,
-		ApplicationID: in.ApplicationID,
-		IcalUid:       in.UID,
-		StartsAt:      pgtype.Timestamptz{Time: in.StartsAt, Valid: true},
+		UserID:          in.UserID,
+		ApplicationID:   in.ApplicationID,
+		IcalUid:         in.UID,
+		ProviderEventID: in.ProviderID,
+		StartsAt:        pgtype.Timestamptz{Time: in.StartsAt, Valid: true},
 		// An all-day or open-ended entry has no end, and NULL says so rather than
 		// inventing a duration the organiser did not give.
 		EndsAt:  pgtype.Timestamptz{Time: in.EndsAt, Valid: !in.EndsAt.IsZero()},
@@ -82,9 +83,9 @@ func (s *DBStore) UpsertInterview(ctx context.Context, in StoredInterview) error
 	return err
 }
 
-func (s *DBStore) CancelInterview(ctx context.Context, userID int64, uid string) error {
+func (s *DBStore) CancelInterview(ctx context.Context, userID int64, eventID string) error {
 	_, err := s.q.CancelApplicationInterview(ctx, db.CancelApplicationInterviewParams{
-		UserID: userID, IcalUid: uid,
+		UserID: userID, EventID: eventID,
 	})
 	return err
 }

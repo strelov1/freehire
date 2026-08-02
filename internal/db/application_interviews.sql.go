@@ -14,22 +14,26 @@ import (
 const cancelApplicationInterview = `-- name: CancelApplicationInterview :execrows
 UPDATE application_interviews
 SET status = 'cancelled', updated_at = now()
-WHERE user_id  = $1
-  AND ical_uid = $2
-  AND status  <> 'cancelled'
+WHERE user_id = $1
+  AND status <> 'cancelled'
+  AND (ical_uid = $2
+       OR (provider_event_id <> '' AND provider_event_id = $2))
 `
 
 type CancelApplicationInterviewParams struct {
 	UserID  int64  `json:"user_id"`
-	IcalUid string `json:"ical_uid"`
+	EventID string `json:"event_id"`
 }
 
 // Mark a meeting cancelled. Deliberately not a delete: a candidate who remembers an
 // interview on Thursday and finds an empty Thursday cannot tell a cancellation from a
 // calendar that failed to load. The scheduling still happened, and the ledger's
 // `interview_scheduled` stands.
+// Matched on EITHER identifier, because a cancellation may carry only one. A live event
+// names the meeting by its iCalUID; a deleted one is documented to carry just the
+// provider's own `id`, which is why that is stored alongside.
 func (q *Queries) CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error) {
-	result, err := q.db.Exec(ctx, cancelApplicationInterview, arg.UserID, arg.IcalUid)
+	result, err := q.db.Exec(ctx, cancelApplicationInterview, arg.UserID, arg.EventID)
 	if err != nil {
 		return 0, err
 	}
@@ -217,15 +221,17 @@ func (q *Queries) RecordGrantScopes(ctx context.Context, arg RecordGrantScopesPa
 const upsertApplicationInterview = `-- name: UpsertApplicationInterview :one
 WITH saved AS (
     INSERT INTO application_interviews (
-        user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, status, source
+        user_id, application_id, ical_uid, provider_event_id, starts_at, ends_at,
+        title, join_url, status, source
     )
     VALUES (
         $1, $2, $3,
-        $4, $5, $6, $7,
-        $8, $9
+        $4, $5, $6,
+        $7, $8, $9, $10
     )
     ON CONFLICT (user_id, ical_uid) DO UPDATE
-    SET application_id = EXCLUDED.application_id,
+    SET application_id    = EXCLUDED.application_id,
+        provider_event_id = EXCLUDED.provider_event_id,
         starts_at      = EXCLUDED.starts_at,
         ends_at        = EXCLUDED.ends_at,
         title          = EXCLUDED.title,
@@ -235,14 +241,15 @@ WITH saved AS (
                              ELSE EXCLUDED.status
                          END,
         updated_at     = now()
-    RETURNING id, user_id, application_id
+    RETURNING id, user_id, application_id, status
 ), noted AS (
     INSERT INTO application_events (
         user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
     )
     SELECT s.user_id, s.application_id, a.job_id, a.company_slug,
-           'interview_scheduled', '', now(), $10::text, s.id
+           'interview_scheduled', '', now(), $11::text, s.id
       FROM saved s JOIN applications a ON a.id = s.application_id
+     WHERE s.status = 'confirmed' 
     ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
     DO NOTHING
 )
@@ -250,16 +257,17 @@ SELECT id FROM saved
 `
 
 type UpsertApplicationInterviewParams struct {
-	UserID        int64              `json:"user_id"`
-	ApplicationID int64              `json:"application_id"`
-	IcalUid       string             `json:"ical_uid"`
-	StartsAt      pgtype.Timestamptz `json:"starts_at"`
-	EndsAt        pgtype.Timestamptz `json:"ends_at"`
-	Title         string             `json:"title"`
-	JoinUrl       string             `json:"join_url"`
-	Status        string             `json:"status"`
-	Source        string             `json:"source"`
-	EventSource   string             `json:"event_source"`
+	UserID          int64              `json:"user_id"`
+	ApplicationID   int64              `json:"application_id"`
+	IcalUid         string             `json:"ical_uid"`
+	ProviderEventID string             `json:"provider_event_id"`
+	StartsAt        pgtype.Timestamptz `json:"starts_at"`
+	EndsAt          pgtype.Timestamptz `json:"ends_at"`
+	Title           string             `json:"title"`
+	JoinUrl         string             `json:"join_url"`
+	Status          string             `json:"status"`
+	Source          string             `json:"source"`
+	EventSource     string             `json:"event_source"`
 }
 
 // Record a meeting the sync attached to an application, or move the one already recorded,
@@ -284,11 +292,18 @@ type UpsertApplicationInterviewParams struct {
 //   - source_ref is the interview's own id, which makes it idempotent by the ledger's
 //     partial unique index — a re-sync, and a reschedule, add no second event. The
 //     scheduling happened once.
+//   - It is written for a CONFIRMED meeting only. A row in this ledger carrying an
+//     application id IS a link, into an append-only table with no retraction path for
+//     this kind — and the rule is that only the invitation's own identifier may link. A
+//     title match is a guess offered to the candidate; letting it write here would make
+//     "Q3 ramp-up planning" a permanent, unremovable interview against an application to
+//     an employer called Ramp.
 func (q *Queries) UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error) {
 	row := q.db.QueryRow(ctx, upsertApplicationInterview,
 		arg.UserID,
 		arg.ApplicationID,
 		arg.IcalUid,
+		arg.ProviderEventID,
 		arg.StartsAt,
 		arg.EndsAt,
 		arg.Title,

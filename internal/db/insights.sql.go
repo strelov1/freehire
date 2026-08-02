@@ -493,8 +493,14 @@ WITH observable AS (
        AND ae.retracted_at IS NULL
        AND ae.company_slug <> ''
        AND ae.application_id IS NOT NULL
+       -- Observable means "we would have seen a reply": the candidate has somewhere we
+       -- read mail. A Google grant with no mailbox address is a calendar-only consent —
+       -- it can never produce an employer_reply, so counting it would put applications in
+       -- the denominator that are structurally barred from the numerator and make named
+       -- employers read as more silent than they are. That is the exact distortion this
+       -- rollup exists to remove.
        AND (EXISTS (SELECT 1 FROM gmail_connections gc
-                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected')
+                     WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
          OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id))
 ), answered AS (
     SELECT o.company_slug, o.applied_at,

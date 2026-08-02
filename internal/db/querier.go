@@ -99,6 +99,9 @@ type Querier interface {
 	// interview on Thursday and finds an empty Thursday cannot tell a cancellation from a
 	// calendar that failed to load. The scheduling still happened, and the ledger's
 	// `interview_scheduled` stands.
+	// Matched on EITHER identifier, because a cancellation may carry only one. A live event
+	// names the meeting by its iCalUID; a deleted one is documented to carry just the
+	// provider's own `id`, which is why that is stored alongside.
 	CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error)
 	// Cancel the pending reminder for one (user, job): the per-job "turn off" control,
 	// and the eager cleanup wired into apply and unsave. Idempotent — no pending row
@@ -1215,7 +1218,18 @@ type Querier interface {
 	// (0057), which covers the predicate, the order and updated_at — without it the
 	// predicate alone sends every candidate row to the heap.
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
-	// Drives the sync worker: every connection still authorized.
+	// Drives the sync worker: every connection still authorized AND holding a mailbox.
+	//
+	// The address is the test, and it is not decoration. Since the calendar consent exists,
+	// a row here may be a Google grant with no mail scope at all — UpsertCalendarGrant
+	// inserts one with an empty address and never fills it. Syncing such a user calls the
+	// Gmail API with a token that cannot answer, takes the 403 as a revoked grant, and flips
+	// the SHARED status to needs_reconsent — killing the calendar sync they actually asked
+	// for, one cron tick after they connected it.
+	//
+	// Checked on the address rather than on `scopes` for two reasons: every row that predates
+	// the scopes column has an empty list and would be excluded by a scope test, and the
+	// scope string then has to be spelled in SQL as well as in Go.
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
 	// The "my contributions" list: one user's contributions, newest first.
 	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
@@ -2440,6 +2454,12 @@ type Querier interface {
 	//   * source_ref is the interview's own id, which makes it idempotent by the ledger's
 	//     partial unique index — a re-sync, and a reschedule, add no second event. The
 	//     scheduling happened once.
+	//   * It is written for a CONFIRMED meeting only. A row in this ledger carrying an
+	//     application id IS a link, into an append-only table with no retraction path for
+	//     this kind — and the rule is that only the invitation's own identifier may link. A
+	//     title match is a guess offered to the candidate; letting it write here would make
+	//     "Q3 ramp-up planning" a permanent, unremovable interview against an application to
+	//     an employer called Ramp.
 	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
 	// Store the grant a calendar consent produced, and record that it now covers the calendar.
 	//

@@ -19,8 +19,9 @@ const eventsJSON = `{"items":[
    "start":{"dateTime":"2026-08-13T09:00:00Z"},"end":{"dateTime":"2026-08-13T10:00:00Z"}},
   {"iCalUID":"allday@google.com","summary":"Onsite day","status":"confirmed",
    "start":{"date":"2026-08-20"},"end":{"date":"2026-08-21"}},
-  {"iCalUID":"gone@google.com","summary":"Screen","status":"cancelled",
+  {"id":"evt-gone","iCalUID":"gone@google.com","summary":"Screen","status":"cancelled",
    "start":{"dateTime":"2026-08-14T09:00:00Z"}},
+  {"id":"evt-minimal","status":"cancelled"},
   {"iCalUID":"","summary":"No identifier","start":{"dateTime":"2026-08-15T09:00:00Z"}},
   {"iCalUID":"nostart@google.com","summary":"No start"}
 ]}`
@@ -63,8 +64,8 @@ func TestListEventsReadsTheShapesGoogleReturns(t *testing.T) {
 		t.Fatalf("ListEvents: %v", err)
 	}
 
-	if len(got) != 3 {
-		t.Fatalf("read %d meetings, want 3 — the two without an identifier or a start are unusable", len(got))
+	if len(got) != 4 {
+		t.Fatalf("read %d meetings, want 4 — the two LIVE rows without an identifier or a start are unusable", len(got))
 	}
 	timed := got[0]
 	if timed.UID != "timed@google.com" || timed.JoinURL != "https://meet.google.com/abc" {
@@ -80,6 +81,13 @@ func TestListEventsReadsTheShapesGoogleReturns(t *testing.T) {
 	}
 	if !got[2].Cancelled {
 		t.Error("a cancelled event did not report itself cancelled; the worker would store it as current")
+	}
+	// The shape Google documents for a deleted event: `id` and nothing else. The live
+	// rules would discard it, and the cancellation would never reach the store — which is
+	// how a called-off interview stands on a calendar forever.
+	minimal := got[3]
+	if !minimal.Cancelled || minimal.ProviderID != "evt-minimal" || minimal.UID != "" {
+		t.Errorf("a minimal cancellation read as %+v, want it cancelled under the provider's id alone", minimal)
 	}
 }
 

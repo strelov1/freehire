@@ -21,17 +21,25 @@
 --   * source_ref is the interview's own id, which makes it idempotent by the ledger's
 --     partial unique index — a re-sync, and a reschedule, add no second event. The
 --     scheduling happened once.
+--   * It is written for a CONFIRMED meeting only. A row in this ledger carrying an
+--     application id IS a link, into an append-only table with no retraction path for
+--     this kind — and the rule is that only the invitation's own identifier may link. A
+--     title match is a guess offered to the candidate; letting it write here would make
+--     "Q3 ramp-up planning" a permanent, unremovable interview against an application to
+--     an employer called Ramp.
 WITH saved AS (
     INSERT INTO application_interviews (
-        user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, status, source
+        user_id, application_id, ical_uid, provider_event_id, starts_at, ends_at,
+        title, join_url, status, source
     )
     VALUES (
         sqlc.arg(user_id), sqlc.arg(application_id), sqlc.arg(ical_uid),
-        sqlc.arg(starts_at), sqlc.narg(ends_at), sqlc.arg(title), sqlc.arg(join_url),
-        sqlc.arg(status), sqlc.arg(source)
+        sqlc.arg(provider_event_id), sqlc.arg(starts_at), sqlc.narg(ends_at),
+        sqlc.arg(title), sqlc.arg(join_url), sqlc.arg(status), sqlc.arg(source)
     )
     ON CONFLICT (user_id, ical_uid) DO UPDATE
-    SET application_id = EXCLUDED.application_id,
+    SET application_id    = EXCLUDED.application_id,
+        provider_event_id = EXCLUDED.provider_event_id,
         starts_at      = EXCLUDED.starts_at,
         ends_at        = EXCLUDED.ends_at,
         title          = EXCLUDED.title,
@@ -41,7 +49,7 @@ WITH saved AS (
                              ELSE EXCLUDED.status
                          END,
         updated_at     = now()
-    RETURNING id, user_id, application_id
+    RETURNING id, user_id, application_id, status
 ), noted AS (
     INSERT INTO application_events (
         user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
@@ -49,6 +57,7 @@ WITH saved AS (
     SELECT s.user_id, s.application_id, a.job_id, a.company_slug,
            'interview_scheduled', '', now(), sqlc.arg(event_source)::text, s.id
       FROM saved s JOIN applications a ON a.id = s.application_id
+     WHERE s.status = 'confirmed' 
     ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
     DO NOTHING
 )
@@ -59,11 +68,15 @@ SELECT id FROM saved;
 -- interview on Thursday and finds an empty Thursday cannot tell a cancellation from a
 -- calendar that failed to load. The scheduling still happened, and the ledger's
 -- `interview_scheduled` stands.
+-- Matched on EITHER identifier, because a cancellation may carry only one. A live event
+-- names the meeting by its iCalUID; a deleted one is documented to carry just the
+-- provider's own `id`, which is why that is stored alongside.
 UPDATE application_interviews
 SET status = 'cancelled', updated_at = now()
-WHERE user_id  = sqlc.arg(user_id)
-  AND ical_uid = sqlc.arg(ical_uid)
-  AND status  <> 'cancelled';
+WHERE user_id = sqlc.arg(user_id)
+  AND status <> 'cancelled'
+  AND (ical_uid = sqlc.arg(event_id)
+       OR (provider_event_id <> '' AND provider_event_id = sqlc.arg(event_id)));
 
 -- name: ListCalendarMatchCandidates :many
 -- The caller's applications a meeting could belong to, each with the identifiers of the

@@ -96,14 +96,15 @@ func TestCancelApplicationInterview_MarksRatherThanDeletes(t *testing.T) {
 	_, appID := seedApplication(t, q, user, "iv-cancel-1", "derq")
 	if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
 		UserID: user, ApplicationID: appID, IcalUid: "cancel-me@ashbyhq.com",
-		StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
-		Status:   "confirmed", Source: "calendar_google",
+		ProviderEventID: "evt-cancel-me",
+		StartsAt:        ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
+		Status:          "confirmed", Source: "calendar_google",
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 
 	if _, err := q.CancelApplicationInterview(ctx, CancelApplicationInterviewParams{
-		UserID: user, IcalUid: "cancel-me@ashbyhq.com",
+		UserID: user, EventID: "cancel-me@ashbyhq.com",
 	}); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
@@ -269,5 +270,137 @@ func TestUpsertApplicationInterview_NotesTheSchedulingOnceInTheLedger(t *testing
 	// itself is in August 2026; this row must not be.
 	if occurred.After(time.Now().Add(time.Minute)) {
 		t.Errorf("the ledger event is dated %v, in the future — occurred_at means when it happened", occurred)
+	}
+}
+
+// A calendar-only grant is not a mailbox, and every reader that treats it as one causes
+// a different injury. The mail sync would call an API its token cannot answer and take
+// the 403 as a revoked grant, flipping the SHARED status and killing the calendar sync
+// the candidate actually asked for. The response-rate rollup would count their
+// applications as observable — in the denominator, structurally barred from the
+// numerator, making named employers read as more silent than they are.
+func TestACalendarOnlyGrantIsNotAMailbox(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	withMail := seedResponseUser(t, q, "grant-mail@example.test", true)
+	calendarOnly := seedResponseUser(t, q, "grant-cal@example.test", false)
+	if err := q.UpsertCalendarGrant(ctx, UpsertCalendarGrantParams{
+		UserID:          calendarOnly,
+		RefreshTokenEnc: "enc",
+		Scopes:          []string{"https://www.googleapis.com/auth/calendar.readonly"},
+	}); err != nil {
+		t.Fatalf("grant the calendar: %v", err)
+	}
+
+	// The mail sync must not see them.
+	rows, err := q.ListConnectedGmailUsers(ctx)
+	if err != nil {
+		t.Fatalf("list connected: %v", err)
+	}
+	for _, r := range rows {
+		if r.UserID == calendarOnly {
+			t.Error("the mail sync picked up a calendar-only grant; its 403 would revoke the shared connection")
+		}
+	}
+	var sawMailUser bool
+	for _, r := range rows {
+		if r.UserID == withMail {
+			sawMailUser = true
+		}
+	}
+	if !sawMailUser {
+		t.Error("the mail sync lost a real mailbox — the predicate is too narrow")
+	}
+
+	// And the calendar sync must see them.
+	cal, err := q.ListCalendarConnections(ctx, "https://www.googleapis.com/auth/calendar.readonly")
+	if err != nil {
+		t.Fatalf("list calendar connections: %v", err)
+	}
+	if len(cal) != 1 || cal[0] != calendarOnly {
+		t.Errorf("calendar connections = %v, want just the calendar-only user %d", cal, calendarOnly)
+	}
+}
+
+// A title match is a guess offered to the candidate, and a row in the ledger carrying an
+// application id is a link — into an append-only table with no retraction path for this
+// kind. Letting a guess write one would make "Q3 ramp-up planning" a permanent,
+// unremovable interview against an application to an employer called Ramp.
+func TestUpsertApplicationInterview_ASuggestionWritesNoLedgerLink(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-suggest@example.test", true)
+	_, appID := seedApplication(t, q, user, "iv-suggest-1", "ramp")
+	upsert := func(status string) {
+		t.Helper()
+		if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+			UserID: user, ApplicationID: appID, IcalUid: "guess@google.com",
+			StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
+			Status:   status, Source: "calendar_google", EventSource: "calendar_google",
+		}); err != nil {
+			t.Fatalf("upsert %s: %v", status, err)
+		}
+	}
+	events := func() int {
+		t.Helper()
+		var n int
+		if err := q.db.QueryRow(ctx,
+			`SELECT count(*) FROM application_events WHERE user_id = $1 AND kind = 'interview_scheduled'`,
+			user).Scan(&n); err != nil {
+			t.Fatalf("count events: %v", err)
+		}
+		return n
+	}
+
+	upsert("suggested")
+	if got := events(); got != 0 {
+		t.Fatalf("a suggestion wrote %d ledger events, want none — only the identifier may link", got)
+	}
+	// Confirming it later does write one: the identifier turned up, and now it is a fact.
+	upsert("confirmed")
+	if got := events(); got != 1 {
+		t.Errorf("confirming the meeting wrote %d ledger events, want 1", got)
+	}
+}
+
+// Google guarantees a deleted event carries only its own id — no iCalUID, no time, no
+// title. A cancellation therefore has to be able to find the meeting by the provider's
+// identifier alone, or a called-off interview stands on the calendar forever.
+func TestCancelApplicationInterview_FindsTheMeetingByTheProvidersIdAlone(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-provider-cancel@example.test", true)
+	_, appID := seedApplication(t, q, user, "iv-provider-1", "derq")
+	if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+		UserID: user, ApplicationID: appID, IcalUid: "round-1@ashbyhq.com",
+		ProviderEventID: "evt-abc123",
+		StartsAt:        ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
+		Status:          "confirmed", Source: "calendar_google", EventSource: "calendar_google",
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	rows, err := q.CancelApplicationInterview(ctx, CancelApplicationInterviewParams{
+		UserID: user, EventID: "evt-abc123",
+	})
+	if err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("cancelling by the provider id touched %d rows, want 1", rows)
+	}
+	var status string
+	if err := q.db.QueryRow(ctx,
+		`SELECT status FROM application_interviews WHERE user_id = $1`, user).Scan(&status); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if status != "cancelled" {
+		t.Errorf("status = %q, want cancelled", status)
 	}
 }

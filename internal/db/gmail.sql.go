@@ -338,7 +338,7 @@ func (q *Queries) GetInterviewInvitation(ctx context.Context, arg GetInterviewIn
 const listConnectedGmailUsers = `-- name: ListConnectedGmailUsers :many
 SELECT user_id, email, sync_cursor
 FROM gmail_connections
-WHERE status = 'connected'
+WHERE status = 'connected' AND email <> ''
 `
 
 type ListConnectedGmailUsersRow struct {
@@ -347,7 +347,18 @@ type ListConnectedGmailUsersRow struct {
 	SyncCursor int64  `json:"sync_cursor"`
 }
 
-// Drives the sync worker: every connection still authorized.
+// Drives the sync worker: every connection still authorized AND holding a mailbox.
+//
+// The address is the test, and it is not decoration. Since the calendar consent exists,
+// a row here may be a Google grant with no mail scope at all — UpsertCalendarGrant
+// inserts one with an empty address and never fills it. Syncing such a user calls the
+// Gmail API with a token that cannot answer, takes the 403 as a revoked grant, and flips
+// the SHARED status to needs_reconsent — killing the calendar sync they actually asked
+// for, one cron tick after they connected it.
+//
+// Checked on the address rather than on `scopes` for two reasons: every row that predates
+// the scopes column has an empty list and would be excluded by a scope test, and the
+// scope string then has to be spelled in SQL as well as in Go.
 func (q *Queries) ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error) {
 	rows, err := q.db.Query(ctx, listConnectedGmailUsers)
 	if err != nil {

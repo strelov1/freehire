@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS application_interviews (
     application_id bigint      NOT NULL REFERENCES applications (id) ON DELETE CASCADE,
     -- The meeting's own identity, shared with the invitation that named it.
     ical_uid       text        NOT NULL,
+    -- The provider's own event id, which is a different thing and is stored because a
+    -- cancellation may arrive carrying nothing else. Google documents that a deleted
+    -- event is only guaranteed to have `id` populated, and a cancelled occurrence of a
+    -- series only `id`, `recurringEventId` and `originalStartTime` — no iCalUID, no time,
+    -- no title. Without this column such a message names a meeting we cannot find, and a
+    -- called-off interview stands on the calendar forever.
+    provider_event_id text     NOT NULL DEFAULT '',
     starts_at      timestamptz NOT NULL,
     ends_at        timestamptz,
     -- What the candidate needs in order to keep the appointment, and nothing else. No
@@ -91,6 +98,10 @@ CREATE TABLE IF NOT EXISTS application_interviews (
 -- (user, application) — one application can hold several rounds.
 CREATE UNIQUE INDEX IF NOT EXISTS application_interviews_user_uid_key
     ON application_interviews (user_id, ical_uid);
+
+-- Finding a meeting from a cancellation that carries only the provider's id.
+CREATE INDEX IF NOT EXISTS application_interviews_provider_event_idx
+    ON application_interviews (user_id, provider_event_id) WHERE provider_event_id <> '';
 
 -- The calendar's range read, and the account-deletion cascade.
 CREATE INDEX IF NOT EXISTS application_interviews_user_starts_idx

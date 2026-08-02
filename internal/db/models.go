@@ -52,18 +52,19 @@ type ApplicationEvent struct {
 }
 
 type ApplicationInterview struct {
-	ID            int64              `json:"id"`
-	UserID        int64              `json:"user_id"`
-	ApplicationID int64              `json:"application_id"`
-	IcalUid       string             `json:"ical_uid"`
-	StartsAt      pgtype.Timestamptz `json:"starts_at"`
-	EndsAt        pgtype.Timestamptz `json:"ends_at"`
-	Title         string             `json:"title"`
-	JoinUrl       string             `json:"join_url"`
-	Status        string             `json:"status"`
-	Source        string             `json:"source"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	ApplicationID   int64              `json:"application_id"`
+	IcalUid         string             `json:"ical_uid"`
+	ProviderEventID string             `json:"provider_event_id"`
+	StartsAt        pgtype.Timestamptz `json:"starts_at"`
+	EndsAt          pgtype.Timestamptz `json:"ends_at"`
+	Title           string             `json:"title"`
+	JoinUrl         string             `json:"join_url"`
+	Status          string             `json:"status"`
+	Source          string             `json:"source"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AssistantMessage struct {

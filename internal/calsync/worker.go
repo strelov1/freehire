@@ -57,13 +57,16 @@ type Connection struct {
 // appointment, and none of the ones that describe a private life. No attendees, no
 // description, no organiser name.
 type Meeting struct {
-	UID       string
-	Title     string
-	Organizer string
-	StartsAt  time.Time
-	EndsAt    time.Time
-	JoinURL   string
-	Cancelled bool
+	UID string
+	// ProviderID is the calendar provider's own event id — a different thing from UID,
+	// and the only identifier a cancellation is guaranteed to carry.
+	ProviderID string
+	Title      string
+	Organizer  string
+	StartsAt   time.Time
+	EndsAt     time.Time
+	JoinURL    string
+	Cancelled  bool
 }
 
 // StoredInterview is a meeting that attached to an application, ready to persist.
@@ -71,6 +74,7 @@ type StoredInterview struct {
 	UserID        int64
 	ApplicationID int64
 	UID           string
+	ProviderID    string
 	Title         string
 	StartsAt      time.Time
 	EndsAt        time.Time
@@ -97,7 +101,10 @@ type Store interface {
 	RefreshToken(ctx context.Context, userID int64) (encToken string, err error)
 	Candidates(ctx context.Context, userID int64) ([]calmatch.Candidate, error)
 	UpsertInterview(ctx context.Context, in StoredInterview) error
-	CancelInterview(ctx context.Context, userID int64, uid string) error
+	// CancelInterview matches on either identifier: a cancellation may name the meeting
+	// by its iCalUID or by the provider's own event id, and Google guarantees only the
+	// second.
+	CancelInterview(ctx context.Context, userID int64, eventID string) error
 	SetNeedsReconsent(ctx context.Context, userID int64) error
 }
 
@@ -138,6 +145,16 @@ func (w *Worker) RunOnce(ctx context.Context) error {
 	return nil
 }
 
+// cancelKey names the meeting a cancellation refers to. The iCalUID when it survived,
+// the provider's own id otherwise — a deleted event is documented to carry only the
+// second, and the store matches on either.
+func cancelKey(ev Meeting) string {
+	if ev.UID != "" {
+		return ev.UID
+	}
+	return ev.ProviderID
+}
+
 func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 	encToken, err := w.store.RefreshToken(ctx, u.UserID)
 	if err != nil {
@@ -175,7 +192,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 		if ev.Cancelled {
 			// Marking beats storing: the row may already exist, and an organiser who
 			// called a meeting off has not scheduled a new one.
-			if err := w.store.CancelInterview(ctx, u.UserID, ev.UID); err != nil {
+			if err := w.store.CancelInterview(ctx, u.UserID, cancelKey(ev)); err != nil {
 				return fmt.Errorf("cancel %s: %w", ev.UID, err)
 			}
 			continue
