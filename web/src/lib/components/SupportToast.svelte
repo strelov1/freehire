@@ -4,7 +4,15 @@
   import { Star, X } from '@lucide/svelte';
   import { githubStars, formatStars, GITHUB_URL } from '$lib/github.svelte';
   import { bannerVisible } from '$lib/consent.svelte';
-  import { readDismissed, readPhBannerDismissed, shouldShow, writeDismissed } from '$lib/supportToast';
+  import { phBannerDismissed } from '$lib/phBanner.svelte';
+  import { cn } from '$lib/ui';
+  import {
+    ownsMobileStickyCta,
+    readDismissed,
+    shouldShow,
+    suppressesToast,
+    writeDismissed,
+  } from '$lib/supportToast';
 
   // A floating ask for a GitHub star, self-gating so the layout mounts it unconditionally.
   //
@@ -14,51 +22,64 @@
   // class in app.html, and why that file (and the CSP hash over its inline script) stays
   // untouched.
   //
-  // It also yields the bottom-right corner to the consent banner, which wants the same
-  // box: consent is an obligation, a promo is not. `bannerVisible` is rune-backed, so the
-  // toast appears on its own the moment consent is settled — no timer, no subscription.
+  // Everything it depends on is reactive: the strip's dismissal, the consent banner, the
+  // route. Only the visitor's own answer is read once, on mount, because nothing else in
+  // the session can change it.
 
-  // Starts false so nothing flashes before the gate has been read; storage is only
-  // reachable after mount anyway.
-  let allowed = $state(false);
+  // Starts true so the gate is decided by mount-time storage rather than flashing first;
+  // `mounted` keeps the toast off the server-rendered pass.
+  let mounted = $state(false);
+  let answered = $state(true);
 
   onMount(() => {
-    allowed = shouldShow({
-      now: Date.now(),
-      phBannerDismissed: readPhBannerDismissed(),
-      selfDismissed: readDismissed(),
-    });
-    if (allowed) void githubStars.load();
+    answered = readDismissed();
+    mounted = true;
+    if (!answered) void githubStars.load();
   });
 
-  // /open is the open-source pitch in full; repeating it in a toast is noise.
-  const visible = $derived(allowed && !bannerVisible() && page.url.pathname !== '/open');
+  const visible = $derived(
+    mounted &&
+      shouldShow({
+        now: Date.now(),
+        phBannerDismissed: phBannerDismissed(),
+        selfDismissed: answered,
+      }) &&
+      !bannerVisible() &&
+      !suppressesToast(page.url.pathname),
+  );
 
   const count = $derived(githubStars.count);
 
   // Following the link answers the ask as surely as closing the toast does — someone who
   // went to star the repo must not be asked again.
   function dismiss() {
-    allowed = false;
+    answered = true;
     writeDismissed();
   }
 </script>
 
 {#if visible}
   <div
-    role="status"
-    class="fixed inset-x-4 bottom-4 z-30 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md"
+    role="complementary"
+    aria-label="Support freehire"
+    class={cn(
+      'fixed inset-x-4 bottom-4 z-30 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md',
+      // The job page anchors its Apply button to the same corner on the same layer below
+      // `lg`. A promo never covers a page's own primary action, so here the toast waits
+      // for the width at which that bar is gone.
+      ownsMobileStickyCta(page.url.pathname) && 'hidden lg:block',
+    )}
   >
     <div class="flex items-start gap-3">
       <p class="min-w-0 flex-1 text-sm text-muted-foreground">
         <span class="font-medium text-foreground">freehire is open source.</span>
-        Free to use, and it stays that way because people star it.
+        Stars are how people find it.
       </p>
 
       <button
         type="button"
         onclick={dismiss}
-        aria-label="Dismiss"
+        aria-label="Dismiss support request"
         class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
         <X class="size-4" aria-hidden="true" />

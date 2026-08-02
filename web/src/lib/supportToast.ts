@@ -11,7 +11,7 @@
 // nothing, so it can appear on mount — which is why `app.html` stays untouched and the
 // SHA-256 CSP hash over its inline script stays intact.
 
-import { launchPhase, PH_DISMISSED_KEY } from './productHunt';
+import { launchPhase } from './productHunt';
 
 /** localStorage key holding the visitor's answer to the star request. */
 export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
@@ -41,16 +41,29 @@ export function shouldShow({ now, phBannerDismissed, selfDismissed }: SupportToa
   return phBannerDismissed || launchPhase(now) === 'over';
 }
 
+/** Pages that make this exact case at length already, where a toast repeating it is
+ *  noise. */
+export function suppressesToast(pathname: string): boolean {
+  return pathname === '/open';
+}
+
+/**
+ * Whether the page owns a sticky call to action anchored to the bottom of a narrow
+ * viewport — currently the job page's mobile Apply bar, which is `lg:hidden` and sits on
+ * the same layer in the same corner.
+ *
+ * A promo must never cover a page's own primary action, so on these routes the toast is
+ * shown from `lg` up only, where the bar is not rendered. The rule deliberately matches
+ * any single segment under `/jobs/`: keeping a list of static siblings in step with the
+ * router would be more fragile than occasionally hiding a promo on a phone.
+ */
+export function ownsMobileStickyCta(pathname: string): boolean {
+  return /^\/jobs\/[^/]+$/.test(pathname);
+}
+
 /** Whether the visitor has answered the ask. */
 export function readDismissed(): boolean {
   return readFlag(SUPPORT_DISMISSED_KEY);
-}
-
-/** Whether the visitor has closed the Product Hunt strip. Reads that surface's own key
- *  rather than restating the literal, so a rename there breaks the build here instead of
- *  leaving a toast that silently waits until after the launch day. */
-export function readPhBannerDismissed(): boolean {
-  return readFlag(PH_DISMISSED_KEY);
 }
 
 /** Record that the visitor answered — by closing the toast, or by following the link.

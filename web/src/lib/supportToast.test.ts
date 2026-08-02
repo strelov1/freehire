@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { LAUNCH_OPENS_AT, PH_DISMISSED_KEY } from './productHunt';
 import {
+  ownsMobileStickyCta,
   readDismissed,
-  readPhBannerDismissed,
   shouldShow,
   SUPPORT_DISMISSED_KEY,
+  suppressesToast,
   writeDismissed,
 } from './supportToast';
 
@@ -32,10 +33,41 @@ describe('shouldShow', () => {
     ).toBe(true);
   });
 
+  it('stays hidden through the launch day itself, when the strip asks loudest', () => {
+    expect(
+      shouldShow({
+        now: LAUNCH_OPENS_AT + 12 * 60 * 60 * 1000,
+        phBannerDismissed: false,
+        selfDismissed: false,
+      }),
+    ).toBe(false);
+  });
+
   it('stays hidden once the visitor has answered it', () => {
     expect(
       shouldShow({ now: AFTER_LAUNCH, phBannerDismissed: true, selfDismissed: true }),
     ).toBe(false);
+  });
+});
+
+describe('route rules', () => {
+  it('suppresses the toast on the open-source page', () => {
+    expect(suppressesToast('/open')).toBe(true);
+  });
+
+  it('allows the toast elsewhere', () => {
+    expect(suppressesToast('/')).toBe(false);
+    expect(suppressesToast('/jobs')).toBe(false);
+    expect(suppressesToast('/openings')).toBe(false);
+  });
+
+  it('marks the job page as owning a sticky mobile call to action', () => {
+    expect(ownsMobileStickyCta('/jobs/senior-go-engineer-acme')).toBe(true);
+  });
+
+  it('does not mark the listing or other sections', () => {
+    expect(ownsMobileStickyCta('/jobs')).toBe(false);
+    expect(ownsMobileStickyCta('/companies/acme')).toBe(false);
   });
 });
 
@@ -74,18 +106,20 @@ describe('dismissal', () => {
     expect(readDismissed()).toBe(true);
   });
 
-  it('reads the Product Hunt strip’s own key', () => {
-    installStorage(new Map([[PH_DISMISSED_KEY, '1']]));
+  it('leaves the Product Hunt strip’s own key alone', () => {
+    const store = new Map([[PH_DISMISSED_KEY, '1']]);
+    installStorage(store);
 
-    expect(readPhBannerDismissed()).toBe(true);
-    expect(readDismissed()).toBe(false);
+    writeDismissed();
+
+    expect(store.get(PH_DISMISSED_KEY)).toBe('1');
+    expect(store.get(SUPPORT_DISMISSED_KEY)).toBe('1');
   });
 
   it('reads as unanswered when storage is unavailable', () => {
     installHostileStorage();
 
     expect(readDismissed()).toBe(false);
-    expect(readPhBannerDismissed()).toBe(false);
   });
 
   it('does not throw when the dismissal cannot be stored', () => {
@@ -94,7 +128,4 @@ describe('dismissal', () => {
     expect(() => writeDismissed()).not.toThrow();
   });
 
-  it('keeps the two surfaces on separate keys', () => {
-    expect(SUPPORT_DISMISSED_KEY).not.toBe(PH_DISMISSED_KEY);
-  });
 });

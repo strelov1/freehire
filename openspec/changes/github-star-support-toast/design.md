@@ -62,6 +62,21 @@ Alternative considered: a new "the PH ask is done" flag written by the banner. R
 "the visitor closed the strip" is already an observable fact, and a second flag would have
 to be kept in step with the first.
 
+**The strip's dismissal becomes a shared reactive flag.** It used to live in
+`ProductHuntBanner`'s own `$state`, which was enough while that component was its only
+reader. A snapshot taken in the toast's `onMount` would leave the toast invisible for the
+rest of the session in which the visitor actually closed the strip — and before the launch
+day, closing the strip is the *only* way the toast can appear at all. So the flag moves to
+`phBanner.svelte.ts` and both surfaces read it. This removes a second source of truth
+rather than adding one; the strip's own behaviour is unchanged.
+
+**The corner has an order of precedence.** It now holds four surfaces, so the rule is
+worth stating: consent banner (an obligation) > Undo (a five-second window on a reversible
+action) > a page's own bottom-anchored call to action > this promo. The last of these is
+why the toast waits for `lg` on a job page, where the Apply bar is `lg:hidden` and sits on
+the same layer in the same box. Excluding job pages outright was rejected — they are the
+highest-traffic surface on the site, and the conflict only exists below `lg`.
+
 **Yield to consent, sit under Undo.** Consent is an obligation and a promo is not, so the
 toast does not render while `bannerVisible()` is true; because that is a rune-backed
 getter, the toast appears on its own once consent is settled, with no timer and no

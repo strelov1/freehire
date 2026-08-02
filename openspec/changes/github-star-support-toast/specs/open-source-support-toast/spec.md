@@ -40,7 +40,7 @@ support, so that the visitor never faces two pleas at once.
 
 - **WHEN** the visitor has closed the Product Hunt strip and the launch day has not
   passed
-- **THEN** the toast is shown
+- **THEN** the toast is shown, in that same session and without a reload
 
 #### Scenario: The launch day has passed
 
@@ -48,10 +48,11 @@ support, so that the visitor never faces two pleas at once.
   can no longer be closed
 - **THEN** the toast is shown, whether or not the strip was ever closed
 
-### Requirement: The ask yields to obligations and to reversible actions
+### Requirement: The ask yields to obligations, reversible actions, and primary actions
 
-The toast SHALL NOT be shown while the cookie-consent banner awaits a decision, and
-SHALL be layered below the hide-a-job Undo toast.
+The toast SHALL NOT be shown while the cookie-consent banner awaits a decision, SHALL be
+layered below the hide-a-job Undo toast, and SHALL NOT cover a page's own call to action
+anchored to the bottom of the viewport.
 
 #### Scenario: Consent is undecided
 
@@ -67,6 +68,13 @@ SHALL be layered below the hide-a-job Undo toast.
 
 - **WHEN** the hide-a-job Undo toast and the support toast are on screen together
 - **THEN** the Undo toast is drawn above the support toast and stays clickable
+
+#### Scenario: A page anchors its own action to the bottom
+
+- **WHEN** the visitor is on a job page at a width where its Apply bar is anchored to the
+  bottom of the viewport
+- **THEN** the toast is not shown, and it returns at the width where that bar is no longer
+  rendered
 
 ### Requirement: The ask is made once
 

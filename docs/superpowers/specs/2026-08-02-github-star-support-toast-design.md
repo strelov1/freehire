@@ -101,8 +101,13 @@ noise.
 project's vitest environment does not resolve the alias, and an aliased import fails at
 module load rather than in a test body.
 
-Untouched: `ProductHuntBanner.svelte`, `productHunt.ts`, `github.svelte.ts`,
-`app.html`, `svelte.config.js`.
+Untouched: `productHunt.ts`, `github.svelte.ts`, `app.html`, `svelte.config.js`.
+
+Superseded during implementation, after code review: `ProductHuntBanner.svelte` also
+changes, and `web/src/lib/phBanner.svelte.ts` is added. A dismissal snapshot taken at the
+toast's mount would not fire in the session where the visitor closed the strip — which,
+before the launch day, is the only path to the toast. The authoritative record is
+`openspec/changes/github-star-support-toast/design.md`.
 
 ## Copy
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { launchPhase, PH_URL, readDismissed, writeDismissed } from '$lib/productHunt';
+  import { launchPhase, PH_URL } from '$lib/productHunt';
+  import { dismissPhBanner, loadPhBannerDismissed, phBannerDismissed } from '$lib/phBanner.svelte';
 
   // A strip under the header pointing at the Product Hunt page, dismissible and
   // remembered. Self-gating like EmailVerificationBanner, so the layout mounts it
@@ -18,21 +19,16 @@
 
   const phase = launchPhase(Date.now());
 
-  // Starts false so the hydrated markup matches the server's; the real value arrives
-  // on mount, by which point CSS has already hidden the strip for anyone who closed it.
-  let dismissed = $state(false);
-
+  // The flag starts false so the hydrated markup matches the server's; the real value
+  // arrives on mount, by which point CSS has already hidden the strip for anyone who
+  // closed it. It lives in a shared store rather than here because SupportToast queues
+  // behind this strip and must see the dismissal as it happens.
   onMount(() => {
-    dismissed = readDismissed();
+    loadPhBannerDismissed();
   });
-
-  function dismiss() {
-    dismissed = true;
-    writeDismissed();
-  }
 </script>
 
-{#if phase !== 'over' && !dismissed}
+{#if phase !== 'over' && !phBannerDismissed()}
   <div data-ph-banner class="border-b border-border bg-brand/5">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2.5 text-sm">
       <p class="min-w-0 flex-1 text-muted-foreground">
@@ -62,7 +58,7 @@
 
       <button
         type="button"
-        onclick={dismiss}
+        onclick={dismissPhBanner}
         aria-label="Dismiss"
         class="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
       >
