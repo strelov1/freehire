@@ -96,6 +96,16 @@ var nameToCountry = map[string]string{
 	// the US state; the country resolves via its capital "tbilisi" only.
 	"russia": "ru", "moscow": "ru", "saint petersburg": "ru", "st petersburg": "ru",
 	"kyiv": "ua", "kiev": "ua",
+	// The remaining Ukrainian oblast centres, added with the Telegram UA cohort.
+	// "odessa" (the double-s transliteration) is deliberately absent — it collides
+	// with Odessa, Texas, the same reason "georgia" is absent above; the Ukrainian
+	// "odesa" carries the city on its own.
+	"lviv": "ua", "kharkiv": "ua", "odesa": "ua", "dnipro": "ua",
+	"vinnytsia": "ua", "ivano-frankivsk": "ua", "zaporizhzhia": "ua",
+	"chernivtsi": "ua", "ternopil": "ua", "uzhhorod": "ua", "rivne": "ua",
+	"lutsk": "ua", "poltava": "ua", "khmelnytskyi": "ua", "zhytomyr": "ua",
+	"cherkasy": "ua", "sumy": "ua", "mykolaiv": "ua", "chernihiv": "ua",
+	"kryvyi rih": "ua",
 	"uzbekistan": "uz", "tashkent": "uz", "toshkent": "uz", "samarkand": "uz",
 	"kazakhstan": "kz", "almaty": "kz", "astana": "kz", "nur-sultan": "kz",
 	"kyrgyzstan": "kg", "bishkek": "kg",
@@ -143,7 +153,18 @@ var nameToCountry = map[string]string{
 	"ташкент": "uz", "узбекистан": "uz",
 	"алматы": "kz", "астана": "kz", "казахстан": "kz",
 	"ереван": "am", "баку": "az", "бишкек": "kg",
-	"киев": "ua", "київ": "ua",
+	"киев": "ua", "київ": "ua", "україна": "ua", "украина": "ua",
+	// Oblast centres in both spellings: the Telegram UA channels write Ukrainian,
+	// the RU-segment ATS sources write Russian, and a location field carries either.
+	"львів": "ua", "львов": "ua", "харків": "ua", "харьков": "ua",
+	"одеса": "ua", "одесса": "ua", "дніпро": "ua", "днепр": "ua",
+	"вінниця": "ua", "винница": "ua", "івано-франківськ": "ua", "ивано-франковск": "ua",
+	"запоріжжя": "ua", "запорожье": "ua", "чернівці": "ua", "черновцы": "ua",
+	"тернопіль": "ua", "тернополь": "ua", "ужгород": "ua", "рівне": "ua", "ровно": "ua",
+	"луцьк": "ua", "луцк": "ua", "полтава": "ua", "хмельницький": "ua", "хмельницкий": "ua",
+	"житомир": "ua", "черкаси": "ua", "черкассы": "ua", "суми": "ua", "сумы": "ua",
+	"миколаїв": "ua", "николаев": "ua", "чернігів": "ua", "чернигов": "ua",
+	"кривий ріг": "ua", "кривой рог": "ua",
 
 	// --- Country names: English + native + ES/PT/DE, seeded from the unresolved
 	// production strings. (Names already keyed above are not repeated.)

@@ -236,3 +236,27 @@ channels:
     kind: board
   - channel: wantapply_qa_jobs
     kind: board
+
+  # --- Ukrainian, from the 2026-08-01 Ukrainian_IT_Communities mining ---
+  # Verified 2026-08-01: public t.me/s preview enabled and a post within 30 days.
+  # The source list's 97 Telegram *chats* are unusable — a group's preview serves no
+  # posts. wwjobs is held back: densest candidate of the cohort, but its newest post
+  # is 2026-06-10, past the 30-day gate; revisit if it revives.
+  # Ukrainian-language posts only reach extraction because prefilter.go carries UA
+  # markers — do not add a channel in a language those markers do not cover.
+  - channel: naymarnya
+    kind: board
+  - channel: halepnyirecruiting
+    kind: board
+
+  # DOU verticals: digests that can bundle several roles in one post.
+  - channel: devops_dou
+    kind: authored
+  - channel: dou_qa
+    kind: authored
+  - channel: frontend_dou
+    kind: authored
+  - channel: gamedev_dou
+    kind: authored
+  - channel: junior_dou_ua
+    kind: authored

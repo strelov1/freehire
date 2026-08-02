@@ -4,7 +4,7 @@ Human-readable index of the public Telegram channels crawled by `cmd/tg-ingest`
 (see `internal/telegram`). **The source of truth is [`sources/telegram.yml`](../sources/telegram.yml)** —
 this document mirrors it for browsing; when the YAML changes, regenerate this list.
 
-**88 channels** (12 `authored`, 76 `board`) as of the last update.
+**95 channels** (17 `authored`, 78 `board`) as of the last update.
 
 `kind` steers the extraction prompt:
 
@@ -32,10 +32,8 @@ Verified 2026-06-12: public `t.me/s` preview enabled and a post within the last 
 | Channel | kind |
 |---|---|
 | [it_vakansii_jobs](https://t.me/it_vakansii_jobs) | board |
-| [geekjobs](https://t.me/geekjobs) | board |
 | [vakansii_it](https://t.me/vakansii_it) | board |
 | [zrabota](https://t.me/zrabota) | board |
-| [habr_career](https://t.me/habr_career) | board |
 | [huntmejob](https://t.me/huntmejob) | board |
 | [newdirections](https://t.me/newdirections) | board |
 
@@ -102,7 +100,6 @@ aggregators — geography the curated tier above did not cover.
 |---|---|
 | [dot_aware](https://t.me/dot_aware) | board |
 | [gocareers](https://t.me/gocareers) | board |
-| [getjobss](https://t.me/getjobss) | board |
 | [jobs_and_internships_updates](https://t.me/jobs_and_internships_updates) | board |
 | [jobsandinternshipsupdates](https://t.me/jobsandinternshipsupdates) | board |
 | [off_campus_jobs_and_internships](https://t.me/off_campus_jobs_and_internships) | board |
@@ -198,7 +195,6 @@ executive / top-management / marketing roles rather than pure IT.
 | Channel | kind |
 |---|---|
 | [evacuatejobs](https://t.me/evacuatejobs) | board |
-| [remotegeekjob](https://t.me/remotegeekjob) | board |
 | [zarubezhom_jobs](https://t.me/zarubezhom_jobs) | board |
 
 ### Marketing niche
@@ -208,3 +204,46 @@ executive / top-management / marketing roles rather than pure IT.
 | [marketing_jobs](https://t.me/marketing_jobs) | board |
 | [forallmarketing](https://t.me/forallmarketing) | board |
 | [wantapply_marketing](https://t.me/wantapply_marketing) | board |
+| [wantapply_managers](https://t.me/wantapply_managers) | board |
+| [wantapply_design](https://t.me/wantapply_design) | board |
+| [wantapply_analytics](https://t.me/wantapply_analytics) | board |
+| [wantapply_qa_jobs](https://t.me/wantapply_qa_jobs) | board |
+
+## Added 2026-08-01 (Ukrainian_IT_Communities)
+
+Mined from [nikit0ns/Ukrainian_IT_Communities](https://github.com/nikit0ns/Ukrainian_IT_Communities)
+(192 entries). Verified 2026-08-01: public `t.me/s` preview enabled and a post within the
+last 30 days. This is the first Ukrainian-language cohort, and it only yields vacancies
+because `internal/telegram/prefilter.go` gained UA markers in the same change — the RU
+marker `ваканси` cannot match `вакансія`, since Cyrillic `і` and `и` are distinct runes.
+Do not add a channel in a language the prefilter does not yet cover.
+
+Excluded, with reasons, so the next reader does not re-derive them:
+
+- **The list's 97 Telegram *chats*.** `cmd/tg-ingest` reads the public `t.me/s` preview,
+  which serves posts for channels and nothing for groups (checked on `aiogramua`,
+  `angular_community_ua`, `angularkyiv`: HTTP 200, zero messages). Reading them needs an
+  MTProto client with a logged-in account.
+- **`wwjobs`.** The densest candidate of the cohort — 81 hiring-keyword hits across 20
+  posts — but its newest post is 2026-06-10, past the 30-day gate. Revisit if it revives.
+- **`jobs.dou.ua`.** Returns HTTP 403 to a plain request; an anti-bot problem, not a
+  source-file one.
+
+### Ukrainian job boards
+
+| Channel | kind |
+|---|---|
+| [naymarnya](https://t.me/naymarnya) | board |
+| [halepnyirecruiting](https://t.me/halepnyirecruiting) | board |
+
+### Ukrainian editorial (DOU verticals)
+
+Digests that can bundle several roles in one post.
+
+| Channel | kind |
+|---|---|
+| [devops_dou](https://t.me/devops_dou) | authored |
+| [dou_qa](https://t.me/dou_qa) | authored |
+| [frontend_dou](https://t.me/frontend_dou) | authored |
+| [gamedev_dou](https://t.me/gamedev_dou) | authored |
+| [junior_dou_ua](https://t.me/junior_dou_ua) | authored |
