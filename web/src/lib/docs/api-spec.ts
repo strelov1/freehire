@@ -757,9 +757,26 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/jobs/{slug}/apply',
         auth: 'cookie-or-key',
         summary: 'Mark the job as applied to.',
+        description:
+          'Send `applied_on` to record an application on the day it was actually sent — ' +
+          'importing a history, or correcting a date already stored. A date you state ' +
+          'overrides one we inferred. The day is stored at noon UTC, because you are stating ' +
+          'a day and midnight reads as the previous date west of Greenwich. A date in the ' +
+          'future, older than a year, or not a calendar date, is a 400. Without a body the ' +
+          'application is stamped now, as before.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
-        responseExample: `{ "data": { "job_id": 42, "applied_at": "2026-06-19T10:00:00Z" } }`,
+        body: [
+          {
+            name: 'applied_on',
+            type: 'string',
+            description: 'The day the application was sent (`YYYY-MM-DD`). Defaults to today.',
+            example: '2026-07-27',
+          },
+        ],
+        curl: `curl -X POST "${BASE_URL}/jobs/<slug>/apply" \\
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \\
+  -d '{"applied_on":"2026-07-27"}'`,
+        responseExample: `{ "data": { "job_id": 42, "applied_at": "2026-07-27T12:00:00Z" } }`,
       },
       {
         method: 'POST',
@@ -787,7 +804,8 @@ ${BASE_URL}/auth/oauth/google/start`,
         description:
           'A null field is left unchanged. `stage` is a controlled vocabulary: ' +
           '`applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, ' +
-          '`rejected`, `withdrawn` (an unknown value is a 400).',
+          '`rejected`, `withdrawn`, `expired` (an unknown value is a 400). `expired` is the ' +
+          'outcome for an application nobody answered; nothing sets it for you.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         body: [
           { name: 'stage', type: 'string', description: 'Application stage from the vocabulary above.', example: 'interview' },

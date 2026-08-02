@@ -45,13 +45,13 @@
 
 ## 5. CLI
 
-- [ ] 5.1 In `../freehire-cli`, give `client.Apply` the optional date and send it as the body.
-- [ ] 5.2 Add `--on YYYY-MM-DD` to `freehire apply`, with a test covering the parse and the
+- [x] 5.1 In `../freehire-cli`, give `client.Apply` the optional date and send it as the body.
+- [x] 5.2 Add `--on YYYY-MM-DD` to `freehire apply`, with a test covering the parse and the
   request body it produces.
 
 ## 6. Documentation and verification
 
-- [ ] 6.1 Update `docs/API.md`: the apply body and its bounds, and the widened stage list on
+- [x] 6.1 Update `docs/API.md`: the apply body and its bounds, and the widened stage list on
   `PATCH /track`.
-- [ ] 6.2 Run `go build ./...`, `go vet ./...`, `go test ./...` and `go vet -tags=integration
+- [x] 6.2 Run `go build ./...`, `go vet ./...`, `go test ./...` and `go vet -tags=integration
   ./...`; run the tagged suites for `internal/handler` and `internal/db`.

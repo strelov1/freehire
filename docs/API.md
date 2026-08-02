@@ -949,12 +949,26 @@ Mark the job as applied to.
 | --- | --- | --- | --- |
 | `slug` | string | yes | The job `public_slug`. |
 
+**Body** (optional)
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `applied_on` | string | no | The day you actually applied, as `YYYY-MM-DD`. Omit it and the application is stamped now, as before. |
+
+Send `applied_on` to record a history after the fact — importing past applications, or correcting a date already stored. A date you state overrides one we recorded, because you know when you applied and we inferred it. A date in the future, or more than a year old, is a `400`, as is one that is not a calendar date.
+
+The day is stored at noon UTC. You are stating a day, not an instant, and midnight would render as the previous date for anyone west of Greenwich.
+
 ```bash
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+
+curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" \
+  -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"applied_on":"2026-07-27"}'
 ```
 
 ```json
-{ "data": { "job_id": 42, "applied_at": "2026-06-19T10:00:00Z" } }
+{ "data": { "job_id": 42, "applied_at": "2026-07-27T12:00:00Z" } }
 ```
 
 ### `POST /jobs/{slug}/save`
@@ -1003,7 +1017,9 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: 
 
 Set the application stage and/or notes.
 
-A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn` (an unknown value is a 400).
+A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an unknown value is a 400).
+
+`expired` is the outcome for an application nobody answered — the employer never replied, or the posting went away. Nothing sets it for you: silence is reported separately, by `silence_state` on the tracking list, and this stage is your own conclusion that no answer is coming. Setting it settles the application, so it stops accruing silence.
 
 **Path parameters**
 
@@ -1258,13 +1274,14 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "withdrawn": 0
+      "withdrawn": 0,
+      "expired": 3
     }
   }
 }
 ```
 
-Group the stages yourself if you want the four coarse states the tracking board shows: `applied`/`screening`/`responded` → **Applied**, `interview` → **Interview**, `offer` → **Offer**, `accepted`/`rejected`/`withdrawn` → **Closed**.
+Group the stages yourself if you want the four coarse states the tracking board shows: `applied`/`screening`/`responded` → **Applied**, `interview` → **Interview**, `offer` → **Offer**, `accepted`/`rejected`/`withdrawn`/`expired` → **Closed**.
 
 > **Changed:** this response previously carried a `buckets` object with seven differently-named keys (`no_answer`, `in_progress`, `declined`, …). Those names existed nowhere else in the product and have been removed in favour of the stage vocabulary you already set through `PUT /me/tracking/:slug`.
 
