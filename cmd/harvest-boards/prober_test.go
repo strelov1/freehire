@@ -261,6 +261,19 @@ func TestNamelessProbers(t *testing.T) {
 			live: "acme", empty: "empty",
 		},
 		{
+			name: "teamtailor",
+			p:    teamtailorProber{},
+			getter: fakeGetter{
+				// Teamtailor serves its listing as HTML on every board, vendor sub-domain and
+				// employer domain alike — there is no JSON feed to ask. Live: a /jobs/<id>
+				// permalink. Empty: only the nav anchors, which must not be counted.
+				"https://careers.acme.com/jobs?page=1": `<html><body><a href="/jobs/1234-senior-go">Senior Go</a></body></html>`,
+				"https://careers.empty.com/jobs?page=1": `<html><body><a href="/jobs">All jobs</a>` +
+					`<a href="/departments">Departments</a></body></html>`,
+			},
+			live: "careers.acme.com", empty: "careers.empty.com",
+		},
+		{
 			name: "jobvite",
 			p:    jobviteProber{},
 			getter: fakeGetter{
@@ -342,15 +355,10 @@ func TestNamedProbers(t *testing.T) {
 			live: "acme", wantName: "Acme Inc", empty: "empty",
 		},
 		{
-			name: "teamtailor",
-			p:    teamtailorProber{},
-			getter: fakeGetter{
-				"https://jobs.acme.com/jobs?page=1":  `{"title":"Acme","items":[{"id":"1"},{"id":"2"}]}`,
-				"https://jobs.empty.com/jobs?page=1": `{"title":"Empty","items":[]}`,
-			},
-			live: "jobs.acme.com", wantName: "Acme", empty: "jobs.empty.com",
-		},
-		{
+			// Teamtailor used to be listed here, on the strength of a JSON feed that returned a
+			// company name. The platform serves HTML on every board and no such feed exists, so
+			// this case asserted a shape only the fake ever produced. It now lives with the
+			// nameless probers, where it belongs.
 			name: "join",
 			p:    joinProber{},
 			getter: fakeGetter{

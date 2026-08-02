@@ -29,8 +29,8 @@ read, and the value of `identifier.value` is that it makes a derived board prova
 
 - Feed the existing harvest a worklist of companies that are demonstrably hiring now, for
   any keyword and market the operator lists.
-- Widen `harvest-ats` detection to the full board recognizer, including platforms that host
-  the careers site themselves.
+- Let `harvest-ats` resolve the platforms that host the careers site themselves, which no URL
+  scan can see.
 - Make a JS-only careers page a solvable case instead of a skipped one, by proposing
   candidate slugs that `harvest-boards` confirms against an exact posting id.
 - Keep every LinkedIn-derived fact transient: only boards this project validated against a
@@ -159,6 +159,23 @@ slug derivation is too timid (three spellings from name and domain may simply mi
 are actually registered), or a UUID is a weaker signal than assumed and narrows to platforms
 beyond Lever and Ashby. The instrumentation to tell is already there — a wrong slug on a live
 board would have surfaced as an id mismatch rather than as an absent one, and none did.
+
+## Second run, and what it found
+
+The full worklist (6 queries) produced **110 companies, 60 of them carrying an ATS-native id**,
+which resolved to **56 boards across 14 providers**. Two boards reached `sources/*.yml`:
+`Freeday` (recruitee) and — after the fix below — five Teamtailor career sites.
+
+The run exposed a pre-existing break the change happens to be the first to hit at scale. The
+Teamtailor prober asked for a JSON feed at `/jobs?page=1`; the platform serves HTML there, on
+vendor sub-domains and employer domains alike, which is exactly how `internal/sources/teamtailor.go`
+already reads it. Every Teamtailor candidate therefore read as a dead board — including
+`careers.arrive.com`, which is *already* in the board file. The prober now counts posting
+permalinks on the listing, as the Freshteam prober does, and the five candidates validate.
+
+Also surfaced, and deliberately left alone: `harvest-ats` can resolve boards for providers
+`harvest-boards` has no prober for (catsone, factorial, jibe, phenom). Those seeds are written
+and then silently never validated. Out of scope here, worth its own change.
 
 ## Open Questions
 

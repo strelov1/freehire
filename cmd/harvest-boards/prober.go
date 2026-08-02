@@ -450,22 +450,28 @@ func (breezyProber) probe(ctx context.Context, c httpClient, slug string) (strin
 // teamtailorProber probes a Teamtailor career site. The board is the site host, and its
 // /jobs listing serves a JSON Feed (title + items) to a JSON Accept header, so a non-empty
 // items array is a live board and the feed title is the company name.
+// teamtailorProber probes a Teamtailor career site, whose board is the host itself (the vendor
+// sub-domain `acme.teamtailor.com` or the employer's own `careers.acme.com`). The platform
+// serves its listing as HTML on both — there is no JSON feed — so liveness is judged the way
+// the ingest adapter reads the same page: a live board links at least one posting permalink.
+// The listing carries no company name worth trusting, so it falls back to the slug.
 type teamtailorProber struct{}
 
+// teamtailorJobPattern is the posting permalink on a Teamtailor listing: /jobs/<numeric id>.
+// It must not match the bare /jobs nav anchor, which every listing carries whether or not it
+// has postings.
+var teamtailorJobPattern = regexp.MustCompile(`/jobs/\d+`)
+
 func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (string, int, error) {
-	var feed struct {
-		Title string `json:"title"`
-		Items []struct {
-			ID string `json:"id"`
-		} `json:"items"`
-	}
-	if err := c.GetJSON(ctx, fmt.Sprintf("https://%s/jobs?page=1", host), &feed); err != nil {
+	root, err := c.GetHTML(ctx, fmt.Sprintf("https://%s/jobs?page=1", host))
+	if err != nil {
 		return "", 0, nil
 	}
-	if len(feed.Items) == 0 {
+	n := countMatchingLinks(root, teamtailorJobPattern)
+	if n == 0 {
 		return "", 0, nil
 	}
-	return feed.Title, len(feed.Items), nil
+	return "", n, nil
 }
 
 // trakstarProber probes the Trakstar Hire per-subdomain RSS feed. A non-empty channel of

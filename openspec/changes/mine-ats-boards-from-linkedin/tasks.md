@@ -59,6 +59,13 @@
 - [x] 5.3 Record the expected-id seed field where the harvest worklist conventions are
   described, so a future seed source knows it can supply one
 
+## 7. Teamtailor validation (found by the first end-to-end run)
+
+- [x] 7.1 Probe a Teamtailor board the way the ingest adapter reads it — the HTML listing —
+  instead of a JSON feed the platform does not serve, so a live board stops reading as absent
+- [x] 7.2 Move the Teamtailor case out of the named-prober test: the company name it asserted
+  came from the JSON shape only the fake produced
+
 ## 6. Verification
 
 - [x] 6.1 `go build ./... && go vet ./... && go test ./...` clean
