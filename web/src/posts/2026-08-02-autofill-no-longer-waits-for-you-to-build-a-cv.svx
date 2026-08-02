@@ -1,0 +1,32 @@
+---
+title: Autofill no longer waits for you to build a CV
+date: 2026-08-02
+summary: The browser extension now fills application forms from the CV you uploaded, not only from one you built in the editor — so autofill works from your first upload instead of staying empty until you open the builder.
+type: changelog
+tags:
+  - extension
+  - job-seekers
+  - cv
+---
+
+The extension fills the boring top of an application form for you — name, email, phone,
+location, your LinkedIn and GitHub. Until now it read those from one place: a CV built
+in the editor here. If you had only ever **uploaded** a CV, the form came back with your
+account email and nothing else.
+
+That was the wrong place to look, and for most people it was the only place with
+nothing in it. An uploaded CV is already parsed into fields — your name, your number,
+your links are sitting there the moment the upload finishes. **Autofill now reads them.**
+
+The order is: a CV you built here first, then the one you uploaded, then your account
+email on its own. Nothing else changes about how you use it — if you have never opened
+the editor, the extension simply starts working.
+
+**Your own edits win outright.** A CV you built here answers for the whole form, gaps
+included: if you cleared your phone number from it on purpose, autofill leaves the
+phone field empty rather than quietly filling it back in from the upload. The two are
+not mixed.
+
+**Tailored copies are never used.** When you tailor a CV for a particular vacancy, that
+copy stays with that vacancy — it is not what a form for some other company gets filled
+from.
