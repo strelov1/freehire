@@ -83,9 +83,16 @@ WHERE id = $1 AND user_id = $2;
 -- HTML-only senders (Gem, Ashby, Greenhouse), so an ILIKE over it is blind exactly where
 -- the recruiting mail is. The narrowing is the caller's to do with the readable body.
 --
--- application_id IS NULL admits both the mail nothing has claimed and the mail carrying
--- an unconfirmed suggestion; it excludes what is already linked, which this path may
--- never reach — re-linking retracts and re-records on a company's public response rate.
+-- Unattached means BOTH columns are null, and it takes both to say it. A message can
+-- hold job_id with application_id still NULL: the matcher is offered saved-only jobs
+-- (ListUserApplicationsForMatch admits uj.saved_at), SetEmailClassification then derives
+-- an application that does not exist yet and leaves it NULL, and MarkJobApplied never
+-- goes back to repair the mail — only cmd/backfill-applications does, and it is a
+-- one-shot. Testing application_id alone would let that message into the net and end in a
+-- confirm that RE-LINKS it, which this change declared out of scope.
+--
+-- What remains admitted is the mail nothing has claimed and the mail carrying an
+-- unconfirmed suggestion — the second being the very case the button exists to fix.
 --
 -- A query of its own rather than new parameters on ListEmails, which serves the web
 -- inbox and seven assistant tools: one shared statement grown for one reader is how the
@@ -94,23 +101,36 @@ SELECT id, from_addr, from_name, subject, body_text, body_html, received_at, ica
 FROM emails
 WHERE user_id = $1
   AND deleted_at IS NULL
+  AND job_id IS NULL
   AND application_id IS NULL
   AND received_at >= sqlc.arg(since)
 ORDER BY received_at DESC, id DESC
 LIMIT sqlc.arg(lim);
 
--- name: SuggestApplicationForEmail :execrows
+-- name: SuggestJobForEmail :execrows
 -- Record one message as belonging to a job the caller named, as a SUGGESTION they still
 -- confirm. It is the only write the recall path makes.
 --
--- `application_id IS NULL` is the guard, not an optimisation: a linked message stays
+-- It names a JOB, like LinkEmailToJob and like the column it writes: the application is
+-- what ConfirmEmailLink derives when the caller accepts.
+--
+-- The two IS NULL predicates are the guard, not an optimisation: a linked message stays
 -- unreachable from here even if the net, the model and the service layer went wrong at
--- once. Keep it in the statement — a check in Go is a check the next caller can skip.
+-- once. Keep them in the statement — a check in Go is a check the next caller can skip —
+-- and keep BOTH, for the reason ListEmailsForRecall spells out above. Clobbering
+-- match_confidence is the concrete harm: it belongs to the LINK, so writing it here
+-- would restate how sure somebody was about a link this statement did not make.
+--
+-- The cast is load-bearing. suggested_job_id is nullable, so sqlc.arg alone yields a
+-- nullable parameter, and a zero-value one would CLEAR the suggestion while reporting a
+-- row changed. This statement never clears — that is RejectEmailLink — so the mistake is
+-- made unrepresentable rather than documented.
 --
 -- An unconfirmed suggestion naming a different job is overwritten. The caller asked
 -- about this application explicitly, suggested_job_id holds one value, and a proposal
 -- nobody has confirmed costs nothing to lose.
 UPDATE emails
-SET suggested_job_id = sqlc.arg(suggested_job_id),
+SET suggested_job_id = sqlc.arg(suggested_job_id)::bigint,
     match_confidence = sqlc.arg(confidence)::real
-WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND application_id IS NULL;
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+  AND job_id IS NULL AND application_id IS NULL AND deleted_at IS NULL;

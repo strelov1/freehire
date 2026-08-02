@@ -109,11 +109,21 @@ call is enough and why no disambiguation tier is needed.
 
 ### The guard against a wrong write lives in SQL
 
-`SuggestApplicationForEmail` carries `WHERE application_id IS NULL` in the statement. A
-linked message cannot be modified by this path even if the net, the model and the service
-layer all went wrong at once. `ListEmailsForRecall` is a query of its own rather than new
-parameters on `ListEmails`, which serves the web inbox and seven assistant tools; extending
-a shared query for one reader is how the two drift.
+`SuggestJobForEmail` carries `WHERE job_id IS NULL AND application_id IS NULL` in the
+statement. A linked message cannot be modified by this path even if the net, the model and
+the service layer all went wrong at once. `ListEmailsForRecall` is a query of its own
+rather than new parameters on `ListEmails`, which serves the web inbox and seven assistant
+tools; extending a shared query for one reader is how the two drift.
+
+**It takes both columns to say "unattached", and one of them was nearly enough.** A
+message can hold `job_id` with `application_id` still NULL: `ListUserApplicationsForMatch`
+offers the matcher saved-only jobs, `SetEmailClassification` derives an application row
+that does not exist yet and leaves it NULL, and `MarkJobApplied` never returns to repair
+the mail — `cmd/backfill-applications` does, and it is a one-shot, not a cron. Testing
+`application_id` alone would have admitted exactly that message to the net and ended in a
+confirm that RE-LINKS it, which this change lists as a non-goal. The name is
+`SuggestJobForEmail` and not `...Application...` for the same reason `LinkEmailToJob` is:
+the column names a job, and the application is what `ConfirmEmailLink` derives.
 
 ### Bounds are the injection defence and the cost ceiling at once
 

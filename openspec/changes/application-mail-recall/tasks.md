@@ -1,15 +1,18 @@
 ## 1. SQL layer
 
-- [ ] 1.1 Add `ListEmailsForRecall` to `internal/db/queries/mail_linking.sql`: the caller's
-      live mail (`deleted_at IS NULL`) attached to no application (`application_id IS NULL`),
-      received at or after a given instant, newest first, with a limit. Carries the columns
-      the adjudication needs — id, from_addr, from_name, subject, body_text, body_html,
-      received_at, ical_uid — and nothing else.
-- [ ] 1.2 Add `SuggestApplicationForEmail` to the same file: set `suggested_job_id` and
-      `match_confidence` for one message owned by the caller, `WHERE application_id IS NULL`
-      so a linked message is unreachable from this path. Comment says the predicate is the
-      guard, not an optimisation.
-- [ ] 1.3 Run `make sqlc` and confirm `internal/db` regenerates cleanly. No migration.
+- [x] 1.1 Add `ListEmailsForRecall` to `internal/db/queries/mail_linking.sql`: the caller's
+      live mail (`deleted_at IS NULL`) attached to nothing (`job_id IS NULL AND
+      application_id IS NULL` — both, because a message auto-linked before its application
+      row existed holds the first without the second), received at or after a given
+      instant, newest first, with a limit. Carries the columns the adjudication needs —
+      id, from_addr, from_name, subject, body_text, body_html, received_at, ical_uid — and
+      nothing else.
+- [x] 1.2 Add `SuggestJobForEmail` to the same file: set `suggested_job_id` and
+      `match_confidence` for one message owned by the caller, under the same two IS NULL
+      predicates plus `deleted_at IS NULL`, so a linked message is unreachable from this
+      path. The suggested id is cast to `bigint` so a zero value cannot silently clear the
+      suggestion. Comment says the predicates are the guard, not an optimisation.
+- [x] 1.3 Run `make sqlc` and confirm `internal/db` regenerates cleanly. No migration.
 
 ## 2. The service
 
