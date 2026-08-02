@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"log"
 	"time"
@@ -17,7 +18,11 @@ import (
 // /me/emails/:id` marks a message READ — a response assembled through it would zero its
 // owner's unread count for mail no human has opened.
 type recalledEmail struct {
-	ID         int64     `json:"id"`
+	// ID is our stored row's id, and is 0 for a message the search found. A proposal from
+	// the search path is addressed by ProviderID until the caller links it.
+	ID int64 `json:"id"`
+	// ProviderID names the message at the mail provider. Empty on the stored-mail path.
+	ProviderID string    `json:"provider_id,omitempty"`
 	FromAddr   string    `json:"from_addr"`
 	FromName   string    `json:"from_name"`
 	Subject    string    `json:"subject"`
@@ -74,7 +79,13 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 
 	// The run goes out on the caller's own gateway credential. Attribution cannot fail: an
 	// unresolvable one falls back to the service credential, still tagged.
+	//
+	// The mailbox is resolved per caller and may be nil — a hosted address or a harness
+	// tier — in which case the service reads stored mail instead.
 	recall := h.recall.As(h.llm.bind(c.Context(), userID, tagMailRecall))
+	if h.mailboxes != nil {
+		recall = recall.WithMailbox(h.mailboxes.For(c.Context(), userID))
+	}
 	result, err := recall.Recall(c.Context(), userID, mailrecall.Application{
 		JobID:     job.ID,
 		Company:   job.Company,
@@ -105,7 +116,8 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 	suggested := make([]recalledEmail, 0, len(result.Proposed))
 	for _, p := range result.Proposed {
 		suggested = append(suggested, recalledEmail{
-			ID: p.Message.ID, FromAddr: p.Message.FromAddr, FromName: p.Message.FromName,
+			ID: p.Message.ID, ProviderID: p.Message.ProviderID,
+			FromAddr: p.Message.FromAddr, FromName: p.Message.FromName,
 			Subject: p.Message.Subject, ReceivedAt: p.Message.ReceivedAt,
 			Invitation: p.Message.ICalUID != "",
 		})
@@ -115,4 +127,63 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		Suggested:   suggested,
 		Invitations: result.Invitations,
 	}})
+}
+
+// linkRecalledRequest names one message the caller picked out of a sweep.
+type linkRecalledRequest struct {
+	ProviderID string `json:"provider_id"`
+}
+
+// LinkRecalledMail imports a message the sweep proposed and links it to the application.
+//
+// It exists because a searched message is not ours yet: the sweep shows what the mailbox
+// holds and keeps nothing, so this is the moment the message arrives. Import first, then
+// link through internal/inbox so the ledger reconcile runs exactly as it does for a message
+// the sync had fetched — the import is idempotent on (source, external_id), so a message
+// already stored is linked rather than duplicated.
+func (h *inboxHandlers) LinkRecalledMail(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var req linkRecalledRequest
+	if err := c.BodyParser(&req); err != nil || req.ProviderID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "provider_id is required")
+	}
+	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+	if err != nil {
+		return err // ErrNoRows → 404
+	}
+	if _, err := h.queries.GetUserApplication(c.Context(),
+		db.GetUserApplicationParams{UserID: userID, JobID: job.ID}); err != nil {
+		return err // ErrNoRows → 404 (caller does not track this job)
+	}
+
+	if h.mailboxes == nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "no mailbox to import from")
+	}
+	box := h.mailboxes.For(c.Context(), userID)
+	importer, ok := box.(interface {
+		Import(ctx context.Context, userID int64, providerID string) error
+	})
+	if !ok {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "no mailbox to import from")
+	}
+	if err := importer.Import(c.Context(), userID, req.ProviderID); err != nil {
+		log.Printf("mail-recall link: user %d: %v", userID, err)
+		return fiber.NewError(fiber.StatusBadGateway, "could not read that message right now")
+	}
+
+	// The import just stored it, so this resolves; a message the sync had already fetched
+	// resolves to that same row rather than a second copy.
+	id, err := h.queries.GetEmailIDByExternalID(c.Context(),
+		db.GetEmailIDByExternalIDParams{UserID: userID, ExternalID: req.ProviderID})
+	if err != nil {
+		return err
+	}
+	msg, err := h.inbox.Link(c.Context(), userID, id, c.Params("slug"))
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": bodyOf(msg)})
 }

@@ -326,9 +326,13 @@ func Register(app *fiber.App, cfg Config) {
 	// reports the feature off — the same way an unconfigured deployment reports every other
 	// model-backed surface off, rather than failing at the first press.
 	if cfg.LLM != nil {
+		// The mailbox factory is present only where a Gmail client and a token cipher both
+		// are — the same condition cmd/gmail-sync checks. Absent, every caller falls back to
+		// stored mail, which is the path that shipped first.
 		inboxH = inboxH.withRecall(
 			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
-			llmBinding{client: cfg.LLM, keys: llmKeys})
+			llmBinding{client: cfg.LLM, keys: llmKeys},
+			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
 	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is — either way there is nothing

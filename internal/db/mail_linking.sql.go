@@ -36,6 +36,27 @@ func (q *Queries) ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkPara
 	return result.RowsAffected(), nil
 }
 
+const getEmailIDByExternalID = `-- name: GetEmailIDByExternalID :one
+SELECT id FROM emails WHERE user_id = $1 AND external_id = $2 AND deleted_at IS NULL
+`
+
+type GetEmailIDByExternalIDParams struct {
+	UserID     int64  `json:"user_id"`
+	ExternalID string `json:"external_id"`
+}
+
+// One message's id from the identifier its provider gave it, scoped to the caller.
+//
+// The recall sweep proposes messages by PROVIDER id, because a searched message is not ours
+// until somebody links it. This is the one lookup that turns the id a caller pressed into
+// the row every linking path works on, immediately after the import stored it.
+func (q *Queries) GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getEmailIDByExternalID, arg.UserID, arg.ExternalID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getUserApplication = `-- name: GetUserApplication :one
 SELECT uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes, a.followed_up_at,
        (CASE WHEN a.applied_at IS NOT NULL THEN

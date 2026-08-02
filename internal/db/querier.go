@@ -855,6 +855,12 @@ type Querier interface {
 	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
 	// are enforced by the caller, which must fail identically for expired and wrong codes.
 	GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (GetEmailCodeRow, error)
+	// One message's id from the identifier its provider gave it, scoped to the caller.
+	//
+	// The recall sweep proposes messages by PROVIDER id, because a searched message is not ours
+	// until somebody links it. This is the one lookup that turns the id a caller pressed into
+	// the row every linking path works on, immediately after the import stored it.
+	GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.

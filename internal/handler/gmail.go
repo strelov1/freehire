@@ -59,6 +59,16 @@ type inboxHandlers struct {
 	// unconfigured deployment, which every path already treats as "spend on the service
 	// credential".
 	llm llmBinding
+	// mailboxes mints the caller's searchable mailbox for a recall run. Nil, or a caller
+	// with no grant, means the sweep reads stored mail instead. An interface so a test can
+	// stand a mailbox up without a Google credential — the fallback path and the search
+	// path are different code, and both have to be covered.
+	mailboxes mailboxes
+}
+
+// mailboxes resolves one caller's searchable mailbox, or nil when they have none.
+type mailboxes interface {
+	For(ctx context.Context, userID int64) mailrecall.Mailbox
 }
 
 // withRecall wires the mail-recall action after construction.
@@ -66,8 +76,8 @@ type inboxHandlers struct {
 // Separate from newInboxHandlers because six test harnesses build these handlers for
 // surfaces that make no model call, and two more positional parameters on a
 // seven-parameter constructor would be paid by all of them for a field they leave nil.
-func (h *inboxHandlers) withRecall(recall *mailrecall.Service, binding llmBinding) *inboxHandlers {
-	h.recall, h.llm = recall, binding
+func (h *inboxHandlers) withRecall(recall *mailrecall.Service, binding llmBinding, boxes mailboxes) *inboxHandlers {
+	h.recall, h.llm, h.mailboxes = recall, binding, boxes
 	return h
 }
 
@@ -140,6 +150,10 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// The limiter is the whole cost gate — this endpoint spends on the model and debits no
 	// credit — and is mounted after the auth gate so it can key on the caller.
 	api.Post("/me/tracking/:slug/mail-recall", mw.key, mailRecallLimiter(), h.RecallApplicationMail)
+	// Import-and-link, for a proposal the sweep found in the mailbox and deliberately did
+	// not store. Unlimited beside its sibling: this one is a person pressing Link on
+	// something they just read, not a model call.
+	api.Post("/me/tracking/:slug/mail-recall/link", mw.key, h.LinkRecalledMail)
 	if h.gmailReady() {
 		api.Get("/me/gmail/connect", mw.cookie, h.GmailConnect)
 		// The callback is the browser returning from Google, not an XHR — so it is

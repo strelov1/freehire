@@ -34,13 +34,13 @@
 
 ## 3. Link-and-import, in the handler
 
-- [ ] 3.1 Add `POST /me/tracking/:slug/mail-recall/link` (body: provider message id) under
+- [x] 3.1 Add `POST /me/tracking/:slug/mail-recall/link` (body: provider message id) under
       `mw.key`: import the message, then link it through `internal/inbox` so the ledger
       reconcile runs exactly as it does today. 404 for an application that is not the
       caller's; 502 when the mailbox cannot be read.
-- [ ] 3.2 Wire the `Mailbox` implementation in `handler.go`, present only when the Gmail
+- [x] 3.2 Wire the `Mailbox` implementation in `handler.go`, present only when the Gmail
       client and token cipher are configured — the same condition `cmd/gmail-sync` checks.
-- [ ] 3.3 Integration test (`//go:build integration`): a search-path sweep writes nothing;
+- [x] 3.3 Integration test (`//go:build integration`): a search-path sweep writes nothing;
       linking a proposal imports and links it; linking a message already stored does not
       duplicate it; another user's application is 404.
 
