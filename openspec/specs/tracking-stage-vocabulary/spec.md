@@ -4,7 +4,6 @@
 One owner for the application-stage vocabulary: which stages exist, what each is called, and
 which coarse group it shows as. Introduced by the tracker-one-vocabulary change, which collapsed
 three competing vocabularies (8 stages, 4 board columns, 7 pipeline buckets) onto this one.
-
 ## Requirements
 ### Requirement: One owner for the stage vocabulary, its labels and its groups
 
@@ -16,7 +15,7 @@ stage→group mapping.
 
 The groups SHALL be, in pipeline order: `applied` (stages `applied`, `screening`, `responded`),
 `interview` (`interview`), `offer` (`offer`), and `closed` (`accepted`, `rejected`,
-`withdrawn`).
+`withdrawn`, `expired`).
 
 #### Scenario: Every stage belongs to exactly one group
 
@@ -64,27 +63,66 @@ chip at runtime.
 
 ### Requirement: A settled application names its outcome wherever it is shown
 
-The board SHALL collapse the three terminal stages into a single `Closed` column, and every
-card in that column SHALL carry its own stage as a label, so the coarse column and the precise
-stage are legible together rather than competing. Moving a card into `Closed` SHALL require the
+The board SHALL collapse the terminal stages into a single `Closed` column, and every card in
+that column SHALL carry its own stage as a label, so the coarse column and the precise stage
+are legible together rather than competing. Moving a card into `Closed` SHALL require the
 candidate to choose which terminal stage applies, because the group does not determine it.
 
 The drawer's stage selector SHALL present its options grouped by the same four groups, so
-`Closed` reads as a heading over `Accepted`, `Rejected` and `Withdrawn` rather than as a fifth
-state.
+`Closed` reads as a heading over `Accepted`, `Rejected`, `Withdrawn` and `Expired` rather than
+as a fifth state.
 
 #### Scenario: A rejected card in the Closed column
 
 - **WHEN** an application at stage `rejected` is shown on the board
 - **THEN** it sits in the `Closed` column and the card carries the label `Rejected`
 
+#### Scenario: An expired card names its own outcome
+
+- **WHEN** an application at stage `expired` is shown on the board
+- **THEN** it sits in the `Closed` column and the card carries the label `Expired`, so it does
+  not read as a rejection
+
 #### Scenario: Dropping into Closed asks for the outcome
 
 - **WHEN** the candidate drags a card into the `Closed` column
-- **THEN** they are asked which of `Accepted`, `Rejected` or `Withdrawn` applies, and declining
-  to choose reverts the move
+- **THEN** they are asked which terminal stage applies, and declining to choose reverts the move
 
 #### Scenario: The selector groups its options
 
 - **WHEN** the candidate opens the stage selector
 - **THEN** the options appear under their group headings, in pipeline order
+
+### Requirement: A settled outcome for an application nobody answered
+
+The vocabulary SHALL carry a terminal stage `expired`, labelled `Expired`, meaning the
+application ended without an answer — the employer never replied, or the posting went away.
+
+It SHALL be settable only by the candidate, through the same stage-setting surfaces as every
+other stage. No worker, schedule or threshold SHALL move an application into it: silence is
+already reported by the silence state, which measures how long an employer has been quiet,
+while `expired` records the candidate's conclusion that no answer is coming. One is computed
+and reversible by the passage of a reply; the other is a decision.
+
+Being terminal, `expired` SHALL have no forward rank and no silence threshold: an application
+does not pass through it on the way anywhere, and a settled application waits on nobody. The
+existing rule that automatic advancement never enters or leaves a terminal stage therefore
+applies to it unchanged, so mail classified after the candidate marked an application expired
+cannot resurrect it.
+
+#### Scenario: The candidate marks an unanswered application expired
+
+- **WHEN** the candidate sets stage `expired` on an application
+- **THEN** the application is settled, shows in the `Closed` group labelled `Expired`, and
+  reports no silence state
+
+#### Scenario: Nothing sets it automatically
+
+- **WHEN** an application passes any silence threshold, however long ago it was sent
+- **THEN** its stage is unchanged, and only its silence state reports the delay
+
+#### Scenario: A late reply cannot reopen it
+
+- **WHEN** employer mail arrives for an application already at stage `expired`
+- **THEN** the automatic advance declines, exactly as it does for the other terminal stages
+
