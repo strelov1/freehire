@@ -70,21 +70,21 @@
 
 ## 7. The view
 
-- [ ] 7.1 Render a scheduled meeting distinctly from a recorded event, on the day it is
+- [x] 7.1 Render a scheduled meeting distinctly from a recorded event, on the day it is
       due in the reader's timezone, using a design-system token — `check:tokens` counts
       raw palette utilities per file.
-- [ ] 7.2 The day panel entry carries the time, the title, the application, and the
+- [x] 7.2 The day panel entry carries the time, the title, the application, and the
       joining link when there is one; a cancelled meeting is shown as cancelled.
-- [ ] 7.3 A month holding only a future interview must not show the empty-month message.
+- [x] 7.3 A month holding only a future interview must not show the empty-month message.
       Extend the model's own tests for it.
-- [ ] 7.4 The connect surface says plainly that the grant is limited to test accounts
+- [x] 7.4 The connect surface says plainly that the grant is limited to test accounts
       until Google verification.
 
 ## 8. Verify
 
-- [ ] 8.1 `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`, and
+- [x] 8.1 `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`, and
       `go test -tags=integration ./...` — both runs.
-- [ ] 8.2 `web/`: `pnpm run check`, `pnpm run build`, `pnpm exec vitest run`, and
+- [x] 8.2 `web/`: `pnpm run check`, `pnpm run build`, `pnpm exec vitest run`, and
       `design-system`'s `check:tokens` and `check:adoption`, recording an adoption
       improvement with `--update` if one lands.
 - [ ] 8.3 Visual check against a running stack seeded with a matched meeting, a cancelled

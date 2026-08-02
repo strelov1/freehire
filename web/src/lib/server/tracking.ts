@@ -32,7 +32,12 @@ export async function loadTimeline(fetchImpl: typeof fetch, cookie: string | nul
   const month = now.getMonth();
   const { from, to } = rangeForMonth(year, month);
   try {
-    return { events: await serverApi(fetchImpl, cookie).myTimeline(from, to), year, month };
+    // Both layers in one go: what happened, and what is arranged. The day panel filters
+    // data already in hand, so both have to arrive before the page does — but they are
+    // two endpoints, because /me/timeline is published with `data` as a list of events.
+    const api = serverApi(fetchImpl, cookie);
+    const [events, interviews] = await Promise.all([api.myTimeline(from, to), api.myInterviews(from, to)]);
+    return { events, interviews, year, month };
   } catch {
     return undefined;
   }

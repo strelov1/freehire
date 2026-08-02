@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -259,13 +260,20 @@ func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		// available signals whether the connect flow is wired (Google creds + token
 		// key), so the SPA hides the Connect button when it would 404.
-		return c.JSON(fiber.Map{"data": fiber.Map{"connected": false, "available": h.gmailReady()}})
+		return c.JSON(fiber.Map{"data": fiber.Map{
+			"connected": false, "available": h.gmailReady(), "calendar_connected": false,
+		}})
 	}
 	if err != nil {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{
 		"connected": true, "email": conn.Email, "status": conn.Status, "available": h.gmailReady(),
+		// Whether this grant also covers the calendar. Read from the recorded scopes and
+		// not from the row's existence: the two consents are separate, so a connected
+		// mailbox says nothing about the calendar and a calendar grant may have no
+		// mailbox behind it at all.
+		"calendar_connected": slices.Contains(conn.Scopes, gmailsync.CalendarScope),
 	}})
 }
 

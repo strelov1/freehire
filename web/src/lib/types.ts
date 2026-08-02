@@ -883,3 +883,29 @@ export interface TimelineEvent {
   email_id?: number;
   email_subject?: string;
 }
+
+/** One interview arranged for an application, as GET /me/interviews serves it.
+ *
+ *  Deliberately a different type from [[TimelineEvent]], and not a variant of it: an
+ *  event happened and cannot change, a meeting is arranged and can be moved or called
+ *  off. One shape for both would invite the calendar to draw them with one meaning.
+ *
+ *  `starts_at` is an instant like `occurred_at`, and belongs to the reader's day for the
+ *  same reason — see calendarModel.
+ *
+ *  `status` is `suggested` when only the meeting's title named the employer, `confirmed`
+ *  when the invitation's own identifier attached it, and `cancelled` when the organiser
+ *  called it off. A cancelled meeting is still shown: an interview that vanished from a
+ *  Thursday cannot be told apart from a calendar that failed to load. */
+export interface ScheduledInterview {
+  id: number;
+  application_id: number;
+  starts_at: string;
+  ends_at?: string;
+  title?: string;
+  join_url?: string;
+  status: string;
+  company_slug: string;
+  role_title?: string;
+  job_slug?: string;
+}

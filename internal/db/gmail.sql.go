@@ -215,7 +215,7 @@ func (q *Queries) GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow
 }
 
 const getGmailConnection = `-- name: GetGmailConnection :one
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes
 FROM gmail_connections
 WHERE user_id = $1
 `
@@ -227,8 +227,13 @@ type GetGmailConnectionRow struct {
 	SyncCursor   int64              `json:"sync_cursor"`
 	ConnectedAt  pgtype.Timestamptz `json:"connected_at"`
 	LastSyncedAt pgtype.Timestamptz `json:"last_synced_at"`
+	Scopes       []string           `json:"scopes"`
 }
 
+// The grant row as the status endpoint reads it. `scopes` is included because the two
+// consents are separate: a connected mailbox says nothing about the calendar, and a
+// calendar grant may have no mailbox behind it, so the row's existence cannot answer
+// either question on its own.
 func (q *Queries) GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error) {
 	row := q.db.QueryRow(ctx, getGmailConnection, userID)
 	var i GetGmailConnectionRow
@@ -239,6 +244,7 @@ func (q *Queries) GetGmailConnection(ctx context.Context, userID int64) (GetGmai
 		&i.SyncCursor,
 		&i.ConnectedAt,
 		&i.LastSyncedAt,
+		&i.Scopes,
 	)
 	return i, err
 }

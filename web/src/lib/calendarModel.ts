@@ -7,7 +7,7 @@
 // Everything below therefore reads a Date through its LOCAL accessors and never through
 // the UTC ones, and is testable without rendering.
 
-import type { TimelineEvent } from './types';
+import type { ScheduledInterview, TimelineEvent } from './types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -20,8 +20,12 @@ export interface CalendarDay {
   /** False for the neighbouring month's days that pad the first and last rows. */
   inMonth: boolean;
   isToday: boolean;
-  /** That day's events, oldest first. */
+  /** That day's events, oldest first — what happened. */
   events: TimelineEvent[];
+  /** That day's arranged meetings, oldest first — what is going to. Kept apart from the
+   *  events rather than merged into one list, because the view must be able to draw the
+   *  difference: one is a record, the other is an appointment that can still move. */
+  interviews: ScheduledInterview[];
 }
 
 /** A drawable month. */
@@ -35,9 +39,13 @@ export interface CalendarMonth {
   days: CalendarDay[];
   /** Only the cells holding something, for the narrow layout that lists days. */
   daysWithEvents: CalendarDay[];
-  /** How many events this month's OWN days hold. Deliberately not the whole grid: a
-   *  September whose only mark sits in its 31 August pad cell holds nothing of its own,
-   *  and counting the pad would suppress the message saying so. */
+  /** How much this month's OWN days hold, events and arranged meetings together.
+   *
+   *  Deliberately not the whole grid: a September whose only mark sits in its 31 August
+   *  pad cell holds nothing of its own, and counting the pad would suppress the message
+   *  saying so. And deliberately not events alone: a month whose only content is an
+   *  interview next week is not an empty month, and saying nothing is recorded would be
+   *  both wrong and discouraging. */
   total: number;
 }
 
@@ -50,6 +58,25 @@ function pad(n: number): string {
  *  Greenwich, and on the next one for anyone west of it. */
 export function dayKey(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Buckets a series by the reader's local day, oldest first within each day.
+ *
+ *  Sorted by instant rather than by string. Postgres keeps microseconds and Go trims
+ *  trailing zeros, so one second can hold both "09:00:00Z" and "09:00:00.482913Z" — and
+ *  lexically '.' sorts before 'Z', which would put the later one first. */
+function groupByLocalDay<T>(items: T[], instantOf: (item: T) => string): Map<string, T[]> {
+  const byDay = new Map<string, T[]>();
+  for (const item of items) {
+    const key = dayKey(new Date(instantOf(item)));
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(item);
+    else byDay.set(key, [item]);
+  }
+  for (const bucket of byDay.values()) {
+    bucket.sort((a, b) => Date.parse(instantOf(a)) - Date.parse(instantOf(b)));
+  }
+  return byDay;
 }
 
 /** Monday-first weekday index, 0–6. */
@@ -82,21 +109,11 @@ export function buildCalendarMonth(
   year: number,
   month: number,
   events: TimelineEvent[],
+  interviews: ScheduledInterview[] = [],
   today: Date = new Date(),
 ): CalendarMonth {
-  const byDay = new Map<string, TimelineEvent[]>();
-  for (const e of events) {
-    const key = dayKey(new Date(e.occurred_at));
-    const bucket = byDay.get(key);
-    if (bucket) bucket.push(e);
-    else byDay.set(key, [e]);
-  }
-  // Compared as instants, not as strings. Postgres keeps microseconds and Go trims
-  // trailing zeros, so one second can hold both "09:00:00Z" and "09:00:00.482913Z" — and
-  // lexically '.' sorts before 'Z', which would put the later event first.
-  for (const bucket of byDay.values()) {
-    bucket.sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at));
-  }
+  const byDay = groupByLocalDay(events, (e) => e.occurred_at);
+  const meetingsByDay = groupByLocalDay(interviews, (i) => i.starts_at);
 
   const { first, last } = gridBounds(year, month);
   const cells = Math.round((last.getTime() - first.getTime()) / MS_PER_DAY) + 1;
@@ -113,6 +130,7 @@ export function buildCalendarMonth(
       inMonth: date.getMonth() === month && date.getFullYear() === year,
       isToday: key === todayKey,
       events: byDay.get(key) ?? [],
+      interviews: meetingsByDay.get(key) ?? [],
     });
   }
 
@@ -124,8 +142,8 @@ export function buildCalendarMonth(
     month,
     weeks,
     days,
-    daysWithEvents: days.filter((d) => d.events.length > 0),
-    total: days.reduce((n, d) => n + (d.inMonth ? d.events.length : 0), 0),
+    daysWithEvents: days.filter((d) => d.events.length + d.interviews.length > 0),
+    total: days.reduce((n, d) => n + (d.inMonth ? d.events.length + d.interviews.length : 0), 0),
   };
 }
 
@@ -142,7 +160,7 @@ export function rangeForMonth(year: number, month: number): { from: string; to: 
   return { from: from.toISOString(), to: new Date(to.getTime() - 1).toISOString() }; // …less an instant
 }
 
-/** splitDayEvents divides a cell's events into the ones it shows and a count of the rest.
+/** splitDayEvents divides a cell's marks into the ones it shows and a count of the rest.
  *  A bulk-apply evening is ordinary behaviour, and a cell that silently dropped the tail
  *  would under-report the day. */
 export function splitDayEvents(

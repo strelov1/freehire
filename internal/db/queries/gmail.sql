@@ -1,5 +1,9 @@
 -- name: GetGmailConnection :one
-SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at
+-- The grant row as the status endpoint reads it. `scopes` is included because the two
+-- consents are separate: a connected mailbox says nothing about the calendar, and a
+-- calendar grant may have no mailbox behind it, so the row's existence cannot answer
+-- either question on its own.
+SELECT user_id, email, status, sync_cursor, connected_at, last_synced_at, scopes
 FROM gmail_connections
 WHERE user_id = $1;
 

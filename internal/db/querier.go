@@ -818,6 +818,10 @@ type Querier interface {
 	// One employment owned by the caller. A foreign or missing id returns no row, which the
 	// handler maps to 404 — so a probe cannot tell the two apart.
 	GetExperienceEmployment(ctx context.Context, arg GetExperienceEmploymentParams) (ExperienceEmployment, error)
+	// The grant row as the status endpoint reads it. `scopes` is included because the two
+	// consents are separate: a connected mailbox says nothing about the calendar, and a
+	// calendar grant may have no mailbox behind it, so the row's existence cannot answer
+	// either question on its own.
 	GetGmailConnection(ctx context.Context, userID int64) (GetGmailConnectionRow, error)
 	GetGmailRefreshToken(ctx context.Context, userID int64) (GetGmailRefreshTokenRow, error)
 	// The employer's own description of an upcoming interview, for the rehearsal context:

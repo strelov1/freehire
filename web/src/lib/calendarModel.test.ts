@@ -5,7 +5,7 @@ process.env.TZ = 'Europe/Warsaw'; // UTC+2 in summer
 
 import { describe, it, expect } from 'vitest';
 import { buildCalendarMonth, rangeForMonth, splitDayEvents } from './calendarModel';
-import type { TimelineEvent } from './types';
+import type { ScheduledInterview, TimelineEvent } from './types';
 
 const event = (occurredAt: string, over: Partial<TimelineEvent> = {}): TimelineEvent => ({
   id: 1,
@@ -122,5 +122,67 @@ describe('splitDayEvents', () => {
 
     expect(shown).toHaveLength(1);
     expect(remaining).toBe(0);
+  });
+});
+
+const interview = (startsAt: string, over: Partial<ScheduledInterview> = {}): ScheduledInterview => ({
+  id: 1,
+  application_id: 31,
+  starts_at: startsAt,
+  status: 'confirmed',
+  company_slug: 'derq',
+  ...over,
+});
+
+describe('buildCalendarMonth with arranged meetings', () => {
+  it('places a meeting on the reader’s day, as it does an event', () => {
+    const month = buildCalendarMonth(2026, 7, [], [interview('2026-08-12T23:40:00Z')]);
+
+    expect(dayAt(month, '2026-08-13').interviews).toHaveLength(1);
+    expect(dayAt(month, '2026-08-12').interviews).toHaveLength(0);
+  });
+
+  it('keeps meetings apart from events on the same day', () => {
+    const month = buildCalendarMonth(
+      2026,
+      7,
+      [event('2026-08-13T09:00:00Z')],
+      [interview('2026-08-13T15:00:00Z')],
+    );
+    const day = dayAt(month, '2026-08-13');
+
+    expect(day.events).toHaveLength(1);
+    expect(day.interviews).toHaveLength(1);
+  });
+
+  // A month whose only content is a future interview is not an empty month, and telling
+  // its owner that nothing is recorded would be both wrong and discouraging.
+  it('counts an arranged meeting as content', () => {
+    const month = buildCalendarMonth(2026, 7, [], [interview('2026-08-20T09:00:00Z')]);
+
+    expect(month.total).toBe(1);
+  });
+
+  it('does not count a meeting sitting in a neighbouring month’s cell', () => {
+    // The August grid leads with late July; a meeting there is not August's.
+    const month = buildCalendarMonth(2026, 7, [], [interview('2026-07-28T09:00:00Z')]);
+
+    expect(dayAt(month, '2026-07-28').interviews).toHaveLength(1);
+    expect(month.total).toBe(0);
+  });
+
+  it('lists a day holding only a meeting in the narrow layout', () => {
+    const month = buildCalendarMonth(2026, 7, [], [interview('2026-08-20T09:00:00Z')]);
+
+    expect(month.daysWithEvents.map((d) => d.key)).toEqual(['2026-08-20']);
+  });
+
+  it('orders a day’s meetings oldest first', () => {
+    const month = buildCalendarMonth(2026, 7, [], [
+      interview('2026-08-13T15:00:00Z', { id: 2 }),
+      interview('2026-08-13T09:00:00Z', { id: 1 }),
+    ]);
+
+    expect(dayAt(month, '2026-08-13').interviews.map((i) => i.id)).toEqual([1, 2]);
   });
 });

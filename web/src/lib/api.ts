@@ -35,6 +35,7 @@ import type {
   MyJob,
   MyJobCounts,
   PipelineStats,
+  ScheduledInterview,
   TimelineEvent,
   User,
   UserJob,
@@ -208,6 +209,11 @@ export interface GmailStatus {
   available?: boolean; // whether the connect flow is configured server-side
   email?: string;
   status?: string;
+  /** Whether the same Google grant also covers the calendar. Read from the recorded
+   *  scopes rather than from the connection existing: the two consents are separate, so
+   *  a connected mailbox says nothing about the calendar, and a calendar grant may have
+   *  no mailbox behind it at all. */
+  calendar_connected?: boolean;
 }
 
 /** The hosted-mailbox option: the caller's address (null when none) + whether
@@ -810,6 +816,15 @@ export function createApi(
   async function myTimeline(from: string, to: string): Promise<TimelineEvent[]> {
     return requestData<TimelineEvent[]>(
       `/api/v1/me/timeline?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    );
+  }
+
+  /** The interviews arranged for the caller's applications whose start falls in the
+   *  range — the calendar's second layer, beside what myTimeline reports as having
+   *  happened. Cancelled meetings come back marked rather than withheld. */
+  async function myInterviews(from: string, to: string): Promise<ScheduledInterview[]> {
+    return requestData<ScheduledInterview[]>(
+      `/api/v1/me/interviews?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     );
   }
 
@@ -1681,6 +1696,7 @@ export function createApi(
     listMyJobs,
     getMyPipeline,
     myTimeline,
+    myInterviews,
     myAnalyses,
     myCredits,
     myCreditsHistory,
