@@ -20,10 +20,11 @@ func NewDBStore(q *db.Queries) *DBStore { return &DBStore{q: q} }
 // ListForRecall runs the net. Both body columns come across unresolved: which one carries
 // the text is the service's rule, and resolving it here would put the HTML-only trap in
 // the one place no unit test reaches.
-func (s *DBStore) ListForRecall(ctx context.Context, userID int64, since time.Time, limit int32) ([]Message, error) {
+func (s *DBStore) ListForRecall(ctx context.Context, userID int64, since, until time.Time, limit int32) ([]Message, error) {
 	rows, err := s.q.ListEmailsForRecall(ctx, db.ListEmailsForRecallParams{
 		UserID: userID,
 		Since:  pgtype.Timestamptz{Time: since, Valid: true},
+		Until:  pgtype.Timestamptz{Time: until, Valid: true},
 		Lim:    limit,
 	})
 	if err != nil {

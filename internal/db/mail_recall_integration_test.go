@@ -39,7 +39,7 @@ func seedRecallEmail(t *testing.T, q *Queries, userID int64, extID string, recei
 func recallRows(t *testing.T, q *Queries, userID int64, since time.Time, limit int32) []ListEmailsForRecallRow {
 	t.Helper()
 	rows, err := q.ListEmailsForRecall(context.Background(), ListEmailsForRecallParams{
-		UserID: userID, Since: ts(since), Lim: limit,
+		UserID: userID, Since: ts(since), Until: ts(since.AddDate(0, 0, 97)), Lim: limit,
 	})
 	if err != nil {
 		t.Fatalf("list for recall: %v", err)
@@ -87,6 +87,9 @@ func TestListEmailsForRecall_TakesOnlyUnattachedMailInsideTheWindow(t *testing.T
 	linkedWithoutApp := seedRecallEmail(t, q, user, "recall-halflinked", applied.Add(5*time.Hour),
 		`UPDATE emails SET job_id = (SELECT job_id FROM applications WHERE id = $2) WHERE id = $1`, appID)
 	atBoundary := seedRecallEmail(t, q, user, "recall-boundary", since, "")
+	// Past the window's far edge. The edge exists so the cap trims the tail rather than
+	// the head — without it, a busy mailbox's recent mail crowds out the acknowledgement.
+	tooNew := seedRecallEmail(t, q, user, "recall-too-new", applied.AddDate(0, 0, 91), "")
 
 	got := setOf(recallIDs(t, q, user, since, 40))
 
@@ -104,6 +107,7 @@ func TestListEmailsForRecall_TakesOnlyUnattachedMailInsideTheWindow(t *testing.T
 		linkedWithoutApp: "mail linked to a job but carrying no application row",
 		deleted:          "soft-deleted mail",
 		tooOld:           "mail older than the window",
+		tooNew:           "mail past the window's far edge",
 	} {
 		if got[id] {
 			t.Errorf("%s reached the net", what)
@@ -165,12 +169,13 @@ func TestListEmailsForRecall_IsScopedToTheCallerAndCapped(t *testing.T) {
 	if got := setOf(recallIDs(t, q, mine, since, 40)); got[stranger] {
 		t.Error("another user's mail reached the net")
 	}
-	// The cap keeps the NEWEST, which is why the order is asserted and not just the count:
-	// under a reversed sort this returns two rows too, and they are the wrong two.
+	// The cap keeps the OLDEST, and that is the whole point of the sort direction: the
+	// acknowledgement that proves an application arrives first, so a cap eating from the
+	// other end would drop it and leave the button reporting nothing found.
 	got := recallIDs(t, q, mine, since, 2)
-	want := []int64{seeded[2], seeded[1]}
+	want := []int64{seeded[0], seeded[1]}
 	if !slices.Equal(got, want) {
-		t.Errorf("limit 2 returned %v, want the two newest %v", got, want)
+		t.Errorf("limit 2 returned %v, want the two oldest %v", got, want)
 	}
 }
 

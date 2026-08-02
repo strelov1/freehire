@@ -94,7 +94,19 @@ The window opens **seven days before `applied_at`**. `applied_at` is when the ap
 recorded: for one recorded from mail it is that message's own `received_at`, and for one
 recorded by hand it can be days late. A window starting exactly at it would exclude the
 acknowledgement that proves the application. A tracking row with `applied_at IS NULL` is not
-an application and answers 404.
+an application and answers 404, and that check is in the service rather than the handler —
+a rule enforced in a Fiber handler is one the in-process caller never meets.
+
+**It closes ninety days after, and the closing edge is one decision with the cap and the
+sort, not three.** Left open, newest-first, the forty candidates go to a busy mailbox's most
+recent mail: a three-month-old application never shows the model the acknowledgement, and
+the button answers "nothing found" on exactly the applications people press it for. The net
+is therefore ordered **oldest first** inside a closed window, so the cap trims the far tail
+rather than the head. Ninety days comfortably covers a funnel whose silence ladder
+(`internal/userjob`) tops out at 21 days for `applied`. The cost is real and stated: an
+application still moving after three months will not find its recent mail this way. That is
+the trade a bounded run buys, and it is measurable later from confirm rates by application
+age.
 
 ### The question put to the model changes shape, and that is the point
 

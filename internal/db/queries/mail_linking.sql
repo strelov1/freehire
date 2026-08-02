@@ -73,8 +73,14 @@ WHERE id = $1 AND user_id = $2;
 
 -- name: ListEmailsForRecall :many
 -- The net for the pull direction: from an application, the caller's mail that might
--- belong to it. Mail attached to no application, received at or after a given instant,
--- newest first, bounded.
+-- belong to it. Mail attached to nothing, inside a window around the application's
+-- recorded date, OLDEST first, bounded.
+--
+-- The order and the closing edge are one decision with the cap, not three. Newest-first
+-- over an open-ended window spends the forty candidates on a busy mailbox's most recent
+-- mail, so a three-month-old application never shows the model the acknowledgement that
+-- proves it — the button answers "nothing found" on exactly the applications people press
+-- it for. Oldest-first inside a closed window makes the cap trim the far tail instead.
 --
 -- It filters on attachment state and time and NOT on the employer's name, which is the
 -- one thing a reader expects to find here. Two measurements say not to. The name is
@@ -104,7 +110,8 @@ WHERE user_id = $1
   AND job_id IS NULL
   AND application_id IS NULL
   AND received_at >= sqlc.arg(since)
-ORDER BY received_at DESC, id DESC
+  AND received_at < sqlc.arg(until)
+ORDER BY received_at ASC, id ASC
 LIMIT sqlc.arg(lim);
 
 -- name: SuggestJobForEmail :execrows

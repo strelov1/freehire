@@ -131,13 +131,15 @@ WHERE user_id = $1
   AND job_id IS NULL
   AND application_id IS NULL
   AND received_at >= $2
-ORDER BY received_at DESC, id DESC
-LIMIT $3
+  AND received_at < $3
+ORDER BY received_at ASC, id ASC
+LIMIT $4
 `
 
 type ListEmailsForRecallParams struct {
 	UserID int64              `json:"user_id"`
 	Since  pgtype.Timestamptz `json:"since"`
+	Until  pgtype.Timestamptz `json:"until"`
 	Lim    int32              `json:"lim"`
 }
 
@@ -153,8 +155,14 @@ type ListEmailsForRecallRow struct {
 }
 
 // The net for the pull direction: from an application, the caller's mail that might
-// belong to it. Mail attached to no application, received at or after a given instant,
-// newest first, bounded.
+// belong to it. Mail attached to nothing, inside a window around the application's
+// recorded date, OLDEST first, bounded.
+//
+// The order and the closing edge are one decision with the cap, not three. Newest-first
+// over an open-ended window spends the forty candidates on a busy mailbox's most recent
+// mail, so a three-month-old application never shows the model the acknowledgement that
+// proves it — the button answers "nothing found" on exactly the applications people press
+// it for. Oldest-first inside a closed window makes the cap trim the far tail instead.
 //
 // It filters on attachment state and time and NOT on the employer's name, which is the
 // one thing a reader expects to find here. Two measurements say not to. The name is
@@ -178,7 +186,12 @@ type ListEmailsForRecallRow struct {
 // inbox and seven assistant tools: one shared statement grown for one reader is how the
 // two drift.
 func (q *Queries) ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error) {
-	rows, err := q.db.Query(ctx, listEmailsForRecall, arg.UserID, arg.Since, arg.Lim)
+	rows, err := q.db.Query(ctx, listEmailsForRecall,
+		arg.UserID,
+		arg.Since,
+		arg.Until,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}

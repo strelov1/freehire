@@ -4,7 +4,8 @@
       live mail (`deleted_at IS NULL`) attached to nothing (`job_id IS NULL AND
       application_id IS NULL` — both, because a message auto-linked before its application
       row existed holds the first without the second), received at or after a given
-      instant, newest first, with a limit. Carries the columns the adjudication needs —
+      window, OLDEST first, with a limit — oldest first so the cap trims the far tail
+      rather than the acknowledgement. Carries the columns the adjudication needs —
       id, from_addr, from_name, subject, body_text, body_html, received_at, ical_uid — and
       nothing else.
 - [x] 1.2 Add `SuggestJobForEmail` to the same file: set `suggested_job_id` and
@@ -16,23 +17,23 @@
 
 ## 2. The service
 
-- [ ] 2.1 Create `internal/mailrecall` with its package doc: what the pull direction is, why
+- [x] 2.1 Create `internal/mailrecall` with its package doc: what the pull direction is, why
       a proposal is never a link, and the `body_text`-is-empty-for-HTML-only trap that
       dictates the net's shape.
-- [ ] 2.2 Define the narrow `Store` interface (the two queries) and the `Candidate` /
+- [x] 2.2 Define the narrow `Store` interface (the two queries) and the `Candidate` /
       `Proposal` / `Result` types. `Result` carries `Scanned`, the proposed message ids with
       confidences, and the invitation count.
-- [ ] 2.3 Implement the net: window opening seven days before `applied_at`, cap of 40
-      candidates, bodies through `maillink.ReadableBody` truncated to 800 runes. Pure and
-      testable without a store.
-- [ ] 2.4 Implement the adjudication call — one batched, schema-bound request through the
+- [x] 2.3 Implement the net: window from seven days before `applied_at` to ninety days
+      after, oldest first, cap of 40 candidates, bodies through `maillink.ReadableBody`
+      truncated to 800 runes. Pure and testable without a store.
+- [x] 2.4 Implement the adjudication call — one batched, schema-bound request through the
       `llm` provider, per-candidate belongs/does-not with a confidence. Test-first: an id
       absent from the batch is discarded; an empty candidate set makes no call.
-- [ ] 2.5 Implement `Recall`: net → adjudicate → write suggestions through the store,
+- [x] 2.5 Implement `Recall`: net → adjudicate → write suggestions through the store,
       returning `Result`. A model failure propagates; nothing is written on that path.
-- [ ] 2.6 Write `TestMailRecallCannotLink` — no path in the package sets `application_id`,
+- [x] 2.6 Write `TestMailRecallCannotLink` — no path in the package sets `application_id`,
       in the manner of `calmatch.Tier.Links()`.
-- [ ] 2.7 Write the remaining unit tests against a fake store and a fake provider: an
+- [x] 2.7 Write the remaining unit tests against a fake store and a fake provider: an
       HTML-only message reaches the model with a non-empty body; a message whose suggestion
       names another application is overwritten; a linked message never enters the net.
 

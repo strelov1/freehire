@@ -20,6 +20,7 @@ type fakeStore struct {
 	listErr  error
 
 	since       time.Time
+	until       time.Time
 	limit       int32
 	suggested   []suggestCall
 	suggerr     error
@@ -32,8 +33,8 @@ type suggestCall struct {
 	confidence float32
 }
 
-func (s *fakeStore) ListForRecall(_ context.Context, _ int64, since time.Time, limit int32) ([]Message, error) {
-	s.since, s.limit = since, limit
+func (s *fakeStore) ListForRecall(_ context.Context, _ int64, since, until time.Time, limit int32) ([]Message, error) {
+	s.since, s.until, s.limit = since, until, limit
 	return s.messages, s.listErr
 }
 
@@ -192,16 +193,23 @@ func TestRecallTruncatesEachBody(t *testing.T) {
 	}
 }
 
-// The window opens before the recorded date, because the date is when the application was
-// entered and the acknowledgement that proves it may predate that entry.
-func TestRecallOpensTheWindowBeforeTheRecordedDate(t *testing.T) {
+// The window opens before the recorded date and closes after it, and both ends earn their
+// place. It opens early because the date is when the application was ENTERED, so the
+// acknowledgement proving it may predate the entry. It closes at all because the cap is
+// what one press costs: left open, a three-month-old application in a busy mailbox spends
+// its forty candidates on recent unrelated mail and never shows the model the
+// acknowledgement — the button then answers "nothing found" on exactly the applications
+// people press it for.
+func TestRecallBoundsTheWindowAtBothEnds(t *testing.T) {
 	store := &fakeStore{}
 	if _, err := svc(store, &fakeGen{}).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	want := appliedAt.Add(-windowLead)
-	if !store.since.Equal(want) {
+	if want := appliedAt.Add(-windowLead); !store.since.Equal(want) {
 		t.Errorf("the net opened at %s, want %s", store.since, want)
+	}
+	if want := appliedAt.Add(windowTrail); !store.until.Equal(want) {
+		t.Errorf("the net closed at %s, want %s", store.until, want)
 	}
 	if store.limit != maxCandidates {
 		t.Errorf("the net asked for %d candidates, want the cap of %d", store.limit, maxCandidates)

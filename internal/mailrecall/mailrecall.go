@@ -60,6 +60,15 @@ const (
 	// exactly at it would exclude the acknowledgement that proves the application.
 	windowLead = 7 * 24 * time.Hour
 
+	// windowTrail closes it. An open end plus a cap is a trap rather than a generosity:
+	// the forty candidates would go to a busy mailbox's most recent mail and never reach
+	// the acknowledgement, so the button would answer "nothing found" on exactly the old
+	// applications people press it for. Ninety days comfortably covers a funnel whose
+	// silence ladder (internal/userjob) tops out at 21 days for `applied`. The cost is
+	// stated rather than hidden: an application still moving after three months will not
+	// find its recent mail this way.
+	windowTrail = 90 * 24 * time.Hour
+
 	// minConfidence is the bar a verdict clears to become a proposal. It sits below
 	// maillink's 0.85 auto-link threshold because nothing here links, and above zero
 	// because a proposal overwrites another application's pending one.
@@ -113,8 +122,10 @@ type Result struct {
 // central rule expressed where it can be checked, in the manner of calmatch's Tier.Links:
 // a linking capability would have to be added here first, and a test fails when it is.
 type Store interface {
-	// ListForRecall yields the caller's unattached live mail from an instant, capped.
-	ListForRecall(ctx context.Context, userID int64, since time.Time, limit int32) ([]Message, error)
+	// ListForRecall yields the caller's unattached live mail inside a window, oldest
+	// first, capped. Oldest first because the cap must trim the far tail rather than the
+	// acknowledgement.
+	ListForRecall(ctx context.Context, userID int64, since, until time.Time, limit int32) ([]Message, error)
 	// Suggest records one message as proposed for a job, returning rows affected — zero
 	// when the message was linked or deleted underneath the run.
 	Suggest(ctx context.Context, emailID, userID, jobID int64, confidence float32) (int64, error)
@@ -183,7 +194,8 @@ func (s *Service) Recall(ctx context.Context, userID int64, app Application) (Re
 	if app.AppliedAt.IsZero() {
 		return Result{}, ErrNotAnApplication
 	}
-	messages, err := s.store.ListForRecall(ctx, userID, app.AppliedAt.Add(-windowLead), maxCandidates)
+	messages, err := s.store.ListForRecall(ctx, userID,
+		app.AppliedAt.Add(-windowLead), app.AppliedAt.Add(windowTrail), maxCandidates)
 	if err != nil {
 		return Result{}, err
 	}
