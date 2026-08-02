@@ -128,14 +128,29 @@ func leverControl(group []*html.Node) (FieldType, string, []Option) {
 
 // blockLabel reads the question as the employer wrote it, with the required marker
 // removed and whitespace collapsed — the markup lays the label out across several nodes.
+//
+// A consent block carries no application-label at all: the text a candidate reads sits
+// beside the checkbox instead. Without that fallback the control was captured with an
+// empty label, which reached production as a stray comma at the end of the standard
+// fields line.
 func blockLabel(block *html.Node) string {
 	for _, n := range descendants(block) {
 		if hasClass(n, "application-label") {
-			return strings.Join(strings.Fields(
-				strings.ReplaceAll(textOf(n), requiredGlyph, " ")), " ")
+			return tidyLabel(textOf(n))
+		}
+	}
+	for _, n := range descendants(block) {
+		if hasClass(n, "application-answer-alternative") {
+			return tidyLabel(textOf(n))
 		}
 	}
 	return ""
+}
+
+// tidyLabel drops the required marker and collapses the whitespace the markup used for
+// layout rather than for the sentence.
+func tidyLabel(text string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(text, requiredGlyph, " ")), " ")
 }
 
 // controls returns the block's form controls in document order.

@@ -133,6 +133,12 @@ func (f Form) ForDisplay() Display {
 		case field.Demographic:
 			continue
 
+		// A control nothing could name cannot be described to anyone. It stays in the
+		// store — the identifier is still what a form-filler needs — but an unnamed
+		// entry on the page is a stray comma at best and a blank bullet at worst.
+		case strings.TrimSpace(field.Label) == "":
+			continue
+
 		case isStandard(f.Provider, field):
 			// One label may cover several controls (Greenhouse offers the CV as an
 			// upload OR pasted text under a single label), so the reader sees it once.

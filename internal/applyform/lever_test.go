@@ -70,6 +70,14 @@ const leverPage = `<html><body><form>
   <div class="application-field"><p>Just a note from the employer.</p></div>
 </li>
 
+<li class="application-question">
+  <div class="application-field full-width"><ul><li><label>
+    <input type="hidden" name="consent[marketing]" value="0" />
+    <input type="checkbox" name="consent[marketing]" value="1" />
+    <p class="application-answer-alternative">Yes, Acme can contact me about future roles for up to 1 year</p>
+  </label></li></ul></div>
+</li>
+
 </ul></form></body></html>`
 
 func parseLever(t *testing.T) Form {
@@ -214,5 +222,20 @@ func TestFromLeverFoldsTheConsentPair(t *testing.T) {
 	}
 	if seen != 1 {
 		t.Errorf("consent produced %d controls, want 1", seen)
+	}
+}
+
+// The marketing-consent block carries no application-label at all: the text a candidate
+// reads sits beside the checkbox instead. Without a fallback the control is captured
+// with an empty label, which reached production as a stray comma at the end of the
+// standard-fields line.
+func TestFromLeverLabelsAConsentBoxFromItsOwnText(t *testing.T) {
+	got := leverField(t, parseLever(t), "consent[marketing]")
+
+	if got.Label != "Yes, Acme can contact me about future roles for up to 1 year" {
+		t.Errorf("label = %q, want the text presented beside the checkbox", got.Label)
+	}
+	if got.Type != TypeBoolean {
+		t.Errorf("type = %q, want %q", got.Type, TypeBoolean)
 	}
 }
