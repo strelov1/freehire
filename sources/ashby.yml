@@ -7528,8 +7528,6 @@
   board: ediphi
 - company: FYST
   board: fyst
-- company: GlossGenius
-  board: glossgenius
 - company: Hamster Garage
   board: hamstergarage
 - company: Hire Digital
@@ -7554,12 +7552,8 @@
   board: revecore
 - company: Seekeasy
   board: seekeasy
-- company: TBC Corporation
-  board: tbc
 - company: True Classic Tees LLC
   board: true-classic-tees
-- company: Visier
-  board: visier
 - company: Whiskey Library
   board: whiskeylibrary
 - company: Wonderly
