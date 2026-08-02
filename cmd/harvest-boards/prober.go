@@ -475,11 +475,13 @@ func (teamtailorProber) probe(ctx context.Context, c httpClient, host string) (s
 }
 
 // trakstarProber probes the Trakstar Hire per-subdomain RSS feed. A non-empty channel of
-// items is a live board; the feed carries no company name, so it falls back to the slug.
+// items is a live board, and the channel title names the employer, so the board can be gated
+// against the name the seed expected instead of accepted on liveness alone.
 type trakstarProber struct{}
 
 func (trakstarProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
 	var feed struct {
+		Title string     `xml:"channel>title"`
 		Items []struct{} `xml:"channel>item"`
 	}
 	if err := c.GetXML(ctx, fmt.Sprintf("https://%s.hire.trakstar.com/jobfeeds/%s", slug, slug), &feed); err != nil {
@@ -488,7 +490,17 @@ func (trakstarProber) probe(ctx context.Context, c httpClient, slug string) (str
 	if len(feed.Items) == 0 {
 		return "", 0, nil
 	}
-	return "", len(feed.Items), nil
+	return trakstarEmployer(feed.Title), len(feed.Items), nil
+}
+
+// trakstarEmployer pulls the employer out of a Trakstar feed title, which renders as
+// "Jobs at <Company>". A title without that prefix names nobody, so it yields "".
+func trakstarEmployer(title string) string {
+	name, ok := strings.CutPrefix(strings.TrimSpace(title), "Jobs at ")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(name)
 }
 
 // personioProber probes the Personio public XML feed on the .com host (the host the adapter

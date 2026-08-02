@@ -47,8 +47,9 @@ func (oracleProber) probe(ctx context.Context, c httpClient, boardID string) (st
 
 // jazzhrProber validates a JazzHR board "<slug>" by counting the postings linked from its
 // single /apply listing page ("<slug>.applytojob.com/apply"). JazzHR's listing exposes no
-// employer name (the adapter reads it from each posting's JSON-LD at ingest), so the prober
-// returns an empty name.
+// employer name, but the page titles itself "<Company> - Career Page", so the prober reads
+// the employer there and the board can be gated against the name the seed expected rather
+// than accepted on liveness alone.
 type jazzhrProber struct{}
 
 // jazzhrApplyHref captures a posting's token from a JazzHR job link (/apply/<token>/<slug>),
@@ -80,5 +81,17 @@ func (jazzhrProber) probe(ctx context.Context, c httpClient, slug string) (strin
 	if len(tokens) == 0 {
 		return "", 0, nil
 	}
-	return "", len(tokens), nil
+	return jazzhrEmployer(pageTitle(root)), len(tokens), nil
+}
+
+// jazzhrEmployer pulls the employer out of a JazzHR career-page title, which renders as
+// "<Company> - Career Page". A title without that suffix names nobody in particular, so it
+// yields "" and the board falls back to the seed's label rather than being gated against a
+// generic word.
+func jazzhrEmployer(title string) string {
+	name, ok := strings.CutSuffix(strings.TrimSpace(title), " - Career Page")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(name)
 }

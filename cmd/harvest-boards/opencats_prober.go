@@ -156,25 +156,5 @@ var opencatsTitleSuffix = regexp.MustCompile(`(?i)\s*[-–—|]\s*careers\s*$`)
 // corroboration gate tests, so a derived one would gate a board against a token the employer
 // never chose. An unnamed board falls back to the seed's name, then to the board id.
 func opencatsCompanyName(root *html.Node, _ string) string {
-	return strings.TrimSpace(opencatsTitleSuffix.ReplaceAllString(opencatsPageTitle(root), ""))
-}
-
-// opencatsPageTitle returns the document's <title> text, or "".
-func opencatsPageTitle(root *html.Node) string {
-	var title string
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if title != "" {
-			return
-		}
-		if n.Type == html.ElementNode && n.Data == "title" && n.FirstChild != nil {
-			title = strings.TrimSpace(n.FirstChild.Data)
-			return
-		}
-		for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
-			walk(ch)
-		}
-	}
-	walk(root)
-	return title
+	return strings.TrimSpace(opencatsTitleSuffix.ReplaceAllString(pageTitle(root), ""))
 }
