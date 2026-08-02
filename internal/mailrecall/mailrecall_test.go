@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -18,10 +19,11 @@ type fakeStore struct {
 	messages []Message
 	listErr  error
 
-	since     time.Time
-	limit     int32
-	suggested []suggestCall
-	suggerr   error
+	since       time.Time
+	limit       int32
+	suggested   []suggestCall
+	suggerr     error
+	suggestRows *int64
 }
 
 type suggestCall struct {
@@ -40,6 +42,9 @@ func (s *fakeStore) Suggest(_ context.Context, emailID, _, jobID int64, confiden
 		return 0, s.suggerr
 	}
 	s.suggested = append(s.suggested, suggestCall{emailID: emailID, jobID: jobID, confidence: confidence})
+	if s.suggestRows != nil {
+		return *s.suggestRows, nil
+	}
 	return 1, nil
 }
 
@@ -50,6 +55,7 @@ type fakeGen struct {
 	calls    int
 	prompt   string
 	verdicts []verdict
+	raw      string
 	err      error
 }
 
@@ -59,6 +65,9 @@ func (g *fakeGen) GenerateJSON(_ context.Context, _, user string, _ ...llm.GenOp
 	if g.err != nil {
 		return "", g.err
 	}
+	if g.raw != "" {
+		return g.raw, nil
+	}
 	out, err := json.Marshal(answer{Verdicts: g.verdicts})
 	if err != nil {
 		return "", err
@@ -67,6 +76,11 @@ func (g *fakeGen) GenerateJSON(_ context.Context, _, user string, _ ...llm.GenOp
 }
 
 var appliedAt = time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+
+// svc builds the service around fakes. New takes a *llm.Client so callers cannot forget
+// the per-user credential seam; the private field is what a same-package test uses, the
+// way mailclassify's tests do.
+func svc(store Store, g gen) *Service { return &Service{store: store, gen: g} }
 
 func testApplication() Application {
 	return Application{JobID: 77, Company: "Derq", Role: "Backend Engineer", AppliedAt: appliedAt}
@@ -110,12 +124,12 @@ func TestRecallDiscardsAVerdictOutsideTheBatch(t *testing.T) {
 		{EmailID: 999, Belongs: true, Confidence: 0.99},
 	}}
 
-	got, err := New(store, gen).Recall(context.Background(), 5, testApplication())
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	if len(got.Proposed) != 1 || got.Proposed[0] != 1 {
-		t.Fatalf("proposed %v, want only the message that was actually offered", got.Proposed)
+	if len(got.Proposed) != 1 || got.Proposed[0].Message.ID != 1 {
+		t.Fatalf("proposed %+v, want only the message that was actually offered", got.Proposed)
 	}
 	for _, c := range store.suggested {
 		if c.emailID == 999 {
@@ -129,7 +143,7 @@ func TestRecallWithAnEmptyNetMakesNoModelCall(t *testing.T) {
 	store := &fakeStore{}
 	gen := &fakeGen{}
 
-	got, err := New(store, gen).Recall(context.Background(), 5, testApplication())
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
@@ -154,7 +168,7 @@ func TestRecallShowsTheModelTheHTMLBodyWhenThereIsNoTextPart(t *testing.T) {
 	store := &fakeStore{messages: []Message{m}}
 	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
 
-	if _, err := New(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
+	if _, err := svc(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
 	}
 	if !strings.Contains(gen.prompt, "book a call about the Backend role") {
@@ -170,7 +184,7 @@ func TestRecallTruncatesEachBody(t *testing.T) {
 	store := &fakeStore{messages: []Message{m}}
 	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
 
-	if _, err := New(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
+	if _, err := svc(store, gen).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
 	}
 	if strings.Contains(gen.prompt, strings.Repeat("a", maxBodyRunes+1)) {
@@ -182,7 +196,7 @@ func TestRecallTruncatesEachBody(t *testing.T) {
 // entered and the acknowledgement that proves it may predate that entry.
 func TestRecallOpensTheWindowBeforeTheRecordedDate(t *testing.T) {
 	store := &fakeStore{}
-	if _, err := New(store, &fakeGen{}).Recall(context.Background(), 5, testApplication()); err != nil {
+	if _, err := svc(store, &fakeGen{}).Recall(context.Background(), 5, testApplication()); err != nil {
 		t.Fatalf("recall: %v", err)
 	}
 	want := appliedAt.Add(-windowLead)
@@ -201,16 +215,19 @@ func TestRecallKeepsOnlyConfidentVerdicts(t *testing.T) {
 	store := &fakeStore{messages: []Message{msg(1, "Sure"), msg(2, "Unsure"), msg(3, "No")}}
 	gen := &fakeGen{verdicts: []verdict{
 		{EmailID: 1, Belongs: true, Confidence: 0.95},
-		{EmailID: 2, Belongs: true, Confidence: minConfidence - 0.01},
+		{EmailID: 2, Belongs: true, Confidence: 0.69},
 		{EmailID: 3, Belongs: false, Confidence: 0.99},
 	}}
 
-	got, err := New(store, gen).Recall(context.Background(), 5, testApplication())
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
-	if len(got.Proposed) != 1 || got.Proposed[0] != 1 {
-		t.Fatalf("proposed %v, want only the confident belonging message", got.Proposed)
+	if len(got.Proposed) != 1 || got.Proposed[0].Message.ID != 1 {
+		t.Fatalf("proposed %+v, want only the confident belonging message", got.Proposed)
+	}
+	if got.Proposed[0].Confidence != 0.95 {
+		t.Errorf("carried confidence %v, want the model's 0.95", got.Proposed[0].Confidence)
 	}
 	if got.Scanned != 3 {
 		t.Errorf("scanned %d, want the 3 the net caught", got.Scanned)
@@ -235,7 +252,7 @@ func TestRecallCountsProposedInvitations(t *testing.T) {
 		{EmailID: 3, Belongs: false, Confidence: 0.9},
 	}}
 
-	got, err := New(store, gen).Recall(context.Background(), 5, testApplication())
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
 	if err != nil {
 		t.Fatalf("recall: %v", err)
 	}
@@ -250,10 +267,118 @@ func TestRecallPropagatesAModelFailureAndWritesNothing(t *testing.T) {
 	store := &fakeStore{messages: []Message{msg(1, "Thanks")}}
 	gen := &fakeGen{err: errors.New("gateway down")}
 
-	if _, err := New(store, gen).Recall(context.Background(), 5, testApplication()); err == nil {
+	if _, err := svc(store, gen).Recall(context.Background(), 5, testApplication()); err == nil {
 		t.Fatal("a failed model call reported success")
 	}
 	if len(store.suggested) != 0 {
 		t.Errorf("%d writes happened on the failure path", len(store.suggested))
+	}
+}
+
+// The second half of the no-link guard. The reflection test above watches the Store
+// interface, which leaves four ways to break the rule with it still green: reimplement
+// DBStore.Suggest over a linking query, add a linking method to DBStore alone, give
+// Service a second dependency that bypasses Store, or reach the ledger directly. A scan of
+// the package's own source closes the first three, because all of them have to name one of
+// these symbols somewhere in this directory.
+func TestMailRecallNamesNoLinkingSymbol(t *testing.T) {
+	forbidden := []string{
+		"LinkEmailToJob", "ConfirmEmailLink", "SetEmailClassification", "AgentTriageEmail",
+		"application_events", "ReconcileMailEvent", "MarkJobApplied", "AdvanceStage",
+	}
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(e.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		for _, symbol := range forbidden {
+			if strings.Contains(string(src), symbol) {
+				t.Errorf("%s names %q. This package proposes and never links — a suggestion "+
+					"is resolved by the caller through the inbox, and reaching a linking path "+
+					"from here would put a model's pick into application_events.", e.Name(), symbol)
+			}
+		}
+	}
+}
+
+// The prompt spells the JSON shape out in prose, and the struct tags spell it again. They
+// are two copies of one fact, which is what prompt_test.go exists for in mailclassify: a
+// key described but not decoded is an answer thrown away.
+func TestThePromptNamesTheKeysTheAnswerDecodes(t *testing.T) {
+	for _, key := range []string{"verdicts", "email_id", "belongs", "confidence"} {
+		if !strings.Contains(systemPrompt, `"`+key+`"`) {
+			t.Errorf("the prompt never names %q, which the answer decodes", key)
+		}
+	}
+}
+
+// A tracking row that was never applied to is not an application. The check lives in the
+// service because a rule enforced in a handler is a rule the in-process caller never meets.
+func TestRecallRefusesATrackedJobThatWasNeverAppliedTo(t *testing.T) {
+	store := &fakeStore{messages: []Message{msg(1, "Thanks")}}
+	gen := &fakeGen{}
+
+	app := testApplication()
+	app.AppliedAt = time.Time{}
+	if _, err := svc(store, gen).Recall(context.Background(), 5, app); !errors.Is(err, ErrNotAnApplication) {
+		t.Fatalf("got %v, want ErrNotAnApplication", err)
+	}
+	if gen.calls != 0 {
+		t.Error("the model was called for a job that was never applied to")
+	}
+}
+
+// The statement's guard fires when a candidate is claimed between the net and the write.
+// Reporting it anyway would draw a suggestion the database does not hold.
+func TestRecallDoesNotReportAProposalTheGuardRefused(t *testing.T) {
+	store := &fakeStore{messages: []Message{msg(1, "Thanks")}, suggestRows: new(int64)}
+	gen := &fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+
+	got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
+	if err != nil {
+		t.Fatalf("recall: %v", err)
+	}
+	if len(got.Proposed) != 0 {
+		t.Errorf("proposed %+v, want nothing — the write changed no rows", got.Proposed)
+	}
+	if got.Scanned != 1 {
+		t.Errorf("scanned %d, want 1 — the message WAS examined", got.Scanned)
+	}
+}
+
+// Every failure the caller can meet is a failure, not an empty answer.
+func TestRecallSurfacesEveryFailurePath(t *testing.T) {
+	for name, build := range map[string]func() (*fakeStore, *fakeGen){
+		"the net cannot be read": func() (*fakeStore, *fakeGen) {
+			return &fakeStore{listErr: errors.New("db down")}, &fakeGen{}
+		},
+		"the model is unreachable": func() (*fakeStore, *fakeGen) {
+			return &fakeStore{messages: []Message{msg(1, "Thanks")}}, &fakeGen{err: errors.New("gateway down")}
+		},
+		"the answer cannot be read": func() (*fakeStore, *fakeGen) {
+			return &fakeStore{messages: []Message{msg(1, "Thanks")}}, &fakeGen{raw: "not json"}
+		},
+		"the suggestion cannot be written": func() (*fakeStore, *fakeGen) {
+			return &fakeStore{messages: []Message{msg(1, "Thanks")}, suggerr: errors.New("db down")},
+				&fakeGen{verdicts: []verdict{{EmailID: 1, Belongs: true, Confidence: 0.9}}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store, gen := build()
+			got, err := svc(store, gen).Recall(context.Background(), 5, testApplication())
+			if err == nil {
+				t.Fatalf("%s reported success with %+v", name, got)
+			}
+			if len(got.Proposed) != 0 {
+				t.Errorf("a failed run still proposed %+v", got.Proposed)
+			}
+		})
 	}
 }
