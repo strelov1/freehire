@@ -192,10 +192,17 @@ func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	// The two paths differ only in which date the application takes; everything after is the
+	// same apply, so they rejoin immediately rather than each carrying their own tail.
+	var interaction jobtracking.Interaction
 	if day != nil {
-		return h.markAppliedOn(c, userID, *day)
+		// The believable-date window belongs to the service, so an out-of-range day arrives
+		// as an error to render rather than as a rule restated here.
+		interaction, err = h.tracking.MarkAppliedOn(
+			c.Context(), userID, c.Params("slug"), *day, time.Now().UTC(), appevent.SourceUser)
+	} else {
+		interaction, err = h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"), appevent.SourceUser)
 	}
-	interaction, err := h.tracking.MarkApplied(c.Context(), userID, c.Params("slug"), appevent.SourceUser)
 	if err != nil {
 		return trackingError(err)
 	}
@@ -222,18 +229,6 @@ func statedApplyDay(c *fiber.Ctx) (*time.Time, error) {
 	}
 	at := time.Date(day.Year(), day.Month(), day.Day(), appliedOnHour, 0, 0, 0, time.UTC)
 	return &at, nil
-}
-
-// markAppliedOn records the application on the stated day. The believable-date window belongs
-// to the service, so an out-of-range day arrives here as an error to render rather than as a
-// rule this handler restates.
-func (h *trackingHandlers) markAppliedOn(c *fiber.Ctx, userID int64, at time.Time) error {
-	interaction, err := h.tracking.MarkAppliedOn(c.Context(), userID, c.Params("slug"), at, time.Now().UTC(), appevent.SourceUser)
-	if err != nil {
-		return trackingError(err)
-	}
-	h.cancelReminderBestEffort(c, userID, interaction.JobID)
-	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the
