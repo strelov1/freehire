@@ -3,6 +3,7 @@ package applyform
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -64,6 +65,23 @@ func splitBoardPosting(externalID string) (board, posting string, ok bool) {
 	return board, posting, true
 }
 
+// decodeBoardName undoes the percent-encoding a board name carries.
+//
+// Board names are stored as they appear in the board file, where they are already encoded
+// for the URL PATH the crawl adapter builds — Greenhouse and Ashby's posting API both take
+// the board as a path segment, so "stony%20creek%20homes" is correct there. Ashby's GraphQL
+// takes the organization as a VARIABLE, and an encoded name is simply a wrong name: the API
+// answers 200 with a null posting, so every board whose name carries a space would fail
+// every capture forever. A name that is not valid encoding is returned as it stands —
+// refusing to fetch would be worse than trying the literal.
+func decodeBoardName(board string) string {
+	decoded, err := url.PathUnescape(board)
+	if err != nil {
+		return board
+	}
+	return decoded
+}
+
 // greenhouseBaseURL is the job-board API. One host serves EU-hosted boards too, so unlike
 // Lever there is no regional base URL to pick between.
 const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
@@ -107,7 +125,7 @@ func (a ashbyFetcher) Fetch(ctx context.Context, board, postingID string) (Form,
 	body := map[string]any{
 		"operationName": "ApiJobPosting",
 		"variables": map[string]any{
-			"organizationHostedJobsPageName": board,
+			"organizationHostedJobsPageName": decodeBoardName(board),
 			"jobPostingId":                   postingID,
 		},
 		"query": ashbyQuery,

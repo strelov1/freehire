@@ -142,3 +142,42 @@ func TestSplitBoardPosting(t *testing.T) {
 		}
 	}
 }
+
+// Board names reach us percent-encoded, because that is what belongs in the URL PATH the
+// crawl adapter builds. Ashby's GraphQL takes the organization as a VARIABLE, where an
+// encoded name is just a wrong name: the API answers 200 with a null posting, so without
+// decoding, every board whose name carries a space fails every capture forever. Found on
+// the first supervised production drain — "stony%20creek%20homes" returned nothing while
+// "stony creek homes" returned the posting.
+func TestAshbyFetcherDecodesTheBoardName(t *testing.T) {
+	tr := &fakeTransport{body: `{"data":{"jobPosting":{"applicationForm":{"sections":[]}}}}`}
+
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "stony%20creek%20homes", "x"); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	body, ok := tr.gotBody.(map[string]any)
+	if !ok {
+		t.Fatalf("request body = %T, want a JSON object", tr.gotBody)
+	}
+	vars, _ := body["variables"].(map[string]any)
+	if got := vars["organizationHostedJobsPageName"]; got != "stony creek homes" {
+		t.Errorf("organization = %q, want the decoded name", got)
+	}
+}
+
+// A board name that is not valid percent-encoding is passed through rather than dropped:
+// a name is a name, and refusing to fetch would be worse than trying the literal one.
+func TestAshbyFetcherKeepsAnUndecodableBoardName(t *testing.T) {
+	tr := &fakeTransport{body: `{"data":{"jobPosting":{"applicationForm":{"sections":[]}}}}`}
+
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "100%discount", "x"); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	body := tr.gotBody.(map[string]any)
+	vars := body["variables"].(map[string]any)
+	if got := vars["organizationHostedJobsPageName"]; got != "100%discount" {
+		t.Errorf("organization = %q, want the literal name kept", got)
+	}
+}
