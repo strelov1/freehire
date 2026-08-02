@@ -37,6 +37,23 @@
 // those facets for the dictionary-derived majority. A boardless adapter like
 // getmatch re-supplies the structured facets on its next full crawl.
 //
+// Regions and cities go the same way, and they are the case the sentence above does NOT cover:
+// a moderator- or submission-authored vacancy may STATE them (internal/moderation passes them as
+// authoritative structured geography), and this command re-derives both from the free-text
+// location — which for such a row usually yields nothing. Unlike getmatch, a manual job is never
+// crawled again, so nothing restores them.
+//
+// That is deliberate rather than an oversight, and it is not this command's decision to make
+// alone: internal/moderation's own edit path already re-derives every facet from content and
+// passes no structured overrides, so ANY moderator edit — a title typo fix — does the same thing.
+// The project treats stored geography as re-derivable. Measured on production 2026-08-02, the
+// blast radius is seven manually-authored rows, all of which still carry regions.
+//
+// If that ever stops being the intent, the fix is in BOTH places at once (skip the two columns
+// for `created_by IS NOT NULL` rows in UpdateJobDerived, and stop blanking them in moderation),
+// never in one — two doors disagreeing about whether stated geography survives is worse than
+// either answer.
+//
 // When a slug moves (a deliberate slug-builder change), the run re-keys the companies
 // catalogue afterwards (SyncCompaniesFromJobs + DeleteOrphanCompanies), exactly as the
 // former cmd/reslug did. Follow the run with a reindex (make reindex), whose

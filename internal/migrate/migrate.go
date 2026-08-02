@@ -35,9 +35,16 @@ import (
 // safe only if such files are written idempotently (IF NOT EXISTS / IF EXISTS).
 const noTxMarker = "migrate: no-transaction"
 
-// advisoryLockKey serializes concurrent migrate runs (e.g. a deploy racing a
-// cron-triggered run). Arbitrary but stable — it only needs to not collide with
-// other advisory-lock users, and the project has none.
+// advisoryLockKey serializes concurrent migrate runs (e.g. a deploy racing a cron-triggered
+// run). Arbitrary but stable — it only needs to not collide with the project's other
+// advisory-lock users, which is the list a fourth one should read before picking its own:
+//
+//	728391      internal/migrate     — this one, a blocking pg_advisory_lock
+//	0x66686c76  cmd/liveness         — "fhlv", a non-blocking pg_try_advisory_lock
+//	0x66686763  cmd/ghost-crosscheck — "fhgc", likewise
+//
+// The comment here used to say "the project has none", which stopped being true when those two
+// arrived and left the only place anyone would look asserting there was nothing to collide with.
 const advisoryLockKey int64 = 728391
 
 // lockTimeout bounds how long a migration may WAIT for a lock. It does not bound how long a

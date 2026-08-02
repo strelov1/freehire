@@ -42,7 +42,7 @@ const (
 	// would not corrupt anything, but they would double the read load for no gain
 	// and interleave their reports into nonsense. A run that cannot take the lock
 	// exits cleanly. Arbitrary constant unique to this worker.
-	lockKey = 0x66686763 // "fhgc" — freehire ghost crosscheck
+	lockKey = 0x66686763 // "fhgc" — freehire ghost crosscheck; the key list lives in internal/migrate
 	// sampleSize is how many stamped titles a dry run prints. A report is read by a
 	// person deciding whether to open the gate, and they need examples, not a count.
 	sampleSize = 25

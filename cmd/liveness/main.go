@@ -42,7 +42,7 @@ const (
 	// orphan seconds apart would collapse the "two consecutive expired reads" grace
 	// into one burst — closing a job on a transient blip. A second run that can't take
 	// the lock exits cleanly. The value is an arbitrary constant unique to this worker.
-	lockKey = 0x66686c76 // "fhlv" — freehire liveness
+	lockKey = 0x66686c76 // "fhlv" — freehire liveness; the key list lives in internal/migrate
 )
 
 // unprobableSources are open-job sources excluded from the probe on top of the ATS

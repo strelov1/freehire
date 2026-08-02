@@ -49,7 +49,7 @@ Worker gotchas (`go run ./cmd/<name>`, all need `DATABASE_URL`; run `ls cmd/` fo
 - `enrich` / `tg-extract` — need `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`.
 - `embed` / `rollup-facets` / `reindex-companies` — need `MEILI_URL` / `MEILI_MASTER_KEY`.
 - `backfill-derive` — re-derives every deterministic column (facets, `role_fingerprint`, slugs) in one keyset pass; `BACKFILL_CONCURRENCY` tunes the pool. Follow with `make reindex` — it collapses newly-clustered reposts and unions their geography.
-- `reindex-companies` and `rollup-views` hold their own flock. **Never stack `reindex-companies` with `make reindex`** — Meilisearch deadlocks.
+- **Nothing holds a flock** — `grep flock` finds none in Go and none in the systemd units. What keeps a cron worker from stacking on itself is systemd: a `Type=oneshot` unit will not start a second instance while the first is active. That protects the TIMER path only, so a run started by hand has no lock at all. **Never stack `reindex-companies` with `make reindex`** — Meilisearch deadlocks, and nothing will stop you. Two workers additionally take a Postgres advisory lock (`cmd/liveness`, `cmd/ghost-crosscheck`); their keys are listed in `internal/migrate`.
 - `prune` — the **only** hard-delete path. Dry-run by default; archives every removal to `pruned_jobs`.
 
 ## Module files
