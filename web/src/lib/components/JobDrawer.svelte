@@ -537,6 +537,13 @@
                       <span class="shrink-0 text-xs text-muted-foreground">{timeAgo(e.received_at)}</span>
                     </div>
                     <div class="truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
+                    <!-- Marked on the row it belongs to, not only counted below it. The
+                         count alone made the reader hunt for which message it meant. -->
+                    {#if e.invitation}
+                      <span class="mt-1 inline-flex text-xs text-muted-foreground">
+                        Carries a calendar invitation
+                      </span>
+                    {/if}
                   </div>
                   <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e.id, true)}>Link</Button>
                   <button
@@ -553,9 +560,8 @@
                    produces its meeting on the next one. -->
               {#if recall && recall.invitations > 0}
                 <p class="text-xs text-muted-foreground">
-                  {recall.invitations === 1 ? 'One of these is' : `${recall.invitations} of these are`} a
-                  calendar invitation — linking {recall.invitations === 1 ? 'it' : 'them'} brings the
-                  meeting{recall.invitations === 1 ? '' : 's'} onto your calendar view after the next sync.
+                  Linking an invitation brings its meeting onto your calendar view after the next
+                  sync.
                 </p>
               {/if}
             </div>
