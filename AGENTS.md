@@ -39,8 +39,17 @@ make run / make psql / make sqlc      # run server on host / psql into DB / rege
 make reindex                          # rebuild the Meilisearch jobs index from Postgres
 go build ./...  &&  go vet ./...
 go test ./...                             # unit tests (no external deps)
+go vet -tags=integration ./...            # compiles the tagged tests — run before EVERY push
 go test -tags=integration ./internal/db/  # queue integration tests (needs Docker; testcontainers)
 ```
+
+**`go test ./...` compiles no `//go:build integration` file, and those files are not
+confined to `internal/db`** — there are 152 of them across 13 packages, and `internal/handler`
+holds 65, which call unexported constructors like `newCVHandlers`. A changed signature
+therefore passes every command above except the `vet` line, then fails CI, which runs
+`go test -tags=integration ./...` over the whole module. The vet line is the cheap guard:
+seconds, no Docker. Run the full tagged suite when you change behaviour rather than a
+signature.
 
 Worker gotchas (`go run ./cmd/<name>`, all need `DATABASE_URL`; run `ls cmd/` for the full list):
 
