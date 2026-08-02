@@ -1,0 +1,28 @@
+---
+title: The catalogue now reads Ukrainian
+date: 2026-08-02
+summary: Seven Ukrainian job channels join the catalogue, and cities like Lviv and Kharkiv finally carry their country — so they show up when you filter by Ukraine.
+type: changelog
+tags:
+  - job-seekers
+  - sources
+---
+
+Ukrainian-language vacancies were not arriving here, and the reason was smaller than it
+sounds. Before a Telegram post is read in full, a quick filter decides whether it looks
+like a job ad at all. That filter recognised Russian and English. Russian does not cover
+Ukrainian: «вакансія» and «вакансия» differ by a single letter, and to a computer that
+letter is a different letter entirely — not a spelling variant. So a post that opened
+with «Шукаємо Golang розробника» was set aside before anyone looked at it.
+
+**Seven Ukrainian channels are now crawled** — two recruiter boards and five DOU
+verticals covering DevOps, QA, frontend, gamedev and junior roles. On one of them the
+filter had been letting through three posts in eighteen; it now lets through nine. On
+another it had been letting through none at all.
+
+The second half was geography. **Lviv, Kharkiv, Dnipro, Odesa** and the other regional
+centres used to arrive as a city name with no country attached, which meant a job in
+Lviv was missing from the Ukraine filter and from Europe — you could only find it by
+typing the city. They now carry both.
+
+[Jobs in Ukraine →](/?countries=UA)
