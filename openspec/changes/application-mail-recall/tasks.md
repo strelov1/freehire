@@ -55,18 +55,23 @@
 
 ## 4. Web
 
-- [ ] 4.1 Run `cmd/gen-contracts` and wire the new response type into `web/src/lib/api`.
-- [ ] 4.2 Add the button and the result list to the Emails tab of
+- [x] 4.1 Wire the response type into `web/src/lib/types.ts` and the call into
+      `web/src/lib/api.ts`. `cmd/gen-contracts` emits domain contracts, not handler wire
+      shapes, so it had nothing to add here — run for drift, no diff.
+- [x] 4.2 Add the button and the result list to the Emails tab of
       `web/src/lib/components/JobDrawer.svelte`, reusing the existing email row and the
       existing confirm/reject calls. Disabled while in flight; the error path shows the
       server's message rather than an empty list.
-- [ ] 4.3 When the result carries invitations, say that the meetings arrive after the next
+- [x] 4.3 When the result carries invitations, say that the meetings arrive after the next
       calendar sync.
-- [ ] 4.4 Run `pnpm run check` and `pnpm run lint` in `web/`.
+- [x] 4.4 Run `pnpm run check` and `pnpm run lint` in `web/`, and the design-system
+      ratchets (`check:tokens`, `check:adoption`) — the token gate counts arbitrary values
+      per file, so the new row uses `text-xs` rather than copying its neighbour's
+      `text-[11px]` and raising the baseline.
 
 ## 5. Documentation and gates
 
-- [ ] 5.1 Add the pull direction to `docs/agents/mail-stack.md`: the action exists, it
+- [x] 5.1 Add the pull direction to `docs/agents/mail-stack.md`: the action exists, it
       proposes and never links, and the calendar follows from the mail with no calendar code.
-- [ ] 5.2 Run `go build ./...`, `go vet ./...`, `go test ./...`, and
+- [x] 5.2 Run `go build ./...`, `go vet ./...`, `go test ./...`, and
       `go vet -tags=integration ./...` before pushing.

@@ -27,6 +27,7 @@ import type {
   Job,
   EmailLinking,
   TrackedApplication,
+  MailRecallResult,
   FollowUpDraft,
   Company,
   CompanyListItem,
@@ -1404,6 +1405,18 @@ export function createApi(
     return requestData<TrackedApplication>(`/api/v1/me/tracking/${encodeURIComponent(slug)}`);
   }
 
+  /** Sweep the caller's mailbox for mail belonging to this application. The matches come
+   *  back as SUGGESTIONS — nothing is linked — and are resolved with confirmEmailLink /
+   *  rejectEmailLink, the same calls the inbox uses. 502 when the model could not be
+   *  reached, which is deliberately not an empty result: "your mailbox holds nothing" is
+   *  the wrong thing to say about a gateway being down. */
+  async function recallApplicationMail(slug: string): Promise<MailRecallResult> {
+    return requestData<MailRecallResult>(
+      `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall`,
+      { method: 'POST' }
+    );
+  }
+
   /** The assembled follow-up draft for a silent application. 409 when the
    *  application is not waiting on a reply — the same verdict the board's badge
    *  renders, so a card that offers the draft never gets one. */
@@ -1774,6 +1787,7 @@ export function createApi(
     deleteEmail,
     restoreEmail,
     getTrackedApplication,
+    recallApplicationMail,
     getFollowUpDraft,
     recordFollowUp,
     confirmEmailLink,

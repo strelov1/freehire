@@ -21,7 +21,14 @@
   import { eventLabel, eventTone } from '$lib/events';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import { avatarInitials, avatarColor } from '$lib/avatar';
-  import type { Job, MyJob, ApplicationEmail, StageSuggestion, TimelineEvent } from '$lib/types';
+  import type {
+    Job,
+    MyJob,
+    ApplicationEmail,
+    MailRecallResult,
+    StageSuggestion,
+    TimelineEvent
+  } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
 
@@ -121,8 +128,24 @@
   // so a fresh mount always opens on Application.
   let tab = $state<Tab>('application');
 
-  async function loadEmails() {
-    if (emails !== null || emailsLoading) return;
+  // The mailbox sweep: from this application, find the mail that belongs to it. What comes
+  // back are SUGGESTIONS — nothing is linked — resolved by the same confirm/reject calls
+  // the inbox uses. Null until the button is pressed, so an untouched tab shows no verdict.
+  let recall = $state.raw<MailRecallResult | null>(null);
+  let recallLoading = $state(false);
+  let recallError = $state<string | null>(null);
+  // Ids resolved since the sweep, so a confirmed or dismissed row leaves at the press
+  // rather than on the next load.
+  let recallResolved = $state.raw<number[]>([]);
+  const recallPending = $derived(
+    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.id))
+  );
+  // Only applications can be swept: the window is anchored on the date it was recorded, and
+  // a job that was merely saved has none.
+  const canRecall = $derived(hasPosting && !!item.applied_at);
+
+  async function loadEmails(force = false) {
+    if ((emails !== null && !force) || emailsLoading) return;
     emailsLoading = true;
     emailsError = null;
     try {
@@ -136,6 +159,35 @@
       emailsError = errorMessage(e, 'Failed to load emails.');
     } finally {
       emailsLoading = false;
+    }
+  }
+
+  async function runRecall() {
+    if (!item.job || recallLoading) return;
+    recallLoading = true;
+    recallError = null;
+    recallResolved = [];
+    try {
+      recall = await api.recallApplicationMail(item.job.public_slug);
+    } catch (e) {
+      // Shown rather than swallowed. An empty result would read as "your mailbox holds
+      // nothing", which is the wrong thing to say about a gateway being down.
+      recall = null;
+      recallError = errorMessage(e, 'Could not search your mail right now.');
+    } finally {
+      recallLoading = false;
+    }
+  }
+
+  async function resolveRecalled(id: number, accept: boolean) {
+    recallResolved = [...recallResolved, id];
+    try {
+      await (accept ? api.confirmEmailLink(id) : api.rejectEmailLink(id));
+      if (accept) await loadEmails(true);
+    } catch {
+      // Put it back: an unresolved suggestion the caller can press again beats a row that
+      // vanished without becoming anything.
+      recallResolved = recallResolved.filter((x) => x !== id);
     }
   }
 
@@ -448,6 +500,64 @@
               >
                 Dismiss
               </button>
+            </div>
+          {/if}
+          <!-- The pull direction. Everything else in the mail stack starts from a message
+               and asks which application it belongs to; this asks the opposite, which is
+               the only way an application that plainly ought to have mail can say so. -->
+          {#if canRecall}
+            <div class="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" disabled={recallLoading} onclick={runRecall}>
+                {recallLoading ? 'Searching your mail…' : 'Find this application’s mail'}
+              </Button>
+              {#if recall && recallPending.length === 0}
+                <span class="text-xs text-muted-foreground">
+                  {recall.scanned === 0
+                    ? 'No unattached mail around this application to look at.'
+                    : `Nothing matched among ${recall.scanned} message${recall.scanned === 1 ? '' : 's'}.`}
+                </span>
+              {/if}
+            </div>
+          {/if}
+          {#if recallError}
+            <p class="text-sm text-destructive">{recallError}</p>
+          {/if}
+          {#if recallPending.length > 0}
+            <div class="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3">
+              <p class="text-sm">
+                <span class="font-medium">{recallPending.length}</span>
+                of {recall?.scanned} message{recall?.scanned === 1 ? '' : 's'} may belong here.
+                Nothing is attached until you say so.
+              </p>
+              {#each recallPending as e (e.id)}
+                <div class="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline gap-2">
+                      <span class="min-w-0 flex-1 truncate text-sm font-medium">{e.from_name || e.from_addr}</span>
+                      <span class="shrink-0 text-xs text-muted-foreground">{timeAgo(e.received_at)}</span>
+                    </div>
+                    <div class="truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
+                  </div>
+                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e.id, true)}>Link</Button>
+                  <button
+                    type="button"
+                    class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    onclick={() => resolveRecalled(e.id, false)}
+                  >
+                    Not this one
+                  </button>
+                </div>
+              {/each}
+              <!-- The calendar follows from the mail and needs no calendar code: cal-sync
+                   re-reads its whole window every run, so an invitation linked today
+                   produces its meeting on the next one. -->
+              {#if recall && recall.invitations > 0}
+                <p class="text-xs text-muted-foreground">
+                  {recall.invitations === 1 ? 'One of these is' : `${recall.invitations} of these are`} a
+                  calendar invitation — linking {recall.invitations === 1 ? 'it' : 'them'} brings the
+                  meeting{recall.invitations === 1 ? '' : 's'} onto your calendar view after the next sync.
+                </p>
+              {/if}
             </div>
           {/if}
           {#if emailsLoading}

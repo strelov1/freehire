@@ -109,6 +109,25 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **`UpsertExternalEmail` refreshes content columns only.** `read_at`, `deleted_at` and
   every classification column are the *reader's* state, not the mail server's, so a nightly
   re-sync cannot resurrect deleted mail, un-read a message, or wipe a triage verdict.
+- **There is a PULL direction, and it proposes rather than links.** Everything above starts
+  from a message and asks which application it belongs to.
+  `POST /me/tracking/:slug/mail-recall` (`internal/mailrecall`) asks the opposite, so an
+  application that plainly ought to have mail can say so. It gathers the caller's
+  unattached live mail in a window around `applied_at` — **oldest first**, capped at 40 —
+  adjudicates the batch in ONE model call, and writes the confident answers to
+  `suggested_job_id`. Four things make it safe, and each was nearly got wrong:
+  *"unattached" needs BOTH `job_id IS NULL` and `application_id IS NULL`*, because a
+  message auto-linked before its application row existed holds the first without the second
+  and nothing repairs it but a one-shot backfill; *the net is state and time, never the
+  employer's name*, which would reproduce `mailmatch`'s measured blind spot and additionally
+  miss every HTML-only sender; *the cap eats from the far end*, because newest-first over an
+  open window spends forty candidates on recent noise and never shows the model the
+  acknowledgement; and *the guard is in the statement*, so a linked message is unreachable
+  even if the net, the model and the service all went wrong at once. It never links, never
+  advances a stage and never writes the ledger — `TestMailRecallCannotLink` and a source
+  scan of the package hold that. **The calendar needs no code**: `cmd/cal-sync` re-reads its
+  whole ±90-day window every run, so an invitation confirmed here yields its meeting on the
+  next one.
 - **A suggestion needs a consumer, or the matcher's caution turns into a backlog.**
   Only a deterministic tier auto-links, so everything else lands as a suggestion —
   and a suggestion nobody can see is a row that never resolves. `?link=suggested`

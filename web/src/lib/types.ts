@@ -503,6 +503,29 @@ export interface ApplicationEmail {
   read: boolean;
 }
 
+/** One message the mailbox sweep proposes for an application. It is a SUGGESTION, not a
+ *  link: it is resolved through the same confirm/reject calls the inbox uses. */
+export interface RecalledEmail {
+  id: number;
+  from_addr: string;
+  from_name: string;
+  subject: string;
+  received_at: string;
+  /** This message carries a calendar invitation's identifier, so confirming it is what
+   *  brings the meeting in. */
+  invitation: boolean;
+}
+
+/** The result of one sweep. `scanned` is what makes an empty `suggested` legible: nothing
+ *  found among forty messages is a different answer from nothing to look at. */
+export interface MailRecallResult {
+  scanned: number;
+  suggested: RecalledEmail[];
+  /** How many of the proposed messages carry an invitation identifier. The meetings
+   *  themselves arrive on the next calendar sync. */
+  invitations: number;
+}
+
 /** An offer to move the application to the stage its newest classified message implies.
  *  Present only when the two disagree and the candidate has not already answered — mail
  *  never settles an application by itself, and this is how that rule is stated rather
