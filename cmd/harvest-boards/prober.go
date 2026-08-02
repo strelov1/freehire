@@ -108,8 +108,9 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 }
 
 // leverProber probes the Lever postings API. The JSON-mode endpoint returns a bare array
-// of live postings, so a non-empty array is a live board. Lever exposes no company name, so
-// the name falls back to the slug.
+// of live postings, so a non-empty array is a live board. The posting API exposes no company
+// name, but the board's storefront titles itself after the employer, so the name is read
+// there once the board is known to be live.
 type leverProber struct{}
 
 func leverPostingsURL(slug string) string {
@@ -142,12 +143,13 @@ func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string
 	if len(postings) == 0 {
 		return "", 0, nil
 	}
-	return "", len(postings), nil
+	return storefrontEmployer(ctx, c, fmt.Sprintf("https://jobs.lever.co/%s", slug), ""), len(postings), nil
 }
 
 // ashbyProber probes the Ashby public job-board API. The list endpoint returns the live
-// postings, so a non-empty list is a live board; the name falls back to the (case-sensitive)
-// slug, which Ashby itself uses as the board identity.
+// postings, so a non-empty list is a live board. The posting API exposes no company name, but
+// the storefront titles itself "<Company> Jobs", so the name is read there once the board is
+// known to be live. The board id stays the case-sensitive slug Ashby uses as its identity.
 type ashbyProber struct{}
 
 func ashbyBoardURL(slug string) string {
@@ -184,7 +186,7 @@ func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string
 	if len(resp.Jobs) == 0 {
 		return "", 0, nil
 	}
-	return "", len(resp.Jobs), nil
+	return storefrontEmployer(ctx, c, fmt.Sprintf("https://jobs.ashbyhq.com/%s", slug), " Jobs"), len(resp.Jobs), nil
 }
 
 // bamboohrProber probes the BambooHR per-subdomain careers list. A non-empty result is a
@@ -332,6 +334,31 @@ func (workableProber) probe(ctx context.Context, c httpClient, slug string) (str
 		return "", 0, nil
 	}
 	return resp.Name, len(resp.Jobs), nil
+}
+
+// storefrontEmployer reads the employer name from a board's public storefront page title,
+// trimming the platform's boilerplate suffix. It is called only once a board is known to have
+// jobs, so it costs one request per LIVE board rather than one per candidate — the same
+// discipline greenhouse's board-metadata fetch follows.
+//
+// Anything unreadable yields "": an unreachable page, a title that is only the boilerplate
+// (an unknown ashby slug still serves a 200 titled just "Jobs"), or a platform 404. A board
+// whose name cannot be read is kept on liveness and labelled from the seed, exactly as before
+// — the gate simply cannot fire for it.
+func storefrontEmployer(ctx context.Context, c httpClient, url, suffix string) string {
+	root, err := c.GetHTML(ctx, url)
+	if err != nil {
+		return ""
+	}
+	title := strings.TrimSpace(pageTitle(root))
+	if suffix != "" {
+		trimmed, ok := strings.CutSuffix(title, suffix)
+		if !ok {
+			return ""
+		}
+		title = trimmed
+	}
+	return strings.TrimSpace(title)
 }
 
 // smartRecruitersProber probes the SmartRecruiters public postings API. The listing carries
