@@ -3101,3 +3101,13 @@
 # already calls the employer rather than the holding company.
 - company: Simple
   board: palta.teamtailor.com
+- company: Camper
+  board: careers.camper.com
+- company: Murphy AI
+  board: careers.getmurphy.ai
+- company: Neat
+  board: careers.neat.no
+- company: PARIS64
+  board: jobs.paris64.com
+- company: Onwelo
+  board: kariera.onwelo.com
