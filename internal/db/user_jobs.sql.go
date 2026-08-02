@@ -832,6 +832,80 @@ func (q *Queries) RecountJobVotes(ctx context.Context, jobID int64) (RecountJobV
 	return i, err
 }
 
+const redateApplication = `-- name: RedateApplication :one
+WITH app AS (
+    UPDATE applications ap
+       SET applied_at = $1::timestamptz
+     WHERE ap.user_id = $2
+       AND ap.job_id = $3::bigint
+       AND ap.applied_at IS NOT NULL
+    RETURNING ap.id, ap.user_id, ap.company_slug, ap.role_title, ap.job_id, ap.applied_at, ap.stage, ap.notes, ap.followed_up_at, ap.created_at
+), event AS (
+    UPDATE application_events e
+       SET occurred_at = $1::timestamptz
+      FROM app
+     WHERE e.application_id = app.id
+       AND e.kind = 'applied'
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM app a
+  JOIN user_jobs t ON t.user_id = a.user_id AND t.job_id = a.job_id
+`
+
+type RedateApplicationParams struct {
+	At     pgtype.Timestamptz `json:"at"`
+	UserID int64              `json:"user_id"`
+	JobID  int64              `json:"job_id"`
+}
+
+type RedateApplicationRow struct {
+	UserID       int64              `json:"user_id"`
+	JobID        int64              `json:"job_id"`
+	ViewedAt     pgtype.Timestamptz `json:"viewed_at"`
+	AppliedAt    pgtype.Timestamptz `json:"applied_at"`
+	SavedAt      pgtype.Timestamptz `json:"saved_at"`
+	Stage        pgtype.Text        `json:"stage"`
+	Notes        pgtype.Text        `json:"notes"`
+	DismissedAt  pgtype.Timestamptz `json:"dismissed_at"`
+	Vote         pgtype.Int2        `json:"vote"`
+	FollowedUpAt pgtype.Timestamptz `json:"followed_up_at"`
+}
+
+// Correct when an application happened, in both places that record it.
+//
+// MarkJobApplied above accepts a date, but deliberately keeps one already stored: a later
+// recording is not a later application, and its `at` comes from employer mail, which is an
+// upper bound rather than the candidate's own word. When the candidate states the date, theirs
+// wins — that is this statement, and keeping it separate is what leaves MarkJobApplied's
+// predicate (the applied_count bump and the ledger insert, decided together) untouched.
+//
+// The `applied` event moves with the column because occurred_at IS the column, copied at write
+// time, and every aggregate reads the event. `recorded_at` stays put: when we learned of the
+// application is not what is being corrected. `applied_count` is not mentioned at all — the
+// application was already counted, and re-dating it is not a second one.
+//
+// Only an application that carries a date is re-dated. A row tracking a stage on a job never
+// applied to has nothing to correct, and setting applied_at here would assert an application
+// that was never made (0065).
+func (q *Queries) RedateApplication(ctx context.Context, arg RedateApplicationParams) (RedateApplicationRow, error) {
+	row := q.db.QueryRow(ctx, redateApplication, arg.At, arg.UserID, arg.JobID)
+	var i RedateApplicationRow
+	err := row.Scan(
+		&i.UserID,
+		&i.JobID,
+		&i.ViewedAt,
+		&i.AppliedAt,
+		&i.SavedAt,
+		&i.Stage,
+		&i.Notes,
+		&i.DismissedAt,
+		&i.Vote,
+		&i.FollowedUpAt,
+	)
+	return i, err
+}
+
 const saveJob = `-- name: SaveJob :one
 WITH touch AS (
     INSERT INTO user_jobs (user_id, job_id, saved_at)

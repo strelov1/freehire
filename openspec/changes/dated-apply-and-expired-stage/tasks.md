@@ -22,10 +22,10 @@
 
 ## 3. Re-dating an application
 
-- [ ] 3.1 Add the `RedateApplication` statement to `internal/db/queries/user_jobs.sql`: set
+- [x] 3.1 Add the `RedateApplication` statement to `internal/db/queries/user_jobs.sql`: set
   `applications.applied_at` and the `occurred_at` of that application's `applied` event to the
   same instant, touching neither `applied_count` nor `recorded_at`. Regenerate with `make sqlc`.
-- [ ] 3.2 Add `MarkAppliedOn` to `internal/jobtracking`: in one transaction, mark applied with
+- [x] 3.2 Add `MarkAppliedOn` to `internal/jobtracking`: in one transaction, mark applied with
   the stated instant, then re-date. Creating and correcting both end with the column and the
   ledger reporting the same instant.
 - [ ] 3.3 Add an integration test for the correction path: an application recorded today,

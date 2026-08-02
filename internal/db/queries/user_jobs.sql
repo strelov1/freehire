@@ -497,3 +497,39 @@ WITH prior AS (
      )
 )
 SELECT followed_up_at FROM upd;
+
+-- name: RedateApplication :one
+-- Correct when an application happened, in both places that record it.
+--
+-- MarkJobApplied above accepts a date, but deliberately keeps one already stored: a later
+-- recording is not a later application, and its `at` comes from employer mail, which is an
+-- upper bound rather than the candidate's own word. When the candidate states the date, theirs
+-- wins — that is this statement, and keeping it separate is what leaves MarkJobApplied's
+-- predicate (the applied_count bump and the ledger insert, decided together) untouched.
+--
+-- The `applied` event moves with the column because occurred_at IS the column, copied at write
+-- time, and every aggregate reads the event. `recorded_at` stays put: when we learned of the
+-- application is not what is being corrected. `applied_count` is not mentioned at all — the
+-- application was already counted, and re-dating it is not a second one.
+--
+-- Only an application that carries a date is re-dated. A row tracking a stage on a job never
+-- applied to has nothing to correct, and setting applied_at here would assert an application
+-- that was never made (0065).
+WITH app AS (
+    UPDATE applications ap
+       SET applied_at = sqlc.arg(at)::timestamptz
+     WHERE ap.user_id = sqlc.arg(user_id)
+       AND ap.job_id = sqlc.arg(job_id)::bigint
+       AND ap.applied_at IS NOT NULL
+    RETURNING ap.*
+), event AS (
+    UPDATE application_events e
+       SET occurred_at = sqlc.arg(at)::timestamptz
+      FROM app
+     WHERE e.application_id = app.id
+       AND e.kind = 'applied'
+)
+SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
+       a.stage, a.notes, t.dismissed_at, t.vote, a.followed_up_at
+  FROM app a
+  JOIN user_jobs t ON t.user_id = a.user_id AND t.job_id = a.job_id;

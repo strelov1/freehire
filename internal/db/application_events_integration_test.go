@@ -311,3 +311,58 @@ func TestSyncEmailApplicationEvent_DeletionKeepsTheFactRelinkMovesIt(t *testing.
 		t.Errorf("a repeated reconcile moved the retraction stamp from %v to %v", stampBefore, stampAfter)
 	}
 }
+
+// Re-dating an application moves its applied event with it. The column answers "when is this
+// application dated"; the ledger answers the same question for every aggregate, and the two are
+// written by one statement precisely so they cannot disagree. A correction that touched only the
+// column would leave the card reading one month and the response rate another — the divergence
+// this ledger exists to prevent, which is why the repair is a statement rather than a caller's
+// discipline.
+func TestRedateApplication_MovesTheAppliedEventWithTheColumn(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "redate@example.test", true)
+	job := seedResponseJob(t, q, "redate-1", "acme")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("MarkJobApplied: %v", err)
+	}
+
+	sent := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	row, err := q.RedateApplication(ctx, RedateApplicationParams{
+		UserID: user, JobID: job,
+		At: pgtype.Timestamptz{Time: sent, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("RedateApplication: %v", err)
+	}
+	if !row.AppliedAt.Time.Equal(sent) {
+		t.Errorf("returned applied_at = %v, want %v", row.AppliedAt.Time, sent)
+	}
+
+	var events int
+	var occurred, recorded time.Time
+	if err := q.db.QueryRow(ctx,
+		`SELECT count(*), min(occurred_at), min(recorded_at) FROM application_events
+		  WHERE user_id = $1 AND kind = 'applied'`, user).Scan(&events, &occurred, &recorded); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	if events != 1 {
+		t.Errorf("applied events = %d, want 1: a correction repairs the event, it does not add one", events)
+	}
+	if !occurred.UTC().Equal(sent) {
+		t.Errorf("event occurred_at = %v, want %v", occurred.UTC(), sent)
+	}
+	if recorded.UTC().Equal(sent) {
+		t.Error("recorded_at moved too: when we learned of the application is not what was corrected")
+	}
+
+	var appliedCount int
+	if err := q.db.QueryRow(ctx, `SELECT applied_count FROM jobs WHERE id = $1`, job).Scan(&appliedCount); err != nil {
+		t.Fatalf("read applied_count: %v", err)
+	}
+	if appliedCount != 1 {
+		t.Errorf("applied_count = %d, want 1: correcting a date is not a second application", appliedCount)
+	}
+}

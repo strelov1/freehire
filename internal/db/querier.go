@@ -2063,6 +2063,23 @@ type Querier interface {
 	// sees the write (a same-statement CTE would not). Scoped to one job_id via the
 	// partial index user_jobs(job_id) WHERE vote IS NOT NULL — a cheap indexed count.
 	RecountJobVotes(ctx context.Context, jobID int64) (RecountJobVotesRow, error)
+	// Correct when an application happened, in both places that record it.
+	//
+	// MarkJobApplied above accepts a date, but deliberately keeps one already stored: a later
+	// recording is not a later application, and its `at` comes from employer mail, which is an
+	// upper bound rather than the candidate's own word. When the candidate states the date, theirs
+	// wins — that is this statement, and keeping it separate is what leaves MarkJobApplied's
+	// predicate (the applied_count bump and the ledger insert, decided together) untouched.
+	//
+	// The `applied` event moves with the column because occurred_at IS the column, copied at write
+	// time, and every aggregate reads the event. `recorded_at` stays put: when we learned of the
+	// application is not what is being corrected. `applied_count` is not mentioned at all — the
+	// application was already counted, and re-dating it is not a second one.
+	//
+	// Only an application that carries a date is re-dated. A row tracking a stage on a job never
+	// applied to has nothing to correct, and setting applied_at here would assert an application
+	// that was never made (0065).
+	RedateApplication(ctx context.Context, arg RedateApplicationParams) (RedateApplicationRow, error)
 	// Whether a specific member is an approved referrer for a company — the authorization
 	// check for acting on / viewing a request in that company's pool.
 	ReferrerApprovedForCompany(ctx context.Context, arg ReferrerApprovedForCompanyParams) (bool, error)

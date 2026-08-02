@@ -176,6 +176,13 @@ type Repository interface {
 	// application is not a later application.
 	MarkAppliedAt(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error)
 
+	// MarkAppliedOn records an application on a day the candidate states, and
+	// overwrites a date already recorded. It is the counterpart of MarkAppliedAt and
+	// differs from it in exactly that: mail supplies an upper bound, while a person
+	// supplies the answer, so theirs wins. The `applied` ledger event moves with the
+	// column, because every aggregate dates the application from the event.
+	MarkAppliedOn(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error)
+
 	SaveJob(ctx context.Context, userID, jobID int64) (Interaction, error)
 
 	// UnsaveJob clears the saved mark. It returns ErrNoInteraction when no row
@@ -341,6 +348,24 @@ func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, 
 		return Interaction{}, err
 	}
 	return s.repo.MarkAppliedAt(ctx, userID, jobID, at, source)
+}
+
+// MarkAppliedOn records an application on the day the candidate states, overwriting a date
+// already held. `now` is supplied rather than read here so the bound is testable and so the
+// caller's clock, not this package's, decides what "the future" means.
+//
+// The window is enforced at this level rather than at the HTTP door because two callers never
+// pass through Fiber — the CLI reaches the API, but the in-app assistant calls this service
+// directly — and a bound that only the handler applied would not exist for them.
+func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, at, now time.Time, source string) (Interaction, error) {
+	if err := userjob.ValidateAppliedOn(at, now); err != nil {
+		return Interaction{}, err
+	}
+	jobID, err := s.repo.JobIDBySlug(ctx, slug)
+	if err != nil {
+		return Interaction{}, err
+	}
+	return s.repo.MarkAppliedOn(ctx, userID, jobID, at, source)
 }
 
 // SaveJob resolves slug → jobID then delegates to the repository.

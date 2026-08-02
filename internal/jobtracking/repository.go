@@ -70,6 +70,50 @@ func (r *QueriesRepository) MarkAppliedAt(ctx context.Context, userID, jobID int
 	return r.markApplied(ctx, userID, jobID, pgtype.Timestamptz{Time: at, Valid: true}, source)
 }
 
+// MarkAppliedOn records an application on a day the candidate stated, overwriting a date
+// already held.
+//
+// It runs MarkJobApplied first and re-dates second, in one transaction, because the two
+// statements answer different halves of the request: the first creates the application when
+// there is none — carrying the applied_count bump and the ledger insert under the single
+// predicate that decides them together — and the second imposes the stated date on the
+// application either way. Neither alone is the whole operation, and a caller left to run them
+// in sequence would eventually run only the first.
+//
+// RedateApplication returns no row when the application carries no date, which the tracker
+// allows: a stage may be set on a job never applied to. MarkJobApplied has just set one here,
+// so the miss cannot happen on this path, and treating it as an error rather than silence keeps
+// it that way.
+func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int64, at time.Time, source string) (Interaction, error) {
+	stated := pgtype.Timestamptz{Time: at, Valid: true}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Interaction{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	qtx := r.q.WithTx(tx)
+	if err := qtx.LockJobForApply(ctx, jobID); err != nil {
+		return Interaction{}, err
+	}
+	if _, err := qtx.MarkJobApplied(ctx, db.MarkJobAppliedParams{
+		UserID: userID, JobID: jobID, At: stated, EventSource: source,
+	}); err != nil {
+		return Interaction{}, err
+	}
+	row, err := qtx.RedateApplication(ctx, db.RedateApplicationParams{
+		UserID: userID, JobID: jobID, At: stated,
+	})
+	if err != nil {
+		return Interaction{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Interaction{}, err
+	}
+	return toInteraction(assembledRow(row)), nil
+}
+
 // markApplied is the shared apply transaction. An invalid `at` means "stamp
 // now()", the ordinary apply.
 //
