@@ -332,7 +332,38 @@ func TestForDisplaySeparatesLeversStandardApplication(t *testing.T) {
 	if len(got) != 2 || got[0] != "Are you authorized to work in the US?" {
 		t.Errorf("questions = %v, want only the two the employer wrote", got)
 	}
-	if len(d.Basics) != 5 {
-		t.Errorf("basics = %v, want the five standard controls", d.Basics)
+	// Four, not five: the consent checkbox is boilerplate and is dropped — see
+	// TestForDisplayDropsLeverConsentBoilerplate.
+	if len(d.Basics) != 4 {
+		t.Errorf("basics = %v, want the four real standard controls", d.Basics)
+	}
+}
+
+// A consent checkbox is the platform's legal boilerplate, not the employer's question:
+// it is on every Lever application, its text is a paragraph, and a candidate deciding
+// whether to apply learns nothing from it. Same reasoning as the EEO survey — and left
+// in, its 250-character paragraph sits in the standard-fields line beside "Email".
+func TestForDisplayDropsLeverConsentBoilerplate(t *testing.T) {
+	d := Form{
+		Provider: "lever",
+		Fields: []Field{
+			{ID: "name", Label: "Full name", Type: TypeText, Required: true},
+			{ID: "email", Label: "Email", Type: TypeText, Required: true},
+			{ID: "consent[store]", Label: "I agree to the storage of my data for up to five years", Type: TypeBoolean, Required: true},
+			{ID: "consent[marketing]", Label: "Yes, I would like to receive notifications about future job opportunities that match my skill profile.", Type: TypeBoolean},
+			{ID: "cards[abc][field0]", Label: "Why this role?", Type: TypeTextarea, Required: true},
+		},
+	}.ForDisplay()
+
+	for _, b := range d.Basics {
+		if strings.Contains(b, "consent") || strings.Contains(b, "storage of my data") || strings.Contains(b, "notifications about future") {
+			t.Errorf("basics = %v, want the consent boilerplate dropped", d.Basics)
+		}
+	}
+	if len(d.Basics) != 2 {
+		t.Errorf("basics = %v, want just the two real ones", d.Basics)
+	}
+	if len(d.Questions) != 1 {
+		t.Errorf("questions = %v, want the employer's own only", questionTexts(d))
 	}
 }

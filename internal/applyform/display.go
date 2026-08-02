@@ -133,6 +133,16 @@ func (f Form) ForDisplay() Display {
 		case field.Demographic:
 			continue
 
+		// A consent checkbox is the platform's legal boilerplate rather than the
+		// employer's question: it is on every application, its text is a paragraph of
+		// data-protection language, and a candidate deciding whether to apply learns
+		// nothing from it. Same reasoning as the equal-opportunity survey above — and
+		// left in, that paragraph sits in the standard-fields line beside "Email".
+		//
+		// It stays in the store. Anything that eventually FILLS a form has to tick it.
+		case strings.HasPrefix(field.ID, "consent["):
+			continue
+
 		// A control nothing could name cannot be described to anyone. It stays in the
 		// store — the identifier is still what a form-filler needs — but an unnamed
 		// entry on the page is a stray comma at best and a blank bullet at worst.
