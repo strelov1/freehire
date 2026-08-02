@@ -90,7 +90,7 @@ func at(day, hour int) time.Time {
 // applications may be written, and nothing else may leave a trace anywhere.
 func TestRunOnceStoresOnlyMeetingsItCouldAttach(t *testing.T) {
 	store := &fakeStore{
-		connections: []Connection{{UserID: 7, Email: "ivan@example.test"}},
+		connections: []Connection{{UserID: 7}},
 		candidates: map[int64][]calmatch.Candidate{
 			7: {{ApplicationID: 11, Company: "Derq", UIDs: []string{"derq@ashbyhq.com"}}},
 		},

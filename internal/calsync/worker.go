@@ -45,9 +45,12 @@ const (
 // Connection is a candidate whose Google grant covers the calendar. The query filters on
 // the recorded scopes, so a grant that predates the calendar consent never reaches here
 // and never costs an API call to discover.
+//
+// Only the id: gmailsync carries the address to skip the candidate's own replies to a
+// thread, and a calendar has no equivalent notion. A field nobody reads is a question the
+// next reader has to answer.
 type Connection struct {
 	UserID int64
-	Email  string
 }
 
 // Meeting is one calendar entry as the reader returns it — the fields needed to keep an

@@ -140,7 +140,7 @@ WHERE user_id = sqlc.arg(user_id);
 -- query rather than in the worker's loop: a connection that cannot answer is not a
 -- connection to retry, and calling the API to find that out costs a quota unit per user
 -- per run for an answer we already hold.
-SELECT user_id, email, refresh_token_enc
+SELECT user_id
   FROM gmail_connections
  WHERE status = 'connected'
    AND sqlc.arg(calendar_scope)::text = ANY (scopes)

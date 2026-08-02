@@ -105,36 +105,30 @@ func (q *Queries) ListApplicationInterviewsInRange(ctx context.Context, arg List
 }
 
 const listCalendarConnections = `-- name: ListCalendarConnections :many
-SELECT user_id, email, refresh_token_enc
+SELECT user_id
   FROM gmail_connections
  WHERE status = 'connected'
    AND $1::text = ANY (scopes)
  ORDER BY user_id
 `
 
-type ListCalendarConnectionsRow struct {
-	UserID          int64  `json:"user_id"`
-	Email           string `json:"email"`
-	RefreshTokenEnc string `json:"refresh_token_enc"`
-}
-
 // The candidates whose grant actually covers the calendar. The scope check belongs in the
 // query rather than in the worker's loop: a connection that cannot answer is not a
 // connection to retry, and calling the API to find that out costs a quota unit per user
 // per run for an answer we already hold.
-func (q *Queries) ListCalendarConnections(ctx context.Context, calendarScope string) ([]ListCalendarConnectionsRow, error) {
+func (q *Queries) ListCalendarConnections(ctx context.Context, calendarScope string) ([]int64, error) {
 	rows, err := q.db.Query(ctx, listCalendarConnections, calendarScope)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCalendarConnectionsRow{}
+	items := []int64{}
 	for rows.Next() {
-		var i ListCalendarConnectionsRow
-		if err := rows.Scan(&i.UserID, &i.Email, &i.RefreshTokenEnc); err != nil {
+		var user_id int64
+		if err := rows.Scan(&user_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, user_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

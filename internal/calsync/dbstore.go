@@ -29,8 +29,8 @@ func (s *DBStore) ListCalendarConnections(ctx context.Context) ([]Connection, er
 		return nil, err
 	}
 	out := make([]Connection, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, Connection{UserID: r.UserID, Email: r.Email})
+	for _, id := range rows {
+		out = append(out, Connection{UserID: id})
 	}
 	return out, nil
 }

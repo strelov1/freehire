@@ -1146,7 +1146,7 @@ type Querier interface {
 	// query rather than in the worker's loop: a connection that cannot answer is not a
 	// connection to retry, and calling the API to find that out costs a quota unit per user
 	// per run for an answer we already hold.
-	ListCalendarConnections(ctx context.Context, calendarScope string) ([]ListCalendarConnectionsRow, error)
+	ListCalendarConnections(ctx context.Context, calendarScope string) ([]int64, error)
 	// The caller's applications a meeting could belong to, each with the identifiers of the
 	// invitations already linked to it.
 	//

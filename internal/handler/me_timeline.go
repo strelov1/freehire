@@ -68,15 +68,7 @@ type timelineEvent struct {
 
 // Timeline serves the caller's events between from and to inclusive, oldest first.
 func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	from, err := timelineBound(c, "from")
-	if err != nil {
-		return err
-	}
-	to, err := timelineBound(c, "to")
+	userID, from, to, err := timelineRequest(c)
 	if err != nil {
 		return err
 	}
@@ -138,15 +130,7 @@ type scheduledInterview struct {
 
 // Interviews serves the caller's arranged meetings whose start falls in the range.
 func (h *timelineHandlers) Interviews(c *fiber.Ctx) error {
-	userID, err := requireUserID(c)
-	if err != nil {
-		return err
-	}
-	from, err := timelineBound(c, "from")
-	if err != nil {
-		return err
-	}
-	to, err := timelineBound(c, "to")
+	userID, from, to, err := timelineRequest(c)
 	if err != nil {
 		return err
 	}
@@ -186,6 +170,24 @@ func optionalTime(at time.Time) *time.Time {
 		return nil
 	}
 	return &at
+}
+
+// timelineRequest reads the caller and the range both calendar layers are asked for.
+//
+// Shared so a change to how a range is read cannot reach one layer and not the other:
+// the view puts the two answers on one grid, and a bound parsed differently by each would
+// paint half a month with nothing to say why.
+func timelineRequest(c *fiber.Ctx) (userID int64, from, to time.Time, err error) {
+	if userID, err = requireUserID(c); err != nil {
+		return 0, time.Time{}, time.Time{}, err
+	}
+	if from, err = timelineBound(c, "from"); err != nil {
+		return 0, time.Time{}, time.Time{}, err
+	}
+	if to, err = timelineBound(c, "to"); err != nil {
+		return 0, time.Time{}, time.Time{}, err
+	}
+	return userID, from, to, nil
 }
 
 // timelineBound parses one RFC3339 bound. Both are required and neither is defaulted: a
