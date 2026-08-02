@@ -38,6 +38,10 @@ type applicationDetail struct {
 	// for never. It says nothing about whether anybody replied.
 	FollowedUpAt *time.Time         `json:"followed_up_at"`
 	Emails       []applicationEmail `json:"emails"`
+	// Events is the application's history from the ledger, newest first — what happened to
+	// it, as against the marks on the posting the row carries. Empty on an application
+	// nothing has happened to yet, and the panel renders no history section for it.
+	Events []timelineEvent `json:"events"`
 	// StageSuggestion is the stage the newest classified message implies when it differs
 	// from the current one, and null when there is nothing to offer. It changes nothing by
 	// itself: mail never settles an application, and this is how that rule is said out loud
@@ -95,6 +99,14 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		lastStageSet = pgtype.Timestamptz{}
 	}
 
+	// The history. A failure here must not cost the caller their application: it is one
+	// section of a panel whose other four tabs do not depend on it, so it degrades to an
+	// empty history rather than a 500 on a page that was otherwise ready to render.
+	events, err := h.timeline.ForApplication(c.Context(), userID, job.ID)
+	if err != nil {
+		events = nil
+	}
+
 	return c.JSON(fiber.Map{"data": applicationDetail{
 		Job:             jv,
 		ViewedAt:        tsPtr(app.ViewedAt),
@@ -104,6 +116,7 @@ func (h *inboxHandlers) GetTrackedApplication(c *fiber.Ctx) error {
 		Notes:           pgStr(app.Notes),
 		FollowedUpAt:    tsPtr(app.FollowedUpAt),
 		Emails:          emails,
+		Events:          timelineEvents(events),
 		StageSuggestion: jobtracking.SuggestStage(pgStr(app.Stage), forSuggestion, lastStageSet.Time),
 	}})
 }

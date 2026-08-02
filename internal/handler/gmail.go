@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/apptimeline"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/db"
@@ -45,6 +46,10 @@ type inboxHandlers struct {
 	// mail tools call the same service, so a rule can never hold for one reader and
 	// not the other.
 	inbox *inbox.Service
+	// timeline reads the ledger for the application panel's history. The panel already
+	// fetches this endpoint for its linked mail, so the history rides along rather than
+	// costing a second request.
+	timeline *apptimeline.Service
 }
 
 // trackingApplications adapts the tracking service to the one call the mail
@@ -64,6 +69,7 @@ func newInboxHandlers(queries *db.Queries, pool *pgxpool.Pool, gmailConnector *g
 		pool:           pool,
 		tracking:       tracking,
 		inbox:          inbox.New(queries, trackingApplications{tracking}),
+		timeline:       apptimeline.New(queries),
 		gmailConnector: gmailConnector,
 		gmailCipher:    gmailCipher,
 		frontendOrigin: frontendOrigin,

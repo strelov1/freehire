@@ -1641,11 +1641,27 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'GET',
         path: '/me/tracking/{slug}',
         auth: 'cookie-or-key',
-        summary: 'One tracked application, with the mail linked to it.',
-        description: 'A slug you do not track is a 404.',
+        summary: 'One tracked application, with the mail linked to it and its history.',
+        description:
+          '`events` is the application\'s ledger, newest first — the apply, employer ' +
+          'replies, follow-ups, stage changes, scheduled interviews — in the shape ' +
+          '`GET /me/timeline` serves, bounded at 100 and empty when nothing has happened ' +
+          'yet. This read also carries the full job view; the listing carries only a card. ' +
+          'A slug you do not track is a 404.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl "${BASE_URL}/me/tracking/senior-backend-engineer-acme-1a2b" -H "Authorization: Bearer fhk_…"`,
-        responseExample: `{ "data": { "slug": "senior-backend-engineer-acme-1a2b", "stage": "interview", "applied_at": "2026-07-24T09:00:00Z", "emails": [ { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation" } ] } }`,
+        responseExample: `{
+  "data": {
+    "slug": "senior-backend-engineer-acme-1a2b",
+    "stage": "interview",
+    "applied_at": "2026-07-24T09:00:00Z",
+    "emails": [ { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation" } ],
+    "events": [
+      { "id": 991, "kind": "employer_reply", "signal": "interview_invitation", "source": "mail_gmail", "observed": true, "occurred_at": "2026-07-29T11:04:00Z" },
+      { "id": 802, "kind": "applied", "source": "user", "observed": false, "occurred_at": "2026-07-24T09:00:00Z" }
+    ]
+  }
+}`,
       },
       {
         method: 'GET',

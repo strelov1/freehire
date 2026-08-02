@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // linkedReply seeds a message against the caller's application to jobID and reconciles it
@@ -275,5 +277,132 @@ func TestListApplicationEventsInRange_BoundsAreInclusiveAndExcludeTheRest(t *tes
 	}
 	if !rows[0].OccurredAt.Time.Before(rows[1].OccurredAt.Time) {
 		t.Errorf("events came back as %v then %v, want oldest first", rows[0].OccurredAt.Time, rows[1].OccurredAt.Time)
+	}
+}
+
+// listApplication reads one application's history the way the panel does.
+func listApplication(t *testing.T, q *Queries, userID, jobID int64, limit int32) []ListApplicationEventsRow {
+	t.Helper()
+	rows, err := q.ListApplicationEvents(context.Background(), ListApplicationEventsParams{
+		UserID:      userID,
+		JobID:       pgtype.Int8{Int64: jobID, Valid: true},
+		Limit:       limit,
+		SrcGmail:    "mail_gmail",
+		SrcHosted:   "mail_hosted",
+		SrcExternal: "mail_external",
+	})
+	if err != nil {
+		t.Fatalf("list application events: %v", err)
+	}
+	return rows
+}
+
+// The panel reads a history, so the newest thing that happened comes first — the opposite of
+// the calendar's range read, which paints a month forwards. Same rows, same rules, one order
+// each because each is answering a different question.
+func TestListApplicationEvents_NewestFirstAndScopedToTheCaller(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "history-order@example.test", true)
+	other := seedResponseUser(t, q, "history-other@example.test", true)
+	job := seedResponseJob(t, q, "history-order-1", "derq")
+
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	linkedReply(t, q, user, job, "Thanks for applying", time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC))
+	linkedReply(t, q, user, job, "Invitation to interview", time.Date(2026, 7, 20, 9, 0, 0, 0, time.UTC))
+
+	// The other caller's application to the SAME job, which must not leak into this history.
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: other, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply (other): %v", err)
+	}
+
+	rows := listApplication(t, q, user, job, 100)
+	if len(rows) != 3 {
+		t.Fatalf("got %d events, want 3 (one apply, two replies)", len(rows))
+	}
+	for i := 1; i < len(rows); i++ {
+		if rows[i].OccurredAt.Time.After(rows[i-1].OccurredAt.Time) {
+			t.Errorf("event %d is newer than the one before it — the history is not newest-first", i)
+		}
+	}
+	// The two replies are seeded in the past and the apply is stamped now(), so the mail
+	// orders among itself and the apply leads. Asserting the order rather than a fixed row
+	// keeps this about the ORDER BY, which is what the query owns.
+	var replies []string
+	for _, r := range rows {
+		if r.Kind == "employer_reply" {
+			replies = append(replies, r.EmailSubject.String)
+		}
+	}
+	if len(replies) != 2 || replies[0] != "Invitation to interview" || replies[1] != "Thanks for applying" {
+		t.Errorf("replies came back as %v, want the July 20th one before the July 10th one", replies)
+	}
+}
+
+// A re-linked message retracts its old event and records a new one. A history that still
+// showed the retraction would show the correction's author a correction they cannot see they
+// made — the same rule the range read follows.
+func TestListApplicationEvents_RetractedEventsAreAbsent(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "history-retract@example.test", true)
+	job := seedResponseJob(t, q, "history-retract-1", "derq")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	linkedReply(t, q, user, job, "Thanks for applying", time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC))
+
+	if _, err := q.db.Exec(ctx,
+		`UPDATE application_events SET retracted_at = now() WHERE user_id = $1 AND kind = 'employer_reply'`,
+		user); err != nil {
+		t.Fatalf("retract: %v", err)
+	}
+
+	for _, r := range listApplication(t, q, user, job, 100) {
+		if r.Kind == "employer_reply" {
+			t.Error("a retracted employer_reply is still in the application's history")
+		}
+	}
+}
+
+// Hygiene rather than a fix: an application accrues a handful of events, and an unbounded read
+// of an append-only table costs nothing now and something later.
+func TestListApplicationEvents_RespectsTheLimit(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "history-limit@example.test", true)
+	job := seedResponseJob(t, q, "history-limit-1", "derq")
+	if _, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: user, JobID: job, EventSource: "user"}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for i := range 5 {
+		linkedReply(t, q, user, job, fmt.Sprintf("Reply %d", i),
+			time.Date(2026, 7, 10+i, 9, 0, 0, 0, time.UTC))
+	}
+
+	all := listApplication(t, q, user, job, 100)
+	if len(all) != 6 {
+		t.Fatalf("got %d events unbounded, want 6 (one apply, five replies)", len(all))
+	}
+
+	rows := listApplication(t, q, user, job, 2)
+	if len(rows) != 2 {
+		t.Fatalf("got %d events, want the 2 the limit allows", len(rows))
+	}
+	// The limit keeps the newest, whichever those are — the apply is stamped now() and the
+	// replies are seeded in the past, so naming one here would pin the test to that accident.
+	for i, r := range rows {
+		if r.ID != all[i].ID {
+			t.Errorf("bounded row %d is event %d, want %d — the limit dropped from the wrong end",
+				i, r.ID, all[i].ID)
+		}
 	}
 }

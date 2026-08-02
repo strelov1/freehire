@@ -3,6 +3,7 @@
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
+  import { eventLabel, eventTone } from '$lib/events';
   import {
     buildCalendarMonth,
     monthLabel,
@@ -123,37 +124,11 @@
   }
 
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
-  // candidate set the date. An unrecognised kind gets the neutral mark rather than none —
-  // a fifth kind is coming and must be visible before this file knows its name.
-  //
-  // Tokens, not raw palette hues. Four arbitrary colours would read as a fifth vocabulary
-  // nobody owns, and `pnpm check:tokens` counts them per file; the neighbouring status maps
-  // predate the check and carry a recorded baseline, which is not a reason to add to it.
-  //
-  // Only four token colours are actually distinct: primary and secondary-foreground hold
-  // the SAME value in both themes (oklch(0.13 0 0) light, oklch(0.985 0 0) dark), so
-  // reaching for the second to separate two kinds silently collapses them into one mark.
-  const KIND_TONE: Record<string, string> = {
-    applied: 'text-primary',
-    employer_reply: 'text-brand-strong',
-    follow_up_sent: 'text-warning-strong',
-    stage_set: 'text-muted-foreground',
-  };
-  const tone = (kind: string) => KIND_TONE[kind] ?? 'text-muted-foreground';
-
-  /** Sentence-case an unknown kind so a new one reads as words, not as a column name. */
-  function humanKind(kind: string): string {
-    const words = kind.replace(/_/g, ' ');
-    return words.charAt(0).toUpperCase() + words.slice(1);
-  }
-
-  const KIND_LABEL: Record<string, (e: TimelineEvent) => string> = {
-    applied: () => 'Applied',
-    employer_reply: (e) => (e.signal ? `Employer replied — ${e.signal.replace(/_/g, ' ')}` : 'Employer replied'),
-    follow_up_sent: () => 'Followed up',
-    stage_set: (e) => (e.signal ? `Moved to ${e.signal}` : 'Stage changed'),
-  };
-  const label = (e: TimelineEvent) => (KIND_LABEL[e.kind] ?? (() => humanKind(e.kind)))(e);
+  // candidate set the date. Both the label and the tone come from $lib/events, shared with
+  // the application panel:
+  // the same event captioned two ways on two screens is what putting them here caused.
+  const tone = (kind: string) => eventTone(kind);
+  const label = (e: TimelineEvent) => eventLabel(e);
 
   const timeOf = (e: TimelineEvent) => clockOf(e.occurred_at);
   const clockOf = (instant: string) =>

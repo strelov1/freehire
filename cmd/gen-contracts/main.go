@@ -14,6 +14,7 @@ import (
 
 	"github.com/gzuidhof/tygo/tygo"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/collections"
 	"github.com/strelov1/freehire/internal/location"
@@ -283,6 +284,10 @@ func genVocab() string {
 	var b strings.Builder
 	b.WriteString(emitVocab("Source", "SOURCE_VALUES", source))
 	b.WriteString(emitVocab("Stage", "STAGE_VALUES", userjob.Stages))
+	// The ledger's event kinds. Generated for the reason the mail signals are: the panel and
+	// the calendar each render a label per kind, and a kind added in Go but missing from the
+	// SPA's map rendered as a blank row with every test green.
+	b.WriteString(emitVocab("ApplicationEventKind", "APPLICATION_EVENT_KINDS", appevent.Kinds))
 	// The stage's human label and the group it belongs to, generated for the same reason the
 	// mail signals are: the board, the funnel, the drawer's selector and the home page each kept
 	// their own copy, and three of the four disagreed about what to call a settled application.

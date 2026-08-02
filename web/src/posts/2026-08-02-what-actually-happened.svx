@@ -1,0 +1,42 @@
+---
+title: What actually happened to this application
+date: 2026-08-02
+summary: The strip at the top of an application read left to right and ran backwards in time. It's gone, replaced by the application's real history — the apply, every employer reply, every stage change — newest first.
+type: changelog
+tags:
+  - job-seekers
+  - tracking
+---
+
+Open an application and the panel used to greet you with this:
+
+```
+● Viewed yesterday ————————————— ● Applied 6 days ago
+```
+
+Read it left to right and you read it backwards. It was never a timeline — it was an
+engagement funnel, ordered viewed → saved → applied, with "applied" pinned to the right
+because it is the deepest step, not because it is the latest. Nothing on screen said so.
+
+It was also almost empty. Three timestamps, whatever else had happened. An application with
+seven linked emails, two stage changes and a follow-up showed none of them.
+
+**The panel now shows the application's actual history**, newest first, on the Application
+tab:
+
+```
+● 3 days ago    Employer replied — rejection
+● 5 days ago    Moved to interview
+● 8 days ago    Followed up
+● 14 days ago   Applied
+```
+
+Every one of those was already recorded — the same ledger the Calendar tab paints a month
+from. It just had never been read for a single application, so the panel showed a funnel
+where a history belonged.
+
+Two things are deliberately not in it. **Viewed and saved are gone**: they are marks on a
+posting rather than events of an application, and "viewed" is refreshed every time you open
+the job, so at the foot of a history it would claim to be the first time while holding the
+date of the most recent one. And the rows don't link anywhere — the Emails tab is one click
+away and shows you the message properly.

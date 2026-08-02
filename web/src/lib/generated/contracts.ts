@@ -1058,6 +1058,8 @@ export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
+export const APPLICATION_EVENT_KINDS = ['applied', 'employer_reply', 'follow_up_sent', 'stage_set', 'interview_scheduled'] as const;
+export type ApplicationEventKind = (typeof APPLICATION_EVENT_KINDS)[number];
 export const STAGE_LABELS = {
   'accepted': 'Accepted',
   'applied': 'Applied',

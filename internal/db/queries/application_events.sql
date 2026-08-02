@@ -173,3 +173,38 @@ SELECT max(occurred_at)::timestamptz AS last_stage_set_at
    AND job_id = $2
    AND kind = 'stage_set'
    AND retracted_at IS NULL;
+
+-- name: ListApplicationEvents :many
+-- One application's live events, newest first — what the application panel renders as its
+-- history, where ListApplicationEventsInRange paints a month for the calendar.
+--
+-- Same columns, same joins and the same retraction rule as that range read, deliberately: the
+-- two answer different questions about the same ledger, and a row that meant one thing on the
+-- calendar and another in the panel would be the drift this table exists to remove. See that
+-- query for why the employer comes from the event's own slug, why the message is joined for
+-- its subject alone, and why the join is restricted to mail-derived sources.
+--
+-- Newest first because it is a history: the reader wants what just happened, not what started
+-- it. `id` breaks ties so a batch landing on one timestamp keeps a stable order.
+--
+-- Served by application_events_app_idx (user_id, job_id, kind) WHERE retracted_at IS NULL —
+-- the predicate here is that index's leading pair.
+SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
+       ae.application_id,
+       a.role_title,
+       j.public_slug AS job_slug,
+       em.id         AS email_id,
+       em.subject    AS email_subject
+  FROM application_events ae
+  LEFT JOIN applications a ON a.id = ae.application_id
+                          AND a.user_id = ae.user_id
+  LEFT JOIN jobs j         ON j.id = ae.job_id
+  LEFT JOIN emails em      ON em.id = ae.source_ref
+                          AND em.user_id = ae.user_id
+                          AND em.deleted_at IS NULL
+                          AND ae.source IN (sqlc.arg(src_gmail), sqlc.arg(src_hosted), sqlc.arg(src_external))
+ WHERE ae.user_id      = $1
+   AND ae.job_id       = $2
+   AND ae.retracted_at IS NULL
+ ORDER BY ae.occurred_at DESC, ae.id DESC
+ LIMIT $3;

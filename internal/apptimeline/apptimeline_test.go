@@ -15,8 +15,9 @@ import (
 // stubStore answers with a fixed set of rows, so the service's own rules — validation and
 // the observed verdict — are tested without a pool.
 type stubStore struct {
-	rows       []db.ListApplicationEventsInRangeRow
-	interviews []db.ListApplicationInterviewsInRangeRow
+	rows            []db.ListApplicationEventsInRangeRow
+	interviews      []db.ListApplicationInterviewsInRangeRow
+	applicationRows []db.ListApplicationEventsRow
 }
 
 func (s stubStore) ListApplicationEventsInRange(context.Context, db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error) {
@@ -114,4 +115,65 @@ func TestAnUnknownSourceIsNotObserved(t *testing.T) {
 
 func (s stubStore) ListApplicationInterviewsInRange(context.Context, db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error) {
 	return s.interviews, nil
+}
+
+func (s stubStore) ListApplicationEvents(context.Context, db.ListApplicationEventsParams) ([]db.ListApplicationEventsRow, error) {
+	return s.applicationRows, nil
+}
+
+func applicationRow(source, subject string) db.ListApplicationEventsRow {
+	return db.ListApplicationEventsRow{
+		ID:           7,
+		Kind:         appevent.KindEmployerReply,
+		Source:       source,
+		OccurredAt:   pgtype.Timestamptz{Time: time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC), Valid: true},
+		CompanySlug:  "derq",
+		EmailSubject: pgtype.Text{String: subject, Valid: subject != ""},
+	}
+}
+
+// One application's history is the same Event the calendar renders, resolved by the same
+// rules — including the observed verdict, which is appevent's to give and this package's to
+// ask for. A second mapping would be a second chance to disagree about what an event is.
+func TestForApplicationMapsRowsThroughTheSameRules(t *testing.T) {
+	svc := New(stubStore{applicationRows: []db.ListApplicationEventsRow{
+		applicationRow(appevent.SourceMailGmail, "Invitation to interview"),
+	}})
+
+	events, err := svc.ForApplication(context.Background(), 1, 2)
+	if err != nil {
+		t.Fatalf("ForApplication: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("got %d events, want 1", len(events))
+	}
+	got := events[0]
+	if got.ID != 7 || got.Kind != appevent.KindEmployerReply || got.CompanySlug != "derq" {
+		t.Errorf("event = %+v, want the row's own id, kind and employer", got)
+	}
+	if got.EmailSubject != "Invitation to interview" {
+		t.Errorf("subject = %q, want the message's own", got.EmailSubject)
+	}
+	if !got.Observed {
+		t.Error("a gmail-sourced event is not observed; the trust rule is appevent's and this reads it")
+	}
+}
+
+// Deletion hides content and does not un-happen the reply: the query withholds the subject
+// and keeps the event, and the mapping must not turn that into a dropped row.
+func TestForApplicationKeepsAnEventWhoseMessageIsGone(t *testing.T) {
+	svc := New(stubStore{applicationRows: []db.ListApplicationEventsRow{
+		applicationRow(appevent.SourceMailGmail, ""),
+	}})
+
+	events, err := svc.ForApplication(context.Background(), 1, 2)
+	if err != nil {
+		t.Fatalf("ForApplication: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("got %d events, want the event to stand without its message", len(events))
+	}
+	if events[0].EmailSubject != "" {
+		t.Errorf("subject = %q, want none", events[0].EmailSubject)
+	}
 }

@@ -109,6 +109,104 @@ func (q *Queries) LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) 
 	return last_stage_set_at, err
 }
 
+const listApplicationEvents = `-- name: ListApplicationEvents :many
+SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
+       ae.application_id,
+       a.role_title,
+       j.public_slug AS job_slug,
+       em.id         AS email_id,
+       em.subject    AS email_subject
+  FROM application_events ae
+  LEFT JOIN applications a ON a.id = ae.application_id
+                          AND a.user_id = ae.user_id
+  LEFT JOIN jobs j         ON j.id = ae.job_id
+  LEFT JOIN emails em      ON em.id = ae.source_ref
+                          AND em.user_id = ae.user_id
+                          AND em.deleted_at IS NULL
+                          AND ae.source IN ($4, $5, $6)
+ WHERE ae.user_id      = $1
+   AND ae.job_id       = $2
+   AND ae.retracted_at IS NULL
+ ORDER BY ae.occurred_at DESC, ae.id DESC
+ LIMIT $3
+`
+
+type ListApplicationEventsParams struct {
+	UserID      int64       `json:"user_id"`
+	JobID       pgtype.Int8 `json:"job_id"`
+	Limit       int32       `json:"limit"`
+	SrcGmail    string      `json:"src_gmail"`
+	SrcHosted   string      `json:"src_hosted"`
+	SrcExternal string      `json:"src_external"`
+}
+
+type ListApplicationEventsRow struct {
+	ID            int64              `json:"id"`
+	Kind          string             `json:"kind"`
+	Signal        string             `json:"signal"`
+	Source        string             `json:"source"`
+	OccurredAt    pgtype.Timestamptz `json:"occurred_at"`
+	CompanySlug   string             `json:"company_slug"`
+	ApplicationID pgtype.Int8        `json:"application_id"`
+	RoleTitle     pgtype.Text        `json:"role_title"`
+	JobSlug       pgtype.Text        `json:"job_slug"`
+	EmailID       pgtype.Int8        `json:"email_id"`
+	EmailSubject  pgtype.Text        `json:"email_subject"`
+}
+
+// One application's live events, newest first — what the application panel renders as its
+// history, where ListApplicationEventsInRange paints a month for the calendar.
+//
+// Same columns, same joins and the same retraction rule as that range read, deliberately: the
+// two answer different questions about the same ledger, and a row that meant one thing on the
+// calendar and another in the panel would be the drift this table exists to remove. See that
+// query for why the employer comes from the event's own slug, why the message is joined for
+// its subject alone, and why the join is restricted to mail-derived sources.
+//
+// Newest first because it is a history: the reader wants what just happened, not what started
+// it. `id` breaks ties so a batch landing on one timestamp keeps a stable order.
+//
+// Served by application_events_app_idx (user_id, job_id, kind) WHERE retracted_at IS NULL —
+// the predicate here is that index's leading pair.
+func (q *Queries) ListApplicationEvents(ctx context.Context, arg ListApplicationEventsParams) ([]ListApplicationEventsRow, error) {
+	rows, err := q.db.Query(ctx, listApplicationEvents,
+		arg.UserID,
+		arg.JobID,
+		arg.Limit,
+		arg.SrcGmail,
+		arg.SrcHosted,
+		arg.SrcExternal,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApplicationEventsRow{}
+	for rows.Next() {
+		var i ListApplicationEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Signal,
+			&i.Source,
+			&i.OccurredAt,
+			&i.CompanySlug,
+			&i.ApplicationID,
+			&i.RoleTitle,
+			&i.JobSlug,
+			&i.EmailID,
+			&i.EmailSubject,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listApplicationEventsInRange = `-- name: ListApplicationEventsInRange :many
 SELECT ae.id, ae.kind, ae.signal, ae.source, ae.occurred_at, ae.company_slug,
        ae.application_id,

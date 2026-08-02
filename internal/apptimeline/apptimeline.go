@@ -35,6 +35,7 @@ import (
 type Queries interface {
 	ListApplicationEventsInRange(ctx context.Context, arg db.ListApplicationEventsInRangeParams) ([]db.ListApplicationEventsInRangeRow, error)
 	ListApplicationInterviewsInRange(ctx context.Context, arg db.ListApplicationInterviewsInRangeParams) ([]db.ListApplicationInterviewsInRangeRow, error)
+	ListApplicationEvents(ctx context.Context, arg db.ListApplicationEventsParams) ([]db.ListApplicationEventsRow, error)
 }
 
 // MaxRangeDays caps one request at a year and a day — enough for any calendar span a
@@ -44,6 +45,12 @@ type Queries interface {
 // so this is hygiene rather than a fix: an unbounded range over an append-only table is
 // the kind of thing that costs nothing now and something later.
 const MaxRangeDays = 366
+
+// MaxApplicationEvents caps one application's history. An application accrues a handful of
+// events — an apply, some mail, a stage change or two — so this is the same hygiene
+// MaxRangeDays is rather than a limit anyone meets: an unbounded read of an append-only
+// table costs nothing now and something later.
+const MaxApplicationEvents = 100
 
 // ErrInvalidRange is a from/to pair the reader cannot answer for. Callers wrap it with
 // what was wrong; both readers need only to recognise it — the handler renders a 400,
@@ -86,6 +93,47 @@ func New(q Queries) *Service { return &Service{q: q} }
 // validRange is the one bound rule, shared by both reads. Two copies would drift, and the
 // calendar asks them for the same window — a range one accepted and the other refused
 // would paint half a month with no way to tell why.
+// ForApplication reads one application's events, newest first — the history the application
+// panel renders, where Range paints a month for the calendar.
+//
+// Same rows, same rules, one order each: the panel's reader wants what just happened, the
+// calendar's wants a month laid out. The mapping is shared with Range for the reason the two
+// queries share their joins — an event that meant one thing on the calendar and another in the
+// panel would be exactly the drift the ledger exists to remove.
+func (s *Service) ForApplication(ctx context.Context, userID, jobID int64) ([]Event, error) {
+	rows, err := s.q.ListApplicationEvents(ctx, db.ListApplicationEventsParams{
+		UserID: userID,
+		JobID:  pgtype.Int8{Int64: jobID, Valid: true},
+		Limit:  MaxApplicationEvents,
+		// Which sources carry an emails.id in source_ref — see Range.
+		SrcGmail:    appevent.SourceMailGmail,
+		SrcHosted:   appevent.SourceMailHosted,
+		SrcExternal: appevent.SourceMailExternal,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]Event, 0, len(rows))
+	for _, r := range rows {
+		events = append(events, Event{
+			ID:            r.ID,
+			Kind:          r.Kind,
+			Signal:        r.Signal,
+			Source:        r.Source,
+			Observed:      appevent.TrustedForDayMath(r.Source),
+			OccurredAt:    r.OccurredAt.Time,
+			CompanySlug:   r.CompanySlug,
+			RoleTitle:     r.RoleTitle.String,
+			ApplicationID: r.ApplicationID.Int64,
+			JobSlug:       r.JobSlug.String,
+			EmailID:       r.EmailID.Int64,
+			EmailSubject:  r.EmailSubject.String,
+		})
+	}
+	return events, nil
+}
+
 func validRange(from, to time.Time) error {
 	if from.IsZero() || to.IsZero() {
 		return fmt.Errorf("%w: both bounds are required", ErrInvalidRange)

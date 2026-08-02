@@ -66,21 +66,10 @@ type timelineEvent struct {
 	EmailSubject  string    `json:"email_subject,omitempty"`
 }
 
-// Timeline serves the caller's events between from and to inclusive, oldest first.
-func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
-	userID, from, to, err := timelineRequest(c)
-	if err != nil {
-		return err
-	}
-
-	events, err := h.timeline.Range(c.Context(), userID, from, to)
-	if err != nil {
-		if errors.Is(err, apptimeline.ErrInvalidRange) {
-			return fiber.NewError(fiber.StatusBadRequest, err.Error())
-		}
-		return err
-	}
-
+// timelineEvents projects the service's events onto the wire. Shared by the range read and
+// the single application's history, so an event published by one cannot carry a field the
+// other withholds.
+func timelineEvents(events []apptimeline.Event) []timelineEvent {
 	out := make([]timelineEvent, 0, len(events))
 	for _, e := range events {
 		out = append(out, timelineEvent{
@@ -98,6 +87,25 @@ func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
 			EmailSubject:  e.EmailSubject,
 		})
 	}
+	return out
+}
+
+// Timeline serves the caller's events between from and to inclusive, oldest first.
+func (h *timelineHandlers) Timeline(c *fiber.Ctx) error {
+	userID, from, to, err := timelineRequest(c)
+	if err != nil {
+		return err
+	}
+
+	events, err := h.timeline.Range(c.Context(), userID, from, to)
+	if err != nil {
+		if errors.Is(err, apptimeline.ErrInvalidRange) {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		return err
+	}
+
+	out := timelineEvents(events)
 	return c.JSON(fiber.Map{
 		"data": out,
 		"meta": fiber.Map{"from": from, "to": to, "count": len(out)},

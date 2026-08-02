@@ -2232,7 +2232,9 @@ curl "https://freehire.me/api/v1/me/credits/history" -H "Authorization: Bearer f
 
 **Auth:** Session or API key
 
-One tracked application, with the mail linked to it.
+One tracked application, with the mail linked to it and its history.
+
+`events` is the application's ledger, newest first — what happened to it: the apply, employer replies, follow-ups, stage changes, scheduled interviews. Each carries the same shape `GET /me/timeline` serves, and `observed` says whether anybody other than you set its date. Bounded at 100; empty on an application nothing has happened to yet. This is also where the full public job view lives, description included — the listing at `GET /me/tracking` carries only a card.
 
 A slug you do not track is a 404.
 

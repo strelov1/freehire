@@ -27,6 +27,11 @@ func (s timelineStore) ListApplicationEventsInRange(context.Context, db.ListAppl
 	return s.rows, nil
 }
 
+// The single-application read. These cases exercise the range endpoint, which never calls it.
+func (s timelineStore) ListApplicationEvents(context.Context, db.ListApplicationEventsParams) ([]db.ListApplicationEventsRow, error) {
+	return nil, nil
+}
+
 // meTimelineApp mounts the range read behind RequireAuth. The store is nil unless a case
 // supplies one: the auth and range cases must refuse before the service reaches it, and a
 // nil dereference here is how a regression that queried first would announce itself.

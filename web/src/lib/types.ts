@@ -528,6 +528,9 @@ export interface TrackedApplication {
   cv_opened_at: string | null;
   emails: ApplicationEmail[];
   stage_suggestion?: StageSuggestion;
+  /** The application's history from the ledger, newest first — what happened to it, as
+   *  against the marks on the posting the listing row carries. Empty when nothing has. */
+  events: TimelineEvent[];
 }
 
 /** The assembled follow-up message for a silent application. Deterministic and

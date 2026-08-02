@@ -1115,6 +1115,21 @@ type Querier interface {
 	// Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 	// restricted to one source.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
+	// One application's live events, newest first — what the application panel renders as its
+	// history, where ListApplicationEventsInRange paints a month for the calendar.
+	//
+	// Same columns, same joins and the same retraction rule as that range read, deliberately: the
+	// two answer different questions about the same ledger, and a row that meant one thing on the
+	// calendar and another in the panel would be the drift this table exists to remove. See that
+	// query for why the employer comes from the event's own slug, why the message is joined for
+	// its subject alone, and why the join is restricted to mail-derived sources.
+	//
+	// Newest first because it is a history: the reader wants what just happened, not what started
+	// it. `id` breaks ties so a batch landing on one timestamp keeps a stable order.
+	//
+	// Served by application_events_app_idx (user_id, job_id, kind) WHERE retracted_at IS NULL —
+	// the predicate here is that index's leading pair.
+	ListApplicationEvents(ctx context.Context, arg ListApplicationEventsParams) ([]ListApplicationEventsRow, error)
 	// One caller's live events over a date range, oldest first — the ledger's first dated
 	// read, behind internal/apptimeline and the tracking calendar.
 	//

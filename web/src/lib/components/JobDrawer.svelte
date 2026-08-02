@@ -18,9 +18,10 @@
   import type { EmailBody } from '$lib/api';
   import { currentUser } from '$lib/auth.svelte';
   import { statusLabel, stageImplication } from '$lib/emailStatus';
+  import { eventLabel, eventTone } from '$lib/events';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import { avatarInitials, avatarColor } from '$lib/avatar';
-  import type { Job, MyJob, ApplicationEmail, StageSuggestion } from '$lib/types';
+  import type { Job, MyJob, ApplicationEmail, StageSuggestion, TimelineEvent } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
 
@@ -130,6 +131,7 @@
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
       posting = app.job;
+      events = app.events ?? [];
     } catch (e) {
       emailsError = errorMessage(e, 'Failed to load emails.');
     } finally {
@@ -171,16 +173,12 @@
   let tags = $derived(item.job ? cardTagsFromCard(item.job) : []);
   let stageLabel = $derived(item.stage ? humanizeStage(item.stage) : null);
 
-  // Interaction timeline shown as a wizard-style stepper up top, in engagement-funnel
-  // order (viewed → saved → applied): Applied is the deepest step, so it anchors the
-  // right end regardless of the raw last-viewed timestamp.
-  let activity = $derived(
-    [
-      { label: 'Viewed', at: item.viewed_at },
-      item.saved_at ? { label: 'Saved', at: item.saved_at } : null,
-      item.applied_at ? { label: 'Applied', at: item.applied_at } : null,
-    ].filter((x): x is { label: string; at: string } => x !== null),
-  );
+  // The application's history, newest first, from the ledger. It replaces a strip that read
+  // as a timeline and was not one: viewed/saved/applied ordered by depth, so the newest fact
+  // sat on the left and the oldest on the right. `viewed` and `saved` are gone from it on
+  // purpose — they are marks on a posting, and viewed_at is refreshed on every view, so at
+  // the foot of a history it would state a first view while holding the latest date.
+  let events = $state.raw<TimelineEvent[]>([]);
 
   // Lock background scroll while the fullscreen panel is open, released on unmount
   // (close / job switch). A DOM side-effect — the legitimate use of $effect.
@@ -269,23 +267,6 @@
             <span class="rounded-full bg-brand-muted px-2.5 py-0.5 text-xs font-medium text-brand-strong">{stageLabel}</span>
           {/if}
         </div>
-      {/if}
-
-      {#if activity.length}
-        <ol class="flex items-center gap-2">
-          {#each activity as a, i (a.label)}
-            <li class="flex shrink-0 items-center gap-1.5">
-              <span class="size-2 rounded-full bg-brand"></span>
-              <span class="whitespace-nowrap text-xs">
-                <span class="font-medium text-foreground">{a.label}</span>
-                <span class="text-muted-foreground">{timeAgo(a.at)}</span>
-              </span>
-            </li>
-            {#if i < activity.length - 1}
-              <li aria-hidden="true" class="h-px min-w-4 flex-1 bg-border"></li>
-            {/if}
-          {/each}
-        </ol>
       {/if}
 
       <!-- What the candidate can do about this application, on every tab. The card used
@@ -379,6 +360,24 @@
                   <Button variant="outline" onclick={() => onchooseoutcome(o)}>{humanizeStage(o)}</Button>
                 {/each}
               </div>
+            </div>
+          {/if}
+
+          <!-- What happened, newest first. Absent entirely when the ledger holds nothing:
+               an application saved but never applied to has no history, and an empty frame
+               would say otherwise. -->
+          {#if events.length}
+            <div class="flex flex-col gap-1 text-sm">
+              <span class="font-medium">History</span>
+              <ol class="flex flex-col gap-1.5">
+                {#each events as e (e.id)}
+                  <li class="flex items-baseline gap-2">
+                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
+                    <span class="w-24 shrink-0 text-xs text-muted-foreground">{timeAgo(e.occurred_at)}</span>
+                    <span class="min-w-0 text-sm">{eventLabel(e)}</span>
+                  </li>
+                {/each}
+              </ol>
             </div>
           {/if}
 
