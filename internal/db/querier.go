@@ -1554,18 +1554,36 @@ type Querier interface {
 	// Capped at 500 — the quota window (see CountRecentUserJobAnalyses) keeps real usage
 	// far below that, and each row drags a full analysis JSONB over the wire.
 	ListUserJobAnalyses(ctx context.Context, userID int64) ([]ListUserJobAnalysesRow, error)
-	// A user's job interactions joined with the job rows. Each subset is ordered by
-	// when the job entered *that* list, not by last touch: saved by saved_at, applied
-	// by applied_at, the passive history by viewed_at, the board by when it was saved
-	// or applied. This keeps a plain re-view from bumping a saved/applied job to the
-	// top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
-	// timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
-	// passive history (rows neither saved nor applied). Closed jobs stay listed: a
-	// user's history must not shrink when a posting closes. email_count is the
-	// caller's live (non-deleted) inbox messages linked to this job — the board's
-	// per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
-	// the pending saved-job reminder's deadline (NULL when none), so the saved list can
-	// show "remind in N days" with its reschedule/off controls.
+	// A user's job interactions joined with a CARD of the job — what a list row draws, and no
+	// more. Each subset is ordered by when the job entered *that* list, not by last touch: saved
+	// by saved_at, applied by applied_at, the passive history by viewed_at, the board by when it
+	// was saved or applied. This keeps a plain re-view from bumping a saved/applied job to the
+	// top (viewed_at is refreshed on every view). 'all' keeps the touched-recency timeline.
+	// filter narrows to viewed-only/saved/applied subsets; 'viewed' is the passive history (rows
+	// neither saved nor applied). Closed jobs stay listed: a user's history must not shrink when
+	// a posting closes.
+	//
+	// The columns are named rather than embedded because of what embedding cost: sqlc.embed(jobs)
+	// read all 51, description included, and the board renders none of that text. Measured over
+	// 500 applications with 5 KB descriptions, it was 2.37 MB of a 2.83 MB response — serialized
+	// again into the SSR payload and parsed again by the browser — plus 13 ms of the query's 40,
+	// since a description is large enough to be TOASTed and fetched separately per row. The full
+	// posting is one read away at GET /me/tracking/:slug, which is what the drawer already calls.
+	//
+	// Only the geography arrives raw: the wire value is a dict-then-LLM hybrid, so both sides have
+	// to reach the projection. They are pulled out of the enrichment by key instead of shipping
+	// the whole JSONB.
+	// One pass over this job's mail for all three facts. They were three correlated subqueries
+	// over the same rows with the same predicate written three times; the "pending" test in
+	// particular has to stay the one the follow-up gate, the ghost signal and the inbox's link
+	// filter make, and three spellings of it were three chances to drift.
+	//
+	// has_pending_suggestion is mail the matcher believes belongs to this application that the
+	// caller has neither confirmed nor rejected. Such mail contradicts a claim that nobody
+	// replied, so the reader downgrades a silence verdict to a question rather than asserting it.
+	// "Pending" means the caller has not confirmed it, and confirming is what attaches the
+	// application — asking `job_id IS NULL` instead is the same set today only by the coincidence
+	// that every writer setting job_id also clears the suggestion.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
 	// Users whose stored structured résumé currently describes their stored CV, for the
 	// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:

@@ -3,6 +3,7 @@
 
 import type {
   Job,
+  Card as JobCard,
   JobMatch,
   Blocker,
   Professional,
@@ -11,6 +12,9 @@ import type {
   Analysis as MatchAnalysisContract,
 } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
+// The list-row projection of a job: the same names and derivations as Job, minus the posting
+// text and everything else a row does not draw.
+export type { Card as JobCard } from './generated/contracts';
 // Per-job profile match (how well a job's skills are covered by the caller's profile).
 export type { JobMatch, AdjacentSkill } from './generated/contracts';
 // Hard-constraint blockers (years, education, certs, work auth, location) surfaced
@@ -422,8 +426,11 @@ export interface MyJob {
   /** Read from the application record, so a card renders whether or not `job` is there. */
   company_slug: string;
   role_title: string;
-  /** Null once the catalogue has removed the posting. The application outlives it. */
-  job: Job | null;
+  /** The card projection of the posting — what a row draws. Null once the catalogue has
+   *  removed the posting: the application outlives it. The full posting, description
+   *  included, is on the single-application read (`getTrackedApplication`), which the
+   *  panel already fetches; the listing carrying it cost 84% of its own payload. */
+  job: JobCard | null;
   viewed_at: string;
   saved_at: string | null;
   applied_at: string | null;

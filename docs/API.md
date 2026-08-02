@@ -1117,7 +1117,11 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorizatio
 
 Your tracked jobs joined with the job data.
 
-Each item carries the job in the shared wire shape with your interaction timestamps alongside it. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay listed so your history never shrinks.
+Each item carries a **card** of the job with your interaction timestamps alongside it. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay listed so your history never shrinks.
+
+The card is what a list row draws: `public_slug`, `title`, `company`, `closed_at`, the stated facets (`work_mode`, `seniority`, `employment_type`, `countries`, `regions`), `skills`, `collections`, `posted_at`, and `blurb` — a short summary already cut to length. It does **not** carry the posting's description; the full public job view, description included, is on `GET /me/tracking/:slug`.
+
+> **Changed:** this listing previously returned the complete job view on every row. Over 500 applications the descriptions alone were 2.37 MB of a 2.83 MB response, for text no row renders.
 
 **Query parameters**
 

@@ -8,7 +8,7 @@
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
   import { timeAgo, errorMessage } from '$lib/utils';
   import { tablist } from '$lib/actions/tablist';
-  import { cardTags } from '$lib/enrichment';
+  import { cardTagsFromCard } from '$lib/enrichment';
   import CompanyLogo from './CompanyLogo.svelte';
   import JobDescription from './JobDescription.svelte';
   import MatchAnalysisFull from './MatchAnalysisFull.svelte';
@@ -19,7 +19,7 @@
   import { currentUser } from '$lib/auth.svelte';
   import { statusLabel, statusClass, stageImplication } from '$lib/emailStatus';
   import { avatarInitials, avatarColor } from '$lib/avatar';
-  import type { MyJob, ApplicationEmail, StageSuggestion } from '$lib/types';
+  import type { Job, MyJob, ApplicationEmail, StageSuggestion } from '$lib/types';
   import { focusTrap } from '$lib/actions/focusTrap';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
 
@@ -100,6 +100,11 @@
   // stage is set from here, so the offer disappears on the press rather than on the next
   // load — the server would stop sending it, but not until something asks it again.
   let stageSuggestion = $state.raw<StageSuggestion | null>(null);
+  // The full posting. The listing serves a card — employer, role, and the facets a row draws —
+  // because carrying every description was 84% of its payload for text no row renders. The
+  // panel is the one place that wants the posting, and it already makes this request for the
+  // linked mail, so the description arrives on a call that was happening anyway.
+  let posting = $state.raw<Job | null>(null);
   let expandedId = $state<number | null>(null);
   let expandedBody = $state.raw<EmailBody | null>(null);
   let bodyLoading = $state(false);
@@ -123,6 +128,7 @@
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
+      posting = app.job;
     } catch (e) {
       emailsError = errorMessage(e, 'Failed to load emails.');
     } finally {
@@ -161,7 +167,7 @@
   // simply absent — the honest rendering, since we no longer have it to show.
   const company = $derived(item.job?.company || item.company_slug);
   const title = $derived(item.job?.title || item.role_title);
-  let tags = $derived(item.job ? cardTags(item.job) : []);
+  let tags = $derived(item.job ? cardTagsFromCard(item.job) : []);
   let stageLabel = $derived(item.stage ? humanizeStage(item.stage) : null);
 
   // Interaction timeline shown as a wizard-style stepper up top, in engagement-funnel
@@ -403,9 +409,11 @@
         </div>
       {:else if tab === 'fit'}
         <div class="flex flex-col gap-6">
-          {#if item.job}
-            <JobMatch job={item.job} />
-            <MatchAnalysisFull job={item.job} />
+          {#if posting}
+            <JobMatch job={posting} />
+            <MatchAnalysisFull job={posting} />
+          {:else if item.job}
+            <p class="text-sm text-muted-foreground">Loading…</p>
           {/if}
         </div>
       {:else if tab === 'emails'}
@@ -517,17 +525,19 @@
             <p class="text-sm text-muted-foreground">
               This posting is no longer listed. Your application, its stage and your notes are kept.
             </p>
-          {:else if item.job.description}
-            <JobDescription html={item.job.description} />
+          {:else if posting?.description}
+            <JobDescription html={posting.description} />
+          {:else if !posting}
+            <p class="text-sm text-muted-foreground">Loading…</p>
           {:else}
             <p class="text-sm text-muted-foreground">No description available.</p>
           {/if}
 
-          {#if item.job?.skills?.length}
+          {#if posting?.skills?.length}
             <div class="flex flex-col gap-2 border-t border-border pt-5">
               <p class={sectionLabel}>Skills</p>
               <div class="flex flex-wrap gap-1.5">
-                {#each item.job.skills as skill (skill)}
+                {#each posting.skills as skill (skill)}
                   <Badge variant="brand">{skill}</Badge>
                 {/each}
               </div>

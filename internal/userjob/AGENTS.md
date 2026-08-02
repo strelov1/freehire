@@ -43,5 +43,9 @@ A chased application therefore has **two readings at once**, and the board card 
 
 The `/me/tracking` read joins the caller's interactions with the jobs they touch. View history = all rows; applications = `applied_at IS NOT NULL`.
 
+**The listing serves a CARD, not the posting** (`jobview.Card`). It carries what a row draws — employer, role, the stated facets, skills, collections, the effective posting date, and a `blurb` cut server-side — and the query reads only those columns. Embedding the whole `jobs` row cost 2.37 MB of a 2.83 MB response over 500 applications, for description text no row renders, plus the TOAST fetch per row that reading it implies. The full public job view stays on `GET /me/tracking/:slug`, which the application panel already calls for its linked mail, so the description arrives on a request that was happening anyway. `TestMeasureBoardLoad` holds the line: it fails if a description reappears in the listing or the payload crosses its ceiling.
+
+Two read-time signals are absent from the card by the same reasoning that they were absent before it: `Reality` and `Ghost` are attached by explicit calls the tracking path has never made, so the rows that render cards showed no such badge either way.
+
 ## Limitations
 - No bulk operations (e.g. "mark all viewed"); each interaction is an individual per-(user, job) upsert.

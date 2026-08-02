@@ -5,6 +5,7 @@
 // never renders blank — the SPA never re-validates, it only formats.
 
 import type { Enrichment, Job } from './types';
+import type { Card as JobCard } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
@@ -123,14 +124,38 @@ export function regionLabel(job: Pick<Job, 'regions'>): string | null {
  */
 export function cardTags(job: Job): string[] {
   const e = job.enrichment;
+  return tagRow({
+    work_mode: job.work_mode,
+    regions: job.regions,
+    employment_type: e?.employment_type,
+    seniority: e?.seniority,
+  });
+}
+
+/**
+ * The same row, from the listing's card projection. The card carries these four facets flat —
+ * the server resolved the dict-then-LLM geography before sending — where a full `Job` still
+ * keeps two of them inside `enrichment`. One row builder, two shapes of input, so a tracked
+ * application and a catalogue result cannot describe the same job differently.
+ */
+export function cardTagsFromCard(card: JobCard): string[] {
+  return tagRow(card);
+}
+
+function tagRow(f: {
+  work_mode?: string;
+  regions?: string[];
+  employment_type?: string;
+  seniority?: string;
+}): string[] {
   const tags: string[] = [];
 
-  const arrangement = workArrangement(job);
+  const arrangement = workArrangement({ work_mode: f.work_mode ?? '' });
   if (arrangement) tags.push(arrangement);
-  const region = regionLabel(job);
+  const region = regionLabel({ regions: f.regions ?? [] });
   if (region) tags.push(region);
-  if (e?.employment_type) tags.push(label(EMPLOYMENT_LABELS, e.employment_type));
-  if (e?.seniority) tags.push(label(SENIORITY_LABELS, e.seniority));
+  if (f.employment_type) tags.push(label(EMPLOYMENT_LABELS, f.employment_type));
+  if (f.seniority) tags.push(label(SENIORITY_LABELS, f.seniority));
 
   return tags;
 }

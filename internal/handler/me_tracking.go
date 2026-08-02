@@ -21,14 +21,14 @@ type myJobResponse struct {
 	RoleTitle string `json:"role_title"`
 	// Job is null once the catalogue has removed the posting. The application is a fact
 	// about the candidate's life and outlives our inventory of it.
-	Job            *jobview.Job `json:"job"`
-	ViewedAt       *time.Time   `json:"viewed_at"`
-	SavedAt        *time.Time   `json:"saved_at"`
-	AppliedAt      *time.Time   `json:"applied_at"`
-	Stage          *string      `json:"stage"`
-	Notes          *string      `json:"notes"`
-	EmailCount     int          `json:"email_count"`
-	ReminderFireAt *time.Time   `json:"reminder_fire_at"`
+	Job            *jobview.Card `json:"job"`
+	ViewedAt       *time.Time    `json:"viewed_at"`
+	SavedAt        *time.Time    `json:"saved_at"`
+	AppliedAt      *time.Time    `json:"applied_at"`
+	Stage          *string       `json:"stage"`
+	Notes          *string       `json:"notes"`
+	EmailCount     int           `json:"email_count"`
+	ReminderFireAt *time.Time    `json:"reminder_fire_at"`
 	// The silence fields are null together on any row that is not an application
 	// awaiting a reply — a job merely viewed or saved, or one in a settled stage.
 	// Null means "nothing is owed here", which the board must be able to tell

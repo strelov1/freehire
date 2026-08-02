@@ -265,17 +265,31 @@ func (r *QueriesRepository) ListInteractions(
 	}
 	items := make([]TrackedJob, 0, len(rows))
 	for _, row := range rows {
-		view, err := jobview.FromRow(row.Job)
-		if err != nil {
-			return nil, err
-		}
+		card := jobview.NewCard(jobview.CardInput{
+			PublicSlug:     row.PublicSlug,
+			Title:          row.Title,
+			Company:        row.CompanySlug,
+			ClosedAt:       pgconv.TimePtr(row.ClosedAt),
+			WorkMode:       row.WorkMode,
+			Seniority:      row.Seniority,
+			EmploymentType: row.EmploymentType,
+			DictCountries:  row.Countries,
+			DictRegions:    row.Regions,
+			LLMCountries:   row.LlmCountries,
+			LLMRegions:     row.LlmRegions,
+			Skills:         row.Skills,
+			Collections:    row.Collections,
+			PostedAt:       pgconv.TimePtr(row.PostedAt),
+			CreatedAt:      pgconv.TimePtr(row.CreatedAt),
+			Blurb:          row.Blurb,
+		})
 		items = append(items, TrackedJob{
-			ID:          view.PublicSlug,
-			CompanySlug: row.Job.CompanySlug,
-			RoleTitle:   row.Job.Title,
-			Job:         &view,
+			ID:          row.PublicSlug,
+			CompanySlug: row.CompanySlug,
+			RoleTitle:   row.Title,
+			Job:         &card,
 			Interaction: Interaction{
-				JobID:     row.Job.ID,
+				JobID:     row.ID,
 				ViewedAt:  pgconv.TimePtr(row.ViewedAt),
 				SavedAt:   pgconv.TimePtr(row.SavedAt),
 				AppliedAt: pgconv.TimePtr(row.AppliedAt),

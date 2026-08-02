@@ -245,7 +245,7 @@ func TestUserJobsSaveAndList(t *testing.T) {
 		if len(all) != 3 {
 			t.Fatalf("list all: %d rows, want 3", len(all))
 		}
-		gotOrder := []int64{all[0].Job.ID, all[1].Job.ID, all[2].Job.ID}
+		gotOrder := []int64{all[0].ID, all[1].ID, all[2].ID}
 		wantOrder := []int64{appliedJob, savedJob, viewedJob}
 		for i := range wantOrder {
 			if gotOrder[i] != wantOrder[i] {
@@ -257,7 +257,7 @@ func TestUserJobsSaveAndList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list viewed: %v", err)
 		}
-		if len(viewed) != 1 || viewed[0].Job.ID != viewedJob {
+		if len(viewed) != 1 || viewed[0].ID != viewedJob {
 			t.Fatalf("list viewed: got %d rows, want exactly the view-only job (not saved, not applied)", len(viewed))
 		}
 
@@ -265,7 +265,7 @@ func TestUserJobsSaveAndList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list saved: %v", err)
 		}
-		if len(saved) != 1 || saved[0].Job.ID != savedJob {
+		if len(saved) != 1 || saved[0].ID != savedJob {
 			t.Fatalf("list saved: got %d rows, want exactly the saved job", len(saved))
 		}
 
@@ -273,7 +273,7 @@ func TestUserJobsSaveAndList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list applied: %v", err)
 		}
-		if len(applied) != 1 || applied[0].Job.ID != appliedJob {
+		if len(applied) != 1 || applied[0].ID != appliedJob {
 			t.Fatalf("list applied: got %d rows, want exactly the applied job", len(applied))
 		}
 
@@ -316,7 +316,7 @@ func TestUserJobsSaveAndList(t *testing.T) {
 			}
 			got := []int64{}
 			for _, r := range saved {
-				got = append(got, r.Job.ID)
+				got = append(got, r.ID)
 			}
 			want := []int64{newer, older}
 			if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {

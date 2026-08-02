@@ -844,9 +844,12 @@ ${BASE_URL}/auth/oauth/google/start`,
         auth: 'cookie-or-key',
         summary: 'Your tracked jobs joined with the job data.',
         description:
-          'Each item carries the job in the shared wire shape with your interaction ' +
-          'timestamps alongside it. `meta.counts` gives the per-filter totals for tab ' +
-          'badges. Closed jobs stay listed so your history never shrinks.',
+          'Each item carries a card of the job with your interaction timestamps alongside ' +
+          'it — what a list row draws: slug, title, company, closed_at, the stated facets, ' +
+          'skills, collections, posted_at, and a `blurb` already cut to length. It does NOT ' +
+          'carry the description; the full job view is on `GET /me/tracking/:slug`. ' +
+          '`meta.counts` gives the per-filter totals for tab badges. Closed jobs stay ' +
+          'listed so your history never shrinks.',
         query: [
           { name: 'filter', type: 'string', description: 'Subset to return: `all`, `viewed`, `saved`, `applied`, or `board` (default `all`; an unknown value is a 400).', example: 'applied' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },

@@ -239,24 +239,43 @@ SELECT u.user_id, u.job_id, u.viewed_at,
   FROM unsaved u;
 
 -- name: ListUserJobs :many
--- A user's job interactions joined with the job rows. Each subset is ordered by
--- when the job entered *that* list, not by last touch: saved by saved_at, applied
--- by applied_at, the passive history by viewed_at, the board by when it was saved
--- or applied. This keeps a plain re-view from bumping a saved/applied job to the
--- top (viewed_at is refreshed on every view). 'all' keeps the touched-recency
--- timeline. filter narrows to viewed-only/saved/applied subsets; 'viewed' is the
--- passive history (rows neither saved nor applied). Closed jobs stay listed: a
--- user's history must not shrink when a posting closes. email_count is the
--- caller's live (non-deleted) inbox messages linked to this job — the board's
--- per-card ✉ badge; 0 for everyone without a connected mailbox. reminder_fire_at is
--- the pending saved-job reminder's deadline (NULL when none), so the saved list can
--- show "remind in N days" with its reschedule/off controls.
-SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
-       (SELECT count(*)
-          FROM emails e
-         WHERE e.user_id = uj.user_id
-           AND e.job_id = jobs.id
-           AND e.deleted_at IS NULL) AS email_count,
+-- A user's job interactions joined with a CARD of the job — what a list row draws, and no
+-- more. Each subset is ordered by when the job entered *that* list, not by last touch: saved
+-- by saved_at, applied by applied_at, the passive history by viewed_at, the board by when it
+-- was saved or applied. This keeps a plain re-view from bumping a saved/applied job to the
+-- top (viewed_at is refreshed on every view). 'all' keeps the touched-recency timeline.
+-- filter narrows to viewed-only/saved/applied subsets; 'viewed' is the passive history (rows
+-- neither saved nor applied). Closed jobs stay listed: a user's history must not shrink when
+-- a posting closes.
+--
+-- The columns are named rather than embedded because of what embedding cost: sqlc.embed(jobs)
+-- read all 51, description included, and the board renders none of that text. Measured over
+-- 500 applications with 5 KB descriptions, it was 2.37 MB of a 2.83 MB response — serialized
+-- again into the SSR payload and parsed again by the browser — plus 13 ms of the query's 40,
+-- since a description is large enough to be TOASTed and fetched separately per row. The full
+-- posting is one read away at GET /me/tracking/:slug, which is what the drawer already calls.
+--
+-- Only the geography arrives raw: the wire value is a dict-then-LLM hybrid, so both sides have
+-- to reach the projection. They are pulled out of the enrichment by key instead of shipping
+-- the whole JSONB.
+SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company_slug, jobs.closed_at,
+       jobs.work_mode, jobs.seniority, jobs.employment_type,
+       jobs.countries, jobs.regions, jobs.skills, jobs.collections,
+       jobs.posted_at, jobs.created_at,
+       -- The blurb a row shows under the title: the enrichment's own summary when there is
+       -- one, else the opening of the description with its tags stripped. Cut here rather
+       -- than shipped whole and cut in the browser — the descriptions were 2.37 MB of a
+       -- 2.83 MB response, and a row displays about 220 characters of one.
+       COALESCE(
+           NULLIF(jobs.enrichment ->> 'summary', ''),
+           left(regexp_replace(jobs.description, '<[^>]*>', ' ', 'g'), 400)
+       )::text AS blurb,
+       ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'countries'))::text[] AS llm_countries,
+       ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'regions'))::text[]   AS llm_regions,
+       uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
+       COALESCE(mail.email_count, 0)::bigint AS email_count,
+       (a.applied_at IS NOT NULL
+        AND COALESCE(mail.suggestion_pending, false))::boolean AS has_pending_suggestion,
        (SELECT r.fire_at
           FROM job_reminders r
          WHERE r.user_id = uj.user_id
@@ -264,52 +283,49 @@ SELECT sqlc.embed(jobs), uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.not
            AND r.status = 'pending') AS reminder_fire_at,
        a.followed_up_at,
        -- When a CV of the caller's tied to this job was last opened by a countable visitor. Read
-       -- from the denormalised stamp on cvs rather than from the click history, which would mean a
-       -- fifth correlated subquery here joining three tables.
+       -- from the denormalised stamp on cvs rather than from the click history, which would mean
+       -- joining three tables for one timestamp.
        --
-       -- Deliberately NOT an input to last_activity_at below, for the same reason followed_up_at is
-       -- not: somebody opening a CV is not a reply. Folding it in would clear the silence badge at
-       -- the moment it matters most — they read it and still said nothing.
+       -- Deliberately NOT an input to last_activity_at below, for the same reason followed_up_at
+       -- is not: somebody opening a CV is not a reply. Folding it in would clear the silence
+       -- badge at the moment it matters most — they read it and still said nothing.
        (SELECT max(cv.last_click_at)
           FROM cvs cv
          WHERE cv.user_id = uj.user_id
            AND cv.job_id = jobs.id)::timestamptz AS cv_opened_at,
-       -- last_activity_at is when this application last moved: its apply date, or
-       -- the newest message linked to it when that is later. GREATEST ignores a
-       -- NULL aggregate, so an application with no mail falls back to applied_at
-       -- rather than reporting nothing — a clock that only starts once mail
-       -- arrives would never fire on the applications ignored outright, which are
-       -- the ones worth reporting. NULL on a row that is not an application: a job
-       -- merely viewed or saved is not waiting on anyone.
-       (CASE WHEN a.applied_at IS NOT NULL THEN
-          GREATEST(a.applied_at,
-                   (SELECT max(e.received_at)
-                      FROM emails e
-                     WHERE e.user_id = uj.user_id
-                       AND e.job_id = jobs.id
-                       AND e.deleted_at IS NULL))
-        END)::timestamptz AS last_activity_at,
-       -- has_pending_suggestion is mail the matcher believes belongs to this
-       -- application that the caller has neither confirmed nor rejected. Such mail
-       -- contradicts a claim that nobody replied, so the reader downgrades a
-       -- silence verdict to a question rather than asserting it.
-       (a.applied_at IS NOT NULL AND EXISTS (
-          SELECT 1
-            FROM emails e
-           WHERE e.user_id = uj.user_id
-             AND e.suggested_job_id = jobs.id
-             -- "Pending" means the caller has not confirmed it, and confirming is what
-             -- attaches the application — the same test the follow-up gate, the ghost
-             -- signal and the inbox's link filter make, so the two cannot disagree about
-             -- one message. This used to ask `e.job_id IS NULL`, which is the same set
-             -- today only because every writer that sets job_id also either clears the
-             -- suggestion or attaches the application. Two spellings of one rule held
-             -- apart by that coincidence is not an invariant.
-             AND e.application_id IS NULL
-             AND e.deleted_at IS NULL))::boolean AS has_pending_suggestion
+       -- last_activity_at is when this application last moved: its apply date, or the newest
+       -- message linked to it when that is later. GREATEST ignores a NULL aggregate, so an
+       -- application with no mail falls back to applied_at rather than reporting nothing — a
+       -- clock that only starts once mail arrives would never fire on the applications ignored
+       -- outright, which are the ones worth reporting. NULL on a row that is not an
+       -- application: a job merely viewed or saved is not waiting on anyone.
+       (CASE WHEN a.applied_at IS NOT NULL
+             THEN GREATEST(a.applied_at, mail.newest_mail_at)
+        END)::timestamptz AS last_activity_at
 FROM user_jobs uj
 JOIN jobs ON jobs.id = uj.job_id
 LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+-- One pass over this job's mail for all three facts. They were three correlated subqueries
+-- over the same rows with the same predicate written three times; the "pending" test in
+-- particular has to stay the one the follow-up gate, the ghost signal and the inbox's link
+-- filter make, and three spellings of it were three chances to drift.
+--
+-- has_pending_suggestion is mail the matcher believes belongs to this application that the
+-- caller has neither confirmed nor rejected. Such mail contradicts a claim that nobody
+-- replied, so the reader downgrades a silence verdict to a question rather than asserting it.
+-- "Pending" means the caller has not confirmed it, and confirming is what attaches the
+-- application — asking `job_id IS NULL` instead is the same set today only by the coincidence
+-- that every writer setting job_id also clears the suggestion.
+LEFT JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE e.job_id = jobs.id)                AS email_count,
+           max(e.received_at) FILTER (WHERE e.job_id = jobs.id)      AS newest_mail_at,
+           bool_or(e.suggested_job_id = jobs.id
+                   AND e.application_id IS NULL)                     AS suggestion_pending
+      FROM emails e
+     WHERE e.user_id = uj.user_id
+       AND (e.job_id = jobs.id OR e.suggested_job_id = jobs.id)
+       AND e.deleted_at IS NULL
+) mail ON true
 WHERE uj.user_id = $1
   AND (sqlc.arg(filter)::text = 'all'
        OR (sqlc.arg(filter)::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)

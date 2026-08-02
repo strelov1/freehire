@@ -96,7 +96,7 @@ type TrackedJob struct {
 	CompanySlug string
 	RoleTitle   string
 	// Job is absent when the catalogue no longer holds the posting.
-	Job *jobview.Job
+	Job *jobview.Card
 	Interaction
 	// EmailCount is the caller's live inbox messages linked to this job — the
 	// board's per-card ✉ badge. 0 for users without a connected mailbox.

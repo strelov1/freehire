@@ -8,11 +8,11 @@
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import { cardTags, formatSalary } from '$lib/enrichment';
+  import { cardTags, cardTagsFromCard, formatSalary } from '$lib/enrichment';
   import { computeClientMatch, matchTeaser, resolveMatchState } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
   import { metaDescription } from '$lib/seo';
-  import type { Job } from '$lib/types';
+  import type { Job, JobCard } from '$lib/types';
   import { Badge } from '$lib/ui';
   import { supersedesReality } from '$lib/ghost';
   import CredentialBadge from './CredentialBadge.svelte';
@@ -53,7 +53,11 @@
     footer,
     onHide,
   }: {
-    job: Job;
+    // Either the catalogue's full posting or the tracking listing's card. The row draws the
+    // same thing from both: the card carries a server-cut blurb where the posting carries the
+    // whole description, and the two facet fields a full Job keeps inside `enrichment` arrive
+    // flat. Everything the card omits is optional here already.
+    job: Job | JobCard;
     dimViewed?: boolean;
     newTab?: boolean;
     compact?: boolean;
@@ -63,7 +67,7 @@
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
 
-  const tags = $derived(cardTags(job));
+  const tags = $derived('enrichment' in job ? cardTags(job) : cardTagsFromCard(job));
   // Only the credential subset of job.collections renders here, so the signal row's
   // guard has to test that subset — a job carrying only editorial tags would
   // otherwise open an empty flex row and leave a stray margin under the title.
@@ -72,12 +76,23 @@
   // opening it. Prefer the clean model-written summary, but only tech jobs are
   // enriched — fall back to a plain-text snippet of the raw (HTML) posting so
   // non-tech jobs still show a description. metaDescription strips the tags.
-  const blurb = $derived(job.enrichment?.summary || metaDescription(job.description ?? '', 220));
-  const salary = $derived(job.enrichment ? formatSalary(job.enrichment) : null);
+  const blurb = $derived(
+    'enrichment' in job
+      ? job.enrichment?.summary || metaDescription(job.description ?? '', 220)
+      : metaDescription(job.blurb ?? '', 220),
+  );
+  // Salary lives in the enrichment, which a card does not carry: the tracking lists never
+  // showed it (their rows came from the same listing) and a row without one simply omits it.
+  const salary = $derived('enrichment' in job && job.enrichment ? formatSalary(job.enrichment) : null);
   // Top-level `skills` is the served (deterministic-dictionary) facet; the raw
   // `enrichment.skills` is kept in the JSONB and NOT served, so it's always absent
   // here — read the dictionary field so the card's skill chips actually populate.
   const skills = $derived(job.skills ?? []);
+  // The two read-time signals. Both are attached by the catalogue's projection and neither
+  // has ever been computed for the tracking listing, so a card simply has none — the rows
+  // that render cards showed no badge before this change either.
+  const reality = $derived('reality' in job ? job.reality : undefined);
+  const ghost = $derived('ghost' in job ? job.ghost : undefined);
   // How recently it was posted is a key signal, so it leads the header.
   const posted = $derived(timeAgo(job.posted_at));
 
@@ -278,15 +293,15 @@
 
   <!-- Signal row: reality chip + the region/employment facets, grouped under the
        title as quiet outline chips so they read as metadata, not decoration. -->
-  {#if job.reality || tags.length > 0 || job.countries?.length || credentials.length > 0}
+  {#if reality || tags.length > 0 || job.countries?.length || credentials.length > 0}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
            checklist; where ghost is silent, reality renders exactly as before. -->
-      {#if supersedesReality(job.ghost)}
-        <GhostBadge ghost={job.ghost} />
+      {#if supersedesReality(ghost)}
+        <GhostBadge {ghost} />
       {:else}
-        <RealityBadge reality={job.reality} />
+        <RealityBadge {reality} />
       {/if}
       {#each tags as tag (tag)}
         <Badge variant="outline">{tag}</Badge>
