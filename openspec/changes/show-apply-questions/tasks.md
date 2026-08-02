@@ -1,8 +1,8 @@
 ## 1. The display projection
 
-- [ ] 1.1 Add the display shape and projection to `internal/applyform`: a pure function from a stored `Form` to the questions a reader sees, carrying the provider, each question's published text, whether it is required, and the word naming its answer kind
-- [ ] 1.2 Cover the exclusions: the standard name/email/phone/CV controls collapsed into one entry, every control the platform marked demographic dropped, and every non-question (`hidden`, `info`) dropped
-- [ ] 1.3 Cover the answer-kind vocabulary, including that an unnormalized kind yields no word while the question is still shown
+- [x] 1.1 Add the display shape and projection to `internal/applyform`: a pure function from a stored `Form` to the questions a reader sees, carrying the provider, each question's published text, whether it is required, and the word naming its answer kind
+- [x] 1.2 Cover the exclusions: the standard name/email/phone/CV controls collapsed into one entry, every control the platform marked demographic dropped, and every non-question (`hidden`, `info`) dropped
+- [x] 1.3 Cover the answer-kind vocabulary, including that an unnormalized kind yields no word while the question is still shown
 
 ## 2. The endpoint
 
