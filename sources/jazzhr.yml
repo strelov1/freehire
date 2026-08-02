@@ -8129,8 +8129,6 @@
   board: 83bar
 - company: acre security
   board: acresecurity
-- company: Aequilibrium
-  board: aequilibrium
 - company: Airitos
   board: airitos
 - company: Alia Services
@@ -8161,8 +8159,6 @@
   board: cleargov
 - company: ClearStar
   board: clearstar
-- company: CME
-  board: cme
 - company: Collider
   board: collider
 - company: Cytovale
@@ -8223,8 +8219,6 @@
   board: inair
 - company: Indigo Slate
   board: indigoslate
-- company: Industrial Electric Manufacturing
-  board: industrialelectricmanufacturing
 - company: iPromo
   board: ipromo
 - company: Jets.com
@@ -8235,8 +8229,6 @@
   board: legacyhrconsulting
 - company: Leggett & Platt
   board: leggettplatt
-- company: Leverify
-  board: leverify
 - company: Lexipol LLC
   board: lexipol
 - company: Life Science Connect
@@ -8247,5 +8239,3 @@
   board: longbowadvantage
 - company: LTD Global
   board: ltdglobal
-- company: Xpanxion
-  board: xpanxion

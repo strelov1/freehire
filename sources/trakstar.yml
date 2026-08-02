@@ -1072,18 +1072,10 @@
   board: bridgit
 - company: Brighton Science
   board: brightonscience
-- company: Canon
-  board: canon
 - company: career
   board: career
-- company: Charterhouse
-  board: charterhouse
-- company: CIS College
-  board: ciscollege
 - company: ClearStar
   board: clearstar
-- company: CloudFactory
-  board: cloudfactory
 - company: 'Coalition Technologies '
   board: coalitiontechnologies
 - company: Conifer
@@ -1096,38 +1088,20 @@
   board: darwinbox
 - company: DataBank
   board: databank
-- company: Digital
-  board: digital
 - company: DigitalOnUs
   board: digitalonus
 - company: Dimagi, Inc.
   board: dimagi
 - company: Education Northwest
   board: educationnorthwest
-- company: Ellevation Education
-  board: ellevationeducation
 - company: Engine Digital
   board: enginedigital
 - company: Envato
   board: envato
 - company: E-SPACE
   board: espace
-- company: Excel
-  board: excel
-- company: Farmers
-  board: farmers
-- company: Fever
-  board: fever
 - company: Finance active
   board: financeactive
-- company: Find.co
-  board: find
-- company: First Student
-  board: firststudent
-- company: Flinks
-  board: flinks
-- company: Future PLC
-  board: future
 - company: George Jon
   board: georgejon
 - company: Guardian
@@ -1148,54 +1122,34 @@
   board: iflip4
 - company: IJL Select
   board: ijlselect
-- company: Infinity Group
-  board: infinitygroup
 - company: Infosys Limited
   board: infosys
 - company: Innovaccer
   board: innovaccer
 - company: Inspectorio
   board: inspectorio
-- company: Intel Corporation
-  board: intel
-- company: intellect
-  board: intellect
 - company: Irex Consulting
   board: irexconsulting
 - company: Island
   board: island
 - company: iTutor
   board: itutor
-- company: Jeeves
-  board: jeeves
-- company: Jones
-  board: jones
 - company: JumpstartMD
   board: jumpstartmd
 - company: Justworks, Inc.
   board: justworks
 - company: Kaizen
   board: kaizen
-- company: King Law Offices
-  board: kinglawoffices
 - company: kWallet
   board: kwallet
-- company: Magnum
-  board: magnum
 - company: Manila Recruitment
   board: manilarecruitment
-- company: Marco
-  board: marco
-- company: MAX & TAX
-  board: maxtax
 - company: Meet Cute
   board: meetcute
 - company: Méliuz
   board: meliuz
 - company: Milestone
   board: milestone
-- company: Mind
-  board: mind
 - company: mindbodygreen
   board: mindbodygreen
 - company: Mindlance
@@ -1210,10 +1164,6 @@
   board: motif
 - company: Motive International
   board: motiveinternational
-- company: Moving Walls
-  board: movingwalls
-- company: MP Solutions Ltd.
-  board: mpsolutions
 - company: Multi Media LLC
   board: multimedia
 - company: Nebo Agency
@@ -1226,8 +1176,6 @@
   board: nexus
 - company: NGP VAN
   board: ngpvan
-- company: Nimble
-  board: nimble
 - company: North American Bancard
   board: northamericanbancard
 - company: nterra
@@ -1242,30 +1190,18 @@
   board: penbrothers
 - company: Penn Foster
   board: pennfoster
-- company: People Corporation
-  board: people
 - company: Pilot
   board: pilot
-- company: Pinpoint
-  board: pinpoint
-- company: Pipe
-  board: pipe
 - company: Pitchbox
   board: pitchbox
 - company: Planate Management Group
   board: planatemanagementgroup
-- company: Plum Inc
-  board: plum
 - company: PopuTrust
   board: poputrust
 - company: Port
   board: port
 - company: Positively Partners
   board: positivelypartners
-- company: Premier Inc.
-  board: premier
-- company: PRISM+
-  board: prism
 - company: Proficio
   board: proficio
 - company: Prominence Advisors
@@ -1292,22 +1228,16 @@
   board: satori
 - company: Schnabel Engineering
   board: schnabelengineering
-- company: Scopic
-  board: scopic
 - company: SD Solutions
   board: sdsolutions
 - company: Signal Vine, Inc
   board: signalvine
-- company: Sika AG
-  board: sika
 - company: STAFFVIRTUAL
   board: staffvirtual
 - company: Stefanini
   board: stefanini
 - company: strategic HR, inc.
   board: strategichr
-- company: Summit
-  board: summit
 - company: Team Delegate, LLC
   board: teamdelegate
 - company: Teamswell
@@ -1324,8 +1254,6 @@
   board: thepersimmongroup
 - company: Thought Industries, Inc.
   board: thoughtindustries
-- company: Tive
-  board: tive
 - company: TOTVS
   board: totvs
 - company: Trusted
@@ -1334,8 +1262,6 @@
   board: uniplaces
 - company: Unit4
   board: unit4
-- company: Veda
-  board: veda
 - company: Vestmark
   board: vestmark
 - company: Viaggio Partners, Inc.
@@ -1346,8 +1272,6 @@
   board: vsolvit
 - company: Wagepoint
   board: wagepoint
-- company: WealthForge
-  board: wealthforge
 - company: Web Partners
   board: webpartners
 - company: Whistle
@@ -1358,7 +1282,5 @@
   board: xideral
 - company: Xtremax
   board: xtremax
-- company: YOUNG
-  board: young
 - company: Zadara
   board: zadara
