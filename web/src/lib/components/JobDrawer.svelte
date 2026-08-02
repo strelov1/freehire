@@ -470,18 +470,17 @@
                     </div>
                     <div class="mt-0.5 truncate text-sm text-muted-foreground">{e.subject || '(no subject)'}</div>
                     {#if statusLabel(e.status_signal)}
-                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5">
-                        <span class="inline-block rounded border px-1.5 text-[10px] leading-4 {statusClass(e.status_signal)}">
+                      <!-- The chip, and what its signal means for the stage. The chip alone left
+                           three different situations looking identical: the signal moved the
+                           stage, it named one only the candidate may apply, or it was never
+                           about progress. Both sit in one wrapper carrying the size, so the
+                           explanation matches the chip without restating the class. -->
+                      <span class="mt-1 inline-flex flex-wrap items-baseline gap-1.5 text-[10px] leading-4">
+                        <span class="inline-block rounded border px-1.5 {statusClass(e.status_signal)}">
                           {statusLabel(e.status_signal)}
                         </span>
-                        <!-- What the signal means for the stage. The chip alone left three
-                             different situations looking identical: it moved the stage, it
-                             named one only the candidate may apply, or it was never about
-                             progress. -->
                         {#if stageImplication(e.status_signal)}
-                          <span class="text-[10px] leading-4 text-muted-foreground">
-                            {stageImplication(e.status_signal)}
-                          </span>
+                          <span class="text-muted-foreground">{stageImplication(e.status_signal)}</span>
                         {/if}
                       </span>
                     {/if}

@@ -101,26 +101,25 @@
   <!-- Source bar: all applications -->
   <rect x={LX} y={model.barY} width={LW} height={HH} rx="3" class="fill-foreground" />
 
-  {#each model.ribbons as r (r.key)}
-    <path d={r.path} fill={r.color} fill-opacity="0.5" />
-    <rect x={RX} y={r.nodeY} width={RW} height={Math.max(r.nodeH, 1)} rx="2" fill={r.color} />
-    <text
-      x={RX + RW + 10}
-      y={r.breakdown ? r.labelY - 6 : r.labelY}
-      dy="0.32em"
-      class="fill-foreground text-[0.72rem]"
-    >
-      {r.label}<tspan dx="6" class="fill-muted-foreground">{r.count}</tspan>
-    </text>
-    {#if r.breakdown}
+  <!-- The label size is set once on the group and inherited by both lines, so the band's
+       total and its per-stage breakdown cannot drift apart typographically. -->
+  <g class="text-[0.72rem]">
+    {#each model.ribbons as r (r.key)}
+      <path d={r.path} fill={r.color} fill-opacity="0.5" />
+      <rect x={RX} y={r.nodeY} width={RW} height={Math.max(r.nodeH, 1)} rx="2" fill={r.color} />
       <text
         x={RX + RW + 10}
-        y={r.labelY + 7}
+        y={r.breakdown ? r.labelY - 6 : r.labelY}
         dy="0.32em"
-        class="fill-muted-foreground text-[0.6rem]"
+        class="fill-foreground"
       >
-        {r.breakdown}
+        {r.label}<tspan dx="6" class="fill-muted-foreground">{r.count}</tspan>
       </text>
-    {/if}
-  {/each}
+      {#if r.breakdown}
+        <text x={RX + RW + 10} y={r.labelY + 7} dy="0.32em" class="fill-muted-foreground">
+          {r.breakdown}
+        </text>
+      {/if}
+    {/each}
+  </g>
 </svg>
