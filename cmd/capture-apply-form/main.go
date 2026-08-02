@@ -52,5 +52,10 @@ func run() int {
 
 	log.Printf("capture-apply-form done: captured=%d failed=%d dead_lettered=%d",
 		stats.Captured, stats.Failed, stats.DeadLettered)
-	return worker.ExitCode(stats.Failed, stats.DeadLettered)
+	// Deliberately not worker.ExitCode: see RunStats.Degraded for why a few retryable
+	// failures are the healthy shape of this particular worker rather than a bad run.
+	if stats.Degraded() {
+		return 1
+	}
+	return 0
 }

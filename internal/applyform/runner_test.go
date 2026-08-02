@@ -352,3 +352,28 @@ func TestRunStopsWhenCancelled(t *testing.T) {
 		t.Error("a cancelled run drained every wave, want it to stop")
 	}
 }
+
+// A run's exit status has to separate work POSTPONED from work ABANDONED. Against
+// hundreds of thousands of third-party endpoints a handful of transient failures per run
+// is normal and self-healing — the queue retries them — so treating them as a degraded run
+// paints the unit red on nearly every firing and the status stops meaning anything. A dead
+// letter is different: that work is given up on, and nobody will look at it again.
+func TestRunOutcomeSeparatesPostponedFromAbandoned(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		stats    RunStats
+		degraded bool
+	}{
+		{"a clean run", RunStats{Captured: 2500}, false},
+		{"a few transient failures among many captures", RunStats{Captured: 2490, Failed: 10}, false},
+		{"an abandoned capture", RunStats{Captured: 2490, Failed: 10, DeadLettered: 1}, true},
+		// Nothing captured while everything failed is not a blip — it is the platform
+		// being gone, and it must not hide behind the same forgiveness.
+		{"every capture failed", RunStats{Failed: 40}, true},
+		{"an empty queue", RunStats{}, false},
+	} {
+		if got := tc.stats.Degraded(); got != tc.degraded {
+			t.Errorf("%s: Degraded() = %v, want %v (%+v)", tc.name, got, tc.degraded, tc.stats)
+		}
+	}
+}

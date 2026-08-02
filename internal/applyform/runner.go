@@ -66,6 +66,23 @@ type RunStats struct {
 	DeadLettered int
 }
 
+// Degraded reports whether a run deserves an alert, and it deliberately does NOT use the
+// shared worker.ExitCode rule that every other worker here applies.
+//
+// That rule — non-zero on any per-item failure — fits a worker whose items rarely fail. This
+// one issues hundreds of thousands of requests to other companies' APIs, where a handful of
+// transient failures per run is the normal, healthy shape: the queue retries them, and the
+// first production run measured 10 in 2490. Marking that degraded paints the unit red on
+// nearly every firing, and a status that is always red carries no information.
+//
+// What does deserve an alert is work ABANDONED rather than postponed: a dead letter is a
+// capture nobody will look at again. And a run that captured nothing at all while failing is
+// not a blip either — that is the platform being gone, and it must not hide behind the same
+// forgiveness the blips get.
+func (s RunStats) Degraded() bool {
+	return s.DeadLettered > 0 || (s.Captured == 0 && s.Failed > 0)
+}
+
 // Run drains the capture queue and returns. It is the whole worker: claim a wave, fetch
 // each posting's form through its provider's fetcher, store it, and keep going until a
 // wave comes back empty.
