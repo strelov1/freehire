@@ -130,9 +130,13 @@ func leverControl(group []*html.Node) (FieldType, string, []Option) {
 // removed and whitespace collapsed — the markup lays the label out across several nodes.
 //
 // A consent block carries no application-label at all: the text a candidate reads sits
-// beside the checkbox instead. Without that fallback the control was captured with an
-// empty label, which reached production as a stray comma at the end of the standard
-// fields line.
+// inside the <label> beside the checkbox. The wrapper around it varies by tenant — one
+// board puts it in a `p.application-answer-alternative`, another in a bare `span` — so
+// the fallback reads the enclosing <label> itself, which is what makes that text a label
+// in the first place and does not depend on how the employer styled it.
+//
+// Without a fallback the control was captured unnamed and reached production as a stray
+// comma at the end of the standard-fields line.
 func blockLabel(block *html.Node) string {
 	for _, n := range descendants(block) {
 		if hasClass(n, "application-label") {
@@ -140,8 +144,10 @@ func blockLabel(block *html.Node) string {
 		}
 	}
 	for _, n := range descendants(block) {
-		if hasClass(n, "application-answer-alternative") {
-			return tidyLabel(textOf(n))
+		if n.Data == "label" {
+			if text := tidyLabel(textOf(n)); text != "" {
+				return text
+			}
 		}
 	}
 	return ""

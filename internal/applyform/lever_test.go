@@ -78,6 +78,17 @@ const leverPage = `<html><body><form>
   </label></li></ul></div>
 </li>
 
+<li class="application-question">
+  <div class="application-field full-width">
+    <p data-qa="legitimate-interest-copy"><div>Acme collects and processes your personal data solely for your application.</div></p>
+    <ul><li><label>
+      <span class=""><div>Yes, notify me about future roles that match my profile.</div></span>
+      <input type="hidden" name="consent[notify]" value="0" />
+      <input type="checkbox" name="consent[notify]" value="1" />
+    </label></li></ul>
+  </div>
+</li>
+
 </ul></form></body></html>`
 
 func parseLever(t *testing.T) Form {
@@ -230,12 +241,19 @@ func TestFromLeverFoldsTheConsentPair(t *testing.T) {
 // with an empty label, which reached production as a stray comma at the end of the
 // standard-fields line.
 func TestFromLeverLabelsAConsentBoxFromItsOwnText(t *testing.T) {
-	got := leverField(t, parseLever(t), "consent[marketing]")
-
-	if got.Label != "Yes, Acme can contact me about future roles for up to 1 year" {
-		t.Errorf("label = %q, want the text presented beside the checkbox", got.Label)
-	}
-	if got.Type != TypeBoolean {
-		t.Errorf("type = %q, want %q", got.Type, TypeBoolean)
+	// Two tenants, two different wrappers around the same idea — the first fix read one
+	// of them and left the other unnamed on production. The rule that covers both is the
+	// enclosing <label>, which is what makes the text a label in the first place.
+	for _, tc := range []struct{ id, want string }{
+		{"consent[marketing]", "Yes, Acme can contact me about future roles for up to 1 year"},
+		{"consent[notify]", "Yes, notify me about future roles that match my profile."},
+	} {
+		got := leverField(t, parseLever(t), tc.id)
+		if got.Label != tc.want {
+			t.Errorf("%s label = %q, want %q", tc.id, got.Label, tc.want)
+		}
+		if got.Type != TypeBoolean {
+			t.Errorf("%s type = %q, want %q", tc.id, got.Type, TypeBoolean)
+		}
 	}
 }
