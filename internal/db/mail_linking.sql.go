@@ -123,6 +123,81 @@ func (q *Queries) LinkEmailToJob(ctx context.Context, arg LinkEmailToJobParams) 
 	return result.RowsAffected(), nil
 }
 
+const listEmailsForRecall = `-- name: ListEmailsForRecall :many
+SELECT id, from_addr, from_name, subject, body_text, body_html, received_at, ical_uid
+FROM emails
+WHERE user_id = $1
+  AND deleted_at IS NULL
+  AND application_id IS NULL
+  AND received_at >= $2
+ORDER BY received_at DESC, id DESC
+LIMIT $3
+`
+
+type ListEmailsForRecallParams struct {
+	UserID int64              `json:"user_id"`
+	Since  pgtype.Timestamptz `json:"since"`
+	Lim    int32              `json:"lim"`
+}
+
+type ListEmailsForRecallRow struct {
+	ID         int64              `json:"id"`
+	FromAddr   string             `json:"from_addr"`
+	FromName   string             `json:"from_name"`
+	Subject    string             `json:"subject"`
+	BodyText   string             `json:"body_text"`
+	BodyHtml   string             `json:"body_html"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+	IcalUid    string             `json:"ical_uid"`
+}
+
+// The net for the pull direction: from an application, the caller's mail that might
+// belong to it. Mail attached to no application, received at or after a given instant,
+// newest first, bounded.
+//
+// It filters on attachment state and time and NOT on the employer's name, which is the
+// one thing a reader expects to find here. Two measurements say not to. The name is
+// absent from the message body in 16 of 99 confirmed-correct links on a live mailbox —
+// recruiters routinely write without naming the employer — and body_text is EMPTY for
+// HTML-only senders (Gem, Ashby, Greenhouse), so an ILIKE over it is blind exactly where
+// the recruiting mail is. The narrowing is the caller's to do with the readable body.
+//
+// application_id IS NULL admits both the mail nothing has claimed and the mail carrying
+// an unconfirmed suggestion; it excludes what is already linked, which this path may
+// never reach — re-linking retracts and re-records on a company's public response rate.
+//
+// A query of its own rather than new parameters on ListEmails, which serves the web
+// inbox and seven assistant tools: one shared statement grown for one reader is how the
+// two drift.
+func (q *Queries) ListEmailsForRecall(ctx context.Context, arg ListEmailsForRecallParams) ([]ListEmailsForRecallRow, error) {
+	rows, err := q.db.Query(ctx, listEmailsForRecall, arg.UserID, arg.Since, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmailsForRecallRow{}
+	for rows.Next() {
+		var i ListEmailsForRecallRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FromAddr,
+			&i.FromName,
+			&i.Subject,
+			&i.BodyText,
+			&i.BodyHtml,
+			&i.ReceivedAt,
+			&i.IcalUid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobEmails = `-- name: ListJobEmails :many
 SELECT id, source, from_addr, from_name, subject, status_signal, link_source,
     received_at, (read_at IS NOT NULL)::boolean AS read
@@ -194,6 +269,43 @@ type RejectEmailLinkParams struct {
 // Dismiss a suggestion without linking.
 func (q *Queries) RejectEmailLink(ctx context.Context, arg RejectEmailLinkParams) (int64, error) {
 	result, err := q.db.Exec(ctx, rejectEmailLink, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const suggestApplicationForEmail = `-- name: SuggestApplicationForEmail :execrows
+UPDATE emails
+SET suggested_job_id = $1,
+    match_confidence = $2::real
+WHERE id = $3 AND user_id = $4 AND application_id IS NULL
+`
+
+type SuggestApplicationForEmailParams struct {
+	SuggestedJobID pgtype.Int8 `json:"suggested_job_id"`
+	Confidence     float32     `json:"confidence"`
+	ID             int64       `json:"id"`
+	UserID         int64       `json:"user_id"`
+}
+
+// Record one message as belonging to a job the caller named, as a SUGGESTION they still
+// confirm. It is the only write the recall path makes.
+//
+// `application_id IS NULL` is the guard, not an optimisation: a linked message stays
+// unreachable from here even if the net, the model and the service layer went wrong at
+// once. Keep it in the statement — a check in Go is a check the next caller can skip.
+//
+// An unconfirmed suggestion naming a different job is overwritten. The caller asked
+// about this application explicitly, suggested_job_id holds one value, and a proposal
+// nobody has confirmed costs nothing to lose.
+func (q *Queries) SuggestApplicationForEmail(ctx context.Context, arg SuggestApplicationForEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, suggestApplicationForEmail,
+		arg.SuggestedJobID,
+		arg.Confidence,
+		arg.ID,
+		arg.UserID,
+	)
 	if err != nil {
 		return 0, err
 	}

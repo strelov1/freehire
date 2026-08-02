@@ -70,3 +70,47 @@ SET job_id         = NULL,
     application_id = NULL,
     link_source = NULL
 WHERE id = $1 AND user_id = $2;
+
+-- name: ListEmailsForRecall :many
+-- The net for the pull direction: from an application, the caller's mail that might
+-- belong to it. Mail attached to no application, received at or after a given instant,
+-- newest first, bounded.
+--
+-- It filters on attachment state and time and NOT on the employer's name, which is the
+-- one thing a reader expects to find here. Two measurements say not to. The name is
+-- absent from the message body in 16 of 99 confirmed-correct links on a live mailbox —
+-- recruiters routinely write without naming the employer — and body_text is EMPTY for
+-- HTML-only senders (Gem, Ashby, Greenhouse), so an ILIKE over it is blind exactly where
+-- the recruiting mail is. The narrowing is the caller's to do with the readable body.
+--
+-- application_id IS NULL admits both the mail nothing has claimed and the mail carrying
+-- an unconfirmed suggestion; it excludes what is already linked, which this path may
+-- never reach — re-linking retracts and re-records on a company's public response rate.
+--
+-- A query of its own rather than new parameters on ListEmails, which serves the web
+-- inbox and seven assistant tools: one shared statement grown for one reader is how the
+-- two drift.
+SELECT id, from_addr, from_name, subject, body_text, body_html, received_at, ical_uid
+FROM emails
+WHERE user_id = $1
+  AND deleted_at IS NULL
+  AND application_id IS NULL
+  AND received_at >= sqlc.arg(since)
+ORDER BY received_at DESC, id DESC
+LIMIT sqlc.arg(lim);
+
+-- name: SuggestApplicationForEmail :execrows
+-- Record one message as belonging to a job the caller named, as a SUGGESTION they still
+-- confirm. It is the only write the recall path makes.
+--
+-- `application_id IS NULL` is the guard, not an optimisation: a linked message stays
+-- unreachable from here even if the net, the model and the service layer went wrong at
+-- once. Keep it in the statement — a check in Go is a check the next caller can skip.
+--
+-- An unconfirmed suggestion naming a different job is overwritten. The caller asked
+-- about this application explicitly, suggested_job_id holds one value, and a proposal
+-- nobody has confirmed costs nothing to lose.
+UPDATE emails
+SET suggested_job_id = sqlc.arg(suggested_job_id),
+    match_confidence = sqlc.arg(confidence)::real
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND application_id IS NULL;
