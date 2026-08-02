@@ -310,3 +310,29 @@ func TestForDisplaySeparatesWorkablesStandardProfile(t *testing.T) {
 		t.Errorf("basics = %v, want all six standard controls", d.Basics)
 	}
 }
+
+// Lever names an employer's question `cards[<uuid>][fieldN]`; the rest — name, contact
+// details, CV, profile links, consent — is the standard application every Lever posting
+// collects. Same inverted marker as Workable's `QA_`.
+func TestForDisplaySeparatesLeversStandardApplication(t *testing.T) {
+	d := Form{
+		Provider: "lever",
+		Fields: []Field{
+			{ID: "name", Label: "Full name", Type: TypeText, Required: true},
+			{ID: "email", Label: "Email", Type: TypeText, Required: true},
+			{ID: "resume", Label: "Resume/CV", Type: TypeFile, Required: true},
+			{ID: "urls[LinkedIn]", Label: "LinkedIn URL", Type: TypeText},
+			{ID: "consent[store]", Label: "I agree to the storage of my data", Type: TypeBoolean, Required: true},
+			{ID: "cards[115d9079][field0]", Label: "Are you authorized to work in the US?", Type: TypeSelect, Required: true},
+			{ID: "cards[82aec075][field0]", Label: "How did you hear about us?", Type: TypeSelect},
+		},
+	}.ForDisplay()
+
+	got := questionTexts(d)
+	if len(got) != 2 || got[0] != "Are you authorized to work in the US?" {
+		t.Errorf("questions = %v, want only the two the employer wrote", got)
+	}
+	if len(d.Basics) != 5 {
+		t.Errorf("basics = %v, want the five standard controls", d.Basics)
+	}
+}

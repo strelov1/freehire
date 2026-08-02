@@ -13,7 +13,7 @@ func TestCaptureProvidersMatchTheFetcherRegistry(t *testing.T) {
 			t.Errorf("provider %q has a fetcher but is never queued", provider)
 		}
 	}
-	for _, provider := range []string{"greenhouse", "ashby", "workable"} {
+	for _, provider := range []string{"greenhouse", "ashby", "workable", "lever"} {
 		if !NeedsRequestCapture(provider) {
 			t.Errorf("NeedsRequestCapture(%q) = false, want true", provider)
 		}
@@ -35,7 +35,7 @@ func TestRecruiteeIsNeverQueued(t *testing.T) {
 // DataDome, and the hundred-odd platforms nobody has looked at — must not accumulate queue
 // entries that can never be drained.
 func TestProvidersWithoutAReadableFormAreNeverQueued(t *testing.T) {
-	for _, provider := range []string{"workday", "smartrecruiters", "lever", "telegram", ""} {
+	for _, provider := range []string{"workday", "smartrecruiters", "oracle", "ukg", "telegram", ""} {
 		if NeedsRequestCapture(provider) {
 			t.Errorf("NeedsRequestCapture(%q) = true, want false — nothing can drain it", provider)
 		}
