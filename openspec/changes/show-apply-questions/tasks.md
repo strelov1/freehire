@@ -6,9 +6,9 @@
 
 ## 2. The endpoint
 
-- [ ] 2.1 Add the query loading a job's stored form by job id, then `make sqlc`
-- [ ] 2.2 Add `GET /jobs/:slug/apply-form` following `JobCopies`: resolve the slug to an id, load the form, respond `{"data": ...}`; an unknown slug and a posting with no stored form both 404, distinguishably
-- [ ] 2.3 Integration-test the three cases against a real database: a posting with a form, a posting without one, an unknown slug
+- [x] 2.1 Add the query loading a job's stored form by job id, then `make sqlc`
+- [x] 2.2 Add `GET /jobs/:slug/apply-form` following `JobCopies`: resolve the slug to an id, load the form, respond `{"data": ...}`; an unknown slug and a posting with no stored form both 404, distinguishably
+- [x] 2.3 Integration-test the three cases against a real database: a posting with a form, a posting without one, an unknown slug
 
 ## 3. The page
 

@@ -36,6 +36,7 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/jobs/find", h.FindJob)
 	api.Get("/jobs/:slug", mw.optional, h.GetJob)
 	api.Get("/jobs/:slug/copies", h.JobCopies)
+	api.Get("/jobs/:slug/apply-form", h.JobApplyForm)
 
 	// Moderator-authored jobs: create a hand-curated vacancy and edit it. Authenticated
 	// by cookie or API key (the CLI uses a key), then gated on the moderator role. The

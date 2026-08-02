@@ -85,3 +85,11 @@ SET attempts   = attempts + 1,
                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
+
+-- name: GetApplyFormByJobID :one
+-- Read one job's captured form for display. The only read path over this store, and it
+-- is by primary key — the display surface asks for exactly one posting's form, never a
+-- page of them, which is also why nothing here joins jobs.
+SELECT provider, captured_at, payload
+FROM apply_forms
+WHERE job_id = sqlc.arg(job_id);

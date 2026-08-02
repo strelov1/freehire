@@ -125,6 +125,28 @@ func (q *Queries) EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int
 	return result.RowsAffected(), nil
 }
 
+const getApplyFormByJobID = `-- name: GetApplyFormByJobID :one
+SELECT provider, captured_at, payload
+FROM apply_forms
+WHERE job_id = $1
+`
+
+type GetApplyFormByJobIDRow struct {
+	Provider   string             `json:"provider"`
+	CapturedAt pgtype.Timestamptz `json:"captured_at"`
+	Payload    []byte             `json:"payload"`
+}
+
+// Read one job's captured form for display. The only read path over this store, and it
+// is by primary key — the display surface asks for exactly one posting's form, never a
+// page of them, which is also why nothing here joins jobs.
+func (q *Queries) GetApplyFormByJobID(ctx context.Context, jobID int64) (GetApplyFormByJobIDRow, error) {
+	row := q.db.QueryRow(ctx, getApplyFormByJobID, jobID)
+	var i GetApplyFormByJobIDRow
+	err := row.Scan(&i.Provider, &i.CapturedAt, &i.Payload)
+	return i, err
+}
+
 const recordApplyFormFailure = `-- name: RecordApplyFormFailure :one
 UPDATE apply_form_outbox
 SET attempts   = attempts + 1,
