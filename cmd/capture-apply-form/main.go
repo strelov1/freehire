@@ -42,6 +42,7 @@ func run() int {
 		LeaseSeconds: cfg.LeaseSeconds,
 		MaxAttempts:  cfg.MaxAttempts,
 		Concurrency:  cfg.Concurrency,
+		MaxPerRun:    cfg.MaxPerRun,
 		CallTimeout:  cfg.CallTimeout,
 	})
 	if err != nil {

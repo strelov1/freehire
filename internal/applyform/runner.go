@@ -43,6 +43,16 @@ type RunOptions struct {
 	// Concurrency bounds how many postings are fetched at once. It is the only thing
 	// stopping a backlog drain from becoming a flood aimed at one platform.
 	Concurrency int
+	// MaxPerRun bounds how much of the backlog ONE run takes; 0 is unbounded.
+	//
+	// Concurrency limits how fast, this limits how long, and the second bound is the one
+	// that matters operationally. Nothing here holds a lock — what keeps a cron worker
+	// from stacking on itself is systemd refusing to start a second instance of a
+	// Type=oneshot unit while the first is active. So a run that works through a 185k
+	// backlog for hours does not merely take a long time: it silently swallows every
+	// scheduled firing behind it while ingest keeps enqueueing. Bounded, the cron cadence
+	// is what sets throughput, which is where that decision belongs.
+	MaxPerRun int
 	// CallTimeout bounds a single fetch; 0 leaves it to the transport's own timeout.
 	CallTimeout time.Duration
 }
@@ -68,7 +78,18 @@ func Run(ctx context.Context, s Store, fetchers map[string]Fetcher, opts RunOpti
 	var stats RunStats
 
 	for {
-		claims, err := s.Claim(ctx, opts.BatchSize, opts.LeaseSeconds)
+		batch := opts.BatchSize
+		if opts.MaxPerRun > 0 {
+			// Never claim past the budget: a leased entry this run will not touch is one
+			// no other run can take until its lease lapses.
+			remaining := opts.MaxPerRun - (stats.Captured + stats.Failed)
+			if remaining <= 0 {
+				return stats, nil
+			}
+			batch = min(batch, remaining)
+		}
+
+		claims, err := s.Claim(ctx, batch, opts.LeaseSeconds)
 		if err != nil {
 			return stats, fmt.Errorf("claim apply-form captures: %w", err)
 		}

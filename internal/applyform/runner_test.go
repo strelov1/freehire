@@ -30,7 +30,9 @@ func newFakeStore(waves ...[]Claimed) *fakeStore {
 	}
 }
 
-func (s *fakeStore) Claim(_ context.Context, _, _ int) ([]Claimed, error) {
+// Claim honours the batch size the way the real query's LIMIT does — a fake that ignored
+// it would let a bounded run overshoot its budget and still pass.
+func (s *fakeStore) Claim(_ context.Context, batch, _ int) ([]Claimed, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.claimErr != nil {
@@ -41,6 +43,10 @@ func (s *fakeStore) Claim(_ context.Context, _, _ int) ([]Claimed, error) {
 		return nil, nil
 	}
 	wave := s.waves[0]
+	if batch > 0 && len(wave) > batch {
+		s.waves[0] = wave[batch:]
+		return wave[:batch], nil
+	}
 	s.waves = s.waves[1:]
 	return wave, nil
 }
@@ -263,5 +269,86 @@ func TestRunReturnsAClaimFailure(t *testing.T) {
 
 	if _, err := Run(context.Background(), store, nil, testOptions()); err == nil {
 		t.Error("Run() = nil error when the queue could not be claimed")
+	}
+}
+
+// A run takes a bounded bite of the backlog rather than all of it. The first production
+// drain faces ~185k postings; without a budget one process works for hours, and because
+// nothing here holds a lock — a systemd Type=oneshot unit simply refuses to start a second
+// instance — that one long run silently swallows every scheduled firing behind it.
+func TestRunStopsAtItsBudget(t *testing.T) {
+	var waves [][]Claimed
+	forms := map[string]Form{}
+	for w := range 4 {
+		var wave []Claimed
+		for i := range 5 {
+			id := string(rune('a'+w)) + string(rune('0'+i))
+			wave = append(wave, claim(int64(w*5+i+1), int64(w*5+i+100), "greenhouse", "b:"+id))
+			forms[id] = Form{Provider: "greenhouse"}
+		}
+		waves = append(waves, wave)
+	}
+	store := newFakeStore(waves...)
+	fetcher := &fakeFetcher{forms: forms}
+
+	opts := testOptions()
+	opts.BatchSize = 5
+	opts.MaxPerRun = 12
+
+	stats, err := Run(context.Background(), store, map[string]Fetcher{"greenhouse": fetcher}, opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if stats.Captured > 12 {
+		t.Errorf("captured %d, want no more than the budget of 12", stats.Captured)
+	}
+	if stats.Captured < 10 {
+		t.Errorf("captured %d, want the run to take a real bite before stopping", stats.Captured)
+	}
+	// The rest of the backlog is still queued, waiting for the next run.
+	if len(store.waves) == 0 {
+		t.Error("the whole backlog was drained, want the budget to leave work for a later run")
+	}
+}
+
+// A budget of zero is unbounded — the shape a one-off manual catch-up wants.
+func TestRunWithoutABudgetDrainsEverything(t *testing.T) {
+	store := newFakeStore(
+		[]Claimed{claim(1, 100, "greenhouse", "b:one")},
+		[]Claimed{claim(2, 200, "greenhouse", "b:two")},
+	)
+	fetcher := &fakeFetcher{forms: map[string]Form{
+		"one": {Provider: "greenhouse"}, "two": {Provider: "greenhouse"},
+	}}
+
+	opts := testOptions()
+	opts.MaxPerRun = 0
+
+	stats, err := Run(context.Background(), store, map[string]Fetcher{"greenhouse": fetcher}, opts)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Captured != 2 {
+		t.Errorf("captured %d, want the whole queue", stats.Captured)
+	}
+}
+
+// A cancelled run stops rather than working through the backlog burning retry budget.
+func TestRunStopsWhenCancelled(t *testing.T) {
+	store := newFakeStore(
+		[]Claimed{claim(1, 100, "greenhouse", "b:one")},
+		[]Claimed{claim(2, 200, "greenhouse", "b:two")},
+	)
+	fetcher := &fakeFetcher{forms: map[string]Form{"one": {Provider: "greenhouse"}}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := Run(ctx, store, map[string]Fetcher{"greenhouse": fetcher}, testOptions()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.waves) == 0 {
+		t.Error("a cancelled run drained every wave, want it to stop")
 	}
 }

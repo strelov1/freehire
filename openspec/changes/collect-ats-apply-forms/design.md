@@ -132,10 +132,14 @@ a materialized column then — with a real consumer to shape it.
   than being swallowed.
 
 - **The first drain is a 185k-posting backlog against two platforms** → The
-  worker bounds its own concurrency and is run-once-and-exit, so the backlog
-  drains across scheduled runs rather than in one burst. Worth watching on the
-  first production run; the per-posting sizes (22 KB, 15 KB) are small, but the
-  request count is not.
+  worker takes two bounds, and they are separate on purpose: concurrency decides
+  how fast a run goes, a per-run budget decides how long it goes for. Only the
+  second keeps the backlog spread across scheduled runs — a drain loop that
+  simply ran until the queue emptied would work for hours, and since nothing in
+  this fleet holds a lock, a systemd `Type=oneshot` unit would then refuse every
+  scheduled firing behind it while ingest kept enqueueing. With the budget, the
+  cron cadence sets throughput. Worth watching on the first production run; the
+  per-posting sizes (22 KB, 15 KB) are small, but the request count is not.
 
 - **`cmd/capture-apply-form` has no lock, like every other worker here** → Per
   the repository's standing hazard, nothing takes a flock; only systemd
