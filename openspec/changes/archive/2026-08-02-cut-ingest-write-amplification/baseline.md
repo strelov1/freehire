@@ -69,3 +69,46 @@ reached. The counters below are only interpretable in light of it.
 
 If these do not move, the diagnosis was wrong and the follow-on `pg_repack` must not be run on
 this change's strength.
+
+---
+
+# Post-release, 2026-08-02T21:39Z (partial)
+
+Released to prod (blue, `2c3c9690`). `release.sh` applied migration 0073 as one of its own
+steps — prod `reloptions` is now `fillfactor=90, autovacuum_vacuum_scale_factor=0.02`.
+
+## The mechanism works
+
+24 providers reported a cheap-write share within the first 20 minutes. **20 of them at 100%**,
+`habr_career` and `himalayas` at 99%, `arbeitsagentur` at 89%. **No provider at 0%** — the
+silent-zero failure this change most feared did not occur on any of them.
+
+One outlier: `rippling cheap=1039/1809 (57%)`, from a single run. Unresolved, and its
+arithmetic does not reconcile: 770 full writes against ~262 rows carrying a post-release
+`updated_at`, and 1,809 saves against 1,575 rows that all have distinct `external_id`s.
+Candidate explanations (repeated saves within a run, aliased boards, measurement-window edges)
+were not distinguishable from the data to hand. The next runs settle whether 57% is a
+transitional first-run figure or a real signal.
+
+## The aggregate effect is NOT yet measurable
+
+| | baseline | T+10 min | T+20 min |
+|---|---|---|---|
+| `jobs` updates/h | ~1.07 M | ~1.11 M | ~1.09 M |
+| `companies` updates/h | ~0.90 M | ~0.48 M | ~0.31 M |
+
+`companies` is down ~66% and still falling — expected, since its guard does not depend on the
+cheap path matching anything.
+
+`jobs` has not moved, and it is too early for it to have. Verified rather than assumed: none of
+the six largest providers (`greenhouse`, `lever`, `workday`, `ashby`, `smartrecruiters`,
+`recruitee`) had produced a single `ingest writes:` line at T+20 min, and 140 ingest units were
+in flight, many started before the colour flip and therefore running the old binary. One
+`greenhouse` run alone persists ~170k postings; the heavy boards fire on 1–3 h timers.
+
+Early positive sign, weak: HOT share of `jobs` updates within the post-release window was ~75%,
+against a 62.5% lifetime figure. Short window, contaminated by old-binary runs.
+
+**The decisive measurement is still ~24 h out**, and its condition stands: if `jobs.n_tup_upd`
+has not fallen by then, the diagnosis was wrong and the follow-on `pg_repack` must not be run
+on this change's strength.

@@ -217,7 +217,13 @@ harmless because both cases want the same statement; noted so a future reader do
 1. Snapshot `pg_stat_user_tables` for `jobs` and `companies` on prod before the release.
 2. Release the code change. It is backward-compatible: no schema dependency, and a rollback
    is a plain revert with no data migration.
-3. Deploy the storage-parameter migration on its own, with `lock_timeout`.
+3. ~~Deploy the storage-parameter migration on its own, with `lock_timeout`.~~ **Corrected by
+   the actual release, 2026-08-02:** `release.sh` runs the migrations itself as one of its
+   steps, so 0073 went out with the code rather than separately. It applied cleanly
+   (`migrate: applied 0073_jobs_write_storage_params.sql`, prod `reloptions` now
+   `fillfactor=90, autovacuum_vacuum_scale_factor=0.02`) because `internal/migrate` sets
+   `lock_timeout` on its own connection — which is the whole protection this step was asking
+   for. Separating it was never available and was not needed.
 4. After 24 h, re-snapshot. Expected: `companies.n_tup_upd` down by orders of magnitude,
    `jobs.n_tup_upd` down toward the rate of genuine content change, HOT share up, dead
    tuples falling. Read the per-provider hit-rate logs first.
