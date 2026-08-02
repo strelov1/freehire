@@ -20,13 +20,23 @@ import (
 )
 
 // trusted lists the providers whose atsdetect (provider, board) equals the ingest
-// external_id namespace, so a resolved board is dedup-correct. Greenhouse/Lever/Ashby/Workable
-// embed the board slug directly (verified against prod external_ids).
+// external_id namespace, so a resolved board is dedup-correct. These three embed the board
+// slug directly in the linked URL (verified against prod external_ids).
+//
+// It gates atsdetect's output only. atsdetect can also return icims/oracle/taleo/neogov/
+// paycom (via FromURL) and radancy/phenom/jibe/teamtailor (via the self-hosted markers);
+// those are deliberately NOT accepted here, because their board identity is a host or a
+// host+path that has not been checked against how ingest namespaces external_id. Widening
+// the set is a feature, and it needs that check first.
+//
+// Do not list a provider atsdetect cannot produce: the entry reads as coverage and is
+// unreachable. "workable" sat here doing exactly that — atsdetect's matcher table covers
+// greenhouse/lever/ashby, FromURL has no apply.workable.com case, and the self-hosted
+// markers explicitly exclude it.
 var trusted = map[string]bool{
 	"greenhouse": true,
 	"lever":      true,
 	"ashby":      true,
-	"workable":   true,
 }
 
 // textFetcher is the slice of the sources client this package needs (a raw, SSRF-guarded,

@@ -3,6 +3,7 @@ package cv
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -210,6 +211,62 @@ func TestStoreGetForModelStripsTheContactBlock(t *testing.T) {
 	if stored.Document.Header.FullName != "Ada Lovelace" || stored.Document.Header.Email != "ada@example.com" {
 		t.Errorf("stored contacts were mutated: %+v", stored.Document.Header)
 	}
+}
+
+// TestRedactedHeaderKeepsOnlyLocation states the rule by the SHAPE of Header rather than by
+// naming the fields to clear, so a field added to the struct is covered the moment it is
+// declared.
+//
+// That direction is the whole point. Header reaches a model through GetForModel, and a
+// redaction that lists what to remove discloses anything it has not been taught about —
+// which is the reading internal/resumeextract already rejected for its own projection: "A
+// blacklist — dropping the four known contact keys — would disclose that new field by
+// default, which is the wrong way round."
+func TestRedactedHeaderKeepsOnlyLocation(t *testing.T) {
+	full := headerWithEveryFieldSet(t)
+
+	got := Document{Header: full}.withoutContacts().Header
+
+	v := reflect.ValueOf(got)
+	for i := range v.NumField() {
+		name := v.Type().Field(i).Name
+		if name == "Location" {
+			if got.Location != full.Location {
+				t.Errorf("Location = %q, want it kept: it is not an identifier", got.Location)
+			}
+			continue
+		}
+		if !v.Field(i).IsZero() {
+			t.Errorf("Header.%s survived the redaction (%v) — every field but Location must be withheld, "+
+				"including one added after this test was written", name, v.Field(i).Interface())
+		}
+	}
+}
+
+// headerWithEveryFieldSet builds a Header with a non-zero value in EVERY field, derived from
+// the struct rather than written out, so a newly declared field arrives populated and the
+// redaction is actually asked about it. A field of a kind this helper cannot fill fails the
+// test on purpose: a new kind in the contact block is a decision, not a default.
+func headerWithEveryFieldSet(t *testing.T) Header {
+	t.Helper()
+	var h Header
+	v := reflect.ValueOf(&h).Elem()
+	for i := range v.NumField() {
+		f, name := v.Field(i), v.Type().Field(i).Name
+		switch f.Kind() {
+		case reflect.String:
+			f.SetString("set-" + name)
+		case reflect.Slice:
+			f.Set(reflect.MakeSlice(f.Type(), 1, 1))
+			if e := f.Index(0); e.Kind() == reflect.String {
+				e.SetString("set-" + name)
+			}
+		default:
+			t.Fatalf("Header.%s is a %s, which this test cannot populate — teach it, and decide "+
+				"whether the field is an identifier while you are here", name, f.Kind())
+		}
+	}
+	return h
 }
 
 func TestStoreGetForModelForeignUserIsNotFound(t *testing.T) {

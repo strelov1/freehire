@@ -34,25 +34,25 @@ type Store interface {
 	Save(ctx context.Context, j job.Job) error
 }
 
-// closer is the optional Store capability a self-closing streaming source needs: closing a
+// Closer is the optional Store capability a self-closing streaming source needs: closing a
 // posting by its (source, external_id) identity when the feed reports it removed. Only the
 // ingest dbStore implements it; ingestStream type-asserts for it and skips removals when a
 // Store lacks it, so other Store implementations (and test fakes) are unaffected.
-type closer interface {
+type Closer interface {
 	Close(ctx context.Context, source, externalID string) error
 }
 
-// toucher is the optional Store capability a HydratingSource needs: refresh a posting's liveness
+// Toucher is the optional Store capability a HydratingSource needs: refresh a posting's liveness
 // (last_seen_at, reopen if closed) by its (source, external_id) identity, WITHOUT rewriting its
 // content. The pipeline uses it for a posting the adapter re-listed but did not re-fetch (its
 // stored content is already current); a full upsert of the content-less listing would wipe the
 // hydrated description/facets. Only the ingest dbStore implements it; the pipeline type-asserts
-// for it and drops the refresh when a Store lacks it (test fakes), like closer.
-type toucher interface {
+// for it and drops the refresh when a Store lacks it (test fakes), like Closer.
+type Toucher interface {
 	Touch(ctx context.Context, source, externalID string) error
 }
 
-// seenLookup is the optional Store capability a HydratingSource needs: the external_ids already
+// SeenLookup is the optional Store capability a HydratingSource needs: the external_ids already
 // stored for the board about to be crawled, so the adapter fetches expensive per-posting detail
 // only for postings the catalogue lacks. Only the ingest dbStore implements it; the runner
 // type-asserts for it and falls back to the list-only Fetch when a Store lacks it (test fakes,
@@ -65,7 +65,7 @@ type toucher interface {
 // Each id maps to whether its stored row carries tech evidence (is_tech). Membership drives the
 // hydration decision; the flag lets a liveness refresh face the catalogue filter on the same
 // evidence a write would, which a content-less listing cannot supply.
-type seenLookup interface {
+type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
 
@@ -73,7 +73,7 @@ type seenLookup interface {
 // board is currently cooled down (skip it) and records each crawl's outcome so a
 // repeatedly-failing board backs off. A nil BoardHealth disables the feature entirely
 // (the Runner behaves exactly as before), so unit tests and non-DB callers are
-// unaffected — the same shape as the optional closer.
+// unaffected — the same shape as the optional Closer.
 type BoardHealth interface {
 	// Cooldown reports the board's cooldown_until and whether it is set. The Runner
 	// skips the board when it is set and in the future.
@@ -434,7 +434,7 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 // every lookup — harmless, because such a board yields no refreshes.
 func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, map[string]bool, error) {
 	hs, hydrating := src.(sources.HydratingSource)
-	sl, canLookUp := r.Store.(seenLookup)
+	sl, canLookUp := r.Store.(SeenLookup)
 	if !hydrating || !canLookUp {
 		jobs, err := src.Fetch(ctx, e)
 		return jobs, nil, err
@@ -454,10 +454,10 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 }
 
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,
-// without rewriting its content. It routes through the Store's optional toucher capability; a
-// Store without it (a test fake) drops the refresh, matching how ingestStream handles closer.
+// without rewriting its content. It routes through the Store's optional Toucher capability; a
+// Store without it (a test fake) drops the refresh, matching how ingestStream handles Closer.
 func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) error {
-	t, ok := r.Store.(toucher)
+	t, ok := r.Store.(Toucher)
 	if !ok {
 		return nil
 	}
@@ -519,10 +519,10 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		defer mu.Unlock()
 		total++
 		// A self-closing source emits removed postings: close by identity instead of
-		// upserting. The Store must implement closer (the ingest dbStore does); a Store
+		// upserting. The Store must implement Closer (the ingest dbStore does); a Store
 		// without it simply drops the removal (e.g. a test fake that never sees them).
 		if j.Removed {
-			c, ok := r.Store.(closer)
+			c, ok := r.Store.(Closer)
 			if !ok {
 				return
 			}

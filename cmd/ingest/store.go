@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobdedup"
 	"github.com/strelov1/freehire/internal/jobview"
+	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/vocab"
@@ -36,6 +37,19 @@ type dbStore struct {
 	indexer       jobIndexer
 	crawled       *crawledSet
 }
+
+// dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
+// all three optional capabilities — the pipeline discovers them by type assertion and
+// silently degrades on a miss, which is right for a test fake and wrong for this one. A
+// dropped Touch stops refreshing a re-listed posting's last_seen_at, and the 48h unseen sweep
+// then closes live jobs. These state that expectation to the compiler, the way board_health.go
+// already does for the one port that was exported.
+var (
+	_ pipeline.Store      = (*dbStore)(nil)
+	_ pipeline.Closer     = (*dbStore)(nil)
+	_ pipeline.Toucher    = (*dbStore)(nil)
+	_ pipeline.SeenLookup = (*dbStore)(nil)
+)
 
 func newDBStore(pool *pgxpool.Pool, targetVersion int, indexer jobIndexer, crawled *crawledSet) *dbStore {
 	return &dbStore{pool: pool, q: db.New(pool), targetVersion: int32(targetVersion), indexer: indexer, crawled: crawled}

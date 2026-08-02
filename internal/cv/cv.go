@@ -169,18 +169,22 @@ type Header struct {
 	Links    []string `json:"links,omitempty"`
 }
 
-// withoutContacts returns a copy of the document with the candidate's identifiers
-// cleared. Location stays: it is not an identifier, and a tailoring agent reasons about
-// it when the vacancy is tied to a place. Links go, because a personal profile URL names
-// the candidate as squarely as their address does.
+// withoutContacts returns a copy of the document carrying only the parts of the header a
+// model may see. Location stays: it is not an identifier, and a tailoring agent reasons
+// about it when the vacancy is tied to a place. Everything else goes — a name, an address,
+// a number, and a personal profile URL all name the candidate equally.
+//
+// It REBUILDS the header from what is allowed through rather than clearing the fields it
+// knows to be identifiers, so a field added to Header is withheld until someone decides
+// otherwise here. A list of what to remove discloses whatever it has not been taught about,
+// which is the reading internal/resumeextract already rejected for its own projection
+// (structured.go: "A blacklist ... would disclose that new field by default, which is the
+// wrong way round"). This projection reaches the same models, so it follows the same rule.
 //
 // The receiver is a value, so the stored document is untouched — only the copy handed
 // to a reader is stripped.
 func (d Document) withoutContacts() Document {
-	d.Header.FullName = ""
-	d.Header.Email = ""
-	d.Header.Phone = ""
-	d.Header.Links = nil
+	d.Header = Header{Location: d.Header.Location}
 	return d
 }
 
