@@ -233,3 +233,35 @@ func decodeB64URL(s string) string {
 	}
 	return string(b)
 }
+
+// Search runs an arbitrary query and returns the matching messages in full.
+//
+// One page only. The recall query is already scoped to one employer inside one window, so a
+// result that overflows a page is a query that failed to narrow rather than a mailbox that
+// needs paging — and the caller is a person waiting at a button.
+func (r *apiReader) Search(ctx context.Context, query string, limit int) ([]Message, error) {
+	if query == "" {
+		return nil, nil
+	}
+	u := fmt.Sprintf("%s/messages?maxResults=%d&q=%s", gmailBaseURL, limit, url.QueryEscape(query))
+	var page struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+	}
+	if err := r.getJSON(ctx, u, &page); err != nil {
+		return nil, err
+	}
+
+	out := make([]Message, 0, len(page.Messages))
+	for _, m := range page.Messages {
+		msg, err := r.GetMessage(ctx, m.ID)
+		if err != nil {
+			// One unreadable message must not lose the rest: the caller is choosing from
+			// what we found, and a short list beats an error nobody can act on.
+			continue
+		}
+		out = append(out, msg)
+	}
+	return out, nil
+}

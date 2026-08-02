@@ -5,10 +5,12 @@
       carries the de-spaced variant (`Blend 360` → also `Blend360`), the gate carries the
       hiring vocabulary AND `filename:ics` AND the quoted role, and quotes in either field
       are stripped rather than allowed to break the query.
-- [ ] 1.2 Add a reader method that runs an arbitrary query and returns message headers +
-      readable body for each hit, capped. It is a sibling of `ListATSMessageIDs`, not a
-      replacement: that one owns the sync's own query.
-- [ ] 1.3 Add a single-message fetch-and-store that reuses the sync's existing store path,
+- [x] 1.2 Add `MailboxSearcher` + `apiReader.Search` — an arbitrary query returning whole
+      messages, capped, one page. A separate interface rather than a method on
+      `GmailReader`: that one belongs to the sync worker and its query is the sync's own.
+      Behaviour is covered at the `mailrecall` layer, where the fake lives — this package
+      tests parsers, not its HTTP calls.
+- [x] 1.3 Add a single-message fetch-and-store that reuses the sync's existing store path,
       idempotent on `(source, external_id)`, so importing a message the worker had already
       stored links the existing row rather than creating a second.
 
