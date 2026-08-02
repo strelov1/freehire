@@ -1,6 +1,7 @@
 package userjob
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -40,20 +41,11 @@ func TestValidateAppliedOn(t *testing.T) {
 func TestValidateAppliedOnSaysWhich(t *testing.T) {
 	now := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
 	if err := ValidateAppliedOn(now.AddDate(0, 0, 1), now); err == nil ||
-		!contains(err.Error(), "future") {
+		!strings.Contains(err.Error(), "future") {
 		t.Errorf("err = %v, want it to mention the future", err)
 	}
 	if err := ValidateAppliedOn(now.AddDate(0, 0, -400), now); err == nil ||
-		!contains(err.Error(), "year") {
+		!strings.Contains(err.Error(), "year") {
 		t.Errorf("err = %v, want it to mention the year bound", err)
 	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

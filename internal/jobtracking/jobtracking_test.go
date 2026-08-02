@@ -835,3 +835,38 @@ func TestMarkAppliedOn_RefusesADateOutsideTheWindow(t *testing.T) {
 		})
 	}
 }
+
+// Stating today must work at every hour of the day. The day is stored at noon UTC, so validating
+// that derived instant rather than the day itself refuses "today" for the whole UTC morning —
+// and, for a caller east of UTC+12, refuses their today permanently. The window bounds the day a
+// person names; the hour the row happens to be stored at is not part of it.
+func TestMarkAppliedOn_AcceptsTodayAtAnyHour(t *testing.T) {
+	day := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	for _, hour := range []int{0, 6, 11, 12, 23} {
+		now := time.Date(2026, 8, 2, hour, 0, 0, 0, time.UTC)
+		repo := newRepo()
+		repo.appliedResult = jobtracking.Interaction{JobID: jobID, AppliedAt: tPtr(day)}
+		svc := jobtracking.New(repo)
+
+		if _, err := svc.MarkAppliedOn(ctx(), userID, slug, day, now, appevent.SourceUser); err != nil {
+			t.Errorf("now=%02d:00 UTC: %v", hour, err)
+		}
+	}
+}
+
+// The day reaches storage as noon UTC. Midnight would render as the previous date for every
+// reader west of Greenwich, so the card would show a day earlier than the one they typed.
+func TestMarkAppliedOn_StoresTheDayAtNoon(t *testing.T) {
+	day := time.Date(2026, 7, 27, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	repo := newRepo()
+	svc := jobtracking.New(repo)
+
+	if _, err := svc.MarkAppliedOn(ctx(), userID, slug, day, now, appevent.SourceUser); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
+	if !repo.redatedAt.Equal(want) {
+		t.Errorf("repository received %v, want %v", repo.redatedAt, want)
+	}
+}

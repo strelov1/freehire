@@ -105,6 +105,13 @@ func (r *QueriesRepository) MarkAppliedOn(ctx context.Context, userID, jobID int
 	row, err := qtx.RedateApplication(ctx, db.RedateApplicationParams{
 		UserID: userID, JobID: jobID, At: stated,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The statement re-dates only an application that carries a date, and MarkJobApplied has
+		// just set one — so this cannot happen on this path today. It is mapped rather than left
+		// to surface as a 500 because "cannot happen" is an argument about the code above, not a
+		// guarantee, and the honest answer to a missing application is that it is missing.
+		return Interaction{}, ErrApplicationNotFound
+	}
 	if err != nil {
 		return Interaction{}, err
 	}

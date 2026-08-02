@@ -11,7 +11,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - OAuth buttons render from `GET /api/v1/auth/oauth/providers`. Callbacks 302 back to the
   SPA; failures 302 with `?auth_error=oauth`, never JSON.
 - `stage` in job tracking mirrors the backend vocabulary (`internal/userjob/stages.go`):
-  applied/screening/responded/interview/offer/accepted/rejected/withdrawn.
+  applied/screening/responded/interview/offer/accepted/rejected/withdrawn/expired.
 - A view is recorded silently when a signed-in user opens a job — failure is swallowed and
   must not break the page.
 - `MatchSummary.svelte` is the compact sidebar summary (overall % + verdict + top gap)

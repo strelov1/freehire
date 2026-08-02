@@ -90,6 +90,27 @@ The existing rule that automatic advancement never enters or leaves a terminal s
 feature its safety property for free: mail classified after the candidate marked an
 application expired cannot resurrect it.
 
+### A backdated application reaches two public aggregates, and that is accepted here
+
+`applied_at` feeds the ghost-job evidence query, and the `applied` event's `occurred_at` feeds
+the per-company response rate and median reply time. A date the candidate states therefore
+moves both, and a backdated apply produces mature ghost evidence immediately rather than after
+the silence ladder has run.
+
+That is the same reach an application has always had — the tracker's own dates were never
+audited — and the alternative, excluding user-dated applications from the rollups, would make
+an imported history invisible in exactly the statistics it exists to inform. Two things bound
+it: the ghost evidence path already requires a connected mailbox, and the year-old limit stops
+stale history from speaking about a live posting.
+
+Note the deliberate asymmetry with the ghost report, which states in its own package comment
+that a claim is "their word, not an observation, which is why it never reaches the tracking
+board's `applied_at`", and caps filings at twenty a day. That separation is about a claim made
+against **someone else's** posting. This date is a claim about the candidate's **own**
+application, so it belongs on their own record — and the honest reading of the response rate is
+"how employers treat applications people say they sent". If that ever needs tightening, the
+lever is the rollup's own filter, not this endpoint.
+
 ## Risks / Trade-offs
 
 **A correction silently disagrees with the ledger** → The service method owns both writes in

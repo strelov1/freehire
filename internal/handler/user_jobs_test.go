@@ -186,10 +186,14 @@ func TestMarkApplied_StoresAStatedDayAtNoonUTC(t *testing.T) {
 	app, iss := datedApplyApp(repo)
 	token, _ := iss.Issue(7, testTokenVersion)
 
-	if got := postApply(t, app, token, `{"applied_on":"2026-07-27"}`); got != fiber.StatusOK {
+	// A day relative to now, not a fixed one: the service measures the window against the real
+	// clock here, so a hardcoded date would start failing a year after it was written.
+	day := time.Now().UTC().AddDate(0, 0, -6)
+	stated := day.Format("2006-01-02")
+	if got := postApply(t, app, token, `{"applied_on":"`+stated+`"}`); got != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", got)
 	}
-	want := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
+	want := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, time.UTC)
 	if !repo.on.Equal(want) {
 		t.Errorf("repository received %v, want %v", repo.on, want)
 	}
@@ -219,8 +223,12 @@ func TestMarkApplied_WithoutABodyKeepsTheUndatedPath(t *testing.T) {
 // the service's, so this also proves the handler does not hold a second copy of it.
 func TestMarkApplied_RefusesAnUnusableDate(t *testing.T) {
 	cases := map[string]string{
-		"not a date":        `{"applied_on":"last tuesday"}`,
-		"a timestamp":       `{"applied_on":"2026-07-27T10:00:00Z"}`,
+		"not a date":  `{"applied_on":"last tuesday"}`,
+		"a timestamp": `{"applied_on":"2026-07-27T10:00:00Z"}`,
+		// Not a string, and not JSON at all: both used to read as "no date given" and stamp
+		// today, telling a caller who named a day that it worked.
+		"a number":          `{"applied_on":20260727}`,
+		"not json":          `applied_on=2026-07-27`,
 		"in the future":     `{"applied_on":"` + time.Now().AddDate(0, 0, 2).Format("2006-01-02") + `"}`,
 		"older than a year": `{"applied_on":"` + time.Now().AddDate(0, 0, -400).Format("2006-01-02") + `"}`,
 	}

@@ -30,9 +30,12 @@ export function columnOf(item: MyJob): BoardColumnId | null {
   return null;
 }
 
-// The three terminal stages live behind the single "Closed" column; the user
-// picks which one in the drawer after dropping there.
-export const CLOSED_OUTCOMES = ['accepted', 'rejected', 'withdrawn'] as const;
+// The terminal stages live behind the single "Closed" column; the user picks which one in the
+// drawer after dropping there. Derived rather than listed, for the reason at the top of this
+// file: a hand-written copy went stale the moment a settled stage was added, leaving the new
+// stage unreachable from the board while every type check still passed — the generated-stage
+// check binds Stage to STAGE_GROUPS and says nothing about a literal array.
+export const CLOSED_OUTCOMES = STAGE_GROUPS.find((g) => g.id === 'closed')!.stages;
 export type ClosedOutcome = (typeof CLOSED_OUTCOMES)[number];
 
 // svelte-dnd-action keys each draggable by a top-level `id`; MyJob has none, so

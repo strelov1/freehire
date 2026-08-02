@@ -164,18 +164,12 @@ func (h *trackingHandlers) RecordView(c *fiber.Ctx) error {
 
 // applyRequest is the optional body of an apply: the day the application was actually sent.
 //
-// A calendar date rather than a timestamp, matching the ghost report, because the caller is
-// stating a day. Asking for an instant would invite one bearing a timezone, which reads as a
-// different day either side of a border.
+// A calendar date rather than a timestamp, read with appliedOnLayout — the same layout the ghost
+// report parses, since both take a day from a person. Asking for an instant would invite one
+// bearing a timezone, which reads as a different day either side of a border.
 type applyRequest struct {
 	AppliedOn string `json:"applied_on"`
 }
-
-// appliedOnHour is the hour of the stated day to store it at, read with appliedOnLayout — the
-// same layout the ghost report parses, since both take a day from a person. Noon, because
-// midnight UTC renders as the previous date for every reader west of Greenwich: the card would
-// show a day earlier than the one they typed.
-const appliedOnHour = 12
 
 // MarkApplied marks a job as applied for the authenticated user and returns the
 // updated interaction.
@@ -211,24 +205,37 @@ func (h *trackingHandlers) MarkApplied(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toResponse(interaction)})
 }
 
-// statedApplyDay reads the optional day out of the request, as the instant to store. It
-// answers nil for a request that states none — no body, an unparseable one, or a body whose
-// `applied_on` is empty — because apply has always been callable with nothing at all, and a
-// client that sends none is asking for today rather than making a mistake.
+// statedApplyDay reads the optional day out of the request. It answers nil only when the caller
+// sent nothing at all, or sent a body carrying no `applied_on`: apply has always been callable
+// with an empty request, and a client sending none is asking for today rather than making a
+// mistake.
 //
-// A date that is present but unreadable is a mistake, and says so: silently stamping now()
-// would record a different application than the one the caller described.
+// Anything else that fails to read is a 400, including a body that is not JSON and one whose
+// `applied_on` is not a string. Treating those as "no date" would stamp today for a caller who
+// named a day and tell them it worked — the row would then record a different application than
+// the one they described, silently. That mattered more than it looks: Fiber's BodyParser also
+// fails on a perfectly good JSON body sent without a Content-Type, which is exactly what a curl
+// one-liner does.
+//
+// The day is returned as a day. Placing it at the storage hour is the service's job, because the
+// believable-date window is checked against the day and would refuse "today" all morning if it
+// were checked against the derived instant.
 func statedApplyDay(c *fiber.Ctx) (*time.Time, error) {
+	if len(c.Body()) == 0 {
+		return nil, nil
+	}
 	var in applyRequest
-	if err := c.BodyParser(&in); err != nil || in.AppliedOn == "" {
+	if err := c.BodyParser(&in); err != nil {
+		return nil, fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if in.AppliedOn == "" {
 		return nil, nil
 	}
 	day, err := time.Parse(appliedOnLayout, in.AppliedOn)
 	if err != nil {
 		return nil, fiber.NewError(fiber.StatusBadRequest, "applied_on must be a date like 2026-07-29")
 	}
-	at := time.Date(day.Year(), day.Month(), day.Day(), appliedOnHour, 0, 0, 0, time.UTC)
-	return &at, nil
+	return &day, nil
 }
 
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the

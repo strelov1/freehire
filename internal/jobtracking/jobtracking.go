@@ -354,18 +354,22 @@ func (s *Service) MarkAppliedAt(ctx context.Context, userID int64, slug string, 
 // already held. `now` is supplied rather than read here so the bound is testable and so the
 // caller's clock, not this package's, decides what "the future" means.
 //
-// The window is enforced at this level rather than at the HTTP door because two callers never
-// pass through Fiber — the CLI reaches the API, but the in-app assistant calls this service
-// directly — and a bound that only the handler applied would not exist for them.
-func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, at, now time.Time, source string) (Interaction, error) {
-	if err := userjob.ValidateAppliedOn(at, now); err != nil {
+// The window is enforced at this level rather than at the HTTP door so that it holds for every
+// caller of the service, not only the one that arrives over HTTP: the in-app assistant calls
+// jobtracking directly and never passes through Fiber. Its apply tool takes no date today, so
+// this is a guard against the next caller rather than a fix for a current one.
+// `day` is the calendar day stated, and the window is checked against it — never against the
+// instant it is stored at. Those differ by the storage hour, and bounding the instant refuses
+// "today" for the whole UTC morning.
+func (s *Service) MarkAppliedOn(ctx context.Context, userID int64, slug string, day, now time.Time, source string) (Interaction, error) {
+	if err := userjob.ValidateAppliedOn(day, now); err != nil {
 		return Interaction{}, err
 	}
 	jobID, err := s.repo.JobIDBySlug(ctx, slug)
 	if err != nil {
 		return Interaction{}, err
 	}
-	return s.repo.MarkAppliedOn(ctx, userID, jobID, at, source)
+	return s.repo.MarkAppliedOn(ctx, userID, jobID, userjob.AppliedOnInstant(day), source)
 }
 
 // SaveJob resolves slug → jobID then delegates to the repository.

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { BOARD_COLUMNS, boardRefFor, columnOf, matchesQuery } from './board';
+import { BOARD_COLUMNS, CLOSED_OUTCOMES, boardRefFor, columnOf, matchesQuery } from './board';
+import { STAGE_GROUPS } from './generated/contracts';
 import type { MyJob } from './types';
 
 // columnOf reads only `stage` and `applied_at`; a minimal cast fixture suffices.
@@ -115,5 +116,16 @@ describe('boardRefFor', () => {
 
   it('addresses nothing when the event names no application', () => {
     expect(boardRefFor({})).toBeNull();
+  });
+});
+
+// The outcomes offered when a card is dropped into Closed must BE the closed group, not a
+// second list that happens to agree with it today. A hand-written copy is exactly how a new
+// settled stage becomes unreachable from the board while every type check still passes: the
+// generated-stage check binds Stage to STAGE_GROUPS, and says nothing about a literal array.
+describe('CLOSED_OUTCOMES', () => {
+  it('is the generated closed group', () => {
+    const closed = STAGE_GROUPS.find((g) => g.id === 'closed');
+    expect([...CLOSED_OUTCOMES]).toEqual([...closed!.stages]);
   });
 });
