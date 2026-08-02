@@ -7,7 +7,7 @@ package userjob
 // generated frontend list is emitted from it.
 var Stages = []string{
 	"applied", "screening", "responded", "interview",
-	"offer", "accepted", "rejected", "withdrawn",
+	"offer", "accepted", "rejected", "withdrawn", "expired",
 }
 
 // ValidStage reports whether s is a known application stage.

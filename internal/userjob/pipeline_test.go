@@ -72,6 +72,11 @@ func TestForward(t *testing.T) {
 		{"never resurrects a rejection", "rejected", "interview", false},
 		{"never resurrects an acceptance", "accepted", "offer", false},
 		{"never advances INTO a terminal outcome", "interview", "rejected", false},
+		// A reply that arrives after the candidate gave up must not reopen the application:
+		// they concluded no answer was coming, and a late classification is not a reversal of
+		// that. The rule costs nothing to extend — it follows from `expired` being terminal.
+		{"never resurrects an expired application", "expired", "responded", false},
+		{"never advances INTO expired", "applied", "expired", false},
 		{"refuses an unknown target", "applied", "definitely-not-a-stage", false},
 	}
 	for _, tt := range tests {

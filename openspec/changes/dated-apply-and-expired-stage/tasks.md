@@ -1,16 +1,18 @@
 ## 1. The `expired` stage
 
-- [ ] 1.1 Add `expired` to the vocabulary in `internal/userjob`: `Stages`, `terminalStages`
+- [x] 1.1 Add `expired` to the vocabulary in `internal/userjob`: `Stages`, `terminalStages`
   (no `activeRank` entry, no `silenceThresholds` entry), the `closed` group and the label
   `Expired`. The three binding tests (`TestEveryStageIsRankedOrTerminal`,
   `TestSilenceThresholdsCoverExactlyTheActiveStages`, `TestEveryStageBelongsToExactlyOneGroup`)
   must pass without being relaxed.
-- [ ] 1.2 Add a test asserting `Forward` refuses to advance an application out of `expired`,
+- [x] 1.2 Add a test asserting `Forward` refuses to advance an application out of `expired`,
   so mail classified later cannot resurrect it.
-- [ ] 1.3 Regenerate the frontend contracts (`make` target or `go run ./cmd/gen-contracts`) and
+- [x] 1.3 Regenerate the frontend contracts (`make` target or `go run ./cmd/gen-contracts`) and
   confirm `pnpm run check` passes in `web/` with no hand edits to the SPA.
-- [ ] 1.4 Add an integration test that `PATCH /jobs/:slug/track` accepts `expired` and that the
-  application then reports no silence state.
+- [x] 1.4 Add a test that `PATCH /jobs/:slug/track` accepts `expired`, and one that an expired
+  application reports no silence state. Not an integration test: the stage has no database
+  constraint, so Postgres would accept any string — the vocabulary is enforced in the service
+  before the write, which is where the test has to sit to prove anything.
 
 ## 2. Believable dates, defined once
 

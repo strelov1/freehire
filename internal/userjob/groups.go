@@ -30,7 +30,7 @@ var Groups = []Group{
 	{ID: "applied", Label: "Applied", Stages: []string{"applied", "screening", "responded"}},
 	{ID: "interview", Label: "Interview", Stages: []string{"interview"}},
 	{ID: "offer", Label: "Offer", Stages: []string{"offer"}},
-	{ID: "closed", Label: "Closed", Stages: []string{"accepted", "rejected", "withdrawn"}},
+	{ID: "closed", Label: "Closed", Stages: []string{"accepted", "rejected", "withdrawn", "expired"}},
 }
 
 // stageLabels is the one text a person reads for each stage.
@@ -49,6 +49,7 @@ var stageLabels = map[string]string{
 	"accepted":  "Accepted",
 	"rejected":  "Rejected",
 	"withdrawn": "Withdrawn",
+	"expired":   "Expired",
 }
 
 // GroupOf reports the group a stage belongs to, or "" for a stage outside the vocabulary.

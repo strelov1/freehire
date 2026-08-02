@@ -1056,13 +1056,14 @@ export interface RevisionView {
 
 export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
-export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn'] as const;
+export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
 export const APPLICATION_EVENT_KINDS = ['applied', 'employer_reply', 'follow_up_sent', 'stage_set', 'interview_scheduled'] as const;
 export type ApplicationEventKind = (typeof APPLICATION_EVENT_KINDS)[number];
 export const STAGE_LABELS = {
   'accepted': 'Accepted',
   'applied': 'Applied',
+  'expired': 'Expired',
   'interview': 'Interview',
   'offer': 'Offer',
   'rejected': 'Rejected',
@@ -1075,7 +1076,7 @@ export const STAGE_GROUPS = [
   { id: 'applied', label: 'Applied', stages: ['applied', 'screening', 'responded'] },
   { id: 'interview', label: 'Interview', stages: ['interview'] },
   { id: 'offer', label: 'Offer', stages: ['offer'] },
-  { id: 'closed', label: 'Closed', stages: ['accepted', 'rejected', 'withdrawn'] },
+  { id: 'closed', label: 'Closed', stages: ['accepted', 'rejected', 'withdrawn', 'expired'] },
 ] as const;
 export type StageGroup = (typeof STAGE_GROUPS)[number];
 export const WORK_MODE_VALUES = ['remote', 'hybrid', 'onsite'] as const;

@@ -111,3 +111,14 @@ func TestSilenceStateForPendingSuggestion(t *testing.T) {
 		t.Errorf("inside threshold with a pending suggestion = %q, want %q", got, SilenceActive)
 	}
 }
+
+// An expired application waits on nobody, so it reports no silence state at all — not `active`,
+// which would read as "waiting and fine". This is what stops the new stage from becoming a
+// second name for silence: the moment the candidate records the outcome, the clock goes quiet.
+func TestExpiredReportsNoSilenceState(t *testing.T) {
+	for _, days := range []int{0, 21, 400} {
+		if got := SilenceStateFor("expired", days, false); got != "" {
+			t.Errorf("SilenceStateFor(\"expired\", %d, false) = %q, want \"\"", days, got)
+		}
+	}
+}

@@ -26,10 +26,14 @@ var activeRank = map[string]int{
 // out of one — that would resurrect a dead application — and never into one either: deciding an
 // application is rejected, accepted or withdrawn is the candidate's call or an explicit action,
 // never an inference from a piece of mail.
+// `expired` is settled without anyone deciding: the employer never answered, or the posting
+// went away. It is the candidate's own conclusion, never an inference — nothing computes it
+// from a threshold, so the silence state stays the only automatic reading of a quiet employer.
 var terminalStages = map[string]bool{
 	"accepted":  true,
 	"rejected":  true,
 	"withdrawn": true,
+	"expired":   true,
 }
 
 // IsTerminal reports whether stage is a settled outcome.

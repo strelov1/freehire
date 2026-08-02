@@ -149,3 +149,22 @@ func TestInteractionResponse_HasStageAndNotes(t *testing.T) {
 		}
 	}
 }
+
+// `expired` reaches the write path like any other stage: the vocabulary is the only gate, so
+// adding a stage to internal/userjob is all it takes for the endpoint to accept it. The test
+// guards the wiring rather than the word — a validation copy kept anywhere else in the handler
+// would fail here.
+func TestTrackJob_AcceptsExpired(t *testing.T) {
+	app, iss := trackApp()
+	token, _ := iss.Issue(7, testTokenVersion)
+	req := httptest.NewRequest(fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+}
