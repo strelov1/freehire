@@ -20,11 +20,6 @@
 ALTER TABLE public.emails
     ADD COLUMN IF NOT EXISTS ical_uid text NOT NULL DEFAULT '';
 
--- The lookup calmatch runs per calendar event. Partial: the column is empty on the large
--- majority of rows, and an index over those entries would be mostly dead weight.
-CREATE INDEX IF NOT EXISTS emails_user_ical_uid_idx
-    ON public.emails (user_id, ical_uid) WHERE ical_uid <> '';
-
 -- Which Google scopes this grant actually carries.
 --
 -- The calendar consent is asked for separately, so a connection may hold mail only. The

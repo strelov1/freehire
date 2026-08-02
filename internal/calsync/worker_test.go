@@ -92,7 +92,7 @@ func TestRunOnceStoresOnlyMeetingsItCouldAttach(t *testing.T) {
 	store := &fakeStore{
 		connections: []Connection{{UserID: 7}},
 		candidates: map[int64][]calmatch.Candidate{
-			7: {{ApplicationID: 11, Company: "Derq", UIDs: []string{"derq@ashbyhq.com"}}},
+			7: {{ApplicationID: 11, UIDs: []string{"derq@ashbyhq.com"}}},
 		},
 	}
 	reader := fakeReader{meetings: []Meeting{
@@ -118,12 +118,13 @@ func TestRunOnceStoresOnlyMeetingsItCouldAttach(t *testing.T) {
 	}
 }
 
-// A title naming exactly one tracked employer is worth offering and not worth acting on.
-// It still names an application, so it is storable — as a suggestion.
-func TestRunOnceStoresATitleMatchAsASuggestion(t *testing.T) {
+// A meeting no invitation named is not stored at all. There is no weaker tier to fall
+// back to: one existed, matched an employer's name in the title, and attached meetings to
+// the wrong employer often enough that removing it was the fix.
+func TestRunOnceStoresNothingForAMeetingNoInvitationNamed(t *testing.T) {
 	store := &fakeStore{
 		connections: []Connection{{UserID: 7}},
-		candidates:  map[int64][]calmatch.Candidate{7: {{ApplicationID: 12, Company: "Vercel"}}},
+		candidates:  map[int64][]calmatch.Candidate{7: {{ApplicationID: 12}}},
 	}
 	reader := fakeReader{meetings: []Meeting{
 		{UID: "v-1@google.com", Title: "Vercel <> Ivan", StartsAt: at(13, 9)},
@@ -132,28 +133,8 @@ func TestRunOnceStoresATitleMatchAsASuggestion(t *testing.T) {
 	if err := newTestWorker(store, reader).RunOnce(context.Background()); err != nil {
 		t.Fatalf("RunOnce: %v", err)
 	}
-	if len(store.stored) != 1 || store.stored[0].Status != StatusSuggested {
-		t.Fatalf("stored %+v, want one suggestion", store.stored)
-	}
-}
-
-// Two applications to one employer are two rounds and the title does not say which.
-// Offering the wrong one is worse than offering none, so nothing is stored.
-func TestRunOnceStoresNothingWhenTheTitleNamesTwoApplications(t *testing.T) {
-	store := &fakeStore{
-		connections: []Connection{{UserID: 7}},
-		candidates: map[int64][]calmatch.Candidate{7: {
-			{ApplicationID: 12, Company: "Derq"},
-			{ApplicationID: 13, Company: "Derq"},
-		}},
-	}
-	reader := fakeReader{meetings: []Meeting{{UID: "d@google.com", Title: "Derq interview", StartsAt: at(13, 9)}}}
-
-	if err := newTestWorker(store, reader).RunOnce(context.Background()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
-	}
 	if len(store.stored) != 0 {
-		t.Errorf("stored %+v, want nothing", store.stored)
+		t.Errorf("stored %+v, want nothing — only the invitation's identifier attaches a meeting", store.stored)
 	}
 }
 
@@ -162,7 +143,7 @@ func TestRunOnceStoresNothingWhenTheTitleNamesTwoApplications(t *testing.T) {
 func TestRunOnceMarksACancelledMeeting(t *testing.T) {
 	store := &fakeStore{
 		connections: []Connection{{UserID: 7}},
-		candidates:  map[int64][]calmatch.Candidate{7: {{ApplicationID: 11, Company: "Derq", UIDs: []string{"derq@ashbyhq.com"}}}},
+		candidates:  map[int64][]calmatch.Candidate{7: {{ApplicationID: 11, UIDs: []string{"derq@ashbyhq.com"}}}},
 	}
 	reader := fakeReader{meetings: []Meeting{
 		{UID: "derq@ashbyhq.com", Title: "Technical screen", StartsAt: at(13, 9), Cancelled: true},
@@ -184,7 +165,7 @@ func TestRunOnceMarksACancelledMeeting(t *testing.T) {
 func TestRunOnceMarksAFailingGrantAndKeepsGoing(t *testing.T) {
 	store := &fakeStore{
 		connections: []Connection{{UserID: 7}, {UserID: 8}},
-		candidates:  map[int64][]calmatch.Candidate{8: {{ApplicationID: 11, Company: "Derq", UIDs: []string{"derq@ashbyhq.com"}}}},
+		candidates:  map[int64][]calmatch.Candidate{8: {{ApplicationID: 11, UIDs: []string{"derq@ashbyhq.com"}}}},
 	}
 	w := newTestWorker(store, fakeReader{meetings: []Meeting{
 		{UID: "derq@ashbyhq.com", Title: "Screen", StartsAt: at(13, 9)},
@@ -192,7 +173,7 @@ func TestRunOnceMarksAFailingGrantAndKeepsGoing(t *testing.T) {
 	// User 7's reader refuses; user 8's works.
 	w.newReader = func(_ context.Context, _ string) CalendarReader {
 		if len(store.reconsent) == 0 {
-			return fakeReader{err: errors.New("invalid_grant")}
+			return fakeReader{err: &AuthError{err: errors.New("401 Unauthorized")}}
 		}
 		return fakeReader{meetings: []Meeting{{UID: "derq@ashbyhq.com", Title: "Screen", StartsAt: at(13, 9)}}}
 	}
@@ -214,4 +195,21 @@ func newTestWorker(store *fakeStore, reader CalendarReader) *Worker {
 	w := NewWorker(store, testCipher, func(context.Context, string) CalendarReader { return reader })
 	w.now = func() time.Time { return at(12, 0) }
 	return w
+}
+
+// Google having a bad day is not a candidate revoking a grant. The flag is shared with
+// mail, so treating a 500 as a revocation would disconnect every mailbox we hold during
+// one incident — each needing a restricted-scope consent to restore.
+func TestRunOnceDoesNotRevokeAGrantOverAProviderFailure(t *testing.T) {
+	store := &fakeStore{connections: []Connection{{UserID: 7}}}
+	w := newTestWorker(store, fakeReader{err: errors.New("500 Internal Server Error")})
+
+	err := w.RunOnce(context.Background())
+
+	if err == nil {
+		t.Error("RunOnce reported success although the provider failed")
+	}
+	if len(store.reconsent) != 0 {
+		t.Errorf("marked %v for re-consent over a provider failure — that flag is shared with mail", store.reconsent)
+	}
 }

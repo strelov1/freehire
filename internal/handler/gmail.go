@@ -177,7 +177,7 @@ func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 		return redirect("gmail_error=state", errors.New("state cookie missing or mismatched"))
 	}
 	if code := c.Query("code"); code != "" {
-		refresh, email, err := h.gmailConnector.Exchange(c.Context(), code)
+		refresh, email, granted, err := h.gmailConnector.Exchange(c.Context(), code)
 		if err != nil {
 			return redirect("gmail_error=exchange", err)
 		}
@@ -193,7 +193,7 @@ func (h *inboxHandlers) GmailCallback(c *fiber.Ctx) error {
 		// Record what this grant covers. cal-sync selects connections by their recorded
 		// scopes, so a row that never says what it holds is a row no worker can use.
 		if err := h.queries.RecordGrantScopes(c.Context(), db.RecordGrantScopesParams{
-			UserID: userID, Scopes: []string{gmailsync.GmailReadonlyScope},
+			UserID: userID, Scopes: granted,
 		}); err != nil {
 			return redirect("gmail_error=exchange", err)
 		}
@@ -233,7 +233,7 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 		return redirect("calendar_error=state", errors.New("state cookie missing or mismatched"))
 	}
 	if code := c.Query("code"); code != "" {
-		refresh, err := h.gmailConnector.ExchangeCalendar(c.Context(), code)
+		refresh, granted, err := h.gmailConnector.ExchangeCalendar(c.Context(), code)
 		if err != nil {
 			return redirect("calendar_error=exchange", err)
 		}
@@ -242,7 +242,10 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 			return redirect("calendar_error=exchange", err)
 		}
 		if err := h.queries.UpsertCalendarGrant(c.Context(), db.UpsertCalendarGrantParams{
-			UserID: userID, RefreshTokenEnc: enc, Scopes: []string{gmailsync.CalendarScope},
+			// What Google says the grant covers, not what we asked for: the two differ
+			// whenever a candidate declines part of a consent, and the record is what
+			// every worker's filter reads.
+			UserID: userID, RefreshTokenEnc: enc, Scopes: granted,
 		}); err != nil {
 			return redirect("calendar_error=exchange", err)
 		}

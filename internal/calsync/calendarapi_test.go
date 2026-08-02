@@ -76,8 +76,11 @@ func TestListEventsReadsTheShapesGoogleReturns(t *testing.T) {
 	}
 	// An all-day entry carries `date` and no clock. Reading only dateTime would drop it
 	// silently, and an onsite day is exactly the kind of thing booked that way.
-	if want := time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC); !got[1].StartsAt.Equal(want) {
-		t.Errorf("all-day starts_at = %v, want %v", got[1].StartsAt, want)
+	// Midday, not midnight: the calendar groups by the reader's local day, and midnight
+	// UTC is the previous day for everyone west of Greenwich — which is the onsite-day
+	// case this branch exists for.
+	if want := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC); !got[1].StartsAt.Equal(want) {
+		t.Errorf("all-day starts_at = %v, want midday %v", got[1].StartsAt, want)
 	}
 	if !got[2].Cancelled {
 		t.Error("a cancelled event did not report itself cancelled; the worker would store it as current")

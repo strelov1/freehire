@@ -75,9 +75,14 @@
     }
   }
 
-  // Whether this reader has given us their calendar. Undefined until asked, so the
-  // invitation below does not flash for someone who already connected one.
+  // Whether this reader has given us their calendar, and whether the flow exists to give
+  // it. Undefined until asked, so the invitation below does not flash for someone who
+  // already connected one — or on a deployment that has no Google client configured,
+  // where the connect route is not registered at all and the button would navigate the
+  // browser to a JSON 404. The Gmail surface states that invariant for its own button;
+  // `available` is what carries it, and it is served already.
   let calendarConnected = $state<boolean | undefined>(undefined);
+  let connectAvailable = $state(false);
 
   // One fetch on mount when the server load failed, or when it answered for a month other
   // than the reader's. Once, not reactively.
@@ -86,7 +91,10 @@
     if (isAuthenticated()) {
       void api
         .gmailStatus()
-        .then((s) => (calendarConnected = s.calendar_connected === true))
+        .then((s) => {
+          calendarConnected = s.calendar_connected === true;
+          connectAvailable = s.available === true;
+        })
         .catch(() => (calendarConnected = undefined));
     }
   });
@@ -363,7 +371,7 @@
       </div>
     {/if}
 
-    {#if calendarConnected === false}
+    {#if calendarConnected === false && connectAvailable}
       <!-- Said plainly rather than discovered at Google's consent screen. The OAuth app
            is not verified yet, so an account outside the test roster is simply refused
            there — and a refusal with no explanation reads as a fault in freehire. -->

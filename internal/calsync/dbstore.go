@@ -53,11 +53,7 @@ func (s *DBStore) Candidates(ctx context.Context, userID int64) ([]calmatch.Cand
 	}
 	out := make([]calmatch.Candidate, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, calmatch.Candidate{
-			ApplicationID: r.ApplicationID,
-			Company:       r.CompanySlug,
-			UIDs:          r.IcalUids,
-		})
+		out = append(out, calmatch.Candidate{ApplicationID: r.ApplicationID, UIDs: r.IcalUids})
 	}
 	return out, nil
 }

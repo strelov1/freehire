@@ -15,7 +15,12 @@ import (
 	"strings"
 )
 
-// UID returns the first VEVENT's identifier, or "" when the body carries none.
+// UID returns the first UID property in the body, or "" when it carries none.
+//
+// The first PROPERTY, not the first VEVENT's: a body whose VTODO precedes its VEVENT
+// would yield the wrong one. Invitations do not arrive shaped that way — an ATS sends a
+// single VEVENT with METHOD:REQUEST — so the distinction is documented rather than
+// implemented, and the day it matters this is where to look.
 //
 // Absence is reported as absence. The only automatic link built on this is UID equality,
 // so a confident wrong answer would attach a meeting to an application that no

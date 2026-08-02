@@ -1909,9 +1909,9 @@ type Querier interface {
 	// left in place — its expiry gates the retry to a later run and doubles as the
 	// crash reaper, so a failed entry is never reprocessed within the same run.
 	RecordEnrichmentFailure(ctx context.Context, arg RecordEnrichmentFailureParams) (RecordEnrichmentFailureRow, error)
-	// Note the scopes a grant carries without touching anything else, unioned for the same
-	// reason as above. The Gmail connect calls this so a mailbox connected before the calendar
-	// existed still records what it holds.
+	// Record what a grant covers, as the provider reported it. Replacing rather than unioning,
+	// for the reason above: a list that only grows cannot express a scope the candidate took
+	// away. An empty list means the exchange did not say, and keeps what we held.
 	RecordGrantScopes(ctx context.Context, arg RecordGrantScopesParams) error
 	// Record (or refresh) a user's view of a job. Idempotent on (user_id, job_id):
 	// the first view creates the row, a repeat view touches viewed_at. Returns the
@@ -2468,9 +2468,14 @@ type Querier interface {
 	// none to record — the calendar flow never reads the Gmail profile, because that needs the
 	// mail scope they may not have given.
 	//
-	// It does not replace the scope list, it unions with it. The consent is incremental and
-	// the returned token covers everything granted so far, so overwriting would forget the
-	// mail scope and stop the mail sync at the moment the candidate added their calendar.
+	// It records what Google says the grant covers, verbatim. Unioning was the first attempt
+	// and can only ever grow: a candidate who revokes at Google and then reconnects mail alone
+	// would keep a calendar scope they no longer hold, cal-sync would take the resulting 403
+	// as a revoked grant, and the SHARED status would break the mailbox they had just
+	// reconnected — once per cron tick, forever. The consent is incremental, so the token from
+	// either flow already reports everything granted; the authoritative answer is the one to
+	// store. A caller that could not read the scopes passes the empty list and this keeps what
+	// it had, because absence of evidence is not evidence of revocation.
 	//
 	// And it does not distinguish insert from update, because both mean the same thing here:
 	// this person has granted us their calendar.

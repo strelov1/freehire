@@ -52,6 +52,7 @@ func TestUpsertApplicationInterview_MovesInPlaceAndStaysOneRow(t *testing.T) {
 			JoinUrl:       "https://meet.google.com/abc-defg-hij",
 			Status:        "confirmed",
 			Source:        "calendar_google",
+			EventSource:   "calendar_google",
 		}); err != nil {
 			t.Fatalf("upsert: %v", err)
 		}
@@ -98,7 +99,7 @@ func TestCancelApplicationInterview_MarksRatherThanDeletes(t *testing.T) {
 		UserID: user, ApplicationID: appID, IcalUid: "cancel-me@ashbyhq.com",
 		ProviderEventID: "evt-cancel-me",
 		StartsAt:        ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
-		Status:          "confirmed", Source: "calendar_google",
+		Status:          "confirmed", Source: "calendar_google", EventSource: "calendar_google",
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -203,7 +204,7 @@ func TestUpsertApplicationInterview_AConfirmedMeetingNeverFallsBackToASuggestion
 		t.Helper()
 		if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
 			UserID: user, ApplicationID: appID, IcalUid: "status@ashbyhq.com",
-			StartsAt: at, Status: status, Source: "calendar_google",
+			StartsAt: at, Status: status, Source: "calendar_google", EventSource: "calendar_google",
 		}); err != nil {
 			t.Fatalf("upsert %s: %v", status, err)
 		}
@@ -402,5 +403,35 @@ func TestCancelApplicationInterview_FindsTheMeetingByTheProvidersIdAlone(t *test
 	}
 	if status != "cancelled" {
 		t.Errorf("status = %q, want cancelled", status)
+	}
+}
+
+// A ledger row is only as good as its provenance, and application_events.source has no
+// CHECK constraint — an empty one is accepted silently and then reads as an unknown
+// source, which TrustedForDayMath refuses. Three tests here wrote exactly that without
+// noticing until review; this one makes the omission visible.
+func TestUpsertApplicationInterview_WritesTheLedgerWithARealSource(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-source@example.test", true)
+	_, appID := seedApplication(t, q, user, "iv-source-1", "derq")
+	if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+		UserID: user, ApplicationID: appID, IcalUid: "src@ashbyhq.com",
+		StartsAt: ts(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)),
+		Status:   "confirmed", Source: "calendar_google", EventSource: "calendar_google",
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	var source string
+	if err := q.db.QueryRow(ctx,
+		`SELECT source FROM application_events WHERE user_id = $1 AND kind = 'interview_scheduled'`,
+		user).Scan(&source); err != nil {
+		t.Fatalf("read event: %v", err)
+	}
+	if source != "calendar_google" {
+		t.Errorf("ledger source = %q, want calendar_google — an empty one reads as unknown provenance", source)
 	}
 }

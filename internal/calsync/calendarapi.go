@@ -57,9 +57,10 @@ type calendarEvent struct {
 	Summary     string `json:"summary"`
 	Status      string `json:"status"`
 	HangoutLink string `json:"hangoutLink"`
-	Organizer   struct {
-		Email string `json:"email"`
-	} `json:"organizer"`
+	// The organiser is deliberately not read. It is evidence about who SENT the
+	// invitation, not about who is interviewing — an ATS schedules from its own domain
+	// as readily as a recruiter schedules from the employer's, which is the same trap
+	// mailmatch names for sender domains. Nothing here may match on it.
 	Start calendarTime `json:"start"`
 	End   calendarTime `json:"end"`
 }
@@ -78,10 +79,12 @@ func (t calendarTime) parse() time.Time {
 		}
 	}
 	if t.Date != "" {
-		// An all-day entry has no clock. Midnight UTC is a placeholder the reader's own
-		// timezone will move; the calendar view groups by local day anyway.
+		// An all-day entry has no clock, and the calendar groups by the reader's LOCAL
+		// day — so midnight UTC lands a day early for everyone west of Greenwich, which
+		// is exactly the onsite-day case this branch exists for. Midday keeps the entry
+		// on its own date for every offset between -11 and +12.
 		if at, err := time.Parse("2006-01-02", t.Date); err == nil {
-			return at
+			return at.Add(12 * time.Hour)
 		}
 	}
 	return time.Time{}
@@ -151,7 +154,6 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 			UID:        it.ICalUID,
 			ProviderID: it.ID,
 			Title:      it.Summary,
-			Organizer:  it.Organizer.Email,
 			StartsAt:   start,
 			EndsAt:     it.End.parse(),
 			JoinURL:    it.HangoutLink,
@@ -160,6 +162,14 @@ func (r *APIReader) ListEvents(ctx context.Context, from, to time.Time) ([]Meeti
 	}
 	return out, nil
 }
+
+// AuthError marks a failure that means the grant itself is no longer good, as against
+// one that means the provider is unwell. Only the first may cost a candidate their
+// connection.
+type AuthError struct{ err error }
+
+func (e *AuthError) Error() string { return e.err.Error() }
+func (e *AuthError) Unwrap() error { return e.err }
 
 // eventsPage is one response page.
 type eventsPage struct {
@@ -178,7 +188,16 @@ func (r *APIReader) page(ctx context.Context, q url.Values) (eventsPage, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return eventsPage{}, fmt.Errorf("calendar: list events: %s", resp.Status)
+		err := fmt.Errorf("calendar: list events: %s", resp.Status)
+		// 401 and 403 are the grant saying no. Everything else — a 500, a rate limit, a
+		// timeout — is Google having a bad day, and must not be read as a revocation:
+		// the status flag it would set is SHARED with mail, so one incident would
+		// disconnect every candidate's mailbox at once and each would have to redo a
+		// restricted-scope consent.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return eventsPage{}, &AuthError{err: err}
+		}
+		return eventsPage{}, err
 	}
 	var body eventsPage
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {

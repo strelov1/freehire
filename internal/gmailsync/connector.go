@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -92,20 +93,34 @@ func (c *Connector) CalendarAuthCodeURL(state string) string {
 
 // Exchange turns the callback code into a refresh token and the connected Gmail
 // address. It errors if Google returned no refresh token (consent not offline).
-func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, email string, err error) {
+func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, email string, scopes []string, err error) {
 	ctx = guardedContext(ctx)
 	tok, err := c.cfg.Exchange(ctx, code)
 	if err != nil {
-		return "", "", fmt.Errorf("gmail: exchange code: %w", err)
+		return "", "", nil, fmt.Errorf("gmail: exchange code: %w", err)
 	}
 	if tok.RefreshToken == "" {
-		return "", "", errors.New("gmail: no refresh token (consent was not offline)")
+		return "", "", nil, errors.New("gmail: no refresh token (consent was not offline)")
 	}
 	email, err = c.fetchEmail(ctx, c.cfg.Client(ctx, tok))
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
-	return tok.RefreshToken, email, nil
+	return tok.RefreshToken, email, GrantedScopes(tok), nil
+}
+
+// GrantedScopes reads what Google says the grant actually covers.
+//
+// Authoritative, and therefore recorded as-is rather than unioned with what we held
+// before. A union can only ever grow, so a candidate who revokes at Google and reconnects
+// mail alone would keep a calendar scope they no longer have — and cal-sync would take
+// the resulting 403 as a revoked grant and flip the SHARED status, breaking the mailbox
+// they had just reconnected, once per cron tick.
+//
+// A response without the field is not evidence of no scopes; the caller keeps what it had.
+func GrantedScopes(tok *oauth2.Token) []string {
+	raw, _ := tok.Extra("scope").(string)
+	return strings.Fields(raw)
 }
 
 // ExchangeCalendar turns the calendar callback's code into a refresh token.
@@ -115,18 +130,18 @@ func (c *Connector) Exchange(ctx context.Context, code string) (refreshToken, em
 // not have it, so asking would fail the connect for a field the calendar flow has no use
 // for. The token itself covers whatever they have granted in total — the consent is
 // incremental — so a candidate with both ends up with one grant covering both.
-func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshToken string, err error) {
+func (c *Connector) ExchangeCalendar(ctx context.Context, code string) (refreshToken string, scopes []string, err error) {
 	cfg := *c.cfg
 	cfg.Scopes = []string{CalendarScope}
 	cfg.RedirectURL = c.calendarRedirect
 	tok, err := cfg.Exchange(guardedContext(ctx), code)
 	if err != nil {
-		return "", fmt.Errorf("calendar: exchange code: %w", err)
+		return "", nil, fmt.Errorf("calendar: exchange code: %w", err)
 	}
 	if tok.RefreshToken == "" {
-		return "", errors.New("calendar: no refresh token (consent was not offline)")
+		return "", nil, errors.New("calendar: no refresh token (consent was not offline)")
 	}
-	return tok.RefreshToken, nil
+	return tok.RefreshToken, GrantedScopes(tok), nil
 }
 
 // TokenSource mints access tokens from a stored refresh token (used by the sync

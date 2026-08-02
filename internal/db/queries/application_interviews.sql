@@ -58,6 +58,11 @@ WITH saved AS (
            'interview_scheduled', '', now(), sqlc.arg(event_source)::text, s.id
       FROM saved s JOIN applications a ON a.id = s.application_id
      WHERE s.status = 'confirmed' 
+    -- DO NOTHING rather than a correction. An interview is only ever attached by the
+    -- invitation's own identifier, and an invitation belongs to one application — so the
+    -- application under a given meeting cannot move, and there is nothing to correct.
+    -- Were a weaker tier ever added, this would need the retract-and-re-record treatment
+    -- the mail reconcile uses; it is not a DO NOTHING that would still be right.
     ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
     DO NOTHING
 )
@@ -92,8 +97,6 @@ WHERE user_id = sqlc.arg(user_id)
 -- un-schedule the meeting it announced, the same position the ledger takes on a deleted
 -- reply.
 SELECT a.id AS application_id,
-       a.company_slug,
-       a.role_title,
        coalesce(
            array_agg(em.ical_uid) FILTER (WHERE em.ical_uid IS NOT NULL AND em.ical_uid <> ''),
            '{}'
@@ -127,9 +130,14 @@ SELECT i.id, i.application_id, i.ical_uid, i.starts_at, i.ends_at, i.title, i.jo
 -- none to record — the calendar flow never reads the Gmail profile, because that needs the
 -- mail scope they may not have given.
 --
--- It does not replace the scope list, it unions with it. The consent is incremental and
--- the returned token covers everything granted so far, so overwriting would forget the
--- mail scope and stop the mail sync at the moment the candidate added their calendar.
+-- It records what Google says the grant covers, verbatim. Unioning was the first attempt
+-- and can only ever grow: a candidate who revokes at Google and then reconnects mail alone
+-- would keep a calendar scope they no longer hold, cal-sync would take the resulting 403
+-- as a revoked grant, and the SHARED status would break the mailbox they had just
+-- reconnected — once per cron tick, forever. The consent is incremental, so the token from
+-- either flow already reports everything granted; the authoritative answer is the one to
+-- store. A caller that could not read the scopes passes the empty list and this keeps what
+-- it had, because absence of evidence is not evidence of revocation.
 --
 -- And it does not distinguish insert from update, because both mean the same thing here:
 -- this person has granted us their calendar.
@@ -138,14 +146,20 @@ VALUES (sqlc.arg(user_id), '', sqlc.arg(refresh_token_enc), 'connected', sqlc.ar
 ON CONFLICT (user_id) DO UPDATE
 SET refresh_token_enc = EXCLUDED.refresh_token_enc,
     status            = 'connected',
-    scopes            = ARRAY(SELECT DISTINCT unnest(gmail_connections.scopes || EXCLUDED.scopes));
+    scopes            = CASE
+                            WHEN cardinality(EXCLUDED.scopes) > 0 THEN EXCLUDED.scopes
+                            ELSE gmail_connections.scopes
+                        END;
 
 -- name: RecordGrantScopes :exec
--- Note the scopes a grant carries without touching anything else, unioned for the same
--- reason as above. The Gmail connect calls this so a mailbox connected before the calendar
--- existed still records what it holds.
+-- Record what a grant covers, as the provider reported it. Replacing rather than unioning,
+-- for the reason above: a list that only grows cannot express a scope the candidate took
+-- away. An empty list means the exchange did not say, and keeps what we held.
 UPDATE gmail_connections
-SET scopes = ARRAY(SELECT DISTINCT unnest(scopes || sqlc.arg(scopes)::text[]))
+SET scopes = CASE
+                 WHEN cardinality(sqlc.arg(scopes)::text[]) > 0 THEN sqlc.arg(scopes)::text[]
+                 ELSE scopes
+             END
 WHERE user_id = sqlc.arg(user_id);
 
 -- name: ListCalendarConnections :many

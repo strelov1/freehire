@@ -18,6 +18,7 @@ package calsync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -35,12 +36,13 @@ const windowDays = 90
 // else would change.
 const SourceGoogleCalendar = "calendar_google"
 
-// The stored statuses. A meeting the invitation's own identifier attached is confirmed;
-// one only a title recognised is offered as a suggestion.
-const (
-	StatusSuggested = "suggested"
-	StatusConfirmed = "confirmed"
-)
+// StatusConfirmed is the only status this worker writes: a meeting the invitation's own
+// identifier attached. The schema also knows `cancelled`, which the cancel path sets.
+//
+// There is no `suggested`. A weaker tier would need a way for the candidate to confirm or
+// dismiss what it produced, and until that exists a guess would be permanent — see
+// internal/calmatch for what the first attempt at one actually did.
+const StatusConfirmed = "confirmed"
 
 // Connection is a candidate whose Google grant covers the calendar. The query filters on
 // the recorded scopes, so a grant that predates the calendar consent never reaches here
@@ -54,15 +56,15 @@ type Connection struct {
 }
 
 // Meeting is one calendar entry as the reader returns it — the fields needed to keep an
-// appointment, and none of the ones that describe a private life. No attendees, no
-// description, no organiser name.
+// appointment, and none of the ones that describe a private life. No attendees and no
+// description. Title is carried because a matched meeting shows one; nothing MATCHES on
+// it, which is the difference between a label and evidence.
 type Meeting struct {
 	UID string
 	// ProviderID is the calendar provider's own event id — a different thing from UID,
 	// and the only identifier a cancellation is guaranteed to carry.
 	ProviderID string
 	Title      string
-	Organizer  string
 	StartsAt   time.Time
 	EndsAt     time.Time
 	JoinURL    string
@@ -169,8 +171,14 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 	events, err := w.newReader(ctx, refresh).
 		ListEvents(ctx, now.AddDate(0, 0, -windowDays), now.AddDate(0, 0, windowDays))
 	if err != nil {
-		// A revoked or expired grant surfaces here. Flag it for re-consent so the
-		// candidate is asked once, rather than retried silently forever.
+		// Only the grant saying no costs the candidate their connection. A 500 or a rate
+		// limit is Google having a bad day, and the flag is SHARED with mail — treating
+		// every failure as a revocation would disconnect every mailbox we hold during one
+		// Google incident, each needing a restricted-scope consent to restore.
+		var authErr *AuthError
+		if !errors.As(err, &authErr) {
+			return fmt.Errorf("list events: %w", err)
+		}
 		if markErr := w.store.SetNeedsReconsent(ctx, u.UserID); markErr != nil {
 			return fmt.Errorf("list events: %w (and marking re-consent failed: %v)", err, markErr)
 		}
@@ -183,7 +191,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 	}
 
 	for _, ev := range events {
-		match := calmatch.Resolve(calmatch.Event{UID: ev.UID, Title: ev.Title, Organizer: ev.Organizer}, candidates)
+		match := calmatch.Resolve(calmatch.Event{UID: ev.UID}, candidates)
 		if match.ApplicationID == 0 {
 			// Not this candidate's business with us. It is not stored, not logged, and
 			// not counted — the window was read into memory and is discarded with it.
@@ -197,9 +205,11 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 			}
 			continue
 		}
-		status := StatusSuggested
-		if match.Tier.Links() {
-			status = StatusConfirmed
+		if !match.Tier.Links() {
+			// Resolved to an application by something weaker than the invitation's own
+			// identifier. There is nothing weaker today, and the guard stays so that
+			// adding one cannot start writing rows before somebody decides it may.
+			continue
 		}
 		if err := w.store.UpsertInterview(ctx, StoredInterview{
 			UserID:        u.UserID,
@@ -209,7 +219,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 			StartsAt:      ev.StartsAt,
 			EndsAt:        ev.EndsAt,
 			JoinURL:       ev.JoinURL,
-			Status:        status,
+			Status:        StatusConfirmed,
 		}); err != nil {
 			return fmt.Errorf("store %s: %w", ev.UID, err)
 		}
