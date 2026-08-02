@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -107,5 +108,73 @@ func TestRecruiteeFetchHybridOffer(t *testing.T) {
 	}
 	if jobs[0].Remote {
 		t.Error("Remote = true, want false: a hybrid offer is not remote")
+	}
+}
+
+// Recruitee's board listing already carries the application form, so the adapter yields it
+// with the job and the capture costs no request beyond the one the crawl was making anyway.
+func TestRecruiteeFetchYieldsApplyForm(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"offers": [
+			{
+				"id": 42,
+				"title": "Game Director",
+				"careers_url": "https://acme.recruitee.com/o/game-director",
+				"created_at": "2024-04-24 10:13:38 UTC",
+				"description": "<p>Lead.</p>",
+				"options_cv": "required",
+				"options_phone": "optional",
+				"options_cover_letter": "off",
+				"open_questions": [
+					{"id": 7, "position": 1, "required": true, "kind": "single_choice",
+					 "body": "Contract type?",
+					 "open_question_options": [{"id": 91, "position": 0, "body": "B2B"}]}
+				]
+			}
+		]
+	}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch() = %d jobs, err=%v, want 1", len(jobs), err)
+	}
+	form := jobs[0].ApplyForm
+	if form == nil {
+		t.Fatal("ApplyForm = nil, want the form the listing already carried")
+	}
+	if form.Provider != "recruitee" {
+		t.Errorf("provider = %q, want %q", form.Provider, "recruitee")
+	}
+
+	// One request, and only one: a Recruitee capture must not become a per-posting fetch.
+	if !strings.Contains(fake.gotURL, "/api/offers/") {
+		t.Errorf("requested %q, want only the board listing", fake.gotURL)
+	}
+
+	var ids []string
+	for _, f := range form.Fields {
+		ids = append(ids, f.ID)
+	}
+	for _, want := range []string{"name", "email", "cv", "phone", "7"} {
+		if !slices.Contains(ids, want) {
+			t.Errorf("captured %v, want it to include %q", ids, want)
+		}
+	}
+	if slices.Contains(ids, "cover_letter") {
+		t.Error("captured cover_letter, want it omitted when the employer switched it off")
+	}
+}
+
+// An offer describing no form at all still yields one: the standard fields the platform
+// always demands are themselves the answer to what applying costs.
+func TestRecruiteeFetchAlwaysYieldsAForm(t *testing.T) {
+	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev","careers_url":"https://a.recruitee.com/o/dev"}]}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("Fetch() = %d jobs, err=%v", len(jobs), err)
+	}
+	if jobs[0].ApplyForm == nil {
+		t.Fatal("ApplyForm = nil, want the standard fields Recruitee always demands")
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+
+	"github.com/strelov1/freehire/internal/applyform"
 )
 
 // recruiteeBaseURL templates the Recruitee public offers API; each board is its own
@@ -36,6 +38,9 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Hybrid       bool   `json:"hybrid"`
 			Description  string `json:"description"`
 			Requirements string `json:"requirements"`
+			// The same listing also describes the application form, which is why
+			// Recruitee is the one provider whose form costs nothing to capture.
+			applyform.RecruiteeOffer
 		} `json:"offers"`
 	}
 	if err := r.http.GetJSON(ctx, url, &resp); err != nil {
@@ -44,8 +49,10 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	jobs := make([]Job, 0, len(resp.Offers))
 	for _, o := range resp.Offers {
+		form := applyform.FromRecruitee(o.RecruiteeOffer)
 		// Recruitee splits the body across separate description and requirements HTML.
 		jobs = append(jobs, Job{
+			ApplyForm:   &form,
 			ExternalID:  strconv.FormatInt(o.ID, 10),
 			URL:         o.CareersURL,
 			Title:       o.Title,

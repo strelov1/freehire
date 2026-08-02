@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/applyform"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobdedup"
@@ -46,6 +48,7 @@ type dbStore struct {
 // already does for the one port that was exported.
 var (
 	_ pipeline.Store      = (*dbStore)(nil)
+	_ pipeline.FormSaver  = (*dbStore)(nil)
 	_ pipeline.Closer     = (*dbStore)(nil)
 	_ pipeline.Toucher    = (*dbStore)(nil)
 	_ pipeline.SeenLookup = (*dbStore)(nil)
@@ -84,7 +87,22 @@ func clustersByRole(row db.UpsertJobRow) bool {
 	return row.Inserted.Bool && !row.Job.DuplicateOf.Valid
 }
 
+// Save persists a posting whose adapter yielded no application form — every provider but
+// Recruitee.
 func (s *dbStore) Save(ctx context.Context, j job.Job) error {
+	return s.save(ctx, j, nil)
+}
+
+// SaveWithApplyForm persists a posting together with the application form its adapter
+// yielded, in ONE transaction. Separated from Save only at the seam: a form written after
+// a committed job could be lost to a crash, and nothing would ever queue it — the capture
+// queue is for the providers whose form costs a request, and Recruitee is not one of them,
+// so this write is the only chance its form gets.
+func (s *dbStore) SaveWithApplyForm(ctx context.Context, j job.Job, form applyform.Form) error {
+	return s.save(ctx, j, &form)
+}
+
+func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -123,6 +141,25 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 		}
 	}
 
+	// The form belongs to the posting whether or not the posting is a searchable canon: a
+	// repost is still a job somebody can apply to, and its form is what applying costs.
+	// This is the opposite call from the enrichment enqueue below, and deliberately so —
+	// that one spends an LLM budget on an invisible row, this one writes bytes we already
+	// hold.
+	if form != nil {
+		payload, err := json.Marshal(form)
+		if err != nil {
+			return fmt.Errorf("encode apply form: %w", err)
+		}
+		if err := qtx.UpsertApplyForm(ctx, db.UpsertApplyFormParams{
+			JobID:    saved.Job.ID,
+			Provider: form.Provider,
+			Payload:  payload,
+		}); err != nil {
+			return fmt.Errorf("upsert apply form: %w", err)
+		}
+	}
+
 	// A duplicate never reaches search, so enriching it pays an LLM for an invisible row.
 	if !deduped {
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
@@ -136,6 +173,21 @@ func (s *dbStore) Save(ctx context.Context, j job.Job) error {
 
 	if err := tx.Commit(ctx); err != nil {
 		return err
+	}
+
+	// Queue a form capture for a provider whose form costs its own request — AFTER the
+	// commit, and never fatal.
+	//
+	// After, because a failed statement aborts the surrounding transaction: inside it, a
+	// hiccup on this queue would discard the posting itself, and failing a crawl over a
+	// field nothing yet reads is the wrong trade. The gap that opens — a crash between the
+	// commit and this line — closes by itself, because the enqueue is gated on the job
+	// having no stored form rather than on it being new: the next crawl of the board
+	// queues it again.
+	if applyform.NeedsRequestCapture(saved.Job.Source) {
+		if _, err := s.q.EnqueueApplyFormCapture(ctx, saved.Job.ID); err != nil {
+			log.Printf("ingest: queue apply-form capture for job %d: %v", saved.Job.ID, err)
+		}
 	}
 
 	// Record this (provider, company) as crawled so the post-run stale sweep only

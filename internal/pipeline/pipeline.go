@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/strelov1/freehire/internal/applyform"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
 	"github.com/strelov1/freehire/internal/sources"
@@ -32,6 +33,20 @@ const progressInterval = 60 * time.Second
 // version or the outbox — that is the Store implementation's concern.
 type Store interface {
 	Save(ctx context.Context, j job.Job) error
+}
+
+// FormSaver is the optional Store capability for a posting whose adapter also yielded the
+// platform's application form: write the job and the form together, so a captured form
+// cannot be lost to a failure between the two.
+//
+// It exists as a capability rather than a wider Save signature because exactly one
+// provider's listing carries a form, and every other Store — including every test fake —
+// would otherwise take a parameter it has nothing to do with. Same discovery rule as
+// Closer and Toucher: the pipeline type-asserts, and a Store that lacks it still ingests
+// the posting through the plain Save. The form is then simply not captured, which is the
+// right degradation — a crawl must not fail over a field nothing yet reads.
+type FormSaver interface {
+	SaveWithApplyForm(ctx context.Context, j job.Job, form applyform.Form) error
 }
 
 // Closer is the optional Store capability a self-closing streaming source needs: closing a
@@ -410,7 +425,7 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		rej.reject(dj.Fields().Title)
 		return
 	}
-	if err := r.Store.Save(ctx, dj); err != nil {
+	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
 		st.Skipped++
 		if *firstErr == nil {
 			*firstErr = err
@@ -418,6 +433,18 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		return
 	}
 	st.Ingested++
+}
+
+// save writes the posting, taking the form along when the adapter yielded one and the
+// Store can hold it. Both conditions matter: a nil form is the normal case for almost
+// every provider, and a Store without the capability must still ingest.
+func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) error {
+	if form != nil {
+		if fs, ok := r.Store.(FormSaver); ok {
+			return fs.SaveWithApplyForm(ctx, dj, *form)
+		}
+	}
+	return r.Store.Save(ctx, dj)
 }
 
 // fetchBoard fetches a board's postings, preferring a hydrating adapter's FetchNew — which

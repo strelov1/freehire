@@ -6,6 +6,8 @@ package sources
 import (
 	"context"
 	"time"
+
+	"github.com/strelov1/freehire/internal/applyform"
 )
 
 // CompanyEntry is one configured board from a board file (sources/<provider>.yml): the
@@ -69,6 +71,17 @@ type Job struct {
 	// HydratingSource sets it (carrying just Title/Company/URL/ExternalID for the identity);
 	// all other adapters leave it false. Mutually exclusive with Removed.
 	SeenRefresh bool
+	// ApplyForm is the application form the platform published for this posting, set ONLY
+	// by an adapter whose list endpoint already carries one. It is nil for every other
+	// adapter, and nil is not a failure — most platforms do not describe their form in a
+	// listing, and the two that describe it per posting are captured after ingest by
+	// cmd/capture-apply-form rather than here.
+	//
+	// An adapter must not issue an extra request to fill this. That is the whole point of
+	// the split: a form that costs a request would make a crawl's duration a function of
+	// board size, and the adapter cannot tell which postings are new anyway — that answer
+	// only exists after the upsert's ON CONFLICT resolves.
+	ApplyForm *applyform.Form
 }
 
 // Source adapts one job-source platform. Provider is the platform key that selects
