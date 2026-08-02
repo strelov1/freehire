@@ -26,6 +26,8 @@ The `internal/db` package — generated sqlc code, hand-written SQL queries, and
 Response shapes and error rendering are the handler layer's concern — see
 [../handler/AGENTS.md](../handler/AGENTS.md).
 
+- `apply_forms` keys on `job_id` as its PRIMARY KEY, so "at most one current form per job" is structural — a re-capture replaces and no write path can produce two. Its `payload` keeps the ATS's own vocabulary (field identifiers, option values, question text) unnormalized: those tokens exist to be handed back to the platform that issued them, so mapping them into a freehire vocabulary would be loss, not tidying. `apply_form_outbox` copies `semantic_outbox`'s lease/retry semantics and drops its target-version column — a form has no generations, and re-capture is an operator dropping the stored row, which reopens the enqueue gate.
+
 ## How it works
 
 sqlc reads `migrations/` for the schema and the hand-written SQL in

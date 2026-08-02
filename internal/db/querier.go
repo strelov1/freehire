@@ -123,6 +123,23 @@ type Querier interface {
 	// jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
 	// non-partial fallback.
 	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
+	// Claim a batch of live, unleased captures, freshest posting first, by stamping
+	// claimed_at. Mirrors ClaimSemanticBatch: FOR UPDATE OF o locks only outbox rows (a bare
+	// FOR UPDATE would also lock jobs, making concurrent claim waves contend), SKIP LOCKED
+	// lets concurrent workers take disjoint rows, and the lease predicate reclaims entries
+	// whose worker died, so no separate reaper process is needed.
+	//
+	// Freshness is COALESCE(posted_at, created_at) so postings without a source date fall
+	// back to ingest time instead of starving under NULLS LAST. It matters less here than for
+	// embeddings — a form does not go stale — but a just-posted job is the one somebody is
+	// about to apply to, so it is still the right order.
+	//
+	// The claim returns the job's source and external_id because the worker builds its fetch
+	// from the row alone: external_id is the board-namespaced posting id
+	// (sources.NamespaceExternalID), which carries both halves the platform APIs need.
+	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
+	// FROM) so the platform identity comes back without a second query.
+	ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error)
 	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
 	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
 	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
@@ -557,6 +574,9 @@ type Querier interface {
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
+	// Retire a capture that succeeded. The stored form is the record; the queue entry has
+	// nothing left to say.
+	DeleteApplyFormEntry(ctx context.Context, id int64) error
 	// Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 	// affected rows for a foreign or missing id.
 	DeleteAssistantSession(ctx context.Context, arg DeleteAssistantSessionParams) (int64, error)
@@ -619,6 +639,19 @@ type Querier interface {
 	// independent of a prior view: it inserts the row (viewed_at defaults) or
 	// refreshes dismissed_at in place.
 	DismissJob(ctx context.Context, arg DismissJobParams) (DismissJobRow, error)
+	// Transactional-outbox enqueue for the ingest write path: queue this one job for a form
+	// capture, gated on it having none.
+	//
+	// The gate is deliberately "has no form" rather than the content-hash staleness gate the
+	// semantic queue uses. A posting's description is reworded often; its application form is
+	// configured once on the requisition and then sits still. Gating on content change would
+	// re-fetch a form every time a company edited its job ad — 135k Greenhouse fetches for a
+	// payload that did not move. Refreshing a capture is therefore a deliberate act (drop the
+	// stored row, which reopens this gate), not something a crawl does by accident.
+	//
+	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
+	// UpsertJob so a newly ingested job is queued atomically with its write.
+	EnqueueApplyFormCapture(ctx context.Context, jobID int64) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for
 	// enrichment, gated on the same conditions the backfill uses (unenriched or below the
 	// target schema version, and a non-blacklisted category), so an already-enriched job
@@ -1935,6 +1968,11 @@ type Querier interface {
 	// seconds apart, a genuine second chase days apart, so any threshold between them is
 	// safe. An hour is the smallest that sits comfortably above a retry.
 	RecordApplicationFollowUp(ctx context.Context, arg RecordApplicationFollowUpParams) (pgtype.Timestamptz, error)
+	// Count a failed capture: bump attempts, record the error, and dead-letter (set
+	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left in
+	// place — its expiry gates the retry to a later run and doubles as the crash reaper, so a
+	// failed entry is never reprocessed within the same run. Mirrors RecordSemanticFailure.
+	RecordApplyFormFailure(ctx context.Context, arg RecordApplyFormFailureParams) (RecordApplyFormFailureRow, error)
 	// Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
 	// and RETURN the new failure count so the caller can compute the cooldown (the backoff
 	// policy lives in Go, not here). The cooldown itself is applied by SetBoardCooldown.
@@ -2525,6 +2563,11 @@ type Querier interface {
 	//     "Q3 ramp-up planning" a permanent, unremovable interview against an application to
 	//     an employer called Ramp.
 	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
+	// Store a job's captured application form, replacing whatever was there. job_id is the
+	// primary key, so this is the only shape a write can take: a job carries one current
+	// form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
+	// every write so a form's age always describes the payload actually stored.
+	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
 	// Store the grant a calendar consent produced, and record that it now covers the calendar.
 	//
 	// Three things this deliberately does not do. It does not touch `email`: a candidate who

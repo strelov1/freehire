@@ -67,6 +67,23 @@ type ApplicationInterview struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ApplyForm struct {
+	JobID      int64              `json:"job_id"`
+	Provider   string             `json:"provider"`
+	CapturedAt pgtype.Timestamptz `json:"captured_at"`
+	Payload    []byte             `json:"payload"`
+}
+
+type ApplyFormOutbox struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int32              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type AssistantMessage struct {
 	SessionID uuid.UUID          `json:"session_id"`
 	Seq       int32              `json:"seq"`
