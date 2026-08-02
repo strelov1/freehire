@@ -1,0 +1,43 @@
+---
+title: Your search, laid out in time
+date: 2026-08-02
+summary: Tracking has a calendar — the days you applied, the days employers answered, and, if you connect your Google Calendar, the interviews you have coming.
+type: changelog
+tags:
+  - job-seekers
+  - tracking
+---
+
+The board tells you where an application stands. The list tells you what you're waiting
+on. Neither answers the question you ask yourself in a bad week: what actually happened
+in July?
+
+**Tracking now has a Calendar tab.** A month at a time, with a mark on every day
+something happened — applications sent, replies that came back, follow-ups you chased,
+stages you moved. Click a day and it opens beneath the grid: which employer, which role,
+what the message said, with a link to the application and to the message itself.
+
+Two things it does deliberately.
+
+It shows you **which dates were observed and which you typed**. A reply from an employer
+is dated by their message. A stage you moved yourself is dated by the evening you got
+around to updating your board. Those are not the same kind of fact, so they aren't drawn
+the same way — filled marks were seen, hollow ones were recorded.
+
+And it puts the day where **your** clock says it is. A message that arrived at half past
+eleven at night belongs to that night, not to the next morning in some server's timezone.
+
+## Interviews, if you want them there
+
+Connect your Google Calendar and the interviews you've accepted show up on the same
+grid — the day, the time, the joining link, and the application they belong to. A
+cancelled one stays visible, struck through, because an interview that silently vanished
+from a Thursday is indistinguishable from a calendar that failed to load.
+
+We only store a meeting we can attach to an application you're already tracking, and only
+when the invitation's own identifier says it's that meeting. Everything else in your
+calendar — the dentist, the standups, the interviews you never told us about — is read
+and discarded. Nothing else is kept.
+
+The connection is still limited to approved test accounts while Google reviews our app.
+You'll see that said plainly on the page rather than finding out at a consent screen.
