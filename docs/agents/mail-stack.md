@@ -109,25 +109,44 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **`UpsertExternalEmail` refreshes content columns only.** `read_at`, `deleted_at` and
   every classification column are the *reader's* state, not the mail server's, so a nightly
   re-sync cannot resurrect deleted mail, un-read a message, or wipe a triage verdict.
-- **There is a PULL direction, and it proposes rather than links.** Everything above starts
-  from a message and asks which application it belongs to.
-  `POST /me/tracking/:slug/mail-recall` (`internal/mailrecall`) asks the opposite, so an
-  application that plainly ought to have mail can say so. It gathers the caller's
-  unattached live mail in a window around `applied_at` — **oldest first**, capped at 40 —
-  adjudicates the batch in ONE model call, and writes the confident answers to
-  `suggested_job_id`. Four things make it safe, and each was nearly got wrong:
-  *"unattached" needs BOTH `job_id IS NULL` and `application_id IS NULL`*, because a
-  message auto-linked before its application row existed holds the first without the second
-  and nothing repairs it but a one-shot backfill; *the net is state and time, never the
-  employer's name*, which would reproduce `mailmatch`'s measured blind spot and additionally
-  miss every HTML-only sender; *the cap eats from the far end*, because newest-first over an
-  open window spends forty candidates on recent noise and never shows the model the
-  acknowledgement; and *the guard is in the statement*, so a linked message is unreachable
-  even if the net, the model and the service all went wrong at once. It never links, never
-  advances a stage and never writes the ledger — `TestMailRecallCannotLink` and a source
-  scan of the package hold that. **The calendar needs no code**: `cmd/cal-sync` re-reads its
-  whole ±90-day window every run, so an invitation confirmed here yields its meeting on the
-  next one.
+- **There is a PULL direction, and it SEARCHES the mailbox rather than reading our copy.**
+  Everything above starts from a message and asks which application it belongs to.
+  `POST /me/tracking/:slug/mail-recall` (`internal/mailrecall`) asks the opposite. It issues
+  ONE Gmail search scoped to the employer inside a window around `applied_at`, adjudicates
+  what comes back in one model call, and shows the confident answers.
+  The first version read the stored table instead, and production retired it: candidates in
+  that window ran 96 at minimum and 158 at the median, **263 of 263 applications exceeded
+  the cap of 40**, and the batch was chosen oldest-first — which says nothing about
+  relevance. The store simply cannot answer "about this employer": matched against sender
+  name and subject the employer's name is absent from the median application's mail
+  entirely. A mailbox search reads BODIES, and found mail for **14 applications in 15**
+  where the store found none. A caller with no searchable mailbox still gets the stored
+  path, which is why both still exist.
+  Four rules carry it:
+  *The search is gated* — employer AND (hiring vocabulary OR `filename:ics` OR the role
+  title) — because scoping by a company name would otherwise reach personal mail. All three
+  gate members were measured: hiring words alone cut 53 candidates to 41 and dropped both
+  calendar invitations for one interview plus a live thread whose only subject was the role.
+  `filename:ics` is the exact member for invitations, whatever language the subject uses.
+  *A proposal is not stored.* The sweep keeps nothing; pressing Link imports the message
+  (idempotent on `(source, external_id)`) and then links it. What nobody confirmed is not
+  kept.
+  *The model is addressed by POSITION in the batch, never by an id* — a searched message
+  has none of ours, and an out-of-range position resolves to nothing by construction.
+  *It never links, never advances a stage, never writes the ledger* — held by
+  `TestMailRecallCannotLink`, which now walks both `Store` and `Mailbox`, and by a source
+  scan of the package for `LinkEmailToJob` / `application_events` / `calsync`.
+  **The calendar still needs no code**: `cmd/cal-sync` re-reads its whole ±90-day window
+  every run, so an invitation linked here yields its meeting on the next one.
+- **Two known gaps in the PUSH path, measured and not yet fixed.** They are why the pull
+  direction has so much to find. `gmailsync.BuildQuery` fetched **431** messages over 120
+  days from a mailbox holding **3297**; **739** hiring-shaped messages were never fetched,
+  including an acknowledgement, three interview invitations and four live recruiter threads
+  from personal and corporate domains. The misses are near misses on wording — the phrase
+  list knows `invite you to interview` but not `interview invite`. Separately,
+  `mailmatch.ExtractCompany`'s five subject templates all use `to`, while the mailbox shows
+  `at`, `with`, `as … at`, a company before a dash, a company after a pipe, and Portuguese;
+  33 of 93 messages with an empty sender name carry a subject it cannot parse.
 - **A suggestion needs a consumer, or the matcher's caution turns into a backlog.**
   Only a deterministic tier auto-links, so everything else lands as a suggestion —
   and a suggestion nobody can see is a row that never resolves. `?link=suggested`

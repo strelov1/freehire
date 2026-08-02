@@ -54,10 +54,10 @@
 
 ## 5. Documentation and gates
 
-- [ ] 5.1 Update `docs/agents/mail-stack.md`: the pull direction now searches the mailbox,
+- [x] 5.1 Update `docs/agents/mail-stack.md`: the pull direction now searches the mailbox,
       the gate's two measured halves, and the rule that nothing unconfirmed is stored.
-- [ ] 5.2 Record the two findings this change routes around rather than fixes — the 739
+- [x] 5.2 Record the two findings this change routes around rather than fixes — the 739
       messages `BuildQuery` never fetches, and `ExtractCompany`'s five `to`-only subject
       templates — where the next reader will meet them.
-- [ ] 5.3 Run `go build ./...`, `go vet ./...`, `go test ./...`, and
+- [x] 5.3 Run `go build ./...`, `go vet ./...`, `go test ./...`, and
       `go vet -tags=integration ./...` before pushing.
