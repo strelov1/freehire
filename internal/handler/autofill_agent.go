@@ -12,24 +12,24 @@ import (
 //
 // The extension triggers this and then watches its own socket do the work — the
 // agent never touches the DOM itself, it only drives the primitives.
-func (a *API) RunAgentAutofill(c *fiber.Ctx) error {
+func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	profile, err := a.autofillProfile(c.Context(), userID)
+	profile, err := h.autofillProfile(c.Context(), userID)
 	if err != nil {
 		return err
 	}
 
-	caller := a.browserTools.NewCaller(userID)
+	caller := h.browserTools.NewCaller(userID)
 	defer caller.Close()
 
 	report, err := autofillagent.Run(
 		c.Context(),
 		caller,
-		autofillagent.LLMPlanner{Client: a.llm.bind(c.Context(), userID, tagAutofill)},
+		autofillagent.LLMPlanner{Client: h.llm.bind(c.Context(), userID, tagAutofill)},
 		profileFields(profile),
 	)
 	if err != nil {

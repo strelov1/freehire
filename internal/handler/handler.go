@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
+	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/enrich"
@@ -83,11 +84,6 @@ type API struct {
 	// user's browser extension (the /tools/ws wire). In-memory and per-instance:
 	// both ends of a channel are live connections to this process.
 	browserTools *browsertools.Hub
-	// llm binds the model the agent-driven autofill maps a profile onto a form with,
-	// together with the resolver naming the account it is spent under. A nil client is
-	// the LLM being unconfigured: the run then reports the feature is off, and the
-	// extension's deterministic autofill still works.
-	llm llmBinding
 }
 
 // middleware bundles the auth gates the feature handlers mount their routes
@@ -287,9 +283,6 @@ func Register(app *fiber.App, cfg Config) {
 	// out mid-stage. Nil-safe (a nil client stays nil → Analyze is a no-op).
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
-	// The autofill planner is one cheap structured call per run; the shared client's
-	// default timeout is right for it.
-	a.llm.client = cfg.LLM
 	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
 	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
 	// client the crawlers use (sources.NewClient). That one client also backs the ingest
@@ -301,7 +294,11 @@ func Register(app *fiber.App, cfg Config) {
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
-	cvH := newCVHandlers(cfg.Pool, queries, cfg.TypstBin, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
+	// The CV store is shared: the CV surface owns the write path, referrals render from it
+	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
+	// services here rather than inside whichever feature happened to need one first.
+	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
+	cvH := newCVHandlers(cfg.Pool, queries, cvStore, cfg.TypstBin, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
@@ -352,9 +349,12 @@ func Register(app *fiber.App, cfg Config) {
 	// credential.
 	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
 	assistantH.withKeys(llmKeys)
-	a.llm.keys = llmKeys
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
+	// The autofill planner is one cheap structured call per run, so it travels on the
+	// shared client's default timeout. The contact block it plans over comes from the base
+	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
+	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
 	usageH := newUsageHandlers(cfg.LLMKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
@@ -391,7 +391,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvH.cvStore, photoStore)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvStore, photoStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a
@@ -472,18 +472,15 @@ func Register(app *fiber.App, cfg Config) {
 	votesH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)
-	// Canonical autofill fields (name/email/phone/location/links) for the browser
-	// extension to write into application forms. keyAuth (Bearer).
-	api.Get("/me/autofill-profile", keyAuth, a.AutofillProfile)
+	// The contact block the extension writes into forms, plain and agent-driven (see
+	// autofillHandlers).
+	autofillH.register(api, mw)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the
 	// extension, which can set no headers); the relay routes strictly within one
 	// user's channel. See internal/browsertools.
 	api.Get("/tools/ws", auth.RequireAuthWS(a.issuer, a.queries, apiKeys{a.queries}), a.BrowserToolsWS())
-	// Agent-driven autofill: the caller's own browser is driven over that wire.
-	// keyAuth (Bearer) so the extension can trigger it.
-	api.Post("/me/autofill/run", keyAuth, a.RunAgentAutofill)
 
 	// Public job submissions + review queue (see submissionHandlers).
 	submissionsH.register(api, mw)

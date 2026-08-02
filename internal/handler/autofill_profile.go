@@ -2,14 +2,14 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 // autofillProfile is the canonical set of fields the browser extension writes
@@ -24,6 +24,93 @@ type autofillProfile struct {
 	LinkedIn  string `json:"linkedin"`
 	GitHub    string `json:"github"`
 	Portfolio string `json:"portfolio"`
+}
+
+// baseCVReader is the one CV read autofill makes. Tailored copies are excluded by the
+// query behind it (GetBaseCVByUser filters NOT is_tailored), not by anything here: a
+// tailored CV is written for one vacancy and the autofill block carries none.
+type baseCVReader interface {
+	BaseCV(ctx context.Context, userID int64) (cv.Record, bool, error)
+}
+
+// resumeContactReader is the one résumé read autofill makes. The bool reports whether a
+// structure current with the uploaded résumé exists: the store compares the structure's
+// stamp against the résumé's upload time, so one derived from a superseded file reads as
+// absent rather than being served.
+type resumeContactReader interface {
+	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
+}
+
+// accountReader supplies the address that backstops a contact block stating no email.
+type accountReader interface {
+	GetUserByID(ctx context.Context, id int64) (db.GetUserByIDRow, error)
+}
+
+// autofillHandlers serves the contact block the browser extension fills application forms
+// with, both as a plain read and as an agent-driven run over the caller's own browser.
+//
+// It holds the two contact sources in precedence order (see autofillProfile) plus the
+// account read, the browser-tool hub the agent run drives the caller's page through, and
+// the model binding that run plans on.
+type autofillHandlers struct {
+	cvs      baseCVReader
+	resumes  resumeContactReader
+	accounts accountReader
+	// browserTools is shared with /tools/ws and the assistant — the hub is per-process and
+	// routes strictly within one user's channel.
+	browserTools *browsertools.Hub
+	// llm plans the agent-driven fill. A nil client is the LLM being unconfigured: the run
+	// reports the feature is off and the deterministic read still works.
+	llm llmBinding
+}
+
+func newAutofillHandlers(cvs baseCVReader, resumes resumeContactReader, accounts accountReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
+	return &autofillHandlers{cvs: cvs, resumes: resumes, accounts: accounts, browserTools: tools, llm: llm}
+}
+
+func (h *autofillHandlers) register(api fiber.Router, mw middleware) {
+	// Canonical autofill fields (name/email/phone/location/links) for the browser
+	// extension to write into application forms. keyAuth (Bearer).
+	api.Get("/me/autofill-profile", mw.key, h.AutofillProfile)
+	// Agent-driven autofill: the caller's own browser is driven over the browser-tool
+	// wire. keyAuth (Bearer) so the extension can trigger it.
+	api.Post("/me/autofill/run", mw.key, h.RunAgentAutofill)
+}
+
+// statesContact reports whether a header carries any contact value at all. A source that
+// exists but states nothing is passed over rather than allowed to answer, so a CV created
+// empty does not silence a résumé that has the values.
+func statesContact(h cv.Header) bool {
+	return h.FullName != "" || h.Email != "" || h.Phone != "" || h.Location != "" || len(h.Links) > 0
+}
+
+// firstStatedHeader returns the first header that states any contact value, or the zero
+// header when none does.
+//
+// The chosen header answers for the WHOLE block: fields are never merged across sources.
+// The résumé structure is what seeds a CV (cv.Seed), so the two sources hold the same
+// fields with the CV holding the corrected ones — a merge would restore precisely the
+// value the candidate deleted from their CV.
+func firstStatedHeader(headers ...cv.Header) cv.Header {
+	for _, h := range headers {
+		if statesContact(h) {
+			return h
+		}
+	}
+	return cv.Header{}
+}
+
+// contactHeaderFromStructured projects the structured résumé's contact fields into a
+// header, so the résumé can be offered to firstStatedHeader as one more source. It is the
+// same five-field mapping cv.Seed makes when it seeds a CV from the same structure.
+func contactHeaderFromStructured(st resumeextract.Structured) cv.Header {
+	return cv.Header{
+		FullName: st.FullName,
+		Email:    st.Email,
+		Phone:    st.Phone,
+		Location: st.Location,
+		Links:    st.Links,
+	}
 }
 
 // buildAutofillProfile projects a CV contact header (plus the account email as a
@@ -68,37 +155,46 @@ func splitName(full string) (first, last string) {
 	}
 }
 
-// autofillProfile assembles a user's canonical autofill fields from their most
-// recent CV's contact header plus their account email. Shared by the endpoint the
-// extension reads and the agent that fills forms with it.
-func (a *API) autofillProfile(ctx context.Context, userID int64) (autofillProfile, error) {
-	var accountEmail string
-	_ = a.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&accountEmail)
-
-	var header cv.Header
-	var raw []byte
-	err := a.pool.QueryRow(ctx,
-		`SELECT data FROM cvs WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, userID).Scan(&raw)
-	if err == nil {
-		var doc cv.Document
-		if json.Unmarshal(raw, &doc) == nil {
-			header = doc.Header
-		}
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+// autofillProfile assembles a user's canonical autofill fields from the first source that
+// states a contact, backstopped by their account email. Shared by the endpoint the
+// extension reads and the agent that fills forms with it, so the values a person sees in a
+// form and the values the agent plans on cannot diverge.
+//
+// The sources are ordered: the base CV first, because it is the copy the candidate
+// authored and the only one the tailoring agent cannot rewrite (the edit policy denies it
+// the header's name, email, phone and links); the structured résumé second, because it is
+// what seeded that CV in the first place. Corrected beats derived.
+func (h *autofillHandlers) autofillProfile(ctx context.Context, userID int64) (autofillProfile, error) {
+	var fromCV cv.Header
+	if rec, ok, err := h.cvs.BaseCV(ctx, userID); err != nil {
 		return autofillProfile{}, err
+	} else if ok {
+		fromCV = rec.Document.Header
 	}
 
-	return buildAutofillProfile(header, accountEmail), nil
+	var fromResume cv.Header
+	if st, ok, err := h.resumes.Structured(ctx, userID); err != nil {
+		return autofillProfile{}, err
+	} else if ok {
+		fromResume = contactHeaderFromStructured(st)
+	}
+
+	account, err := h.accounts.GetUserByID(ctx, userID)
+	if err != nil {
+		return autofillProfile{}, err
+	}
+	return buildAutofillProfile(firstStatedHeader(fromCV, fromResume), account.Email), nil
 }
 
 // AutofillProfile returns the caller's canonical autofill fields. keyAuth so the
-// browser extension (Bearer) can read it. All-empty (bar email) with no CV.
-func (a *API) AutofillProfile(c *fiber.Ctx) error {
+// browser extension (Bearer) can read it. All-empty (bar the account email) when no
+// source states a contact.
+func (h *autofillHandlers) AutofillProfile(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	profile, err := a.autofillProfile(c.Context(), userID)
+	profile, err := h.autofillProfile(c.Context(), userID)
 	if err != nil {
 		return err
 	}
