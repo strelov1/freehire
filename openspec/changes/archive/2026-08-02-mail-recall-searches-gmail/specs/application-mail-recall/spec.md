@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: The candidate set comes from a gated mailbox search
 
@@ -74,26 +74,6 @@ confirmed is not kept.
 - **WHEN** the caller links a proposed message that the mail sync had already stored
 - **THEN** the existing message is linked rather than a second copy created
 
-### Requirement: A run is bounded and its output is verified against its input
-
-The amount of each body handed to the model SHALL be capped, and any message the model
-names that was not in the candidate set SHALL be discarded. A run whose candidate set is
-empty SHALL NOT call the model at all.
-
-The candidate count needs no cap of its own on the search path: the search returns what
-names the employer, which is a small set, rather than everything that arrived in a window.
-
-#### Scenario: An answer outside the candidate set is discarded
-
-- **WHEN** the model names a message that was not among the candidates
-- **THEN** that message is not proposed and nothing about it is written
-
-#### Scenario: An empty candidate set costs nothing
-
-- **WHEN** the candidate set is empty
-- **THEN** no model call is made
-- **AND** the response reports nothing examined and nothing proposed
-
 ### Requirement: A failed search is reported, not disguised
 
 When the mailbox cannot be searched, or the model cannot be reached, or its answer cannot
@@ -114,7 +94,37 @@ from a mailbox with nothing in it.
 - **THEN** the action responds with an error
 - **AND** nothing is imported and nothing is linked
 
+## MODIFIED Requirements
+
+### Requirement: A run is bounded and its output is verified against its input
+
+The amount of each body handed to the model SHALL be capped, and any message the model
+names that was not in the candidate set SHALL be discarded. A run whose candidate set is
+empty SHALL NOT call the model at all.
+
+The candidate count needs no cap of its own on the search path: the search returns what
+names the employer, which is a small set, rather than everything that arrived in a window.
+
+#### Scenario: An answer outside the candidate set is discarded
+
+- **WHEN** the model names a message that was not among the candidates
+- **THEN** that message is not proposed and nothing about it is written
+
+#### Scenario: An empty candidate set costs nothing
+
+- **WHEN** the candidate set is empty
+- **THEN** no model call is made
+- **AND** the response reports nothing examined and nothing proposed
+
 ## REMOVED Requirements
+
+### Requirement: A failed model call is reported, not disguised
+
+**Reason**: Replaced by "A failed search is reported, not disguised", which covers the same
+ground plus the failure the search path adds. "We could not look" and "we could not judge"
+are both failures, and both must reach the caller as one rather than as an empty result.
+
+**Migration**: None. The rendering is unchanged for the model half.
 
 ### Requirement: Only unattached mail may be proposed
 
