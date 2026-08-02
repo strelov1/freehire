@@ -1,8 +1,10 @@
 package gmailsync
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsATSSender(t *testing.T) {
@@ -109,5 +111,67 @@ func TestBuildQueryRecallSignals(t *testing.T) {
 	// LinkedIn is no longer a recall source — no linkedin.com senders in the query.
 	if strings.Contains(q, "linkedin.com") {
 		t.Errorf("query should not reference LinkedIn: %q", q)
+	}
+}
+
+// The employer clause has to spell the name the way a SENDER would, not the way the
+// catalogue does. "Blend 360" signs itself "Blend360" — the same class of mismatch that
+// killed the calendar title tier, which compared against a hyphenated slug.
+func TestBuildRecallQuerySpellsTheEmployerBothWays(t *testing.T) {
+	since := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	until := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	q := BuildRecallQuery("Blend 360", "Senior AI Engineer", since, until)
+
+	for _, want := range []string{`"Blend 360"`, `"Blend360"`} {
+		if !strings.Contains(q, want) {
+			t.Errorf("query does not spell the employer as %s:\n%s", want, q)
+		}
+	}
+	if !strings.Contains(q, fmt.Sprintf("after:%d", since.Unix())) ||
+		!strings.Contains(q, fmt.Sprintf("before:%d", until.Unix())) {
+		t.Errorf("query is not bounded by the window:\n%s", q)
+	}
+}
+
+// The gate is what stands between an employer's name and the caller's private mail, and it
+// takes all three members. Hiring vocabulary ALONE was measured against 20 applications: it
+// cut 53 candidates to 41 and dropped both calendar invitations for an interview plus a
+// live recruiter thread whose only subject was the role.
+func TestBuildRecallQueryGateCarriesAllThreeMembers(t *testing.T) {
+	q := BuildRecallQuery("Derq", "Full-Stack Engineer", time.Now(), time.Now())
+
+	if !strings.Contains(q, "filename:ics") {
+		t.Error("no filename:ics — every calendar invitation carries it, whatever language " +
+			"its subject uses, and an invitation has no other route into the product")
+	}
+	if !strings.Contains(q, `"Full-Stack Engineer"`) {
+		t.Error("the role is not in the gate — mail whose only subject is the role would be " +
+			"dropped, and that is a measured, real class")
+	}
+	if !strings.Contains(q, "interview") {
+		t.Error("no hiring vocabulary in the gate")
+	}
+}
+
+// A quote in either field would end the term early and let the rest of the string act as
+// query syntax. They are the only caller-supplied text in it.
+func TestBuildRecallQueryStripsQuotes(t *testing.T) {
+	q := BuildRecallQuery(`Ac"me`, `Sen"ior Dev`, time.Now(), time.Now())
+	if strings.Contains(q, `Ac"me`) || strings.Contains(q, `Sen"ior`) {
+		t.Errorf("a quote survived into the query:\n%s", q)
+	}
+	if !strings.Contains(q, `"Acme"`) || !strings.Contains(q, `"Senior Dev"`) {
+		t.Errorf("stripping mangled the terms:\n%s", q)
+	}
+}
+
+// An application with no role recorded still has an employer, and the gate keeps working.
+func TestBuildRecallQueryWithoutARole(t *testing.T) {
+	q := BuildRecallQuery("Derq", "", time.Now(), time.Now())
+	if strings.Contains(q, `""`) {
+		t.Errorf("an empty role left an empty term in the query:\n%s", q)
+	}
+	if !strings.Contains(q, "filename:ics") {
+		t.Errorf("the rest of the gate went missing with the role:\n%s", q)
 	}
 }

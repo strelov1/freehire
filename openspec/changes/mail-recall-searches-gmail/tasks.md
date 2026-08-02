@@ -1,6 +1,6 @@
 ## 1. The search, in gmailsync
 
-- [ ] 1.1 Add `BuildRecallQuery(company, role string, since, until time.Time) string` beside
+- [x] 1.1 Add `BuildRecallQuery(company, role string, since, until time.Time) string` beside
       `BuildQuery` in `internal/gmailsync/senders.go`, with unit tests: the employer clause
       carries the de-spaced variant (`Blend 360` → also `Blend360`), the gate carries the
       hiring vocabulary AND `filename:ics` AND the quoted role, and quotes in either field
