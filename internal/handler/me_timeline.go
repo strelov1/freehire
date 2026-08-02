@@ -121,9 +121,13 @@ type scheduledInterview struct {
 	ID            int64     `json:"id"`
 	ApplicationID int64     `json:"application_id"`
 	StartsAt      time.Time `json:"starts_at"`
-	EndsAt        time.Time `json:"ends_at,omitempty"`
-	Title         string    `json:"title,omitempty"`
-	JoinURL       string    `json:"join_url,omitempty"`
+	// A pointer, not a time.Time with omitempty: encoding/json has no notion of an empty
+	// struct, so the tag is inert there and a meeting with no end serialises as year 1.
+	// An all-day entry legitimately has no end, and a reader that trusted the field would
+	// draw it two millennia long.
+	EndsAt  *time.Time `json:"ends_at,omitempty"`
+	Title   string     `json:"title,omitempty"`
+	JoinURL string     `json:"join_url,omitempty"`
 	// Status is suggested | confirmed | cancelled — the matcher's certainty, and then
 	// the organiser's. A cancelled meeting is served, not withheld.
 	Status      string `json:"status"`
@@ -161,7 +165,7 @@ func (h *timelineHandlers) Interviews(c *fiber.Ctx) error {
 			ID:            iv.ID,
 			ApplicationID: iv.ApplicationID,
 			StartsAt:      iv.StartsAt,
-			EndsAt:        iv.EndsAt,
+			EndsAt:        optionalTime(iv.EndsAt),
 			Title:         iv.Title,
 			JoinURL:       iv.JoinURL,
 			Status:        iv.Status,
@@ -174,6 +178,14 @@ func (h *timelineHandlers) Interviews(c *fiber.Ctx) error {
 		"data": out,
 		"meta": fiber.Map{"from": from, "to": to, "count": len(out)},
 	})
+}
+
+// optionalTime renders a zero time as absent rather than as the year 1.
+func optionalTime(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }
 
 // timelineBound parses one RFC3339 bound. Both are required and neither is defaulted: a

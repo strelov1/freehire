@@ -901,6 +901,8 @@ export interface ScheduledInterview {
   id: number;
   application_id: number;
   starts_at: string;
+  /** Absent when the meeting has no end — an all-day entry has none. Never a zero
+   *  timestamp: the server omits the field rather than sending the year 1. */
   ends_at?: string;
   title?: string;
   join_url?: string;

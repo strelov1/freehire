@@ -87,5 +87,5 @@
 - [x] 8.2 `web/`: `pnpm run check`, `pnpm run build`, `pnpm exec vitest run`, and
       `design-system`'s `check:tokens` and `check:adoption`, recording an adoption
       improvement with `--update` if one lands.
-- [ ] 8.3 Visual check against a running stack seeded with a matched meeting, a cancelled
+- [x] 8.3 Visual check against a running stack seeded with a matched meeting, a cancelled
       one, and a personal event that must appear nowhere.

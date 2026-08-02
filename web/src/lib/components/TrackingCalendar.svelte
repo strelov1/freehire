@@ -162,11 +162,17 @@
 
   /** What a cell announces. An empty day says nothing about a count: "0 events" on the
    *  thirty-odd empty cells is noise a screen reader has to walk through. */
-  function cellLabel(d: CalendarDay): string {
+  /** "1 entry" / "3 entries". Shared by the cell's label and the panel's heading so the
+   *  two cannot disagree, which is how "1 entries" got onto the screen in the first place. */
+  function entryCount(d: CalendarDay): string {
     const n = d.events.length + d.interviews.length;
-    if (n === 0) return dayHeading(d);
+    return `${n} ${n === 1 ? 'entry' : 'entries'}`;
+  }
+
+  function cellLabel(d: CalendarDay): string {
+    if (d.events.length + d.interviews.length === 0) return dayHeading(d);
     const scheduled = d.interviews.length > 0 ? ', interview scheduled' : '';
-    return `${dayHeading(d)} — ${n} ${n === 1 ? 'entry' : 'entries'}${scheduled}`;
+    return `${dayHeading(d)} — ${entryCount(d)}${scheduled}`;
   }
 </script>
 
@@ -217,9 +223,12 @@
             <span class="flex flex-wrap items-center gap-0.5">
               {#each day.interviews as iv (iv.id)}
                 <!-- A square marks an appointment, a circle a record. Shape rather than
-                     hue alone, so the difference does not depend on seeing colour. -->
+                     hue alone, so the difference does not depend on seeing colour.
+                     rounded-none and not the radius token: radius-sm is 6px, which on an
+                     8px mark rounds the square back into a circle — the distinction was
+                     invisible on screen until it was looked at. -->
                 <span
-                  class="inline-block h-2 w-2 rounded-sm border {meetingTone(iv)}"
+                  class="inline-block h-2 w-2 rounded-none border {meetingTone(iv)}"
                   class:bg-current={iv.status !== 'cancelled'}
                   style="border-color: currentColor"
                   title={iv.status === 'cancelled' ? 'Interview — cancelled' : 'Interview'}
@@ -266,16 +275,14 @@
       <div id="calendar-day-panel" role="region" aria-live="polite" class="rounded-lg border bg-card p-4">
         <h3 class="mb-3 text-sm font-medium">
           {dayHeading(selected)}
-          <span class="font-normal text-muted-foreground"
-            >· {selected.events.length + selected.interviews.length} entries</span
-          >
+          <span class="font-normal text-muted-foreground">· {entryCount(selected)}</span>
         </h3>
         {#if selected.interviews.length > 0}
           <ul class="mb-3 flex flex-col gap-3">
             {#each selected.interviews as iv (iv.id)}
               <li class="flex gap-3">
                 <span
-                  class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-sm border {meetingTone(iv)}"
+                  class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-none border {meetingTone(iv)}"
                   class:bg-current={iv.status !== 'cancelled'}
                   style="border-color: currentColor"
                 ></span>

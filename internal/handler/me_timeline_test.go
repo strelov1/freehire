@@ -264,6 +264,12 @@ func TestInterviews_ServesArrangedMeetingsIncludingCancelledOnes(t *testing.T) {
 	if got.Data[1].Status != "cancelled" {
 		t.Errorf("second meeting status = %q, want it served as cancelled", got.Data[1].Status)
 	}
+	// A meeting with no end is absent, not the year 1. time.Time has no empty value for
+	// encoding/json, so `omitempty` on one is inert and an all-day entry would serialise
+	// as 0001-01-01 — a reader trusting it would draw a two-millennia meeting.
+	if got.Data[1].EndsAt != nil {
+		t.Errorf("a meeting with no end serialised %v, want the field omitted", *got.Data[1].EndsAt)
+	}
 }
 
 func TestInterviews_RefusesABadRangeAndRequiresAuth(t *testing.T) {
