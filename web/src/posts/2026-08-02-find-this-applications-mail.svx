@@ -1,0 +1,38 @@
+---
+title: Find this application's mail
+date: 2026-08-02
+summary: Mail has always found your applications. Now an application can go looking for its mail — one button, and every message it turns up is a suggestion you confirm.
+type: changelog
+tags:
+  - job-seekers
+  - tracking
+  - inbox
+---
+
+Connected mail has only ever worked one way. A message arrives, we work out which
+application it belongs to, and either attach it or leave it as a suggestion for you to
+confirm. When that guess came up empty, the message sat in the inbox and the application
+sat there looking untouched — and there was nothing you could press to say *this one has
+mail, go and find it*.
+
+Open an application, go to **Emails**, and there is now a button that does exactly that. It
+looks through the mail around the date you applied that isn't attached to anything yet,
+works out which of it belongs here, and shows you what it found:
+
+```
+2 of 3 messages may belong here. Nothing is attached until you say so.
+
+  Ashby            Thanks for applying to Derq          4 weeks ago   [Link]  Not this one
+  Maria Alvarez    Next step — a 45 minute call         3 weeks ago   [Link]  Not this one
+                   Carries a calendar invitation
+```
+
+**Nothing is attached until you press Link.** That is deliberate rather than cautious:
+attaching a message to the wrong employer quietly rewrites that company's reply history, and
+it is the sort of mistake nobody notices for months. A suggestion you dismiss costs one
+click.
+
+One side effect worth knowing. Interviews only appear on your calendar view when the
+invitation that announced them is attached to an application — so an invitation that never
+got attached meant a meeting we simply couldn't show you. Link one here and it turns up on
+the calendar at the next sync.
