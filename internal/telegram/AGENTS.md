@@ -18,6 +18,8 @@ Public Telegram channels carry vacancies as free-form posts, so unlike the struc
   channel that publishes in a language the markers do not cover silently rejects all of its
   vacancies — the failure looks like a weak channel, not a blind filter. Extend
   `internal/telegram/prefilter.go` before adding the channel.
-- Telegram jobs have no lifecycle close signal: the ingest sweep does not reach them, there is
-  no change feed, and `cmd/liveness` excludes them because the stored URL is the post, which
-  outlives the vacancy. They stay open until something else closes them.
+- Telegram jobs have no close signal of their own: the ingest sweep does not reach them, there
+  is no change feed, and `cmd/liveness` excludes them from the probe because the stored URL is
+  the post, which outlives the vacancy. They are closed by age instead — 45 days on
+  `COALESCE(posted_at, created_at)`, `closed_reason = 'expired'`. That is a guess, not
+  evidence: a vacancy still open at 46 days is closed anyway.

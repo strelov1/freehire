@@ -56,7 +56,6 @@ type cvHandlers struct {
 	jobReader jobReader
 	match     *matchHandlers
 	// assistantSessions mints the conversation a tailoring workspace runs in.
-	// Assigned after construction (see withAssistantSessions).
 	assistantSessions *assistant.Store
 	// seeder answers what a new CV starts from: the banked work history plus the sections
 	// the stored structure still owns.
@@ -75,10 +74,12 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, typstBin, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate) *cvHandlers {
 	h := &cvHandlers{
-		cvStore:    cvStore,
-		tracerSalt: tracerSalt,
+		cvStore:           cvStore,
+		assistantSessions: assistantSessions,
+		cvRenderer:        cvRenderer,
+		tracerSalt:        tracerSalt,
 		tracerMinter: tracerlink.NewMinter(tracerlink.NewRepository(
 			func(ctx context.Context, cvID uuid.UUID, userID int64, token, sourcePath, destURL, destHash string) (string, error) {
 				return queries.UpsertTracerLink(ctx, db.UpsertTracerLinkParams{
@@ -103,20 +104,7 @@ func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, t
 		match:              match,
 		extractPDFText:     resume.ExtractPDFText,
 	}
-	// The renderer is enabled only when a typst binary was resolved (assign only a
-	// non-nil renderer so the interface stays nil when disabled — a typed-nil would
-	// defeat the 501 gate).
-	if r := cv.NewTypstRenderer(typstBin); r != nil {
-		h.cvRenderer = r
-	}
 	return h
-}
-
-// withAssistantSessions gives the tailoring bootstrap the conversation store it
-// mints a session in. Assigned after construction because the assistant is built
-// from these handlers — the same shape authH.withAccountDeletion uses.
-func (h *cvHandlers) withAssistantSessions(store *assistant.Store) {
-	h.assistantSessions = store
 }
 
 // seedSource returns what a new CV starts from, and is never nil.

@@ -55,10 +55,10 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		matchAnalysisCache: queries,
 		credits:            creditsStore,
 		match:              &matchHandlers{credits: creditsStore},
+		// The tailoring bootstrap mints its conversation through the assistant's store,
+		// exactly as Register wires it.
+		assistantSessions: assistant.NewStore(queries),
 	}
-	// The tailoring bootstrap mints its conversation through the assistant's store,
-	// exactly as Register wires it.
-	h.withAssistantSessions(assistant.NewStore(queries))
 	return h, iss, pool
 }
 

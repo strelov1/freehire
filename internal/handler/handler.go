@@ -14,6 +14,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/accountdelete"
 	"github.com/strelov1/freehire/internal/accounts"
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
@@ -246,12 +247,15 @@ func Register(app *fiber.App, cfg Config) {
 			"sign-in on them (state mismatch). List every served host in SERVED_HOSTS.",
 			cfg.CookieDomains, cfg.FrontendOrigin)
 	}
-	jobsH := newJobsHandlers(queries, moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version)))
+	// Moderation is shared by the jobs surface and the submission queue, so it is built
+	// here rather than inside whichever of the two is constructed first.
+	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version))
+	jobsH := newJobsHandlers(queries, moderationSvc)
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
-	submissionsH := newSubmissionHandlers(queries, jobsH.moderation)
+	submissionsH := newSubmissionHandlers(queries, moderationSvc)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
@@ -298,7 +302,23 @@ func Register(app *fiber.App, cfg Config) {
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
 	// services here rather than inside whichever feature happened to need one first.
 	cvStore := cv.NewStore(cv.NewQueriesRepository(queries))
-	cvH := newCVHandlers(cfg.Pool, queries, cvStore, cfg.TypstBin, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
+	// The conversation store is shared the same way: the assistant runs turns in it and the
+	// tailoring bootstrap mints a session in it. Built here, both are handed the same one —
+	// which is what lets the CV handlers take it as an argument instead of being patched
+	// with it after the assistant exists.
+	assistantStore := assistant.NewStore(queries)
+	// The renderer is shared with referrals, and is enabled only when a typst binary was
+	// resolved. Assign only a NON-NIL renderer: a typed-nil satisfies cv.Renderer and would
+	// defeat the 501 gate that answers when rendering is off.
+	var cvRenderer cv.Renderer
+	if r := cv.NewTypstRenderer(cfg.TypstBin); r != nil {
+		cvRenderer = r
+	}
+	// Who each model call is spent as. One resolver serves every per-user surface, so the
+	// account a call is attributed to is decided in one place rather than per feature. A nil
+	// gateway client leaves it inert and every call on the service credential.
+	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
+	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
@@ -337,18 +357,11 @@ func Register(app *fiber.App, cfg Config) {
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	assistantH := newAssistantHandlers(queries, cfg.AssistantLLM, cfg.AssistantMaxSteps, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
-	cvH.withAssistantSessions(assistantH.store)
 	// Suggestions run on LLM (cheap, one-shot) rather than on AssistantLLM: the whole
 	// argument for generating them outside the turn is that they cost almost nothing.
-	assistantH.withFollowUps(cfg.LLM)
-
-	// Who each model call is spent as. One resolver serves every per-user surface, so
-	// the account a call is attributed to is decided in one place rather than per
-	// feature. A nil gateway client leaves it inert and every call on the service
-	// credential.
-	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
-	assistantH.withKeys(llmKeys)
+	assistantH := newAssistantHandlers(queries,
+		assistantModels{Agent: cfg.AssistantLLM, FollowUps: cfg.LLM, Keys: llmKeys, MaxSteps: cfg.AssistantMaxSteps},
+		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the
@@ -391,7 +404,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralCabinetURL := strings.TrimRight(cfg.FrontendOrigin, "/") + "/my/referrals?tab=incoming"
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
-	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvH.cvRenderer, cvStore, photoStore)
+	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore)
 
 	// Allow the canonical frontend origin plus every served domain's https apex,
 	// so a cross-origin (non-credentialed) read works from either domain during a

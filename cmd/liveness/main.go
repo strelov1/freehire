@@ -16,9 +16,12 @@ package main
 import (
 	"context"
 	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/liveness"
@@ -45,14 +48,25 @@ const (
 	lockKey = 0x66686c76 // "fhlv" — freehire liveness; the key list lives in internal/migrate
 )
 
-// unprobableSources are open-job sources excluded from the probe on top of the ATS
-// registry: their stored URL is a container that outlives the vacancy, not the
-// vacancy's own page, so a liveness probe can never reach a death verdict. Only
-// telegram qualifies today — its URL is the Telegram post (see cmd/tg-extract), which
-// stays live after the job is filled. These jobs have no lifecycle close signal at all;
-// see the job-lifecycle spec's telegram limitation. (habr_career/geekjob are already
-// excluded as registered providers — cmd/ingest's sweep owns their closes.)
-var unprobableSources = []string{"telegram"}
+// unsignalledSources carry no close signal at all: no re-crawl that could stop seeing
+// them, no change feed, and a stored URL that is a container outliving the vacancy rather
+// than the vacancy's own page — so a liveness probe can never reach a death verdict. Only
+// telegram qualifies today: its URL is the Telegram post (see cmd/tg-extract), which stays
+// live after the job is filled. (habr_career/geekjob are already excluded as registered
+// providers — cmd/ingest's sweep owns their closes.)
+//
+// This one list plays both roles, and they are two halves of the same decision: these
+// sources are excluded from the probe BECAUSE probing them is futile, and closed by age
+// INSTEAD. Keeping it single means a source can never be dropped from the probe without
+// something else taking over its closes.
+var unsignalledSources = []string{"telegram"}
+
+// expiryWindow is how old a posting from an unsignalledSource must be before it is
+// presumed filled. Deliberately generous: this is the only close in the lifecycle that
+// rests on a guess rather than on evidence, so it takes the same under-closing bias the
+// probe does. Measured on the catalogue at 45 days it closes the tail without taking the
+// bulk of postings still inside a normal hiring cycle.
+const expiryWindow = 45 * 24 * time.Hour
 
 func main() {
 	worker.Main(run)
@@ -104,20 +118,44 @@ func run() int {
 		return 1
 	}
 
-	// Also exclude sources whose stored URL is not the vacancy's own page but a
-	// container that outlives it — a Telegram job's URL is the post (https://t.me/
-	// <chan>/<id>), which stays live long after the vacancy it advertised is filled,
-	// so probing it always reads Live and never closes the job. Excluding it skips a
-	// probe that can only waste a fetch, never reach a verdict. Appended AFTER the
-	// guard above so the empty-ATS-registry safeguard still keys off atsProviders.
-	excluded := append(atsProviders, unprobableSources...)
+	// Guard: an unsignalledSource must not be a source some other mechanism already
+	// closes on evidence. The age rule closes on a guess, so overlapping the ingest
+	// sweep would let a guess override evidence — and it would do so silently, since
+	// the probe exclusion for such a source is a no-op (it is excluded as a provider
+	// anyway). Refuse to run rather than mass-close a swept provider by age.
+	for _, s := range unsignalledSources {
+		if slices.Contains(atsProviders, s) {
+			log.Printf("liveness: %q is a registered ATS provider — refusing to run (the sweep owns its closes; age must not override evidence)", s)
+			return 1
+		}
+	}
+
+	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
+	// off atsProviders alone. See unsignalledSources for why these are excluded.
+	excluded := append(atsProviders, unsignalledSources...)
 
 	candidates, err := queries.SelectOrphanLivenessCandidates(ctx, excluded)
 	if err != nil {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unprobable sources)", len(candidates), len(atsProviders), len(unprobableSources))
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources)", len(candidates), len(atsProviders), len(unsignalledSources))
+
+	// The other half of the same decision: what the probe cannot judge, age judges.
+	// Run before probing so a run that dies partway through the probe still expires.
+	expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
+		Sources: unsignalledSources,
+		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+	})
+	if err != nil {
+		// Log and carry on rather than return: the guess-half failing must not disable
+		// the evidence-half. A lock wait against a concurrent reindex would otherwise
+		// stop orphan probing on every subsequent cron run, silently and indefinitely.
+		log.Printf("liveness: expire stale unsignalled jobs: %v", err)
+	} else {
+		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
+			expired, int(expiryWindow.Hours()/24), len(unsignalledSources))
+	}
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
 	// sources (telegram posts), so the probe must refuse internal/metadata targets.

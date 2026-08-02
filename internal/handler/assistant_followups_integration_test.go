@@ -60,7 +60,7 @@ func TestFollowUpsOnAnEmptyConversationSpendNothing(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, nil)
-	h.withFollowUps(llm.NewWithModel(jsonModel{body: `{"follow_ups":["never asked?"]}`}))
+	setFollowUpModel(h, llm.NewWithModel(jsonModel{body: `{"follow_ups":["never asked?"]}`}))
 	_, cookie := assistantUser(t, pool, iss, "quiet@example.test", true)
 
 	got, status := followUpsOf(t, app, createSession(t, app, cookie), cookie)
@@ -79,7 +79,7 @@ func TestFollowUpsSurviveAFailingModel(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, &turnModel{replies: []*llms.ContentChoice{{Content: "here are three roles"}}})
-	h.withFollowUps(llm.NewWithModel(jsonModel{err: errors.New("gateway down")}))
+	setFollowUpModel(h, llm.NewWithModel(jsonModel{err: errors.New("gateway down")}))
 	_, cookie := assistantUser(t, pool, iss, "unlucky@example.test", true)
 
 	id := createSession(t, app, cookie)
@@ -102,7 +102,7 @@ func TestFollowUpsFollowTheAnswerThatWasGiven(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, &turnModel{replies: []*llms.ContentChoice{{Content: "here are three roles"}}})
-	h.withFollowUps(llm.NewWithModel(jsonModel{
+	setFollowUpModel(h, llm.NewWithModel(jsonModel{
 		body: `{"follow_ups":["compare the first two?","tailor my CV to the first?","  ","which pays most?","a fifth?"]}`,
 	}))
 	_, cookie := assistantUser(t, pool, iss, "curious@example.test", true)
@@ -130,7 +130,7 @@ func TestFollowUpsWithoutAModelAreEmpty(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, &turnModel{replies: []*llms.ContentChoice{{Content: "an answer"}}})
-	h.withFollowUps(nil)
+	setFollowUpModel(h, nil)
 	_, cookie := assistantUser(t, pool, iss, "plain@example.test", true)
 
 	id := createSession(t, app, cookie)
@@ -149,7 +149,7 @@ func TestFollowUpsRequireACredential(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, nil)
-	h.withFollowUps(llm.NewWithModel(jsonModel{body: `{"follow_ups":["never?"]}`}))
+	setFollowUpModel(h, llm.NewWithModel(jsonModel{body: `{"follow_ups":["never?"]}`}))
 	_, cookie := assistantUser(t, pool, iss, "owner@example.test", true)
 
 	id := createSession(t, app, cookie)
@@ -193,4 +193,12 @@ func TestFollowUpsReadTheStoredTranscript(t *testing.T) {
 	if ex.Prompt != "the question" || ex.Answer != "the spoken answer" {
 		t.Errorf("exchange = %+v, want the turn that was just run", ex)
 	}
+}
+
+// setFollowUpModel binds the suggestion model the way newAssistantHandlers does. It exists
+// as ONE helper so a fixture cannot bind half of it — the client without the spend
+// resolver — which is the shape of divergence a partial struct literal invites.
+func setFollowUpModel(h *assistantHandlers, model *llm.Client) {
+	h.followUps = assistant.NewFollowUps(model)
+	h.followUpLLM = llmBinding{client: model, keys: h.keys}
 }

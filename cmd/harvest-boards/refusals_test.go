@@ -85,3 +85,19 @@ func TestRefusalsDominated(t *testing.T) {
 		t.Error("a run that made no requests is not a refused run")
 	}
 }
+
+// A 503 is not a rate limit. Traffit answers an unknown tenant with one — 200 for a live
+// board, 503 for a slug nobody owns — so counting it as a refusal turned a completely normal
+// run (every candidate simply absent) into "refused=15467, nothing written, exit 1".
+func TestCountingClientDoesNotCountServiceUnavailableAsRefusal(t *testing.T) {
+	c := newCountingClient(erroringClient{
+		err: &sources.StatusError{Method: http.MethodGet, Code: http.StatusServiceUnavailable, URL: "u"},
+	})
+	_ = c.GetJSON(context.Background(), "u", nil)
+	if got := c.refused(); got != 0 {
+		t.Errorf("a 503 is ambiguous and must not count as a refusal, refused = %d, want 0", got)
+	}
+	if got := c.answered(); got != 1 {
+		t.Errorf("answered = %d, want 1 — the platform did answer", got)
+	}
+}

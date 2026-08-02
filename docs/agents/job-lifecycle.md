@@ -1,7 +1,7 @@
 # Job lifecycle conventions
 
 ## Scope
-The open/closed state of a job row, the three mechanisms that write `closed_at`, and the filtering semantics that depend on it.
+The open/closed state of a job row, the four mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
 - A job is open while `closed_at IS NULL`. Closing is a soft state, and the lifecycle never deletes.
@@ -12,9 +12,11 @@ The open/closed state of a job row, the three mechanisms that write `closed_at`,
 - A reappearing posting reopens via the upsert.
 - Self-closing sources (`jobtech`, etc.) are excluded from the unseen sweep — the feed's `removed` events are the authoritative close signal.
 - The liveness worker closes only on positive evidence (two consecutive `expired` reads) and never reopens.
+- A source carrying no close signal at all — no re-crawl, no feed, and a URL that outlives the vacancy — is closed by age instead: `telegram` today, at 45 days. It is the only close that rests on a guess.
+- Every close records WHICH mechanism wrote it in `closed_reason`; a reopen clears it. Rows closed before that column existed carry `''`, meaning unknown, and are never relabelled.
 
 ## How it works
-Closing is a soft state on one column (`closed_at`) written by three independent mechanisms, each covering a gap the others can't reach.
+Closing is a soft state on one column (`closed_at`) written by four independent mechanisms, each covering a gap the others can't reach. Three of them close on evidence; the fourth, the age rule, closes on a guess, which is why every close now records which one wrote it.
 
 One interaction with catalogue pruning is worth knowing. Once ingest starts rejecting a board's non-technical postings, the ones already stored stop being seen and the unseen sweep closes them after 48h — so `closed_at` fills with rows the campaign is about to delete. That is why `cmd/prune`'s scan covers closed rows: a scan over open jobs only would leave exactly the rows nothing will ever replace.
 
@@ -24,12 +26,15 @@ One interaction with catalogue pruning is worth knowing. Once ingest starts reje
 
 **(3) Stream-driven self-close** (`CloseJobBySourceExternalID`): a *self-closing* source (a streaming aggregator like `jobtech`/Arbetsförmedlingen that consumes an incremental change feed) emits a `Job{Removed: true}` for a posting its feed reports taken down. `pipeline.ingestStream` routes that to the Store's optional `closer` (the ingest `dbStore`), closing by `(source, external_id)`. Such a source implements the `selfClosing` marker and is excluded from the (1) unseen sweep (`sources.SelfClosingProviders`): it re-reports only changed ads, so the sweep's `last_seen_at` cutoff would wrongly close every still-open ad it did not touch. Trade-off: a missed run can leave an orphan open until a future reconcile; the change window is sized wide enough to absorb a skipped cron.
 
-**(2) Liveness probe** (`cmd/liveness`): board sources are not the whole catalogue — jobs from sources not in the `sources.All` registry (manual/`resolve-url` imports and the like) are never re-crawled, so the sweep can't reach them. (Aggregators like `habr_career`/`geekjob` *are* registered providers, swept by (1)/(1b) and excluded from the probe; `telegram` is registered-excluded too via `unprobableSources` because its URL outlives the vacancy.) The liveness worker URL-probes those orphans, classifies the page via `internal/liveness` (pure heuristics — HTTP 404/410, error/listing redirect, curated EN/DE/FR closed-posting phrases, or near-empty content — no browser, no LLM), and closes a job after two consecutive `expired` reads (the `liveness_strikes` counter; any healthy probe resets it). It closes only on positive evidence and never reopens, biasing toward under-closing (an orphan has no re-ingest to reopen it). Run-once-and-exit, cron-scheduled.
+**(4) Age rule** (`cmd/liveness`, `CloseStaleUnsignalledJobs`): the probe cannot judge every orphan. A `telegram` job's stored URL is the post, which stays live after the vacancy is filled, so no fetch of it can ever read as dead — and no crawl re-visits it either. Such a source has no evidence to appeal to, so it is closed once its effective posting date (`COALESCE(posted_at, created_at)`) is older than 45 days, with `closed_reason = 'expired'`. The source list is passed in by the caller rather than derived from "whatever the sweep misses", so a new adapter can never drift into being closed by age; it is the same list the probe excludes, which keeps the two halves of one decision — what cannot be probed is expired instead — from separating. Strictly older than the cutoff, and it never reopens, because nothing re-crawls these rows.
+
+**(2) Liveness probe** (`cmd/liveness`): board sources are not the whole catalogue — jobs from sources not in the `sources.All` registry (manual/`resolve-url` imports and the like) are never re-crawled, so the sweep can't reach them. (Aggregators like `habr_career`/`geekjob` *are* registered providers, swept by (1)/(1b) and excluded from the probe; `telegram` is excluded too, via `unsignalledSources`, because its URL outlives the vacancy — mechanism (4) closes it instead.) The liveness worker URL-probes those orphans, classifies the page via `internal/liveness` (pure heuristics — HTTP 404/410, error/listing redirect, curated EN/DE/FR closed-posting phrases, or near-empty content — no browser, no LLM), and closes a job after two consecutive `expired` reads (the `liveness_strikes` counter; any healthy probe resets it). It closes only on positive evidence and never reopens, biasing toward under-closing (an orphan has no re-ingest to reopen it). Run-once-and-exit, cron-scheduled.
 
 ## Limitations
 - A missed liveness cron run leaves orphans open longer; no reconciliation beyond the next run.
 - The liveness probe uses pure heuristics (no browser, no LLM) — a posting that returns a 200 with a "position filled" message in a language or phrasing not in the curated set stays open.
 - Self-closing sources trade missed-run safety for feed-accuracy: a skipped cron leaves orphans open until the next run's change window catches up.
+- The age rule is a guess, not a verdict: a Telegram vacancy still genuinely open at 46 days is closed anyway, and nothing reopens it. `closed_reason = 'expired'` is what makes that reversible — the rows it closed can be found and restored as a set.
 
 ## Catalogue pruning (cmd/prune)
 

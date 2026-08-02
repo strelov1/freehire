@@ -34,10 +34,13 @@ func newCountingClient(inner httpClient) *countingClient {
 	return &countingClient{inner: inner}
 }
 
-// record classifies one transport outcome. A 429 (and the 503 a WAF serves under the same
-// conditions) is a refusal; a 404 is the platform answering "no such board", which is an
-// answer and exactly what a harvest is built to read; anything else — a timeout, a DNS
-// failure, a closed connection — is a dead host, which is neither.
+// record classifies one transport outcome. Only a 429 is a refusal: it is the one status that
+// unambiguously means "the platform is there and is declining". Every other status is the
+// platform answering — a 404, or a 503, which reads like a refusal but is not one. Traffit
+// answers an unknown tenant with 503 and a live board with 200, so counting it turned a run
+// where every candidate was simply absent into "refused=15467, nothing written, exit 1".
+// Anything that is not an HTTP status at all — a timeout, a DNS failure, a closed connection
+// — is a dead host, which is neither refused nor answered.
 func (c *countingClient) record(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -49,12 +52,11 @@ func (c *countingClient) record(err error) {
 	if !errors.As(err, &se) {
 		return
 	}
-	switch se.Code {
-	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+	if se.Code == http.StatusTooManyRequests {
 		c.refusedN++
-	default:
-		c.answeredN++
+		return
 	}
+	c.answeredN++
 }
 
 func (c *countingClient) refused() int {
