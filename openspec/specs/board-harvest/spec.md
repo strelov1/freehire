@@ -24,6 +24,15 @@ mismatch is visible as a mismatch rather than as an absent board. A seed that na
 expected employer SHALL be validated on live jobs alone, and a platform that reports no name
 of its own SHALL keep taking the seed's name as its label.
 
+A seed entry MAY instead name the ATS-native id of a posting the candidate board is expected
+to contain. When it does, and the platform's probe reads the ids of the board's live
+postings, the board SHALL be kept only if that id is among them, and rejected otherwise —
+counted separately from an unreachable candidate, as a name mismatch is. An expected id
+SHALL take precedence over a name comparison for the same candidate, since it identifies the
+board by evidence rather than by resemblance. An expected id on a provider whose probe reads
+no posting ids SHALL leave validation unchanged rather than rejecting the candidate, so
+supplying one is never worse than omitting it.
+
 #### Scenario: A candidate with open jobs is kept
 
 - **WHEN** a candidate board is probed and the platform API reports one or more
@@ -67,6 +76,31 @@ of its own SHALL keep taking the seed's name as its label.
 
 - **WHEN** a seed entry names no expected employer
 - **THEN** the candidate is validated on live jobs alone, exactly as before
+
+#### Scenario: A board containing the expected posting is kept
+
+- **WHEN** a seed entry names an expected posting id and the platform reports a live
+  posting with that id on the candidate board
+- **THEN** the board is appended exactly as a live-validated candidate would be
+
+#### Scenario: A board that does not contain the expected posting is rejected
+
+- **WHEN** a seed entry names an expected posting id and the candidate board's live
+  postings do not include it
+- **THEN** the board is not appended, and the run reports it as an id mismatch rather than
+  as a skipped or unreachable candidate
+
+#### Scenario: An expected id is not weakened by a name comparison
+
+- **WHEN** a seed entry names both an expected posting id and an expected employer, and the
+  platform reports the posting under a company name that does not match the seed's
+- **THEN** the expected id decides the outcome and the board is kept
+
+#### Scenario: An expected id on a provider that reports no posting ids is inert
+
+- **WHEN** a seed entry names an expected posting id for a provider whose probe does not
+  read the ids of live postings
+- **THEN** the candidate is validated exactly as it would be without the expected id
 
 ### Requirement: A provider may supply its own candidate boards by discovery
 
