@@ -1,6 +1,18 @@
 # ashby boards. Provider is the filename; each entry is company + board.
 # board = platform-specific id (see internal/sources/ashby.go).
 
+- company: Adaptive Innovations
+  board: adaptive-innovations
+- company: Allegheny Science & Technology
+  board: alleghenyst
+- company: Allwyn Corp
+  board: allwyn-corp
+- company: Alta Ares
+  board: alta-ares
+- company: Ambrosia Energy
+  board: Ambrosia-Energy
+- company: Amenitiz Solutions
+  board: amenitiz
 - company: "Apex Technology, Inc."
   board: apex-technology-inc
 - company: 0x
@@ -51,6 +63,138 @@
   board: aiwyn
 - company: Allium
   board: allium
+- company: Arctic Research and Development
+  board: arcticrd
+- company: Aria Insurtech
+  board: ariainsurtech
+- company: Armadin
+  board: armadin
+- company: Arthur AI
+  board: arthur-ai
+- company: "Artificial Analysis, Inc."
+  board: artificialanalysis
+- company: Aslan
+  board: aslan
+- company: Atlys
+  board: atlys
+- company: Augmodo
+  board: augmodo
+- company: Aveni
+  board: aveni
+- company: BeReal
+  board: bereal
+- company: Berry AI
+  board: berry-ai
+- company: "Blanton’s Air, Plumbing & Electric"
+  board: blanton-s-air-plumbing-electric
+- company: Blooming Health
+  board: blooming-health
+- company: Boosters Team ⛹🏼
+  board: boosters
+- company: Bridgepoint Consulting
+  board: bridgepoint-consulting
+- company: Chainalysis Government Solutions
+  board: chainalysis-government-solutions
+- company: Charta Health
+  board: chartahealth
+- company: Company Ventures
+  board: CompanyVentures
+- company: Complir
+  board: complir
+- company: Concourse
+  board: concoursetech
+- company: Council Capital
+  board: council-capital
+- company: Cranston
+  board: cranston
+- company: Current
+  board: current-advisors
+- company: Davis Chicago
+  board: davischicago
+- company: DLC
+  board: dlc-inc
+- company: Eliza
+  board: eliza
+- company: Engram Lab
+  board: engram
+- company: Ent
+  board: ent-security
+- company: Evaratus
+  board: evaratus
+- company: Extend Your Team
+  board: EYT
+- company: Fab2
+  board: fab2
+- company: Familiar Machines & Magic
+  board: familiarmachines
+- company: Flagstone
+  board: flagstone
+- company: Flinn
+  board: flinn
+- company: Forge Atomics Inc.
+  board: forgeatomics
+- company: Fronza and Francis LLC
+  board: FronzaFrancis
+- company: Galliant
+  board: galliant
+- company: Gradient Robotics
+  board: gradientrobotics
+- company: Gravie
+  board: gravie
+- company: Grounded
+  board: grounded
+- company: Halluminate
+  board: halluminate
+- company: Hawkins Service Company
+  board: hawkins-service-company
+- company: Healf
+  board: healf
+- company: HEN Technologies
+  board: hen-technologies
+- company: Inspiren
+  board: inspiren
+- company: Investa
+  board: investa
+- company: Ujwal Inc.
+  board: level-ai
+- company: Luma
+  board: lumaai
+- company: Lyrebird Health
+  board: lyrebird-health
+- company: MaintainX
+  board: maintainx
+- company: Manifest OS
+  board: manifest-os
+- company: Marso Robotics
+  board: marsorobotics
+- company: MatX
+  board: matx
+- company: MultiplyMii
+  board: multiplymii
+- company: Nanonets
+  board: nanonets
+- company: Nebuly
+  board: nebuly
+- company: Nectir
+  board: nectir
+- company: Neural Earth
+  board: neural-earth
+- company: Openly
+  board: openly
+- company: Outmarket AI
+  board: outmarket
+- company: Parasail
+  board: parasail
+- company: Pharmacy First Health
+  board: pharmacy1sthealth
+- company: Phrase
+  board: phrase
+- company: Posh AI
+  board: posh-ai
+- company: Reo.Dev
+  board: reo-dev
+- company: Rev
+  board: rev
 - company: ALSO
   board: ridealso
 - company: ambient.ai
@@ -213,6 +357,28 @@
   board: chilipiper
 - company: choco
   board: choco
+- company: RiseGuide
+  board: RiseGuide
+- company: Sapiom
+  board: sapiom
+- company: SimpleStudy
+  board: simplestudy
+- company: Specright
+  board: specright
+- company: Spherical
+  board: spherical
+- company: TAR
+  board: tar
+- company: TaskRay
+  board: taskray
+- company: Teambridge
+  board: Teambridge
+- company: Techy Recruiter
+  board: techyrecruiter
+- company: Temporal Technologies
+  board: temporal
+- company: Trexo Robotics
+  board: Trexo%20Robotics
 - company: Chroma
   board: trychroma
 - company: Circleback
@@ -1209,6 +1375,20 @@
   board: the-exploration-company
 - company: The Global Talent Co.
   board: the-global-talent-co
+- company: Universe
+  board: universe
+- company: VA4U
+  board: va4u
+- company: VÆRIDION
+  board: vaeridion
+- company: Validio
+  board: validio
+- company: Veho
+  board: veho-tech-inc
+- company: Veritus
+  board: veritus
+- company: "Vinyl Equity, Inc."
+  board: vinylequity
 - company: The Voleon Group
   board: voleon
 - company: Tilde Research
@@ -1287,6 +1467,8 @@
   board: vital-lyfe
 - company: Voldex
   board: Voldex
+- company: Volta
+  board: volta
 - company: voodoo
   board: voodoo
 - company: Vooma
@@ -1317,6 +1499,8 @@
   board: windranger
 - company: wistia
   board: wistia
+- company: Carver Technologies
+  board: withorbital
 - company: WorkOS
   board: workos
 - company: Worldly
@@ -1325,6 +1509,8 @@
   board: writer
 - company: Yendo
   board: yendo
+- company: YGO GmbH
+  board: ygo
 - company: yubo
   board: yubo
 - company: Yuma AI
