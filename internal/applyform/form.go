@@ -9,6 +9,11 @@
 // field's identifier is not for comparing. `question_67165648` means nothing except to
 // Greenhouse, and it exists to be handed back to Greenhouse. Any mapping of it is loss.
 //
+// The store has one reader: display.go projects a captured form into what a candidate
+// sees on the job page, which wants almost none of the above — the question text and one
+// word about the answer. The verbatim identifiers exist for the consumer that has not
+// been built yet, the one that fills a form rather than describing it.
+//
 // The one thing that IS normalized is the kind of control, because "is this a dropdown"
 // is a question every consumer asks and no consumer should answer three times. That
 // mapping follows the repository's dict-only rule: a word the dictionary does not know

@@ -134,6 +134,19 @@ every later turn, so a name that lands there stays for the conversation's life. 
 caller with no profile gets a result naming `/my/profile`, never an error and never an
 empty profile the model would read as "no preferences".
 
+## Application forms (`apply_form.go`)
+
+- `GET /jobs/:slug/apply-form` serves the questions a posting's application will ask,
+  projected for reading by `applyform.Display` — not the stored form, which keeps each
+  platform's own field identifiers and option values so an autofiller can hand them back.
+- **A 404 is the ordinary answer.** Forms can be read from three ATS platforms, roughly a
+  sixth of technical postings, so most of the catalogue has none and never will. Do not
+  treat it as an error worth logging or alerting on.
+- Two queries, not one join — mirroring `JobCopies` on the same resource. An unknown slug
+  fails at `GetJobIDBySlug`, a posting with no captured form at `GetApplyFormByJobID`.
+  Both render 404, and keeping them distinguishable is the point: "this employer asks
+  nothing" and "we cannot read this platform" are different statements.
+
 ## Error Convention
 
 - Genuinely domain-specific status choices (e.g. `Me` returning 401 for a gone user token) stay in the handler.

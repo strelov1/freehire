@@ -18,5 +18,5 @@
 
 ## 4. Finish
 
-- [ ] 4.1 Run `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`, both Go test passes, and the web gates (`lint` and `check` catch different things)
-- [ ] 4.2 Note the new endpoint in `internal/handler/AGENTS.md` and the reader in `internal/applyform`'s package doc, so the store no longer reads as write-only
+- [x] 4.1 Run `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`, both Go test passes, and the web gates (`lint` and `check` catch different things)
+- [x] 4.2 Note the new endpoint in `internal/handler/AGENTS.md` and the reader in `internal/applyform`'s package doc, so the store no longer reads as write-only
