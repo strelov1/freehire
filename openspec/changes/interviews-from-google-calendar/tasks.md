@@ -59,9 +59,9 @@
 
 ## 6. The ledger and the reader
 
-- [ ] 6.1 Add `appevent.KindInterviewScheduled` to the vocabulary and its tests; the
+- [x] 6.1 Add `appevent.KindInterviewScheduled` to the vocabulary and its tests; the
       source is the calendar grant, and the pin test in `appevent` must get its verdict.
-- [ ] 6.2 Record the event once, dated at the observation, inside the statement that
+- [x] 6.2 Record the event once, dated at the observation, inside the statement that
       upserts the meeting — the same discipline that keeps `MarkJobApplied` and its event
       from drifting. Integration test: a reschedule leaves exactly one event.
 - [ ] 6.3 Serve scheduled meetings to the SPA: extend the timeline read, or add a sibling

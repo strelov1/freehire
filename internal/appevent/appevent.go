@@ -19,10 +19,15 @@ const (
 	KindEmployerReply = "employer_reply"
 	KindFollowUpSent  = "follow_up_sent"
 	KindStageSet      = "stage_set"
+	// KindInterviewScheduled records that a meeting was arranged, dated by when we
+	// observed the arrangement rather than by when the meeting is. The meeting's own
+	// time lives in application_interviews: it moves and is called off, and occurred_at
+	// here means "when this happened", which a future date would make untrue.
+	KindInterviewScheduled = "interview_scheduled"
 )
 
 // Kinds is the canonical, ordered kind vocabulary.
-var Kinds = []string{KindApplied, KindEmployerReply, KindFollowUpSent, KindStageSet}
+var Kinds = []string{KindApplied, KindEmployerReply, KindFollowUpSent, KindStageSet, KindInterviewScheduled}
 
 // ValidKind reports whether k is a known event kind.
 func ValidKind(k string) bool {
@@ -42,10 +47,14 @@ const (
 	SourceMailExternal = "mail_external"
 	SourceUser         = "user"
 	SourceAssistant    = "assistant"
+	// SourceCalendarGoogle is a fact read out of the candidate's own calendar. Trusted
+	// for day math like the mail sources and for the same reason: the date was set by an
+	// organiser and observed by us, not typed by the candidate when they got round to it.
+	SourceCalendarGoogle = "calendar_google"
 )
 
 // Sources is the canonical, ordered source vocabulary.
-var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant}
+var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant, SourceCalendarGoogle}
 
 // ValidSource reports whether s is a known event source.
 func ValidSource(s string) bool {
@@ -60,13 +69,14 @@ func ValidSource(s string) bool {
 // TrustedForDayMath reports whether events from this source may enter timing
 // calculations.
 //
-// Only the mail sources carry a timestamp the employer set. A manually-recorded stage
-// dates from when the candidate got around to updating their board, so a funnel built on
-// it would measure diligence and report it as market behaviour. Unknown sources are
-// untrusted: unknown provenance must never read as an observation.
+// Only the mail and calendar sources carry a timestamp somebody other than the candidate
+// set. A manually-recorded stage dates from when the candidate got around to updating
+// their board, so a funnel built on it would measure diligence and report it as market
+// behaviour. Unknown sources are untrusted: unknown provenance must never read as an
+// observation.
 func TrustedForDayMath(source string) bool {
 	switch source {
-	case SourceMailGmail, SourceMailHosted, SourceMailExternal:
+	case SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceCalendarGoogle:
 		return true
 	default:
 		return false

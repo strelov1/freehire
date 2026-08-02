@@ -2413,7 +2413,8 @@ type Querier interface {
 	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
 	// No matching owner-scoped row returns no row (the handler maps that to 404).
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
-	// Record a meeting the sync attached to an application, or move the one already recorded.
+	// Record a meeting the sync attached to an application, or move the one already recorded,
+	// and note in the ledger that the scheduling was observed.
 	//
 	// The sync re-reads its whole window every run, so this must be idempotent: the unique
 	// index on (user_id, ical_uid) makes a second sighting an update rather than a second row.
@@ -2421,10 +2422,19 @@ type Querier interface {
 	// the ledger could not have expressed.
 	//
 	// The status is the matcher's tier rendered: `confirmed` when the invitation's identifier
-	// attached it, `suggested` when only the title did. A re-sync that upgrades a suggestion
-	// to a link may overwrite the status; one that would downgrade a confirmed meeting to a
-	// suggestion must not, so the caller passes what it resolved and the conflict branch keeps
-	// the stronger of the two.
+	// attached it, `suggested` when only the title did. A confirmed meeting never falls back
+	// to a suggestion; the identifier that linked it is a fact, and a later run that only
+	// recognises the title has learned nothing new.
+	//
+	// The ledger event rides in the same statement, the way MarkJobApplied's does, so the
+	// appointment and the record of it being made cannot drift apart. Two things about it:
+	//
+	//   * It is dated by the OBSERVATION, not by the meeting. occurred_at means "when this
+	//     happened" and every day calculation reads it; a row dated in the future would turn
+	//     the record of a search into a schedule.
+	//   * source_ref is the interview's own id, which makes it idempotent by the ledger's
+	//     partial unique index — a re-sync, and a reschedule, add no second event. The
+	//     scheduling happened once.
 	UpsertApplicationInterview(ctx context.Context, arg UpsertApplicationInterviewParams) (int64, error)
 	// Apply one external-dataset company-info record, matched by slug. A new slug is
 	// inserted as a reference row (is_reference = true) with no jobs; an existing slug

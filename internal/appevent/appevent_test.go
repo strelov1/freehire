@@ -32,13 +32,18 @@ func TestValidSourceAcceptsTheVocabularyAndNothingElse(t *testing.T) {
 // board, not from when the thing happened. Letting one into day arithmetic would measure
 // diligence and report it as market behaviour, so the split is asserted in both
 // directions: a future edit cannot quietly promote a manual source.
-func TestOnlyMailSourcesAreTrustedForDayMath(t *testing.T) {
+//
+// The line is "did somebody other than the candidate set this date", not "did it come
+// from mail". A meeting read out of the candidate's calendar was arranged by an
+// organiser and observed by us, so it belongs on the trusted side beside the mail.
+func TestOnlyObservedSourcesAreTrustedForDayMath(t *testing.T) {
 	trusted := map[string]bool{
-		SourceMailGmail:    true,
-		SourceMailHosted:   true,
-		SourceMailExternal: true,
-		SourceUser:         false,
-		SourceAssistant:    false,
+		SourceMailGmail:      true,
+		SourceMailHosted:     true,
+		SourceMailExternal:   true,
+		SourceCalendarGoogle: true,
+		SourceUser:           false,
+		SourceAssistant:      false,
 	}
 	if len(trusted) != len(Sources) {
 		t.Fatalf("the vocabulary has %d sources but this test pins %d — a new source needs a verdict here", len(Sources), len(trusted))

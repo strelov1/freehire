@@ -1,5 +1,6 @@
 -- name: UpsertApplicationInterview :one
--- Record a meeting the sync attached to an application, or move the one already recorded.
+-- Record a meeting the sync attached to an application, or move the one already recorded,
+-- and note in the ledger that the scheduling was observed.
 --
 -- The sync re-reads its whole window every run, so this must be idempotent: the unique
 -- index on (user_id, ical_uid) makes a second sighting an update rather than a second row.
@@ -7,32 +8,51 @@
 -- the ledger could not have expressed.
 --
 -- The status is the matcher's tier rendered: `confirmed` when the invitation's identifier
--- attached it, `suggested` when only the title did. A re-sync that upgrades a suggestion
--- to a link may overwrite the status; one that would downgrade a confirmed meeting to a
--- suggestion must not, so the caller passes what it resolved and the conflict branch keeps
--- the stronger of the two.
-INSERT INTO application_interviews (
-    user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, status, source
+-- attached it, `suggested` when only the title did. A confirmed meeting never falls back
+-- to a suggestion; the identifier that linked it is a fact, and a later run that only
+-- recognises the title has learned nothing new.
+--
+-- The ledger event rides in the same statement, the way MarkJobApplied's does, so the
+-- appointment and the record of it being made cannot drift apart. Two things about it:
+--
+--   * It is dated by the OBSERVATION, not by the meeting. occurred_at means "when this
+--     happened" and every day calculation reads it; a row dated in the future would turn
+--     the record of a search into a schedule.
+--   * source_ref is the interview's own id, which makes it idempotent by the ledger's
+--     partial unique index — a re-sync, and a reschedule, add no second event. The
+--     scheduling happened once.
+WITH saved AS (
+    INSERT INTO application_interviews (
+        user_id, application_id, ical_uid, starts_at, ends_at, title, join_url, status, source
+    )
+    VALUES (
+        sqlc.arg(user_id), sqlc.arg(application_id), sqlc.arg(ical_uid),
+        sqlc.arg(starts_at), sqlc.narg(ends_at), sqlc.arg(title), sqlc.arg(join_url),
+        sqlc.arg(status), sqlc.arg(source)
+    )
+    ON CONFLICT (user_id, ical_uid) DO UPDATE
+    SET application_id = EXCLUDED.application_id,
+        starts_at      = EXCLUDED.starts_at,
+        ends_at        = EXCLUDED.ends_at,
+        title          = EXCLUDED.title,
+        join_url       = EXCLUDED.join_url,
+        status         = CASE
+                             WHEN application_interviews.status = 'confirmed' THEN 'confirmed'
+                             ELSE EXCLUDED.status
+                         END,
+        updated_at     = now()
+    RETURNING id, user_id, application_id
+), noted AS (
+    INSERT INTO application_events (
+        user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source, source_ref
+    )
+    SELECT s.user_id, s.application_id, a.job_id, a.company_slug,
+           'interview_scheduled', '', now(), sqlc.arg(event_source)::text, s.id
+      FROM saved s JOIN applications a ON a.id = s.application_id
+    ON CONFLICT (user_id, kind, source_ref) WHERE source_ref IS NOT NULL AND retracted_at IS NULL
+    DO NOTHING
 )
-VALUES (
-    sqlc.arg(user_id), sqlc.arg(application_id), sqlc.arg(ical_uid),
-    sqlc.arg(starts_at), sqlc.narg(ends_at), sqlc.arg(title), sqlc.arg(join_url),
-    sqlc.arg(status), sqlc.arg(source)
-)
-ON CONFLICT (user_id, ical_uid) DO UPDATE
-SET application_id = EXCLUDED.application_id,
-    starts_at      = EXCLUDED.starts_at,
-    ends_at        = EXCLUDED.ends_at,
-    title          = EXCLUDED.title,
-    join_url       = EXCLUDED.join_url,
-    -- A confirmed meeting never falls back to a suggestion: the identifier that linked it
-    -- is a fact, and a later sync that only sees the title has learned nothing new.
-    status         = CASE
-                         WHEN application_interviews.status = 'confirmed' THEN 'confirmed'
-                         ELSE EXCLUDED.status
-                     END,
-    updated_at     = now()
-RETURNING id;
+SELECT id FROM saved;
 
 -- name: CancelApplicationInterview :execrows
 -- Mark a meeting cancelled. Deliberately not a delete: a candidate who remembers an

@@ -230,3 +230,44 @@ func TestUpsertApplicationInterview_AConfirmedMeetingNeverFallsBackToASuggestion
 		t.Errorf("status = %q, want it to stay confirmed", got)
 	}
 }
+
+// The appointment and the record of it being made ride in one statement, so they cannot
+// drift. The event is dated by the observation and written once: a reschedule moves the
+// meeting, and the scheduling still happened only the one time.
+func TestUpsertApplicationInterview_NotesTheSchedulingOnceInTheLedger(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	user := seedResponseUser(t, q, "iv-ledger@example.test", true)
+	_, appID := seedApplication(t, q, user, "iv-ledger-1", "derq")
+	upsert := func(at time.Time) {
+		t.Helper()
+		if _, err := q.UpsertApplicationInterview(ctx, UpsertApplicationInterviewParams{
+			UserID: user, ApplicationID: appID, IcalUid: "ledger@ashbyhq.com",
+			StartsAt: ts(at), Status: "confirmed",
+			Source: "calendar_google", EventSource: "calendar_google",
+		}); err != nil {
+			t.Fatalf("upsert: %v", err)
+		}
+	}
+
+	upsert(time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC))
+	upsert(time.Date(2026, 8, 15, 9, 0, 0, 0, time.UTC)) // moved
+
+	var events int
+	var occurred time.Time
+	if err := q.db.QueryRow(ctx,
+		`SELECT count(*), coalesce(max(occurred_at), now()) FROM application_events
+		  WHERE user_id = $1 AND kind = 'interview_scheduled'`, user).Scan(&events, &occurred); err != nil {
+		t.Fatalf("read ledger: %v", err)
+	}
+	if events != 1 {
+		t.Fatalf("a reschedule produced %d interview_scheduled events, want 1 — the scheduling happened once", events)
+	}
+	// Dated by the observation, so nothing in the ledger sits in the future. The meeting
+	// itself is in August 2026; this row must not be.
+	if occurred.After(time.Now().Add(time.Minute)) {
+		t.Errorf("the ledger event is dated %v, in the future — occurred_at means when it happened", occurred)
+	}
+}

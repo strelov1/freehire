@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/calmatch"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/gmailsync"
@@ -74,6 +75,9 @@ func (s *DBStore) UpsertInterview(ctx context.Context, in StoredInterview) error
 		JoinUrl: in.JoinURL,
 		Status:  in.Status,
 		Source:  SourceGoogleCalendar,
+		// The ledger's own vocabulary, passed rather than written into the SQL so the
+		// pin test in appevent stays the single place a source is spelled.
+		EventSource: appevent.SourceCalendarGoogle,
 	})
 	return err
 }
