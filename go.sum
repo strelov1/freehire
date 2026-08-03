@@ -14,8 +14,8 @@ github.com/abadojack/whatlanggo v1.0.1 h1:19N6YogDnf71CTHm3Mp2qhYfkRdyvbgwWdd2EP
 github.com/abadojack/whatlanggo v1.0.1/go.mod h1:66WiQbSbJBIlOZMsvbKe5m6pzQovxCH9B/K8tQB2uoc=
 github.com/andybalholm/brotli v1.2.2 h1:HzTuoo2ErYQqf5qvcJInB8uvqSVxRttzkFexPWtnceM=
 github.com/andybalholm/brotli v1.2.2/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
-github.com/aws/aws-sdk-go-v2 v1.43.0 h1:fharf/WhbRAVZ1du0QL7roNFxZ6T/sWr+4Ni617bwSI=
-github.com/aws/aws-sdk-go-v2 v1.43.0/go.mod h1:5pKeft2eJj+gElQ38Jqg4ibCqh+/AK33/0X3hip7IjM=
+github.com/aws/aws-sdk-go-v2 v1.43.2 h1:cl+IXwWb3qazClUcm08tGSsB6OiuV83JVJO9B0jQcPc=
+github.com/aws/aws-sdk-go-v2 v1.43.2/go.mod h1:WEzLKBh/mEjXvx1FtQMWgSxMSTVqxQzjkRtk5fa3wkg=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.14 h1:3IZY0XAJquT3aHzbkHfPzy4ACPcEjVG0x87KOwtpqGY=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.14/go.mod h1:zwM6veDkhGgQFqkBy+uT28AAYpLu+uFMlPl+rCg/73E=
 github.com/aws/aws-sdk-go-v2/config v1.32.30 h1:XwsEzpTJfQYJbFicz/QMLwAZdyeNVVoOEkbF7R3gPJk=
@@ -52,8 +52,8 @@ github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1 h1:arjT9Cm3/WYbGmD5TUZHk4UQ
 github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1/go.mod h1:DMPWJBjYs6+3+f/qhBFEFPPlQ6NlhWjai3dJNvipJ84=
 github.com/aws/aws-sdk-go-v2/service/sts v1.44.1 h1:RvfHDg+xvAeZ+5741vUEjpOVtYSIm93W2zhx10Xtydw=
 github.com/aws/aws-sdk-go-v2/service/sts v1.44.1/go.mod h1:9gdl4RrflIdpDb2TlXshWgR1F9TeCkvqDx77Vpr4Z/Q=
-github.com/aws/smithy-go v1.27.3 h1:F3Zb497UhhskkfpJmfkXswyo+t0sh9OTBnIHjogWbVY=
-github.com/aws/smithy-go v1.27.3/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
+github.com/aws/smithy-go v1.27.5 h1:d1ro7KpYOYwP6m73YFa+Kc/A130VsAdX68SpsJwARMM=
+github.com/aws/smithy-go v1.27.5/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
 github.com/aymerick/douceur v0.2.0 h1:Mv+mAeH1Q+n9Fr+oyamOlAkUNPWPlA8PPGR0QAaYuPk=
 github.com/aymerick/douceur v0.2.0/go.mod h1:wlT5vV2O3h55X9m7iVYN0TBM0NH/MmbLnd30/FjWUq4=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
