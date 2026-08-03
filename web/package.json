@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@sentry/sveltekit": "^10.63.0",
+    "@sentry/sveltekit": "^10.69.0",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
     "isomorphic-dompurify": "^3.18.0",
