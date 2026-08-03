@@ -1438,7 +1438,7 @@ export function createApi(
   async function linkRecalledMail(slug: string, providerId: string): Promise<EmailBody> {
     return requestData<EmailBody>(
       `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall/link`,
-      { method: 'POST', body: JSON.stringify({ provider_id: providerId }) }
+      jsonBody('POST', { provider_id: providerId })
     );
   }
 
