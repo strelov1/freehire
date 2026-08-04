@@ -290,6 +290,20 @@ func TestAddEmploymentRefusesOneWithNeitherCompanyNorRole(t *testing.T) {
 	}
 }
 
+func TestAddEmploymentRefusesAKindOutsideTheVocabulary(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+		`{"kind":"hobby","company":"RingCentral"}`, token)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(bank.employments) != 0 {
+		t.Error("an employment with an out-of-vocabulary kind was persisted anyway")
+	}
+}
+
 func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 	app, token, _ := experienceApp(t)
 
