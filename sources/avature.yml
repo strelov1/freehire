@@ -11,3 +11,5 @@
 # --- aggregator-harvested + live-validated 1 boards ---
 - company: Deloittecm
   board: deloittecm.avature.net
+- company: Qatar Airways
+  board: careers.qatarairways.com

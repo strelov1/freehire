@@ -179,11 +179,86 @@ func TestAvatureDropsJobWithNoParseableID(t *testing.T) {
 }
 
 func TestAvatureMissingEnUSSitemapErrors(t *testing.T) {
-	// The index must advertise an en_US locale sitemap; without it the board can't be crawled.
+	// The index must advertise an en_US locale sitemap; without it the board can't be crawled,
+	// and robots.txt (routed here to advertise nothing beyond /careers/) offers no alternative.
 	fake := (&routedHTTP{}).
-		route("/careers/sitemap_index.xml", avatureSitemapIndex("https://jobs.ea.com/es_ES/careers/sitemap.xml"))
+		route("/careers/sitemap_index.xml", avatureSitemapIndex("https://jobs.ea.com/es_ES/careers/sitemap.xml")).
+		route("/robots.txt", "Sitemap: https://jobs.ea.com/careers/sitemap_index.xml\n")
 	_, err := NewAvature(fake).Fetch(context.Background(), CompanyEntry{Board: "jobs.ea.com"})
 	if err == nil {
 		t.Fatal("expected error when no en_US sitemap is advertised")
+	}
+}
+
+func TestAvatureFallsBackToRobotsTxtPortalWhenCareersIsEmpty(t *testing.T) {
+	// Qatar Airways' actual shape: the conventional /careers/ portal doesn't exist on this
+	// tenant at all (no route registered → GetXML errors), but robots.txt advertises a
+	// same-host "global" portal that carries the real public listing — and that portal's index
+	// has no locale split at all (a single sub-sitemap, no /en_US/ or any other locale segment
+	// in it), unlike EA's per-locale index. The adapter must fall back to the robots.txt portal
+	// and accept its lone sub-sitemap as-is.
+	job := "https://careers.qatarairways.com/global/JobDetail/Administration-Coordinator/27906"
+	fake := (&routedHTTP{}).
+		route("/robots.txt", strings.Join([]string{
+			"User-agent: *",
+			"Sitemap: https://qatarairways.avature.net/hiringmanager/sitemap_index.xml", // different host: must be skipped
+			"Sitemap: https://careers.qatarairways.com/global/sitemap_index.xml",
+		}, "\n")).
+		route("/global/sitemap_index.xml", avatureSitemapIndex(
+			"https://careers.qatarairways.com/global/sitemap.xml",
+		)).
+		route("/global/sitemap.xml", avatureURLset(job)).
+		route("/JobDetail/Administration-Coordinator/27906", avatureDetailHTML)
+
+	jobs, err := NewAvature(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Qatar Airways", Board: "careers.qatarairways.com",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (fallback portal must be crawled)", len(jobs))
+	}
+	if jobs[0].URL != job {
+		t.Errorf("URL = %q, want %q", jobs[0].URL, job)
+	}
+}
+
+func TestAvatureNoLivePortalAnywhereErrors(t *testing.T) {
+	// Bain's shape: /careers/ doesn't exist, and every same-host portal robots.txt advertises
+	// (jobs, recruits, bainonyourcampus) resolves to an index with no en_US JobDetail postings.
+	// A tenant with no reachable public listing must error, not silently return zero jobs.
+	fake := (&routedHTTP{}).
+		route("/robots.txt", strings.Join([]string{
+			"Sitemap: https://careers.bain.com/jobs/sitemap_index.xml",
+			"Sitemap: https://careers.bain.com/recruits/sitemap_index.xml",
+		}, "\n")).
+		route("/jobs/sitemap_index.xml", avatureSitemapIndex("https://careers.bain.com/en_US/jobs/sitemap.xml")).
+		route("/en_US/jobs/sitemap.xml", avatureURLset("https://careers.bain.com/en_US/jobs/AgentCreate")).
+		route("/recruits/sitemap_index.xml", avatureSitemapIndex("https://careers.bain.com/en_US/recruits/sitemap.xml")).
+		route("/en_US/recruits/sitemap.xml", avatureURLset("https://careers.bain.com/en_US/recruits/SearchPositions"))
+
+	_, err := NewAvature(fake).Fetch(context.Background(), CompanyEntry{Board: "careers.bain.com"})
+	if err == nil {
+		t.Fatal("expected error when no candidate portal carries any JobDetail postings")
+	}
+}
+
+func TestAvatureSkipsRobotsTxtWhenCareersAlreadyWorks(t *testing.T) {
+	// The common case (every board onboarded before robots.txt discovery existed): /careers/
+	// resolves directly to postings, so robots.txt must never be consulted — no route is
+	// registered for it, so the adapter would error if it tried.
+	job := "https://jobs.ea.com/en_US/careers/JobDetail/Senior-Product-Manager/214840"
+	fake := (&routedHTTP{}).
+		route("/careers/sitemap_index.xml", avatureSitemapIndex("https://jobs.ea.com/en_US/careers/sitemap.xml")).
+		route("/en_US/careers/sitemap.xml", avatureURLset(job)).
+		route("/JobDetail/Senior-Product-Manager/214840", avatureDetailHTML)
+
+	jobs, err := NewAvature(fake).Fetch(context.Background(), CompanyEntry{Board: "jobs.ea.com"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
 	}
 }

@@ -15,9 +15,17 @@ import (
 // JobDetail URLs. Each job page is server-rendered HTML with no schema.org JSON-LD, so the
 // title comes from og:title and the location/work-model/description from the page's
 // article__content__view__field label/value blocks (description = the richest value).
+//
+// Almost every tenant names its public portal "careers", so that path is tried first at no
+// extra request. A handful front their listing behind a differently-named portal instead (Qatar
+// Airways: "global") — robots.txt enumerates every portal Avature registered for the host, so
+// when /careers/ carries no postings each same-host Sitemap: line it advertises is tried in
+// turn until one does. A tenant whose portals all wall off requisitions (Bain: real portals,
+// zero listed postings in any of them) legitimately exhausts every candidate and errors.
 type avatureHTTP interface {
 	XMLGetter
 	HTMLGetter
+	TextGetter
 }
 
 type avature struct {
@@ -30,33 +38,107 @@ func NewAvature(c avatureHTTP) Source { return avature{http: c} }
 func (avature) Provider() string { return "avature" }
 
 func (s avature) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	indexURL := fmt.Sprintf("https://%s/careers/sitemap_index.xml", e.Board)
-	// One sitemap per locale lists the same postings; crawl en_US to avoid duplicates.
-	listURL, err := resolveSubSitemap(ctx, s.http, indexURL, "/en_US/")
+	careersURL := fmt.Sprintf("https://%s/careers/sitemap_index.xml", e.Board)
+	entries, err := avatureJobLocs(ctx, s.http, careersURL)
+	if len(entries) == 0 {
+		if alt, altErr := avatureFallbackLocs(ctx, s.http, e.Board); len(alt) > 0 {
+			entries, err = alt, nil
+		} else if altErr != nil {
+			err = altErr
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("avature: %s: %w", e.Board, err)
 	}
-	if listURL == "" {
-		return nil, fmt.Errorf("avature: no en_US sitemap advertised for %s", e.Board)
-	}
-
-	urlset, err := getSitemap(ctx, s.http, listURL)
-	if err != nil {
-		return nil, fmt.Errorf("avature: sitemap %s: %w", listURL, err)
-	}
-
-	// The locale sitemap mixes JobDetail pages with utility pages (AgentCreate, …); keep
-	// only the postings. Each entry's lastmod is carried into detail as posted_at.
-	var entries []sitemapLoc
-	for _, u := range urlset.URLs {
-		if strings.Contains(u.Loc, "/careers/JobDetail/") {
-			entries = append(entries, u)
-		}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("avature: %s: no JobDetail postings found", e.Board)
 	}
 
 	return fetchDetails(entries, defaultDetailWorkers, func(entry sitemapLoc) (Job, bool) {
 		return s.detail(ctx, e, entry)
 	}), nil
+}
+
+// avatureLocaleSegment matches a locale code path segment (e.g. "/en_US/", "/es_ES/").
+var avatureLocaleSegment = regexp.MustCompile(`/[a-z]{2}_[A-Z]{2}/`)
+
+// avatureJobLocs resolves one sitemap index into its JobDetail entries, filtered to posting
+// pages — utility routes like AgentCreate are excluded. Most tenants split their index by
+// locale, so the en_US sub-sitemap is preferred (the other locales list the same postings); a
+// tenant that advertises a locale split but no en_US within it returns (nil, nil) rather than
+// guessing a different language. A tenant with no locale split at all (Qatar Airways' "global"
+// portal, one sub-sitemap with no locale segment) uses that sole sub-sitemap as-is.
+func avatureJobLocs(ctx context.Context, c avatureHTTP, indexURL string) ([]sitemapLoc, error) {
+	index, err := getSitemap(ctx, c, indexURL)
+	if err != nil {
+		return nil, fmt.Errorf("sitemap index %s: %w", indexURL, err)
+	}
+
+	listURL, localeSplit := "", false
+	for _, sm := range index.Sitemaps {
+		if avatureLocaleSegment.MatchString(sm.Loc) {
+			localeSplit = true
+			if strings.Contains(sm.Loc, "/en_US/") {
+				listURL = sm.Loc
+				break
+			}
+		}
+	}
+	if listURL == "" && !localeSplit && len(index.Sitemaps) == 1 {
+		listURL = index.Sitemaps[0].Loc
+	}
+	if listURL == "" {
+		return nil, nil
+	}
+
+	urlset, err := getSitemap(ctx, c, listURL)
+	if err != nil {
+		return nil, fmt.Errorf("sitemap %s: %w", listURL, err)
+	}
+
+	var entries []sitemapLoc
+	for _, u := range urlset.URLs {
+		if strings.Contains(u.Loc, "/JobDetail/") {
+			entries = append(entries, u)
+		}
+	}
+	return entries, nil
+}
+
+// avatureFallbackLocs is reached only when the conventional /careers/ portal carries no
+// postings. It fetches robots.txt from the board host and tries every other Sitemap: line
+// targeting that same host (a tenant can run several portals — applicant login, hiring-manager
+// tools, a public listing under a differently-named one) until one yields JobDetail entries.
+func avatureFallbackLocs(ctx context.Context, c avatureHTTP, board string) ([]sitemapLoc, error) {
+	robots, err := c.GetText(ctx, fmt.Sprintf("https://%s/robots.txt", board))
+	if err != nil {
+		return nil, fmt.Errorf("robots.txt: %w", err)
+	}
+
+	prefix := "https://" + board + "/"
+	tried := map[string]bool{prefix + "careers/sitemap_index.xml": true}
+	var lastErr error
+	for _, line := range strings.Split(robots, "\n") {
+		u, ok := strings.CutPrefix(strings.TrimSpace(line), "Sitemap:")
+		if !ok {
+			continue
+		}
+		u = strings.TrimSpace(u)
+		if !strings.HasPrefix(u, prefix) || tried[u] {
+			continue // a different host's portal (e.g. the tenant's own *.avature.net) or a repeat
+		}
+		tried[u] = true
+
+		entries, err := avatureJobLocs(ctx, c, u)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if len(entries) > 0 {
+			return entries, nil
+		}
+	}
+	return nil, lastErr
 }
 
 // detail fetches one job page and maps it to a Job, returning ok=false when the page fetch
