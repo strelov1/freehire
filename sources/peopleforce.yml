@@ -72,8 +72,6 @@
   board: magnetics
 - company: Media24
   board: media24
-- company: Frontline
-  board: miltech-1
 - company: Мрія
   board: mriia
 - company: Multiplex
