@@ -13,11 +13,13 @@ import (
 // education. Every tenant is served keylessly through the canonical host
 // careers.pageuppeople.com/<instID>/, so the board is the numeric institution id (e.g.
 // "513"). The listing endpoint returns a JSON envelope whose "results" field is a rendered
-// HTML fragment; the row wrapper differs per tenant (a <tr> table or a <li> list), so parsing
-// keys on the cross-tenant-stable a.job-link anchor and pairs each job with the location and
-// summary that follow it in document order. Posted date and the full description live only on
-// the per-tenant detail page (whose markup varies too), so this list-only adapter carries the
-// listing's summary snippet; a detail fan-out is a possible later enrichment.
+// HTML fragment; the row wrapper differs per tenant (a <tr> table, a <li> list, or a <div>
+// card), so parsing keys on the cross-tenant-stable a.job-link anchor and pairs each job
+// with the location and summary that follow it in document order. Most tenants' listings
+// carry a usable summary; a minority render nothing of the kind, so a job that comes out of
+// pageupParseListing with no description gets one more fetch against its own detail page
+// (see detailDescription) — bounded so tenants whose listing already has a summary never
+// pay the extra request. Posted date is not exposed by either endpoint.
 type pageup struct {
 	http pageupHTTP
 }
@@ -63,7 +65,53 @@ func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	for i := range jobs {
 		jobs[i].Company = e.Company
 	}
+
+	// Some tenants' listing rows carry no summary of any shape (e.g. board 798) — the
+	// full text lives only on the job's own detail page. Fan out just for those, so
+	// tenants whose listing already carries a summary never pay the extra request.
+	var need []int
+	for i, j := range jobs {
+		if j.Description == "" {
+			need = append(need, i)
+		}
+	}
+	if len(need) > 0 {
+		filled := fetchDetails(need, defaultDetailWorkers, func(i int) (Job, bool) {
+			j := jobs[i]
+			j.Description = p.detailDescription(ctx, j.URL)
+			return j, true
+		})
+		for k, i := range need {
+			jobs[i] = filled[k]
+		}
+	}
 	return jobs, nil
+}
+
+// pageupDetailDescriptionID is the container the detail page's XHR envelope wraps the full
+// posting body in, on tenants whose listing omits a summary (confirmed on board 798). It
+// is a platform template id, not something a tenant's own theme reliably reuses — a tenant
+// whose detail markup uses a different container (board 709, which needs no detail fetch
+// since its listing already carries a summary) simply yields "" here, same as a fetch
+// failure: the posting keeps its empty description rather than being dropped.
+const pageupDetailDescriptionID = "job-details"
+
+// detailDescription fetches one job's detail page and returns its sanitized description
+// HTML, or "" when the fetch fails or the known container is absent.
+func (p pageup) detailDescription(ctx context.Context, jobURL string) string {
+	var env pageupEnvelope
+	if err := p.http.GetJSONWithHeaders(ctx, jobURL, pageupXHR, &env); err != nil {
+		return ""
+	}
+	root, err := html.Parse(strings.NewReader(env.Results))
+	if err != nil {
+		return ""
+	}
+	node := firstByID(root, pageupDetailDescriptionID)
+	if node == nil {
+		return ""
+	}
+	return sanitizeHTML(innerHTML(node))
 }
 
 // pageupParseListing parses a search-results HTML fragment into jobs. It walks the DOM in
@@ -114,6 +162,10 @@ func pageupParseListing(fragment, board string) ([]Job, error) {
 		case hasClass(n, "location") && cur.Location == "":
 			cur.Location = textContent(n)
 		case (hasClass(n, "jobs-summary") || hasClass(n, "summary")) && cur.Description == "":
+			cur.Description = textContent(n)
+		// Some tenants render the summary as a bare <p> with no class at all (e.g. board
+		// 709); catch it too, so long as nothing has claimed the description yet.
+		case n.Data == "p" && attr(n, "class") == "" && cur.Description == "":
 			cur.Description = textContent(n)
 		}
 		return true
