@@ -44,10 +44,16 @@
   `go test ./...` — clean. Also `go test -tags=integration ./internal/handler/...`.
 - [x] 3.2 `openspec validate --all --strict` — 213/213.
 - [x] 3.3 freehire-cli: `go build ./...`, `go vet ./...`, `go test ./...` in that repo — clean.
-- [ ] 3.4 Manual smoke: mint/use a real full-scope key against a local or prod server,
-  `experience employments add`, `experience atoms add` citing the returned id, `cv edit
-  --evidence <id>` with it. Blocked on two things outside this change's own commits: the
-  backend PR (freehire#1574) reaching prod, and a freehire-cli release being cut (the
-  locally installed binary is the pre-existing release and has no `experience` command
-  until one ships) — deliberately left undone rather than deployed/released as a side
+- [x] 3.4 Manual smoke: done against real prod (2026-08-04), after `release.sh` deployed
+  freehire#1574/#1575 and freehire-cli v0.17.0 was cut and downloaded fresh (not the
+  pre-existing installed binary). `POST /me/experience/employments` and
+  `POST /me/experience/atoms` verified unauthenticated-401 (not 404) post-deploy, then a
+  real `experience employments add` + `experience atoms add --employment <id>` against the
+  live server returned `"provenance":"manual"` and showed up correctly grouped in
+  `experience list`. Did NOT chain into `cv edit --evidence <id>` against a real CV — that
+  would have written test text into the account's actual CV revision history, which the
+  bare bank entries don't; the create→list→provenance chain already covers what `cv
+  edit`'s own evidence-gate integration tests independently prove. Test entries
+  (`"TEST — delete me"`) left for the account owner to remove via the site, since delete
+  stays cookie-only by design (see this change's own design.md).
   effect of archiving.
