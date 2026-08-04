@@ -46,4 +46,8 @@
 - [x] 3.3 freehire-cli: `go build ./...`, `go vet ./...`, `go test ./...` in that repo — clean.
 - [ ] 3.4 Manual smoke: mint/use a real full-scope key against a local or prod server,
   `experience employments add`, `experience atoms add` citing the returned id, `cv edit
-  --evidence <id>` with it.
+  --evidence <id>` with it. Blocked on two things outside this change's own commits: the
+  backend PR (freehire#1574) reaching prod, and a freehire-cli release being cut (the
+  locally installed binary is the pre-existing release and has no `experience` command
+  until one ships) — deliberately left undone rather than deployed/released as a side
+  effect of archiving.
