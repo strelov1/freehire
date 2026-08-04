@@ -27,8 +27,10 @@ type experienceBankOwner interface {
 	ListEmployments(ctx context.Context, userID int64) ([]experience.Employment, error)
 	ListAtoms(ctx context.Context, userID int64) ([]experience.Atom, error)
 	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (experience.Atom, error)
+	CreateEmployment(ctx context.Context, userID int64, e experience.Employment) (experience.Employment, error)
 	UpdateEmployment(ctx context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error)
 	DeleteEmployment(ctx context.Context, id uuid.UUID, userID int64) error
+	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)
 	DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) error
 }
@@ -39,11 +41,17 @@ func newExperienceHandlers(bank experienceBankOwner) *experienceHandlers {
 
 func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
 	// The read takes a key, like the profile read, so a programmatic consumer can ground
-	// itself in what the candidate has actually done. The writes stay cookie-only: a key
-	// that leaks out of a script's environment must not edit or erase someone's career.
+	// itself in what the candidate has actually done. Correcting or removing an EXISTING
+	// entry stays cookie-only: a key that leaks out of a script's environment must not edit
+	// or erase someone's career. Creating a new one takes a key too — it is additive-only,
+	// and a full-scope key already reaches everything more destructive than this (cv edit,
+	// apply) through the rest of the CLI's surface, so gating this narrower than that would
+	// protect a boundary the same key crosses everywhere else.
 	api.Get("/me/experience", mw.key, h.ListExperience)
+	api.Post("/me/experience/employments", mw.key, h.AddEmployment)
 	api.Put("/me/experience/employments/:id", mw.cookie, h.UpdateEmployment)
 	api.Delete("/me/experience/employments/:id", mw.cookie, h.DeleteEmployment)
+	api.Post("/me/experience/atoms", mw.key, h.AddAtom)
 	api.Put("/me/experience/atoms/:id", mw.cookie, h.UpdateAtom)
 	api.Delete("/me/experience/atoms/:id", mw.cookie, h.DeleteAtom)
 }
@@ -107,6 +115,47 @@ func (h *experienceHandlers) ListExperience(c *fiber.Ctx) error {
 		resp.Employments = append(resp.Employments, entry)
 	}
 	return c.JSON(fiber.Map{"data": resp})
+}
+
+// AddEmployment records a new place — a job or a project — under the caller. Unlike
+// UpdateEmployment this creates rather than corrects, so nothing about provenance applies:
+// an employment carries no claim of its own, only the atoms attached to it do.
+func (h *experienceHandlers) AddEmployment(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in experience.Employment
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	created, err := h.bank.CreateEmployment(c.Context(), userID, in)
+	if err != nil {
+		return experienceError(err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
+}
+
+// AddAtom records a new achievement under the caller. This is the only route that can add
+// evidence outside a chat session — the assistant's own experience_add tool is the other —
+// so provenance is forced to manual regardless of what the body sends, the same way
+// UpdateAtom already forces it on a correction: an authenticated POST with no chat
+// transcript behind it can only ever honestly be "the owner typed this themselves".
+func (h *experienceHandlers) AddAtom(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in experience.Atom
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	in.Provenance = experience.ProvenanceManual
+	created, err := h.bank.AddAtom(c.Context(), userID, in)
+	if err != nil {
+		return experienceError(err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": created})
 }
 
 // UpdateEmployment replaces one place's fields with what the owner typed — blanks
@@ -202,6 +251,8 @@ func experienceError(err error) error {
 		errors.Is(err, experience.ErrEmptyEmployment),
 		errors.Is(err, experience.ErrInvalidKind):
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	case errors.Is(err, experience.ErrAlreadyBanked):
+		return fiber.NewError(fiber.StatusConflict, err.Error())
 	default:
 		return err
 	}

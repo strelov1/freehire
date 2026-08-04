@@ -71,6 +71,13 @@ func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a e
 	return a, nil
 }
 
+func (b *stubBank) CreateEmployment(_ context.Context, userID int64, e experience.Employment) (experience.Employment, error) {
+	if err := e.Validate(); err != nil {
+		return experience.Employment{}, err
+	}
+	return b.addEmployment(userID, e), nil
+}
+
 func (b *stubBank) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error) {
 	for i, existing := range b.employments {
 		if existing.ID == id && b.owner[id] == userID {
