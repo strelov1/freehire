@@ -136,3 +136,5 @@
   board: octogamesstudio
 - company: Arctic7
   board: arctic7
+- company: Rootstrap
+  board: rootstrap
