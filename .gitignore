@@ -38,6 +38,7 @@ hire
 # Root-level build output of `go build ./cmd/<name>/` — never commit these artifacts.
 /backfill-company-info
 /backfill-derive
+/discord-register-commands
 /enrich
 /gen-contracts
 /harvest-ats

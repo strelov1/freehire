@@ -3,7 +3,9 @@
   import { resolve } from '$app/paths';
   import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
+  import { Button } from '$lib/ui';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import JdIntakeDialog from './JdIntakeDialog.svelte';
   import { type CvTailoredItem } from '$lib/cv';
 
   // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
@@ -13,6 +15,7 @@
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
   let items = $state<CvTailoredItem[]>([]);
+  let showIntake = $state(false);
 
   onMount(load);
 
@@ -41,12 +44,17 @@
 </script>
 
 <div class="space-y-6">
-  <div>
-    <h1 class="text-2xl font-semibold">Tailored CVs</h1>
-    <p class="text-sm text-muted-foreground">
-      CVs you tailored for specific roles. Open one to resume its tailoring session, or start a new
-      one from any vacancy’s match page.
-    </p>
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Tailored CVs</h1>
+      <p class="text-sm text-muted-foreground">
+        CVs you tailored for specific roles. Open one to resume its tailoring session, or start a
+        new one from any vacancy’s match page.
+      </p>
+    </div>
+    <Button variant="outline" class="shrink-0" onclick={() => (showIntake = true)}>
+      Tailor for a job
+    </Button>
   </div>
 
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
@@ -128,3 +136,7 @@
     </ul>
   {/if}
 </div>
+
+{#if showIntake}
+  <JdIntakeDialog onClose={() => (showIntake = false)} />
+{/if}

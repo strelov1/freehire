@@ -310,3 +310,60 @@ func TestForDisplaySeparatesWorkablesStandardProfile(t *testing.T) {
 		t.Errorf("basics = %v, want all six standard controls", d.Basics)
 	}
 }
+
+// Lever names an employer's question `cards[<uuid>][fieldN]`; the rest — name, contact
+// details, CV, profile links, consent — is the standard application every Lever posting
+// collects. Same inverted marker as Workable's `QA_`.
+func TestForDisplaySeparatesLeversStandardApplication(t *testing.T) {
+	d := Form{
+		Provider: "lever",
+		Fields: []Field{
+			{ID: "name", Label: "Full name", Type: TypeText, Required: true},
+			{ID: "email", Label: "Email", Type: TypeText, Required: true},
+			{ID: "resume", Label: "Resume/CV", Type: TypeFile, Required: true},
+			{ID: "urls[LinkedIn]", Label: "LinkedIn URL", Type: TypeText},
+			{ID: "consent[store]", Label: "I agree to the storage of my data", Type: TypeBoolean, Required: true},
+			{ID: "cards[115d9079][field0]", Label: "Are you authorized to work in the US?", Type: TypeSelect, Required: true},
+			{ID: "cards[82aec075][field0]", Label: "How did you hear about us?", Type: TypeSelect},
+		},
+	}.ForDisplay()
+
+	got := questionTexts(d)
+	if len(got) != 2 || got[0] != "Are you authorized to work in the US?" {
+		t.Errorf("questions = %v, want only the two the employer wrote", got)
+	}
+	// Four, not five: the consent checkbox is boilerplate and is dropped — see
+	// TestForDisplayDropsLeverConsentBoilerplate.
+	if len(d.Basics) != 4 {
+		t.Errorf("basics = %v, want the four real standard controls", d.Basics)
+	}
+}
+
+// A consent checkbox is the platform's legal boilerplate, not the employer's question:
+// it is on every Lever application, its text is a paragraph, and a candidate deciding
+// whether to apply learns nothing from it. Same reasoning as the EEO survey — and left
+// in, its 250-character paragraph sits in the standard-fields line beside "Email".
+func TestForDisplayDropsLeverConsentBoilerplate(t *testing.T) {
+	d := Form{
+		Provider: "lever",
+		Fields: []Field{
+			{ID: "name", Label: "Full name", Type: TypeText, Required: true},
+			{ID: "email", Label: "Email", Type: TypeText, Required: true},
+			{ID: "consent[store]", Label: "I agree to the storage of my data for up to five years", Type: TypeBoolean, Required: true},
+			{ID: "consent[marketing]", Label: "Yes, I would like to receive notifications about future job opportunities that match my skill profile.", Type: TypeBoolean},
+			{ID: "cards[abc][field0]", Label: "Why this role?", Type: TypeTextarea, Required: true},
+		},
+	}.ForDisplay()
+
+	for _, b := range d.Basics {
+		if strings.Contains(b, "consent") || strings.Contains(b, "storage of my data") || strings.Contains(b, "notifications about future") {
+			t.Errorf("basics = %v, want the consent boilerplate dropped", d.Basics)
+		}
+	}
+	if len(d.Basics) != 2 {
+		t.Errorf("basics = %v, want just the two real ones", d.Basics)
+	}
+	if len(d.Questions) != 1 {
+		t.Errorf("questions = %v, want the employer's own only", questionTexts(d))
+	}
+}

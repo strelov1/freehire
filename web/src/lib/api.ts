@@ -22,6 +22,7 @@ import type {
   CvTracerLink,
   UpdateCvInput,
   TailorResult,
+  JdResolveInput,
 } from './cv';
 import type {
   Job,
@@ -48,6 +49,8 @@ import type {
   UserProfile,
   Subscription,
   TelegramStatus,
+  DiscordStatus,
+  DiscordLinkResult,
   Submission,
   SubmissionInput,
   Contribution,
@@ -1160,6 +1163,22 @@ export function createApi(
     await call('/api/v1/me/telegram', { method: 'DELETE' });
   }
 
+  /** Whether Discord contribution linking is configured and whether this user is linked. */
+  async function discordStatus(): Promise<DiscordStatus> {
+    return requestData<DiscordStatus>('/api/v1/me/discord');
+  }
+
+  /** Mint a one-time token: the user runs `/link token:<token>` in the freehire Discord
+   *  server to connect their account. */
+  async function discordLink(): Promise<DiscordLinkResult> {
+    return requestData<DiscordLinkResult>('/api/v1/me/discord/link', { method: 'POST' });
+  }
+
+  /** Disconnect the user's linked Discord account. */
+  async function discordUnlink(): Promise<void> {
+    await call('/api/v1/me/discord', { method: 'DELETE' });
+  }
+
   /** Submit a vacancy for moderation. Returns the pending submission. */
   async function submitJob(input: SubmissionInput): Promise<Submission> {
     return requestData<Submission>('/api/v1/submissions', jsonBody('POST', input));
@@ -1350,8 +1369,11 @@ export function createApi(
       source?: InboxSource;
       unread?: boolean;
       status?: string;
+      /** Ask for mail the classifier judged not to be about an application at all. The
+       *  listing hides it by default and reports how many it hid. */
+      includeOther?: boolean;
     } = {},
-  ): Promise<Slice<InboxMessage>> {
+  ): Promise<Slice<InboxMessage> & { hidden: number }> {
     const params = new URLSearchParams({
       limit: String(opts.limit ?? 20),
       offset: String(opts.offset ?? 0),
@@ -1360,7 +1382,11 @@ export function createApi(
     if (opts.source) params.set('source', opts.source);
     if (opts.unread) params.set('unread', '1');
     if (opts.status) params.set('status', opts.status);
-    return toSlice(await request<Page<InboxMessage>>(`/api/v1/me/inbox?${params.toString()}`), opts.offset ?? 0);
+    if (opts.includeOther) params.set('include_other', '1');
+    const page = await request<Page<InboxMessage> & { meta: { hidden?: number } }>(
+      `/api/v1/me/inbox?${params.toString()}`
+    );
+    return { ...toSlice(page, opts.offset ?? 0), hidden: page.meta.hidden ?? 0 };
   }
 
   /** Mark every unread message matching the active filters as read; returns the
@@ -1421,6 +1447,17 @@ export function createApi(
     return requestData<MailRecallResult>(
       `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall`,
       { method: 'POST' }
+    );
+  }
+
+  /** Import a message the sweep found in the mailbox and link it to the application.
+   *  The sweep itself stores nothing — a proposal lives on screen only — so this is the
+   *  call that makes the message ours, and it is idempotent: a message the mail sync had
+   *  already fetched is linked rather than copied. */
+  async function linkRecalledMail(slug: string, providerId: string): Promise<EmailBody> {
+    return requestData<EmailBody>(
+      `/api/v1/me/tracking/${encodeURIComponent(slug)}/mail-recall/link`,
+      jsonBody('POST', { provider_id: providerId })
     );
   }
 
@@ -1600,6 +1637,21 @@ export function createApi(
     return requestData<TailorResult>(`/api/v1/me/cvs/${id}/tailor-session`, jsonBody('POST', {}));
   }
 
+  /**
+   * Turn a job slug, an external URL, or pasted JD text into a job slug the tailoring
+   * workspace can open. Exactly one of `job_slug`/`url`/`text` must be set. A URL a
+   * recognized ATS can read becomes a normal catalog job; anything else (a generic scrape
+   * or plain text) becomes a private job — visible only via its own slug, never listed or
+   * searchable. 422 when a URL cannot be read at all.
+   */
+  async function resolveJd(input: JdResolveInput): Promise<string> {
+    const { job_slug } = await requestData<{ job_slug: string }>(
+      '/api/v1/me/jd/resolve',
+      jsonBody('POST', input),
+    );
+    return job_slug;
+  }
+
   /** A subject's open discussion threads, newest first. `subjectType` is 'company'
    *  or 'job', `subjectSlug` the subject's public slug. `nextCursor` (when present)
    *  fetches the following keyset page. Public — no auth needed to read. */
@@ -1759,6 +1811,9 @@ export function createApi(
     telegramStatus,
     telegramLink,
     telegramUnlink,
+    discordStatus,
+    discordLink,
+    discordUnlink,
     submitJob,
     listMySubmissions,
     resolveJobLink,
@@ -1796,6 +1851,7 @@ export function createApi(
     restoreEmail,
     getTrackedApplication,
     recallApplicationMail,
+    linkRecalledMail,
     getFollowUpDraft,
     recordFollowUp,
     confirmEmailLink,
@@ -1823,6 +1879,7 @@ export function createApi(
     undoCvRevisionRun,
     tailorCv,
     startTailorSession,
+    resolveJd,
     listThreads,
     countThreads,
     getThread,

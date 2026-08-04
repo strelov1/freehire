@@ -18,6 +18,10 @@ import (
 type EventKind string
 
 const (
+	// EventQueued precedes a turn that had to wait for the session's previous one. It is not
+	// produced by the loop — the turn has not started yet — but it travels the same stream, so
+	// a client learns it is waiting instead of watching a silent connection and guessing.
+	EventQueued           EventKind = "queued"
 	EventUserPrompt       EventKind = "user_prompt"
 	EventAssistantText    EventKind = "assistant_text"
 	EventAssistantThought EventKind = "assistant_thought"

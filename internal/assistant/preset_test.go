@@ -45,6 +45,20 @@ func TestOnlyTheChatPresetIsToldAboutMail(t *testing.T) {
 	}
 }
 
+// cv_edit and tailor_report write two different columns through two different tool
+// calls, with nothing tying them together unless the agent is told to pass
+// requirement/requirement_status on the edit that closes one — otherwise a document
+// change with no follow-up tailor_report call leaves that requirement's report entry
+// stale.
+func TestTailorPromptTellsTheAgentToSelfReportAClosedRequirement(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+	for _, want := range []string{"requirement_status", "closed_bank", "closed_candidate"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the tailor prompt never says %q about cv_edit closing a requirement", want)
+		}
+	}
+}
+
 // A rehearsal runs on the candidate's own recorded experience, and the bank is where
 // that lives — so the prompt has to state the one rule the service cannot enforce.
 // experience_add takes `said` as a string and stamps stated_in_chat either way, so

@@ -258,62 +258,12 @@ func (h *telegramHandlers) processTelegramContribution(chatID int64, rawURL stri
 		h.sendTelegram(ctx, chatID, "⚠️ Something went wrong. Please try again.")
 		return
 	}
-	h.sendTelegram(ctx, chatID, h.intakeReply(out))
+	h.sendTelegram(ctx, chatID, renderIntakeOutcome(out, h.frontendOrigin, telegramEmphasize))
 }
 
-// intakeReply puts one intake outcome into words. A readable vacancy now comes back as a link
-// to the posting — before, a Telegram user was only ever told about the board, even when we
-// could have handed them the job.
-func (h *telegramHandlers) intakeReply(out intakeOutcome) string {
-	switch out.Status {
-	case outcomeFound:
-		return "👍 We already have this one:\n" + h.jobURL(out.PublicSlug)
-	case outcomeTracked:
-		return "✅ Added — and we already track this company, so the rest of its roles will follow on the next crawl.\n" +
-			h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
-	case outcomeImported:
-		if out.CompanySlug != "" {
-			return "✅ Added — we already carry this company, and now we'll crawl this board of theirs too.\n" +
-				h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
-		}
-		return "🎉 Added, and this company is new to us — we'll start crawling its board.\n" + h.jobURL(out.PublicSlug)
-	case outcomeReview:
-		// Imported, but the page named no board we know how to crawl, so no crawl is promised.
-		if out.CompanySlug != "" {
-			return "✅ Added — we already carry this company. Its careers site isn't one we can crawl yet, so we'll look at it by hand.\n" +
-				h.jobURL(out.PublicSlug) + h.companyURL(out.CompanySlug)
-		}
-		return "✅ Added. Its careers site isn't one we can crawl yet — we'll check by hand whether we can pull the rest of its jobs.\n" +
-			h.jobURL(out.PublicSlug)
-	}
-	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
-	// board behind it, and answering only "couldn't read" would hide a contribution we just
-	// accepted — and paid for.
-	switch {
-	case out.Rewarded:
-		return "🎉 We couldn't open that page, but <b>" + html.EscapeString(out.Board) +
-			"</b> is a company we don't crawl yet — added to the queue. +1 AI credit!"
-	case out.Board != "":
-		return "👍 We couldn't open that page, but that company's board is already known to us — nothing to add."
-	default:
-		return "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet."
-	}
-}
-
-// jobURL renders a posting link, or an empty string when the frontend origin is unset (the
-// slug alone would be meaningless to a reader).
-func (h *telegramHandlers) jobURL(slug string) string {
-	if slug == "" || h.frontendOrigin == "" {
-		return ""
-	}
-	return h.frontendOrigin + "/jobs/" + slug
-}
-
-// companyURL renders a company link on its own line, so a reply can append it unconditionally.
-// Empty under the same rule as jobURL.
-func (h *telegramHandlers) companyURL(slug string) string {
-	if slug == "" || h.frontendOrigin == "" {
-		return ""
-	}
-	return "\n" + h.frontendOrigin + "/companies/" + slug
+// telegramEmphasize renders emphasis as Telegram's HTML bold tag, matching the parse_mode:
+// "HTML" every outbound message is sent with (see telegramnotify.Client.SendMessage) — the
+// board name is escaped because it is untrusted text riding inside markup we control.
+func telegramEmphasize(s string) string {
+	return "<b>" + html.EscapeString(s) + "</b>"
 }

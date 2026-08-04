@@ -14,6 +14,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,8 +135,10 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 		// A real binding, not a zero one: it drives the whole userLLM path — resolve the
 		// caller's credential, fall open to the service one, tag the call — which a zero
 		// binding short-circuits before any of it runs.
+		// No mailbox factory: these tests cover the STORED path, which is the fallback and
+		// the one a caller with no Gmail grant still gets. The search path has its own.
 		h = h.withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
-			llmBinding{client: client})
+			llmBinding{client: client}, nil)
 	}
 
 	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
@@ -166,18 +169,20 @@ func postRecall(t *testing.T, app *fiber.App, iss *auth.Issuer, userID int64, sl
 	return resp.StatusCode, body
 }
 
-func verdictsJSON(t *testing.T, ids ...int64) string {
+// verdictsJSON says "the message at position N belongs". The model is addressed by
+// POSITION, not by our id — a searched message has none of ours.
+func verdictsJSON(t *testing.T, positions ...int) string {
 	t.Helper()
 	type verdict struct {
-		EmailID    int64   `json:"email_id"`
+		Index      int     `json:"index"`
 		Belongs    bool    `json:"belongs"`
 		Confidence float64 `json:"confidence"`
 	}
 	out := struct {
 		Verdicts []verdict `json:"verdicts"`
 	}{}
-	for _, id := range ids {
-		out.Verdicts = append(out.Verdicts, verdict{EmailID: id, Belongs: true, Confidence: 0.95})
+	for _, n := range positions {
+		out.Verdicts = append(out.Verdicts, verdict{Index: n, Belongs: true, Confidence: 0.95})
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {
@@ -192,7 +197,7 @@ func verdictsJSON(t *testing.T, ids ...int64) string {
 func TestRecallApplicationMail_ProposesWithoutLinking(t *testing.T) {
 	pool := startPostgres(t)
 	fx := seedRecallFixture(t, pool)
-	model := &recallModel{reply: verdictsJSON(t, fx.unlinked)}
+	model := &recallModel{reply: verdictsJSON(t, 1)}
 	app, iss := recallApp(t, pool, model)
 
 	status, body := postRecall(t, app, iss, fx.userID, fx.slug)
@@ -248,7 +253,7 @@ func TestRecallApplicationMail_ProposesWithoutLinking(t *testing.T) {
 func TestRecallApplicationMail_RefusesAnApplicationThatIsNotTheCallers(t *testing.T) {
 	pool := startPostgres(t)
 	fx := seedRecallFixture(t, pool)
-	model := &recallModel{reply: verdictsJSON(t, fx.unlinked)}
+	model := &recallModel{reply: verdictsJSON(t, 1)}
 	app, iss := recallApp(t, pool, model)
 
 	var stranger int64
@@ -323,5 +328,178 @@ func TestRecallApplicationMail_ReportsTheFeatureOffWhenNoModelIsConfigured(t *te
 
 	if status, _ := postRecall(t, app, iss, fx.userID, fx.slug); status != fiber.StatusServiceUnavailable {
 		t.Fatalf("status %d, want 503", status)
+	}
+}
+
+// fakeMailboxes stands a searchable mailbox up without a Google credential.
+type fakeMailboxes struct{ box *fakeMailbox }
+
+func (f *fakeMailboxes) For(context.Context, int64) mailrecall.Mailbox {
+	if f.box == nil {
+		return nil
+	}
+	return f.box
+}
+
+type fakeMailbox struct {
+	found    []mailrecall.Message
+	imported []string
+	store    func(providerID string) error
+}
+
+func (m *fakeMailbox) Search(context.Context, int64, string, string, time.Time, time.Time) ([]mailrecall.Message, error) {
+	return m.found, nil
+}
+
+func (m *fakeMailbox) Import(_ context.Context, _ int64, providerID string) error {
+	m.imported = append(m.imported, providerID)
+	if m.store != nil {
+		return m.store(providerID)
+	}
+	return nil
+}
+
+// recallSearchApp mounts both recall routes over a handler whose mailbox is the fake.
+func recallSearchApp(t *testing.T, pool *pgxpool.Pool, model llms.Model, box *fakeMailbox) (*fiber.App, *auth.Issuer) {
+	t.Helper()
+	queries := db.New(pool)
+	client := llm.NewWithModel(model)
+	h := newInboxHandlers(queries, pool, nil, nil, "", false, "inbox.freehire.test").
+		withRecall(mailrecall.New(mailrecall.NewDBStore(queries), client),
+			llmBinding{client: client}, &fakeMailboxes{box: box})
+
+	iss := auth.NewIssuer("test-secret-that-is-long-enough-0001", time.Hour)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	ra := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
+	app.Post("/api/v1/me/tracking/:slug/mail-recall", ra, h.RecallApplicationMail)
+	app.Post("/api/v1/me/tracking/:slug/mail-recall/link", ra, h.LinkRecalledMail)
+
+	return app, iss
+}
+
+func postLink(t *testing.T, app *fiber.App, iss *auth.Issuer, userID int64, slug, providerID string) int {
+	t.Helper()
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	r := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/tracking/"+slug+"/mail-recall/link",
+		strings.NewReader(`{"provider_id":"`+providerID+`"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+	resp, err := app.Test(r, -1)
+	if err != nil {
+		t.Fatalf("post link: %v", err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// The change's central promise: a sweep over the mailbox keeps nothing. What a person has
+// not confirmed is not stored — which is a change from the path that shipped first, where
+// a confident answer wrote a suggestion whether anybody agreed with it or not.
+func TestRecallOverAMailboxStoresNothing(t *testing.T) {
+	pool := startPostgres(t)
+	fx := seedRecallFixture(t, pool)
+	box := &fakeMailbox{found: []mailrecall.Message{{
+		ProviderID: "g-new", FromAddr: "maria@derq.example", FromName: "Maria Alvarez",
+		Subject: "Next step — a 45 minute call", BodyText: "Could we book 45 minutes?",
+		ReceivedAt: time.Now().Add(-24 * time.Hour),
+	}}}
+	app, iss := recallSearchApp(t, pool, &recallModel{reply: verdictsJSON(t, 1)}, box)
+
+	status, body := postRecall(t, app, iss, fx.userID, fx.slug)
+	if status != fiber.StatusOK {
+		t.Fatalf("status %d, body %+v", status, body)
+	}
+	if len(body.Data.Suggested) != 1 || body.Data.Suggested[0].ID != 0 {
+		t.Fatalf("suggested %+v — a searched message has no id of ours yet", body.Data.Suggested)
+	}
+
+	var rows int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM emails WHERE user_id=$1 AND external_id='g-new'`, fx.userID).Scan(&rows); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("the sweep stored %d rows for a message nobody confirmed", rows)
+	}
+	var suggested int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM emails WHERE user_id=$1 AND suggested_job_id IS NOT NULL`, fx.userID).Scan(&suggested); err != nil {
+		t.Fatalf("count suggestions: %v", err)
+	}
+	if suggested != 0 {
+		t.Errorf("the sweep planted %d suggestions", suggested)
+	}
+}
+
+// Pressing Link is the moment the message arrives.
+func TestLinkRecalledMailImportsThenLinks(t *testing.T) {
+	pool := startPostgres(t)
+	fx := seedRecallFixture(t, pool)
+	ctx := context.Background()
+	box := &fakeMailbox{store: func(providerID string) error {
+		_, err := pool.Exec(ctx,
+			`INSERT INTO emails (user_id, source, external_id, subject, body_text, received_at)
+			 VALUES ($1,'gmail',$2,'Next step','Could we book 45 minutes?', now())
+			 ON CONFLICT (user_id, source, external_id) DO NOTHING`, fx.userID, providerID)
+		return err
+	}}
+	app, iss := recallSearchApp(t, pool, &recallModel{reply: verdictsJSON(t)}, box)
+
+	if status := postLink(t, app, iss, fx.userID, fx.slug, "g-new"); status != fiber.StatusOK {
+		t.Fatalf("link status %d", status)
+	}
+	if len(box.imported) != 1 || box.imported[0] != "g-new" {
+		t.Fatalf("imported %v, want the message the caller pressed", box.imported)
+	}
+
+	var jobID *int64
+	if err := pool.QueryRow(ctx,
+		`SELECT job_id FROM emails WHERE user_id=$1 AND external_id='g-new'`, fx.userID).Scan(&jobID); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if jobID == nil || *jobID != fx.jobID {
+		t.Errorf("job_id = %v, want %d — import must be followed by the link", jobID, fx.jobID)
+	}
+}
+
+// A message the sync had already fetched is linked, not duplicated.
+func TestLinkRecalledMailDoesNotDuplicateAStoredMessage(t *testing.T) {
+	pool := startPostgres(t)
+	fx := seedRecallFixture(t, pool)
+	ctx := context.Background()
+	box := &fakeMailbox{store: func(string) error { return nil }} // the row is already there
+	app, iss := recallSearchApp(t, pool, &recallModel{reply: verdictsJSON(t)}, box)
+
+	if status := postLink(t, app, iss, fx.userID, fx.slug, "recall-http-unlinked"); status != fiber.StatusOK {
+		t.Fatalf("link status %d", status)
+	}
+	var rows int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM emails WHERE user_id=$1 AND external_id='recall-http-unlinked'`,
+		fx.userID).Scan(&rows); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if rows != 1 {
+		t.Errorf("%d rows for one message — the import must be idempotent", rows)
+	}
+}
+
+// Someone else's application is not there to import into.
+func TestLinkRecalledMailRefusesAnotherCallersApplication(t *testing.T) {
+	pool := startPostgres(t)
+	fx := seedRecallFixture(t, pool)
+	box := &fakeMailbox{store: func(string) error { return nil }}
+	app, iss := recallSearchApp(t, pool, &recallModel{reply: verdictsJSON(t)}, box)
+
+	var stranger int64
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO users (email) VALUES ('recall-link-stranger@example.test') RETURNING id`).Scan(&stranger); err != nil {
+		t.Fatalf("seed stranger: %v", err)
+	}
+	if status := postLink(t, app, iss, stranger, fx.slug, "g-new"); status != fiber.StatusNotFound {
+		t.Fatalf("status %d, want 404", status)
+	}
+	if len(box.imported) != 0 {
+		t.Error("a message was imported for somebody else's application")
 	}
 }

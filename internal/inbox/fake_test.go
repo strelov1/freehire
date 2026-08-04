@@ -75,8 +75,8 @@ func (f *fakeQueries) ListEmails(_ context.Context, arg db.ListEmailsParams) ([]
 	return f.list, nil
 }
 
-func (f *fakeQueries) CountEmails(context.Context, db.CountEmailsParams) (int64, error) {
-	return f.total, nil
+func (f *fakeQueries) CountEmails(context.Context, db.CountEmailsParams) (db.CountEmailsRow, error) {
+	return db.CountEmailsRow{Total: f.total}, nil
 }
 
 func (f *fakeQueries) CountEmailsByState(context.Context, int64) ([]db.CountEmailsByStateRow, error) {

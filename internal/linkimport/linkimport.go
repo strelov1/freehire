@@ -95,34 +95,52 @@ type Board struct {
 
 func (b Board) known() bool { return b.Source != "" && b.Board != "" }
 
-// Import resolves raw through the registry and writes the vacancy it parses. ok=false
-// means the page is not a single vacancy we can read (no adapter matched, or the page
-// carries no posting) — the caller decides what to do with it, and nothing is written. A
-// non-nil error is a transient fetch/parse failure or a write failure.
+// Import resolves raw through the registry and writes the vacancy it parses — see Resolve
+// for the resolution sequence and Write for the persistence. A non-nil error is a transient
+// fetch/parse failure or a write failure.
+func (im *Importer) Import(ctx context.Context, raw string, known Board) (Result, bool, error) {
+	resolved, ok, err := im.Resolve(ctx, raw, known)
+	if err != nil || !ok {
+		return Result{}, ok, err
+	}
+	return im.Write(ctx, resolved)
+}
+
+// Resolve runs Import's resolution sequence — host-scoped adapters and board coverage
+// first, the caller's already-known board next, a vanity-domain board fetch, and the
+// generic JSON-LD fallback last — WITHOUT writing anything. ok=false means the page is not
+// a single vacancy we can read (no adapter matched, or the page carries no posting).
+//
+// This is the seam a caller needs when a generic-fallback match must be treated
+// differently from a recognized-ATS match (see internal/jdresolve, which writes a
+// recognized match as a normal public job via Write, but a generic match — an unverified
+// third-party scrape — as a private job instead). Import itself does not make that
+// distinction: it always writes through Write, so a caller that needs to branch on
+// resolved.Source before deciding how to persist must call Resolve directly.
 //
 // known is the board the caller already resolved, and it only ever overrides the generic
-// resolver — the host-scoped adapters and board coverage already write a board's own identity,
-// and cost less. Generic reads any page with a JobPosting block, and files it under (weblink,
-// <the URL>): correct when nothing better is known, but a second row for a posting we crawl
-// under (greenhouse, <board>:<id>) when a board IS known. Preferring the board there is what
-// keeps a storefront link from duplicating the posting it points at.
-func (im *Importer) Import(ctx context.Context, raw string, known Board) (Result, bool, error) {
+// resolver — the host-scoped adapters and board coverage already resolve a board's own
+// identity, and cost less. Generic reads any page with a JobPosting block and reports it
+// under (weblink, <the URL>): correct when nothing better is known, but a second row for a
+// posting we crawl under (greenhouse, <board>:<id>) when a board IS known. Preferring the
+// board there is what keeps a storefront link from duplicating the posting it points at.
+func (im *Importer) Resolve(ctx context.Context, raw string, known Board) (linksource.Resolved, bool, error) {
 	resolved, err := linksource.ResolveLinks(ctx, im.reg, []string{raw})
 	if err != nil {
-		return Result{}, false, err
+		return linksource.Resolved{}, false, err
 	}
 	if len(resolved) == 0 || resolved[0].Source == linksource.GenericSource {
 		if r, ok := im.resolveOnKnownBoard(ctx, raw, known); ok {
-			return im.write(ctx, r)
+			return r, true, nil
 		}
 	}
 	if len(resolved) == 0 {
 		if r, ok := im.resolveVanityDomain(ctx, raw); ok {
-			return im.write(ctx, r)
+			return r, true, nil
 		}
-		return Result{}, false, nil
+		return linksource.Resolved{}, false, nil
 	}
-	return im.write(ctx, resolved[0])
+	return resolved[0], true, nil
 }
 
 // resolveOnKnownBoard reads the posting from the board the caller named, so it is stored under
@@ -190,10 +208,11 @@ func draftFrom(r linksource.Resolved) job.Draft {
 	}
 }
 
-// write persists one resolved job through the Job aggregate factory and the canonical
+// Write persists one resolved job through the Job aggregate factory and the canonical
 // UpsertJob, enqueuing it for enrichment in the same transaction — the same write path as
 // ingest and tg-extract, so facets, slugs and the enrichment outbox stay consistent.
-func (im *Importer) write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
+// Exported so a caller that resolved via Resolve can write on its own terms (see Resolve).
+func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, bool, error) {
 	j, err := job.New(draftFrom(r))
 	if err != nil {
 		return Result{}, false, err

@@ -81,7 +81,8 @@ type fakeFetcher struct {
 	peak    int
 }
 
-func (f *fakeFetcher) Fetch(_ context.Context, _, postingID string) (Form, error) {
+func (f *fakeFetcher) Fetch(_ context.Context, c Claimed) (Form, error) {
+	_, postingID, _ := splitBoardPosting(c.ExternalID)
 	f.mu.Lock()
 	f.calls++
 	f.inFlite++

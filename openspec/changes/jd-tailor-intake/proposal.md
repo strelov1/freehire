@@ -24,9 +24,19 @@ sources (our own catalog, an external URL, or plain text) and turns all three in
   `created_by` set to the submitting user, and synchronous `internal/jobderive.Derive` for
   skills/facets — but are never enqueued onto `enrichment_outbox` (no LLM enrichment spend on a
   one-off private submission).
-- Exclude `is_private` rows from the Meilisearch index and from public job listing/search.
-- Job-lookup-by-slug paths used by fit-analysis and CV tailoring must treat a private job not
-  owned by the caller as not found (same as an unknown slug).
+- Exclude `is_private` rows from the Meilisearch index and from public job listing/search —
+  never discoverable by browsing or searching, exactly like a closed job. A private job's own
+  slug remains a working direct link, again like a closed job: `GET /api/v1/jobs/:slug`,
+  fit-analysis, and CV tailoring do not gate on `created_by` — anyone holding the exact slug can
+  read and tailor against it. The privacy guarantee is "never surfaced", not "access-controlled";
+  the slug itself (derived from a synthetic UUID) is the only thing standing between a private
+  job and the open web.
+- One listing DOES need an explicit `is_private` exclusion despite requiring the exact slug to
+  reach at all: `GET /jobs/:slug/copies` (openings sharing a role cluster) joins on
+  `company_slug`/`role_fingerprint`, so a private job can coincidentally cluster with an
+  unrelated **public** one and surface (slug, location, url) to anyone browsing that public
+  job's copies — a listing leak reachable without ever knowing the private slug, unlike every
+  other read path.
 
 ## Capabilities
 
@@ -39,30 +49,26 @@ sources (our own catalog, an external URL, or plain text) and turns all three in
 - `job-search`: the Meilisearch index must exclude `is_private` jobs, and the separate DB-backed
   `GET /api/v1/jobs` list must also exclude them, so a private job never appears in any public
   listing or search surface.
-- `job-public-identity`: `GET /api/v1/jobs/:slug` — the direct public job-detail read, reachable
-  by anyone without auth — must treat a private job not owned by the caller as an unknown slug
-  (404). This is the actual disclosure surface (Meilisearch exclusion alone does not stop a
-  guessed/known slug from being read directly).
-- `job-fit-analysis`: a private job not owned by the calling user resolves as an unknown slug
-  (404), not merely as an inaccessible-but-existing job.
-- `cv-tailoring`: tailoring bootstrap against a private job not owned by the calling user is
-  rejected the same way as tailoring against an unknown vacancy.
+- `job-cluster-copies`: `GET /jobs/:slug/copies` must exclude `is_private` rows from the listed
+  cluster members (see Why, above) — the one listing surface reachable without already knowing
+  the private job's own slug.
 
-Explicitly out of scope for this change: the in-app assistant's job-lookup tools
-(`assistant_tools.go`, `assistant_interview_tools.go`, `assistant.go`) are not gated. A user would
-have to already possess another user's private slug to feed it to the assistant — the same
-prerequisite as guessing it for the direct URL — so the exposure is real but deliberately deferred
-rather than expanding this change's blast radius.
+No changes to `job-public-identity`, `job-fit-analysis`, or `cv-tailoring`: a private job's
+direct-link read/analyze/tailor behavior is identical to any other job's. The privacy model is
+unguessability + never-listed, not per-request ownership checks — deliberately simpler than an
+owner-gate applied across every job-by-slug consumer (vote, reminders, saved-search, ghost
+reports, community threads, the in-app assistant's job-lookup tools, …), all of which would
+otherwise need auditing and would need re-auditing again for every future feature that reads a
+job by slug.
 
 ## Impact
 
 - **Schema**: new migration adding `jobs.is_private`.
 - **Backend**: new handler + route for `/api/v1/me/jd/resolve`; reuse of
   `internal/linkimport`/`internal/linksource` for the recognized-ATS branch; reuse of
-  `internal/jobderive.Derive` for the private branch; an access-gate check added to
-  `jobs.go`'s `GetJob` (public detail), `match_analysis.go`'s three handlers, and
-  `cv_tailor.go`'s `TailorCV`; an `is_private` exclusion added to both the Meilisearch-indexing
-  query in `internal/search` and the DB-backed `GET /api/v1/jobs` list query.
+  `internal/jobderive.Derive` for the private branch; an `is_private` exclusion added to the
+  Meilisearch-indexing query in `internal/search`, the DB-backed `GET /api/v1/jobs` list query,
+  and `ListRoleClusterCopies` (backs `GET /jobs/:slug/copies`).
 - **Frontend**: new form/tabs on `web/src/routes/my/cvs/+page.svelte`, reusing the existing job
   search combobox and the existing `/tailor/[slug]` workspace unchanged.
 - **No changes** to `internal/cvedit`, `internal/matchanalysis`'s prompt chain, or the

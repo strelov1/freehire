@@ -31,11 +31,6 @@ import (
 type assistantHandlers struct {
 	store  *assistant.Store
 	runner *assistant.Runner
-	// followUps suggests what to ask next, on the CHEAP model rather than the agent's
-	// own: it is a three-line task, and spending the tool-calling model on it would
-	// undo the only reason it is a separate call. Nil when unconfigured, which the
-	// endpoint answers as an empty list.
-	followUps *assistant.FollowUps
 
 	// llm is the agent's own client, kept beside the runner so a turn can be re-bound
 	// to the caller's gateway credential. The runner holds it as an interface and
@@ -44,10 +39,11 @@ type assistantHandlers struct {
 	// keys resolves the credential a turn spends under. Nil in a deployment that does
 	// not attribute spend, which every path treats as "spend on the service credential".
 	keys *llmkey.Resolver
-	// followUpLLM binds the CHEAP model the suggestion strip runs on. Separate from the
-	// agent's own client for the same reason followUps is: they are different models,
-	// and one field holding both would eventually be handed the wrong one.
-	followUpLLM llmBinding
+
+	// turns are the turns running right now, so a cancel request can reach one that is
+	// streaming on a goroutine no request owns any more, and so a session keeps to one turn
+	// at a time. Its zero value works; see assistant_turns.go.
+	turns turnRegistry
 
 	queries  *db.Queries
 	search   *searchHandlers
@@ -76,18 +72,13 @@ type assistantHandlers struct {
 	invitation invitationReader
 }
 
-// assistantModels names the two model clients the assistant runs on and the resolver that
-// bills them. It exists because Agent and FollowUps are the SAME TYPE and different models
-// — as two adjacent parameters a swap would compile and quietly move every turn onto the
-// cheap model — so the call site names each one instead of relying on argument order.
+// assistantModels names the model client the assistant runs on and the resolver that
+// bills it.
 type assistantModels struct {
 	// Agent is the model the turn loop runs on. Nil leaves the runner nil: old
 	// conversations stay readable and a new turn reports the assistant as unavailable,
 	// rather than the whole surface disappearing.
 	Agent *llm.Client
-	// FollowUps is the cheap general-purpose model the suggestion strip runs on. The whole
-	// argument for generating suggestions outside the turn is that they cost almost nothing.
-	FollowUps *llm.Client
 	// Keys names the caller on the gateway. Nil is ordinary rather than degraded: every
 	// turn then spends on the service credential, exactly as it did before attribution.
 	Keys     *llmkey.Resolver
@@ -123,8 +114,6 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		h.runner = assistant.NewRunner(models.Agent, h.store, assistant.RunnerConfig{MaxSteps: models.MaxSteps})
 	}
 	h.keys = models.Keys
-	h.followUps = assistant.NewFollowUps(models.FollowUps)
-	h.followUpLLM = llmBinding{client: models.FollowUps, keys: models.Keys}
 	return h
 }
 
@@ -144,8 +133,8 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/assistant/sessions/:id", mw.key, h.GetAssistantSession)
 	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, h.PostAssistantMessage)
+	api.Post("/assistant/sessions/:id/cancel", mw.key, h.CancelAssistantTurn)
 	api.Post("/assistant/sessions/:id/opening", mw.key, h.PostAssistantOpening)
-	api.Post("/assistant/sessions/:id/followups", mw.key, h.PostAssistantFollowUps)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, h.PostAssistantAutopilot)
@@ -399,6 +388,32 @@ func (h *assistantHandlers) DeleteAssistantSession(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+// CancelAssistantTurn stops the session's running turn.
+//
+// It exists because stopping used to be a side effect of the transport: the client aborted its
+// read, the next write failed, and the turn was cancelled. That made a deliberate stop
+// indistinguishable from a phone freezing its tab, and the turn paid for the confusion. Now the
+// two are different things, and this is the one that means stop.
+//
+// A session with nothing running is not an error. A client cancels a turn whose end it cannot
+// see; requiring it to first prove the turn is alive would ask it for the one fact it does not
+// have. The ownership check comes first either way, so an id cannot be probed for existence.
+func (h *assistantHandlers) CancelAssistantTurn(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := assistantSessionID(c)
+	if err != nil {
+		return err
+	}
+	if _, err := h.store.Session(c.Context(), id, userID); err != nil {
+		return mapAssistantError(err)
+	}
+	h.turns.cancel(id)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 // assistantTurnRequest is the body of a turn: the user's message.
 type assistantTurnRequest struct {
 	Text string `json:"text"`
@@ -407,8 +422,8 @@ type assistantTurnRequest struct {
 // PostAssistantMessage runs one turn and streams it as SSE. Every frame the loop
 // produces — the recorded prompt, answer and reasoning deltas, each tool call and
 // its result, the token usage, and exactly one terminal result — is written as a
-// named event. A write failure means the client is gone, which cancels the turn's
-// context so the loop stops before spending another model call.
+// named event. A write failure means only that this reader stopped reading: the turn runs to
+// its own end regardless, and stopping it is a separate request (see CancelAssistantTurn).
 func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -433,7 +448,7 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 
 // streamTurn runs one turn and writes it to the response as SSE. It is shared by every
 // entry point that starts a turn, so the stream's shape — the headers, the cleared write
-// deadline, the keepalive, the cancellation on a dead client — is written once.
+// deadline and the keepalive — is written once.
 //
 // The prompt and the turn's bounds are the caller's arguments rather than the request's
 // body: an unattended run's brief and its raised ceiling are ours to choose, and a ceiling
@@ -462,6 +477,17 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 		hub = reqHub.Clone()
 	}
 
+	// The turn runs on its own cancellable context: the request's own is released the moment
+	// this handler returns, long before the turn ends. It is created HERE rather than inside
+	// the writer so the session's slot is taken while the request can still be answered — a
+	// slot taken after the handler returned could not refuse anything.
+	ctx, cancel := context.WithCancel(context.Background())
+	slot, waiter, err := h.turns.claim(sess.ID, cancel)
+	if err != nil {
+		cancel()
+		return fiber.NewError(fiber.StatusConflict, err.Error())
+	}
+
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		// sseStream owns the write protocol both SSE endpoints need: it serializes the
 		// heartbeat goroutine against the event callback (bufio.Writer is not safe for
@@ -474,22 +500,49 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 		// would block the write, and with it this goroutine, for the life of the process.
 		stream := newSSEStream(w, conn, sseWriteTimeout)
 
-		// The request context is gone once the handler returns, so the turn runs on
-		// its own cancellable context. Cancellation comes from the client going away,
-		// which shows up as a failed write below.
-		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		// The heartbeat starts BEFORE the queue wait, not after it: a queued message can wait
+		// up to a minute, and an idle connection is exactly what a proxy in front of us
+		// collects. Waiting in silence would lose the connection at roughly the same moment
+		// the wait was about to pay off.
 		stopHeartbeat := stream.keepalive(sseKeepalive)
+		defer stopHeartbeat()
 
-		err := turnRunner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
-			if !stream.event(string(e.Kind), e) {
-				// The client is gone. Stop the loop at its next boundary rather than
-				// finishing a turn nobody is reading.
-				cancel()
+		// A message that arrived while the session was busy waits here rather than running
+		// beside the turn in flight — two turns of one tailoring session would edit one CV
+		// from two conversations that cannot see each other. The client is told it is
+		// waiting, because a stream that goes quiet for a minute is indistinguishable from
+		// one that broke.
+		if waiter != nil {
+			stream.event(string(assistant.EventQueued), assistant.Event{Kind: assistant.EventQueued})
+
+			waitCtx, giveUp := context.WithTimeout(ctx, turnQueueWait)
+			slot, err = waiter.enter(waitCtx, cancel)
+			giveUp()
+			if err != nil {
+				// The wait is over and this turn never started. Every stream owes its client
+				// one terminal event; without it the client waits for a turn that is not
+				// coming.
+				stream.event(string(assistant.EventResult),
+					assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopCancelled})
+				return
 			}
+		}
+		defer h.turns.release(sess.ID, slot)
+
+		err = turnRunner.Run(ctx, sess, registry, system, prompt, turn, func(e assistant.Event) {
+			// A write that fails means THIS reader is not listening: a phone froze its tab,
+			// a tunnel dropped, a laptop slept. It does not mean the work should stop, and
+			// treating it that way threw away live runs — a tailoring pass lost its report
+			// after twenty-five committed edits because a tab went to the background.
+			//
+			// So the event is simply not delivered. The turn runs to its own end under the
+			// bounds it already has (the step cap and the model timeout), the transcript is
+			// persisted either way, and a client that comes back reads it from the session.
+			// Stopping a turn is now something a caller ASKS for, through the cancel route.
+			stream.event(string(e.Kind), e)
 		})
-		stopHeartbeat()
 		if err != nil {
 			// The loop has already emitted its terminal error event; this is for us —
 			// and for Sentry, which would otherwise never learn of it: this handler

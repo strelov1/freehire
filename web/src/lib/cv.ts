@@ -89,6 +89,17 @@ export interface UpdateCvInput {
   document: Document;
 }
 
+/** Request body for POST /api/v1/me/jd/resolve — exactly one of `job_slug`/`url`/`text`.
+ *  `title`/`company` are optional hints used only alongside `text` (they improve
+ *  classification/skill derivation but are not required). */
+export interface JdResolveInput {
+  job_slug?: string;
+  url?: string;
+  text?: string;
+  title?: string;
+  company?: string;
+}
+
 export const DEFAULT_TEMPLATE_ID = 'classic-ats';
 
 /** A CV template the user can pick in the gallery. `ats_safe` is false for richer layouts

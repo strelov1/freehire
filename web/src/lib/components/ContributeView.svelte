@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { env } from '$env/dynamic/public';
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import type { Contribution, ResolvedLink } from '$lib/types';
+  import type { Contribution, DiscordLinkResult, DiscordStatus, ResolvedLink } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import States from './States.svelte';
@@ -24,6 +25,82 @@
   });
   const status = $derived(contribData.status);
   const contributions = $derived(contribData.value);
+
+  // Discord: same reward, a second surface. Linking is optional and lets the caller run
+  // `/contribute` from the freehire Discord server instead of pasting a link here.
+  const discordData = new AsyncData<DiscordStatus | null>(null);
+  $effect(() => {
+    if (isAuthenticated()) void discordData.run(() => api.discordStatus());
+  });
+  const discord = $derived(discordData.value);
+
+  let discordBusy = $state(false);
+  let discordError = $state<string | null>(null);
+  // Shown only right after a successful link mint — the token is short-TTL and a
+  // status refetch never returns it again, so this is never restored from anywhere.
+  let discordLinkResult = $state.raw<DiscordLinkResult | null>(null);
+  let discordCopied = $state(false);
+
+  // The exact command the user pastes into Discord — kept separate from the prose
+  // instructions the API returns, so the copy button copies only this and nothing
+  // a stray manual selection could clip a character off of.
+  const discordCommand = $derived(discordLinkResult ? `/link token:${discordLinkResult.token}` : '');
+
+  // The operator's own Discord server URL, set once at deploy time (optional — the
+  // section still works without it, just without the shortcut link).
+  const discordChannelUrl = env.PUBLIC_DISCORD_CHANNEL_URL;
+
+  async function copyDiscordCommand() {
+    if (!discordCommand) return;
+    try {
+      await navigator.clipboard.writeText(discordCommand);
+      discordCopied = true;
+    } catch {
+      discordCopied = false;
+    }
+  }
+
+  async function linkDiscord() {
+    discordCopied = false;
+    if (discordBusy) return;
+    discordBusy = true;
+    discordError = null;
+    try {
+      discordLinkResult = await api.discordLink();
+    } catch (e) {
+      discordError = e instanceof ApiError ? e.message : 'Could not start Discord linking. Please try again.';
+    } finally {
+      discordBusy = false;
+    }
+  }
+
+  async function recheckDiscord() {
+    if (discordBusy) return;
+    discordBusy = true;
+    discordError = null;
+    try {
+      await discordData.run(() => api.discordStatus());
+      if (discordData.value?.linked) discordLinkResult = null;
+      else discordError = 'Not linked yet — run the command above, then retry.';
+    } finally {
+      discordBusy = false;
+    }
+  }
+
+  async function unlinkDiscord() {
+    if (discordBusy) return;
+    discordBusy = true;
+    discordError = null;
+    try {
+      await api.discordUnlink();
+      discordData.value = discordData.value ? { ...discordData.value, linked: false, discord_id: undefined } : null;
+      discordLinkResult = null;
+    } catch (e) {
+      discordError = e instanceof ApiError ? e.message : 'Could not unlink Discord. Please try again.';
+    } finally {
+      discordBusy = false;
+    }
+  }
 
   // Where a row came from, appended to its line. Rows recorded before surfaces were tracked
   // (or by a client that sends no tag) read "unknown" and are better left unlabelled.
@@ -76,6 +153,67 @@
         <a href={resolve('/my/credits')} class="font-medium underline underline-offset-4">Credits page</a>.
       </p>
     </div>
+
+    {#if discord?.enabled}
+      <div class="flex flex-col gap-2 rounded-lg border border-border p-4 text-sm">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-medium">Discord</span>
+            <span class="text-xs text-muted-foreground">
+              Link your account to run <code class="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">/contribute</code>
+              in the freehire Discord server for the same reward.
+              {#if discordChannelUrl}
+                <!-- eslint-disable svelte/no-navigation-without-resolve -- external Discord channel URL, not an internal route -->
+                <a
+                  href={discordChannelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+                >
+                  Open the channel
+                </a>
+                <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              {/if}
+            </span>
+          </div>
+          {#if discord.linked}
+            <Button variant="outline" size="sm" onclick={unlinkDiscord} disabled={discordBusy}>
+              {discordBusy ? 'Unlinking…' : 'Unlink'}
+            </Button>
+          {:else}
+            <Button variant="outline" size="sm" onclick={linkDiscord} disabled={discordBusy}>
+              {discordBusy ? 'Starting…' : 'Link Discord'}
+            </Button>
+          {/if}
+        </div>
+
+        {#if discordLinkResult}
+          <div class="rounded-md bg-secondary/40 p-3 text-xs">
+            <p>Paste this command in the freehire Discord server:</p>
+            <div class="mt-1 flex items-center gap-2">
+              <code class="flex-1 overflow-x-auto rounded bg-background px-2 py-1.5 font-mono text-[11px]"
+                >{discordCommand}</code
+              >
+              <Button variant="secondary" size="sm" onclick={copyDiscordCommand}>
+                {discordCopied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <button
+              type="button"
+              onclick={recheckDiscord}
+              disabled={discordBusy}
+              class="mt-2 font-medium text-foreground underline underline-offset-2 hover:opacity-80"
+            >
+              I've linked it
+            </button>
+          </div>
+        {/if}
+
+        {#if discordError}
+          <p class="text-xs text-destructive">{discordError}</p>
+        {/if}
+      </div>
+    {/if}
 
     {#if resolved}
       <div class="rounded-lg border border-border bg-secondary/40 p-4 text-sm" role="status">

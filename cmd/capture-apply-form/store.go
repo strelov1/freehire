@@ -39,6 +39,7 @@ func (s *dbStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]applyfo
 			JobID:      r.JobID,
 			Provider:   r.Source,
 			ExternalID: r.ExternalID,
+			URL:        r.URL,
 		})
 	}
 	return out, nil

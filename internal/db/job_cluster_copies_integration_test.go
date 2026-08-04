@@ -80,3 +80,46 @@ func TestListRoleClusterCopies_ReturnsOpenClusterByLocation(t *testing.T) {
 		t.Errorf("empty-fp anchor returned %d copies, want 0", len(empty))
 	}
 }
+
+// A private job (jd-tailor-intake: a pasted JD or an unrecognized-URL scrape) must never
+// surface in a PUBLIC job's copies list, even when it coincidentally shares a role cluster
+// (company_slug + role_fingerprint) with one — that would hand the private job's slug and
+// location/url to anyone browsing an unrelated public posting, defeating the point of never
+// listing or indexing it.
+func TestListRoleClusterCopies_ExcludesPrivateJobs(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	const fp = "role-priv"
+	if _, err := q.UpsertJob(ctx, withFingerprint("acme:pub", "Staff Engineer", fp)); err != nil {
+		t.Fatalf("upsert public: %v", err)
+	}
+	if _, err := q.UpsertJob(ctx, withFingerprint("acme:priv", "Staff Engineer", fp)); err != nil {
+		t.Fatalf("upsert private: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE external_id = $1", "acme:priv"); err != nil {
+		t.Fatalf("mark private: %v", err)
+	}
+
+	anchorID, _ := dupOf(t, pool, "acme:pub")
+	copies, err := q.ListRoleClusterCopies(ctx, ListRoleClusterCopiesParams{JobID: anchorID, RowLimit: 100, RowOffset: 0})
+	if err != nil {
+		t.Fatalf("ListRoleClusterCopies: %v", err)
+	}
+	if len(copies) != 1 || copies[0].PublicSlug == "" {
+		t.Fatalf("copies = %+v, want only the public job", copies)
+	}
+	for _, c := range copies {
+		if c.PublicSlug != "" {
+			var isPrivate bool
+			if err := pool.QueryRow(ctx, "SELECT is_private FROM jobs WHERE public_slug = $1", c.PublicSlug).Scan(&isPrivate); err != nil {
+				t.Fatalf("read %s: %v", c.PublicSlug, err)
+			}
+			if isPrivate {
+				t.Errorf("copies included a private job (%s)", c.PublicSlug)
+			}
+		}
+	}
+}

@@ -141,3 +141,11 @@ SET suggested_job_id = sqlc.arg(suggested_job_id)::bigint,
     match_confidence = sqlc.arg(confidence)::real
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
   AND job_id IS NULL AND application_id IS NULL AND deleted_at IS NULL;
+
+-- name: GetEmailIDByExternalID :one
+-- One message's id from the identifier its provider gave it, scoped to the caller.
+--
+-- The recall sweep proposes messages by PROVIDER id, because a searched message is not ours
+-- until somebody links it. This is the one lookup that turns the id a caller pressed into
+-- the row every linking path works on, immediately after the import stored it.
+SELECT id FROM emails WHERE user_id = $1 AND external_id = $2 AND deleted_at IS NULL;

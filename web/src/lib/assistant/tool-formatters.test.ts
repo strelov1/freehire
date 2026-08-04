@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   callLine,
+  CONFIRMATION_DECLINE_TEXT,
   groupTitle,
   isExpandable,
   nonEmptyInput,
+  parseConfirmationRequest,
   previewToolInput,
+  REQUEST_CONFIRMATION_TOOL,
   toolErrorMessage,
   toolLabel,
   type ToolCall,
@@ -127,5 +130,33 @@ describe('input helpers', () => {
 
   it('previews input as truncated JSON', () => {
     expect(previewToolInput({ query: 'go' })).toBe('{"query":"go"}');
+  });
+});
+
+describe('parseConfirmationRequest', () => {
+  it('reads the claim and question off a request_confirmation call', () => {
+    const parsed = parseConfirmationRequest(
+      call(REQUEST_CONFIRMATION_TOOL, { claim: 'Built Reelmente.app with React', question: 'Is that right?' }),
+    );
+    expect(parsed).toEqual({ claim: 'Built Reelmente.app with React', question: 'Is that right?' });
+  });
+
+  it('defaults a missing question to an empty string', () => {
+    const parsed = parseConfirmationRequest(call(REQUEST_CONFIRMATION_TOOL, { claim: 'Built it' }));
+    expect(parsed).toEqual({ claim: 'Built it', question: '' });
+  });
+
+  it('is null for any other tool', () => {
+    expect(parseConfirmationRequest(call('cv_edit', { claim: 'Built it' }))).toBeNull();
+  });
+
+  it('is null when the claim is missing or blank', () => {
+    expect(parseConfirmationRequest(call(REQUEST_CONFIRMATION_TOOL, {}))).toBeNull();
+    expect(parseConfirmationRequest(call(REQUEST_CONFIRMATION_TOOL, { claim: '  ' }))).toBeNull();
+    expect(parseConfirmationRequest(call(REQUEST_CONFIRMATION_TOOL, null))).toBeNull();
+  });
+
+  it('exposes a fixed decline message so the button and its test never drift apart', () => {
+    expect(CONFIRMATION_DECLINE_TEXT.length).toBeGreaterThan(0);
   });
 });

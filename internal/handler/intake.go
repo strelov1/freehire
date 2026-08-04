@@ -173,3 +173,67 @@ func (s *intakeService) record(ctx context.Context, userID int64, pageURL, surfa
 		return "", false, err
 	}
 }
+
+// renderIntakeOutcome puts one intake outcome into words. A readable vacancy now comes back as
+// a link to the posting — before, a Telegram user was only ever told about the board, even when
+// we could have handed them the job. Shared across every surface that calls intakeService.Resolve
+// and reports the result back to the submitter (Telegram's chat reply, Discord's deferred
+// response), so the wording does not drift between them.
+//
+// emphasize renders the one span of emphasis this wording needs (a board name), in whatever
+// markup the calling surface actually understands: Telegram sends parse_mode "HTML", Discord
+// interaction responses are Markdown — hardcoding either here would render as literal markup on
+// the other surface.
+func renderIntakeOutcome(out intakeOutcome, frontendOrigin string, emphasize func(string) string) string {
+	switch out.Status {
+	case outcomeFound:
+		return "👍 We already have this one:\n" + jobURL(frontendOrigin, out.PublicSlug)
+	case outcomeTracked:
+		return "✅ Added — and we already track this company, so the rest of its roles will follow on the next crawl.\n" +
+			jobURL(frontendOrigin, out.PublicSlug) + companyURL(frontendOrigin, out.CompanySlug)
+	case outcomeImported:
+		if out.CompanySlug != "" {
+			return "✅ Added — we already carry this company, and now we'll crawl this board of theirs too.\n" +
+				jobURL(frontendOrigin, out.PublicSlug) + companyURL(frontendOrigin, out.CompanySlug)
+		}
+		return "🎉 Added, and this company is new to us — we'll start crawling its board.\n" + jobURL(frontendOrigin, out.PublicSlug)
+	case outcomeReview:
+		// Imported, but the page named no board we know how to crawl, so no crawl is promised.
+		if out.CompanySlug != "" {
+			return "✅ Added — we already carry this company. Its careers site isn't one we can crawl yet, so we'll look at it by hand.\n" +
+				jobURL(frontendOrigin, out.PublicSlug) + companyURL(frontendOrigin, out.CompanySlug)
+		}
+		return "✅ Added. Its careers site isn't one we can crawl yet — we'll check by hand whether we can pull the rest of its jobs.\n" +
+			jobURL(frontendOrigin, out.PublicSlug)
+	}
+	// outcomeQueued. Failing to read the page says nothing about whether we recognised the
+	// board behind it, and answering only "couldn't read" would hide a contribution we just
+	// accepted — and paid for.
+	switch {
+	case out.Rewarded:
+		return "🎉 We couldn't open that page, but " + emphasize(out.Board) +
+			" is a company we don't crawl yet — added to the queue. +1 AI credit!"
+	case out.Board != "":
+		return "👍 We couldn't open that page, but that company's board is already known to us — nothing to add."
+	default:
+		return "🤔 We couldn't read that page. We'll check by hand whether we can pull its jobs — if we can, you'll get a credit. Not credited yet."
+	}
+}
+
+// jobURL renders a posting link, or an empty string when the frontend origin is unset (the
+// slug alone would be meaningless to a reader).
+func jobURL(frontendOrigin, slug string) string {
+	if slug == "" || frontendOrigin == "" {
+		return ""
+	}
+	return frontendOrigin + "/jobs/" + slug
+}
+
+// companyURL renders a company link on its own line, so a reply can append it unconditionally.
+// Empty under the same rule as jobURL.
+func companyURL(frontendOrigin, slug string) string {
+	if slug == "" || frontendOrigin == "" {
+		return ""
+	}
+	return "\n" + frontendOrigin + "/companies/" + slug
+}

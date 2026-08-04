@@ -31,8 +31,8 @@ func (m *mailStore) ListEmails(_ context.Context, arg db.ListEmailsParams) ([]db
 	m.lastList = arg
 	return m.list, nil
 }
-func (m *mailStore) CountEmails(context.Context, db.CountEmailsParams) (int64, error) {
-	return m.total, nil
+func (m *mailStore) CountEmails(context.Context, db.CountEmailsParams) (db.CountEmailsRow, error) {
+	return db.CountEmailsRow{Total: m.total}, nil
 }
 func (m *mailStore) CountEmailsByState(context.Context, int64) ([]db.CountEmailsByStateRow, error) {
 	return m.state, nil

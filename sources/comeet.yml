@@ -46,3 +46,7 @@
   board: musegroup/FA.001
 - company: Zesty
   board: zesty/06.000
+- company: Dream
+  board: dreamgroup/99.002
+- company: Cognyte
+  board: cognyte/F2.009

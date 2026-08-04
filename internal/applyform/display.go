@@ -68,13 +68,20 @@ var standardFieldIDs = map[string][]string{
 // isStandard reports whether a field is one every application demands rather than
 // something this employer chose to ask.
 //
-// Two platforms answer it by their own convention rather than by a list, which is both
+// Three platforms answer it by their own convention rather than by a list, which is both
 // exact and immune to the platform adding profile fields later: Ashby prefixes every
-// standard field's path with `_systemfield_`, and Workable prefixes every EMPLOYER
-// question with `QA_` — the inverse marker, so for Workable the test is inverted too.
+// standard field's path with `_systemfield_`, while Workable (`QA_`) and Lever
+// (`cards[`) prefix every EMPLOYER question — the inverse marker, so for those two the
+// test is inverted too.
 func isStandard(provider string, f Field) bool {
-	if provider == "workable" {
+	switch provider {
+	case "workable":
 		return !strings.HasPrefix(f.ID, "QA_")
+	case "lever":
+		// Lever names an employer's question `cards[<uuid>][fieldN]`; everything else —
+		// name, email, phone, the profile links, the CV, the consent boxes — is the
+		// standard application. Same kind of marker, read the same inverted way.
+		return !strings.HasPrefix(f.ID, "cards[")
 	}
 	if strings.HasPrefix(f.ID, "_systemfield_") {
 		return true
@@ -124,6 +131,22 @@ func (f Form) ForDisplay() Display {
 		// always optional and near-identical everywhere. Listing it would bury what
 		// a candidate actually has to prepare for.
 		case field.Demographic:
+			continue
+
+		// A consent checkbox is the platform's legal boilerplate rather than the
+		// employer's question: it is on every application, its text is a paragraph of
+		// data-protection language, and a candidate deciding whether to apply learns
+		// nothing from it. Same reasoning as the equal-opportunity survey above — and
+		// left in, that paragraph sits in the standard-fields line beside "Email".
+		//
+		// It stays in the store. Anything that eventually FILLS a form has to tick it.
+		case strings.HasPrefix(field.ID, "consent["):
+			continue
+
+		// A control nothing could name cannot be described to anyone. It stays in the
+		// store — the identifier is still what a form-filler needs — but an unnamed
+		// entry on the page is a stray comma at best and a blank bullet at worst.
+		case strings.TrimSpace(field.Label) == "":
 			continue
 
 		case isStandard(f.Provider, field):

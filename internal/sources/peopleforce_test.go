@@ -45,6 +45,20 @@ func peopleforceDetailHTML(workType, location string) string {
 </div></body></html>`
 }
 
+// peopleforceDetailHTMLTailwind mirrors a tenant already migrated to PeopleForce's newer
+// theme, which renders the same layout with Tailwind-prefixed classes ("tw-col-lg-8"
+// instead of "col-lg-8") — seen live on boards mid-rollout (e.g. vyriy, unitedsoftware).
+func peopleforceDetailHTMLTailwind(location string) string {
+	return `<html><body>
+<h1>Work at Acme</h1>
+<div class="tw-row">
+  <div class="tw-col-lg-8 tw-col-12">
+    <h2>About the role</h2><p>Build things.</p>
+  </div>
+  <div class="tw-col-lg-4 tw-col-12"><dl><dt>Location</dt><dd>` + location + `</dd></dl></div>
+</div></body></html>`
+}
+
 func TestPeopleForceProvider(t *testing.T) {
 	if got := NewPeopleForce(nil).Provider(); got != "peopleforce" {
 		t.Errorf("Provider() = %q, want %q", got, "peopleforce")
@@ -105,6 +119,30 @@ func TestPeopleForceFetchListingThenDetailAndMaps(t *testing.T) {
 	}
 	if !strings.Contains(j.Description, "About the role") || !strings.Contains(j.Description, "Build things") {
 		t.Errorf("Description lost real content: %q", j.Description)
+	}
+}
+
+func TestPeopleForceFetchReadsDescriptionFromTailwindThemedDetailPage(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("?page=1", peopleforceListingHTML([2]string{"229080-marketing-ops", "Marketing Operations Manager"})).
+		route("?page=2", emptyPeopleforceListingHTML).
+		route("/careers/v/229080-marketing-ops", peopleforceDetailHTMLTailwind("Kyiv"))
+
+	jobs, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "peopleforce", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	j := jobs[0]
+	if j.Location != "Kyiv" {
+		t.Errorf("Location = %q", j.Location)
+	}
+	if !strings.Contains(j.Description, "About the role") || !strings.Contains(j.Description, "Build things") {
+		t.Errorf("Description empty or lost content on the Tailwind-themed layout: %q", j.Description)
 	}
 }
 

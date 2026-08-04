@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // fakeTransport records what was requested and replays a canned body, so a fetcher's URL
@@ -15,6 +17,14 @@ type fakeTransport struct {
 	err     error
 	gotURL  string
 	gotBody any
+}
+
+func (f *fakeTransport) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.gotURL = url
+	if f.err != nil {
+		return nil, f.err
+	}
+	return html.Parse(strings.NewReader(f.body))
 }
 
 func (f *fakeTransport) GetJSON(_ context.Context, url string, v any) error {
@@ -42,7 +52,7 @@ func TestGreenhouseFetcher(t *testing.T) {
 		]
 	}`}
 
-	form, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), "stripe", "7954688")
+	form, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), Claimed{ExternalID: "stripe:7954688"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -67,7 +77,7 @@ func TestAshbyFetcher(t *testing.T) {
 		]}}}
 	}`}
 
-	form, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "n8n", "47cc47be")
+	form, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "n8n:47cc47be"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -86,7 +96,7 @@ func TestAshbyFetcher(t *testing.T) {
 func TestAshbyQueryAsksForFieldAsAScalar(t *testing.T) {
 	tr := &fakeTransport{body: `{"data":{"jobPosting":{"applicationForm":{"sections":[]}}}}`}
 
-	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "n8n", "x"); err != nil {
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "n8n:x"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -108,7 +118,7 @@ func TestAshbyQueryAsksForFieldAsAScalar(t *testing.T) {
 func TestAshbyFetcherRejectsAnAbsentPosting(t *testing.T) {
 	tr := &fakeTransport{body: `{"data": {"jobPosting": null}}`}
 
-	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "n8n", "gone"); err == nil {
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "n8n:gone"}); err == nil {
 		t.Error("Fetch() = nil error for a posting the platform does not have")
 	}
 }
@@ -117,7 +127,7 @@ func TestFetcherPropagatesTransportFailure(t *testing.T) {
 	want := errors.New("boom")
 	for _, provider := range []string{"greenhouse", "ashby"} {
 		tr := &fakeTransport{err: want}
-		if _, err := Fetchers(tr)[provider].Fetch(context.Background(), "b", "1"); !errors.Is(err, want) {
+		if _, err := Fetchers(tr)[provider].Fetch(context.Background(), Claimed{ExternalID: "b:1"}); !errors.Is(err, want) {
 			t.Errorf("%s: Fetch() error = %v, want it to wrap %v", provider, err, want)
 		}
 	}
@@ -152,7 +162,7 @@ func TestSplitBoardPosting(t *testing.T) {
 func TestAshbyFetcherDecodesTheBoardName(t *testing.T) {
 	tr := &fakeTransport{body: `{"data":{"jobPosting":{"applicationForm":{"sections":[]}}}}`}
 
-	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "stony%20creek%20homes", "x"); err != nil {
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "stony%20creek%20homes:x"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -171,7 +181,7 @@ func TestAshbyFetcherDecodesTheBoardName(t *testing.T) {
 func TestAshbyFetcherKeepsAnUndecodableBoardName(t *testing.T) {
 	tr := &fakeTransport{body: `{"data":{"jobPosting":{"applicationForm":{"sections":[]}}}}`}
 
-	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "100%discount", "x"); err != nil {
+	if _, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "100%discount:x"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 
@@ -195,7 +205,7 @@ func (e statusErr) StatusCode() int { return e.code }
 func TestGreenhouseFetcherMarksAGonePostingAsGone(t *testing.T) {
 	tr := &fakeTransport{err: statusErr{code: 404}}
 
-	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), "sentinellabs", "7819844003")
+	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), Claimed{ExternalID: "sentinellabs:7819844003"})
 
 	if !errors.Is(err, ErrPostingGone) {
 		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
@@ -207,7 +217,7 @@ func TestGreenhouseFetcherMarksAGonePostingAsGone(t *testing.T) {
 func TestGreenhouseFetcherKeepsARateLimitRetryable(t *testing.T) {
 	tr := &fakeTransport{err: statusErr{code: 429}}
 
-	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), "b", "1")
+	_, err := Fetchers(tr)["greenhouse"].Fetch(context.Background(), Claimed{ExternalID: "b:1"})
 
 	if err == nil {
 		t.Fatal("Fetch() = nil error on a rate limit")
@@ -220,7 +230,7 @@ func TestGreenhouseFetcherKeepsARateLimitRetryable(t *testing.T) {
 func TestAshbyFetcherMarksAnAbsentPostingAsGone(t *testing.T) {
 	tr := &fakeTransport{body: `{"data": {"jobPosting": null}}`}
 
-	_, err := Fetchers(tr)["ashby"].Fetch(context.Background(), "n8n", "gone")
+	_, err := Fetchers(tr)["ashby"].Fetch(context.Background(), Claimed{ExternalID: "n8n:gone"})
 
 	if !errors.Is(err, ErrPostingGone) {
 		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
@@ -237,7 +247,7 @@ func TestWorkableFetcher(t *testing.T) {
 	  ]}
 	]`}
 
-	form, err := Fetchers(tr)["workable"].Fetch(context.Background(), "1000heads", "9168DF8334")
+	form, err := Fetchers(tr)["workable"].Fetch(context.Background(), Claimed{ExternalID: "1000heads:9168DF8334"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -258,7 +268,49 @@ func TestWorkableFetcher(t *testing.T) {
 func TestWorkableFetcherMarksAGonePostingAsGone(t *testing.T) {
 	tr := &fakeTransport{err: statusErr{code: 404}}
 
-	if _, err := Fetchers(tr)["workable"].Fetch(context.Background(), "b", "GONE"); !errors.Is(err, ErrPostingGone) {
+	if _, err := Fetchers(tr)["workable"].Fetch(context.Background(), Claimed{ExternalID: "b:GONE"}); !errors.Is(err, ErrPostingGone) {
+		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
+	}
+}
+
+func TestLeverFetcherPicksTheRegionalHost(t *testing.T) {
+	for _, tc := range []struct{ url, wantHost string }{
+		{"https://jobs.lever.co/acme/abc", "jobs.lever.co"},
+		{"https://jobs.eu.lever.co/silverfin/abc", "jobs.eu.lever.co"},
+		// No URL at all falls back to the default host rather than refusing: a wrong
+		// guess costs one request, and refusing costs the capture.
+		{"", "jobs.lever.co"},
+	} {
+		tr := &fakeTransport{body: leverPage}
+		c := Claimed{ExternalID: "acme:abc", URL: tc.url}
+
+		if _, err := Fetchers(tr)["lever"].Fetch(context.Background(), c); err != nil {
+			t.Fatalf("%s: Fetch: %v", tc.url, err)
+		}
+		if !strings.Contains(tr.gotURL, tc.wantHost) {
+			t.Errorf("url %q -> requested %q, want host %q", tc.url, tr.gotURL, tc.wantHost)
+		}
+		if !strings.HasSuffix(tr.gotURL, "/acme/abc/apply") {
+			t.Errorf("requested %q, want the apply page", tr.gotURL)
+		}
+	}
+}
+
+// A page that parsed to nothing is not an application that asks nothing — Lever renders
+// every form with at least a name and an email, so an empty parse means the markup moved.
+// Storing it would state the opposite of what is true.
+func TestLeverFetcherRefusesAPageItCouldNotParse(t *testing.T) {
+	tr := &fakeTransport{body: "<html><body><p>Nothing here</p></body></html>"}
+
+	if _, err := Fetchers(tr)["lever"].Fetch(context.Background(), Claimed{ExternalID: "acme:abc"}); err == nil {
+		t.Error("Fetch() = nil error for a page with no form")
+	}
+}
+
+func TestLeverFetcherMarksAGonePostingAsGone(t *testing.T) {
+	tr := &fakeTransport{err: statusErr{code: 404}}
+
+	if _, err := Fetchers(tr)["lever"].Fetch(context.Background(), Claimed{ExternalID: "acme:gone"}); !errors.Is(err, ErrPostingGone) {
 		t.Errorf("Fetch() error = %v, want it to mark the posting gone", err)
 	}
 }

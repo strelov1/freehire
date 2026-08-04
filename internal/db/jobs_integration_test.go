@@ -372,3 +372,47 @@ func TestListJobsOpenOnlyAndEstimate(t *testing.T) {
 		t.Errorf("EstimateOpenJobs = %d, want >= 1 (open jobs present)", est)
 	}
 }
+
+// TestListJobsExcludesPrivateJobs covers the jd-tailor-intake gate: a private job (see
+// jobs.is_private) is open (closed_at IS NULL) and not a repost, yet must never appear in
+// the public DB-backed list or its total — it is visible only to its creator, through a
+// different read path (GetJobBySlug, gated in the handler layer).
+func TestListJobsExcludesPrivateJobs(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	if _, err := ingestUpsert(ctx, q, ingestParams("priv-public", "A public job")); err != nil {
+		t.Fatal(err)
+	}
+	private, err := ingestUpsert(ctx, q, ingestParams("priv-private", "A private job"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE id = $1", private.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	jobs, err := q.ListJobs(ctx, ListJobsParams{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "priv-public" {
+		t.Fatalf("ListJobs = %+v, want only the public job", jobs)
+	}
+
+	if _, err := pool.Exec(ctx, "ANALYZE jobs"); err != nil {
+		t.Fatal(err)
+	}
+	est, err := q.EstimateOpenJobs(ctx)
+	if err != nil {
+		t.Fatalf("EstimateOpenJobs: %v", err)
+	}
+	// A loose bound, like the planner-estimate check above: without the fix, both the
+	// public and the private row are open and count toward the estimate (>= 2); the
+	// meaningful assertion is that the private row was excluded, not an exact total.
+	if est >= 2 {
+		t.Errorf("EstimateOpenJobs = %d, want < 2 (the private job excluded from the estimate)", est)
+	}
+}

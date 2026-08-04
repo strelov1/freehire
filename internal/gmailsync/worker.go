@@ -93,7 +93,7 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 	}
 	reader := w.newReader(ctx, refresh, learned)
 
-	ids, err := reader.ListATSMessageIDs(ctx, u.Cursor)
+	ids, err := reader.ListATSMessageIDs(ctx, u.Email, u.Cursor)
 	if err != nil {
 		// A revoked/expired grant surfaces here; flag it for re-consent and move on.
 		log.Printf("gmail-sync: user %d: list: %v — marking needs_reconsent", u.UserID, err)

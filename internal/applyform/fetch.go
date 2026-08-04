@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 // ErrPostingGone marks a form the platform will never serve because the posting is no
@@ -44,12 +46,18 @@ func asGone(err error) error {
 type Transport interface {
 	GetJSON(ctx context.Context, url string, v any) error
 	PostJSONWithHeaders(ctx context.Context, url string, headers map[string]string, body, v any) error
+	// GetHTML is for the one platform that publishes its form as a rendered page. The
+	// real sources.Client already returns a parsed tree with the size caps and timeouts
+	// the crawl relies on, so nothing new is built to satisfy this.
+	GetHTML(ctx context.Context, url string) (*html.Node, error)
 }
 
 // Fetcher retrieves one posting's application form from the platform that published it.
-// board and postingID are the two halves of the stored external_id.
+// It takes the whole claim rather than the two halves of the external id, because what a
+// fetch needs is not the same everywhere: most platforms are addressed by board and
+// posting id, and one needs the posting's own URL to know which regional host to ask.
 type Fetcher interface {
-	Fetch(ctx context.Context, board, postingID string) (Form, error)
+	Fetch(ctx context.Context, c Claimed) (Form, error)
 }
 
 // NeedsRequestCapture reports whether a provider's application form has to be fetched per
@@ -71,6 +79,7 @@ var fetcherFor = map[string]func(Transport) Fetcher{
 	"greenhouse": func(t Transport) Fetcher { return greenhouseFetcher{http: t} },
 	"ashby":      func(t Transport) Fetcher { return ashbyFetcher{http: t} },
 	"workable":   func(t Transport) Fetcher { return workableFetcher{http: t} },
+	"lever":      func(t Transport) Fetcher { return leverFetcher{http: t} },
 }
 
 // Fetchers builds the per-provider fetcher registry over one transport.
@@ -117,7 +126,8 @@ const greenhouseBaseURL = "https://boards-api.greenhouse.io/v1/boards"
 
 type greenhouseFetcher struct{ http Transport }
 
-func (g greenhouseFetcher) Fetch(ctx context.Context, board, postingID string) (Form, error) {
+func (g greenhouseFetcher) Fetch(ctx context.Context, c Claimed) (Form, error) {
+	board, postingID, _ := splitBoardPosting(c.ExternalID)
 	// questions=true is the point of the request: the board listing ignores the parameter
 	// and the per-posting endpoint without it answers 200 with no form at all.
 	url := fmt.Sprintf("%s/%s/jobs/%s?questions=true", greenhouseBaseURL, board, postingID)
@@ -129,6 +139,39 @@ func (g greenhouseFetcher) Fetch(ctx context.Context, board, postingID string) (
 	return FromGreenhouse(job), nil
 }
 
+// leverHosts are the two regional job-board hosts. A posting is served by exactly one of
+// them and the other answers 404 — the same code Lever uses for a posting that is gone,
+// so the region cannot be discovered by trying and is read from the posting's own URL.
+const (
+	leverHost   = "jobs.lever.co"
+	leverEUHost = "jobs.eu.lever.co"
+)
+
+type leverFetcher struct{ http Transport }
+
+func (l leverFetcher) Fetch(ctx context.Context, c Claimed) (Form, error) {
+	board, postingID, _ := splitBoardPosting(c.ExternalID)
+
+	host := leverHost
+	if strings.Contains(c.URL, leverEUHost) {
+		host = leverEUHost
+	}
+	url := fmt.Sprintf("https://%s/%s/%s/apply", host, board, postingID)
+
+	doc, err := l.http.GetHTML(ctx, url)
+	if err != nil {
+		return Form{}, fmt.Errorf("lever: fetch form for %s/%s: %w", board, postingID, asGone(err))
+	}
+	form := FromLever(doc)
+	// A page that parsed to nothing is not a form. Lever renders every application with
+	// at least a name and an email, so an empty parse means the markup moved rather than
+	// that this employer asks for nothing — and storing it would say the opposite.
+	if len(form.Fields) == 0 {
+		return Form{}, fmt.Errorf("lever: no form found on the apply page for %s/%s", board, postingID)
+	}
+	return form, nil
+}
+
 // workableFormURL templates the form endpoint. It takes the posting's shortcode and
 // nothing else — no board, no account — so the board half of the stored external id is
 // not part of the request at all. That is why this fetcher ignores its board argument.
@@ -136,7 +179,8 @@ const workableFormURL = "https://apply.workable.com/api/v1/jobs/%s/form"
 
 type workableFetcher struct{ http Transport }
 
-func (w workableFetcher) Fetch(ctx context.Context, _, postingID string) (Form, error) {
+func (w workableFetcher) Fetch(ctx context.Context, c Claimed) (Form, error) {
+	_, postingID, _ := splitBoardPosting(c.ExternalID)
 	url := fmt.Sprintf(workableFormURL, postingID)
 
 	// The form arrives as a bare array of sections rather than an object.
@@ -168,7 +212,8 @@ const ashbyQuery = `query ApiJobPosting($organizationHostedJobsPageName: String!
 
 type ashbyFetcher struct{ http Transport }
 
-func (a ashbyFetcher) Fetch(ctx context.Context, board, postingID string) (Form, error) {
+func (a ashbyFetcher) Fetch(ctx context.Context, c Claimed) (Form, error) {
+	board, postingID, _ := splitBoardPosting(c.ExternalID)
 	body := map[string]any{
 		"operationName": "ApiJobPosting",
 		"variables": map[string]any{

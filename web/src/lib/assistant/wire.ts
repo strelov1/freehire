@@ -11,6 +11,9 @@ export type StopReason = 'end_turn' | 'max_steps' | 'cancelled' | 'error' | (str
 
 /** One streamed frame of a turn. */
 export type TurnEvent =
+  // The turn has not started: it is waiting for the one in flight in this session. Sent
+  // ahead of the turn's own frames so a wait does not read as a stalled connection.
+  | { type: 'queued' }
   | { type: 'user_prompt'; text: string }
   | { type: 'assistant_text'; text: string }
   | { type: 'assistant_thought'; text: string }

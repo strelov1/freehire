@@ -153,6 +153,157 @@ func TestDeleteExperienceIsOwnerScoped(t *testing.T) {
 	}
 }
 
+// The only way in for a caller with no chat session — a script, freehire-cli — is this
+// route, and it must land under the SAME caller the token names, the same as every other
+// write in this file.
+func TestAddAtomCreatesUnderTheCaller(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+		`{"claim":"Cut latency 20s to 1s"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data struct {
+			ID    uuid.UUID `json:"id"`
+			Claim string    `json:"claim"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if body.Data.Claim != "Cut latency 20s to 1s" {
+		t.Errorf("claim = %q, want it echoed back", body.Data.Claim)
+	}
+
+	stored, err := bank.GetAtom(t.Context(), body.Data.ID, 1)
+	if err != nil {
+		t.Fatalf("the atom was not persisted under caller 1: %v", err)
+	}
+	if stored.Claim != "Cut latency 20s to 1s" {
+		t.Errorf("stored claim = %q", stored.Claim)
+	}
+}
+
+// There is no chat transcript to check a stated_in_chat claim against outside a chat
+// turn, so a plain authenticated POST can only ever honestly produce manual — the same
+// provenance PUT already forces on a correction.
+func TestAddAtomForcesManualProvenance(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+		`{"claim":"Led the migration","provenance":"stated_in_chat"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data struct {
+			ID uuid.UUID `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+
+	stored, err := bank.GetAtom(t.Context(), body.Data.ID, 1)
+	if err != nil {
+		t.Fatalf("GetAtom: %v", err)
+	}
+	if stored.Provenance != experience.ProvenanceManual {
+		t.Errorf("provenance = %q, want it forced to manual regardless of what the caller sent", stored.Provenance)
+	}
+}
+
+func TestAddAtomRefusesAnEmptyClaim(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":""}`, token)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(bank.list) != 0 {
+		t.Error("a refused atom was persisted anyway")
+	}
+}
+
+// AddAtom shares the store's dedup with experience_add: a claim already banked, under any
+// spelling, must not silently create a second row nor a generic 500 — the caller needs to
+// know it already exists.
+func TestAddAtomOnAnAlreadyBankedClaimIsAConflict(t *testing.T) {
+	app, token, bank := experienceApp(t)
+	bank.addErr = experience.ErrAlreadyBanked
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"Cut latency 20s to 1s"}`, token)
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("status = %d, want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestAddEmploymentCreatesUnderTheCaller(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+		`{"kind":"job","company":"RingCentral","role":"SWE"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data struct {
+			ID      uuid.UUID `json:"id"`
+			Company string    `json:"company"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if body.Data.Company != "RingCentral" {
+		t.Errorf("company = %q, want it echoed back", body.Data.Company)
+	}
+
+	found := false
+	for _, e := range bank.employments {
+		if e.ID == body.Data.ID && bank.owner[e.ID] == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the employment was not persisted under caller 1")
+	}
+}
+
+func TestAddEmploymentRefusesOneWithNeitherCompanyNorRole(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job"}`, token)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(bank.employments) != 0 {
+		t.Error("a refused employment was persisted anyway")
+	}
+}
+
+func TestAddEmploymentRefusesAKindOutsideTheVocabulary(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+		`{"kind":"hobby","company":"RingCentral"}`, token)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(bank.employments) != 0 {
+		t.Error("an employment with an out-of-vocabulary kind was persisted anyway")
+	}
+}
+
 func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 	app, token, _ := experienceApp(t)
 
@@ -174,6 +325,12 @@ func TestExperienceRoutesRequireAuth(t *testing.T) {
 	}
 	if resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+uuid.New().String(), "", ""); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated delete = %d, want 401", resp.StatusCode)
+	}
+	if resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"x"}`, ""); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated atom create = %d, want 401", resp.StatusCode)
+	}
+	if resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job","company":"x"}`, ""); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated employment create = %d, want 401", resp.StatusCode)
 	}
 }
 

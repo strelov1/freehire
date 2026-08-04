@@ -51,7 +51,7 @@ type fakeReader struct {
 	listErr error
 }
 
-func (f *fakeReader) ListATSMessageIDs(context.Context, int64) ([]string, error) {
+func (f *fakeReader) ListATSMessageIDs(context.Context, string, int64) ([]string, error) {
 	return f.ids, f.listErr
 }
 func (f *fakeReader) ListThreadMessageIDs(_ context.Context, threadID string) ([]string, error) {

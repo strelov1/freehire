@@ -12,31 +12,34 @@ import (
 )
 
 const countEmails = `-- name: CountEmails :one
-SELECT count(*)
+SELECT
+    count(*) FILTER (WHERE $2::bool OR coalesce(status_signal, '') <> 'other')::bigint AS total,
+    count(*) FILTER (WHERE NOT $2::bool AND coalesce(status_signal, '') = 'other')::bigint AS hidden
 FROM emails
 WHERE user_id = $1
   AND deleted_at IS NULL
-  AND ($2::text = '' OR source = $2)
-  AND ($3::bool = false OR read_at IS NULL)
-  AND ($4::text = '' OR status_signal = $4)
-  AND ($5::bool = false OR classified_at IS NULL)
-  AND (
-    $6::text = ''
-    OR ($6 = 'linked'    AND application_id IS NOT NULL)
-    OR ($6 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
-    OR ($6 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
-  )
+  AND ($3::text = '' OR source = $3)
+  AND ($4::bool = false OR read_at IS NULL)
+  AND ($5::text = '' OR status_signal = $5)
+  AND ($6::bool = false OR classified_at IS NULL)
   AND (
     $7::text = ''
-    OR subject   ILIKE '%' || $7 || '%'
-    OR from_name ILIKE '%' || $7 || '%'
-    OR from_addr ILIKE '%' || $7 || '%'
-    OR body_text ILIKE '%' || $7 || '%'
+    OR ($7 = 'linked'    AND application_id IS NOT NULL)
+    OR ($7 = 'suggested' AND application_id IS NULL AND suggested_job_id IS NOT NULL)
+    OR ($7 = 'unlinked'  AND application_id IS NULL AND suggested_job_id IS NULL)
+  )
+  AND (
+    $8::text = ''
+    OR subject   ILIKE '%' || $8 || '%'
+    OR from_name ILIKE '%' || $8 || '%'
+    OR from_addr ILIKE '%' || $8 || '%'
+    OR body_text ILIKE '%' || $8 || '%'
   )
 `
 
 type CountEmailsParams struct {
 	UserID       int64  `json:"user_id"`
+	IncludeOther bool   `json:"include_other"`
 	Src          string `json:"src"`
 	Unread       bool   `json:"unread"`
 	Status       string `json:"status"`
@@ -45,11 +48,22 @@ type CountEmailsParams struct {
 	Q            string `json:"q"`
 }
 
-// Total live messages for the caller (same optional filters as ListEmails), for
-// pagination.
-func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error) {
+type CountEmailsRow struct {
+	Total  int64 `json:"total"`
+	Hidden int64 `json:"hidden"`
+}
+
+// Total live messages for the caller under the same optional filters as ListEmails, plus
+// how many of them the `other` default omitted.
+//
+// Both numbers come from one statement and one set of predicates on purpose: a hidden count
+// computed separately would describe a different mailbox from the one on screen the moment
+// any filter is active. The count is not decoration — a filter that hides silently makes a
+// misclassification impossible to find, and the classifier reads attacker-controlled text.
+func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (CountEmailsRow, error) {
 	row := q.db.QueryRow(ctx, countEmails,
 		arg.UserID,
+		arg.IncludeOther,
 		arg.Src,
 		arg.Unread,
 		arg.Status,
@@ -57,9 +71,9 @@ func (q *Queries) CountEmails(ctx context.Context, arg CountEmailsParams) (int64
 		arg.Link,
 		arg.Q,
 	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+	var i CountEmailsRow
+	err := row.Scan(&i.Total, &i.Hidden)
+	return i, err
 }
 
 const countEmailsByState = `-- name: CountEmailsByState :many
@@ -415,8 +429,17 @@ WHERE emails.user_id = $1
     OR emails.from_addr ILIKE '%' || $8 || '%'
     OR emails.body_text ILIKE '%' || $8 || '%'
   )
+  -- The inbox's default: mail the classifier judged not to be about an application at
+  -- all is omitted. The judgement is ` + "`" + `mailclassify` + "`" + `'s, on a call already made, rather
+  -- than a curated list of senders — a list would be a second judge, maintained by hand
+  -- forever against people whose business is registering domains, and it would judge by
+  -- sender where the classifier judges by content.
+  --
+  -- Unclassified mail is NEVER hidden. A message nothing has judged has not been found
+  -- irrelevant; it has not been looked at.
+  AND ($9::bool OR coalesce(emails.status_signal, '') <> 'other')
 ORDER BY emails.received_at DESC, emails.id DESC
-LIMIT $10 OFFSET $9
+LIMIT $11 OFFSET $10
 `
 
 type ListEmailsParams struct {
@@ -428,6 +451,7 @@ type ListEmailsParams struct {
 	Unclassified bool   `json:"unclassified"`
 	Link         string `json:"link"`
 	Q            string `json:"q"`
+	IncludeOther bool   `json:"include_other"`
 	Off          int32  `json:"off"`
 	Lim          int32  `json:"lim"`
 }
@@ -486,6 +510,7 @@ func (q *Queries) ListEmails(ctx context.Context, arg ListEmailsParams) ([]ListE
 		arg.Unclassified,
 		arg.Link,
 		arg.Q,
+		arg.IncludeOther,
 		arg.Off,
 		arg.Lim,
 	)

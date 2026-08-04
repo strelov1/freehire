@@ -506,7 +506,12 @@ export interface ApplicationEmail {
 /** One message the mailbox sweep proposes for an application. It is a SUGGESTION, not a
  *  link: it is resolved through the same confirm/reject calls the inbox uses. */
 export interface RecalledEmail {
+  /** Our stored row's id, and 0 for a message the mailbox search found — that one is not
+   *  stored at all until you link it. */
   id: number;
+  /** Names the message at the mail provider. Present on the search path, and what the link
+   *  call is given. */
+  provider_id?: string;
   from_addr: string;
   from_name: string;
   subject: string;
@@ -786,6 +791,22 @@ export interface TelegramStatus {
   enabled: boolean;
   linked: boolean;
   chat_id?: number;
+}
+
+/** Discord link status for the current user (the `/contribute` bot, not a
+ *  notification channel). `enabled` is whether the feature is configured
+ *  server-side at all; `linked` is whether this user has connected their account. */
+export interface DiscordStatus {
+  enabled: boolean;
+  linked: boolean;
+  discord_id?: number;
+}
+
+/** A one-time token to run `/link token:<token>` in the freehire Discord server,
+ *  plus the exact instruction text to show the user. */
+export interface DiscordLinkResult {
+  token: string;
+  instructions: string;
 }
 
 /** What a résumé yields through the deterministic dictionaries: canonical skills and

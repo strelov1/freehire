@@ -2,9 +2,16 @@
 -- Newest-added first: created_at is when the job entered the catalogue (stable
 -- across re-ingests), so fresh ingests surface on top regardless of how old the
 -- platform's posted_at is. id breaks ties within one ingest batch.
+--
+-- AND NOT is_private excludes the jd-tailor-intake private-job path (visible only to
+-- its creator, through GetJobBySlug, not this listing). The partial index backing this
+-- query's ORDER BY (jobs_open_created_idx) predicates on closed_at IS NULL only, not
+-- is_private — Postgres can still use it here since that predicate is implied by this
+-- WHERE clause, applying the is_private filter on the (small) scanned window rather than
+-- the whole table, so this stays index-served rather than degrading to a full scan.
 SELECT *
 FROM jobs
-WHERE closed_at IS NULL AND duplicate_of IS NULL
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
 LIMIT $1 OFFSET $2;
 
@@ -450,6 +457,11 @@ WHERE id = sqlc.arg(id);
 -- its own location and apply URL, so a seeker picks their city; the anchor itself is
 -- included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
 -- clusters with no one and returns nothing.
+--
+-- AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a
+-- private job that coincidentally shares its cluster key with a public one would surface
+-- (slug, location, url) to anyone browsing that PUBLIC job's copies — a listing leak, not
+-- merely "you'd need the direct link", which is what never indexing/listing it is for.
 SELECT j.public_slug, j.location, j.url, j.posted_at,
     COUNT(*) OVER()::bigint AS total
 FROM jobs j
@@ -458,6 +470,7 @@ WHERE j.company_slug = anchor.company_slug
   AND j.role_fingerprint = anchor.role_fingerprint
   AND anchor.role_fingerprint <> ''
   AND j.closed_at IS NULL
+  AND NOT j.is_private
 ORDER BY j.location, j.id
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
 
@@ -788,6 +801,45 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     updated_at   = now()
+RETURNING *;
+
+-- name: InsertPrivateJob :one
+-- Creates a job visible only to its creator: the jd-tailor-intake private-JD path
+-- (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
+-- never an upsert — external_id is a synthetic value scoped to this one submission
+-- (see internal/privatejob), never compared against the public (source, external_id)
+-- dedup space, so two submissions never collide and this never conflicts with an
+-- existing row.
+--
+-- Deliberately does NOT touch the companies table (unlike UpsertJob/UpsertManualJob):
+-- a private submission's employer name is not a vetted catalogue entry, so minting or
+-- updating a companies row from it would leak a one-off private JD's company into the
+-- public companies directory. jobs.company_slug has no FK to companies, so this is
+-- safe to leave unbacked.
+--
+-- Also deliberately does NOT enqueue enrichment (contrast UpsertManualJob's Repository,
+-- which does): a private, single-tailoring-session row doesn't recoup that cost. The
+-- caller supplies content_hash/role_fingerprint precomputed the same way every other
+-- write path does (job.Fields.UpsertParams), so a private job's fingerprints are
+-- comparable if it were ever to matter, even though it is never indexed or clustered.
+INSERT INTO jobs (
+    source, external_id, url, title, company, company_slug, location, remote, description,
+    public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
+    posting_language, employment_type, education_level, english_level, experience_years_min,
+    content_hash, role_fingerprint,
+    created_by, is_private
+) VALUES (
+    sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
+    sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
+    sqlc.arg(description),
+    sqlc.arg(public_slug),
+    COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
+    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
+    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech),
+    sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
+    sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
+    sqlc.arg(created_by)::bigint, true
+)
 RETURNING *;
 
 -- name: UpdateManualJob :one

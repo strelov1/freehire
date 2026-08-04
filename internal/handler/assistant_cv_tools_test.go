@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -288,6 +289,76 @@ func TestCVEditToolAppliesAPatch(t *testing.T) {
 	}
 }
 
+// A model packages the batch as a string holding the array often enough to matter: 15 refusals
+// in 30 days on prod, each one an otherwise-correct edit that cost the turn a round. Packaging
+// says nothing about the document, so the tool reads through it.
+func TestCVEditToolAcceptsOpsAsAJSONString(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	args, err := json.Marshal(map[string]any{
+		"ops": `[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"` + atom.ID.String() + `"}]`,
+	})
+	if err != nil {
+		t.Fatalf("marshal arguments: %v", err)
+	}
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(args)); err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+	if !strings.Contains(string(repo.written), "Senior backend engineer") {
+		t.Errorf("stored document = %s, want the patched summary", repo.written)
+	}
+}
+
+// The tolerance is for packaging only. A field the editor does not define is the shape that
+// once let an agent clobber the wrong experience entry while reading 200 back, so it stays
+// refused, and the refusal still names what it choked on.
+func TestCVEditToolStillRefusesAnUnknownField(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":"[{\"kind\":\"set\",\"path\":\"summary\",\"value\":\"x\",\"skill\":0}]"}`))
+	if err == nil {
+		t.Fatal("an operation carrying an undefined field must be refused, packaged or not")
+	}
+	if !strings.Contains(err.Error(), "skill") {
+		t.Errorf("error = %v, want it to name the offending field", err)
+	}
+}
+
+// The model names positions against the document it read, so a batch removing two lines of one
+// list must mean what it says. The conversion lives at this boundary and nowhere deeper: the
+// editor's other callers state their indices sequentially.
+func TestCVEditToolRemovesTwoPositionsOfOneList(t *testing.T) {
+	const fourBullets = `{"header":{"full_name":"Ada Lovelace"},"summary":"Backend engineer",` +
+		`"experience":[{"company":"Acme","title":"Engineer","bullets":["A","B","C","D"]}]}`
+	a, repo := cvToolsAPI(t, fourBullets)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	// Non-adjacent, and named against the document the model read.
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"remove","path":"experience[0].bullets[1]"},{"kind":"remove","path":"experience[0].bullets[3]"}]}`))
+	if err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+
+	var stored struct {
+		Experience []struct {
+			Bullets []string `json:"bullets"`
+		} `json:"experience"`
+	}
+	if err := json.Unmarshal(repo.written, &stored); err != nil {
+		t.Fatalf("decode stored document: %v", err)
+	}
+	want := []string{"A", "C"}
+	if got := stored.Experience[0].Bullets; !reflect.DeepEqual(got, want) {
+		t.Errorf("bullets = %q, want %q", got, want)
+	}
+}
+
 func TestCVEditToolRefusesToRewriteContactDetails(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
@@ -420,6 +491,159 @@ func TestCVEditWritesACitedBullet(t *testing.T) {
 	}
 }
 
+// cv_edit and tailor_report write two different columns through two different tool calls;
+// nothing ties them together unless cv_edit is told which requirement its batch just closed.
+// requirement/requirement_status is that link — it must land in the SAME call as the edit,
+// because that is the one moment the model still has the requirement in mind.
+func TestCVEditToolMergesTheClosedRequirementIntoTheReport(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
+	if err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+
+	var report []cv.AutopilotEntry
+	if err := json.Unmarshal(repo.report, &report); err != nil {
+		t.Fatalf("report unreadable: %v (raw %s)", err, repo.report)
+	}
+	if len(report) != 1 || report[0].Requirement != "PostgreSQL experience" || report[0].Status != cv.AutopilotClosedBank {
+		t.Errorf("report = %+v, want one entry closing \"PostgreSQL experience\"", report)
+	}
+}
+
+// The merge's replace path (proven at the store level in internal/cv/autopilot_test.go) has
+// to be reachable through cv_edit itself, not just through Store.MergeAutopilotEntry directly
+// — this is what proves the handler wiring, not just the store logic, does the right thing
+// when a report entry already exists.
+func TestCVEditToolReplacesAnExistingOpenReportEntry(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+	seed, err := json.Marshal([]cv.AutopilotEntry{
+		{Requirement: "PostgreSQL experience", Status: cv.AutopilotOpen},
+		{Requirement: "Team leadership", Status: cv.AutopilotClosedBank},
+	})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	repo.report = seed
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err = tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
+	if err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+
+	var report []cv.AutopilotEntry
+	if err := json.Unmarshal(repo.report, &report); err != nil {
+		t.Fatalf("report unreadable: %v (raw %s)", err, repo.report)
+	}
+	if len(report) != 2 {
+		t.Fatalf("report has %d entries, want 2 (the edit must replace, not duplicate)", len(report))
+	}
+	if report[0].Requirement != "PostgreSQL experience" || report[0].Status != cv.AutopilotClosedBank {
+		t.Errorf("report[0] = %+v, want PostgreSQL experience closed_bank", report[0])
+	}
+	if report[1].Requirement != "Team leadership" || report[1].Status != cv.AutopilotClosedBank {
+		t.Errorf("unrelated entry was disturbed: %+v", report[1])
+	}
+}
+
+// The schema's enum keeps a well-behaved model from offering open/not_reached, but the
+// handler must refuse the value too — a model can send whatever JSON it wants regardless of
+// what the schema advertises.
+func TestCVEditToolRejectsAnExplicitOpenRequirementStatus(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"requirement":"PostgreSQL experience","requirement_status":"open"}`))
+	if err == nil {
+		t.Fatal("an explicit \"open\" status was accepted; cv_edit must not be able to reopen a requirement")
+	}
+	if repo.written != nil {
+		t.Errorf("document was written = %s, want the batch refused before the edit applied", repo.written)
+	}
+	if repo.report != nil {
+		t.Errorf("report = %s, want it untouched when the call is refused", repo.report)
+	}
+}
+
+// A batch that names no requirement is the common case (rewording, reordering, adding a
+// technology tag) and must leave the report exactly as it was — merging a blank requirement
+// would either error or, worse, silently create a nameless row the panel cannot render.
+func TestCVEditToolWithNoRequirementLeavesTheReportUntouched(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
+	if err != nil {
+		t.Fatalf("cv_edit: %v", err)
+	}
+	if repo.report != nil {
+		t.Errorf("report = %s, want it untouched when the call named no requirement", repo.report)
+	}
+}
+
+// requirement_status only makes sense as an outcome the edit just produced — open and
+// not_reached describe requirements NOT closed, so cv_edit (which only ever closes one) must
+// not advertise or accept them; a model that could send "open" here could silently reopen a
+// requirement tailor_report already closed, through a call that carries no report review.
+func TestCVEditToolRequirementStatusOffersOnlyClosingOutcomes(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	props, _ := tool.Schema["properties"].(map[string]any)
+	status, _ := props["requirement_status"].(map[string]any)
+	got, _ := status["enum"].([]string)
+
+	want := []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate)}
+	if len(got) != len(want) {
+		t.Fatalf("requirement_status enum = %v, want %v", got, want)
+	}
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			if g == w {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("requirement_status enum = %v, missing %q", got, w)
+		}
+	}
+}
+
+func TestCVEditToolRequirementWithoutStatusIsRefused(t *testing.T) {
+	bank := newStubBank()
+	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
+	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	_, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
+			`"requirement":"PostgreSQL experience"}`))
+	if err == nil {
+		t.Fatal("a requirement with no status was accepted; the report would hold an invalid entry")
+	}
+	if repo.report != nil {
+		t.Errorf("report = %s, want it untouched when the call is refused", repo.report)
+	}
+}
+
 // A batch is one entry in the candidate's history and one round of the turn's budget, which
 // is why closing a requirement no longer costs three calls.
 func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
@@ -443,5 +667,39 @@ func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
 		if !strings.Contains(written, want) {
 			t.Errorf("stored document is missing %q: %s", want, written)
 		}
+	}
+}
+
+// request_confirmation has no side effect: the client renders it as buttons, and the
+// candidate's answer arrives as an ordinary chat message on their next turn, not as a
+// second tool call this one waits for.
+func TestRequestConfirmationToolIsRegisteredForTailoring(t *testing.T) {
+	a, _ := cvToolsAPI(t, oneExperienceCV)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	out, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"claim":"Built Reelmente.app with React and Next.js","question":"Is that right?"}`))
+	if err != nil {
+		t.Fatalf("request_confirmation: %v", err)
+	}
+	payload, _ := json.Marshal(out)
+	if !strings.Contains(string(payload), "awaiting_candidate_response") {
+		t.Errorf("payload = %s, want status awaiting_candidate_response", payload)
+	}
+}
+
+// The tool writes nothing and reads nothing — a claim rejected outright (no employment,
+// no evidence yet) must still be askable about.
+func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
+	a, repo := cvToolsAPI(t, oneExperienceCV)
+	before := string(repo.written)
+
+	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
+		`{"claim":"Anything","question":"Confirm?"}`)); err != nil {
+		t.Fatalf("request_confirmation: %v", err)
+	}
+	if string(repo.written) != before {
+		t.Errorf("request_confirmation wrote to the CV store; it must have no side effect (before=%q after=%q)", before, repo.written)
 	}
 }

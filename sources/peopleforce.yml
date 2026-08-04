@@ -72,8 +72,6 @@
   board: magnetics
 - company: Media24
   board: media24
-- company: Frontline
-  board: miltech-1
 - company: Мрія
   board: mriia
 - company: Multiplex
@@ -136,3 +134,5 @@
   board: octogamesstudio
 - company: Arctic7
   board: arctic7
+- company: Rootstrap
+  board: rootstrap

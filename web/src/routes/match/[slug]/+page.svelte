@@ -17,7 +17,7 @@
   }
 </script>
 
-<svelte:head><title>Fit analysis · {data.job.title}</title></svelte:head>
+<svelte:head><title>Match · {data.job.title}</title></svelte:head>
 
 <div class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:py-10">
   <!-- Editorial masthead -->

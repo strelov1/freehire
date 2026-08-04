@@ -1,7 +1,7 @@
 {
   "web/src/lib/assistant/AssistantChat.svelte": 8,
   "web/src/lib/assistant/Composer.svelte": 2,
-  "web/src/lib/assistant/ToolGroupList.svelte": 1,
+  "web/src/lib/assistant/ToolGroupList.svelte": 2,
   "web/src/lib/avatar.ts": 10,
   "web/src/lib/components/AboutValues.svelte": 1,
   "web/src/lib/components/ActivityBars.svelte": 6,
@@ -19,6 +19,7 @@
   "web/src/lib/components/CompanyFacts.svelte": 1,
   "web/src/lib/components/CompanyLogo.svelte": 2,
   "web/src/lib/components/ContributeLandingView.svelte": 1,
+  "web/src/lib/components/ContributeView.svelte": 2,
   "web/src/lib/components/CountryFlagStack.svelte": 1,
   "web/src/lib/components/cv/SettingRow.svelte": 1,
   "web/src/lib/components/cv/Stepper.svelte": 1,

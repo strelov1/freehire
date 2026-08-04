@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 // OpKind is the closed set of things an edit can do. Four structural operations replace the
@@ -67,6 +70,69 @@ func Apply(state State, ops []Op) (State, []Op, error) {
 		inverse = append([]Op{undo}, inverse...)
 	}
 	return working, inverse, nil
+}
+
+// OrderAgainstOriginal rewrites a batch written against the document as the author SAW it into
+// one that means the same thing applied in sequence, by running each list's consecutive
+// removals from the highest index down.
+//
+// It is not part of Apply, and that distinction is the whole point. Apply's own index semantics
+// are sequential — each operation addresses the list as the batch has changed it so far — and
+// two of its three callers depend on that: `Diff` states its indices exactly that way, and the
+// inverses Apply itself produces are replayed the same way by undo. Sorting inside Apply
+// silently corrupted both: a save that deleted two non-adjacent bullets deleted the wrong one,
+// and undoing a run left the agent's insertion in place while removing the candidate's line.
+//
+// A model is the one author that does not think sequentially: it reads the document once and
+// names the positions it saw. So the conversion belongs where that batch arrives, and nowhere
+// else.
+func OrderAgainstOriginal(ops []Op) []Op {
+	ordered := make([]Op, len(ops))
+	copy(ordered, ops)
+
+	for start := 0; start < len(ordered); {
+		list, _, ok := listAddress(ordered[start])
+		if !ok {
+			start++
+			continue
+		}
+		end := start + 1
+		for end < len(ordered) {
+			next, _, ok := listAddress(ordered[end])
+			if !ok || next != list {
+				break
+			}
+			end++
+		}
+		run := ordered[start:end]
+		sort.SliceStable(run, func(a, b int) bool {
+			_, x, _ := listAddress(run[a])
+			_, y, _ := listAddress(run[b])
+			return x > y
+		})
+		start = end
+	}
+	return ordered
+}
+
+// listAddress splits a removal's path into the list it addresses and the position within it —
+// `experience[0].bullets[3]` becomes `experience[0].bullets` and 3. It reports false for
+// anything that is not a removal from a position, which is what excludes every other operation
+// from reordering.
+func listAddress(op Op) (string, int, bool) {
+	if op.Kind != OpRemove {
+		return "", 0, false
+	}
+	s := string(op.Path)
+	open := strings.LastIndexByte(s, '[')
+	if open < 0 || !strings.HasSuffix(s, "]") {
+		return "", 0, false
+	}
+	at, err := strconv.Atoi(s[open+1 : len(s)-1])
+	if err != nil {
+		return "", 0, false
+	}
+	return s[:open], at, true
 }
 
 func applyOne(state *State, op Op) (Op, error) {

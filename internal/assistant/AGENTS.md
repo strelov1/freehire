@@ -16,13 +16,28 @@ built from the same services the HTTP handlers use.
   turn. Only a model/transport failure ends a turn as errored.
 - **Every turn ends with exactly one `result` event.** A client that receives no
   terminal event waits forever, so the loop emits one on every path: an answer,
-  the step cap, cancellation, and failure.
-- **A turn is bounded three ways**: tool-calling rounds, the LLM client's per-call
-  timeout, and cancellation. Zero/negative bounds fall back to defaults rather
-  than meaning "unbounded" — an unbounded loop on a metered gateway is a runaway
-  bill. The round ceiling is `RunnerConfig.MaxSteps` unless the turn names its own
-  through `TurnConfig`; that value is always chosen server-side, because a ceiling
-  a client can raise is not a ceiling.
+  the step cap, cancellation, and failure — and so does the handler on the one path
+  that never reaches the loop, a queued message whose wait ran out.
+- **A turn is bounded two ways**: tool-calling rounds and the LLM client's per-call
+  timeout. Zero/negative bounds fall back to defaults rather than meaning
+  "unbounded" — an unbounded loop on a metered gateway is a runaway bill. The round
+  ceiling is `RunnerConfig.MaxSteps` unless the turn names its own through
+  `TurnConfig`; that value is always chosen server-side, because a ceiling a client
+  can raise is not a ceiling.
+- **A turn outlives its reader, and stops only when asked.** A failed SSE write means
+  this reader is not listening — a phone freezing a backgrounded tab, a slept laptop
+  — and nothing more; the turn runs to its own end and its transcript is stored
+  whether or not anyone reads it. Treating that write as "the user left" is what once
+  lost an unattended run its report after twenty-five committed CV edits. Stopping is
+  a request of its own (`POST /assistant/sessions/:id/cancel`), because a dropped
+  connection cannot be told apart from a deliberate Stop.
+- **One turn at a time per session.** `turnRegistry` (`internal/handler/assistant_turns.go`)
+  holds each running turn's `CancelFunc` — the only handle on a turn no request owns
+  any more — and makes a second message wait rather than run beside the first: two
+  turns of one tailoring session would edit one CV from two conversations that cannot
+  see each other. One message may wait, a further one is refused. The registry is
+  per-process, so a turn started before a blue/green flip cannot be cancelled and ends
+  at its step cap.
 - **The transcript IS the model's history.** One table holds both, including the
   assistant's tool calls and each tool's result, with the model's argument string
   stored verbatim. Two stores would drift; re-encoding parsed arguments would
@@ -170,28 +185,6 @@ absent from every other preset — nothing is attached to their channel, and a t
 can only fail teaches the model to stop calling tools. Reaching no browser is a tool
 error naming the remedy, never a failed turn; the call carries its own deadline, because
 it is the only tool whose completion depends on a client we do not control.
-
-**Follow-ups** (`followups.go`, `handler/assistant_followups.go`) suggest what to ask next
-under a settled answer. They are NOT part of the turn: generating them inside the loop
-would make a failure to suggest a failure to answer, and would spend the tool-calling
-model on a three-line task. `POST /assistant/sessions/:id/followups` runs `LLM_MODEL` —
-the cheap one — over `LastExchange` alone, and answers an empty list on EVERY failure
-path: no model, a model error, an unreadable answer, a conversation with nothing said in
-it yet. The strip is decoration, and a decoration that reports a problem nobody can act
-on is worse than one that quietly does not appear; the failure goes to the log instead,
-because otherwise "the model had nothing to suggest" and "the gateway is down" look
-identical from the outside.
-
-Two rules are load-bearing, and both follow from the same fact — activating a suggestion
-speaks it in the CALLER's voice, and the model that wrote it has read job descriptions
-and browsed pages:
-
-- **It renders as text nodes, never through `renderMarkdown`**, and the client sends
-  exactly what it displayed. A truncated question is a different question from the one
-  that was read, which is why the display cap equals the server's per-item cap and why an
-  over-length item is DISCARDED server-side rather than shortened.
-- **The exchange is handed to the model as data.** The system prompt says so outright
-  rather than leaving it implied.
 
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a

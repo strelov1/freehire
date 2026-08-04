@@ -37,7 +37,7 @@ import (
 // stays in the handler, where the caller is a person opening a message.
 type Queries interface {
 	ListEmails(ctx context.Context, arg db.ListEmailsParams) ([]db.ListEmailsRow, error)
-	CountEmails(ctx context.Context, arg db.CountEmailsParams) (int64, error)
+	CountEmails(ctx context.Context, arg db.CountEmailsParams) (db.CountEmailsRow, error)
 	CountEmailsByState(ctx context.Context, userID int64) ([]db.CountEmailsByStateRow, error)
 	GetEmail(ctx context.Context, arg db.GetEmailParams) (db.GetEmailRow, error)
 	GetInterviewInvitation(ctx context.Context, arg db.GetInterviewInvitationParams) (db.GetInterviewInvitationRow, error)
@@ -164,9 +164,21 @@ type Query struct {
 	// WithBody asks for each message's readable body. It is opt-in because bodies
 	// are the one listing payload heavy enough to matter.
 	WithBody bool
-	Limit    int
-	Offset   int
+	// IncludeOther asks for mail the classifier judged not to be about an application at
+	// all. It is opt-IN, so the inbox defaults to the applications a person came to find —
+	// and Page.Hidden reports how much that default cost them, because a filter nobody can
+	// see is a misclassification nobody can find.
+	IncludeOther bool
+	Limit        int
+	Offset       int
 }
+
+// showsOther reports whether this query wants the mail the default omits.
+//
+// Asking FOR the label is asking for it. Without this, `?status=other` and the hide default
+// cancel each other out and the filter returns an empty page — a filter that answers
+// "nothing" to its own subject is worse than one that does not exist.
+func (q Query) showsOther() bool { return q.IncludeOther || q.Status == "other" }
 
 // Validate checks the filters against their controlled vocabularies. Search calls
 // it; it is exported for the one caller that reuses the same filters for a
@@ -188,10 +200,15 @@ func (q Query) Validate() error {
 // DefaultLimit is the page size a caller gets when it names none.
 const DefaultLimit = 20
 
-// Page is one listing page and the total matching the same filters.
+// Page is one listing page, the total matching the same filters, and how many the `other`
+// default omitted under those same filters.
 type Page struct {
 	Messages []Message
 	Total    int64
+	// Hidden is the count the default suppressed. Zero when the caller asked for
+	// everything, and zero when there was nothing to suppress — the two are the same
+	// answer to "what am I not seeing".
+	Hidden int64
 }
 
 // Search lists the caller's live mail, newest first, under the given filters.
@@ -212,14 +229,15 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 	rows, err := s.q.ListEmails(ctx, db.ListEmailsParams{
 		UserID: userID, Src: q.Source, Unread: q.Unread, Status: q.Status, Q: q.Q,
 		Unclassified: q.Unclassified, Link: q.Link, WithBody: q.WithBody,
-		Lim: int32(limit), Off: int32(max(q.Offset, 0)),
+		IncludeOther: q.showsOther(),
+		Lim:          int32(limit), Off: int32(max(q.Offset, 0)),
 	})
 	if err != nil {
 		return Page{}, err
 	}
-	total, err := s.q.CountEmails(ctx, db.CountEmailsParams{
+	counts, err := s.q.CountEmails(ctx, db.CountEmailsParams{
 		UserID: userID, Src: q.Source, Unread: q.Unread, Status: q.Status, Q: q.Q,
-		Unclassified: q.Unclassified, Link: q.Link,
+		Unclassified: q.Unclassified, Link: q.Link, IncludeOther: q.showsOther(),
 	})
 	if err != nil {
 		return Page{}, err
@@ -247,7 +265,7 @@ func (s *Service) Search(ctx context.Context, userID int64, q Query) (Page, erro
 		}
 		out = append(out, m)
 	}
-	return Page{Messages: out, Total: total}, nil
+	return Page{Messages: out, Total: counts.Total, Hidden: counts.Hidden}, nil
 }
 
 // Get reads one message without touching its read state. It is the shared tail of

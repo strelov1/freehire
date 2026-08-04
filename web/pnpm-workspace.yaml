@@ -6,3 +6,10 @@ allowBuilds:
 # build scripts are skipped. @sentry/cli is only needed for source-map upload
 # (gated on SENTRY_AUTH_TOKEN); core-js postinstall is non-critical.
 strictDepBuilds: false
+# @sveltejs/kit pins cookie@^0.6.0 on every 2.x release (GHSA-pxg6-pf52-xh8x /
+# CVE-2024-47764, low: out-of-bounds characters in cookie name/path/domain).
+# Pinned to the last 0.7.x patch, not an open '>=0.7.0' range: cookie has since
+# jumped to 1.x/2.x, and @sveltejs/kit has never declared support past 0.6/0.7 —
+# an unbounded override would silently ride a major bump its own tests never ran.
+overrides:
+  cookie@<0.7.0: 0.7.2

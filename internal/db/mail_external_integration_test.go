@@ -417,7 +417,7 @@ func listIDs(t *testing.T, q *Queries, p ListEmailsParams) ([]int64, int64) {
 	if err != nil {
 		t.Fatalf("count emails: %v", err)
 	}
-	return ids, total
+	return ids, total.Total
 }
 
 // TestUnclassifiedFilterIsTheAgentsWorkQueue asserts the listing can answer "what

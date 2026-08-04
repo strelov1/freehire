@@ -1,0 +1,70 @@
+---
+title: What this application asks
+date: 2026-08-03
+summary: A one-click apply and an evening of essay writing look identical in a job listing. Now the questions are on the page, before you commit to the form.
+type: changelog
+tags:
+  - job-seekers
+  - transparency
+  - catalogue
+---
+
+A job posting tells you what the work is. It tells you nothing about what applying costs.
+One role wants your CV and an email address. The next wants fourteen answers, three of
+them essays, your salary expectations and a visa declaration — and you find that out after
+you have clicked through, made an account, and started typing.
+
+Open a job now and, under the description, you will often see this:
+
+```
+What this application asks                                        Greenhouse
+
+  First Name, Last Name, Email, Phone, Resume/CV, Cover Letter
+  LinkedIn Profile                                          optional
+  Please share a link of your website/portfolio
+  What is your salary expectation in CHF?
+  Are you currently located in Zurich?
+  Do you have the legal right to work in Switzerland
+    without visa sponsorship?                               choose one
+  Do you have working proficiency in German?                choose one
+```
+
+Those are the employer's own questions, as they wrote them, read straight off the
+application form. The word on the right is the shape of the answer — **written answer**
+for the ones that want a paragraph, **choose one**, **choose any**, **yes / no**,
+**upload**. That word is the whole difference between a question worth a minute and one
+worth twenty.
+
+## What we found looking at a hundred thousand of them
+
+Two thirds of applications ask nothing at all beyond a CV and your contact details. The
+rest range from mild to punishing:
+
+```
+  one click, no questions      67%
+  light        1–4 questions   16%
+  heavy       5–14 questions   16%
+  punishing     15+ questions    1%
+```
+
+More than a quarter of the applications on Greenhouse demand three or more written
+answers. The longest form we have seen has ninety-nine fields.
+
+None of that is visible from a listing, and all of it decides where a week's worth of
+effort should go.
+
+## What it does not do
+
+It does not guess. Everything shown is read from the form itself — we count nothing,
+estimate nothing, and infer nothing about what a question "really" means. If an employer's
+question is ambiguous, you see the ambiguity rather than our interpretation of it.
+
+It leaves out the equal-opportunity survey and the data-consent boxes. Those are the
+hiring platform's boilerplate, identical on every posting, and they tell you nothing about
+this job.
+
+And it is not everywhere. We can read application forms from Greenhouse, Lever, Ashby,
+Workable and Recruitee. Workday, Oracle, SmartRecruiters and UKG keep theirs behind a
+candidate account or a bot wall, and where we cannot read a form we say nothing rather
+than guess at one. Coverage is still filling in — a posting that shows no block today may
+show one tomorrow.

@@ -2,8 +2,13 @@
 //
 // A turn is a single POST whose response body streams the turn as SSE. That is
 // the whole client: no connection held open between turns, no attach, no input
-// lease. Cancelling is aborting the fetch — the backend notices its next write
-// fail and stops the loop before spending another model call.
+// lease.
+//
+// Reading and stopping are now two different things. Aborting the fetch stops THIS
+// client reading; it does not stop the turn, which runs on the server under its own
+// bounds and stores its transcript whether anyone is listening or not. Stopping the
+// turn is a request of its own — which is what lets a phone background its tab
+// without throwing the work away.
 
 import { readFrames } from './sse';
 import type { TurnEvent } from './wire';
@@ -17,6 +22,37 @@ export interface Turn {
 }
 
 /**
+ * The stream ended before the turn did — a dropped connection, a frozen tab, a slept
+ * laptop.
+ *
+ * It is deliberately its own type because it is NOT a failed turn: the turn is still
+ * running on the server and its transcript is stored, so the caller should re-read the
+ * session rather than tell the user their work failed. Saying "error" here would
+ * misreport the state of the user's own CV.
+ */
+export class StreamInterrupted extends Error {
+  constructor(cause: unknown) {
+    super('the stream was interrupted', { cause });
+    this.name = 'StreamInterrupted';
+  }
+}
+
+/** Ask the server to stop a session's running turn. Safe to call when nothing is
+ *  running: the caller cannot know whether the turn it stopped watching has ended. */
+export async function cancelTurn(sessionId: string): Promise<void> {
+  try {
+    await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // Best-effort by nature: offline, or the route answered badly. There is nothing the user
+    // can do about it and nothing to show them — the turn ends at its step cap either way, and
+    // an unhandled rejection here would be reported as a fault they did not cause.
+  }
+}
+
+/**
  * Send a message and stream the turn. `onEvent` receives every frame in order,
  * ending with exactly one `result`. The returned promise resolves when the stream
  * ends — including when it was cancelled, which is a normal outcome rather than
@@ -24,6 +60,7 @@ export interface Turn {
  */
 export function sendTurn(sessionId: string, text: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
+    sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
     { text },
     'could not send the message',
@@ -38,6 +75,7 @@ export function sendTurn(sessionId: string, text: string, onEvent: (e: TurnEvent
  */
 export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
+    sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/autopilot`,
     {},
     'could not start the run',
@@ -55,6 +93,7 @@ export function startAutopilot(sessionId: string, onEvent: (e: TurnEvent) => voi
  */
 export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
   return streamTurn(
+    sessionId,
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/opening`,
     {},
     'could not open the rehearsal',
@@ -65,6 +104,7 @@ export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void
 /** POST a turn and stream its frames. Shared by every way of starting one, so cancellation
  *  and frame decoding have a single implementation. */
 function streamTurn(
+  sessionId: string,
   url: string,
   body: unknown,
   failure: string,
@@ -97,11 +137,21 @@ function streamTurn(
         onEvent({ type: 'result', stop_reason: 'cancelled' });
         return;
       }
-      throw e;
+      // Anything else broke the stream, not the turn. The caller re-reads the session.
+      throw new StreamInterrupted(e);
     }
   })();
 
-  return { done, cancel: () => controller.abort() };
+  return {
+    done,
+    cancel: () => {
+      // Both halves: tell the server to stop the work, and stop reading it here. The
+      // server no longer infers the first from the second. cancelTurn swallows its own
+      // failures, so this cannot reject.
+      void cancelTurn(sessionId);
+      controller.abort();
+    },
+  };
 }
 
 /** Decode one frame's payload. A frame we cannot parse is dropped rather than

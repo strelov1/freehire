@@ -100,6 +100,25 @@ func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
 	}
 }
 
+// A private job (the jd-tailor-intake path: pasted text or an unrecognized-URL scrape)
+// must never become a search document, whatever its open/closed state — see the job-search
+// capability delta in openspec/changes/jd-tailor-intake.
+func TestSplitJobs_PrivateJobsAreDeletedNotIndexed(t *testing.T) {
+	public := db.Job{ID: 1, Title: "Public", PublicSlug: "public-x"}
+	private := db.Job{ID: 2, Title: "Private", PublicSlug: "private-x", IsPrivate: true}
+
+	docs, deleteIDs, err := splitJobs([]db.Job{public, private}, nil, nil, time.Now())
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	if len(docs) != 1 || docs[0].ID != 1 {
+		t.Fatalf("docs = %+v, want only the public job", docs)
+	}
+	if len(deleteIDs) != 1 || deleteIDs[0] != 2 {
+		t.Fatalf("deleteIDs = %v, want [2] (private job removed)", deleteIDs)
+	}
+}
+
 // A canonical row's document is widened with its role cluster's geography union, so a
 // collapsed multi-country role stays findable by every country its (hidden) reposts hold.
 func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {

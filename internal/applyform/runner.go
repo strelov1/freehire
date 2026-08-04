@@ -17,6 +17,11 @@ type Claimed struct {
 	JobID      int64
 	Provider   string
 	ExternalID string
+	// URL is the posting's own address. Most fetchers ignore it — the board and posting
+	// id are enough — but a platform with more than one regional host cannot be reached
+	// without it, and the host cannot be discovered by trying: Lever answers 404 from the
+	// wrong region, which is the same code it uses for a posting that no longer exists.
+	URL string
 }
 
 // Store is the persistence the runner needs. The real implementation wraps the generated
@@ -208,8 +213,7 @@ func captureOne(ctx context.Context, s Store, fetchers map[string]Fetcher, opts 
 	if !ok {
 		return fmt.Errorf("no fetcher for provider %q", c.Provider)
 	}
-	board, posting, ok := splitBoardPosting(c.ExternalID)
-	if !ok {
+	if _, _, ok := splitBoardPosting(c.ExternalID); !ok {
 		return fmt.Errorf("external id %q is not a board-namespaced posting id", c.ExternalID)
 	}
 
@@ -219,7 +223,7 @@ func captureOne(ctx context.Context, s Store, fetchers map[string]Fetcher, opts 
 		defer cancel()
 	}
 
-	form, err := fetcher.Fetch(ctx, board, posting)
+	form, err := fetcher.Fetch(ctx, c)
 	if err != nil {
 		return err
 	}

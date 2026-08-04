@@ -30,6 +30,7 @@ import (
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/gmailsync"
 	"github.com/strelov1/freehire/internal/headshot"
+	"github.com/strelov1/freehire/internal/jdresolve"
 	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/llmkey"
@@ -37,6 +38,7 @@ import (
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
+	"github.com/strelov1/freehire/internal/privatejob"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
@@ -152,6 +154,22 @@ func listResponse(c *fiber.Ctx, data any, total int64, limit, offset int) error 
 	})
 }
 
+// listResponseWithHidden is listResponse plus the count a default filter suppressed.
+//
+// Separate from listResponse rather than a widened one: every other listing hides nothing,
+// and a `hidden: 0` on all of them would be a field readers have to learn to ignore.
+func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, offset int) error {
+	return c.JSON(fiber.Map{
+		"data": data,
+		"meta": fiber.Map{
+			"total":  total,
+			"limit":  limit,
+			"offset": offset,
+			"hidden": hidden,
+		},
+	})
+}
+
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
 // single browser origin allowed cross-origin (FrontendOrigin), the token-issuer
 // settings (JWTSecret/JWTTTL), the HTTPS-only cookie flag (CookieSecure), the
@@ -203,6 +221,16 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramBotUsername   string
 	TelegramWebhookSecret string
+	// Discord bot for slash-command board contributions, mirroring the Telegram bot's
+	// role. Optional: empty DiscordBotToken disables the feature — the linking
+	// endpoints and interaction webhook are inert. DiscordApplicationID and
+	// DiscordPublicKey are the app's identity and the key used to verify inbound
+	// interaction signatures. DiscordGuildID scopes slash-command registration to a
+	// single guild.
+	DiscordBotToken      string
+	DiscordApplicationID string
+	DiscordPublicKey     string
+	DiscordGuildID       string
 	// GmailConnector + GmailCipher enable the Connect-Gmail inbox. Both nil = the
 	// feature is off (connect routes unregistered, inbox empty).
 	GmailConnector *gmailsync.Connector
@@ -297,6 +325,10 @@ func Register(app *fiber.App, cfg Config) {
 	ingestClient := sources.NewClient()
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
+	// jd-tailor-intake reuses the SAME importer as the contribution flow (shared SSRF-guarded
+	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
+	// branch, and internal/privatejob for its generic-scrape/pasted-text branch.
+	jdResolveH := newJDResolveHandlers(jdresolve.New(queries, importer, privatejob.NewWriter(queries)))
 	creditsH := newCreditsHandlers(creditsStore, queries)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, creditsStore)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
@@ -321,14 +353,19 @@ func Register(app *fiber.App, cfg Config) {
 	llmKeys := llmkey.NewResolver(queries, cfg.LLMKeys)
 	cvH := newCVHandlers(cfg.Pool, queries, cvStore, assistantStore, cvRenderer, cfg.TracerLinkSalt, cfg.FrontendOrigin, servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin), resumeStore, photoStore, creditsStore, matchH, bankGate{bank: bank})
 	telegramH := newTelegramHandlers(queries, cfg.JWTSecret, cfg.TelegramBotToken, cfg.TelegramBotUsername, cfg.TelegramWebhookSecret, cfg.FrontendOrigin, contributionsH.intake)
+	discordH := newDiscordHandlers(queries, cfg.JWTSecret, cfg.DiscordBotToken, cfg.DiscordApplicationID, cfg.DiscordPublicKey, cfg.DiscordGuildID, cfg.FrontendOrigin, contributionsH.intake)
 	inboxH := newInboxHandlers(queries, cfg.Pool, cfg.GmailConnector, cfg.GmailCipher, cfg.FrontendOrigin, cfg.CookieSecure, cfg.MailboxDomain)
 	// The pull direction is wired only where there is a model to ask. Left nil, its endpoint
 	// reports the feature off — the same way an unconfigured deployment reports every other
 	// model-backed surface off, rather than failing at the first press.
 	if cfg.LLM != nil {
+		// The mailbox factory is present only where a Gmail client and a token cipher both
+		// are — the same condition cmd/gmail-sync checks. Absent, every caller falls back to
+		// stored mail, which is the path that shipped first.
 		inboxH = inboxH.withRecall(
 			mailrecall.New(mailrecall.NewDBStore(queries), cfg.LLM),
-			llmBinding{client: cfg.LLM, keys: llmKeys})
+			llmBinding{client: cfg.LLM, keys: llmKeys},
+			newGmailMailboxes(queries, cfg.GmailCipher, cfg.GmailConnector))
 	}
 	// Account deletion reaches past the FK cascade: cfg.Blob is nil when storage is
 	// unconfigured and the revoker is nil when Gmail is — either way there is nothing
@@ -366,10 +403,8 @@ func Register(app *fiber.App, cfg Config) {
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	// Suggestions run on LLM (cheap, one-shot) rather than on AssistantLLM: the whole
-	// argument for generating them outside the turn is that they cost almost nothing.
 	assistantH := newAssistantHandlers(queries,
-		assistantModels{Agent: cfg.AssistantLLM, FollowUps: cfg.LLM, Keys: llmKeys, MaxSteps: cfg.AssistantMaxSteps},
+		assistantModels{Agent: cfg.AssistantLLM, Keys: llmKeys, MaxSteps: cfg.AssistantMaxSteps},
 		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
@@ -509,6 +544,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Link contributions (see contributionHandlers).
 	contributionsH.register(api, mw)
+	jdResolveH.register(api, mw)
 
 	// Employee referrals (see referralHandlers).
 	referralsH.register(api, mw)
@@ -551,5 +587,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Telegram linking + the inbound bot webhook (see telegramHandlers).
 	telegramH.register(api, mw)
+	// Discord linking + the inbound interaction webhook (see discordHandlers).
+	discordH.register(api, mw)
 
 }

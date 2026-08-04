@@ -150,13 +150,29 @@ WHERE emails.user_id = $1
     OR emails.from_addr ILIKE '%' || sqlc.arg(q) || '%'
     OR emails.body_text ILIKE '%' || sqlc.arg(q) || '%'
   )
+  -- The inbox's default: mail the classifier judged not to be about an application at
+  -- all is omitted. The judgement is `mailclassify`'s, on a call already made, rather
+  -- than a curated list of senders — a list would be a second judge, maintained by hand
+  -- forever against people whose business is registering domains, and it would judge by
+  -- sender where the classifier judges by content.
+  --
+  -- Unclassified mail is NEVER hidden. A message nothing has judged has not been found
+  -- irrelevant; it has not been looked at.
+  AND (sqlc.arg(include_other)::bool OR coalesce(emails.status_signal, '') <> 'other')
 ORDER BY emails.received_at DESC, emails.id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: CountEmails :one
--- Total live messages for the caller (same optional filters as ListEmails), for
--- pagination.
-SELECT count(*)
+-- Total live messages for the caller under the same optional filters as ListEmails, plus
+-- how many of them the `other` default omitted.
+--
+-- Both numbers come from one statement and one set of predicates on purpose: a hidden count
+-- computed separately would describe a different mailbox from the one on screen the moment
+-- any filter is active. The count is not decoration — a filter that hides silently makes a
+-- misclassification impossible to find, and the classifier reads attacker-controlled text.
+SELECT
+    count(*) FILTER (WHERE sqlc.arg(include_other)::bool OR coalesce(status_signal, '') <> 'other')::bigint AS total,
+    count(*) FILTER (WHERE NOT sqlc.arg(include_other)::bool AND coalesce(status_signal, '') = 'other')::bigint AS hidden
 FROM emails
 WHERE user_id = $1
   AND deleted_at IS NULL

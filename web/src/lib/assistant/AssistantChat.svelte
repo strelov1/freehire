@@ -7,12 +7,16 @@
     listSessions,
     getSession,
     deleteSession,
-    suggestFollowUps,
     SessionNotFound,
   } from '$lib/assistant/api';
   import { track } from '$lib/analytics';
-  import { forDisplay, shouldRequest } from '$lib/assistant/followups';
-  import { openRehearsal, sendTurn, startAutopilot, type Turn } from '$lib/assistant/client';
+  import {
+    openRehearsal,
+    sendTurn,
+    startAutopilot,
+    StreamInterrupted,
+    type Turn,
+  } from '$lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '$lib/assistant/chat';
   import { splitPresentingCalls } from '$lib/assistant/deck';
   import { atBottom } from '$lib/assistant/scrolling';
@@ -114,8 +118,8 @@
   let chat = $state<ChatState>(initChat());
   let draft = $state('');
   let turnActive = $state(false);
-  // The turn in flight, so it can be cancelled. Aborting the request is what
-  // tells the backend to stop the loop.
+  // The turn in flight, so it can be cancelled. Cancelling asks the server to stop the work;
+  // aborting the fetch only stops this client reading it.
   let turn: Turn | null = null;
 
   let sidebarOpen = $state(true);
@@ -125,12 +129,6 @@
   // following with no further ceremony.
   let stickToBottom = $state(true);
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
-
-  // What the caller might ask next, offered under the newest answer only. Cleared the
-  // moment anything else starts, and never requested on replay — a suggestion is about
-  // the present moment, and paying a model call to reconstruct it for history is spend
-  // with no reader.
-  let followUps = $state<string[]>([]);
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
   let queue = $state<{ id: string; text: string }[]>([]);
@@ -367,7 +365,6 @@
     try {
       chat = initChat();
       queue = [];
-      followUps = [];
       activeId = id;
       activePreset = null;
       // Raise the guard HERE, not after the fetch below: the URL-following effect reruns
@@ -496,8 +493,9 @@
     }
   }
 
-  /** Stop an in-flight turn. The backend notices its next write fail and stops the
-   *  loop before spending another model call. */
+  /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here. The
+   *  backend no longer infers the first from the second — it could not tell a deliberate stop
+   *  apart from a phone locking its screen. */
   function cancelTurn() {
     turn?.cancel();
     turn = null;
@@ -514,30 +512,8 @@
     chat = reduceTurnEvent(chat, event);
     if (event.type === 'result') {
       endTurn();
-      void askForFollowUps(sessionId, event);
     }
     void scrollToBottom();
-  }
-
-  /**
-   * Fetch the "what now?" strip for a turn that just settled.
-   *
-   * Every failure is silence. The strip is decoration, the answer the caller came for
-   * is already on screen, and an error about a suggestion is a problem they cannot act
-   * on. The server says the same thing from its side, answering an empty list rather
-   * than a status for anything that goes wrong there.
-   */
-  async function askForFollowUps(sessionId: string, result: Extract<TurnEvent, { type: 'result' }>) {
-    const last = chat.messages[chat.messages.length - 1];
-    if (!shouldRequest(result, last?.role === 'assistant' ? last.text : '')) return;
-    try {
-      const got = await suggestFollowUps(sessionId);
-      // The caller may have switched conversations while this was in flight, and
-      // suggestions drawn from one chat must never appear under another.
-      if (sessionId === activeId) followUps = got;
-    } catch {
-      /* decoration: a suggestion that cannot be fetched is simply not offered */
-    }
   }
 
   // Composer submit: while a turn is in flight the message is queued and drained
@@ -551,7 +527,6 @@
     draft = '';
     if (turnActive || queue.length > 0) {
       enqueue(text);
-      followUps = [];
       void scrollToBottom(true);
       return;
     }
@@ -568,9 +543,6 @@
     if (!id) return;
     error = null;
     turnActive = true;
-    // The strip belongs to the answer above it. Once anything new is running, the
-    // questions it offered are about a moment that has passed.
-    followUps = [];
     onTurnStateChange?.(true);
     // Before anything reaches the server: the host may be holding an edit on a timer, and
     // the run is about to snapshot and rewrite the very document that edit belongs to.
@@ -581,24 +553,62 @@
         /* the host reports its own save failures; a turn is still worth starting */
       }
     }
+    // Whether the turn ever began. A message can queue behind the session's running turn and
+    // then never start — the wait runs out, or it is stopped — and the composer cleared the
+    // draft the moment it was sent. Without this the user's words would simply vanish.
+    let began = false;
+    const watch = (event: TurnEvent) => {
+      if (event.type === 'user_prompt') began = true;
+      onEvent(id, event);
+    };
+
     let started: Turn;
     if (start.kind === 'autopilot') {
       runActive = true;
       onRunStateChange?.(true);
-      started = startAutopilot(id, (event) => onEvent(id, event));
+      started = startAutopilot(id, watch);
     } else if (start.kind === 'opening') {
-      started = openRehearsal(id, (event) => onEvent(id, event));
+      started = openRehearsal(id, watch);
     } else {
-      started = sendTurn(id, start.text, (event) => onEvent(id, event));
+      started = sendTurn(id, start.text, watch);
     }
     turn = started;
     void scrollToBottom(true);
     try {
       await started.done;
+      if (!began && start.kind === 'message' && id === activeId) {
+        // The turn never ran, so the message was never recorded. Give it back rather than
+        // losing it, and say why — the composer is empty and nothing else would explain it.
+        draft = draft.trim() === '' ? start.text : draft;
+        error = 'That message was not sent: the chat was still busy. Try again.';
+      }
     } catch (err) {
+      if (err instanceof StreamInterrupted) {
+        // The stream broke, not the turn: it runs on the server under its own bounds and
+        // stores everything it does. Marking the message as failed would tell the user
+        // their CV edits were lost when they were not — so we re-read the session and show
+        // whatever the agent has managed so far.
+        await reloadTranscript(id);
+        endTurn();
+        return;
+      }
       error = err instanceof Error ? err.message : 'Could not send the message.';
       chat = reduceTurnEvent(chat, { type: 'result', stop_reason: 'error', is_error: true });
       endTurn();
+    }
+  }
+
+  /** Re-read a session's stored transcript into the view. The server holds the truth about a
+   *  turn whose stream we lost, so this is how a returning client catches up. */
+  async function reloadTranscript(id: string) {
+    if (id !== activeId) return;
+    try {
+      const { messages } = await getSession(id);
+      let next = initChat();
+      for (const event of eventsFromTranscript(messages)) next = reduceTurnEvent(next, event);
+      if (id === activeId) chat = next;
+    } catch {
+      /* the transcript stays as it is; the next visit will catch up */
     }
   }
 
@@ -606,9 +616,22 @@
     queue = queue.filter((q) => q.id !== id);
   }
 
+  /** Catch up when the tab comes back. A phone freezes a backgrounded tab, which breaks the
+   *  stream while the turn keeps running on the server — so what is on screen when the user
+   *  returns is whatever arrived before the freeze, and the session holds the rest. Nothing
+   *  is re-read while a turn is streaming: that stream is already the newer truth. */
+  function catchUpOnReturn() {
+    if (document.visibilityState !== 'visible' || turnActive || !activeId) return;
+    void reloadTranscript(activeId);
+  }
+
   onMount(() => {
     void boot();
-    return cancelTurn;
+    document.addEventListener('visibilitychange', catchUpOnReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', catchUpOnReturn);
+      cancelTurn();
+    };
   });
 </script>
 
@@ -794,7 +817,7 @@
                    unanswered call means: a placeholder mid-turn, nothing once the
                    turn has closed without its result. -->
               {@const { decks, rest } = splitPresentingCalls(message.tools, message.streaming)}
-              <ToolGroupList calls={rest} />
+              <ToolGroupList calls={rest} onConfirm={submitText} disabled={turnActive || switching} />
               {#each decks as slot, di (di)}
                 <div class="self-start w-full">
                   <JobDeck {slot} />
@@ -814,36 +837,19 @@
             {/if}
           {/each}
 
-          <!-- What to ask next. Rendered as TEXT NODES, never through renderMarkdown:
-               the model that wrote these has read job descriptions and browsed pages,
-               so a suggestion may carry an attacker's words — and activating one speaks
-               them in the caller's own voice. What they agree to has to be exactly what
-               they can see, with nothing able to style, link or hide part of itself. -->
-          {#if followUps.length > 0 && !turnActive}
-            <div class="mt-1 flex flex-col items-start gap-1 self-start">
-              <span class="px-1 text-xs font-medium text-muted-foreground">Ask next</span>
-              {#each followUps as suggestion (suggestion)}
-                <!-- Sent as displayed, not as received: the caller agreed to the words
-                     in front of them, so those are the words that go. -->
-                <button
-                  type="button"
-                  onclick={() => submitText(forDisplay(suggestion))}
-                  disabled={switching}
-                  class="max-w-full rounded-lg border border-border/60 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-50"
-                >
-                  {forDisplay(suggestion)}
-                </button>
-              {/each}
-            </div>
-          {/if}
-
-          {#if turnActive}
+          <!-- One indicator, two states. Queued is not working: nothing is being spent yet, and
+               the elapsed counter would be timing somebody else's turn. -->
+          {#if chat.queued || turnActive}
             <div class="self-start inline-flex items-baseline gap-2 px-2 py-1 text-xs text-muted-foreground">
               <span class="star-glow font-mono text-[0.85rem] font-semibold">
                 {SPINNER_GLYPHS[spinnerIdx]}
               </span>
-              <span class="shimmer font-medium">{currentVerb}…</span>
-              <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
+              <span class="shimmer font-medium">
+                {chat.queued ? 'Waiting for the current turn to finish' : currentVerb}…
+              </span>
+              {#if !chat.queued}
+                <span class="font-mono text-[0.7rem] text-muted-foreground/70">({elapsedSec}s)</span>
+              {/if}
             </div>
           {/if}
         </div>

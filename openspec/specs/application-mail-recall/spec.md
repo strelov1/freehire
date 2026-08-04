@@ -25,10 +25,12 @@ The system SHALL let an authenticated caller ask, from one of their own recorded
 applications, for the mail in their mailbox that belongs to it. Authentication MAY be
 by session cookie or by full-scope API key.
 
-The action SHALL gather candidates deterministically, adjudicate them in a single
-model call, and record the confident ones as that application's pending suggestion.
-It SHALL report how many messages it examined, which ones it proposes, and how many
-of those carry a calendar invitation identifier.
+The action SHALL gather candidates, adjudicate them in a single model call, and report the
+confident ones as proposals. It SHALL report how many messages it examined, which ones it
+proposes, and how many of those carry a calendar invitation identifier.
+
+Whether a proposal is also RECORDED depends on where the candidate came from — see the two
+requirements below. Nothing is linked either way.
 
 An application the caller does not own, one that does not exist, and a tracking row
 that was never applied to SHALL all be answered as not found — a row with no
@@ -39,7 +41,6 @@ recorded application date is not an application and has no mail to find.
 - **WHEN** an authenticated caller invokes the action on their own recorded application
 - **THEN** the response carries the number of messages examined and the messages
   proposed for that application
-- **AND** each proposed message holds a pending suggestion naming that application
 
 #### Scenario: The application is not the caller's
 
@@ -54,9 +55,9 @@ recorded application date is not an application and has no mail to find.
 ### Requirement: The action proposes and never links
 
 The action SHALL NOT attach a message to an application, SHALL NOT advance an
-application's stage, and SHALL NOT write to the application event ledger. Its only
-persistent effect is a pending suggestion, which the caller resolves through the
-existing confirm and reject actions.
+application's stage, and SHALL NOT write to the application event ledger. Its most it may
+persist is a pending suggestion — and on the search path not even that — which the caller
+resolves through the existing confirm and reject actions.
 
 This preserves the rule that governs the whole mail stack: only a deterministic
 signal may link a message on its own, and a model's pick is a proposal. Message
@@ -75,58 +76,14 @@ history onto another permanently, while a wrong proposal costs one press to dism
 - **WHEN** a caller confirms a message the action proposed
 - **THEN** it links exactly as a suggestion from the classification worker does
 
-### Requirement: Only unattached mail may be proposed
-
-The candidate set SHALL be limited to the caller's live mail that is attached to no
-application — mail with no suggestion, and mail carrying an unconfirmed suggestion.
-A message already linked to an application SHALL NOT be examined and SHALL NOT be
-modified, and that restriction SHALL be enforced by the write itself rather than by
-the caller.
-
-An unconfirmed suggestion naming a different application MAY be overwritten: the
-caller asked about this application explicitly, and a suggestion is a proposal that
-costs nothing to lose.
-
-#### Scenario: Linked mail is untouched
-
-- **WHEN** the action runs while the caller holds mail linked to another application
-- **THEN** that mail is neither examined nor changed
-
-#### Scenario: An unconfirmed suggestion is replaced
-
-- **WHEN** the action proposes a message that already carries an unconfirmed
-  suggestion naming a different application
-- **THEN** the suggestion is replaced by the one the caller asked for
-
-### Requirement: The candidate set is bounded by state and time, not by words
-
-The candidate set SHALL be selected by attachment state and by a time window opening
-before the application's recorded date, and SHALL be capped. It SHALL NOT be selected
-by searching message text for the employer's name.
-
-Stored plain-text bodies are empty for messages sent as HTML only, which is how much
-recruiting mail arrives, so a text search is blind exactly where the mail is. The
-model SHALL receive each candidate's readable body — the text part, or the HTML part
-rendered down when no text part was sent — bounded per message.
-
-#### Scenario: Mail sent as HTML only is judged on its content
-
-- **WHEN** a candidate message was sent with no plain-text part
-- **THEN** the model receives its readable body rather than an empty one
-
-#### Scenario: The window opens before the recorded date
-
-- **WHEN** a message arrived shortly before the application's recorded date
-- **THEN** it is still eligible, because the recorded date is when the application was
-  entered and may lag the message that acknowledged it
-
 ### Requirement: A run is bounded and its output is verified against its input
 
-The number of candidates per run and the amount of each body handed to the model
-SHALL both be capped. Any message the model names that was not in the candidate set
-SHALL be discarded.
+The amount of each body handed to the model SHALL be capped, and any message the model
+names that was not in the candidate set SHALL be discarded. A run whose candidate set is
+empty SHALL NOT call the model at all.
 
-A run whose candidate set is empty SHALL NOT call the model at all.
+The candidate count needs no cap of its own on the search path: the search returns what
+names the employer, which is a small set, rather than everything that arrived in a window.
 
 #### Scenario: An answer outside the candidate set is discarded
 
@@ -138,26 +95,6 @@ A run whose candidate set is empty SHALL NOT call the model at all.
 - **WHEN** the candidate set is empty
 - **THEN** no model call is made
 - **AND** the response reports nothing examined and nothing proposed
-
-### Requirement: A failed model call is reported, not disguised
-
-When the model cannot be reached or its answer cannot be read, the action SHALL fail
-with an error. It SHALL NOT answer as though it examined the mail and found nothing.
-
-The caller pressed a button and is waiting for it; an empty success is
-indistinguishable from a mailbox with nothing in it, and would teach them the feature
-does not work.
-
-#### Scenario: The model is unreachable
-
-- **WHEN** the model call fails
-- **THEN** the action responds with an error
-- **AND** no suggestion is written
-
-#### Scenario: No mailbox is connected
-
-- **WHEN** the caller has connected no mail source
-- **THEN** the action succeeds reporting nothing examined, rather than failing
 
 ### Requirement: The run is charged to the caller
 
@@ -190,3 +127,98 @@ applications as they then stand.
 
 - **WHEN** the action runs for a caller who has granted calendar access
 - **THEN** no calendar request is made
+
+### Requirement: The candidate set comes from a gated mailbox search
+
+The candidate set SHALL be gathered by searching the caller's connected mailbox for the
+employer, inside a time window around the application's recorded date, rather than by
+reading mail already stored. A caller with no connected mailbox that can be searched SHALL
+fall back to the stored-mail path.
+
+The search SHALL be gated so that scoping by an employer's name cannot reach the caller's
+personal correspondence: a message qualifies only if it names the employer AND is
+job-shaped. Job-shaped SHALL mean any of hiring vocabulary, a calendar-invitation
+attachment, or the application's role title. The invitation attachment and the role title
+are both required members of that set: a gate of hiring vocabulary alone was measured to
+drop both calendar invitations for an interview and a live recruiter thread whose only
+subject was the role.
+
+The mailbox search reads message bodies, which is why it succeeds where a query over stored
+metadata could not: matched against sender name and subject alone the employer's name is
+absent from the median application's mail entirely.
+
+#### Scenario: Mail is found by searching the mailbox
+
+- **WHEN** an authenticated caller invokes the action on their own recorded application
+- **THEN** the candidates are the messages the mailbox search returned for that employer
+- **AND** no candidate is taken from the stored mail table
+
+#### Scenario: A calendar invitation is not gated out
+
+- **WHEN** the mailbox holds an invitation for an interview with that employer whose
+  subject uses no hiring vocabulary
+- **THEN** it is still a candidate, because it carries a calendar attachment
+
+#### Scenario: Mail naming only the role is not gated out
+
+- **WHEN** the mailbox holds a message from that employer whose subject is the role title
+  and which never says "application" or "interview"
+- **THEN** it is still a candidate
+
+#### Scenario: Personal correspondence is not reached
+
+- **WHEN** the mailbox holds a personal message that merely mentions the employer's name
+  and is not job-shaped
+- **THEN** it is not a candidate
+
+#### Scenario: A caller with no searchable mailbox falls back
+
+- **WHEN** the caller has no connected mailbox the action can search
+- **THEN** the candidates come from the stored-mail path instead
+- **AND** the response is otherwise the same shape
+
+### Requirement: A proposal is an unstored message until the caller links it
+
+A proposed message SHALL NOT be written to the caller's stored mail as a side effect of the
+sweep. The action SHALL report proposals from the search result itself, and a message SHALL
+be stored only when the caller links it, at which point it is imported and then linked.
+
+This is what keeps the sweep from planting state nobody asked for: what a person has not
+confirmed is not kept.
+
+#### Scenario: A sweep stores nothing
+
+- **WHEN** the action proposes messages
+- **THEN** no new stored mail and no pending suggestion is created
+
+#### Scenario: Linking imports first
+
+- **WHEN** the caller links a proposed message that is not yet stored
+- **THEN** the message is imported into their stored mail
+- **AND** it is then linked to the application exactly as a stored message would be
+
+#### Scenario: Linking a message already stored does not duplicate it
+
+- **WHEN** the caller links a proposed message that the mail sync had already stored
+- **THEN** the existing message is linked rather than a second copy created
+
+### Requirement: A failed search is reported, not disguised
+
+When the mailbox cannot be searched, or the model cannot be reached, or its answer cannot
+be read, the action SHALL fail with an error. It SHALL NOT answer as though it examined the
+mailbox and found nothing.
+
+The caller pressed a button and is waiting for it; an empty success is indistinguishable
+from a mailbox with nothing in it.
+
+#### Scenario: The mailbox search fails
+
+- **WHEN** the mailbox search returns an error
+- **THEN** the action responds with an error rather than an empty result
+
+#### Scenario: The model is unreachable
+
+- **WHEN** the model call fails
+- **THEN** the action responds with an error
+- **AND** nothing is imported and nothing is linked
+

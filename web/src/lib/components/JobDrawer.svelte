@@ -26,6 +26,7 @@
     MyJob,
     ApplicationEmail,
     MailRecallResult,
+    RecalledEmail,
     StageSuggestion,
     TimelineEvent
   } from '$lib/types';
@@ -136,9 +137,9 @@
   let recallError = $state<string | null>(null);
   // Ids resolved since the sweep, so a confirmed or dismissed row leaves at the press
   // rather than on the next load.
-  let recallResolved = $state.raw<number[]>([]);
+  let recallResolved = $state.raw<string[]>([]);
   const recallPending = $derived(
-    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.id))
+    (recall?.suggested ?? []).filter((e) => !recallResolved.includes(e.provider_id ?? String(e.id)))
   );
   // Only applications can be swept: the window is anchored on the date it was recorded, and
   // a job that was merely saved has none.
@@ -179,15 +180,23 @@
     }
   }
 
-  async function resolveRecalled(id: number, accept: boolean) {
-    recallResolved = [...recallResolved, id];
+  // A proposal arrives one of two ways and leaves the same way. From the mailbox search it
+  // is a provider id and nothing of ours yet, so linking imports it first; from stored mail
+  // it is a row carrying a suggestion, resolved by the calls the inbox already uses.
+  async function resolveRecalled(e: RecalledEmail, accept: boolean) {
+    const key = e.provider_id ?? String(e.id);
+    recallResolved = [...recallResolved, key];
     try {
-      await (accept ? api.confirmEmailLink(id) : api.rejectEmailLink(id));
+      if (e.provider_id) {
+        if (accept && item.job) await api.linkRecalledMail(item.job.public_slug, e.provider_id);
+      } else {
+        await (accept ? api.confirmEmailLink(e.id) : api.rejectEmailLink(e.id));
+      }
       if (accept) await loadEmails(true);
     } catch {
-      // Put it back: an unresolved suggestion the caller can press again beats a row that
-      // vanished without becoming anything.
-      recallResolved = recallResolved.filter((x) => x !== id);
+      // Put it back: a proposal the caller can press again beats a row that vanished
+      // without becoming anything.
+      recallResolved = recallResolved.filter((x) => x !== key);
     }
   }
 
@@ -529,7 +538,12 @@
                 of {recall?.scanned} message{recall?.scanned === 1 ? '' : 's'} may belong here.
                 Nothing is attached until you say so.
               </p>
-              {#each recallPending as e (e.id)}
+              <!-- Said where the boundary is crossed, not buried in a settings page: the
+                   sweep looks through the mailbox and keeps nothing until Link is pressed. -->
+              <p class="text-xs text-muted-foreground">
+                This searched your mailbox for {company}. Nothing is saved unless you link it.
+              </p>
+              {#each recallPending as e (e.provider_id ?? e.id)}
                 <div class="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2">
                   <div class="min-w-0 flex-1">
                     <div class="flex items-baseline gap-2">
@@ -545,11 +559,11 @@
                       </span>
                     {/if}
                   </div>
-                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e.id, true)}>Link</Button>
+                  <Button size="sm" class="shrink-0" onclick={() => resolveRecalled(e, true)}>Link</Button>
                   <button
                     type="button"
                     class="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onclick={() => resolveRecalled(e.id, false)}
+                    onclick={() => resolveRecalled(e, false)}
                   >
                     Not this one
                   </button>

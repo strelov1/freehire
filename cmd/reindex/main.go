@@ -496,17 +496,20 @@ func buildClusterGeoLookup(ctx context.Context, q *db.Queries) (clusterGeoLookup
 }
 
 // splitJobs partitions a batch from the (deliberately unfiltered) reindex feed:
-// open jobs become index documents (each carrying its reality signal, classified
-// against `now` and its cluster counts), closed jobs become deletions so they leave
-// the index (the index contains only open jobs — see the job-search spec).
+// open, non-private jobs become index documents (each carrying its reality signal,
+// classified against `now` and its cluster counts), closed or private jobs become
+// deletions so they leave the index (the index contains only open, non-private jobs —
+// see the job-search spec).
 func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
-		// A closed job or a non-canonical repost (duplicate_of set) leaves the index:
-		// only the open canonical row of each role cluster is searchable. Deleting (not
-		// just skipping) removes a row that was indexed before it was closed or demoted.
-		if j.ClosedAt.Valid || j.DuplicateOf.Valid {
+		// A closed job, a non-canonical repost (duplicate_of set), or a private job (the
+		// jd-tailor-intake path — visible only to its creator) leaves the index: only the
+		// open, non-private canonical row of each role cluster is searchable. Deleting (not
+		// just skipping) removes a row that was indexed before it was closed, demoted, or
+		// marked private.
+		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue
 		}

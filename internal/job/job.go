@@ -316,5 +316,45 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 	}
 }
 
+// InsertPrivateParams is the private-JD analogue of UpsertParams/UpsertManualParams: it
+// maps the same Fields columns to the generated InsertPrivateJob params, stamping
+// created_by. Unlike the other two mappings there is no updated_by or salary — a private
+// job is never edited or given a manual salary, only created once per submission (see
+// internal/privatejob).
+func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
+	derived := f.UpsertParams()
+	return db.InsertPrivateJobParams{
+		Source:      f.Source,
+		ExternalID:  f.ExternalID,
+		URL:         f.URL,
+		Title:       f.Title,
+		Company:     f.Company,
+		CompanySlug: f.CompanySlug,
+		PublicSlug:  f.PublicSlug,
+		Location:    f.Location,
+		Remote:      f.Remote,
+		Description: f.Description,
+		Countries:   f.Countries,
+		Regions:     f.Regions,
+		Cities:      f.Cities,
+		WorkMode:    f.WorkMode,
+		Skills:      f.Skills,
+		Seniority:   f.Seniority,
+		Category:    f.Category,
+		IsTech:      pgconv.Bool(f.IsTech),
+
+		PostingLanguage:    f.PostingLanguage,
+		EmploymentType:     f.EmploymentType,
+		EducationLevel:     f.EducationLevel,
+		EnglishLevel:       f.EnglishLevel,
+		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+
+		ContentHash:     derived.ContentHash,
+		RoleFingerprint: derived.RoleFingerprint,
+
+		CreatedBy: createdBy,
+	}
+}
+
 // IsOpen reports whether the job is live (not soft-closed).
 func (j Job) IsOpen() bool { return j.f.ClosedAt == nil }

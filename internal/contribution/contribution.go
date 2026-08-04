@@ -44,6 +44,7 @@ const (
 const (
 	SurfaceWeb       = "web"
 	SurfaceTelegram  = "telegram"
+	SurfaceDiscord   = "discord"
 	SurfaceExtension = "extension"
 	SurfaceCLI       = "cli"
 	SurfaceUnknown   = "unknown"
@@ -56,7 +57,7 @@ const (
 // never be REFUSED over a tag, which is exactly what an unnormalised empty string would do.
 func NormalizeSurface(s string) string {
 	switch s {
-	case SurfaceWeb, SurfaceTelegram, SurfaceExtension, SurfaceCLI:
+	case SurfaceWeb, SurfaceTelegram, SurfaceDiscord, SurfaceExtension, SurfaceCLI:
 		return s
 	default:
 		return SurfaceUnknown

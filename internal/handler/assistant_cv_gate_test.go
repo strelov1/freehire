@@ -71,6 +71,13 @@ func (b *stubBank) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a e
 	return a, nil
 }
 
+func (b *stubBank) CreateEmployment(_ context.Context, userID int64, e experience.Employment) (experience.Employment, error) {
+	if err := e.Validate(); err != nil {
+		return experience.Employment{}, err
+	}
+	return b.addEmployment(userID, e), nil
+}
+
 func (b *stubBank) UpdateEmployment(_ context.Context, id uuid.UUID, userID int64, e experience.Employment) (experience.Employment, error) {
 	for i, existing := range b.employments {
 		if existing.ID == id && b.owner[id] == userID {
@@ -175,6 +182,22 @@ func TestCVEditGateAllowsWhatTheCandidateAsserted(t *testing.T) {
 		if err := gate.Publishable(ctx, 1, atom.ID.String()); err != nil {
 			t.Errorf("evidence with provenance %s was refused: %v", provenance, err)
 		}
+	}
+}
+
+// A batch cites an evidence id per operation, so "that id" names nothing a model can act on
+// when thirteen of them went out together. The refusal carries the id that missed.
+func TestCVEditGateNamesTheIdThatMissed(t *testing.T) {
+	h, _ := gateHandlers(t)
+	gate := bankGate{bank: h.experience}
+	missing := uuid.New()
+
+	err := gate.Publishable(context.Background(), 1, missing.String())
+	if err == nil {
+		t.Fatal("an id matching no achievement was accepted")
+	}
+	if !strings.Contains(err.Error(), missing.String()) {
+		t.Errorf("error = %v, want it to name the id that missed", err)
 	}
 }
 

@@ -146,7 +146,7 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, arg EnqueuePen
 }
 
 const getJobsByIDs = `-- name: GetJobsByIDs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private
 FROM jobs
 WHERE id = ANY($1::bigint[])
 `
@@ -216,6 +216,7 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.DownvoteCount,
 			&i.AtsAbsentAt,
 			&i.ClosedReason,
+			&i.IsPrivate,
 		); err != nil {
 			return nil, err
 		}

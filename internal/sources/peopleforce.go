@@ -99,7 +99,14 @@ func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceLi
 	fields := peopleforceDefList(root)
 	location := fields["Location"]
 	description := ""
-	if col := firstByClass(root, "col-lg-8"); col != nil {
+	col := firstByClass(root, "col-lg-8")
+	if col == nil {
+		// PeopleForce is mid-rollout of a Tailwind-based theme: a tenant on the new theme
+		// renders the same column prefixed "tw-", so a board can carry a mix of both across
+		// its own postings depending on when each was last touched on their end.
+		col = firstByClass(root, "tw-col-lg-8")
+	}
+	if col != nil {
 		description = sanitizeHTML(innerHTML(col))
 	}
 

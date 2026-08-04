@@ -15,7 +15,6 @@ import (
 // preset — already tagged as such. A second tag would double-count the same spend.
 const (
 	tagAssistant     = "feature:assistant"
-	tagFollowUps     = "feature:assistant-followups"
 	tagMatchAnalysis = "feature:match-analysis"
 	tagCVExtract     = "feature:cv-extract"
 	tagATSReview     = "feature:ats-review"

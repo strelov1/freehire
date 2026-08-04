@@ -134,9 +134,12 @@ type Querier interface {
 	// embeddings — a form does not go stale — but a just-posted job is the one somebody is
 	// about to apply to, so it is still the right order.
 	//
-	// The claim returns the job's source and external_id because the worker builds its fetch
-	// from the row alone: external_id is the board-namespaced posting id
-	// (sources.NamespaceExternalID), which carries both halves the platform APIs need.
+	// The claim returns the job's source, external_id and url because the worker builds its
+	// fetch from the row alone: external_id is the board-namespaced posting id
+	// (sources.NamespaceExternalID), which carries both halves the platform APIs need, and
+	// the url carries the regional host for a platform that has more than one. Lever serves
+	// its European tenants from a separate host and answers 404 on the other — the same code
+	// it uses for a posting that is gone, so the host cannot be discovered by trying.
 	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
 	// FROM) so the platform identity comes back without a second query.
 	ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error)
@@ -381,9 +384,14 @@ type Querier interface {
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
-	// Total live messages for the caller (same optional filters as ListEmails), for
-	// pagination.
-	CountEmails(ctx context.Context, arg CountEmailsParams) (int64, error)
+	// Total live messages for the caller under the same optional filters as ListEmails, plus
+	// how many of them the `other` default omitted.
+	//
+	// Both numbers come from one statement and one set of predicates on purpose: a hidden count
+	// computed separately would describe a different mailbox from the one on screen the moment
+	// any filter is active. The count is not decoration — a filter that hides silently makes a
+	// misclassification impossible to find, and the classifier reads attacker-controlled text.
+	CountEmails(ctx context.Context, arg CountEmailsParams) (CountEmailsRow, error)
 	// The mailbox's shape in one pass: one row per classification label (the empty
 	// label being mail nothing has judged yet), carrying that label's total plus how
 	// many of it are unread, unclassified, linked to an application, or carrying a
@@ -586,6 +594,8 @@ type Querier interface {
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
+	// Unlink Discord. Returns the affected row count: 0 means there was no link.
+	DeleteDiscordLink(ctx context.Context, userID int64) (int64, error)
 	DeleteEmailClassificationOutbox(ctx context.Context, id int64) error
 	// Consume the code (on success) or burn it (on too many attempts). Idempotent: deleting
 	// an absent code is a no-op, so a double submit cannot fail the request.
@@ -850,11 +860,19 @@ type Querier interface {
 	GetCompanyResponse(ctx context.Context, companySlug string) (GetCompanyResponseRow, error)
 	// The caller's current vote for a company (0 when none). Always returns one row.
 	GetCompanyVote(ctx context.Context, arg GetCompanyVoteParams) (int16, error)
+	// The caller's linked Discord account (link-status endpoint + delivery resolution).
+	GetDiscordLink(ctx context.Context, userID int64) (DiscordLink, error)
 	GetEmail(ctx context.Context, arg GetEmailParams) (GetEmailRow, error)
 	// The outstanding code for a purpose. No row means nothing was issued or it was consumed;
 	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
 	// are enforced by the caller, which must fail identically for expired and wrong codes.
 	GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (GetEmailCodeRow, error)
+	// One message's id from the identifier its provider gave it, scoped to the caller.
+	//
+	// The recall sweep proposes messages by PROVIDER id, because a searched message is not ours
+	// until somebody links it. This is the one lookup that turns the id a caller pressed into
+	// the row every linking path works on, immediately after the import stored it.
+	GetEmailIDByExternalID(ctx context.Context, arg GetEmailIDByExternalIDParams) (int64, error)
 	// Aggregate interaction counts for the public engagement endpoint. Aggregate-only:
 	// every column is a scalar total, so no user identifier or row-level field is
 	// selected. saved / applied are user_jobs interaction-row totals across all users.
@@ -1003,6 +1021,9 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
+	// Reverse lookup: the user linked to an inbound Discord account, for contribution-from-Discord. If a
+	// Discord account somehow linked more than once, the most recently linked user wins.
+	GetUserIDByDiscordID(ctx context.Context, discordID int64) (int64, error)
 	// Reverse lookup: the user linked to an inbound chat, for contribution-from-Telegram. If a
 	// chat somehow linked more than once, the most recently linked user wins.
 	GetUserIDByTelegramChat(ctx context.Context, chatID int64) (int64, error)
@@ -1075,11 +1096,16 @@ type Querier interface {
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
 	InsertDebit(ctx context.Context, arg InsertDebitParams) error
-	// The only insert. ON CONFLICT DO NOTHING against the (user_id, claim_key) unique index makes
-	// "the same claim is never banked twice" a database guarantee rather than a property of the
-	// import code — so re-uploading a CV cannot duplicate atoms no matter what the caller does.
-	// Returns no row when the claim is already banked, which callers report rather than treat as
-	// an error: the user learns it is already recorded.
+	// The only insert. A claim already banked with a stronger provenance than
+	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case
+	// except one: a claim first recorded as agent_inferred (the model's unconfirmed
+	// paraphrase) is upgraded in place when a later call carries a real provenance,
+	// because the candidate confirming it afterward must actually unstick the write —
+	// otherwise that exact claim text stays permanently un-writable to a CV. The WHERE
+	// guards both non-upgrade cases: a confirmed atom is never downgraded, and two
+	// agent_inferred attempts at the same claim leave it exactly as unconfirmed as
+	// before. Returns no row when there is genuinely nothing to change, which callers
+	// report as ErrAlreadyBanked rather than an error.
 	InsertExperienceAtomIfNew(ctx context.Context, arg InsertExperienceAtomIfNewParams) (ExperienceAtom, error)
 	// Second half of the atomic rebuild: one row per (facet, value). Called once per
 	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
@@ -1096,6 +1122,25 @@ type Querier interface {
 	// has a mailbox) or address (taken) — the allocation service handles both: it
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
 	InsertMailbox(ctx context.Context, arg InsertMailboxParams) (Mailbox, error)
+	// Creates a job visible only to its creator: the jd-tailor-intake private-JD path
+	// (pasted text, or a URL only a generic scrape could read). Always a plain INSERT,
+	// never an upsert — external_id is a synthetic value scoped to this one submission
+	// (see internal/privatejob), never compared against the public (source, external_id)
+	// dedup space, so two submissions never collide and this never conflicts with an
+	// existing row.
+	//
+	// Deliberately does NOT touch the companies table (unlike UpsertJob/UpsertManualJob):
+	// a private submission's employer name is not a vetted catalogue entry, so minting or
+	// updating a companies row from it would leak a one-off private JD's company into the
+	// public companies directory. jobs.company_slug has no FK to companies, so this is
+	// safe to leave unbacked.
+	//
+	// Also deliberately does NOT enqueue enrichment (contrast UpsertManualJob's Repository,
+	// which does): a private, single-tailoring-session row doesn't recoup that cost. The
+	// caller supplies content_hash/role_fingerprint precomputed the same way every other
+	// write path does (job.Fields.UpsertParams), so a private job's fingerprints are
+	// comparable if it were ever to matter, even though it is never indexed or clustered.
+	InsertPrivateJob(ctx context.Context, arg InsertPrivateJobParams) (Job, error)
 	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
 	// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
 	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
@@ -1502,6 +1547,13 @@ type Querier interface {
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.
+	//
+	// AND NOT is_private excludes the jd-tailor-intake private-job path (visible only to
+	// its creator, through GetJobBySlug, not this listing). The partial index backing this
+	// query's ORDER BY (jobs_open_created_idx) predicates on closed_at IS NULL only, not
+	// is_private — Postgres can still use it here since that predicate is implied by this
+	// WHERE clause, applying the is_private filter on the (small) scanned window rather than
+	// the whole table, so this stays index-served rather than degrading to a full scan.
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error)
 	// duplicate_of IS NULL collapses role-cluster reposts to their canonical row, matching
 	// the /jobs list so a company page shows one card per role, not every repost.
@@ -1577,6 +1629,11 @@ type Querier interface {
 	// its own location and apply URL, so a seeker picks their city; the anchor itself is
 	// included (it is one of the openings). Ordered by location. An empty-fingerprint anchor
 	// clusters with no one and returns nothing.
+	//
+	// AND NOT j.is_private excludes the jd-tailor-intake private-job path: without it, a
+	// private job that coincidentally shares its cluster key with a public one would surface
+	// (slug, location, url) to anyone browsing that PUBLIC job's copies — a listing leak, not
+	// merely "you'd need the direct link", which is what never indexing/listing it is for.
 	ListRoleClusterCopies(ctx context.Context, arg ListRoleClusterCopiesParams) ([]ListRoleClusterCopiesRow, error)
 	// Every public_slug the user has saved (bookmarked). Used by the SPA to render
 	// the save toggle as filled on already-saved cards in the browse list and search
@@ -2717,6 +2774,9 @@ type Querier interface {
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
 	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
 	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error
+	// Link (or relink) a user's Discord account, captured from the inbound /link command. One
+	// row per user; relinking from a different Discord account overwrites the discord_id.
+	UpsertDiscordLink(ctx context.Context, arg UpsertDiscordLinkParams) error
 	// Store a Gmail message, idempotent by (user_id, source, external_id) with
 	// source fixed to 'gmail'; the hosted path has its own insert (InsertHostedMessage).
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error

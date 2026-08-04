@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,9 +14,44 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
+	"github.com/strelov1/freehire/internal/cvmatch"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
+
+// opBatch is an edit batch as it arrives from a model: either the array the schema asks for,
+// or a string holding that array. Models package it both ways, and the packaging is a guess
+// about the wire format that says nothing about the edit — refusing it spends a round of the
+// turn's budget and teaches the model nothing about the CV.
+//
+// What is inside is read by the same strict rules either way. The decoder is re-armed with
+// DisallowUnknownFields here because a custom unmarshaller receives the raw bytes and the
+// caller's strictness does not reach through it, and that strictness is load-bearing: an
+// undefined field silently dropped is how an agent once rewrote the wrong experience entry
+// while reading success back.
+type opBatch []cvedit.Op
+
+func (b *opBatch) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var packed string
+		if err := json.Unmarshal(data, &packed); err != nil {
+			return err
+		}
+		data = []byte(packed)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode((*[]cvedit.Op)(b)); err != nil {
+		return err
+	}
+	// A second value means the string held more than the one batch — two arrays, or an array
+	// and some trailing text. Applying the first and dropping the rest is the same silent
+	// helpfulness the unknown-field check exists to refuse.
+	if dec.More() {
+		return errors.New("ops holds more than one batch")
+	}
+	return nil
+}
 
 // assistantCVTools are the tools a CV-tailoring session gets on top of the shared
 // ones. They are bound to the session's own CV and vacancy: the ids are closed
@@ -27,6 +63,51 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchI
 		h.cvGetTool(cvID),
 		h.cvEditTool(cvID, batchID),
 		h.tailorReportTool(cvID),
+		h.requestConfirmationTool(),
+		h.cvJobMatchTool(cvID, jobID),
+	}
+}
+
+// requestConfirmationTool puts a confirmation question in front of the candidate as a
+// claim plus a Yes/No choice, instead of the agent writing it as free-text prose. It has
+// no side effect: the client renders the buttons from the call's own arguments, and the
+// candidate's answer arrives as an ordinary chat message on their NEXT turn — clicking Yes
+// replays the claim text verbatim, which is what lets the unchanged verbatim-quote
+// provenance check (internal/assistant/message.go's UserSaid) recognise it as the
+// candidate's own words on the agent's next experience_add retry. There is no dedicated
+// confirmation endpoint and no new provenance value; this tool only changes how the
+// question is put, not how an answer becomes citable.
+func (h *assistantHandlers) requestConfirmationTool() assistant.Tool {
+	return assistant.Tool{
+		Name: "request_confirmation",
+		Description: "Ask the candidate to confirm a claim before it can be written into the CV, instead of " +
+			"asking in free text. Pass the exact claim text — the candidate sees it with Yes/No buttons, and " +
+			"Yes replays that exact text as their next message, which is what makes it citable.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"claim": map[string]any{
+					"type":        "string",
+					"description": "The exact claim text to confirm, verbatim — this is what Yes replays back.",
+				},
+				"question": map[string]any{
+					"type":        "string",
+					"description": "A short question putting the claim to the candidate.",
+				},
+			},
+			"required":             []string{"claim", "question"},
+			"additionalProperties": false,
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				Claim    string `json:"claim"`
+				Question string `json:"question"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			return map[string]any{"status": "awaiting_candidate_response"}, nil
+		},
 	}
 }
 
@@ -115,6 +196,55 @@ func (h *assistantHandlers) cvContextTool(jobID int64) assistant.Tool {
 				return nil, err
 			}
 			return h.withBankEvidence(ctx, userID, base), nil
+		},
+	}
+}
+
+// cvJobMatchTool lets the tailoring agent read the deterministic CV-vs-vacancy score as
+// feedback on what it has changed. It is a different signal from cv_context's Verdict/
+// OverallScore: those come from the cached LLM fit analysis and MUST NOT be recomputed
+// mid-tailoring (internal/matchanalysis, cv-tailoring spec), while this recomputes fresh off
+// the CV's own rendered text every call — the same read GetCVJobMatch serves the workspace
+// panel, which already refreshes after every saved edit. No model call, so it costs nothing
+// to check after a batch of edits.
+func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistant.Tool {
+	return assistant.Tool{
+		Name: "job_match",
+		Description: "Read how well the CV currently scores against this vacancy — Requirements Coverage, " +
+			"Keyword Match, Job Title Match, Seniority Fit — recomputed fresh from what the CV says right now, " +
+			"not the cached fit analysis. Call it after a batch of edits to see their effect; no model call.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct{}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
+			if err != nil {
+				return nil, cvToolError(err)
+			}
+			tmpl, err := cv.ResolveTemplate(rec.TemplateID)
+			if err != nil {
+				return nil, cvToolError(err)
+			}
+			job, err := h.cv.jobReader.GetJob(ctx, jobID)
+			if err != nil {
+				return nil, err
+			}
+			analysis, hasAnalysis := h.cv.cachedAnalysisOrNone(ctx, userID, jobID)
+			score, err := h.cv.cvJobMatchScore(ctx, rec.Document, tmpl, cvmatch.Input{
+				JobTitle:     job.Title,
+				JobSkills:    job.Skills,
+				Requirements: cvJobMatchRequirements(analysis),
+				HasAnalysis:  hasAnalysis,
+			})
+			if err != nil {
+				return map[string]any{"available": false, "reason": "could not compute a score right now"}, nil
+			}
+			if len(score.Contributing) == 0 {
+				return map[string]any{"available": false, "reason": "nothing about this vacancy could be matched automatically"}, nil
+			}
+			return map[string]any{"available": true, "score": score}, nil
 		},
 	}
 }
@@ -283,7 +413,9 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 			"their path from cv_get. Anything that states what the candidate did (a bullet, a summary, a " +
 			"technology, a skill) needs `evidence_id` from experience_search; if the bank holds nothing " +
 			"on the point, ask the candidate and record their answer with experience_add first. Contact " +
-			"details are not editable here.",
+			"details are not editable here. If this batch closes a requirement from cv_context, pass " +
+			"`requirement` and `requirement_status` — the report updates in this same call, so you do not " +
+			"need a separate tailor_report call for it.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -297,13 +429,26 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 					"description": "One short line on why you made these edits — shown to the candidate " +
 						"beside them, in your own words.",
 				},
+				"requirement": map[string]any{
+					"type": "string",
+					"description": "A requirement this batch closes, copied verbatim from cv_context. Omit " +
+						"when this batch does not close a requirement (rewording, reordering, a technology " +
+						"tag). Requires `requirement_status`.",
+				},
+				"requirement_status": map[string]any{
+					"type":        "string",
+					"enum":        []string{string(cv.AutopilotClosedBank), string(cv.AutopilotClosedCandidate)},
+					"description": "closed_bank if the bank already had evidence; closed_candidate if the candidate just confirmed it in this conversation. Required when requirement is set.",
+				},
 			},
 			"required": []string{"ops"},
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Ops  []cvedit.Op `json:"ops"`
-				Note string      `json:"note"`
+				Ops               opBatch `json:"ops"`
+				Note              string  `json:"note"`
+				Requirement       string  `json:"requirement"`
+				RequirementStatus string  `json:"requirement_status"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -315,15 +460,38 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 					return nil, fmt.Errorf("edit %d: %w", i+1, err)
 				}
 			}
+			requirement := strings.TrimSpace(in.Requirement)
+			status := cv.AutopilotStatus(in.RequirementStatus)
+			if requirement != "" && status != cv.AutopilotClosedBank && status != cv.AutopilotClosedCandidate {
+				return nil, fmt.Errorf("requirement_status must be %q or %q when requirement is set",
+					cv.AutopilotClosedBank, cv.AutopilotClosedCandidate)
+			}
+			// A model names the positions it SAW: it read the document once and wrote every
+			// index against that reading. Applied in sequence those addresses shift out from
+			// under each other, so a batch removing two lines of one list would refuse itself.
+			// The conversion happens here and not inside the editor, because the editor's other
+			// callers — the whole-document save and undo — state their indices sequentially and
+			// would be corrupted by it.
 			meta, rev, err := h.cv.editor.Commit(ctx, cvID, userID, cvedit.Change{
 				Actor:   cvedit.ActorAgent,
 				Origin:  cvedit.OriginTailorAgent,
 				BatchID: batchID,
 				Note:    in.Note,
-				Ops:     in.Ops,
+				Ops:     cvedit.OrderAgainstOriginal(in.Ops),
 			})
 			if err != nil {
 				return nil, cvToolError(err)
+			}
+			// Merged only after Commit succeeds: a refused batch must not leave the report
+			// claiming a requirement was closed by an edit that never landed.
+			if requirement != "" {
+				if err := h.cv.cvStore.MergeAutopilotEntry(ctx, cvID, userID, cv.AutopilotEntry{
+					Requirement: requirement,
+					Status:      status,
+					Note:        in.Note,
+				}); err != nil {
+					return nil, cvToolError(err)
+				}
 			}
 			// A receipt, not the document: a tool result is replayed into the model's
 			// context on every later turn of the session, so echoing the CV back would be
@@ -360,7 +528,9 @@ func (g bankGate) Publishable(ctx context.Context, userID int64, evidenceID stri
 	}
 	atom, err := g.bank.GetAtom(ctx, id, userID)
 	if errors.Is(err, experience.ErrNotFound) {
-		return errors.New("no banked achievement with that id — take evidence_id from experience_search")
+		// Named, not "that id": a batch cites one per operation, so a bare refusal leaves the
+		// model guessing which of them to go back for.
+		return fmt.Errorf("no banked achievement with id %s — take evidence_id from experience_search", id)
 	}
 	if err != nil {
 		return err

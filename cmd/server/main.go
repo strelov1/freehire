@@ -231,6 +231,11 @@ func main() {
 		TelegramWebhookSecret: cfg.TelegramWebhookSecret,
 		ServedHosts:           cfg.ServedHosts,
 
+		DiscordBotToken:      cfg.DiscordBotToken,
+		DiscordApplicationID: cfg.DiscordApplicationID,
+		DiscordPublicKey:     cfg.DiscordPublicKey,
+		DiscordGuildID:       cfg.DiscordGuildID,
+
 		Credits: creditsConfig,
 
 		AWSRegion:       cfg.AWSRegion,

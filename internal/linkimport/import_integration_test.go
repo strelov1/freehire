@@ -20,6 +20,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/linksource"
 	"github.com/strelov1/freehire/internal/sources"
 )
 
@@ -152,6 +153,40 @@ func TestImport_ReportsAPageThatIsNotAVacancy(t *testing.T) {
 	}
 	if rows != 0 {
 		t.Errorf("catalog holds %d postings, want none", rows)
+	}
+}
+
+// Resolve is Import's resolution half without the write — the seam a caller needs when it
+// must decide how to persist a match differently depending on which adapter matched (see
+// internal/jdresolve, which writes a generic-fallback match as a private job instead of the
+// public catalog write Import always performs).
+func TestResolve_DoesNotWriteAnything(t *testing.T) {
+	pool := startPostgres(t)
+	q := db.New(pool)
+	ctx := context.Background()
+
+	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
+
+	resolved, ok, err := im.Resolve(ctx, pageURL, Board{})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !ok {
+		t.Fatal("resolve reported nothing parsed, want the vacancy resolved")
+	}
+	if resolved.Source != linksource.GenericSource {
+		t.Errorf("Source = %q, want %q", resolved.Source, linksource.GenericSource)
+	}
+	if resolved.Job.Title != "Staff Java Backend Developer" {
+		t.Errorf("Job.Title = %q, want the posting's title", resolved.Job.Title)
+	}
+
+	var rows int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM jobs`).Scan(&rows); err != nil {
+		t.Fatalf("count postings: %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("catalog holds %d postings after Resolve, want none — Resolve must not write", rows)
 	}
 }
 

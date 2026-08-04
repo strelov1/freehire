@@ -42,9 +42,12 @@ ON CONFLICT (job_id) DO NOTHING;
 -- embeddings — a form does not go stale — but a just-posted job is the one somebody is
 -- about to apply to, so it is still the right order.
 --
--- The claim returns the job's source and external_id because the worker builds its fetch
--- from the row alone: external_id is the board-namespaced posting id
--- (sources.NamespaceExternalID), which carries both halves the platform APIs need.
+-- The claim returns the job's source, external_id and url because the worker builds its
+-- fetch from the row alone: external_id is the board-namespaced posting id
+-- (sources.NamespaceExternalID), which carries both halves the platform APIs need, and
+-- the url carries the regional host for a platform that has more than one. Lever serves
+-- its European tenants from a separate host and answers 404 on the other — the same code
+-- it uses for a posting that is gone, so the host cannot be discovered by trying.
 WITH claimable AS (
     SELECT o.id, o.job_id
     FROM apply_form_outbox o
@@ -63,7 +66,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE o.id = c.id
-RETURNING o.id, o.job_id, j.source, j.external_id;
+RETURNING o.id, o.job_id, j.source, j.external_id, j.url;
 
 -- name: DeleteApplyFormEntry :exec
 -- Retire a capture that succeeded. The stored form is the record; the queue entry has

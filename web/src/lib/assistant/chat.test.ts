@@ -152,4 +152,25 @@ describe('reduceTurnEvent', () => {
     expect(prev.messages).toHaveLength(0);
     expect(next).not.toBe(prev);
   });
+
+  // A message that arrived while the session was busy waits its turn. Until it starts, the
+  // stream is silent — and a silent stream is indistinguishable from a broken one, so the
+  // wait has to be visible.
+  it('marks the chat as waiting when its turn is queued behind another', () => {
+    let s = reduceTurnEvent(initChat(), { type: 'queued' });
+    expect(s.queued).toBe(true);
+
+    // Its own turn starting is what ends the wait.
+    s = reduceTurnEvent(s, { type: 'user_prompt', text: 'and another thing' });
+    expect(s.queued).toBe(false);
+  });
+
+  // A wait can end without the turn ever starting: it timed out, or the user stopped it. The
+  // terminal event has to clear the wait, or the view keeps claiming it is queued behind a turn
+  // that ended — and that stale banner then masks the next turn's real progress.
+  it('stops waiting when the turn ends without ever starting', () => {
+    let s = reduceTurnEvent(initChat(), { type: 'queued' });
+    s = reduceTurnEvent(s, { type: 'result', stop_reason: 'cancelled' });
+    expect(s.queued).toBe(false);
+  });
 });

@@ -99,8 +99,12 @@ func bodyOf(m inbox.Message) emailBody {
 
 // parseInboxQuery reads the listing filters off the query string:
 // ?source=(gmail|hosted|external), ?unread=1, ?status=<signal>, ?q=<term>,
-// ?unclassified=1, ?link=<state>. The vocabularies are checked by the service, so
-// an unknown value is one 400 wherever it arrives from.
+// ?unclassified=1, ?link=<state>, ?include_other=1. The vocabularies are checked by the
+// service, so an unknown value is one 400 wherever it arrives from.
+//
+// include_other is opt-IN because the listing's default is the applications a person came
+// to find, not everything a mailbox holds. What that default costs them is reported as a
+// number rather than left to be discovered.
 func parseInboxQuery(c *fiber.Ctx) inbox.Query {
 	return inbox.Query{
 		Source:       c.Query("source"),
@@ -109,6 +113,7 @@ func parseInboxQuery(c *fiber.Ctx) inbox.Query {
 		Q:            c.Query("q"),
 		Unread:       c.QueryBool("unread"),
 		Unclassified: c.QueryBool("unclassified"),
+		IncludeOther: c.QueryBool("include_other"),
 	}
 }
 
@@ -151,7 +156,10 @@ func (h *inboxHandlers) GetInbox(c *fiber.Ctx) error {
 			emailLinking: linkingOf(m),
 		})
 	}
-	return listResponse(c, out, page.Total, limit, offset)
+	// The hidden count rides in the listing's meta rather than in a second request: a
+	// number nobody fetches is a number nobody sees, and this one exists precisely so a
+	// misclassification is findable.
+	return listResponseWithHidden(c, out, page.Total, page.Hidden, limit, offset)
 }
 
 // GetEmail returns one message body, scoped to the caller (404 for another user's),

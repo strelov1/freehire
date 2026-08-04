@@ -85,39 +85,45 @@ the public catalog or the search index.
   public dedup key space, so concurrent/repeat submissions from the same or different users never
   collide over `(source, external_id)` uniqueness and never contend over `created_by`-based
   access.
-- `created_by` = submitting user. Private-row access is gated on this everywhere a job is looked
-  up by slug for tailoring/fit purposes.
+- `created_by` = submitting user — recorded for provenance/support purposes, not as an access
+  check (see decision 4: a private job's read access is not owner-gated).
 - `jobderive.Derive` runs synchronously at creation (it's pure and DB-free — no reason to queue
   it). The row is **not** enqueued onto `enrichment_outbox`: that queue exists to extract
   additional LLM-derived structure for a catalog that gets crawled repeatedly and searched by
   many users; a private, single-tailoring-session row doesn't recoup that cost. `jobderive`'s
   dict-based facets plus the raw description text are what `matchanalysis` needs.
 
-**4. Visibility gating happens in three places — not just the search index.**
-Research first assumed all public listings were Meilisearch-backed, which turned out to be
-wrong: `GET /api/v1/jobs` is a **separate DB-backed** endpoint (`internal/search`'s Meili index
-is not involved), and `GET /api/v1/jobs/:slug` (`jobs.go`'s `GetJob`) is a fully public,
-unauthenticated single-job read backed directly by `GetJobBySlug` — a known or guessed slug
-reaches it with no index involved at all. Three places need the `is_private` check:
-- Meilisearch's job-indexing query (`internal/search`) gains a `WHERE NOT is_private` (or
-  equivalent) so private rows are never pushed to the index — covers search and any
-  index-derived listing.
-- The DB-backed `GET /api/v1/jobs` list query gains the same exclusion — covers the
-  Postgres-backed listing that bypasses Meilisearch entirely.
-- `GetJob` (`jobs.go`), the three fit-analysis lookups (`match_analysis.go`), and the tailor
-  lookup (`cv_tailor.go`) each gain a check: if the resolved job `is_private` and
-  `created_by != callerID` (or the caller is anonymous), treat it as not found (404), identical
-  to an unknown slug. `GetJob` already carries an optional caller identity via `mw.optional`
-  middleware, so this is a cheap comparison, not a new auth requirement; the other four are
-  already behind `requireUserID`.
+**4. Privacy model: unguessable + never-listed, not per-request ownership checks.**
+An earlier pass of this design gated every job-by-slug read (`GetJob`, the three fit-analysis
+handlers, `TailorCV`, plus — found only by auditing further — `job_match.go` and
+`internal/jobtracking`'s ~11 slug-resolving methods) behind a `created_by == caller` check, on
+the theory that a private job should be invisible to anyone but its creator even if they somehow
+learned its slug. That reasoning holds for a search engine or a listing page discovering the slug
+on its own, but a fresh audit turned up **7 more** call sites with the same unguarded pattern
+(`vote`, `reminder`, `similar`, `copies`, `ghost_reports`, `reports`, `community`) — a
+"whack-a-mole" surface that grows every time a future feature reads a job by slug, not a fixed
+list that can be closed once.
 
-**Explicitly deferred**: the in-app assistant's job-lookup tools also call `GetJobBySlug`
-directly and would leak a private job's text into a chat if fed a known/guessed slug — the same
-prerequisite as reaching the direct URL. Left unpatched for this change: gating every
-`GetJobBySlug` call site (13 across the handler package, including mail-linking and follow-up
-flows that require a pre-existing user-owned application record to reach at all) would expand
-this change well past its scope. The three points above are the endpoints someone could exploit
-with only a slug and nothing else.
+Revised model: a private job behaves exactly like a **closed job** for read access — reachable
+by anyone holding its exact slug (fit analysis, tailoring, vote, copies, …, all unchanged), but
+never surfaced through search, listing, or reindex. Two places must actively keep it unsurfaced,
+because they don't require already knowing the slug to reach:
+- Meilisearch's job-indexing query (`internal/search`) — `WHERE NOT is_private` alongside the
+  existing open/closed handling.
+- The DB-backed `GET /api/v1/jobs` list query and its `estimate_open_jobs()` total — same
+  exclusion.
+- `GET /jobs/:slug/copies` (`ListRoleClusterCopies`) is the one exception that still needs an
+  explicit filter despite requiring a slug to reach *at all*: it joins on
+  `company_slug`/`role_fingerprint`, so a private job can coincidentally share a cluster with an
+  unrelated **public** one and surface (slug, location, url) to anyone browsing that public job's
+  own copies list — reachable without ever knowing the private slug, unlike every other
+  surviving read path.
+
+The security property this relies on: `external_id` (and therefore the slug's shortcode) is a
+fresh synthetic UUID per submission (decision 3) — not derived from anything guessable, and never
+printed anywhere but the response the creator receives. Nothing else needs auditing or
+re-auditing as new features are added, because none of them are asked to treat `is_private`
+specially; they just don't independently list private rows.
 
 **5. `/my/cvs` UI: one form, three tabs, one destination.**
 The "our own vacancy" tab needs no backend work — it's a search/select combobox over the existing
@@ -137,10 +143,15 @@ not know or care which tab produced its slug.
   Mitigation: a freshly-crawled public job is in the identical position immediately after ingest
   (enrichment is async and can lag); `matchanalysis` already has to tolerate an unenriched job, so
   this isn't a new failure mode, only a permanent instance of an existing one.
-- **[Risk] Forgetting the `is_private` filter in some future job-listing query silently leaks a
-  private JD.** → Mitigation: centralize the filter in the single query `internal/search` uses
-  to select jobs for indexing, so leakage would require a *second* Postgres-backed public listing
-  path to be added later without reusing that helper — call this out in that query's code comment.
+- **[Risk] A private job's slug leaks outside the direct-link channel it's meant to travel
+  through** (e.g. pasted into a public Slack channel, logged by a proxy, or surfaced by some
+  future feature that lists jobs by slug without excluding `is_private`).** → Mitigation: this is
+  the accepted trade-off of the "unguessable + never-listed" model (decision 4) rather than
+  something structurally prevented. The synthetic UUID-derived slug is not brute-forceable, and
+  the two listing paths (search index, DB-backed `/jobs`) plus the one coincidental-overlap path
+  (`/jobs/:slug/copies`) are the only ones that could surface it without the slug already being
+  known — every other future job-by-slug consumer inherits safety for free rather than needing
+  its own check, which is the whole reason this model was chosen over per-consumer gating.
 
 ## Migration Plan
 
@@ -151,6 +162,8 @@ not know or care which tab produced its slug.
 
 ## Open Questions
 
-None outstanding — the three prior clarifying rounds (provider-recognized → public ingest;
-pasted/generic-scrape → private row with a visibility flag; single new form on `/my/cvs`) resolved
-the open branching points before this document was written.
+None outstanding. Four clarifying rounds resolved the open branching points: provider-recognized
+→ public ingest; pasted/generic-scrape → private row with a visibility flag; single new form on
+`/my/cvs`; and, after implementation surfaced a growing list of unguarded job-by-slug consumers,
+a fourth round settled the privacy model itself on "unguessable + never-listed" (decision 4)
+rather than per-consumer ownership gating.

@@ -28,7 +28,7 @@ SET claimed_at = now()
 FROM claimable c
 JOIN jobs j ON j.id = c.job_id
 WHERE o.id = c.id
-RETURNING o.id, o.job_id, j.source, j.external_id
+RETURNING o.id, o.job_id, j.source, j.external_id, j.url
 `
 
 type ClaimApplyFormBatchParams struct {
@@ -41,6 +41,7 @@ type ClaimApplyFormBatchRow struct {
 	JobID      int64  `json:"job_id"`
 	Source     string `json:"source"`
 	ExternalID string `json:"external_id"`
+	URL        string `json:"url"`
 }
 
 // Claim a batch of live, unleased captures, freshest posting first, by stamping
@@ -54,9 +55,12 @@ type ClaimApplyFormBatchRow struct {
 // embeddings — a form does not go stale — but a just-posted job is the one somebody is
 // about to apply to, so it is still the right order.
 //
-// The claim returns the job's source and external_id because the worker builds its fetch
-// from the row alone: external_id is the board-namespaced posting id
-// (sources.NamespaceExternalID), which carries both halves the platform APIs need.
+// The claim returns the job's source, external_id and url because the worker builds its
+// fetch from the row alone: external_id is the board-namespaced posting id
+// (sources.NamespaceExternalID), which carries both halves the platform APIs need, and
+// the url carries the regional host for a platform that has more than one. Lever serves
+// its European tenants from a separate host and answers 404 on the other — the same code
+// it uses for a posting that is gone, so the host cannot be discovered by trying.
 // Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
 // FROM) so the platform identity comes back without a second query.
 func (q *Queries) ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error) {
@@ -73,6 +77,7 @@ func (q *Queries) ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBat
 			&i.JobID,
 			&i.Source,
 			&i.ExternalID,
+			&i.URL,
 		); err != nil {
 			return nil, err
 		}

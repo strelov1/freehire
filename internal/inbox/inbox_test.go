@@ -147,3 +147,19 @@ func TestLinkStatePartitionsTheMailbox(t *testing.T) {
 		})
 	}
 }
+
+// Asking for the label the default hides is asking for it. Without this the two rules
+// cancel and `?status=other` answers "nothing" about its own subject.
+func TestAskingForOtherOverridesTheDefault(t *testing.T) {
+	for name, q := range map[string]Query{
+		"the default":       {},
+		"another label":     {Status: "rejection"},
+		"asking for other":  {Status: "other"},
+		"asking for it all": {IncludeOther: true},
+	} {
+		want := name == "asking for other" || name == "asking for it all"
+		if got := q.showsOther(); got != want {
+			t.Errorf("%s: showsOther() = %v, want %v", name, got, want)
+		}
+	}
+}

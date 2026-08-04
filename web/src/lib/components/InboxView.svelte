@@ -41,6 +41,12 @@
   // Triage filters: unread-only and one classification label ('' = all).
   let unread = $state(false);
   let label = $state('');
+  // Mail the classifier judged not to be about an application at all is hidden by default —
+  // the inbox is where a person looks for their applications. How much that costs them is
+  // shown as a number rather than left to be discovered, because a filter nobody can see is
+  // a misclassification nobody can find.
+  let includeOther = $state(false);
+  let hidden = $state(0);
   // The dropdown offers only signals with a human label (drops 'other' → blank).
   const LABEL_OPTIONS = Object.entries(STATUS_LABELS).filter(([, l]) => l !== '');
   const filterActive = $derived(unread || label !== '' || search !== '');
@@ -49,7 +55,19 @@
   // fetch closure reads the live filters (search, account, unread, label) at
   // call time, so a filter change just re-fetches the first page.
   const pager = new Paginator<InboxMessage>(
-    (limit, offset) => api.getInbox({ q: search, limit, offset, source, unread, status: label }),
+    async (limit, offset) => {
+      const page = await api.getInbox({
+        q: search,
+        limit,
+        offset,
+        source,
+        unread,
+        status: label,
+        includeOther,
+      });
+      hidden = page.hidden;
+      return page;
+    },
     PAGE_SIZE,
   );
 
@@ -606,6 +624,38 @@
           <span aria-hidden="true">·</span>
           <button type="button" onclick={undoDelete} class="font-medium text-brand-strong hover:underline">Undo</button>
         </div>
+      {/if}
+
+      <!-- The number the default cost them, where they are already looking. It appears only
+           when something was hidden, so a clean mailbox says nothing at all. -->
+      {#if hidden > 0 && !includeOther}
+        <p class="pb-3 text-sm text-muted-foreground">
+          {hidden} message{hidden === 1 ? '' : 's'} not about an application {hidden === 1 ? 'is' : 'are'} hidden.
+          <button
+            type="button"
+            class="font-medium text-brand-strong underline-offset-2 hover:underline"
+            onclick={() => {
+              includeOther = true;
+              void fetchFirstPage('Could not load the hidden mail.');
+            }}
+          >
+            Show
+          </button>
+        </p>
+      {:else if includeOther}
+        <p class="pb-3 text-sm text-muted-foreground">
+          Showing mail that is not about an application.
+          <button
+            type="button"
+            class="font-medium text-brand-strong underline-offset-2 hover:underline"
+            onclick={() => {
+              includeOther = false;
+              void fetchFirstPage('Could not reload the inbox.');
+            }}
+          >
+            Hide
+          </button>
+        </p>
       {/if}
 
       {#if pager.items.length === 0}

@@ -91,6 +91,34 @@ func (s *Store) SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int
 	return nil
 }
 
+// MergeAutopilotEntry writes one requirement's outcome into an owned CV's run report,
+// replacing the matching entry (requirement text compared case- and whitespace-insensitively)
+// or appending a new one when the report holds nothing for it yet.
+//
+// This is what lets cv_edit report the requirement it just closed in the SAME call as the
+// edit, rather than depending on a separate tailor_report call the model may not remember
+// to make once the requirement is no longer the one it is thinking about.
+func (s *Store) MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry AutopilotEntry) error {
+	rec, err := s.Get(ctx, id, userID)
+	if err != nil {
+		return err
+	}
+	entries := rec.AutopilotReport
+	target := strings.ToLower(strings.TrimSpace(entry.Requirement))
+	replaced := false
+	for i, e := range entries {
+		if strings.ToLower(strings.TrimSpace(e.Requirement)) == target {
+			entries[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		entries = append(entries, entry)
+	}
+	return s.SetAutopilotReport(ctx, id, userID, entries)
+}
+
 // decodeAutopilotReport reads the stored report, tolerating an absent one. A stored report
 // that will not parse is treated as absent rather than failing the CV read: the panel losing
 // a run log must not cost the candidate their CV.

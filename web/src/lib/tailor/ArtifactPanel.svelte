@@ -7,7 +7,10 @@
   //    base profile that it is.
   //  - Score — what tailoring did to the CV's ATS readability against the base CV, and the
   //    last autopilot run's log.
-  //  - Job and Templates — the vacancy's own text, and the template gallery.
+  //  - Job — the vacancy's own text.
+  //
+  // Every tab here MEASURES the document or is the thing it is measured against; what CHANGES
+  // the document — its text, its template, its typography — lives in the left panel.
   //
   // JD and the fit analysis reuse the SAME components the job page / fit page use, so they
   // read identically. Splitter width is clamped by the vitest-covered clampWidth.
@@ -17,7 +20,6 @@
   import JobDescription from '$lib/components/JobDescription.svelte';
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CompanyLogo from '$lib/components/CompanyLogo.svelte';
-  import TemplateGallery from './TemplateGallery.svelte';
   import RevisionHistory from './RevisionHistory.svelte';
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
@@ -26,13 +28,11 @@
   import type { Job, MatchAnalysisResponse } from '$lib/types';
   import type { CvAtsDelta, CvJobMatch } from '$lib/cv';
 
-  type Tab = 'templates' | 'jd' | 'jobmatch' | 'score' | 'history';
+  type Tab = 'jd' | 'jobmatch' | 'score' | 'history';
 
   let {
-    cvId,
     job,
     analysis,
-    onTemplateSelected,
     // Which tab is active — bindable so the page's mobile tab bar can drive it (on desktop the
     // panel's own tab bar sets it). mobileVisible is the page's per-breakpoint show/hide on mobile;
     // at lg the aside is always shown regardless (lg:flex overrides the mobile hidden).
@@ -48,10 +48,8 @@
     onUndoRevision,
     onUndoRevisionRun,
   }: {
-    cvId: string;
     job: Job;
     analysis: Analysis | null;
-    onTemplateSelected: (id: string) => void;
     tab?: Tab;
     mobileVisible?: boolean;
     /** The last unattended run's log, shown in the Score tab. The fit analysis is untouched
@@ -80,7 +78,6 @@
     ['score', 'Score'],
     ['history', 'History'],
     ['jd', 'Job'],
-    ['templates', 'Templates'],
   ];
   // 400 rather than the 340 floor: at the floor the tab strip wraps "Job Match" onto two lines
   // and the vacancy title truncates after a couple of words, so the panel opened looking cramped.
@@ -195,11 +192,7 @@
   </div>
 
   <div class="min-h-0 flex-1 overflow-auto">
-    {#if tab === 'templates'}
-      <div class="p-4">
-        <TemplateGallery {cvId} onSelected={onTemplateSelected} />
-      </div>
-    {:else if tab === 'history'}
+    {#if tab === 'history'}
       <RevisionHistory {revisions} onPreview={onPreviewRevision} onUndo={onUndoRevision} onUndoRun={onUndoRevisionRun} />
     {:else if tab === 'jd'}
       <div class="p-4">
