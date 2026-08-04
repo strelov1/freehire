@@ -7752,3 +7752,5 @@
 # the posting URL carries it — "it-labs" 404s, "it labs" is the real board.
 - company: IT Labs
   board: it%20labs
+- company: Surge AI
+  board: surge-ai

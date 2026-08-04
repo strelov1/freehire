@@ -8394,3 +8394,12 @@
 
 - company: Wowflow GmbH # wowflow
   board: "101037"
+
+- company: Your Software Supplier # yoursoftwaresuppliercom
+  board: "163368"
+- company: Revent # revent1
+  board: "48627"
+- company: Stetig # stetigcom
+  board: "185256"
+- company: senvo GmbH # senvo
+  board: "143084"
