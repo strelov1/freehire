@@ -21,26 +21,29 @@
 
 ## 2. freehire-cli: experience list / employments add / atoms add
 
-- [ ] 2.1 `internal/client/experience.go` (new, in `github.com/strelov1/freehire-cli`):
+- [x] 2.1 `internal/client/experience.go` (new, in `github.com/strelov1/freehire-cli`):
   `ListExperience`, `CreateEmployment`, `CreateAtom`, following the shape of
   `internal/client/cv.go`'s existing methods (`c.do(...)`, typed params structs).
-- [ ] 2.2 `internal/cli/experience.go` (new): `experience` command group with `list`,
+- [x] 2.2 `internal/cli/experience.go` (new): `experience` command group with `list`,
   `employments add`, `atoms add` subcommands, following `internal/cli/jobs_authoring.go`'s
   `add`-verb convention and flag style (`mustString`/`mustBool` helpers). `atoms add` takes
   `--claim` (required), `--context`, `--metric` (repeatable), `--skill` (repeatable),
   `--employment` (id, optional). `employments add` takes `--kind` (job|project, default
   job), `--company`, `--role`, `--location`, `--start`, `--end`, `--current`, `--summary`.
-- [ ] 2.3 Tests in `internal/cli/experience_test.go` and `internal/client/experience_test.go`
+- [x] 2.3 Tests in `internal/cli/experience_test.go` and `internal/client/experience_test.go`
   (`httptest.Server`, matching the existing `cv_test.go` pattern in both packages).
-- [ ] 2.4 Update the CLI's own README/help text and bump the version per
-  `hire-cli-release-ops` convention (new commands ⇒ minor bump).
+- [x] 2.4 Updated the CLI's own README (`## Use` command list + an "Experience bank"
+  explainer paragraph). The version bump / release (new tag, cross-built binaries, `gh
+  release create`) is deliberately NOT done here — that is a real deploy of the public
+  installer real users pull from (`hire-cli-release-ops`), left for when the change is
+  actually ready to ship, not bundled into this commit.
 
 ## 3. Verify
 
-- [ ] 3.1 Backend: `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`,
-  `go test ./...`.
-- [ ] 3.2 `openspec validate --all --strict`.
-- [ ] 3.3 freehire-cli: `go build ./...`, `go vet ./...`, `go test ./...` in that repo.
+- [x] 3.1 Backend: `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`,
+  `go test ./...` — clean. Also `go test -tags=integration ./internal/handler/...`.
+- [x] 3.2 `openspec validate --all --strict` — 213/213.
+- [x] 3.3 freehire-cli: `go build ./...`, `go vet ./...`, `go test ./...` in that repo — clean.
 - [ ] 3.4 Manual smoke: mint/use a real full-scope key against a local or prod server,
   `experience employments add`, `experience atoms add` citing the returned id, `cv edit
   --evidence <id>` with it.
