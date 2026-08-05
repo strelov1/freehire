@@ -234,6 +234,37 @@ func TestSuppressedAggregator_HiddenFromListAndEnrichmentButServedBySlug(t *test
 }
 
 // verify the driver only returns companies that actually have an open aggregator posting.
+func TestSuppressAggregator_FoldsCompanySlugWordSeparatorVariance(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	// Two sources spell the same employer differently: greenhouse's raw company name has a
+	// space ("CFO Insights" -> "cfo-insights"), arbeitnow's has none ("Cfoinsights" ->
+	// "cfoinsights"). company_slug is normalize.Slug(name), which never strips legal
+	// suffixes (internal/normalize/slug.go), so the only difference here is where the
+	// word-break hyphen landed.
+	ats := atsJob("cfoinsights:6500265003", "Founder Associate (MBA Graduate)", []string{"GB"})
+	ats.Company = "CFO Insights"
+	ats.CompanySlug = "cfo-insights"
+	mustUpsert(t, q, ats)
+
+	agg := aggJob("arbeitnow:founder-associate-349135", "Founder Associate (MBA Graduate)", []string{"GB"})
+	agg.Company = "Cfoinsights"
+	agg.CompanySlug = "cfoinsights"
+	mustUpsert(t, q, agg)
+
+	suppressAggregators(t, q)
+
+	atsID, atsDup := dupOf(t, pool, "cfoinsights:6500265003")
+	if atsDup != -1 {
+		t.Errorf("ATS row duplicate_of = %d, want NULL (canonical)", atsDup)
+	}
+	if _, aggDup := dupOf(t, pool, "arbeitnow:founder-associate-349135"); aggDup != atsID {
+		t.Errorf("aggregator duplicate_of = %d, want ATS %d (company_slug word-separator variance must fold)", aggDup, atsID)
+	}
+}
+
 func TestCompaniesWithAggregatorPostings_OnlyAggregatorCompanies(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
