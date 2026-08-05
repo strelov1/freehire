@@ -1075,11 +1075,16 @@ type Querier interface {
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
 	InsertDebit(ctx context.Context, arg InsertDebitParams) error
-	// The only insert. ON CONFLICT DO NOTHING against the (user_id, claim_key) unique index makes
-	// "the same claim is never banked twice" a database guarantee rather than a property of the
-	// import code — so re-uploading a CV cannot duplicate atoms no matter what the caller does.
-	// Returns no row when the claim is already banked, which callers report rather than treat as
-	// an error: the user learns it is already recorded.
+	// The only insert. A claim already banked with a stronger provenance than
+	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case
+	// except one: a claim first recorded as agent_inferred (the model's unconfirmed
+	// paraphrase) is upgraded in place when a later call carries a real provenance,
+	// because the candidate confirming it afterward must actually unstick the write —
+	// otherwise that exact claim text stays permanently un-writable to a CV. The WHERE
+	// guards both non-upgrade cases: a confirmed atom is never downgraded, and two
+	// agent_inferred attempts at the same claim leave it exactly as unconfirmed as
+	// before. Returns no row when there is genuinely nothing to change, which callers
+	// report as ErrAlreadyBanked rather than an error.
 	InsertExperienceAtomIfNew(ctx context.Context, arg InsertExperienceAtomIfNewParams) (ExperienceAtom, error)
 	// Second half of the atomic rebuild: one row per (facet, value). Called once per
 	// value the worker computed, inside the same transaction as DeleteAllFacetStats.
@@ -2520,6 +2525,10 @@ type Querier interface {
 	// its aggregator copy back into search/embedding/enrichment. min(id) picks a stable
 	// target; the IS DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 	// RecomputeRoleDuplicatesForCompany so ATS reposts have already collapsed to their canon.
+	// Company match folds away word-separator spelling variance between sources: company_slug
+	// is normalize.Slug(name), which never strips legal suffixes, so two sources naming the
+	// same employer with a different word break ("Cfoinsights" vs "CFO Insights") land on
+	// different slugs ("cfoinsights" vs "cfo-insights") that agree once hyphens are removed.
 	SuppressAggregatorDuplicatesForCompany(ctx context.Context, arg SuppressAggregatorDuplicatesForCompanyParams) (int64, error)
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
