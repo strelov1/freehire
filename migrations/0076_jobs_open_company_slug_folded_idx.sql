@@ -6,7 +6,7 @@
 -- pass now compares replace(company_slug, '-', ''); without this index that predicate
 -- seq-scans the whole jobs table once per company in the reindex loop.
 --
--- Applied to a fresh volume by initdb after 0073; on an existing prod volume build it
+-- Applied to a fresh volume by initdb after 0075; on an existing prod volume build it
 -- CONCURRENTLY out of band (a plain CREATE INDEX would lock the live jobs table):
 --   CREATE INDEX CONCURRENTLY jobs_open_company_slug_folded_idx
 --     ON public.jobs (replace(company_slug, '-', ''))
