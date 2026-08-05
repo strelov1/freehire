@@ -90,7 +90,23 @@ Both existing indexes on `company_slug` (`jobs_company_slug_idx`,
 `jobs_open_company_created_at_id_idx`, `migrations/0001_init.sql:746,756`) are plain btree on
 the raw column — Postgres cannot use either for an equality on
 `replace(company_slug, '-', '')`, and the suppression pass runs this filter once per company
-in the reindex loop, so an unindexed seq scan per company is unacceptable. Add:
+in the reindex loop, so an unindexed seq scan per company is unacceptable. Add, following the established repo pattern for every prior index added to `jobs`
+(`migrations/0013_jobs_open_role_cluster_idx.sql`, `0023`, `0026`, `0027`, `0033` — none of
+which run `CONCURRENTLY` inside the tracked migration file, since Postgres flatly refuses
+`CREATE INDEX CONCURRENTLY` inside a transaction block and this repo's `-- migrate:
+no-transaction` escape hatch is reserved for the `ADD CONSTRAINT ... NOT VALID` / `VALIDATE`
+split, not exercised here):
+
+```sql
+CREATE INDEX IF NOT EXISTS jobs_open_company_slug_folded_idx
+    ON public.jobs (replace(company_slug, '-', ''))
+    WHERE closed_at IS NULL AND company_slug <> '';
+```
+
+`IF NOT EXISTS` makes the migration safe to apply blocking on a fresh/empty volume (initdb,
+CI, dev) where the cost is negligible. On the existing prod volume, per the same convention
+as `0013`'s comment, an operator builds the equivalent index out of band, non-blocking,
+*before* the tracked migration reaches prod:
 
 ```sql
 CREATE INDEX CONCURRENTLY jobs_open_company_slug_folded_idx
@@ -98,14 +114,13 @@ CREATE INDEX CONCURRENTLY jobs_open_company_slug_folded_idx
     WHERE closed_at IS NULL AND company_slug <> '';
 ```
 
-No new column, no backfill-derive step — Postgres builds the expression index from existing
-data. `CONCURRENTLY` is required on the hot `jobs` table and must run outside a transaction
-per this repo's migration convention for non-blocking DDL (`migrate: no-transaction`, the
-same discipline used for `NOT VALID` constraints — see `hire-migration-add-constraint-not-valid`
-memory). Before merge, `EXPLAIN` the modified query against a staging/prod-shaped dataset to
-confirm the planner actually switches to an Index Scan on the new index rather than falling
-back to a seq scan — a mismatched expression between the index definition and the query
-predicate is a well-known way for this kind of index to silently go unused.
+so that when `migrate` later applies the tracked file, `IF NOT EXISTS` finds the index
+already present and is a no-op — the live table is never blocking-locked. No new column, no
+backfill-derive step: Postgres builds the expression index from existing data either way.
+Before merge, `EXPLAIN` the modified query against a local Postgres with representative data
+to confirm the planner actually switches to an Index Scan on the new index rather than
+falling back to a seq scan — a mismatched expression between the index definition and the
+query predicate is a well-known way for this kind of index to silently go unused.
 
 ## Risks / Trade-offs
 
@@ -124,9 +139,11 @@ predicate is a well-known way for this kind of index to silently go unused.
 
 ## Migration Plan
 
-One migration: `CREATE INDEX CONCURRENTLY ... jobs_open_company_slug_folded_idx` (no
-transaction, per repo convention). The SQL query and its generated sqlc code change
-alongside it. No data backfill. Rollback is reverting the code (the query change) and
+One migration: `CREATE INDEX IF NOT EXISTS ... jobs_open_company_slug_folded_idx`, applied by
+initdb/CI/dev directly; on prod an operator builds the `CONCURRENTLY` equivalent out of band
+before the tracked migration runs, matching `0013`'s convention. The SQL query and its
+generated sqlc code change alongside it. No data backfill. Rollback is reverting the code
+(the query change) and
 dropping the index; no persisted state this pass writes needs unwinding beyond what
 `SuppressAggregatorDuplicatesForCompany` already handles (idempotent, `IS DISTINCT FROM`
 guard, re-evaluated every run).
