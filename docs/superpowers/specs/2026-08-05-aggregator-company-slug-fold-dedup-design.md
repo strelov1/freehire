@@ -65,7 +65,10 @@ to
 WHERE replace(jobs.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
 ```
 
-(plus the existing `company_slug <> ''` guards, unchanged). Since `company_slug` is already
+(plus an explicit `AND jobs.company_slug <> ''` / `AND a.company_slug <> ''` guard added to
+each CTE — neither existed before this change; they exist now so the query's predicate
+provably implies the partial index's `WHERE company_slug <> ''` clause below, letting the
+planner use it). Since `company_slug` is already
 `normalize.Slug(name)` — lowercase, transliterated, non-alphanumeric runs collapsed to a
 single hyphen, no legal-suffix stripping — the only residual difference between two sources'
 slugs for the same company (absent legal-suffix noise) is exactly where word-break hyphens

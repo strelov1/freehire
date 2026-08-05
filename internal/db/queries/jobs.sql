@@ -588,7 +588,7 @@ WITH ats AS (
            jobs.countries
     FROM jobs
     WHERE replace(jobs.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
-      AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL
+      AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
       AND NOT (jobs.source = ANY(sqlc.arg(aggregators)::text[]))
 ),
 agg AS (
@@ -604,7 +604,7 @@ agg AS (
            a.countries
     FROM jobs a
     WHERE replace(a.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
-      AND a.closed_at IS NULL
+      AND a.closed_at IS NULL AND a.company_slug <> ''
       AND a.source = ANY(sqlc.arg(aggregators)::text[])
       AND (
           a.duplicate_of IS NULL
