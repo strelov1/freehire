@@ -352,6 +352,7 @@ FROM jobs
 WHERE id = $2::bigint
   AND (enriched_at IS NULL OR enrichment_version < $1::int)
   AND is_tech IS TRUE
+  AND description <> ''
 ON CONFLICT (job_id, target_version) DO NOTHING
 `
 
@@ -371,9 +372,11 @@ type EnqueueJobEnrichmentParams struct {
 // silently skip a tech job the dictionary missed" — but measured at catalogue scale it
 // was ~65% of the open catalogue and enrichment returned nothing useful for ~91% of it
 // (broad multi-industry ATS crawls: painters, stockers, drivers), so the LLM spend was
-// not buying the coverage it cost. Idempotent via the outbox's UNIQUE (job_id,
-// target_version). Run in the same transaction as the job's UpsertJob so a newly
-// ingested job is queued atomically with its write.
+// not buying the coverage it cost. Also requires a non-empty description: the LLM has
+// nothing to extract from a blank one regardless of category, and a 2026-08-06 prod
+// sweep found ~53K such rows already sitting in the queue for no reason. Idempotent via
+// the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
+// job's UpsertJob so a newly ingested job is queued atomically with its write.
 func (q *Queries) EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrichmentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, enqueueJobEnrichment, arg.TargetVersion, arg.JobID)
 	if err != nil {

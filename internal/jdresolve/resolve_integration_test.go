@@ -57,10 +57,11 @@ func (boardServing) Provider() string { return "recruitee" }
 
 func (b boardServing) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
 	return []sources.Job{{
-		ExternalID: "senior-go",
-		URL:        "https://" + e.Board + ".recruitee.com/o/senior-go",
-		Title:      string(b),
-		Company:    "Acme",
+		ExternalID:  "senior-go",
+		URL:         "https://" + e.Board + ".recruitee.com/o/senior-go",
+		Title:       string(b),
+		Company:     "Acme",
+		Description: "We build things.",
 	}}, nil
 }
 

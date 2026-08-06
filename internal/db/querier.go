@@ -682,9 +682,11 @@ type Querier interface {
 	// silently skip a tech job the dictionary missed" — but measured at catalogue scale it
 	// was ~65% of the open catalogue and enrichment returned nothing useful for ~91% of it
 	// (broad multi-industry ATS crawls: painters, stockers, drivers), so the LLM spend was
-	// not buying the coverage it cost. Idempotent via the outbox's UNIQUE (job_id,
-	// target_version). Run in the same transaction as the job's UpsertJob so a newly
-	// ingested job is queued atomically with its write.
+	// not buying the coverage it cost. Also requires a non-empty description: the LLM has
+	// nothing to extract from a blank one regardless of category, and a 2026-08-06 prod
+	// sweep found ~53K such rows already sitting in the queue for no reason. Idempotent via
+	// the outbox's UNIQUE (job_id, target_version). Run in the same transaction as the
+	// job's UpsertJob so a newly ingested job is queued atomically with its write.
 	EnqueueJobEnrichment(ctx context.Context, arg EnqueueJobEnrichmentParams) (int64, error)
 	// Idempotent backfill: enqueue every email not yet classified. classified_at is the
 	// "done" marker; ON CONFLICT keeps one entry per email, so running this each worker
@@ -698,14 +700,14 @@ type Querier interface {
 	EnqueuePendingEmailClassification(ctx context.Context) (int64, error)
 	// Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 	// schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
-	// user will see should not consume LLM budget. Gated on the same is_tech = true
-	// condition EnqueueJobEnrichment uses (see that query's comment for why the
-	// is_tech IS NULL bucket — unresolved by both the title dictionary and the
+	// user will see should not consume LLM budget. Gated on the same is_tech = true and
+	// description <> '' conditions EnqueueJobEnrichment uses (see that query's comment for
+	// why the is_tech IS NULL bucket — unresolved by both the title dictionary and the
 	// description — is deliberately excluded, not just the confirmed-non-tech
-	// is_tech = false one) so a version bump or a fresh backfill run re-evaluates the
-	// whole catalogue under the identical rule, not a looser one. ON CONFLICT keeps
-	// exactly one entry per (job_id, target_version), so running this every command
-	// invocation never duplicates work.
+	// is_tech = false one, and why a blank description is excluded regardless of category)
+	// so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
+	// identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
+	// target_version), so running this every command invocation never duplicates work.
 	EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error)
 	// Idempotent backfill for the incremental semantic-embedding queue. Enqueues two
 	// kinds of outstanding work at the target embedder model:

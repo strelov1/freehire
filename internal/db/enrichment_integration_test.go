@@ -22,15 +22,16 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 	return testdb.Pool(t)
 }
 
-// insertJob inserts a job with is_tech = true (the enrichment enqueue gate's default
-// requirement — see TestEnqueueGatesOnIsTech for the tri-state gating itself), so every
-// other test in this file that enqueues and expects it to succeed doesn't have to set it.
+// insertJob inserts a job with is_tech = true and a non-empty description (the
+// enrichment enqueue gate's default requirements — see TestEnqueueGatesOnIsTech and
+// TestEnqueueGatesOnDescription for the gating itself), so every other test in this
+// file that enqueues and expects it to succeed doesn't have to set either.
 func insertJob(t *testing.T, pool *pgxpool.Pool, externalID string) int64 {
 	t.Helper()
 	var id int64
 	err := pool.QueryRow(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug, is_tech)
-		 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, true) RETURNING id`,
+		`INSERT INTO jobs (source, external_id, url, title, description, public_slug, is_tech)
+		 VALUES ('test', $1, 'http://example.test', 'A job', 'Build things.', 'job-' || $1, true) RETURNING id`,
 		externalID).Scan(&id)
 	if err != nil {
 		t.Fatalf("insert job: %v", err)
@@ -71,6 +72,16 @@ func setIsTech(t *testing.T, pool *pgxpool.Pool, jobID int64, isTech *bool) {
 	if _, err := pool.Exec(context.Background(),
 		"UPDATE jobs SET is_tech = $1 WHERE id = $2", isTech, jobID); err != nil {
 		t.Fatalf("set is_tech: %v", err)
+	}
+}
+
+// setDescription stamps a job's description so the enrichment enqueue gate's
+// description <> ” condition can be tested.
+func setDescription(t *testing.T, pool *pgxpool.Pool, jobID int64, description string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		"UPDATE jobs SET description = $1 WHERE id = $2", description, jobID); err != nil {
+		t.Fatalf("set description: %v", err)
 	}
 }
 
@@ -366,6 +377,49 @@ func TestEnqueueGatesOnIsTech(t *testing.T) {
 		}
 		if n != 0 {
 			t.Errorf("enqueued rows = %d, want 0 for an is_tech-unresolved job", n)
+		}
+		if got := enqueuedJobIDs(t, pool); len(got) != 0 {
+			t.Errorf("outbox = %v, want empty", got)
+		}
+	})
+}
+
+// TestEnqueueGatesOnDescription covers the other half of the AI-budget gate: a job
+// with no description is never enqueued, whatever its is_tech state — the LLM has
+// nothing to extract from a blank one. A 2026-08-06 prod sweep found ~53K such rows
+// already queued for no reason (see EnqueueJobEnrichment's doc comment).
+func TestEnqueueGatesOnDescription(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	t.Run("backfill enqueue skips a tech job with a blank description", func(t *testing.T) {
+		truncate(t, pool)
+		blank := insertJob(t, pool, "blank")
+		setDescription(t, pool, blank, "")
+
+		if _, err := q.EnqueuePendingJobs(ctx, targetVersion); err != nil {
+			t.Fatal(err)
+		}
+		if got := enqueuedJobIDs(t, pool); len(got) != 0 {
+			t.Errorf("enqueued = %v, want none (blank description)", got)
+		}
+	})
+
+	t.Run("transactional enqueue skips a tech job with a blank description", func(t *testing.T) {
+		truncate(t, pool)
+		blank := insertJob(t, pool, "blank")
+		setDescription(t, pool, blank, "")
+
+		n, err := q.EnqueueJobEnrichment(ctx, EnqueueJobEnrichmentParams{
+			TargetVersion: targetVersion,
+			JobID:         blank,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("enqueued rows = %d, want 0 for a blank-description job", n)
 		}
 		if got := enqueuedJobIDs(t, pool); len(got) != 0 {
 			t.Errorf("outbox = %v, want empty", got)

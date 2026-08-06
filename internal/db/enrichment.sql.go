@@ -91,19 +91,20 @@ WHERE closed_at IS NULL
   AND duplicate_of IS NULL
   AND (enriched_at IS NULL OR enrichment_version < $1::int)
   AND is_tech IS TRUE
+  AND description <> ''
 ON CONFLICT (job_id, target_version) DO NOTHING
 `
 
 // Idempotent backfill: enqueue every OPEN job that is unenriched or below the target
 // schema version. Closed jobs (closed_at IS NOT NULL) are skipped — a dead posting no
-// user will see should not consume LLM budget. Gated on the same is_tech = true
-// condition EnqueueJobEnrichment uses (see that query's comment for why the
-// is_tech IS NULL bucket — unresolved by both the title dictionary and the
+// user will see should not consume LLM budget. Gated on the same is_tech = true and
+// description <> ” conditions EnqueueJobEnrichment uses (see that query's comment for
+// why the is_tech IS NULL bucket — unresolved by both the title dictionary and the
 // description — is deliberately excluded, not just the confirmed-non-tech
-// is_tech = false one) so a version bump or a fresh backfill run re-evaluates the
-// whole catalogue under the identical rule, not a looser one. ON CONFLICT keeps
-// exactly one entry per (job_id, target_version), so running this every command
-// invocation never duplicates work.
+// is_tech = false one, and why a blank description is excluded regardless of category)
+// so a version bump or a fresh backfill run re-evaluates the whole catalogue under the
+// identical rule, not a looser one. ON CONFLICT keeps exactly one entry per (job_id,
+// target_version), so running this every command invocation never duplicates work.
 func (q *Queries) EnqueuePendingJobs(ctx context.Context, targetVersion int32) (int64, error) {
 	result, err := q.db.Exec(ctx, enqueuePendingJobs, targetVersion)
 	if err != nil {
