@@ -2,14 +2,30 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
 
-// workdayPageLimit is Workday's max listing page size.
 const (
+	// workdayPageLimit is Workday's max listing page size.
 	workdayPageLimit = 20
+	// workdayCapTotal is the `total` some Workday tenants report once a board exceeds this
+	// size — past offset=2000 those tenants silently loop back to page 1 instead of erroring
+	// or returning an empty page. A board whose total is exactly this must be walked by facet
+	// (see listPostings), not paged directly.
+	workdayCapTotal = 2000
+	// maxFacetDepth bounds how many facet dimensions can be combined while subdividing a
+	// capped board. Verified sufficient against the worst known case (Accenture's largest
+	// single job family is still capped after one dimension, resolved by a second) with
+	// headroom to spare; raise it if a board's exhaustion log shows it is not enough.
+	maxFacetDepth = 3
+	// workdayRetryMaxAttempts and workdayRetryBase bound how a rate-limited (403/429) listing
+	// or detail request is retried before giving up.
+	workdayRetryMaxAttempts = 6
+	workdayRetryBase        = time.Second
 )
 
 // workday adapts Workday's public "CXS" careers API. The board id is the public board
@@ -25,10 +41,13 @@ type workdayHTTP interface {
 
 type workday struct {
 	http workdayHTTP
+	// retryBase is the first backoff delay for a rate-limited (403/429) request — a field, not
+	// a package var, so tests disable sleeping without touching shared state.
+	retryBase time.Duration
 }
 
 // NewWorkday builds the Workday adapter over the given HTTP client.
-func NewWorkday(c workdayHTTP) Source { return workday{http: c} }
+func NewWorkday(c workdayHTTP) Source { return workday{http: c, retryBase: workdayRetryBase} }
 
 func (workday) Provider() string { return "workday" }
 
@@ -137,30 +156,77 @@ func (s workday) listingJob(e CompanyEntry, b workdayBoard, p workdayPosting) Jo
 	}
 }
 
-// listPostings pages through the board's postings via the POST-only jobs endpoint,
-// stopping when a page is empty or all postings reported by total have been collected.
+// workdayFacetValue is one value of a listing facet, e.g. a single job family within the
+// "jobFamilyGroup" dimension. Count is the platform's own true count for that value, which is
+// what makes it safe to plan a subdivision from a response already being parsed — no extra
+// probe request needed.
+type workdayFacetValue struct {
+	ID    string `json:"id"`
+	Count int    `json:"count"`
+}
+
+// workdayFacet is one filterable dimension a listing response offers, e.g. "jobFamilyGroup" or
+// "workerSubType". Applying a value from it (via appliedFacets) scopes the *other* dimensions'
+// counts in the response that follows, but not this dimension's own counts (verified live
+// against Workday) — so subdividing a still-capped slice further means picking a dimension not
+// yet applied in that recursion branch, never re-applying the same one.
+type workdayFacet struct {
+	Parameter string              `json:"facetParameter"`
+	Values    []workdayFacetValue `json:"values"`
+}
+
+// workdayListPage is one page of the jobs-listing response.
+type workdayListPage struct {
+	Total       int              `json:"total"`
+	JobPostings []workdayPosting `json:"jobPostings"`
+	Facets      []workdayFacet   `json:"facets"`
+}
+
+// listPostings pages through the board's postings via the POST-only jobs endpoint. Most boards
+// page directly (pageAll); a board whose first page reports the capped total (workdayCapTotal)
+// is walked by facet instead (splitByFacet), since that total is a ceiling on what a single
+// query can return, not the board's true size.
 func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPosting, error) {
 	url := fmt.Sprintf("https://%s/wday/cxs/%s/%s/jobs", b.host, b.tenant, b.site)
+	first, err := s.fetchListPage(ctx, url, map[string]any{}, 0)
+	if err != nil {
+		return nil, fmt.Errorf("workday: list board %s: %w", b.site, err)
+	}
+	if first.Total != workdayCapTotal {
+		return s.pageAll(ctx, url, map[string]any{}, first)
+	}
+	log.Printf("workday: board %s/%s reports the capped total (%d); splitting by facet",
+		b.tenant, b.site, workdayCapTotal)
+	return s.splitByFacet(ctx, url, b, map[string]any{}, first, map[string]bool{}, 0)
+}
+
+// fetchListPage fetches one page of the given (possibly facet-scoped) query.
+func (s workday) fetchListPage(ctx context.Context, url string, appliedFacets map[string]any, offset int) (workdayListPage, error) {
+	reqBody := map[string]any{
+		"appliedFacets": appliedFacets,
+		"limit":         workdayPageLimit,
+		"offset":        offset,
+		"searchText":    "",
+	}
+	var page workdayListPage
+	if err := s.postJSONRetrying(ctx, url, reqBody, &page); err != nil {
+		return workdayListPage{}, err
+	}
+	return page, nil
+}
+
+// pageAll pages a query (unfiltered or facet-scoped) to exhaustion, starting from an
+// already-fetched first page so the caller's initial request is never wasted.
+func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[string]any, first workdayListPage) ([]workdayPosting, error) {
 	var postings []workdayPosting
 	// Some boards (e.g. pg.wd5.myworkdayjobs.com) report the real total only on the
 	// first page and total:0 thereafter, so latch the first non-zero total and page
 	// against it — reading each page's total would break after page one and silently
 	// truncate the board, which the 48h unseen sweep then reads as postings removed.
 	total := -1
-	for offset := 0; ; {
-		reqBody := map[string]any{
-			"appliedFacets": map[string]any{},
-			"limit":         workdayPageLimit,
-			"offset":        offset,
-			"searchText":    "",
-		}
-		var page struct {
-			Total       int              `json:"total"`
-			JobPostings []workdayPosting `json:"jobPostings"`
-		}
-		if err := s.http.PostJSON(ctx, url, reqBody, &page); err != nil {
-			return nil, fmt.Errorf("workday: list board %s: %w", b.site, err)
-		}
+	offset := 0
+	page := first
+	for {
 		if len(page.JobPostings) == 0 {
 			break
 		}
@@ -172,8 +238,98 @@ func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPos
 		if total >= 0 && offset >= total {
 			break
 		}
+		next, err := s.fetchListPage(ctx, url, appliedFacets, offset)
+		if err != nil {
+			return nil, err
+		}
+		page = next
 	}
 	return postings, nil
+}
+
+// splitByFacet subdivides a capped slice by the not-yet-used facet dimension that best splits
+// it, recursing into each value's own slice (which may itself still be capped, in which case it
+// recurses again with a different dimension) up to maxFacetDepth combined dimensions. Results
+// are merged and deduped by ExternalPath, since a multi-counting dimension (e.g. workerSubType)
+// can place the same posting in more than one slice.
+func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, appliedFacets map[string]any, capped workdayListPage, used map[string]bool, depth int) ([]workdayPosting, error) {
+	dim := pickSplitDimension(capped.Facets, used)
+	if dim == nil {
+		log.Printf("workday: board %s/%s capped at %d with no further facet dimension to split on; results may be incomplete",
+			b.tenant, b.site, workdayCapTotal)
+		return s.pageAll(ctx, url, appliedFacets, capped)
+	}
+	if depth >= maxFacetDepth {
+		log.Printf("workday: board %s/%s still capped at %d after splitting %d facet dimensions deep; results may be incomplete",
+			b.tenant, b.site, workdayCapTotal, maxFacetDepth)
+		return s.pageAll(ctx, url, appliedFacets, capped)
+	}
+
+	nextUsed := make(map[string]bool, len(used)+1)
+	for k := range used {
+		nextUsed[k] = true
+	}
+	nextUsed[dim.Parameter] = true
+
+	byExternalPath := map[string]workdayPosting{}
+	for _, v := range dim.Values {
+		sliceFacets := cloneAppliedFacets(appliedFacets)
+		sliceFacets[dim.Parameter] = []string{v.ID}
+
+		page, err := s.fetchListPage(ctx, url, sliceFacets, 0)
+		if err != nil {
+			return nil, err
+		}
+		var slice []workdayPosting
+		if page.Total == workdayCapTotal {
+			slice, err = s.splitByFacet(ctx, url, b, sliceFacets, page, nextUsed, depth+1)
+		} else {
+			slice, err = s.pageAll(ctx, url, sliceFacets, page)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range slice {
+			byExternalPath[p.ExternalPath] = p
+		}
+	}
+
+	postings := make([]workdayPosting, 0, len(byExternalPath))
+	for _, p := range byExternalPath {
+		postings = append(postings, p)
+	}
+	return postings, nil
+}
+
+// pickSplitDimension returns the facet dimension (not already in used) whose highest single
+// value count is largest — the dimension most likely to break up the biggest remaining clump of
+// postings — or nil if every present dimension has already been applied in this branch.
+func pickSplitDimension(facets []workdayFacet, used map[string]bool) *workdayFacet {
+	var best *workdayFacet
+	bestCount := -1
+	for i := range facets {
+		f := &facets[i]
+		if used[f.Parameter] {
+			continue
+		}
+		for _, v := range f.Values {
+			if v.Count > bestCount {
+				bestCount = v.Count
+				best = f
+			}
+		}
+	}
+	return best
+}
+
+// cloneAppliedFacets copies an appliedFacets map so a recursion branch can add its own facet
+// value without mutating the map a sibling branch is still using.
+func cloneAppliedFacets(appliedFacets map[string]any) map[string]any {
+	out := make(map[string]any, len(appliedFacets)+1)
+	for k, v := range appliedFacets {
+		out[k] = v
+	}
+	return out
 }
 
 // detail fetches one posting's detail and maps it to a Job, returning ok=false when the
@@ -197,7 +353,7 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 			} `json:"jobRequisitionLocation"`
 		} `json:"jobPostingInfo"`
 	}
-	if err := s.http.GetJSON(ctx, url, &d); err != nil {
+	if err := s.getJSONRetrying(ctx, url, &d); err != nil {
 		return Job{}, false
 	}
 	info := d.JobPostingInfo
@@ -225,6 +381,49 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 		// full vs part time (contract/intern live in other, per-tenant fields).
 		EmploymentType: workdayEmploymentType(info.TimeType),
 	}, true
+}
+
+// isWorkdayRateLimited reports whether err is a Workday rate-limit response (403 or 429). Some
+// Workday tenants return 403 for a burst of requests rather than 429 (the same distinction
+// eightfold.go already handles for that provider); the shared client already retries 429/5xx,
+// this adds 403.
+func isWorkdayRateLimited(err error) bool {
+	var se *StatusError
+	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)
+}
+
+// postJSONRetrying and getJSONRetrying retry a rate-limited (403/429) request with exponential
+// backoff instead of failing the whole board on one throttled response, mirroring eightfold.go's
+// getJSONRetrying/isRateLimited. A non-rate-limit error (e.g. 404) returns immediately.
+func (s workday) postJSONRetrying(ctx context.Context, url string, body, v any) error {
+	return s.retrying(ctx, func() error { return s.http.PostJSON(ctx, url, body, v) })
+}
+
+func (s workday) getJSONRetrying(ctx context.Context, url string, v any) error {
+	return s.retrying(ctx, func() error { return s.http.GetJSON(ctx, url, v) })
+}
+
+// retrying runs call, retrying with exponential backoff while the error is a rate limit
+// (isWorkdayRateLimited) and giving up after workdayRetryMaxAttempts.
+func (s workday) retrying(ctx context.Context, call func() error) error {
+	delay := s.retryBase
+	var err error
+	for attempt := 0; attempt <= workdayRetryMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			if delay < 30*time.Second {
+				delay *= 2
+			}
+		}
+		if err = call(); err == nil || !isWorkdayRateLimited(err) {
+			return err
+		}
+	}
+	return err
 }
 
 // workdayEmploymentType maps Workday's timeType ("Full time" / "Part time") onto the

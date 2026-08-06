@@ -1,10 +1,15 @@
 package sources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -238,6 +243,333 @@ func (p *pagedWorkday) PostJSON(_ context.Context, _ string, _, v any) error {
 
 func workdayDetailBody(title string) string {
 	return `{"jobPostingInfo":{"title":"` + title + `","jobDescription":"<p>x</p>","location":"Berlin, Germany","startDate":"2024-06-11"}}`
+}
+
+// facetedWorkday serves a listing page keyed by the request's appliedFacets (JSON-marshaled,
+// which — because Go's encoding/json sorts map keys — gives a stable key regardless of build
+// order). This is what lets a test control exactly what a facet-scoped re-query returns, which
+// a routedHTTP (URL-only routing) cannot do: every facet-scoped query hits the same listing URL.
+type facetedWorkday struct {
+	*routedHTTP
+	mu     sync.Mutex
+	pages  map[string]string
+	served map[string]bool
+	calls  int
+}
+
+func (f *facetedWorkday) route(appliedFacets, body string) *facetedWorkday {
+	if f.pages == nil {
+		f.pages = map[string]string{}
+	}
+	f.pages[appliedFacets] = body
+	return f
+}
+
+// PostJSON serves each appliedFacets key's canned page exactly once; a repeat request for the
+// same key (i.e. a second listing page, since no test here has more than one page per key)
+// gets an empty page, so pagination terminates instead of looping on a fake that — unlike the
+// real API — doesn't vary by offset.
+func (f *facetedWorkday) PostJSON(_ context.Context, _ string, body, v any) error {
+	f.mu.Lock()
+	f.calls++
+	m, _ := body.(map[string]any)
+	applied, _ := m["appliedFacets"].(map[string]any)
+	key, err := json.Marshal(applied)
+	if err != nil {
+		f.mu.Unlock()
+		return fmt.Errorf("facetedWorkday: marshal appliedFacets: %w", err)
+	}
+	page, ok := f.pages[string(key)]
+	alreadyServed := f.served[string(key)]
+	if f.served == nil {
+		f.served = map[string]bool{}
+	}
+	f.served[string(key)] = true
+	f.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("facetedWorkday: no page for appliedFacets=%s", key)
+	}
+	if alreadyServed {
+		return json.Unmarshal([]byte(`{"total":0,"jobPostings":[]}`), v)
+	}
+	return json.Unmarshal([]byte(page), v)
+}
+
+// A board whose first page reports the capped total (2000) must not stop there: it should
+// re-query per value of the response's own facet, and return the union.
+func TestWorkdaySplitsByFacetWhenCapped(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"jobFamilyGroup","values":[
+				{"id":"fam-eng","count":1200},
+				{"id":"fam-sales","count":800}
+			]}
+		]}`).
+		route(`{"jobFamilyGroup":["fam-eng"]}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/ENG-1","locationsText":"Berlin"}
+		]}`).
+		route(`{"jobFamilyGroup":["fam-sales"]}`, `{"total":1,"jobPostings":[
+			{"title":"Sales Rep","externalPath":"/job/X/SALES-1","locationsText":"NYC"}
+		]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	if len(postings) != 2 {
+		t.Fatalf("len(postings) = %d, want 2 (one per facet value, capped total must not stop the walk)", len(postings))
+	}
+	got := map[string]bool{}
+	for _, p := range postings {
+		got[p.ExternalPath] = true
+	}
+	if !got["/job/X/ENG-1"] || !got["/job/X/SALES-1"] {
+		t.Errorf("postings = %+v, want both facet slices represented", postings)
+	}
+}
+
+// A facet slice that is itself still capped must recurse into a second, different facet
+// dimension — Workday's own facet does not rescope against itself once applied (verified live),
+// so the second level has to be a dimension not yet used in this branch.
+func TestWorkdaySplitsRecursesIntoSecondDimensionWhenSliceStillCapped(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"jobFamilyGroup","values":[{"id":"fam-eng","count":2000}]}
+		]}`).
+		route(`{"jobFamilyGroup":["fam-eng"]}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"jobFamilyGroup","values":[{"id":"fam-eng","count":2000}]},
+			{"facetParameter":"workerSubType","values":[
+				{"id":"full-time","count":1500},
+				{"id":"contract","count":500}
+			]}
+		]}`).
+		route(`{"jobFamilyGroup":["fam-eng"],"workerSubType":["full-time"]}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer FT","externalPath":"/job/X/FT-1","locationsText":"Berlin"}
+		]}`).
+		route(`{"jobFamilyGroup":["fam-eng"],"workerSubType":["contract"]}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer Contract","externalPath":"/job/X/CT-1","locationsText":"Berlin"}
+		]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	got := map[string]bool{}
+	for _, p := range postings {
+		got[p.ExternalPath] = true
+	}
+	if !got["/job/X/FT-1"] || !got["/job/X/CT-1"] {
+		t.Errorf("postings = %+v, want both second-level facet slices represented", postings)
+	}
+}
+
+// Recursion must not go deeper than maxFacetDepth combined dimensions: a slice still capped
+// at that depth is paged as-is (best effort) rather than recursed further.
+func TestWorkdaySplitStopsAtMaxDepth(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"dimA","values":[{"id":"a1","count":2000}]}
+		]}`).
+		route(`{"dimA":["a1"]}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"dimB","values":[{"id":"b1","count":2000}]}
+		]}`).
+		route(`{"dimA":["a1"],"dimB":["b1"]}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"dimC","values":[{"id":"c1","count":2000}]}
+		]}`).
+		// Three dimensions applied (dimA, dimB, dimC) is the depth limit; this slice is still
+		// capped and carries a fourth, unused dimension, but recursion must not use it —
+		// it must page this response as-is instead.
+		route(`{"dimA":["a1"],"dimB":["b1"],"dimC":["c1"]}`, `{"total":2000,"jobPostings":[
+			{"title":"Leaf","externalPath":"/job/X/LEAF-1","locationsText":"Remote"}
+		],"facets":[
+			{"facetParameter":"dimD","values":[{"id":"d1","count":2000}]}
+		]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	if len(postings) != 1 || postings[0].ExternalPath != "/job/X/LEAF-1" {
+		t.Fatalf("postings = %+v, want the depth-limit leaf's single posting, no dimD request", postings)
+	}
+	if _, ok := fake.pages[`{"dimA":["a1"],"dimB":["b1"],"dimC":["c1"],"dimD":["d1"]}`]; ok {
+		t.Error("a dimD route exists on the fake but must never be requested past max depth")
+	}
+}
+
+// Postings that surface in more than one recursed slice (a multi-counting facet dimension can
+// place the same posting under two different values) must be deduped by ExternalPath.
+func TestWorkdaySplitDedupsOverlappingPostings(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"workerSubType","values":[
+				{"id":"remote-eligible","count":1200},
+				{"id":"full-time","count":1900}
+			]}
+		]}`).
+		route(`{"workerSubType":["remote-eligible"]}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/SHARED-1","locationsText":"Remote"}
+		]}`).
+		route(`{"workerSubType":["full-time"]}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/SHARED-1","locationsText":"Remote"}
+		]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	if len(postings) != 1 {
+		t.Fatalf("len(postings) = %d, want 1 — the same posting from two slices must be deduped", len(postings))
+	}
+}
+
+// A board below the cap must page exactly as before: no appliedFacets-scoped requests at all.
+func TestWorkdayBelowCapDoesNotSplit(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":1,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/E-1","locationsText":"Berlin"}
+		]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	if len(postings) != 1 || postings[0].ExternalPath != "/job/X/E-1" {
+		t.Fatalf("postings = %+v, want the single below-cap posting", postings)
+	}
+	if fake.calls != 1 {
+		t.Errorf("calls = %d, want 1 (a single unfiltered page, no facet split triggered)", fake.calls)
+	}
+}
+
+// A capped page carrying no facets at all cannot be split further — this must be visible (a log
+// line), not a silent truncation, which is the exact failure mode this change exists to fix.
+func TestWorkdayLogsWhenCappedWithNoUsableDimension(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/E-1","locationsText":"Berlin"}
+		],"facets":[]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v", err)
+	}
+	if len(postings) != 1 {
+		t.Fatalf("len(postings) = %d, want 1 — the capped page's own postings, best effort", len(postings))
+	}
+	if !strings.Contains(buf.String(), "workday") || !strings.Contains(buf.String(), "acme") {
+		t.Errorf("log output = %q, want a warning naming the provider and board", buf.String())
+	}
+}
+
+// rateLimitedWorkday fails the listing POST and/or a detail GET with a given status code a
+// fixed number of times before succeeding, mimicking Workday rate-limiting a burst with 403.
+type rateLimitedWorkday struct {
+	*routedHTTP
+	mu           sync.Mutex
+	listBody     string
+	listFailCode int
+	listFails    int
+	listCalls    int
+	getFailCode  int
+	getFails     int
+}
+
+func (r *rateLimitedWorkday) PostJSON(_ context.Context, _ string, _, v any) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.listCalls++
+	if r.listFails > 0 {
+		r.listFails--
+		return &StatusError{Method: "POST", Code: r.listFailCode}
+	}
+	return json.Unmarshal([]byte(r.listBody), v)
+}
+
+func (r *rateLimitedWorkday) GetJSON(ctx context.Context, url string, v any) error {
+	r.mu.Lock()
+	if r.getFails > 0 {
+		r.getFails--
+		code := r.getFailCode
+		r.mu.Unlock()
+		return &StatusError{Method: "GET", Code: code, URL: url}
+	}
+	r.mu.Unlock()
+	return r.routedHTTP.GetJSON(ctx, url, v)
+}
+
+// A 403 on the listing request must be retried, not treated as fatal — Workday returns 403 for
+// a burst of requests on some tenants, the same way Eightfold's 403 already is (eightfold.go).
+func TestWorkdayRetriesRateLimitedListing(t *testing.T) {
+	fake := &rateLimitedWorkday{
+		routedHTTP: (&routedHTTP{}).
+			route("ENG-1", workdayDetailBody("Engineer")),
+		listBody: `{"total":1,"jobPostings":[
+			{"title":"Engineer","externalPath":"/job/X/ENG-1","locationsText":"Berlin"}
+		]}`,
+		listFailCode: 403,
+		listFails:    2,
+	}
+	jobs, err := workday{http: fake}.Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 (a rate-limited listing must retry past the 403)", len(jobs))
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls = %d, want 3 (2 failures then success)", fake.listCalls)
+	}
+}
+
+// A non-rate-limit failure (e.g. 404) must not be retried — retry stays scoped to the
+// rate-limit case, and the board fails fast instead of retrying a request that will never
+// succeed.
+func TestWorkdayDoesNotRetryNonRateLimitListingError(t *testing.T) {
+	fake := &rateLimitedWorkday{
+		routedHTTP:   &routedHTTP{},
+		listFailCode: 404,
+		listFails:    99,
+	}
+	_, err := workday{http: fake}.Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "workday", Board: "acme.wd1.myworkdayjobs.com/Careers",
+	})
+	if err == nil {
+		t.Fatal("Fetch: want an error for a non-retryable listing failure, got nil")
+	}
+	if fake.listCalls != 1 {
+		t.Errorf("listCalls = %d, want 1 (no retry for a non-rate-limit error)", fake.listCalls)
+	}
 }
 
 // A board reporting total only on its first page must still be drained fully:
