@@ -107,6 +107,20 @@ func (greenhouseProber) probe(ctx context.Context, c httpClient, slug string) (s
 	return name, len(jr.Jobs), nil
 }
 
+// greenhouseBoardsHost is the web host Greenhouse boards are served under, the surface
+// Common Crawl's crawler actually visits (unlike greenhouseBoardsAPI, which the crawler
+// never touches — it's an API, not a page). Validation still goes through
+// greenhouseBoardsAPI in probe/postingIDs; a discovered candidate's redirect from this host
+// to Greenhouse's newer "job-boards.greenhouse.io" frontend (visible in raw Common Crawl
+// records) doesn't affect that.
+const greenhouseBoardsHost = "boards.greenhouse.io"
+
+// discover finds Greenhouse board candidates from the Common Crawl CDX index: every URL
+// Common Crawl has seen under greenhouseBoardsHost, sliced to its company slug.
+func (greenhouseProber) discover(ctx context.Context, c httpClient) ([]string, error) {
+	return commonCrawlCandidates(ctx, c, greenhouseBoardsHost)
+}
+
 // leverProber probes the Lever postings API. The JSON-mode endpoint returns a bare array
 // of live postings, so a non-empty array is a live board. The posting API exposes no company
 // name, but the board's storefront titles itself after the employer, so the name is read
@@ -187,6 +201,17 @@ func (ashbyProber) probe(ctx context.Context, c httpClient, slug string) (string
 		return "", 0, nil
 	}
 	return storefrontEmployer(ctx, c, fmt.Sprintf("https://jobs.ashbyhq.com/%s", slug), " Jobs"), len(resp.Jobs), nil
+}
+
+// ashbyBoardsHost is the web host Ashby boards are served under, the surface Common Crawl's
+// crawler actually visits (unlike the api.ashbyhq.com host probe/postingIDs validate
+// against).
+const ashbyBoardsHost = "jobs.ashbyhq.com"
+
+// discover finds Ashby board candidates from the Common Crawl CDX index: every URL Common
+// Crawl has seen under ashbyBoardsHost, sliced to its company slug.
+func (ashbyProber) discover(ctx context.Context, c httpClient) ([]string, error) {
+	return commonCrawlCandidates(ctx, c, ashbyBoardsHost)
 }
 
 // bamboohrProber probes the BambooHR per-subdomain careers list. A non-empty result is a

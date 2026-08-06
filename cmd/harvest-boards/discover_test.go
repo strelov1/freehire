@@ -28,7 +28,9 @@ func TestResolveCandidatesDiscoversWhenNoSeed(t *testing.T) {
 }
 
 func TestResolveCandidatesNonDiscovererNeedsSeed(t *testing.T) {
-	_, _, err := resolveCandidates(context.Background(), greenhouseProber{}, nil, "")
+	// leverProber is deliberately not a discoverer (Lever's own robots.txt disallows
+	// CCBot, so no Common Crawl discovery is possible for it — see commoncrawl.go).
+	_, _, err := resolveCandidates(context.Background(), leverProber{}, nil, "")
 	if err == nil {
 		t.Error("a non-discoverer prober with no seed file should error, not silently no-op")
 	}
