@@ -53,16 +53,27 @@
   // hides facets that are redundant under that scope (e.g. Source on a company).
   // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
   // company page's facts card); the standalone /jobs list omits it.
+  //
+  // `layout` picks the shell: `sidebar` (default — filters beside the list, full-size
+  // cards) is what the collections and company pages still use unchanged. `stacked`
+  // is the home feed's (feed) split layout: filters above a compact-card list, sized
+  // for a narrow rail column rather than the full page width. `selectedSlug` (stacked
+  // only) is the job whose detail is open in the layout's pane, so the matching card
+  // can carry the selected treatment.
   let {
     initial,
     scope = {},
     excludeFacets = [],
     sidebarTop,
+    layout = 'sidebar',
+    selectedSlug,
   }: {
     initial: Slice<Job>;
     scope?: Record<string, string>;
     excludeFacets?: string[];
     sidebarTop?: Snippet;
+    layout?: 'sidebar' | 'stacked';
+    selectedSlug?: string;
   } = $props();
 
   // Standalone /jobs (no fixed scope) hands its text search to the header; an
@@ -391,128 +402,146 @@
   </label>
 {/snippet}
 
-<div class="flex gap-6">
-  <aside class="hidden w-72 shrink-0 md:block">
-    <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
-      {#if !standalone && jobs.status === 'ready'}
-        <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
-             The inline count above the list is hidden on desktop (shown only on
-             mobile, where there's no sidebar), so it lives here instead. -->
-        <div class="rounded-xl border border-border bg-card px-4 py-3">
-          <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
-            {jobs.total.toLocaleString()}
-          </p>
-          <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {jobs.total === 1 ? 'open job' : 'open jobs'}
-          </p>
-        </div>
+{#snippet listContent()}
+  <ListToolbar
+    total={!cvSignInPrompt && jobs.items.length > 0 ? jobs.total : null}
+    unit={jobs.total === 1 ? 'job' : 'jobs'}
+    onSwipe={standalone ? openSwipe : undefined}
+    showDesktopTotal={standalone}
+    sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
+  />
+
+  <!-- Onboarding nudges sit UNDER the sort toolbar so the feed controls stay at the
+       top; each shows once (until dismissed or completed), then retires. Never blocks
+       the feed below. -->
+  {#if showBanner || alertBanner}
+    <div class="mt-3">
+      {#if showBanner}
+        <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
       {/if}
-      {@render sidebarTop?.()}
-      <div class="rounded-xl border border-border bg-card p-4">
-        <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
-      </div>
+      {#if alertBanner}
+        <OnboardingAlertBanner
+          query={alertBanner.query}
+          autostart={alertBanner.autostart}
+          onDismiss={() => (alertBanner = null)}
+        />
+      {/if}
     </div>
-  </aside>
+  {/if}
 
-  <div class="min-w-0 flex-1">
-    <ListToolbar
-      total={!cvSignInPrompt && jobs.items.length > 0 ? jobs.total : null}
-      unit={jobs.total === 1 ? 'job' : 'jobs'}
-      onSwipe={standalone ? openSwipe : undefined}
-      showDesktopTotal={standalone}
-      sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
-    />
-
-    <!-- Onboarding nudges sit UNDER the sort toolbar so the feed controls stay at the
-         top; each shows once (until dismissed or completed), then retires. Never blocks
-         the feed below. -->
-    {#if showBanner || alertBanner}
-      <div class="mt-3">
-        {#if showBanner}
-          <OnboardingBanner onOpen={() => (wizardOpen = true)} onDismiss={dismissBanner} />
-        {/if}
-        {#if alertBanner}
-          <OnboardingAlertBanner
-            query={alertBanner.query}
-            autostart={alertBanner.autostart}
-            onDismiss={() => (alertBanner = null)}
-          />
-        {/if}
-      </div>
-    {/if}
-
-    {#if cvSignInPrompt}
-      <!-- CV ranking needs the authenticated recommendations endpoint; the reload
-           effect skips the fetch here, so this prompt stands in for the feed. -->
+  {#if cvSignInPrompt}
+    <!-- CV ranking needs the authenticated recommendations endpoint; the reload
+         effect skips the fetch here, so this prompt stands in for the feed. -->
+    <div class="rounded-xl border border-border bg-card p-6 text-center">
+      <p class="text-sm font-medium text-foreground">Sign in for recommendations</p>
+      <p class="mt-1 text-sm text-muted-foreground">
+        Recommended ranks jobs by similarity to your uploaded résumé.
+        <button
+          type="button"
+          onclick={() => openAuthDialog()}
+          class="font-medium text-foreground underline underline-offset-4 hover:no-underline">Sign in</button
+        >
+        to use it.
+      </p>
+    </div>
+  {:else if jobs.status === 'loading'}
+    <States state="loading" />
+  {:else if jobs.status === 'error'}
+    <States state="error" message="Failed to load jobs." />
+  {:else if jobs.items.length === 0}
+    {#if cvMode && appliedActive === 0}
+      <!-- CV mode, no facet filter: an empty feed means no usable CV vector (the
+           recommendations endpoint returns [] for no/stale CV), so prompt an
+           upload rather than showing a bare "no matches". -->
       <div class="rounded-xl border border-border bg-card p-6 text-center">
-        <p class="text-sm font-medium text-foreground">Sign in for recommendations</p>
+        <p class="text-sm font-medium text-foreground">No recommendations yet</p>
         <p class="mt-1 text-sm text-muted-foreground">
-          Recommended ranks jobs by similarity to your uploaded résumé.
-          <button
-            type="button"
-            onclick={() => openAuthDialog()}
-            class="font-medium text-foreground underline underline-offset-4 hover:no-underline">Sign in</button
+          Add or update your CV on your
+          <a
+            href={resolve('/my/profile')}
+            class="font-medium text-foreground underline underline-offset-4 hover:no-underline">profile</a
           >
-          to use it.
+          to get jobs ranked by how well they match your experience.
         </p>
       </div>
-    {:else if jobs.status === 'loading'}
-      <States state="loading" />
-    {:else if jobs.status === 'error'}
-      <States state="error" message="Failed to load jobs." />
-    {:else if jobs.items.length === 0}
-      {#if cvMode && appliedActive === 0}
-        <!-- CV mode, no facet filter: an empty feed means no usable CV vector (the
-             recommendations endpoint returns [] for no/stale CV), so prompt an
-             upload rather than showing a bare "no matches". -->
-        <div class="rounded-xl border border-border bg-card p-6 text-center">
-          <p class="text-sm font-medium text-foreground">No recommendations yet</p>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Add or update your CV on your
-            <a
-              href={resolve('/my/profile')}
-              class="font-medium text-foreground underline underline-offset-4 hover:no-underline">profile</a
-            >
-            to get jobs ranked by how well they match your experience.
-          </p>
-        </div>
-      {:else}
-        <States state="empty" message="No matching jobs." />
-        {#if standalone && relaxTarget}
-          <!-- No semantic fallback in this slice: offer an honest one-step broaden
-               instead of silently widening the feed. -->
-          <div class="mt-4 flex justify-center">
-            <button
-              type="button"
-              onclick={relaxFeed}
-              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-            >
-              Broaden search
-            </button>
-          </div>
-        {/if}
-      {/if}
-    {:else if visibleJobs.length === 0 && !jobs.hasMore}
-      <!-- The server returned jobs but the user has hidden every one on this final
-           page: show the empty state rather than a blank feed. (With more pages,
-           the {:else} below keeps InfiniteScroll loading instead.) -->
-      <States state="empty" message="No matching jobs." />
     {:else}
-      <div class="flex flex-col gap-3">
-        {#each visibleJobs as job (job.public_slug)}
-          <JobRow {job} {onHide} />
-        {/each}
-      </div>
-
-      {#if jobs.hasMore}
-        <!-- Scroll-to-bottom auto-load; the button stays as the accessible
-             fallback (keyboard/screen-reader, and retry on a failed load). -->
-        <InfiniteScroll onLoad={() => jobs.loadMore()} enabled={!jobs.loadingMore && !jobs.loadMoreError} />
-        <LoadMore loading={jobs.loadingMore} error={jobs.loadMoreError} onclick={() => jobs.loadMore()} />
+      <States state="empty" message="No matching jobs." />
+      {#if standalone && relaxTarget}
+        <!-- No semantic fallback in this slice: offer an honest one-step broaden
+             instead of silently widening the feed. -->
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            onclick={relaxFeed}
+            class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+          >
+            Broaden search
+          </button>
+        </div>
       {/if}
     {/if}
+  {:else if visibleJobs.length === 0 && !jobs.hasMore}
+    <!-- The server returned jobs but the user has hidden every one on this final
+         page: show the empty state rather than a blank feed. (With more pages,
+         the {:else} below keeps InfiniteScroll loading instead.) -->
+    <States state="empty" message="No matching jobs." />
+  {:else}
+    <div class="flex flex-col gap-3">
+      {#each visibleJobs as job (job.public_slug)}
+        <JobRow {job} {onHide} compact={layout === 'stacked'} selected={layout === 'stacked' && job.public_slug === selectedSlug} />
+      {/each}
+    </div>
+
+    {#if jobs.hasMore}
+      <!-- Scroll-to-bottom auto-load; the button stays as the accessible
+           fallback (keyboard/screen-reader, and retry on a failed load). -->
+      <InfiniteScroll onLoad={() => jobs.loadMore()} enabled={!jobs.loadingMore && !jobs.loadMoreError} />
+      <LoadMore loading={jobs.loadingMore} error={jobs.loadMoreError} onclick={() => jobs.loadMore()} />
+    {/if}
+  {/if}
+{/snippet}
+
+{#if layout === 'stacked'}
+  <!-- The (feed) split layout's rail: filters stacked above a compact-card list,
+       instead of beside it — there's no room for a side-by-side sidebar in a ~440px
+       column. Reuses FilterSummary/FilterSummaryShell as-is; only the position moves. -->
+  <div class="flex flex-col gap-4">
+    <div class="rounded-xl border border-border bg-card p-4">
+      <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
+    </div>
+    <div class="min-w-0">
+      {@render listContent()}
+    </div>
   </div>
-</div>
+{:else}
+  <div class="flex gap-6">
+    <aside class="hidden w-72 shrink-0 md:block">
+      <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
+        {#if !standalone && jobs.status === 'ready'}
+          <!-- Company view: the (filtered) open-job count as the sidebar's lead stat.
+               The inline count above the list is hidden on desktop (shown only on
+               mobile, where there's no sidebar), so it lives here instead. -->
+          <div class="rounded-xl border border-border bg-card px-4 py-3">
+            <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
+              {jobs.total.toLocaleString()}
+            </p>
+            <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {jobs.total === 1 ? 'open job' : 'open jobs'}
+            </p>
+          </div>
+        {/if}
+        {@render sidebarTop?.()}
+        <div class="rounded-xl border border-border bg-card p-4">
+          <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
+        </div>
+      </div>
+    </aside>
+
+    <div class="min-w-0 flex-1">
+      {@render listContent()}
+    </div>
+  </div>
+{/if}
 
 {#if standalone}
   <!-- Desktop swipe-mode entry: an icon-only button pinned to the right viewport edge

@@ -7,30 +7,30 @@
 ## 2. Route restructuring
 
 - [x] 2.1 Moved `web/src/routes/+page.svelte`/`+page.server.ts` and `web/src/routes/jobs/[slug]/` under `web/src/routes/(feed)/`; verified `/`, `/jobs/[slug]`, `/discussion`, `/copies`, `/fit` all still resolve (svelte-check clean, dev-server smoke check)
-- [ ] 2.2 Create `(feed)/+layout.svelte` + `+layout.server.ts`/`+layout.ts`: owns the job list fetch, filter state, and renders the list + filter bar
-- [ ] 2.3 Trim `(feed)/+page.svelte`/`+page.server.ts` to just the no-selection state decided in 1.2 — it must not also fetch the list (avoid double-fetch)
+- [x] 2.2 Created `(feed)/+layout.server.ts` (list fetch, no redirect) and `(feed)/+layout.svelte` (responsive two-column shell: list column + `{@render children()}` pane, `lg:` breakpoint toggles which shows on mobile)
+- [x] 2.3 `(feed)/+page.server.ts` now only owns the first-visit redirect (list fetch moved to the layout, no double-fetch); `(feed)/+page.svelte` renders the "pick a job" placeholder
 - [x] 2.4 `fit`/`copies`/`discussion` reset past the `(feed)` layout via `+layout@.svelte` (same convention as `my/assistant/+layout@.svelte`); `og.png` is a `+server.ts` endpoint, unaffected by layouts either way
 
 ## 3. List column
 
-- [ ] 3.1 Switch the list column's `JobRow` cards to the existing `compact` presentation
-- [ ] 3.2 Fix the list column to a ~420–460px width (validated by the design spike) inside the shared layout
-- [ ] 3.3 Add selected-card visual state (border/ring) driven by the current route's `slug` param, not client-side click state
+- [x] 3.1 List column passes `compact={layout === 'stacked'}` to `JobRow` — verified via screenshot against live prod data (blurb hidden, tighter padding)
+- [x] 3.2 List column fixed to `lg:w-[440px]` in `(feed)/+layout.svelte`
+- [x] 3.3 `JobRow` gained a `selected` prop (brand border + ring); layout derives it from `page.params.slug` — verified via screenshot
 
 ## 4. Filter bar relocation
 
-- [ ] 4.1 Move `JobsView`'s filter controls from the `<aside>` sidebar into a horizontal bar docked above the list column; keep `FilterStore`/URL-sync logic unchanged
-- [ ] 4.2 Wire 1.3's decision: clearing or preserving the open pane when the selected job drops out of the filtered list
+- [x] 4.1 Added a `layout: 'sidebar' | 'stacked'` prop to `JobsView`; `stacked` stacks the unchanged `FilterSummary` card above the list in one column (not a literal horizontal chip bar — FilterSummaryShell is a vertical block by design; `sidebar` mode, used by collections/company pages, is pixel-identical to before)
+- [ ] 4.2 Wire 1.3's decision: clearing or preserving the open pane when the selected job drops out of the filtered list — NOT YET DONE, needs its own verification pass
 
 ## 5. Detail pane behavior
 
-- [ ] 5.1 Seed `MatchAnalysisFull`/`JobMatch` from the job's cached `initial` fit with `autoRun={false}` (mirror `ArtifactPanel.svelte`'s usage) — no forced recompute per card click
-- [ ] 5.2 Verify the list column and detail pane scroll independently, following the `/tailor/[slug]` two-column shell pattern
+- [x] 5.1 N/A as implemented: `/jobs/[slug]`'s `JobView` was reused unchanged and only ever renders the lightweight deterministic `JobMatch`, not the LLM `MatchAnalysisFull` report — confirmed by screenshot ("Profile Match" card, not the AI verdict/gauge). No forced-recompute risk exists on this page today.
+- [x] 5.2 CSS is in place (`lg:sticky ... lg:overflow-y-auto` on the list column) — structurally verified, NOT interaction-tested (only static screenshots taken so far)
 
 ## 6. Mobile fallback
 
-- [ ] 6.1 Below the desktop breakpoint, render the list alone (no docked pane) — reuse the breakpoint convention `ArtifactPanel`/`tailor/[slug]` already use
-- [ ] 6.2 Confirm card links still point at `/jobs/[slug]` (unchanged) and that a tap there navigates full-page on mobile, exactly as today
+- [x] 6.1 Verified via screenshot at 390px: `/` shows list only
+- [x] 6.2 Verified via screenshot at 390px: `/jobs/[slug]` shows detail only, list hidden — same URL desktop and mobile both use
 
 ## 7. Verification
 

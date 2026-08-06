@@ -1,11 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import JobsView from '$lib/components/JobsView.svelte';
+  import { FileText } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { jsonLdScript, siteOrganizationJsonLd, websiteJsonLd } from '$lib/seo';
-  import type { PageData } from './$types';
-
-  let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/`);
@@ -28,10 +25,15 @@
   {@html jsonLd}
 </svelte:head>
 
-<div class="mx-auto w-full max-w-6xl px-4 py-6">
-  <!-- Primary heading kept for search engines and assistive tech, but visually
-       hidden: the page's purpose is clear from the feed and onboarding banner, so
-       the on-screen title was redundant. sr-only takes no layout space. -->
-  <h1 class="sr-only">Tech jobs</h1>
-  <JobsView initial={data.initial} />
+<!-- Primary heading kept for search engines and assistive tech, but visually hidden:
+     the page's purpose is clear from the (feed) layout's list, so an on-screen title
+     here was redundant. sr-only takes no layout space. -->
+<h1 class="sr-only">Tech jobs</h1>
+
+<!-- The (feed) layout's pane with nothing selected — this only ever paints on desktop;
+     below the layout's breakpoint the pane is hidden in favour of the list itself. -->
+<div class="flex h-full flex-col items-center justify-center gap-2 p-10 text-center">
+  <FileText class="size-8 text-muted-foreground" aria-hidden="true" />
+  <p class="text-sm font-medium text-foreground">Pick a job from the list</p>
+  <p class="text-sm text-muted-foreground">Its full details will show up here.</p>
 </div>

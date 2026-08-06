@@ -45,11 +45,16 @@
   // affordance. Surfaces that reuse JobRow without it (saved/hidden lists, tracking
   // board, assistant chat) get no hide control — leaving it out scopes the gesture
   // to the feed.
+  //
+  // `selected` marks the card whose detail is showing in the (feed) layout's pane —
+  // only the split-layout rail passes it, driven by the current route's `[slug]`
+  // param rather than any click state the card owns itself.
   let {
     job,
     dimViewed = true,
     newTab = false,
     compact = false,
+    selected = false,
     footer,
     onHide,
   }: {
@@ -61,6 +66,7 @@
     dimViewed?: boolean;
     newTab?: boolean;
     compact?: boolean;
+    selected?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
   } = $props();
@@ -238,8 +244,15 @@
 <!-- The card chrome (border, background, hover) lives on this wrapper, not the <a>,
      so an optional footer row can sit inside the same bordered box as a sibling of
      the link — interactive footer controls never nest inside the navigation <a>.
-     `group` lets the hover-revealed hide control fade in on card hover. -->
-<div class="group relative rounded-xl border border-border bg-card transition hover:border-brand hover:bg-accent">
+     `group` lets the hover-revealed hide control fade in on card hover. `selected`
+     overrides the border/ring with the brand tone so the rail's open card is
+     unambiguous at a glance, matching the design spike's validated treatment. -->
+<div
+  class={[
+    'group relative rounded-xl border bg-card transition hover:border-brand hover:bg-accent',
+    selected ? 'border-brand ring-2 ring-brand/30' : 'border-border',
+  ]}
+>
 <a
   href={resolve('/jobs/[slug]', { slug: job.public_slug })}
   target={newTab ? '_blank' : undefined}
