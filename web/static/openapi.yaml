@@ -22,10 +22,9 @@ paths:
         - Jobs
       summary: Search open jobs for agents
       description: |
-        Agent-friendly job search. By default this returns compact search results.
-        Set include_description=true only when the user explicitly asks for full
-        descriptions across search results; otherwise use getJob for one selected
-        posting.
+        Agent-friendly job search. Every result carries the job's full description
+        (verbatim from the database, not the search-index preview), in the format
+        selected by description_format.
       x-openai-isConsequential: false
       parameters:
         - name: q
@@ -180,12 +179,6 @@ paths:
           schema:
             type: integer
           description: Maximum salary upper bound.
-        - name: include_description
-          in: query
-          schema:
-            type: boolean
-            default: false
-          description: Include full job descriptions in search results.
         - name: description_format
           in: query
           schema:
@@ -194,8 +187,8 @@ paths:
               - html
               - text
               - markdown
-            default: text
-          description: Format used when include_description=true.
+            default: html
+          description: Format of the full description (html is the stored verbatim markup).
       responses:
         "200":
           description: Matching jobs with pagination metadata.

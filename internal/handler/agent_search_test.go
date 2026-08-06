@@ -48,28 +48,7 @@ func TestFormatDescription(t *testing.T) {
 	}
 }
 
-func TestAgentSearchJobs_DefaultKeepsPreview(t *testing.T) {
-	fake := &fakeSearcher{res: search.SearchResult{
-		Hits: []search.JobDocument{{ID: 7, Job: jobview.Job{PublicSlug: "go-dev-x", Description: "<p>trunc...</p>"}}},
-	}}
-	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 7, Description: "<p>the full verbatim description</p>"}}}
-	app := agentSearchApp(fake, desc)
-
-	status, body := doGet(t, app, "/agent/jobs/search")
-	if status != fiber.StatusOK {
-		t.Fatalf("status = %d, want 200", status)
-	}
-	if desc.called {
-		t.Fatal("description loader called for default lightweight search")
-	}
-	data, _ := body["data"].([]any)
-	first, _ := data[0].(map[string]any)
-	if first["description"] != "<p>trunc...</p>" {
-		t.Errorf("description = %v, want search preview", first["description"])
-	}
-}
-
-func TestAgentSearchJobs_IncludeDescriptionHydratesFullDescription(t *testing.T) {
+func TestAgentSearchJobs_HydratesFullDescriptionByDefault(t *testing.T) {
 	fake := &fakeSearcher{res: search.SearchResult{
 		Hits:  []search.JobDocument{{ID: 7, Job: jobview.Job{PublicSlug: "go-dev-x", Description: "<p>trunc...</p>"}}},
 		Total: 3,
@@ -77,7 +56,7 @@ func TestAgentSearchJobs_IncludeDescriptionHydratesFullDescription(t *testing.T)
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 7, Description: "<p>the full verbatim description</p>"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?q=go&seniority=senior&semantic_ratio=0.4&limit=10&offset=20&include_description=true")
+	status, body := doGet(t, app, "/agent/jobs/search?q=go&seniority=senior&semantic_ratio=0.4&limit=10&offset=20")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -114,7 +93,7 @@ func TestAgentSearchJobs_BestEffortKeepsStaleHit(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 1, Description: "FULL-a"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?include_description=true")
+	status, body := doGet(t, app, "/agent/jobs/search")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -135,7 +114,7 @@ func TestAgentSearchJobs_FormatApplies(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 1, Description: "<ul><li>alpha</li></ul>"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?include_description=true&description_format=text")
+	status, body := doGet(t, app, "/agent/jobs/search?description_format=text")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}

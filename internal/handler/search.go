@@ -13,7 +13,7 @@ import (
 )
 
 // searchHandlers serves the Meilisearch-backed job search surfaces: the keyword
-// search, the agent search (full descriptions in a selectable format), the
+// search, the agent search (always full descriptions in a selectable format), the
 // similar-jobs read, and the facet distribution. search/facets are two narrow
 // views of the same client, kept separate so the concerns stay decoupled; both
 // nil when Meilisearch is unconfigured (the endpoints then report 503).
@@ -35,7 +35,7 @@ func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 	// Literal routes are registered before the /jobs/:slug param route (see
 	// Register) so they are not read as slugs.
 	api.Get("/jobs/search", h.SearchJobs)
-	// Agent search: same query as /jobs/search, with opt-in full descriptions in a
+	// Agent search: same query as /jobs/search, but always full descriptions in a
 	// selectable format for programmatic consumers. Public, like the other reads.
 	api.Get("/agent/jobs/search", h.AgentSearchJobs)
 	api.Get("/jobs/facets", h.JobFacets)

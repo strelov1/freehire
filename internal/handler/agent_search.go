@@ -19,18 +19,19 @@ type jobDescriptions interface {
 }
 
 // AgentSearchJobs is the programmatic-consumer variant of SearchJobs: it runs the
-// exact same query (via the shared runJobSearch core) and, when explicitly asked,
-// rehydrates each result with the full description from Postgres in a selectable
-// format. Public and unauthenticated like the other job reads; full descriptions
-// are already public via the detail endpoint.
+// exact same query (via the shared runJobSearch core) and always rehydrates each
+// result with the full description from Postgres, in a selectable format. The
+// truncated preview stays exclusive to /jobs/search — a caller that wants the
+// lightweight variant uses that endpoint instead. Public and unauthenticated like
+// the other job reads; full descriptions are already public via the detail
+// endpoint.
 func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 	res, limit, offset, err := h.runJobSearch(c)
 	if err != nil {
 		return err
 	}
 
-	includeDescription := c.QueryBool("include_description")
-	if includeDescription && len(res.Hits) > 0 {
+	if len(res.Hits) > 0 {
 		if err := h.hydrateDescriptions(c.Context(), res.Hits); err != nil {
 			return err
 		}
@@ -39,9 +40,7 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 	format := c.Query("description_format")
 	views := make([]jobview.Job, len(res.Hits))
 	for i, hit := range res.Hits {
-		if includeDescription {
-			hit.Description = formatDescription(hit.Description, format)
-		}
+		hit.Description = formatDescription(hit.Description, format)
 		views[i] = hit.Job
 	}
 
