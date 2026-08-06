@@ -402,6 +402,46 @@ func TestHistoryNeverStartsWithAnOrphanToolResult(t *testing.T) {
 	}
 }
 
+func TestHistoryClosesDanglingToolCallsBeforeReplay(t *testing.T) {
+	// A turn that persisted the model's tool_use and then died leaves a transcript
+	// Bedrock rejects on the next turn. Replay must synthesise the missing results.
+	q := &fakeQueries{}
+	store := NewStore(q)
+	ctx := context.Background()
+	call, _ := EncodeAssistant("", []llms.ToolCall{{ID: "c1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "echo", Arguments: `{}`}}})
+	user, _ := EncodeUser("still there?")
+	for _, msg := range []Message{call, user} {
+		if _, err := store.Append(ctx, sessionID, msg); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("ok")}}
+	r := NewRunner(m, store, RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
+
+	if _, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(), "retry"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	hist := m.gotHist[0]
+	var sawCall, sawResult bool
+	for _, msg := range hist {
+		for _, part := range msg.Parts {
+			switch p := part.(type) {
+			case llms.ToolCall:
+				if p.ID == "c1" {
+					sawCall = true
+				}
+			case llms.ToolCallResponse:
+				if p.ToolCallID == "c1" {
+					sawResult = true
+				}
+			}
+		}
+	}
+	if !sawCall || !sawResult {
+		t.Fatalf("replayed history missing closed tool pair: call=%v result=%v", sawCall, sawResult)
+	}
+}
+
 func TestTheFirstUserMessageLabelsTheSession(t *testing.T) {
 	q := &fakeQueries{}
 	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("ok")}}

@@ -189,7 +189,11 @@ it is the only tool whose completion depends on a client we do not control.
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a
 tool result that answers no call in the conversation, so an orphan at the head
-turns a context loss into a failed turn.
+turns a context loss into a failed turn. It also closes the inverse shape: a
+`tool_use` whose `tool_result` never landed (a turn that died after persisting
+the calls). Replay synthesises an error result for each unanswered call so the
+next turn stays provider-legal — Bedrock in particular rejects the whole request
+otherwise.
 
 **Streaming.** `llm.Chat` splits the model's two delta channels: answer text goes
 to `OnText`, reasoning to `OnThinking`. The chat renders them apart, so reasoning

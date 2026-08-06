@@ -329,7 +329,10 @@ func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string
 // trim keeps the most recent limit messages, then drops any leading tool results
 // whose originating call was trimmed away. Providers reject a tool result that
 // answers no call in the conversation, so an orphan at the head would fail the
-// whole turn rather than merely losing context.
+// whole turn rather than merely losing context. It then closes any tool_use that
+// still has no matching tool_result — a turn that died after persisting the
+// calls but before their results leaves exactly that shape, and Bedrock rejects
+// the whole next turn for it.
 func trim(msgs []Message, limit int) []Message {
 	if limit > 0 && len(msgs) > limit {
 		msgs = msgs[len(msgs)-limit:]
@@ -337,7 +340,72 @@ func trim(msgs []Message, limit int) []Message {
 	for len(msgs) > 0 && msgs[0].Role == RoleTool {
 		msgs = msgs[1:]
 	}
-	return msgs
+	return closeDanglingToolCalls(msgs)
+}
+
+// closeDanglingToolCalls inserts synthetic error tool results for any assistant
+// tool_use that is not followed by its tool_result before the next non-tool
+// message (or the end of the transcript). Replay must stay provider-legal even
+// when a prior turn was interrupted mid-round.
+func closeDanglingToolCalls(msgs []Message) []Message {
+	if len(msgs) == 0 {
+		return msgs
+	}
+	out := make([]Message, 0, len(msgs)+4)
+	for i := 0; i < len(msgs); i++ {
+		msg := msgs[i]
+		out = append(out, msg)
+		if msg.Role != RoleAssistant {
+			continue
+		}
+		calls := assistantToolCalls(msg)
+		if len(calls) == 0 {
+			continue
+		}
+		answered := make(map[string]struct{}, len(calls))
+		j := i + 1
+		for j < len(msgs) && msgs[j].Role == RoleTool {
+			answered[toolResultCallID(msgs[j])] = struct{}{}
+			out = append(out, msgs[j])
+			j++
+		}
+		for _, call := range calls {
+			if _, ok := answered[call.ID]; ok || call.ID == "" {
+				continue
+			}
+			if syn := syntheticToolError(call); syn.Role != "" {
+				out = append(out, syn)
+			}
+		}
+		i = j - 1
+	}
+	return out
+}
+
+func assistantToolCalls(msg Message) []toolCall {
+	var c assistantContent
+	if err := json.Unmarshal(msg.Content, &c); err != nil {
+		return nil
+	}
+	return c.ToolCalls
+}
+
+func toolResultCallID(msg Message) string {
+	var c toolResultContent
+	if err := json.Unmarshal(msg.Content, &c); err != nil {
+		return ""
+	}
+	return c.ToolCallID
+}
+
+func syntheticToolError(call toolCall) Message {
+	msg, err := EncodeToolResult(call.ID, call.Name,
+		`{"error":"previous turn interrupted before this tool result was recorded; retry if still needed"}`)
+	if err != nil {
+		log.Printf("assistant: encode synthetic tool result for %s: %v", call.ID, err)
+		return Message{}
+	}
+	return msg
 }
 
 // fail emits the terminal error event and returns the cause. The event goes out
