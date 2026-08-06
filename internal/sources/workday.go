@@ -301,22 +301,31 @@ func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, a
 	return postings, nil
 }
 
-// pickSplitDimension returns the facet dimension (not already in used) whose highest single
-// value count is largest — the dimension most likely to break up the biggest remaining clump of
-// postings — or nil if every present dimension has already been applied in this branch.
+// pickSplitDimension returns the facet dimension (not already in used) whose largest single
+// value is smallest — i.e. the dimension that leaves the smallest oversized remainder after
+// splitting, so the recursion is most likely to clear the cap in one more level rather than
+// hitting maxFacetDepth still stuck on an enormous single value. (The opposite heuristic —
+// picking the dimension with the single biggest value anywhere — was tried first and, live
+// against Accenture, kept choosing a dimension whose top value was still ~2000-sized, making
+// no real progress across several depth-3 exhaustions before this was corrected.)
+// Returns nil if every present dimension has already been applied in this branch.
 func pickSplitDimension(facets []workdayFacet, used map[string]bool) *workdayFacet {
 	var best *workdayFacet
-	bestCount := -1
+	bestMax := -1
 	for i := range facets {
 		f := &facets[i]
-		if used[f.Parameter] {
+		if used[f.Parameter] || len(f.Values) == 0 {
 			continue
 		}
+		max := 0
 		for _, v := range f.Values {
-			if v.Count > bestCount {
-				bestCount = v.Count
-				best = f
+			if v.Count > max {
+				max = v.Count
 			}
+		}
+		if best == nil || max < bestMax {
+			bestMax = max
+			best = f
 		}
 	}
 	return best

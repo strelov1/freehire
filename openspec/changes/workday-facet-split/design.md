@@ -40,7 +40,25 @@ Separately, `internal/sources/http.go:493-519` returns immediately on any HTTP 4
   suggests another provider needs this; it stays Workday-local.
 - Not guaranteeing 100% completeness on every conceivable board shape. Recursion
   depth is bounded; exhausting it without resolving the cap is logged, not silently
-  dropped, but the board may still cap out in that rare/unverified case.
+  dropped, but the board may still cap out on some branches.
+
+  **Confirmed live, not just theoretical**: Accenture's "Software Engineering" job
+  family alone (~24,221 postings) exhausts `maxFacetDepth` on its worst remaining
+  branch. Within it, Workday's other facet dimensions are degenerate for this
+  tenant — `timeType` is 99.96% "Full time" (max value 24,211 of 24,221, useless as
+  a splitter) and `locationMainGroup` returns no values at all once `jobFamilyGroup`
+  is applied — leaving `workerSubType` as the only real second dimension, whose own
+  best (smallest-max) remaining bucket ("Release Management") is still 5,098, over
+  the cap, with no third useful dimension left to apply. This is a genuine ceiling
+  of "subdivide by native facets" for this specific tenant's data shape, not a code
+  defect: the exhausted branch still returns up to 2,000 *distinct, correct*
+  postings via ordinary pagination (never past offset 2,000, so it never triggers
+  the wraparound bug this change exists to fix) — strictly better than today's
+  single 2,000-item ceiling for the *entire* board, even though it falls short of
+  that one branch's true ~24k. Confirmed live (2026-08-06) that NVIDIA (2,617
+  postings, fully resolved, no exhaustion) and Accenture's other ~15 job families
+  are unaffected by this — it is specific to Accenture's one or two largest
+  families.
 
 ## Decisions
 
@@ -61,9 +79,13 @@ against itself — Workday returns the same global breakdown for it — so narro
 oversized slice further means adding a facet dimension not yet applied in this
 recursion branch (e.g. `workerSubType`, `timeType`, `locationMainGroup`; verified live
 that `workerSubType` properly rescopes under an applied `jobFamilyGroup` filter).
-At each level, pick the not-yet-used dimension present in the current response with
-the highest single-value count — adaptively targets whichever dimension best splits
-the oversized slice, without hardcoding dimension names or order.
+At each level, pick the not-yet-used dimension whose *largest single value* is
+*smallest* — the dimension that leaves the smallest oversized remainder, without
+hardcoding dimension names or order. (The inverse heuristic — pick the dimension
+with the single biggest value anywhere — was tried first and, live against
+Accenture, kept selecting a dimension whose top bucket was still ~2000-sized,
+making no measurable progress across repeated depth-3 exhaustions before this was
+corrected during the live dry run in task 7.4.)
 
 **Bound recursion at `maxFacetDepth = 3` combined dimensions.** Verified against the
 worst known case: Accenture's top-level split by `jobFamilyGroup` still leaves
@@ -93,7 +115,12 @@ provider (the existing convention) is kept rather than changing the shared defau
   boards; unaffected boards see zero change. Runs under the crawl's existing
   concurrency and retry handling — no new rate-limiting mechanism introduced. If a
   board's request volume under subdivision proves too aggressive in practice, the
-  existing 403-retry backoff (this same change) absorbs it.
+  existing 403-retry backoff (this same change) absorbs it. **Confirmed live**: the
+  listing walk is sequential (no new concurrency added), so a board Accenture's size
+  takes on the order of tens of minutes wall-clock for its full facet tree, which a
+  scratch dry run without the crawler's normal per-board time budget could not fully
+  observe end-to-end. Watch actual crawl duration against the shard timeout at
+  rollout (tasks.md 8.3) the way `workday-hydrating-crawl` tracked Dollar Tree's.
 - **[A board lacks any usable facet dimension, or exhausts depth without resolving]**
   → Logged via `log.Printf` (matching this package's existing convention in
   `config.go`, `eightfold.go`, `djinni.go`) rather than silently truncating, and the

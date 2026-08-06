@@ -332,6 +332,35 @@ func TestWorkdaySplitsByFacetWhenCapped(t *testing.T) {
 	}
 }
 
+// When more than one facet dimension is available, the split must pick the one whose largest
+// single value is smallest — the dimension that leaves the smallest oversized remainder — not
+// the dimension with the single biggest value anywhere. The latter was tried first and, live
+// against a real capped board, kept picking a dimension whose top bucket was still ~2000-sized,
+// making no real progress. Only dimB's values have routes registered: if the wrong dimension
+// (dimA) were picked, the request would hit an unregistered appliedFacets key and error.
+func TestWorkdaySplitPicksDimensionWithSmallestMaxValue(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"dimA","values":[{"id":"a1","count":1900},{"id":"a2","count":100}]},
+			{"facetParameter":"dimB","values":[{"id":"b1","count":700},{"id":"b2","count":700},{"id":"b3","count":600}]}
+		]}`).
+		route(`{"dimB":["b1"]}`, `{"total":1,"jobPostings":[{"title":"B1","externalPath":"/job/X/B1-1","locationsText":"Berlin"}]}`).
+		route(`{"dimB":["b2"]}`, `{"total":1,"jobPostings":[{"title":"B2","externalPath":"/job/X/B2-1","locationsText":"Berlin"}]}`).
+		route(`{"dimB":["b3"]}`, `{"total":1,"jobPostings":[{"title":"B3","externalPath":"/job/X/B3-1","locationsText":"Berlin"}]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v (want dimB picked — dimA's max value of 1900 is worse than dimB's 700)", err)
+	}
+	if len(postings) != 3 {
+		t.Fatalf("len(postings) = %d, want 3 (one per dimB value)", len(postings))
+	}
+}
+
 // A facet slice that is itself still capped must recurse into a second, different facet
 // dimension — Workday's own facet does not rescope against itself once applied (verified live),
 // so the second level has to be a dimension not yet used in this branch.
