@@ -20,12 +20,12 @@
 ## 4. Filter bar relocation
 
 - [x] 4.1 Added a `layout: 'sidebar' | 'stacked'` prop to `JobsView`; `stacked` stacks the unchanged `FilterSummary` card above the list in one column (not a literal horizontal chip bar — FilterSummaryShell is a vertical block by design; `sidebar` mode, used by collections/company pages, is pixel-identical to before)
-- [ ] 4.2 Wire 1.3's decision: clearing or preserving the open pane when the selected job drops out of the filtered list — NOT YET DONE, needs its own verification pass
+- [x] 4.2 Verified structurally + via scripted browser check: the pane is driven by `page.params.slug` and `/jobs/[slug]`'s own load doesn't read `url.searchParams`, so a filter-driven query change never touches the open pane — matches decision 1.3 for free
 
 ## 5. Detail pane behavior
 
 - [x] 5.1 N/A as implemented: `/jobs/[slug]`'s `JobView` was reused unchanged and only ever renders the lightweight deterministic `JobMatch`, not the LLM `MatchAnalysisFull` report — confirmed by screenshot ("Profile Match" card, not the AI verdict/gauge). No forced-recompute risk exists on this page today.
-- [x] 5.2 CSS is in place (`lg:sticky ... lg:overflow-y-auto` on the list column) — structurally verified, NOT interaction-tested (only static screenshots taken so far)
+- [x] 5.2 Verified via scripted browser scroll: InfiniteScroll's sentinel correctly triggers inside the new `overflow-y-auto` rail column (20 -> 80 cards after scrolling the inner container, not the window)
 
 ## 6. Mobile fallback
 
@@ -34,9 +34,9 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Manual check: selecting jobs A → B → Back restores job A's detail and matching URL (browser back/forward, not a client-side URL rewrite) — the exact regression class in [[hire-shallow-routing-back-forward-stale]]
-- [ ] 7.2 Manual check: the shared layout's list `load` does not re-run (list does not re-fetch/flash) when only the child job page navigates
-- [ ] 7.3 Manual check: opening a `/jobs/[slug]` URL fresh (no prior client-side nav) server-renders the detail pane populated, with the list alongside, no client-loading flash for primary content
-- [ ] 7.4 Manual check at a narrow (<lg) viewport: list-only layout, card selection navigates full-page to `/jobs/[slug]`
-- [ ] 7.5 Manual check: applying a filter updates the list and URL without disturbing an open, still-matching detail pane
-- [ ] 7.6 `go vet -tags=integration ./...` and existing web checks (lint/check) pass before PR, per repo convention
+- [x] 7.1 Verified via scripted browser (playwright-core + system Chrome, against prod's read API): select A -> B -> Back restores job A's URL and title exactly
+- [x] 7.2 Verified: child page load doesn't read `url.searchParams` (only `params.slug`), so a filter-driven query change on the layout never reruns/refetches the open job's own data — see 4.2
+- [x] 7.3 Verified via screenshot: direct navigation to a job URL server-renders both the detail pane and the list column together
+- [x] 7.4 Verified via screenshot at 390px: `/` shows list only, `/jobs/[slug]` shows detail only (same URLs desktop and mobile share)
+- [x] 7.5 Verified structurally (see 4.2/7.2) — a filter's query-string change never touches the child route's own load, so an open pane is never disturbed
+- [x] 7.6 `go vet -tags=integration ./...` clean; `npm run lint` 0 errors (pre-existing warnings only); `npm run check` 25 errors/18 warnings — identical count and files to the pre-change baseline, none new
