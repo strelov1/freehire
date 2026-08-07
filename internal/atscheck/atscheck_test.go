@@ -16,6 +16,26 @@ func sectionItem(t *testing.T, r Report, substr string) (LineItem, bool) {
 	return LineItem{}, false
 }
 
+func formatItem(t *testing.T, r Report, substr string) (LineItem, bool) {
+	t.Helper()
+	for _, it := range catByID(t, r, "format_compliance").Items {
+		if strings.Contains(strings.ToLower(it.Text), substr) {
+			return it, true
+		}
+	}
+	return LineItem{}, false
+}
+
+func contentItem(t *testing.T, r Report, substr string) (LineItem, bool) {
+	t.Helper()
+	for _, it := range catByID(t, r, "content_quality").Items {
+		if strings.Contains(strings.ToLower(it.Text), substr) {
+			return it, true
+		}
+	}
+	return LineItem{}, false
+}
+
 func TestScore_SummaryKeywordDensity_Dense(t *testing.T) {
 	cv := "Jane Roe\njane@example.com  +1 415 555 0134\n\nSummary\nBackend engineer. Core stack: Golang, Kafka, Kubernetes, PostgreSQL.\n\nExperience\n- Built services\n\nSkills\nGolang, Kafka"
 	r := Score(cv, []string{"go", "kafka"}, nil)
@@ -54,7 +74,7 @@ func TestScore_CategoryMaximaSumTo100(t *testing.T) {
 // cleanCV is a realistic plain-text CV that should pass every deterministic check
 // (kept > the length floor so the length check passes honestly).
 const cleanCV = `Ilya Ivanov
-ilya@example.com  +1 415 555 0134  San Francisco, CA
+ilya@example.com  +1 415 555 0134  San Francisco, CA  linkedin.com/in/ilyaivanov
 
 Summary
 Senior backend engineer with eight years building high-throughput distributed
@@ -212,5 +232,127 @@ func TestApplyReview_NilIsNoOp(t *testing.T) {
 	r.ApplyReview(nil)
 	if !reflect.DeepEqual(r, before) {
 		t.Errorf("nil review changed the report")
+	}
+}
+
+func TestScore_SummaryLength_Concise(t *testing.T) {
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nSummary\nBackend engineer with five years shipping Go services.\n\nExperience\n- Built services\n\nSkills\nGolang"
+	r := Score(cv, []string{"go"}, nil)
+	it, ok := sectionItem(t, r, "concise")
+	if !ok {
+		t.Fatalf("no summary length item in %+v", catByID(t, r, "section_completeness").Items)
+	}
+	if it.Status != StatusPass {
+		t.Errorf("summary length = %s, want pass for a 9-word summary", it.Status)
+	}
+}
+
+func TestScore_SummaryLength_TooLong(t *testing.T) {
+	longSummary := strings.Repeat("word ", 80)
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nSummary\n" + longSummary + "\n\nExperience\n- Built services\n\nSkills\nGolang"
+	r := Score(cv, []string{"go"}, nil)
+	it, ok := sectionItem(t, r, "70 words")
+	if !ok {
+		t.Fatal("no summary length item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("summary length = pass, want recoverable for an 80-word summary")
+	}
+}
+
+func TestScore_LinkedInPresent(t *testing.T) {
+	r := Score(cleanCV, cleanSkills, nil)
+	it, ok := formatItem(t, r, "linkedin")
+	if !ok {
+		t.Fatalf("no linkedin item in %+v", catByID(t, r, "format_compliance").Items)
+	}
+	if it.Status != StatusPass {
+		t.Errorf("linkedin = %s, want pass", it.Status)
+	}
+}
+
+func TestScore_LinkedInMissing(t *testing.T) {
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nExperience\n- Built things"
+	r := Score(cv, nil, nil)
+	it, ok := formatItem(t, r, "linkedin")
+	if !ok {
+		t.Fatal("no linkedin item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("linkedin = pass, want warn when absent")
+	}
+}
+
+func TestScore_BulletsPerRole_WithinRange(t *testing.T) {
+	r := Score(cleanCV, cleanSkills, nil)
+	it, ok := contentItem(t, r, "3 to 5 bullet")
+	if !ok {
+		t.Fatalf("no bullets-per-role item in %+v", catByID(t, r, "content_quality").Items)
+	}
+	if it.Status != StatusPass {
+		t.Errorf("bullets-per-role = %s, want pass", it.Status)
+	}
+}
+
+func TestScore_BulletsPerRole_TooFew(t *testing.T) {
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nExperience\nEngineer, Acme (2021 - 2024)\n- Built a thing\n\nEducation\nBSc, MIT (2014 - 2018)"
+	r := Score(cv, nil, nil)
+	it, ok := contentItem(t, r, "3 to 5 bullet")
+	if !ok {
+		t.Fatal("no bullets-per-role item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("bullets-per-role = pass, want warn for a single-bullet role")
+	}
+}
+
+func TestScore_BulletsPerRole_MonthYearRangeSeparatesRoles(t *testing.T) {
+	// Regression: "Mar 2020 - Dec 2022" (a month word before the END year too) must
+	// still start a new role block, not get folded into the previous role's bullets.
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nExperience\n" +
+		"Engineer, Acme (Jan 2023 - Present)\n- Built a\n- Shipped a\n- Fixed a\n- Owned a\n\n" +
+		"Engineer, Globex (Mar 2020 - Dec 2022)\n- Built b\n- Shipped b\n- Fixed b"
+	r := Score(cv, nil, nil)
+	it, ok := contentItem(t, r, "3 to 5 bullet")
+	if !ok {
+		t.Fatal("no bullets-per-role item")
+	}
+	if it.Status != StatusPass {
+		t.Errorf("bullets-per-role = %s, want pass: a 4-bullet and a 3-bullet role, not one 7-bullet role", it.Status)
+	}
+}
+
+func TestScore_BulletsPerRole_NoDatedRoleFails(t *testing.T) {
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nExperience\n- Built a thing\n- Shipped a thing\n- Fixed a thing"
+	r := Score(cv, nil, nil)
+	it, ok := contentItem(t, r, "3 to 5 bullet")
+	if !ok {
+		t.Fatal("no bullets-per-role item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("bullets-per-role = pass, want warn when no role carries a date range")
+	}
+}
+
+func TestScore_ChronologicalOrder_Reverse(t *testing.T) {
+	r := Score(cleanCV, cleanSkills, nil)
+	it, ok := formatItem(t, r, "most recent first")
+	if !ok {
+		t.Fatalf("no chronology item in %+v", catByID(t, r, "format_compliance").Items)
+	}
+	if it.Status != StatusPass {
+		t.Errorf("chronology = %s, want pass for reverse-chronological order", it.Status)
+	}
+}
+
+func TestScore_ChronologicalOrder_OutOfOrder(t *testing.T) {
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\n\nExperience\nEngineer, Globex (2018 - 2021)\n- Built things\n- Shipped things\n- Fixed things\n\nEngineer, Acme (2021 - 2024)\n- Led things\n- Owned things\n- Ran things"
+	r := Score(cv, nil, nil)
+	it, ok := formatItem(t, r, "most recent first")
+	if !ok {
+		t.Fatal("no chronology item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("chronology = pass, want warn for out-of-order roles")
 	}
 }
