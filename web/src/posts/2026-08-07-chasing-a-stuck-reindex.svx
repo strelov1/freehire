@@ -1,0 +1,108 @@
+---
+title: Chasing a stuck reindex into two unrelated bugs
+date: 2026-08-07
+summary: A routine cleanup — stop indexing job postings we can't categorize — sent us into a four-hour hang, a goroutine dump, and a real production outage from a week earlier we hadn't fully explained yet.
+type: article
+tags:
+  - engineering
+  - search
+  - catalogue
+draft: false
+---
+
+Some of our sources are a company's entire career page, not just its engineering roles. A
+crawl of a broad ATS board brings back everything that page lists — painters, warehouse
+stockers, drivers, nurses — alongside the software roles we're actually built for. Most of
+that noise gets caught on the way in. Some of it doesn't: titles generic enough that
+nothing recognizes them as tech *or* as clearly not tech, so they land in the catalogue
+with no specialization at all. Unsearchable by role, unfilterable, just static between the
+postings someone was actually looking for.
+
+We decided to stop putting those in search, in the LLM enrichment queue, and in the
+embedding queue — three separate places that were all quietly spending effort on postings
+nobody could ever find by role anyway. The code change was small. Applying it to what was
+already indexed meant running a full rebuild of the search index. That's where the story
+actually starts.
+
+## The reindex that wouldn't finish
+
+We kicked off the rebuild and walked away. Four hours later it was still running — no
+progress logged, no errors, just silence. `systemctl status` showed the process alive,
+burning almost no CPU. Postgres showed no query running for it at all. That combination —
+alive, idle, invisible — usually means one of two things: a deadlock, or something waiting
+on I/O so slow it looks stopped.
+
+We sent the process a `SIGQUIT`. Go's runtime dumps every goroutine's stack before it
+dies, and the dump was unambiguous: the main goroutine was blocked reading the result of a
+SQL query, mid-loop, iterating one company at a time — over 236,923 of them. One network
+round trip per company. Under ordinary load that's slow but survivable; under the load the
+host was actually carrying that day, it added up to hours before it had even reached the
+point of pushing a single document to search.
+
+The fix wasn't clever — batch 500 companies into one query instead of one query per
+company. One of the two passes (role-repost collapsing) batched safely with no extra care;
+its matching key already includes the company, so grouping across a batch can't blend two
+different companies' rows. The other (cross-source duplicate suppression, which matches on
+title text) had no such guarantee — batching it naively would let two different companies
+sharing a common title ("Backend Engineer") cross-match the moment they landed in the same
+batch. That needed an explicit company guard on every match path, and a test that
+specifically tries to break it with two companies posting the identical title at once.
+
+Deployed, the same rebuild that had stalled for four hours finished end to end in under
+nine.
+
+## What we went looking for, and didn't find
+
+Before writing this up we wanted to check something a smaller index should plausibly fix:
+memory pressure. Meilisearch was using roughly a third of the host's RAM, and the full
+data directory (search index plus the semantic index plus a couple of smaller ones) was
+34GB on a 30GB-RAM machine. That's a real number, and it was tempting to write "the index
+didn't fit in RAM, and that caused downtime."
+
+We checked. Thirty days of kernel logs, thirty days of Meilisearch's own logs — no
+out-of-memory kill, ever. That specific story isn't true, so we're not telling it.
+
+What *is* true, and already caused a real outage six days earlier: Meilisearch re-merges
+its entire inverted index on every single push, regardless of how many documents changed.
+Cost scales with total index size, not with the size of the change. When our incremental
+indexer's timeout was tuned too tight for that cost, a normal-but-slow push got
+misclassified as failed and fell back to pushing documents one at a time — turning one
+slow batch into hundreds of individually expensive ones, all competing for the same disk
+I/O the web server needed just to accept connections. That produced two real periods of
+504 errors before we fixed the timeout logic itself.
+
+A smaller index doesn't erase that failure mode, but it lowers the cost of every push going
+forward — which lowers how bad it gets the next time something else goes wrong nearby.
+That's a real, if less dramatic, reason to care about index size. We'd rather say that
+than reach for a cleaner-sounding cause we can't back up.
+
+## The numbers
+
+- Search index: **2,735,456 → 998,841 documents** (a little over 60% smaller)
+- Same index's on-disk size: **~9.96GB → ~3.71GB**
+- Every one of the 36 real specializations we filter by — backend, frontend, design,
+  management, sales, and the rest — checked before and after: unchanged, document for
+  document. Only the "couldn't tell what this even is" bucket is gone.
+
+Nothing was deleted from the database. Every posting is still stored exactly as it was —
+only what's exposed to search changed. If a title later resolves to a real category, it
+reappears in search on the next rebuild automatically.
+
+## The lesson
+
+The bug that actually cost four hours had nothing to do with the change we set out to
+make. "Run the reindex to apply the filter" surfaced a scaling problem that had presumably
+been getting slowly worse for a while, hiding behind a job that's supposed to run
+unattended every few hours. And the number that looked like the obvious headline — 34GB on
+a 30GB box — wasn't the story once we went looking for evidence instead of a narrative.
+
+The dictionary at the root of all this — the one deciding what counts as a real category —
+only resolves what someone has explicitly taught it; it never guesses. The same is true one
+layer over, for the skills facet: [issue #1613](https://github.com/strelov1/freehire/issues/1613)
+tracks entire professions (sales, support, product) where that dictionary has almost no
+vocabulary yet, so their skills filter works far worse than engineering's. It's a
+self-contained, one-file change if you want to fix a gap like this yourself.
+
+The whole pipeline is open source — the filter, the batching fix, and the timeout logic
+that caused the earlier outage are all in the repo. If that's your kind of thing, a
+[⭐ on GitHub](https://github.com/strelov1/freehire) helps others find it.
