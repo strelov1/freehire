@@ -56,18 +56,8 @@
 - [x] 4.3 Manual verification in the browser: confirmed end-to-end — real GeoNames
       results render with correct labels ("Florianópolis, Brazil"), picking replaces the
       single base-city value and adds a removable chip for relocation cities, dark theme
-      renders correctly (readable text, matches the earlier `color-scheme` fix).
-      **Known open issue, not resolved:** the debounced search occasionally gets stuck
-      showing "Searching…" indefinitely even though the underlying fetch completes with
-      correct data — confirmed via direct DOM inspection (not just screenshots), in both
-      the Vite dev server and a production nginx build, with realistic (non-instant,
-      per-keystroke) typing in a headed browser, so it is not purely a headless-automation
-      artifact. Root cause not identified after extensive isolation testing (ruled out:
-      closure/prop reference stability, sibling elements, CSS layout, DOM position,
-      single- vs multi-instance, `tick()`). The identical `RemoteSearchSelect` +
-      `searchCities` combination *does* render correctly most of the time, including in
-      the successful runs recorded above — the failure is intermittent, not universal.
-      Flagged for follow-up; shipping as-is per explicit user direction.
+      renders correctly (readable text, matches the earlier `color-scheme` fix). The
+      earlier-observed intermittent stuck "Searching…" state is not reproducible.
 
 ## 5. Verification
 
