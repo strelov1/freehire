@@ -1,6 +1,9 @@
 package skilltag
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 // TestDictionaryInvariants guards the two properties the engine relies on:
 // every canonical is a stable slug (lowercase, no spaces), and the vocabulary is
@@ -50,10 +53,10 @@ func assertSlug(t *testing.T, what, s string) {
 }
 
 // The dictionary deliberately covers the NON-engineering roles an IT company hires
-// for — recruiting, HR, finance, legal, operations, customer success. That is right
-// for a skills facet, which describes any posting. It is wrong as evidence that a
-// board is a technical employer: cmd/prune's board report treated "has any skill" as
-// "has posted something technical", so a recruiting coordinator tagged
+// for — recruiting, HR, finance, legal, operations, customer success, sales and support.
+// That is right for a skills facet, which describes any posting. It is wrong as
+// evidence that a board is a technical employer: cmd/prune's board report treated
+// "has any skill" as "has posted something technical", so a recruiting coordinator tagged
 // {stakeholder-management, candidate-experience} vouched for the whole board.
 //
 // HasEngineering is the narrower question that report should have been asking.
@@ -74,6 +77,8 @@ func TestHasEngineering(t *testing.T) {
 		{"pure legal", []string{"contract-negotiation", "regulatory-compliance"}, false},
 		{"pure operations", []string{"stakeholder-management", "process-improvement"}, false},
 		{"pure customer success", []string{"customer-onboarding", "churn-prevention"}, false},
+		{"pure sales", []string{"account-executive", "pipeline-management"}, false},
+		{"pure support", []string{"help-desk", "ticket-resolution"}, false},
 		// One engineering canonical is enough — the board has posted something technical.
 		{"recruiter who also names a stack", []string{"talent-sourcing", "python"}, true},
 		{"plain engineering", []string{"kubernetes"}, true},
@@ -124,5 +129,41 @@ func TestNonCorroboratingPhrasesAllExist(t *testing.T) {
 		if !declared[c] {
 			t.Errorf("nonCorroboratingPhrases names %q, which no phrase alias emits", c)
 		}
+	}
+}
+
+func TestParse_UncoveredProfessionalRoleSkills(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "sales",
+			in:   "Account executive responsible for business development, pipeline management, and cold outreach",
+			want: []string{
+				"account-executive",
+				"business-development",
+				"cold-outreach",
+				"pipeline-management",
+			},
+		},
+		{
+			name: "support",
+			in:   "Help desk specialist responsible for ticket resolution and service desk operations",
+			want: []string{
+				"help-desk",
+				"service-desk",
+				"ticket-resolution",
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := Parse(c.in); !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", c.in, got, c.want)
+			}
+		})
 	}
 }
