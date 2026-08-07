@@ -1,0 +1,24 @@
+---
+title: Fewer non-IT postings cluttering search
+date: 2026-08-07
+summary: Postings our category dictionaries could never place — painters, drivers, warehouse stockers pulled in by broad company career-page crawls — no longer show up in search or filters.
+type: changelog
+tags:
+  - job-seekers
+  - catalogue
+draft: false
+---
+
+A lot of our sources are a company's whole career page, not just its engineering roles —
+so a crawl brings back everything that page lists, IT or not. Most of that gets caught and
+kept out on the way in. Some of it wasn't: titles generic enough that nothing recognized
+them as tech *or* as clearly not tech, so they sat in the catalogue with no
+[specialization](/jobs) at all — unsearchable by role, unfilterable, just noise between
+the postings you were actually looking for.
+
+That noise is now out of search and out of every category filter. Nothing was deleted —
+every posting is still stored exactly as it was, and if a title later gets a real category,
+it reappears in search on its own, no action needed on our end. We checked all 36
+specializations (backend, frontend, design, management, sales, and the rest) before and
+after: every one of them is unchanged. Only the "couldn't tell what this even is" bucket
+is gone.

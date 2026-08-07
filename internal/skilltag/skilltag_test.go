@@ -1090,6 +1090,60 @@ func TestParse_DisciplinePhrasesDoNotCorroborate(t *testing.T) {
 	})
 }
 
+// TestParse_SalesAndSupportDoNotCorroborate mirrors
+// TestParse_DisciplinePhrasesDoNotCorroborate for the sales/support phrases: they tag
+// on their own but must not rescue a gated word that merely appears beside them.
+func TestParse_SalesAndSupportDoNotCorroborate(t *testing.T) {
+	t.Run("sales phrase does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Manage our CRM as an account executive.")
+		if !slices.Contains(got, "account-executive") {
+			t.Errorf("Parse(...) = %v, want account-executive", got)
+		}
+		if slices.Contains(got, "crm") {
+			t.Errorf("Parse(...) = %v, must not contain %q", got, "crm")
+		}
+	})
+	t.Run("support phrase does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Ticket resolution specialist troubleshooting via shell scripts the eng team wrote.")
+		if !slices.Contains(got, "ticket-resolution") {
+			t.Errorf("Parse(...) = %v, want ticket-resolution", got)
+		}
+		if slices.Contains(got, "shell") {
+			t.Errorf("Parse(...) = %v, must not contain %q", got, "shell")
+		}
+	})
+	t.Run("sales and support phrases stand alone", func(t *testing.T) {
+		got := Parse("Business development lead driving cold outreach and pipeline management.")
+		for _, want := range []string{"business-development", "cold-outreach", "pipeline-management"} {
+			if !slices.Contains(got, want) {
+				t.Errorf("Parse(...) = %v, want %q", got, want)
+			}
+		}
+	})
+	t.Run("lead generation does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Lead generation using our CRM and analytics tools.")
+		if !slices.Contains(got, "lead-generation") {
+			t.Errorf("Parse(...) = %v, want lead-generation", got)
+		}
+		for _, unwanted := range []string{"crm", "analytics"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("Parse(...) = %v, must not contain %q", got, unwanted)
+			}
+		}
+	})
+	t.Run("sales enablement does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Sales enablement lead supporting reps with our CRM and analytics stack.")
+		if !slices.Contains(got, "sales-enablement") {
+			t.Errorf("Parse(...) = %v, want sales-enablement", got)
+		}
+		for _, unwanted := range []string{"crm", "analytics"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("Parse(...) = %v, must not contain %q", got, unwanted)
+			}
+		}
+	})
+}
+
 // TestParse_MarketingSeparatorInsensitive checks that the separator rule the
 // matcher already guarantees holds for the new multi-word canonicals too — the
 // dictionary lists only the space form, so the hyphen and underscore spellings

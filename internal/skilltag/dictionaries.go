@@ -964,8 +964,9 @@ var engineeringPhraseAliases = []phraseAlias{
 	//     "a key lever", "a flexible workday". Same doctrine as burp/druid above: such
 	//     a name may only return through a qualifying phrase, never as a bare token.
 	//
-	// The recruiting/HR/finance/legal/operations/customer-success half of this seed set
-	// lives in professionalPhraseAliases below — same matching, separate list.
+	// The recruiting/HR/finance/legal/operations/customer-success/sales/support half of
+	// this seed set lives in professionalPhraseAliases below — same matching, separate
+	// list.
 	// business analysis
 	{"requirements gathering", "requirements-gathering"},
 	{"requirements elicitation", "requirements-elicitation"},
@@ -1081,11 +1082,14 @@ var professionalPhraseAliases = []phraseAlias{
 	{"business development", "business-development"},
 	{"pipeline management", "pipeline-management"},
 	{"cold outreach", "cold-outreach"},
+	{"sales enablement", "sales-enablement"},
+	{"lead generation", "lead-generation"},
 	// customer success
 	{"customer onboarding", "customer-onboarding"},
 	{"customer retention", "customer-retention"},
 	{"churn prevention", "churn-prevention"},
 	{"customer health score", "customer-health-score"},
+	{"renewal management", "renewal-management"},
 	{"gainsight", "gainsight"}, {"churnzero", "churnzero"},
 	// support
 	{"help desk", "help-desk"},
@@ -1162,13 +1166,18 @@ var nonCorroboratingPhrases = map[string]bool{
 	"influencer-marketing":           true,
 	"copywriting":                    true,
 	"go-to-market":                   true,
-	"account-executive":              true,
-	"business-development":           true,
-	"pipeline-management":            true,
-	"cold-outreach":                  true,
-	"help-desk":                      true,
-	"service-desk":                   true,
-	"ticket-resolution":              true,
+	// sales / support — same doctrine as the marketing disciplines above: "manage our
+	// CRM as an account executive" names the gated word "crm" without evidencing any
+	// technical involvement with it, and that phrasing recurs at scale in this category.
+	"account-executive":    true,
+	"business-development": true,
+	"pipeline-management":  true,
+	"cold-outreach":        true,
+	"sales-enablement":     true,
+	"lead-generation":      true,
+	"help-desk":            true,
+	"service-desk":         true,
+	"ticket-resolution":    true,
 }
 
 // nonEngineeringCanonicals is derived from professionalPhraseAliases, never written by
