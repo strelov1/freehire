@@ -27,7 +27,7 @@
        width instead); at the desktop breakpoint both columns always show together. -->
   <div
     class={[
-      'w-full shrink-0 lg:w-[440px]',
+      'w-full shrink-0 lg:w-[360px]',
       selectedSlug ? 'hidden lg:block' : 'block',
       'lg:sticky lg:top-[calc(3.5rem+1.5rem)] lg:max-h-[calc(100vh-3.5rem-3rem)] lg:overflow-y-auto',
     ]}
