@@ -311,6 +311,13 @@
     }),
   );
 
+  // `jobs.total` is the server's raw count for the query — accurate for every facet,
+  // which all narrow the actual search, but not for the match slider, which only
+  // trims the already-fetched page client-side. Showing the raw total next to a
+  // shrunk list would read as a lie ("500 open jobs" over three visible cards), so
+  // swap in what's actually on screen while the threshold is active.
+  const listTotal = $derived(matchFilterAvailable && minMatch != null ? visibleJobs.length : jobs.total);
+
   // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
   // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
   // visibleJobs) and confirms with the server; a failed undo is swallowed — the
@@ -435,37 +442,14 @@
              mobile, where there's no sidebar), so it lives here instead. -->
         <div class="rounded-xl border border-border bg-card px-4 py-3">
           <p class="text-3xl font-semibold leading-none tracking-tight tabular-nums">
-            {jobs.total.toLocaleString()}
+            {listTotal.toLocaleString()}
           </p>
           <p class="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {jobs.total === 1 ? 'open job' : 'open jobs'}
+            {listTotal === 1 ? 'open job' : 'open jobs'}
           </p>
         </div>
       {/if}
       {@render sidebarTop?.()}
-      {#if matchFilterAvailable}
-        <!-- Client-only post-filter (see `minMatch` above): drags apply immediately,
-             no debounce, since it only re-filters the page already in memory. -->
-        <div class="rounded-xl border border-border bg-card p-4">
-          <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-sm font-semibold tracking-tight">Minimum match</h3>
-            <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={minMatch ?? 0}
-            oninput={(e) => {
-              const n = Number(e.currentTarget.value);
-              minMatch = n > 0 ? n : null;
-            }}
-            aria-label="Minimum profile match"
-            class="w-full accent-primary"
-          />
-        </div>
-      {/if}
       <div class="rounded-xl border border-border bg-card p-4">
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
       </div>
@@ -474,8 +458,8 @@
 
   <div class="min-w-0 flex-1">
     <ListToolbar
-      total={!cvSignInPrompt && jobs.items.length > 0 ? jobs.total : null}
-      unit={jobs.total === 1 ? 'job' : 'jobs'}
+      total={!cvSignInPrompt && jobs.items.length > 0 ? listTotal : null}
+      unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
       sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
@@ -605,6 +589,9 @@
   open={modalOpen}
   onClose={() => (modalOpen = false)}
   {stagedCounts}
+  matchAvailable={matchFilterAvailable}
+  {minMatch}
+  onMinMatchChange={(v) => (minMatch = v)}
 />
 
 {#if standalone}

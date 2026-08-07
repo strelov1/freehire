@@ -43,6 +43,9 @@
     previewCount,
     stagedCounts,
     extra,
+    matchAvailable = false,
+    minMatch = null,
+    onMinMatchChange,
   }: {
     store?: FilterStore;
     seed?: JobFilters;
@@ -69,6 +72,13 @@
     // Extra content rendered above the pane, handed the staged store so it can edit it
     // (e.g. the profile editor's "import skills from CV").
     extra?: Snippet<[StagedFilters]>;
+    // The "Match" pane: a client-only threshold over the viewer's own profile skills,
+    // not a JobFilters facet (the match percent depends on who's looking, so there's
+    // nothing to put in JobFilters/the URL — see JobsView's `minMatch`). The rail entry
+    // is hidden unless the caller has a real percent to filter on.
+    matchAvailable?: boolean;
+    minMatch?: number | null;
+    onMinMatchChange?: (value: number | null) => void;
   } = $props();
 
   const staged = new StagedFilters();
@@ -110,11 +120,16 @@
   const SECTIONS: RailSection[] = ['SAVED', ...RAIL_SECTIONS];
 
   // Rail entries visible under the current scope: restricted to `railKeys` when given,
-  // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
-  // page).
+  // a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
+  // page), and 'match' is hidden unless the caller has a real percent to filter on.
   const visibleRail = $derived([
     ...(hasSavedTab ? [SAVED_ENTRY] : []),
-    ...RAIL.filter((e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam))),
+    ...RAIL.filter(
+      (e) =>
+        (!railKeys || railKeys.includes(e.key)) &&
+        !(e.facetParam && exclude.includes(e.facetParam)) &&
+        (e.kind !== 'match' || matchAvailable),
+    ),
   ]);
 
   // Values selected for one facet — included plus excluded — so the rail count reflects
@@ -134,6 +149,7 @@
     if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
     if (e.kind === 'relocation') return selCount(f, 'relocation') + (f.visa ? 1 : 0);
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
+    if (e.kind === 'match') return minMatch != null ? 1 : 0;
     return selCount(f, e.facetParam ?? e.key);
   }
 
@@ -306,6 +322,23 @@
       value={freshnessIndex}
       oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
       aria-label="Posted within"
+      class="w-full accent-primary"
+    />
+  {:else if entry.kind === 'match'}
+    <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props): re-filters
+         the already-fetched page in memory, so it applies immediately, no debounce. -->
+    <div class="mb-2 flex items-center justify-between">
+      <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
+      <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
+    </div>
+    <input
+      type="range"
+      min="0"
+      max="100"
+      step="5"
+      value={minMatch ?? 0}
+      oninput={(e) => onMinMatchChange?.(Number(e.currentTarget.value) || null)}
+      aria-label="Minimum skill match"
       class="w-full accent-primary"
     />
   {/if}

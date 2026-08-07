@@ -112,6 +112,9 @@ export type RailKind =
   | 'language'
   | 'relocation'
   | 'posted'
+  // Client-only profile-match threshold — not a facet param, see FilterModal's
+  // `minMatch` prop. Only shown when the caller marks it available.
+  | 'match'
   // The job modal's "My filters" (saved searches) tab — renders SavedSearches, not a facet control.
   | 'saved';
 
@@ -142,4 +145,7 @@ export const RAIL: RailEntry[] = [
   { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
   { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
   { key: 'posted', label: 'Posted', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'posted' },
+  // Hidden unless the caller marks it available (signed in, profile has skills) — see
+  // FilterModal's `matchAvailable` prop and the `visibleRail` filter.
+  { key: 'match', label: 'Match', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'match' },
 ];
