@@ -1082,11 +1082,14 @@ var professionalPhraseAliases = []phraseAlias{
 	{"business development", "business-development"},
 	{"pipeline management", "pipeline-management"},
 	{"cold outreach", "cold-outreach"},
+	{"sales enablement", "sales-enablement"},
+	{"lead generation", "lead-generation"},
 	// customer success
 	{"customer onboarding", "customer-onboarding"},
 	{"customer retention", "customer-retention"},
 	{"churn prevention", "churn-prevention"},
 	{"customer health score", "customer-health-score"},
+	{"renewal management", "renewal-management"},
 	{"gainsight", "gainsight"}, {"churnzero", "churnzero"},
 	// support
 	{"help desk", "help-desk"},
@@ -1170,6 +1173,8 @@ var nonCorroboratingPhrases = map[string]bool{
 	"business-development": true,
 	"pipeline-management":  true,
 	"cold-outreach":        true,
+	"sales-enablement":     true,
+	"lead-generation":      true,
 	"help-desk":            true,
 	"service-desk":         true,
 	"ticket-resolution":    true,

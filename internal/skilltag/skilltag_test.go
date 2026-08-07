@@ -1120,6 +1120,28 @@ func TestParse_SalesAndSupportDoNotCorroborate(t *testing.T) {
 			}
 		}
 	})
+	t.Run("lead generation does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Lead generation using our CRM and analytics tools.")
+		if !slices.Contains(got, "lead-generation") {
+			t.Errorf("Parse(...) = %v, want lead-generation", got)
+		}
+		for _, unwanted := range []string{"crm", "analytics"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("Parse(...) = %v, must not contain %q", got, unwanted)
+			}
+		}
+	})
+	t.Run("sales enablement does not pull in the gated concept", func(t *testing.T) {
+		got := Parse("Sales enablement lead supporting reps with our CRM and analytics stack.")
+		if !slices.Contains(got, "sales-enablement") {
+			t.Errorf("Parse(...) = %v, want sales-enablement", got)
+		}
+		for _, unwanted := range []string{"crm", "analytics"} {
+			if slices.Contains(got, unwanted) {
+				t.Errorf("Parse(...) = %v, must not contain %q", got, unwanted)
+			}
+		}
+	})
 }
 
 // TestParse_MarketingSeparatorInsensitive checks that the separator rule the

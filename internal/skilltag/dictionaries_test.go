@@ -77,8 +77,9 @@ func TestHasEngineering(t *testing.T) {
 		{"pure legal", []string{"contract-negotiation", "regulatory-compliance"}, false},
 		{"pure operations", []string{"stakeholder-management", "process-improvement"}, false},
 		{"pure customer success", []string{"customer-onboarding", "churn-prevention"}, false},
-		{"pure sales", []string{"account-executive", "pipeline-management"}, false},
+		{"pure sales", []string{"account-executive", "pipeline-management", "lead-generation"}, false},
 		{"pure support", []string{"help-desk", "ticket-resolution"}, false},
+		{"pure customer success renewal", []string{"renewal-management"}, false},
 		// One engineering canonical is enough — the board has posted something technical.
 		{"recruiter who also names a stack", []string{"talent-sourcing", "python"}, true},
 		{"plain engineering", []string{"kubernetes"}, true},
@@ -140,12 +141,14 @@ func TestParse_SalesAndSupportVocab(t *testing.T) {
 	}{
 		{
 			name: "sales",
-			in:   "Account executive responsible for business development, pipeline management, and cold outreach",
+			in:   "Account executive responsible for business development, pipeline management, cold outreach, sales enablement, and lead generation",
 			want: []string{
 				"account-executive",
 				"business-development",
 				"cold-outreach",
+				"lead-generation",
 				"pipeline-management",
+				"sales-enablement",
 			},
 		},
 		{
@@ -155,6 +158,13 @@ func TestParse_SalesAndSupportVocab(t *testing.T) {
 				"help-desk",
 				"service-desk",
 				"ticket-resolution",
+			},
+		},
+		{
+			name: "customer success renewal",
+			in:   "Customer success manager owning renewal management for the book of business",
+			want: []string{
+				"renewal-management",
 			},
 		},
 	}
