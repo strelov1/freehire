@@ -28,11 +28,10 @@ const commonCrawlMaxPages = 20
 // commonCrawlSlug extracts a candidate board id from a Common Crawl-matched URL: the first
 // non-empty path segment, exactly as crawled. Greenhouse and Ashby both key a board by that
 // segment (boards.greenhouse.io/<slug>/..., jobs.ashbyhq.com/<slug>/...), so no per-provider
-// variant is needed. Case is preserved rather than folded: Ashby board ids are
-// case-sensitive (see ashbyProber's dedupKeyer note in prober.go), and neither provider
-// implements dedupKeyer, so lower-casing here would silently diverge from how a seeded or
-// platform-discovered candidate is treated. A URL with no path segments (bare host, or root
-// "/") yields no candidate.
+// variant is needed. Case is preserved here rather than folded — both providers' APIs are in
+// fact case-insensitive, but that's handled once, at the dedup layer (see dedupKey on
+// greenhouseProber/ashbyProber in prober.go), not duplicated into every URL this function
+// parses. A URL with no path segments (bare host, or root "/") yields no candidate.
 func commonCrawlSlug(rawURL string) (string, bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil {

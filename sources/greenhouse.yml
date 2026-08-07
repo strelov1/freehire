@@ -14281,24 +14281,12 @@
   board: mooreholdingsllc
 - company: Sharp Electronics
   board: sharpelectronics
-- company: Convene Hospitality Group
-  board: Convene
-- company: Mill
-  board: Mill
-- company: MyHeritage
-  board: MyHeritage
-- company: OKX
-  board: OKX
-- company: Adyen
-  board: adyen
 - company: Auld & White Constructors Talent Community
   board: auldwhitetalentcommunity
 - company: Join Our Talent Community
   board: berkadiatalentpool
 - company: Besxar
   board: besxar
-- company: BETA Technologies
-  board: betatechnologiesinc
 - company: Blenheim Chalcot
   board: blenheimchalcot
 - company: Charlie Health Outreach
@@ -14337,5 +14325,7 @@
   board: publiclabel
 - company: Unconventional, Inc.
   board: unconventionalinc
+- company: Vilya
+  board: vilya
 - company: Zerocater
   board: zerocater

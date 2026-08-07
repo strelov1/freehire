@@ -57,13 +57,25 @@ new-candidate yield per additional snapshot drops fast while cost (CDX requests,
 keeps climbing; 3 was the number the reference implementation (job-hunter) validated in
 production use, and the spike didn't have time budget to establish a better number empirically.
 
-**Slug extraction: first non-empty path segment, lowercased.** Matches how `resolve()` and the
-existing probers already treat a board id for these two providers (case folding only applies to
-Workday via `dedupKeyer`; Greenhouse/Ashby board ids are the literal path segment). No special
+**Slug extraction: first non-empty path segment, case preserved as crawled.** No special
 handling for query strings (they're not part of the URL path) or for known non-board paths like
 Ashby's `/meeting/` or `/b/` — those are simply slugs that will fail live-validation like any
 other invalid candidate, since the probe pipeline already treats "0 jobs / unreachable" as
 "skip, don't append." No extra filtering logic pays for itself here.
+
+**Correction (discovered during implementation, before merge): both APIs are
+case-insensitive, so both providers now implement `dedupKeyer`.** The original assumption
+here — sourced from an existing code comment claiming Ashby board ids "differ by case" — was
+wrong, and Greenhouse was never checked at all. A real run against live Common Crawl produced
+415 case-variant duplicates in `sources/ashby.yml` (`abridge`/`Abridge`, `crusoe`/`Crusoe`, ...)
+and 5 in `sources/greenhouse.yml`. Verified live: `boards-api.greenhouse.io/v1/boards/adyen`
+and `.../Adyen` return the same company; same for `api.ashbyhq.com/posting-api/job-board/`.
+Fix: `greenhouseProber.dedupKey`/`ashbyProber.dedupKey` fold to lower case, exactly like
+`workdayProber`'s — `newBoards` already dedupes through whatever key a `dedupKeyer` supplies,
+so this one addition fixes both cross-run (new vs. already-tracked) and within-run (two
+differently-cased crawls of the same company) duplication. The pre-existing code comments this
+change corrects (in `prober.go`, `boardfile.go`, and this file) were simply never verified
+against the live API — a reminder that an inherited assumption is not evidence.
 
 **Per-snapshot page cap, not a hard total cap.** Mirrors `gupyMaxOffset` — bound the number of
 CDX pages read per snapshot so a snapshot whose index never terminates (or a paging bug) can't

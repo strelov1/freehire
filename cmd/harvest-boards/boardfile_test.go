@@ -40,8 +40,15 @@ func TestDedupKeyOf(t *testing.T) {
 	if dedupKeyOf(workdayProber{})("A.WD1.myworkdayjobs.com/Site") != "a.wd1.myworkdayjobs.com/site" {
 		t.Error("workday key must fold case")
 	}
-	if dedupKeyOf(ashbyProber{})("Ramp") != "Ramp" {
-		t.Error("ashby key must be case-sensitive (identity)")
+	// Greenhouse's boards API is case-insensitive too (confirmed live:
+	// boards-api.greenhouse.io/v1/boards/adyen and .../Adyen return the same company).
+	if dedupKeyOf(greenhouseProber{})("Adyen") != "adyen" {
+		t.Error("greenhouse key must fold case")
+	}
+	// Ashby's job-board API is case-insensitive (confirmed live: /posting-api/job-board/abridge
+	// and .../Abridge return the same company), so the dedup key folds case like Workday's.
+	if dedupKeyOf(ashbyProber{})("Ramp") != "ramp" {
+		t.Error("ashby key must fold case")
 	}
 }
 

@@ -121,6 +121,12 @@ func (greenhouseProber) discover(ctx context.Context, c httpClient) ([]string, e
 	return commonCrawlCandidates(ctx, c, greenhouseBoardsHost)
 }
 
+// dedupKey folds a Greenhouse board id to lower case, like Workday's and Ashby's. The boards
+// API is case-insensitive (boards-api.greenhouse.io/v1/boards/adyen and .../Adyen both
+// resolve to the same company, confirmed live) — without folding, Common Crawl discovery
+// surfacing a different case than an already-known board dedups as a distinct one.
+func (greenhouseProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
+
 // leverProber probes the Lever postings API. The JSON-mode endpoint returns a bare array
 // of live postings, so a non-empty array is a live board. The posting API exposes no company
 // name, but the board's storefront titles itself after the employer, so the name is read
@@ -163,8 +169,16 @@ func (leverProber) probe(ctx context.Context, c httpClient, slug string) (string
 // ashbyProber probes the Ashby public job-board API. The list endpoint returns the live
 // postings, so a non-empty list is a live board. The posting API exposes no company name, but
 // the storefront titles itself "<Company> Jobs", so the name is read there once the board is
-// known to be live. The board id stays the case-sensitive slug Ashby uses as its identity.
+// known to be live. The job-board API is case-insensitive (posting-api/job-board/abridge and
+// .../Abridge both resolve to the same company, confirmed live) — see dedupKey.
 type ashbyProber struct{}
+
+// dedupKey folds an Ashby board id to lower case, like Workday's. Common Crawl discovery
+// surfaces the same company under whatever case a crawled inbound link happened to use, and
+// without folding, "abridge" and "Abridge" dedup as two different boards even though the API
+// serves identical content for both — verified live, and by a stale duplicate this folding
+// removes from sources/ashby.yml (see the CDX-discovery change that added it).
+func (ashbyProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
 
 func ashbyBoardURL(slug string) string {
 	return fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", slug)
@@ -320,8 +334,8 @@ type seedMapper interface {
 }
 
 // dedupKeyer folds a board id into the key used for dedup against existing boards. A
-// provider whose board ids are case-insensitive (Workday) implements it to fold case; the
-// rest dedup case-sensitively (Ashby slugs differ by case), so they do not implement it.
+// provider whose board ids are case-insensitive (Workday, Ashby) implements it to fold case;
+// the rest dedup case-sensitively, so they do not implement it.
 type dedupKeyer interface {
 	dedupKey(boardID string) string
 }
