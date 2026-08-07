@@ -2099,3 +2099,7 @@
   board: stakemate
 - company: Greenfly
   board: work-at-greenfly
+
+# workable board from the contribution queue (2026-08-07, live-validated)
+- company: HelloGov AI
+  board: hellogov

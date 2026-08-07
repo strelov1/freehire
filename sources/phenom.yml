@@ -109,3 +109,7 @@
 # Phenom tenant from the contribution queue (2026-08-06, refineSearch 1701 postings)
 - company: Allianz
   board: careers.allianz.com
+
+# Phenom tenant from the contribution queue (2026-08-07, refineSearch 362 postings)
+- company: UCB
+  board: careers.ucb.com
