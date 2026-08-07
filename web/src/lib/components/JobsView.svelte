@@ -80,6 +80,10 @@
   // embedded, scoped instance (e.g. a company page) keeps its own inline input.
   const standalone = $derived(Object.keys(scope).length === 0);
 
+  // Named once so the three read sites (script + two template spots) agree by
+  // construction instead of repeating the string comparison.
+  const stackedLayout = $derived(layout === 'stacked');
+
   // Seed filters from the current URL so the server and the hydrated client
   // render the same filtered view. Only the standalone list persists to storage;
   // the embedded company list must not clobber the shared key. Persistence is
@@ -380,7 +384,7 @@
   // every click — a full visible re-render for a navigation that has nothing to do with
   // filters. The list's in-memory state is already correct; only an explicit filter
   // action (which calls the store directly) should ever change it here.
-  if (untrack(() => standalone) && untrack(() => layout) !== 'stacked') {
+  if (untrack(() => standalone) && !untrack(() => stackedLayout)) {
     afterNavigate((nav) => {
       const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
       if (stored) filters.apply(stored);
@@ -496,7 +500,12 @@
   {:else}
     <div class="flex flex-col gap-3">
       {#each visibleJobs as job (job.public_slug)}
-        <JobRow {job} {onHide} compact={layout === 'stacked'} selected={layout === 'stacked' && job.public_slug === selectedSlug} />
+        <JobRow
+          {job}
+          {onHide}
+          compact={stackedLayout}
+          selected={stackedLayout && job.public_slug === selectedSlug}
+        />
       {/each}
     </div>
 
@@ -509,9 +518,9 @@
   {/if}
 {/snippet}
 
-{#if layout === 'stacked'}
+{#if stackedLayout}
   <!-- The (feed) split layout's rail: filters stacked above a compact-card list,
-       instead of beside it — there's no room for a side-by-side sidebar in a ~440px
+       instead of beside it — there's no room for a side-by-side sidebar in a narrow
        column. Reuses FilterSummary/FilterSummaryShell as-is; only the position moves. -->
   <div class="flex flex-col gap-4">
     <div class="rounded-xl border border-border bg-card p-4">

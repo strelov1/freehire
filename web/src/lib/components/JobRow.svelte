@@ -245,8 +245,8 @@
      so an optional footer row can sit inside the same bordered box as a sibling of
      the link — interactive footer controls never nest inside the navigation <a>.
      `group` lets the hover-revealed hide control fade in on card hover. `selected`
-     overrides the border/ring with the brand tone so the rail's open card is
-     unambiguous at a glance, matching the design spike's validated treatment. -->
+     overrides the border/ring with the brand tone so the open card in a split-pane
+     rail is unambiguous at a glance. -->
 <div
   class={[
     'group relative rounded-xl border bg-card transition hover:border-brand hover:bg-accent',
