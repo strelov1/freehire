@@ -51,6 +51,11 @@ type AshbyPosting struct {
 	IsRemote        bool   `json:"isRemote"`
 	WorkplaceType   string `json:"workplaceType"`
 	EmploymentType  string `json:"employmentType"`
+	Address         struct {
+		PostalAddress struct {
+			AddressCountry string `json:"addressCountry"`
+		} `json:"postalAddress"`
+	} `json:"address"`
 }
 
 // MapAshbyPosting maps an Ashby API posting into a Job, so the board adapter and the
@@ -72,6 +77,7 @@ func MapAshbyPosting(j AshbyPosting) Job {
 		Description:    sanitizeHTML(j.DescriptionHTML),
 		Remote:         mode == "remote" || isRemote(j.Location),
 		WorkMode:       mode,
+		Countries:      countryFromCode(j.Address.PostalAddress.AddressCountry),
 		PostedAt:       parseRFC3339(j.PublishedAt),
 		EmploymentType: ashbyEmploymentType(j.EmploymentType),
 	}

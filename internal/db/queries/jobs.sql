@@ -533,18 +533,27 @@ UNION
 SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> '' AND duplicate_of IS NOT NULL;
 
--- name: RecomputeRoleDuplicatesForCompany :execrows
--- The per-company slice of the role-duplicate recompute. Canon = min(id) among the
--- company's open rows sharing a role_fingerprint; the canon and any singleton/empty-fp
--- row get duplicate_of NULL, the other reposts point to the canon. Rows are never
--- deleted, so the reality counts are untouched. Scoped to one company_slug so it locks
--- only that company's rows briefly; the (company_slug, role_fingerprint) index makes the
--- aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
--- idempotent, and a closed canon fails over to the next min(id) on the next run.
+-- name: RecomputeRoleDuplicatesForCompanies :execrows
+-- The batched slice of the role-duplicate recompute, driven over a CHUNK of companies
+-- (cmd/reindex's forCompanyBatches) rather than one call per company — see that
+-- function's doc comment for why: at catalogue scale (2026-08-06 prod measurement:
+-- 236,923 distinct open companies) one round trip per company made this pass take
+-- hours under ordinary host load, most of it network/planning overhead rather than
+-- query cost. Batching multiple companies into ONE statement is safe here without any
+-- extra cross-company guard: role_fingerprint is sha256(company_slug, title,
+-- description) (internal/jobhash.RoleFingerprint) with company_slug as its FIRST
+-- component, so a fingerprint collision between two different companies is not a
+-- realistic concern — grouping by role_fingerprint alone, across the whole batch,
+-- cannot merge two different companies' rows. Canon = min(id) among a role's open rows;
+-- the canon and any singleton/empty-fp row get duplicate_of NULL, the other reposts
+-- point to the canon. Rows are never deleted, so the reality counts are untouched. The
+-- (company_slug, role_fingerprint) index makes both scans range scans over the batch.
+-- The IS DISTINCT FROM guard makes re-runs cheap and idempotent, and a closed canon
+-- fails over to the next min(id) on the next run.
 WITH canon AS (
     SELECT jobs.role_fingerprint, MIN(jobs.id) AS canon_id, COUNT(*) AS n
     FROM jobs
-    WHERE jobs.company_slug = sqlc.arg(company)
+    WHERE jobs.company_slug = ANY(sqlc.arg(companies)::text[])
       AND jobs.closed_at IS NULL AND jobs.role_fingerprint IS NOT NULL AND jobs.role_fingerprint <> ''
     GROUP BY jobs.role_fingerprint
 ),
@@ -553,7 +562,7 @@ target AS (
         CASE WHEN c.n > 1 AND j.id <> c.canon_id THEN c.canon_id END AS new_dup
     FROM jobs j
     JOIN canon c ON j.role_fingerprint = c.role_fingerprint
-    WHERE j.company_slug = sqlc.arg(company) AND j.closed_at IS NULL
+    WHERE j.company_slug = ANY(sqlc.arg(companies)::text[]) AND j.closed_at IS NULL
 )
 UPDATE jobs j
 SET duplicate_of = t.new_dup,
@@ -566,30 +575,41 @@ WHERE j.id = t.id
 -- Company slugs with at least one OPEN aggregator posting — the drive list for the
 -- cross-source aggregator suppression pass. An open aggregator row is a candidate whether
 -- it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate
--- covers both. Processed one company at a time (SuppressAggregatorDuplicatesForCompany),
--- mirroring the role-duplicate recompute's lock discipline.
+-- covers both. Processed in chunks (SuppressAggregatorDuplicatesForCompanies), mirroring
+-- the role-duplicate recompute's batching.
 SELECT DISTINCT company_slug FROM jobs
 WHERE closed_at IS NULL AND company_slug <> ''
   AND source = ANY(sqlc.arg(aggregators)::text[]);
 
--- name: SuppressAggregatorDuplicatesForCompany :execrows
--- The per-company slice of the cross-source aggregator suppression. An open aggregator
--- posting is marked duplicate_of an open CANONICAL ATS (non-aggregator) posting of the
--- same company, equal normalized title, and compatible country (countries overlap, or
--- either side empty — the geography dictionary is sparse, so an unresolved side must not
--- veto). The ATS row is never touched, so it stays canonical. Candidate aggregator rows
--- are those that are canonical OR already point at a non-aggregator row (i.e. suppressed
--- by THIS pass) — an aggregator repost pointed at another aggregator by the role pass is
--- left alone. A candidate with no ATS twin resolves to NULL, so a closed twin releases
--- its aggregator copy back into search/embedding/enrichment. min(id) picks a stable
--- target; the IS DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
--- RecomputeRoleDuplicatesForCompany so ATS reposts have already collapsed to their canon.
--- Company match folds away word-separator spelling variance between sources: company_slug
--- is normalize.Slug(name), which never strips legal suffixes, so two sources naming the
--- same employer with a different word break ("Cfoinsights" vs "CFO Insights") land on
--- different slugs ("cfoinsights" vs "cfo-insights") that agree once hyphens are removed.
+-- name: SuppressAggregatorDuplicatesForCompanies :execrows
+-- The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
+-- companies (cmd/reindex's forCompanyBatches) rather than one call per company — see
+-- RecomputeRoleDuplicatesForCompanies' doc comment for the prod measurement that
+-- motivated batching both passes (94,410 companies with an open aggregator posting;
+-- one round trip each made this pass the one that actually got stuck for hours on
+-- 2026-08-06). Unlike that query, batching here is NOT free: title matching has no
+-- natural company key the way role_fingerprint does, so both CTEs carry an explicit
+-- fcompany (folded company) column and every match arm's ON clause pins
+-- t.fcompany = a.fcompany — without it, two different companies sharing a common title
+-- ("Backend Engineer") would cross-match the moment they land in the same batch.
+-- fcompany is the same replace(company_slug, '-', '') fold PR #1591 introduced (a
+-- source spelling one employer "Cfoinsights", another "CFO Insights" — different
+-- slugs that must still agree), just computed once per row instead of per query.
+--
+-- An open aggregator posting is marked duplicate_of an open CANONICAL ATS
+-- (non-aggregator) posting of the same (folded) company, equal normalized title, and
+-- compatible country (countries overlap, or either side empty — the geography
+-- dictionary is sparse, so an unresolved side must not veto). The ATS row is never
+-- touched, so it stays canonical. Candidate aggregator rows are those that are
+-- canonical OR already point at a non-aggregator row (i.e. suppressed by THIS pass) —
+-- an aggregator repost pointed at another aggregator by the role pass is left alone. A
+-- candidate with no ATS twin resolves to NULL, so a closed twin releases its aggregator
+-- copy back into search/embedding/enrichment. min(id) picks a stable target; the IS
+-- DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
+-- RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
 WITH ats AS (
     SELECT jobs.id,
+           replace(jobs.company_slug, '-', '') AS fcompany,
            btrim(regexp_replace(lower(jobs.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
@@ -600,12 +620,14 @@ WITH ats AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            jobs.countries
     FROM jobs
-    WHERE replace(jobs.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
+    WHERE replace(jobs.company_slug, '-', '') = ANY(
+              SELECT replace(c, '-', '') FROM unnest(sqlc.arg(companies)::text[]) AS c)
       AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
       AND NOT (jobs.source = ANY(sqlc.arg(aggregators)::text[]))
 ),
 agg AS (
     SELECT a.id,
+           replace(a.company_slug, '-', '') AS fcompany,
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
@@ -616,7 +638,8 @@ agg AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            a.countries
     FROM jobs a
-    WHERE replace(a.company_slug, '-', '') = replace(sqlc.arg(company)::text, '-', '')
+    WHERE replace(a.company_slug, '-', '') = ANY(
+              SELECT replace(c, '-', '') FROM unnest(sqlc.arg(companies)::text[]) AS c)
       AND a.closed_at IS NULL AND a.company_slug <> ''
       AND a.source = ANY(sqlc.arg(aggregators)::text[])
       AND (
@@ -636,32 +659,38 @@ matches AS (
     -- the way. Only those two clauses are decoration: measured on prod, also stripping a
     -- parenthetical produced 39 wrong pairs out of 55 — one company's "…, Backend (Traffic)"
     -- matching its "(Payments)", "(Identity)" and "(Infrastructure)" roles — and a comma clause
-    -- fails the same way ("…, Backend" vs "…, Fullstack"). Each path is a SEPARATE single-equality hash join (O(agg + ats))
-    -- and the two are UNION ALL-ed — an OR of the two equalities in one ON would defeat the
-    -- hash join and go quadratic on a big company (the hotel-chain case). UNION ALL, not
-    -- UNION: a row matched by both paths appears twice, but the downstream MIN(ats_id)
-    -- absorbs the duplicate, so the de-dup pass is wasted work. Both require a non-empty key;
-    -- the country gate applies to each path.
+    -- fails the same way ("…, Backend" vs "…, Fullstack"). Each path is a SEPARATE
+    -- equality hash join (now on (fcompany, ntitle) / (fcompany, ntitle2), still
+    -- O(agg + ats)) and the two are UNION ALL-ed — an OR of the two equalities in one ON
+    -- would defeat the hash join and go quadratic on a big company (the hotel-chain
+    -- case). UNION ALL, not UNION: a row matched by both paths appears twice, but the
+    -- downstream MIN(ats_id) absorbs the duplicate, so the de-dup pass is wasted work.
+    -- Both require a non-empty key; the country gate applies to each path.
     SELECT a.id AS agg_id, t.id AS ats_id
     FROM agg a JOIN ats t
-      ON t.ntitle = a.ntitle AND a.ntitle <> ''
+      ON t.fcompany = a.fcompany
+     AND t.ntitle = a.ntitle AND a.ntitle <> ''
      AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
     UNION ALL
     SELECT a.id, t.id
     FROM agg a JOIN ats t
-      ON t.ntitle2 = a.ntitle2 AND a.ntitle2 <> ''
+      ON t.fcompany = a.fcompany
+     AND t.ntitle2 = a.ntitle2 AND a.ntitle2 <> ''
      AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
     UNION ALL
     -- Third path: word-subset containment — the aggregator dropped words the ATS keeps (a
     -- mid-title drop the two equality keys miss). This arm is a nested loop (no hash on <@),
-    -- but runs only on the residual after the equality arms and is bounded per company.
+    -- but runs only on the residual after the equality arms and is bounded per company via
+    -- the fcompany equality (planned as a hash/merge join on fcompany, nested-looping only
+    -- within each matching group — the same cost shape the old single-company call had).
     -- Guards against over-merge: the aggregator title needs >= 2 words, and the words the ATS
     -- adds over it must include at least one NON-seniority word — so "Software Engineer" is not
     -- merged into "Senior Software Engineer" (a distinct grade), only into a title that adds a
     -- real specialty/location/department word the aggregator dropped.
     SELECT a.id, t.id
     FROM agg a JOIN ats t
-      ON string_to_array(a.ntitle, ' ') <@ string_to_array(t.ntitle, ' ')
+      ON t.fcompany = a.fcompany
+     AND string_to_array(a.ntitle, ' ') <@ string_to_array(t.ntitle, ' ')
      AND array_length(string_to_array(a.ntitle, ' '), 1) >= 2
      AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
      AND EXISTS (

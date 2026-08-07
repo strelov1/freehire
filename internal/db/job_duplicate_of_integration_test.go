@@ -1,11 +1,11 @@
 //go:build integration
 
-// Integration tests for the role-duplicate recompute: driven per company
-// (CompaniesWithRoleClusters + RecomputeRoleDuplicatesForCompany, as the reindex does),
-// it collapses each role cluster (company_slug + role_fingerprint) to one canonical open
-// job (min(id)), pointing the other open reposts at it via duplicate_of, while leaving
-// singletons and unfingerprinted rows canonical. Canon failover on close and the min(id)
-// tie-break are SQL behaviors verifiable only against a real Postgres.
+// Integration tests for the role-duplicate recompute: driven over batches of companies
+// (CompaniesWithRoleClusters + RecomputeRoleDuplicatesForCompanies, as the reindex
+// does), it collapses each role cluster (company_slug + role_fingerprint) to one
+// canonical open job (min(id)), pointing the other open reposts at it via duplicate_of,
+// while leaving singletons and unfingerprinted rows canonical. Canon failover on close
+// and the min(id) tie-break are SQL behaviors verifiable only against a real Postgres.
 // Run with: go test -tags=integration ./internal/db/
 package db
 
@@ -18,17 +18,18 @@ import (
 )
 
 // recomputeDuplicates runs the batched recompute exactly as the reindex does: fetch the
-// companies needing work, then recompute each in its own short transaction.
+// companies needing work, then recompute them in one batched call.
 func recomputeDuplicates(t *testing.T, q *Queries) {
 	t.Helper()
 	companies, err := q.CompaniesWithRoleClusters(context.Background())
 	if err != nil {
 		t.Fatalf("companies with clusters: %v", err)
 	}
-	for _, c := range companies {
-		if _, err := q.RecomputeRoleDuplicatesForCompany(context.Background(), c); err != nil {
-			t.Fatalf("recompute company %q: %v", c, err)
-		}
+	if len(companies) == 0 {
+		return
+	}
+	if _, err := q.RecomputeRoleDuplicatesForCompanies(context.Background(), companies); err != nil {
+		t.Fatalf("recompute companies %v: %v", companies, err)
 	}
 }
 

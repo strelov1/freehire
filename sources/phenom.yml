@@ -105,3 +105,7 @@
 # Phenom tenant recovered from the contribution queue (2026-08, refineSearch 1135 postings)
 - company: Kuehne+Nagel
   board: jobs.kuehne-nagel.com
+
+# Phenom tenant from the contribution queue (2026-08-06, refineSearch 1701 postings)
+- company: Allianz
+  board: careers.allianz.com

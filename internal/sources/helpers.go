@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/strelov1/freehire/internal/location"
 )
 
 // defaultDetailWorkers bounds the per-board detail-fetch fan-out for adapters whose
@@ -119,6 +121,18 @@ func workplaceTypeMode(t string) string {
 	default:
 		return ""
 	}
+}
+
+// countryFromCode normalizes an ATS-supplied country code (Lever/Workday alpha-2, Ashby
+// alpha-3) into the []string Job.Countries expects, via location.NormalizeCountry.
+// Returns nil for an empty or unresolved code — never a one-element slice holding "" —
+// so an adapter can wire it straight into Job.Countries without an extra empty check.
+func countryFromCode(code string) []string {
+	c := location.NormalizeCountry(code)
+	if c == "" {
+		return nil
+	}
+	return []string{c}
 }
 
 // distinctJoin maps each item to a label, drops blank and duplicate labels (keeping first-seen

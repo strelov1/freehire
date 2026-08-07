@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -398,45 +399,93 @@ type realityLookup func(companySlug, fingerprint string) (repost, mass int)
 // lookup skips widening entirely (tests that do not exercise clustering).
 type clusterGeoLookup func(companySlug, fingerprint string) (countries, regions, cities []string)
 
-// recomputeRoleDuplicates refreshes jobs.duplicate_of one company at a time, returning
-// the total rows re-marked. Scoping each UPDATE to a single company keeps its lock
-// window to that company's rows for a moment, so the pass never holds the table-wide
-// lock that would stall concurrent ingest crawls. Best-effort like every per-company
-// pass here (see forEachCompany).
+// companyBatchSize bounds how many companies one RecomputeRoleDuplicatesForCompanies /
+// SuppressAggregatorDuplicatesForCompanies call covers. Measured on prod (2026-08-06):
+// one round trip per company — 236,923 distinct open companies, 94,410 of them with an
+// open aggregator posting — made the aggregator-suppression pass alone run for hours
+// under ordinary host load and get stuck (systemd auto-restarted it, redoing the same
+// hours of work) with the reindex never reaching the point of actually pushing to
+// Meili. 500 keeps each statement's WHERE ... = ANY(...) small enough to stay a cheap
+// index probe (see migration 0076's functional index) while cutting round trips by
+// ~500x; it is not tuned beyond "clearly fixes the incident," so revisit if a future
+// measurement suggests a better number.
+const companyBatchSize = 500
+
+// recomputeRoleDuplicates refreshes jobs.duplicate_of in batches of companies,
+// returning the total rows re-marked. Batching (not one UPDATE per company, and not one
+// UPDATE for the whole catalogue) balances two costs: an unbatched per-company call
+// pays a full network/planning round trip per company (see companyBatchSize), while a
+// single whole-catalogue UPDATE would hold its lock window across the entire jobs
+// table instead of one bounded slice at a time, risking a stall of concurrent ingest
+// writes. Best-effort like every batch here (see forCompanyBatches).
 func recomputeRoleDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	companies, err := q.CompaniesWithRoleClusters(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return forEachCompany(ctx, companies, q.RecomputeRoleDuplicatesForCompany)
+	return forCompanyBatches(ctx, companies, q.RecomputeRoleDuplicatesForCompanies)
 }
 
 // suppressAggregatorDuplicates marks each open aggregator posting that duplicates a
 // first-party ATS posting (same company, normalized title, compatible country) as a
-// duplicate of that ATS row, one company at a time. Returns the total rows re-marked.
-// The aggregator set comes from the taxonomy registry's aggregator() markers, so it is the
-// same set here as on the ingest host: a keyed adapter whose credential lives only where the
-// crawl runs must still be classified, or its copies of an ATS posting go unsuppressed.
-// Best-effort and lock-scoped exactly like recomputeRoleDuplicates.
+// duplicate of that ATS row, processed in batches of companies. Returns the total rows
+// re-marked. The aggregator set comes from the taxonomy registry's aggregator()
+// markers, so it is the same set here as on the ingest host: a keyed adapter whose
+// credential lives only where the crawl runs must still be classified, or its copies of
+// an ATS posting go unsuppressed. Best-effort and lock-scoped exactly like
+// recomputeRoleDuplicates.
 func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, error) {
 	aggregators := sources.AggregatorProviders(sources.Taxonomy())
 	companies, err := q.CompaniesWithAggregatorPostings(ctx, aggregators)
 	if err != nil {
 		return 0, err
 	}
-	return forEachCompany(ctx, companies, func(ctx context.Context, c string) (int64, error) {
-		return q.SuppressAggregatorDuplicatesForCompany(ctx, db.SuppressAggregatorDuplicatesForCompanyParams{
-			Company:     c,
+	return forCompanyBatches(ctx, companies, func(ctx context.Context, batch []string) (int64, error) {
+		return q.SuppressAggregatorDuplicatesForCompanies(ctx, db.SuppressAggregatorDuplicatesForCompaniesParams{
+			Companies:   batch,
 			Aggregators: aggregators,
 		})
 	})
 }
 
+// forCompanyBatches runs fn once per companyBatchSize-sized slice of companies, summing
+// the rows it reports re-marked. Batches are independent, so one failure (e.g. a
+// statement timeout on an unusually large batch) must not starve the rest — it is
+// counted and skipped, and any failure turns the pass's result into an aggregate error
+// (the caller treats the whole pass as best-effort and continues with the prior
+// markers). This is coarser fault isolation than the one-call-per-company version it
+// replaced (a bad batch now costs up to companyBatchSize companies their update, not
+// just one), a deliberate trade against the hours a full per-company loop cost at
+// catalogue scale — see companyBatchSize.
+func forCompanyBatches(ctx context.Context, companies []string, fn func(context.Context, []string) (int64, error)) (int64, error) {
+	var total int64
+	var failures int
+	var lastErr error
+	for batch := range slices.Chunk(companies, companyBatchSize) {
+		n, err := fn(ctx, batch)
+		if err != nil {
+			failures++
+			lastErr = fmt.Errorf("batch of %d companies (starting %q): %w", len(batch), batch[0], err)
+			continue
+		}
+		total += n
+	}
+	if failures > 0 {
+		return total, fmt.Errorf("%d batches failed out of %d companies (batch size %d); last: %w",
+			failures, len(companies), companyBatchSize, lastErr)
+	}
+	return total, nil
+}
+
 // forEachCompany runs fn once per company, summing the rows it reports re-marked.
-// Companies are independent, so one failure (e.g. a statement timeout on an unusually
-// large cluster) must not starve the rest — it is counted and skipped, and any failure
-// turns the pass's result into an aggregate error (the caller treats the whole pass as
-// best-effort and continues with the prior markers).
+// Companies are independent, so one failure must not starve the rest — it is counted
+// and skipped, and any failure turns the pass's result into an aggregate error (the
+// caller treats the whole pass as best-effort and continues with the prior markers).
+// Unlike forCompanyBatches, this stays one-at-a-time: its only caller
+// (collapseFuzzyDuplicates, cmd/reindex/fuzzy.go) does real per-company work in Go —
+// fetching titles and descriptions, then fuzzy-comparing them in memory — not a single
+// set-based SQL statement, so there is no query to batch the way the two SQL-only
+// passes were.
 func forEachCompany(ctx context.Context, companies []string, fn func(context.Context, string) (int64, error)) (int64, error) {
 	var total int64
 	var failures int

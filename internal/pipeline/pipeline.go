@@ -609,6 +609,7 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job) (job.Job, error) {
 			Location:           j.Location,
 			Description:        j.Description,
 			WorkMode:           j.WorkMode,
+			Countries:          j.Countries,
 			Seniority:          j.Seniority,
 			Category:           j.Category,
 			EmploymentType:     j.EmploymentType,

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -114,5 +115,54 @@ func TestAshbyFetchWorkplaceTypeBeatsIsRemote(t *testing.T) {
 	// text carries no "remote" to trigger the heuristic either.
 	if j.Remote {
 		t.Error("Remote = true, want false: a hybrid role is not remote")
+	}
+}
+
+// Ashby states the country as an alpha-3 code under address.postalAddress.addressCountry
+// — a structured field the location string ("New York, NY (HQ)") does not spell out.
+func TestAshbyFetchDecodesStructuredCountry(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"jobs": [
+			{
+				"id": "ny-uuid",
+				"title": "Backend Engineer",
+				"location": "New York, NY (HQ)",
+				"jobUrl": "https://jobs.ashbyhq.com/ramp/ny-uuid",
+				"address": {"postalAddress": {"addressRegion": "NY", "addressCountry": "USA"}}
+			}
+		]
+	}`}
+
+	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Ramp", Provider: "ashby", Board: "ramp",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if got, want := jobs[0].Countries, []string{"us"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Countries = %v, want %v (normalized from the alpha-3 addressCountry)", got, want)
+	}
+}
+
+// A posting whose address carries no addressCountry (most non-US boards) leaves
+// Countries nil rather than guessing from the free-text location.
+func TestAshbyFetchNoAddressLeavesCountriesEmpty(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"jobs": [
+			{"id": "no-addr", "title": "Support Engineer", "location": "Remote"}
+		]
+	}`}
+
+	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "ashby", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got := jobs[0].Countries; got != nil {
+		t.Errorf("Countries = %v, want nil", got)
 	}
 }

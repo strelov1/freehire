@@ -307,8 +307,8 @@ type Querier interface {
 	// Company slugs with at least one OPEN aggregator posting — the drive list for the
 	// cross-source aggregator suppression pass. An open aggregator row is a candidate whether
 	// it still needs suppressing OR needs releasing (its ATS twin closed), so one predicate
-	// covers both. Processed one company at a time (SuppressAggregatorDuplicatesForCompany),
-	// mirroring the role-duplicate recompute's lock discipline.
+	// covers both. Processed in chunks (SuppressAggregatorDuplicatesForCompanies), mirroring
+	// the role-duplicate recompute's batching.
 	CompaniesWithAggregatorPostings(ctx context.Context, aggregators []string) ([]string, error)
 	// The subset of the given company slugs that are referral-eligible — for annotating a
 	// job/company list in one round-trip instead of a query per row.
@@ -2072,14 +2072,23 @@ type Querier interface {
 	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
 	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
 	RebuildJobDailyStats(ctx context.Context) (int64, error)
-	// The per-company slice of the role-duplicate recompute. Canon = min(id) among the
-	// company's open rows sharing a role_fingerprint; the canon and any singleton/empty-fp
-	// row get duplicate_of NULL, the other reposts point to the canon. Rows are never
-	// deleted, so the reality counts are untouched. Scoped to one company_slug so it locks
-	// only that company's rows briefly; the (company_slug, role_fingerprint) index makes the
-	// aggregation a range scan. The IS DISTINCT FROM guard makes re-runs cheap and
-	// idempotent, and a closed canon fails over to the next min(id) on the next run.
-	RecomputeRoleDuplicatesForCompany(ctx context.Context, company string) (int64, error)
+	// The batched slice of the role-duplicate recompute, driven over a CHUNK of companies
+	// (cmd/reindex's forCompanyBatches) rather than one call per company — see that
+	// function's doc comment for why: at catalogue scale (2026-08-06 prod measurement:
+	// 236,923 distinct open companies) one round trip per company made this pass take
+	// hours under ordinary host load, most of it network/planning overhead rather than
+	// query cost. Batching multiple companies into ONE statement is safe here without any
+	// extra cross-company guard: role_fingerprint is sha256(company_slug, title,
+	// description) (internal/jobhash.RoleFingerprint) with company_slug as its FIRST
+	// component, so a fingerprint collision between two different companies is not a
+	// realistic concern — grouping by role_fingerprint alone, across the whole batch,
+	// cannot merge two different companies' rows. Canon = min(id) among a role's open rows;
+	// the canon and any singleton/empty-fp row get duplicate_of NULL, the other reposts
+	// point to the canon. Rows are never deleted, so the reality counts are untouched. The
+	// (company_slug, role_fingerprint) index makes both scans range scans over the batch.
+	// The IS DISTINCT FROM guard makes re-runs cheap and idempotent, and a closed canon
+	// fails over to the next min(id) on the next run.
+	RecomputeRoleDuplicatesForCompanies(ctx context.Context, companies []string) (int64, error)
 	// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
 	// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
 	// just overwrites the timestamp with a later one rather than erroring.
@@ -2604,22 +2613,32 @@ type Querier interface {
 	// about this application explicitly, suggested_job_id holds one value, and a proposal
 	// nobody has confirmed costs nothing to lose.
 	SuggestJobForEmail(ctx context.Context, arg SuggestJobForEmailParams) (int64, error)
-	// The per-company slice of the cross-source aggregator suppression. An open aggregator
-	// posting is marked duplicate_of an open CANONICAL ATS (non-aggregator) posting of the
-	// same company, equal normalized title, and compatible country (countries overlap, or
-	// either side empty — the geography dictionary is sparse, so an unresolved side must not
-	// veto). The ATS row is never touched, so it stays canonical. Candidate aggregator rows
-	// are those that are canonical OR already point at a non-aggregator row (i.e. suppressed
-	// by THIS pass) — an aggregator repost pointed at another aggregator by the role pass is
-	// left alone. A candidate with no ATS twin resolves to NULL, so a closed twin releases
-	// its aggregator copy back into search/embedding/enrichment. min(id) picks a stable
-	// target; the IS DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
-	// RecomputeRoleDuplicatesForCompany so ATS reposts have already collapsed to their canon.
-	// Company match folds away word-separator spelling variance between sources: company_slug
-	// is normalize.Slug(name), which never strips legal suffixes, so two sources naming the
-	// same employer with a different word break ("Cfoinsights" vs "CFO Insights") land on
-	// different slugs ("cfoinsights" vs "cfo-insights") that agree once hyphens are removed.
-	SuppressAggregatorDuplicatesForCompany(ctx context.Context, arg SuppressAggregatorDuplicatesForCompanyParams) (int64, error)
+	// The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
+	// companies (cmd/reindex's forCompanyBatches) rather than one call per company — see
+	// RecomputeRoleDuplicatesForCompanies' doc comment for the prod measurement that
+	// motivated batching both passes (94,410 companies with an open aggregator posting;
+	// one round trip each made this pass the one that actually got stuck for hours on
+	// 2026-08-06). Unlike that query, batching here is NOT free: title matching has no
+	// natural company key the way role_fingerprint does, so both CTEs carry an explicit
+	// fcompany (folded company) column and every match arm's ON clause pins
+	// t.fcompany = a.fcompany — without it, two different companies sharing a common title
+	// ("Backend Engineer") would cross-match the moment they land in the same batch.
+	// fcompany is the same replace(company_slug, '-', '') fold PR #1591 introduced (a
+	// source spelling one employer "Cfoinsights", another "CFO Insights" — different
+	// slugs that must still agree), just computed once per row instead of per query.
+	//
+	// An open aggregator posting is marked duplicate_of an open CANONICAL ATS
+	// (non-aggregator) posting of the same (folded) company, equal normalized title, and
+	// compatible country (countries overlap, or either side empty — the geography
+	// dictionary is sparse, so an unresolved side must not veto). The ATS row is never
+	// touched, so it stays canonical. Candidate aggregator rows are those that are
+	// canonical OR already point at a non-aggregator row (i.e. suppressed by THIS pass) —
+	// an aggregator repost pointed at another aggregator by the role pass is left alone. A
+	// candidate with no ATS twin resolves to NULL, so a closed twin releases its aggregator
+	// copy back into search/embedding/enrichment. min(id) picks a stable target; the IS
+	// DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
+	// RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
+	SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error)
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's

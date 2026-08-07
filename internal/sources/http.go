@@ -90,6 +90,19 @@ type HeaderJSONPoster interface {
 	PostJSONWithHeaders(ctx context.Context, url string, headers map[string]string, body, v any) error
 }
 
+// CookieReader reads back a cookie a prior request established in the client's jar, for
+// the double-submit CSRF pattern (see Client.CookieValue).
+type CookieReader interface {
+	CookieValue(url, name string) string
+}
+
+// HeaderFormPoster POSTs a form-urlencoded body with extra request headers and returns
+// the response parsed as HTML — for a CSRF-protected listing endpoint that is form-bodied
+// rather than JSON (e.g. aijobs.net's Django cookie-token flow).
+type HeaderFormPoster interface {
+	PostFormWithHeaders(ctx context.Context, url string, headers map[string]string, values url.Values) (*html.Node, error)
+}
+
 // HTTPClient is the full transport surface, composing every capability role. The real
 // Client implements it; sources.All holds one and passes it to each adapter, which then
 // narrows it to the role(s) it actually uses.
@@ -104,6 +117,8 @@ type HTTPClient interface {
 	JSONPoster
 	HeaderJSONGetter
 	HeaderJSONPoster
+	HeaderFormPoster
+	CookieReader
 }
 
 // maxResponseBody caps how many bytes a decoder reads from any response. It bounds a
@@ -425,15 +440,65 @@ func (e *ChallengeError) Error() string {
 	return fmt.Sprintf("sources: GET %s: WAF challenge", e.URL)
 }
 
+// CookieValue returns the value of the named cookie as currently held in the client's
+// cookie jar for url's host, "" if unset or the client has no jar (the shared client,
+// built without one). It exists for the double-submit CSRF pattern (e.g. aijobs.net's
+// Django flow), where a value a prior GET's Set-Cookie response established must also be
+// echoed back as a request header/body field — something the jar alone, which only
+// re-attaches cookies to outgoing requests automatically, cannot do.
+func (c *Client) CookieValue(rawURL, name string) string {
+	if c.httpClient.Jar == nil {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	for _, ck := range c.httpClient.Jar.Cookies(u) {
+		if ck.Name == name {
+			return ck.Value
+		}
+	}
+	return ""
+}
+
+// PostFormWithHeaders POSTs values as an application/x-www-form-urlencoded body with
+// extra request headers, and returns the response parsed as HTML — for a listing
+// endpoint that is POST-only and CSRF-protected (aijobs.net's Django cookie-token
+// flow) rather than a JSON API.
+func (c *Client) PostFormWithHeaders(ctx context.Context, url string, headers map[string]string, values url.Values) (*html.Node, error) {
+	var node *html.Node
+	err := c.do(ctx, request{
+		method:      http.MethodPost,
+		url:         url,
+		body:        []byte(values.Encode()),
+		contentType: "application/x-www-form-urlencoded",
+		accept:      "text/html",
+		headers:     headers,
+		decode: func(resp *http.Response) error {
+			n, err := html.Parse(resp.Body)
+			if err != nil {
+				return err
+			}
+			node = n
+			return nil
+		},
+	})
+	return node, err
+}
+
 // request is the parameters of a single HTTP exchange issued by do. A non-nil body is
 // re-sent on each retry; the standard User-Agent/Accept headers always win over headers.
+// contentType is the Content-Type sent alongside a non-nil body; empty defaults to
+// "application/json" (every existing POST helper is JSON-bodied).
 type request struct {
-	method  string
-	url     string
-	body    []byte
-	accept  string
-	headers map[string]string
-	decode  func(*http.Response) error
+	method      string
+	url         string
+	body        []byte
+	contentType string
+	accept      string
+	headers     map[string]string
+	decode      func(*http.Response) error
 }
 
 // do issues an HTTP request (optionally with a JSON body) and applies r.decode to a
@@ -472,7 +537,11 @@ func (c *Client) do(ctx context.Context, r request) error {
 		}
 		req.Header.Set("Accept", r.accept)
 		if r.body != nil {
-			req.Header.Set("Content-Type", "application/json")
+			contentType := r.contentType
+			if contentType == "" {
+				contentType = "application/json"
+			}
+			req.Header.Set("Content-Type", contentType)
 		}
 
 		resp, err := c.httpClient.Do(req)

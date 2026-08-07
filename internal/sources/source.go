@@ -58,6 +58,14 @@ type Job struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// Countries mirrors the same contract for geography: an adapter sets it only when
+	// the platform states the country in a STRUCTURED field (not the free-text location
+	// the description/location string carries), normalized through
+	// internal/location.NormalizeCountry into freehire's canonical lowercase alpha-2
+	// codes. Left nil for adapters that expose only free-text location, so the
+	// pipeline's location dictionary derives it instead — the same fallback WorkMode
+	// and the other structured facets already follow.
+	Countries []string
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged
 	// removed in JobStream's incremental feed). A streaming, self-closing source emits
 	// these so the pipeline closes the job by identity instead of upserting it; all other

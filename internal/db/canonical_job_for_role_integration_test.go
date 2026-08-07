@@ -71,7 +71,7 @@ func TestCanonicalJobForRole(t *testing.T) {
 	})
 
 	t.Run("the oldest eligible posting wins", func(t *testing.T) {
-		// The canon choice has to agree with RecomputeRoleDuplicatesForCompany, which takes the
+		// The canon choice has to agree with RecomputeRoleDuplicatesForCompanies, which takes the
 		// cluster's MIN(id). A later-seeded, equally eligible row must not win.
 		seed(t, "lever", "acme:2", "senior-go-acme-3", "fp-go", false)
 		row, err := q.CanonicalJobForRole(ctx, CanonicalJobForRoleParams{

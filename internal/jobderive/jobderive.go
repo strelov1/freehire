@@ -31,11 +31,12 @@ import (
 // heuristic an adapter inferred from free text; an adapter with no signal leaves them
 // empty/nil so the dictionary decides.
 //
-// Regions and Cities are the caller's structured GEOGRAPHY signal (macro-region codes
-// and city names the submitter/moderator stated by hand). Unlike the scalars they fully
-// replace the location-dictionary derivation for that facet when present — an explicit
-// place is authoritative, not a hint the dictionary refines — and when empty the
-// dictionary derives as before.
+// Countries, Regions and Cities are the caller's structured GEOGRAPHY signal (a country
+// code the platform states directly, macro-region codes, and city names the
+// submitter/moderator stated by hand). Unlike the scalars they fully replace the
+// location-dictionary derivation for that facet when present — an explicit place is
+// authoritative, not a hint the dictionary refines — and when empty the dictionary
+// derives as before.
 type Input struct {
 	Title              string
 	Company            string
@@ -44,6 +45,7 @@ type Input struct {
 	Location           string
 	Description        string
 	WorkMode           string
+	Countries          []string
 	Regions            []string
 	Cities             []string
 	Seniority          string
@@ -100,8 +102,18 @@ func Derive(in Input) Derived {
 	if usOnly(countries, regions, in.Description) {
 		countries, regions = []string{"us"}, []string{"north_america"}
 	}
+	// An explicit country signal is authoritative: it fully replaces the derived/US-override
+	// countries, the same way a stated work mode replaces the hint — and pulls its region
+	// along with it (the same pairing Parse itself does for a country it resolves), so a
+	// structured country with no separate region statement still lands under the right
+	// region facet instead of falling back to whatever the free-text location parsed.
+	if len(in.Countries) > 0 {
+		countries = in.Countries
+		regions = regionsForCountries(in.Countries)
+	}
 	// An explicit region signal is authoritative: it fully replaces the derived regions
-	// (and the US override above), the same way a stated work mode replaces the hint.
+	// (and the country-derived regions above), the same way a stated work mode replaces
+	// the hint.
 	if len(in.Regions) > 0 {
 		regions = in.Regions
 	}
@@ -204,6 +216,22 @@ func deriveIsTech(category, title string) *bool {
 // veto "Backend Engineer — Teller Systems" is removed on its accidental match.
 func TechEvidence(category, title string) bool {
 	return slices.Contains(vocab.TechCategories, category) || classify.IsTech(title)
+}
+
+// regionsForCountries derives the region codes for a set of already-resolved country
+// codes via the same country→region grouping Parse itself consults (location.CountryToRegion),
+// so a structured country signal with no separate region statement still lands under its
+// region facet. A country outside the curated ~133-country set silently contributes no
+// region — the same never-guess contract the location dictionary follows.
+func regionsForCountries(countries []string) []string {
+	countryToRegion := location.CountryToRegion()
+	set := make(map[string]struct{}, len(countries))
+	for _, c := range countries {
+		if r, ok := countryToRegion[c]; ok {
+			set[r] = struct{}{}
+		}
+	}
+	return stringset.Sorted(set)
 }
 
 // usOnly reports whether a job's geography is unpinned by the location dictionary —

@@ -1270,3 +1270,5 @@
   board: stmichaels-ibukjb.fa.ocs.oraclecloud.com/CX_2
 - company: Dell
   board: enterpriseplatform.dell.com/CX_1001
+- company: Digital Realty
+  board: hdep.fa.us2.oraclecloud.com/CX_2003

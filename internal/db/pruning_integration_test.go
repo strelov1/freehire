@@ -462,7 +462,7 @@ func TestPruneJobsCascadesUserInteractions(t *testing.T) {
 	}
 }
 
-// duplicate_of can chain: RecomputeRoleDuplicatesForCompany and the aggregator
+// duplicate_of can chain: RecomputeRoleDuplicatesForCompanies and the aggregator
 // suppression both scope to open jobs, so a closed row's pointer is never repointed
 // when its parent later becomes a duplicate itself. The prune scan reaches closed rows
 // by design, so it meets those chains — and a one-level extension leaves the tail

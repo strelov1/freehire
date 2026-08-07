@@ -41,6 +41,7 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		Description   string `json:"description"`
 		Additional    string `json:"additional"`
 		WorkplaceType string `json:"workplaceType"`
+		Country       string `json:"country"`
 		Lists         []struct {
 			Text    string `json:"text"`
 			Content string `json:"content"`
@@ -80,6 +81,7 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Description:    sanitizeHTML(body.String()),
 			Remote:         isRemote(p.Categories.Location),
 			WorkMode:       workplaceTypeMode(p.WorkplaceType),
+			Countries:      countryFromCode(p.Country),
 			PostedAt:       parseEpochMillis(p.CreatedAt),
 			EmploymentType: leverEmploymentType(p.Categories.Commitment),
 		})

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -69,6 +70,32 @@ func TestLeverFetch(t *testing.T) {
 	}
 	if got := j.PostedAt.UTC().Year(); got != 2024 {
 		t.Errorf("PostedAt year = %d, want 2024", got)
+	}
+}
+
+// Lever states the country as its own field ("AE") separate from the free-text
+// categories.location ("UAE"), which the location dictionary would have to recognize
+// as a name rather than just reading off the code.
+func TestLeverFetchDecodesStructuredCountry(t *testing.T) {
+	fake := &fakeHTTP{body: `[
+		{
+			"id": "uae-1",
+			"text": "Ops Manager",
+			"hostedUrl": "https://jobs.lever.co/1inch/uae-1",
+			"categories": {"location": "UAE"},
+			"country": "AE",
+			"description": "<p>Run ops.</p>"
+		}
+	]`}
+
+	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "1inch", Provider: "lever", Board: "1inch",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if got, want := jobs[0].Countries, []string{"ae"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Countries = %v, want %v (normalized from the country field)", got, want)
 	}
 }
 

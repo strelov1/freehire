@@ -36,7 +36,8 @@ func aggJob(externalID, title string, countries []string) UpsertJobParams {
 	return p
 }
 
-// suppressAggregators drives the pass per company, as cmd/ingest does.
+// suppressAggregators drives the pass in one batched call across every candidate
+// company, as cmd/reindex does.
 func suppressAggregators(t *testing.T, q *Queries) {
 	t.Helper()
 	ctx := context.Background()
@@ -44,13 +45,14 @@ func suppressAggregators(t *testing.T, q *Queries) {
 	if err != nil {
 		t.Fatalf("companies with aggregator postings: %v", err)
 	}
-	for _, c := range companies {
-		if _, err := q.SuppressAggregatorDuplicatesForCompany(ctx, SuppressAggregatorDuplicatesForCompanyParams{
-			Company:     c,
-			Aggregators: aggregators,
-		}); err != nil {
-			t.Fatalf("suppress company %q: %v", c, err)
-		}
+	if len(companies) == 0 {
+		return
+	}
+	if _, err := q.SuppressAggregatorDuplicatesForCompanies(ctx, SuppressAggregatorDuplicatesForCompaniesParams{
+		Companies:   companies,
+		Aggregators: aggregators,
+	}); err != nil {
+		t.Fatalf("suppress companies %v: %v", companies, err)
 	}
 }
 
@@ -234,6 +236,53 @@ func TestSuppressedAggregator_HiddenFromListAndEnrichmentButServedBySlug(t *test
 	// The suppressed copy is still fetchable by its public slug (direct link).
 	if _, err := q.GetJobBySlug(ctx, "pslug-acme:agg"); err != nil {
 		t.Errorf("GetJobBySlug for suppressed aggregator: %v", err)
+	}
+}
+
+// TestSuppressAggregator_BatchedCallDoesNotCrossCompanies is the regression this batch
+// rewrite exists to guard: SuppressAggregatorDuplicatesForCompanies processes many
+// companies in ONE call (cmd/reindex's forCompanyBatches, added after a 2026-08-06 prod
+// incident where one round trip per company made this pass run for hours). Unlike
+// RecomputeRoleDuplicatesForCompanies, title matching has no company-scoped key baked
+// in, so two different companies sharing an identical role title MUST NOT cross-match
+// just because a batch call happens to cover both at once — each must resolve to its
+// OWN company's ATS twin.
+func TestSuppressAggregator_BatchedCallDoesNotCrossCompanies(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	truncate(t, pool)
+
+	widgetco := func(externalID, source, title string) UpsertJobParams {
+		p := ingestParams(externalID, title)
+		p.Company = "Widget Co"
+		p.CompanySlug = "widget-co"
+		p.Source = source
+		return p
+	}
+
+	// Both companies post the identical title through both an ATS and an aggregator —
+	// the exact shape that would cross-match if the batch query lost the company key.
+	mustUpsert(t, q, atsJob("acme:ats", "Backend Engineer", nil))
+	mustUpsert(t, q, aggJob("acme:agg", "Backend Engineer", nil))
+	mustUpsert(t, q, widgetco("widgetco:ats", "greenhouse", "Backend Engineer"))
+	mustUpsert(t, q, widgetco("widgetco:agg", "himalayas", "Backend Engineer"))
+
+	suppressAggregators(t, q) // one batched call covering both companies
+
+	acmeATS, _ := dupOf(t, pool, "acme:ats")
+	widgetATS, _ := dupOf(t, pool, "widgetco:ats")
+	_, acmeAggDup := dupOf(t, pool, "acme:agg")
+	_, widgetAggDup := dupOf(t, pool, "widgetco:agg")
+
+	if acmeAggDup != acmeATS {
+		t.Errorf("acme aggregator duplicate_of = %d, want its own ATS twin %d", acmeAggDup, acmeATS)
+	}
+	if widgetAggDup != widgetATS {
+		t.Errorf("widgetco aggregator duplicate_of = %d, want its own ATS twin %d", widgetAggDup, widgetATS)
+	}
+	if acmeAggDup == widgetATS || widgetAggDup == acmeATS {
+		t.Fatalf("cross-company match: acme->%d widgetco->%d, want each pinned to its own company's ATS row",
+			acmeAggDup, widgetAggDup)
 	}
 }
 

@@ -4,7 +4,7 @@
 // A company routinely posts one role once per city — same title, same description,
 // thirty external_ids. RoleFingerprint deliberately excludes the location, so those
 // copies share a fingerprint and the batch recompute
-// (db.RecomputeRoleDuplicatesForCompany) collapses them to one canonical row. The batch
+// (db.RecomputeRoleDuplicatesForCompanies) collapses them to one canonical row. The batch
 // runs every few hours, though, and the live search index is written incrementally by
 // the crawl; between the two, every copy is a separate searchable job. That window is
 // what this package closes, by answering the same question synchronously at write time.
@@ -26,7 +26,7 @@ import (
 // CanonicalForRole reports the open canonical posting of this row's role cluster, when
 // one exists that is OLDER than the row just written (id).
 //
-// The age condition is the whole subtlety. RecomputeRoleDuplicatesForCompany makes
+// The age condition is the whole subtlety. RecomputeRoleDuplicatesForCompanies makes
 // MIN(id) among a cluster's open rows the canon, so collapsing onto a NEWER posting is
 // not just a different choice — the next reindex would undo it and invert it. Staying in
 // step with the batch is what makes the two agree instead of fighting.

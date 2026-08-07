@@ -464,3 +464,41 @@ func TestDerive_ExplicitRegionCityOverride(t *testing.T) {
 		t.Errorf("Cities = %v, want [Austin] (explicit wins over derived)", got.Cities)
 	}
 }
+
+// A structured country signal (Ashby/Lever/Workday's own country field) overrides the
+// location-dictionary derivation AND pulls its region along with it, so a job whose
+// free-text location the dictionary cannot parse ("UAE" as a bare name) still lands
+// under both facets instead of just the country.
+func TestDerive_ExplicitCountryOverrideAlsoDerivesRegion(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Ops Manager",
+		Company:    "Acme",
+		Source:     "lever",
+		ExternalID: "1",
+		Location:   "Some Office", // resolves no geography on its own
+		Countries:  []string{"ae"},
+	})
+	if !reflect.DeepEqual(got.Countries, []string{"ae"}) {
+		t.Errorf("Countries = %v, want [ae] (explicit wins over derived)", got.Countries)
+	}
+	if !reflect.DeepEqual(got.Regions, []string{"mena"}) {
+		t.Errorf("Regions = %v, want [mena] (paired from the explicit country)", got.Regions)
+	}
+}
+
+// An explicit Regions signal still wins over the region an explicit Countries signal
+// would otherwise pair in — the same "most specific wins" precedence Regions already
+// has over the dictionary.
+func TestDerive_ExplicitRegionOverridesCountryPairedRegion(t *testing.T) {
+	got := Derive(Input{
+		Title:      "Ops Manager",
+		Company:    "Acme",
+		Source:     "manual",
+		ExternalID: "1",
+		Countries:  []string{"ae"},
+		Regions:    []string{"apac"},
+	})
+	if !reflect.DeepEqual(got.Regions, []string{"apac"}) {
+		t.Errorf("Regions = %v, want [apac] (explicit Regions beats the country-paired one)", got.Regions)
+	}
+}
