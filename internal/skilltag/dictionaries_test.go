@@ -132,7 +132,7 @@ func TestNonCorroboratingPhrasesAllExist(t *testing.T) {
 	}
 }
 
-func TestParse_UncoveredProfessionalRoleSkills(t *testing.T) {
+func TestParse_SalesAndSupportVocab(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
