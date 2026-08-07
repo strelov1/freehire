@@ -206,18 +206,18 @@
   </Button>
 {/snippet}
 
-<!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
-     sticky left sidebar (salary + actions + metadata) starts level with the title,
-     and the description reads in the right column. On mobile everything stacks:
+<!-- Wide layout mirroring /jobs. The company line spans the very top; below it the
+     description reads in the left column, and a sticky right sidebar (match, salary,
+     actions, metadata) starts level with the title. On mobile everything stacks:
      company → title + apply CTA → metadata → description. -->
 <!-- Explicit rows: company + header sized to content, the content row flexible so
-     when the sticky sidebar (which spans all three rows) is taller than the right
+     when the sticky sidebar (which spans all three rows) is taller than the left
      column, the slack collects below the content instead of being spread as gaps
      between company/header/summary. -->
 <article
-  class="flex flex-col gap-4 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
+  class="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-x-6 lg:gap-y-4"
 >
-  <div class="flex items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
+  <div class="flex items-center justify-between gap-3 lg:col-start-1 lg:row-start-1">
     <div class="flex items-center gap-3">
       <CompanyLogo name={job.company} size="size-8" />
       <p class="text-sm text-muted-foreground">
@@ -245,7 +245,7 @@
     </a>
   </div>
 
-  <header class="flex flex-col gap-3 lg:col-start-2 lg:row-start-2">
+  <header class="flex flex-col gap-3 lg:col-start-1 lg:row-start-2">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div class="flex flex-wrap items-center gap-2.5">
         <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
@@ -318,7 +318,7 @@
     {/if}
   </header>
 
-  <aside class="w-full shrink-0 lg:col-start-1 lg:row-span-3 lg:row-start-1">
+  <aside class="w-full shrink-0 lg:col-start-2 lg:row-span-3 lg:row-start-1">
     <div class="sticky top-6 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <JobMatch {job} />
 
@@ -435,7 +435,7 @@
     </div>
   </aside>
 
-  <div class="flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-start-3">
+  <div class="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-3">
     {#if job.closed_at}
       {@const closed = formatDate(job.closed_at)}
       <div class="rounded-md border border-border bg-secondary px-4 py-3 text-sm">
