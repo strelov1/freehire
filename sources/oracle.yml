@@ -1276,5 +1276,3 @@
 # --- from the contribution queue (2026-08-07, live-validated) ---
 - company: PicPay
   board: epdm.fa.la1.oraclecloud.com/PicPay
-- company: JPMorgan Chase
-  board: jpmc.fa.oraclecloud.com/CX_1001
