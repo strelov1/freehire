@@ -372,13 +372,21 @@
   // back/forward — is a client-side navigation, where it works. location.search is the
   // address-bar truth (page.url can lag after shallow routing). The company-embedded
   // list (persist off) keeps the plain re-seed — unchanged.
-  if (untrack(() => standalone)) {
+  //
+  // `stacked` skips this entirely: the (feed) layout mounts this list ONCE and it stays
+  // mounted while the URL moves between the bare feed and a job's own detail URL (which
+  // carries no filter params of its own). Without this guard, clicking into a job read
+  // as "landed on a bare URL, restore/re-seed filters" and reloaded the whole list on
+  // every click — a full visible re-render for a navigation that has nothing to do with
+  // filters. The list's in-memory state is already correct; only an explicit filter
+  // action (which calls the store directly) should ever change it here.
+  if (untrack(() => standalone) && untrack(() => layout) !== 'stacked') {
     afterNavigate((nav) => {
       const stored = nav.type !== 'enter' && location.search === '' ? loadJobFilters() : '';
       if (stored) filters.apply(stored);
       else filters.syncFromUrl();
     });
-  } else {
+  } else if (!untrack(() => standalone)) {
     syncOnNavigation(filters);
   }
 </script>
