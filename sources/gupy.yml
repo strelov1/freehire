@@ -2913,3 +2913,7 @@
 # --- contributed boards ---
 - company: Realco Soluções em Gestão de Pessoas
   board: "21289"
+- company: PhizChat
+  board: "91018"
+- company: Porto
+  board: "54421"
