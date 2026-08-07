@@ -1,0 +1,80 @@
+---
+title: 6 million job postings, now on Hugging Face
+date: 2026-08-07
+summary: We exported freehire's job catalogue — raw postings plus the facets our pipeline derives from them — to an open dataset on Hugging Face.
+type: article
+tags:
+  - data
+  - open-source
+  - engineering
+draft: false
+---
+
+freehire ingests postings from dozens of ATS platforms, normalizes them into
+one shape, and runs each one through a facet pipeline — some of it a plain
+dictionary lookup, some of it an LLM call. The original plan for this export
+was narrower: pull the raw postings, train a small classifier on top of them,
+see if we could get seniority and category tagging cheaper than an LLM call
+per job. What we found instead is that the dictionary-plus-LLM pipeline
+already in production beats what a from-scratch classifier gets you, by
+enough of a margin that the classifier isn't worth finishing right now. So
+instead of a model, here's the data: **[freehire jobs on Hugging
+Face](https://huggingface.co/datasets/istrelov/freehire-jobs)**, 6,041,471
+postings, open to poke at.
+
+## What's in a row
+
+Each row is one JSON object: the raw posting — title, company, location,
+description, URL, source, `posted_at` — plus every facet the pipeline
+derives from it. The facets aren't all derived the same way, and which
+method produced a given field says something about how much you should
+trust it:
+
+- **Dictionary-only, deterministic**: `skills`, `seniority`, `category`,
+  `work_mode`, `posting_language`, `employment_type`, `education_level`,
+  `english_level`, `experience_years_min`. These come from alias tables and
+  title/description pattern matching — no LLM in the loop, no hallucination
+  risk, but also nothing outside the dictionary's vocabulary. An unlisted
+  skill or an unusual title just doesn't get tagged; it never gets a guessed
+  tag either.
+- **Dictionary-first, LLM-filled**: `countries`, `regions`, `cities`. The
+  location dictionary pins what it recognizes; an LLM only fills in the
+  remainder the dictionary couldn't place (mostly ambiguous or informally
+  written locations). The dictionary always wins where it has an answer.
+- **LLM-only**: `salary_min`, `salary_max`, `salary_currency`,
+  `salary_period`. Postings state pay in every format imaginable — ranges,
+  single figures, hourly vs. annual, a dozen currencies — and there's no
+  dictionary for that. This is the one facet group where you're trusting the
+  model's read of the text, not a lookup table.
+
+Company rows carry their own facets — `industries`, `hq_country`, size and
+type buckets, known domains, YC batch/status/stage where applicable — joined
+in from freehire's company catalogue rather than re-derived per posting.
+
+## What's not in it
+
+Postings that never went public — pasted CVs, one-off JD text someone ran
+through freehire's tailoring tool — are excluded outright; they were never
+postings in the first place. Separately, one row got dropped for a reason
+that has nothing to do with data quality: a single job's description had
+gone physically missing from Postgres storage (a TOAST chunk the database
+couldn't retrieve), so that one posting couldn't be read at all. Six million
+rows, one casualty, unrelated to anything about the pipeline.
+
+## Format
+
+20 gzip-compressed JSONL shards, split by internal row range rather than
+bundled into one file — easier to stream, easier to retry a chunk if
+something interrupts you partway through.
+
+## Try it
+
+If you want to train something on real job-market text, check how a
+different classification approach compares to ours, or just look at what six
+million postings actually say — the dataset's right there:
+[huggingface.co/datasets/istrelov/freehire-jobs](https://huggingface.co/datasets/istrelov/freehire-jobs).
+The pipeline that produced it is open source too, at
+[github.com/strelov1/freehire](https://github.com/strelov1/freehire). Found
+something interesting, or built something with it? I'd like to hear about it
+— [LinkedIn](https://www.linkedin.com/in/istrelov/) is the fastest way to
+reach me.
