@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers (Docker entrypoints) or are
+# piped straight into `sh` — a CRLF-mangled shebang breaks both. Force LF
+# regardless of core.autocrlf on a Windows checkout.
+*.sh text eol=lf

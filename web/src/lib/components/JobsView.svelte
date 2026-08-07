@@ -7,6 +7,8 @@
   import { page } from '$app/state';
   import { api, type Slice } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { profileStore } from '$lib/profile.svelte';
+  import { computeClientMatch } from '$lib/jobMatch';
   import { ensureViewedLoaded } from '$lib/viewedJobs.svelte';
   import { ensureSavedLoaded } from '$lib/savedJobs.svelte';
   import { ensureDismissedLoaded, isDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
@@ -134,6 +136,28 @@
     () => api.facetCounts(scopedParams()),
     (c) => (counts = c),
   );
+
+  // Minimum profile-match slider: a client-only post-filter over the already-fetched
+  // page, not a search facet — the match percent depends on the viewer's own profile
+  // skills, which the backend/index never sees, so there's nothing to send server-side
+  // (unlike salary/freshness, which narrow the actual query). Local and URL-free: a
+  // shared link's match filter would mean nothing to whoever opens it. `null` means
+  // "no threshold" (the slider's own default position doubles as "off").
+  let minMatch = $state<number | null>(null);
+
+  // Only a signed-in user with skills on their profile has a real match percent per
+  // card (see resolveMatchState's `ready` state in JobRow) — everyone else sees a
+  // teaser or nothing, so the slider would filter against a number that isn't real.
+  $effect(() => {
+    if (isAuthenticated()) profileStore.ensureLoaded();
+  });
+  const profileSkills = $derived(profileStore.profile?.skills ?? []);
+  const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
+  // Drop a stale threshold the moment the slider would disappear (sign-out, profile
+  // cleared) so it can't silently keep hiding jobs with no control left to reset it.
+  $effect(() => {
+    if (!matchFilterAvailable) minMatch = null;
+  });
 
   let modalOpen = $state(false);
   let started = false;
@@ -269,12 +293,23 @@
     jobs = next;
   }
 
-  // The feed minus the signed-in user's hidden jobs. Cross-referenced client-side
-  // against the shared dismissed set (loaded on mount), mirroring the viewed/saved
-  // sets — the server search is untouched. Re-derives when the page changes or when
-  // a hide/undo mutates the set, so a hidden card drops out (and an undone one
-  // returns) instantly. Empty for a signed-out user, so nothing is filtered.
-  const visibleJobs = $derived(jobs.items.filter((j) => !isDismissed(j.public_slug)));
+  // The feed minus the signed-in user's hidden jobs, and (when the match slider is
+  // active) minus jobs below the chosen match threshold. Dismissal is cross-referenced
+  // client-side against the shared dismissed set (loaded on mount), mirroring the
+  // viewed/saved sets — the server search is untouched. Re-derives when the page
+  // changes, when a hide/undo mutates the dismissed set, or when the slider moves, so
+  // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
+  // with no skills has no percent to test (see computeClientMatch) and stays, matching
+  // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
+  const visibleJobs = $derived(
+    jobs.items.filter((j) => {
+      if (isDismissed(j.public_slug)) return false;
+      if (matchFilterAvailable && minMatch != null && (j.skills ?? []).length > 0) {
+        return computeClientMatch(j.skills ?? [], profileSkills).percent >= minMatch;
+      }
+      return true;
+    }),
+  );
 
   // The pending "Job hidden — Undo" toast, or null. Set when a card is hidden; the
   // toast owns its auto-dismiss. Undo clears the slug's hidden mark (card returns via
@@ -408,6 +443,29 @@
         </div>
       {/if}
       {@render sidebarTop?.()}
+      {#if matchFilterAvailable}
+        <!-- Client-only post-filter (see `minMatch` above): drags apply immediately,
+             no debounce, since it only re-filters the page already in memory. -->
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="mb-2 flex items-center justify-between">
+            <h3 class="text-sm font-semibold tracking-tight">Minimum match</h3>
+            <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={minMatch ?? 0}
+            oninput={(e) => {
+              const n = Number(e.currentTarget.value);
+              minMatch = n > 0 ? n : null;
+            }}
+            aria-label="Minimum profile match"
+            class="w-full accent-primary"
+          />
+        </div>
+      {/if}
       <div class="rounded-xl border border-border bg-card p-4">
         <FilterSummary store={filters} exclude={excludeFacets} onOpen={() => (modalOpen = true)} canSave={standalone} />
       </div>

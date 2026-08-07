@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: hire
       POSTGRES_DB: hire
     ports:
-      - "5432:5432"
+      - "${DB_HOST_PORT:-5432}:5432"
     volumes:
       # postgres:18+ stores data in a version-specific subdirectory and expects
       # the volume at /var/lib/postgresql (not the legacy .../data path, which it
