@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -57,15 +58,35 @@ func (adzuna) aggregator() {}
 
 func (adzuna) sweepGrace() time.Duration { return adzunaSweepGrace }
 
+// adzunaID reads a posting's id, which the API emits as a JSON string for most postings but as a
+// bare JSON number for some (observed live 2026-08-08, gb/it-jobs page 7) — an upstream
+// inconsistency, not a documented alternate shape. A page hitting it must decode instead of
+// failing the whole page, mirroring habrJobLocations/habrAddress's shape-tolerant UnmarshalJSON.
+type adzunaID string
+
+func (id *adzunaID) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*id = adzunaID(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*id = adzunaID(n.String())
+	return nil
+}
+
 // adzunaPosting is one search result. Several fields the API sends are deliberately unread —
 // salary_min/salary_max/salary_is_predicted and category — because none has a home in the Job
 // shape today, mirroring echojobs' treatment of its own unread vendor fields.
 type adzunaPosting struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Created     string `json:"created"`
-	RedirectURL string `json:"redirect_url"`
+	ID          adzunaID `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Created     string   `json:"created"`
+	RedirectURL string   `json:"redirect_url"`
 	Company     struct {
 		DisplayName string `json:"display_name"`
 	} `json:"company"`
@@ -123,7 +144,7 @@ func adzunaPageURL(country, category string, page int, appID, appKey string) str
 
 func (p adzunaPosting) toJob() Job {
 	return Job{
-		ExternalID:  p.ID,
+		ExternalID:  string(p.ID),
 		URL:         p.RedirectURL,
 		Title:       p.Title,
 		Company:     p.Company.DisplayName,

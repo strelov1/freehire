@@ -82,6 +82,27 @@ func TestAdzunaFetchMapsFields(t *testing.T) {
 	}
 }
 
+// Adzuna emits id as a JSON string for most postings but as a bare JSON number for some
+// (observed live 2026-08-08, gb/it-jobs page 7) — an upstream inconsistency, not a documented
+// alternate shape. A page hitting it must not fail the whole page's decode.
+func TestAdzunaFetchAcceptsNumericID(t *testing.T) {
+	numericIDJob := `{
+		"id":123456789,"title":"Backend Engineer","description":"Great role.",
+		"created":"2026-08-07T13:10:31Z",
+		"redirect_url":"https://www.adzuna.co.uk/jobs/land/ad/123456789",
+		"company":{"display_name":"Acme"},"location":{"display_name":"Leeds, West Yorkshire"}
+	}`
+	http := &adzunaHTTP{pages: []string{adzunaPageJSON(numericIDJob), adzunaPageJSON("")}}
+
+	jobs, err := (adzuna{http: http, appID: "id", appKey: "key"}).Fetch(context.Background(), CompanyEntry{Region: "gb", Board: "it-jobs"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "123456789" {
+		t.Fatalf("want ExternalID \"123456789\", got %+v", jobs)
+	}
+}
+
 // The credential and the board's country/category must reach the request.
 func TestAdzunaFetchRequestsCorrectURL(t *testing.T) {
 	http := &adzunaHTTP{pages: []string{adzunaPageJSON("")}}
