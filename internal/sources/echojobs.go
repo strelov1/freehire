@@ -59,14 +59,16 @@ func (echojobs) aggregator() {}
 func (echojobs) sweepGrace() time.Duration { return echojobsSweepGrace }
 
 // echojobsPosting is one posting from the /api/jobs list. The upstream response carries several
-// more fields (domain_name, first_seen_at, countries, states, job_function, role, seniority,
+// more fields (id, domain_name, first_seen_at, countries, states, job_function, role, seniority,
 // salary_min_usd/salary_max_usd, employment_type, employee_count, funding) that this adapter
-// deliberately does not read: none of them has a home in the Job shape today, and guessing one
-// (e.g. folding salary into Description) is not this adapter's call to make. Notably absent from
-// this list: description — the list endpoint omits the body entirely (verified live), which is
-// why FetchNew hydrates it from the per-posting detail endpoint (see echojobsDetail).
+// deliberately does not read: id is redundant (the detail endpoint accepts job_handle just as
+// well — verified live — so ExternalID doubles as the detail key without storing a second
+// identifier nothing else needs), and none of the rest has a home in the Job shape today, and
+// guessing one (e.g. folding salary into Description) is not this adapter's call to make.
+// Notably absent from this list: description — the list endpoint omits the body entirely
+// (verified live), which is why FetchNew hydrates it from the per-posting detail endpoint (see
+// echojobsDetail).
 type echojobsPosting struct {
-	ID             string   `json:"id"`
 	Title          string   `json:"title"`
 	CompanyName    string   `json:"company_name"`
 	URL            string   `json:"url"`
@@ -110,9 +112,9 @@ func (e echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 			base.SeenRefresh = true
 			return base, true
 		}
-		d, ok := e.detail(ctx, p.ID)
+		d, ok := e.detail(ctx, p.JobHandle)
 		if !ok {
-			log.Printf("echojobs: detail %q failed; ingesting list-only", p.ID)
+			log.Printf("echojobs: detail %q failed; ingesting list-only", p.JobHandle)
 			return base, true
 		}
 		return d.apply(base), true
@@ -159,23 +161,23 @@ func echojobsPageURL(page int) string {
 	return fmt.Sprintf("%s?page=%d&per_page=%d", echojobsBaseURL, page, echojobsPageSize)
 }
 
-// echojobsDetailURL is the per-posting detail endpoint. It is keyed by the feed's internal id,
-// NOT job_handle (echojobs' own slug, which is what ExternalID carries) — the two are unrelated
-// identifiers on the same posting.
+// echojobsDetailURL is the per-posting detail endpoint. It accepts either the feed's internal id
+// or job_handle (echojobs' own slug) interchangeably — verified live — so this adapter always
+// passes job_handle, the identifier it already carries as ExternalID.
 const echojobsDetailURL = echojobsBaseURL + "/%s"
 
-// echojobsDetail is the per-posting detail payload (GET /api/jobs/{id}). Only Description is
-// read; the detail response also repeats several list fields plus salary/education/yoe ones this
-// adapter does not map, for the same reason echojobsPosting's doc gives.
+// echojobsDetail is the per-posting detail payload (GET /api/jobs/{job_handle}). Only Description
+// is read; the detail response also repeats several list fields plus salary/education/yoe ones
+// this adapter does not map, for the same reason echojobsPosting's doc gives.
 type echojobsDetail struct {
 	Description string `json:"description"`
 }
 
-// detail fetches a posting's detail, returning ok=false on a failed request so the caller falls
-// back to the list-only job — a posting is never dropped over a missing detail.
-func (e echojobs) detail(ctx context.Context, id string) (echojobsDetail, bool) {
+// detail fetches a posting's detail by job_handle, returning ok=false on a failed request so the
+// caller falls back to the list-only job — a posting is never dropped over a missing detail.
+func (e echojobs) detail(ctx context.Context, jobHandle string) (echojobsDetail, bool) {
 	var d echojobsDetail
-	if err := e.http.GetJSON(ctx, fmt.Sprintf(echojobsDetailURL, id), &d); err != nil {
+	if err := e.http.GetJSON(ctx, fmt.Sprintf(echojobsDetailURL, jobHandle), &d); err != nil {
 		return echojobsDetail{}, false
 	}
 	return d, true
@@ -185,6 +187,24 @@ func (e echojobs) detail(ctx context.Context, id string) (echojobsDetail, bool) 
 func (d echojobsDetail) apply(base Job) Job {
 	base.Description = sanitizeHTML(d.Description)
 	return base
+}
+
+// EchoJobsDescription fetches the sanitized description for a stored echojobs job by its
+// job_handle (ExternalID) — the stored URL cannot be used for this the way JustJoinDescription
+// uses justjoin's, because echojobs' URL is the upstream ATS link, not an echojobs.io one. It
+// exists for a backfill worker filling the description of rows ingested before detail hydration
+// existed; the crawl path uses (echojobs).detail directly. Returns ok=false when the detail
+// request fails or the posting has no body.
+func EchoJobsDescription(ctx context.Context, c JSONGetter, jobHandle string) (string, bool) {
+	d, ok := echojobs{http: c}.detail(ctx, jobHandle)
+	if !ok {
+		return "", false
+	}
+	body := sanitizeHTML(d.Description)
+	if body == "" {
+		return "", false
+	}
+	return body, true
 }
 
 func (p echojobsPosting) toJob(postedAt *time.Time) Job {

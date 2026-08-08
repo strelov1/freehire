@@ -62,16 +62,12 @@ func echojobsPageJSON(jobs string) string {
 }
 
 func echojobsJobJSON(handle, postedAt string) string {
-	return echojobsJobJSONWithID(handle, handle, postedAt)
-}
-
-func echojobsJobJSONWithID(id, handle, postedAt string) string {
 	return fmt.Sprintf(`{
-		"id":%q,"title":"Backend Engineer","company_name":"Acme","domain_name":"acme.com",
+		"title":"Backend Engineer","company_name":"Acme","domain_name":"acme.com",
 		"url":"https://boards.greenhouse.io/acme/jobs/123","job_handle":%q,
 		"posted_at":%s,"locations":["California","New York"],"remote_type":"hybrid",
 		"required_skills":["Go","NotARealSkill"]
-	}`, id, handle, postedAt)
+	}`, handle, postedAt)
 }
 
 func TestEchojobsFetchMapsFields(t *testing.T) {
@@ -172,8 +168,8 @@ func TestEchojobsFetchNewHydratesUnseenPosting(t *testing.T) {
 	now := time.Now().UTC()
 	fresh := strconv.FormatInt(now.UnixMilli(), 10)
 	http := &echojobsHTTP{
-		pages:   []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
-		details: map[string]string{"det1": `{"description":"<p>Great role.</p>"}`},
+		pages:   []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
+		details: map[string]string{"acme-swe": `{"description":"<p>Great role.</p>"}`},
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
@@ -186,8 +182,8 @@ func TestEchojobsFetchNewHydratesUnseenPosting(t *testing.T) {
 	if jobs[0].Description != "<p>Great role.</p>" {
 		t.Fatalf("Description not hydrated: %q", jobs[0].Description)
 	}
-	if !slices.Equal(http.gotDetails, []string{"det1"}) {
-		t.Fatalf("detail requests = %v, want [det1]", http.gotDetails)
+	if !slices.Equal(http.gotDetails, []string{"acme-swe"}) {
+		t.Fatalf("detail requests = %v, want [acme-swe]", http.gotDetails)
 	}
 }
 
@@ -198,7 +194,7 @@ func TestEchojobsFetchNewSkipsDetailForSeenPosting(t *testing.T) {
 	now := time.Now().UTC()
 	fresh := strconv.FormatInt(now.UnixMilli(), 10)
 	http := &echojobsHTTP{
-		pages: []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
+		pages: []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(externalID string) bool {
@@ -220,8 +216,8 @@ func TestEchojobsFetchNewDetailFailureKeepsPosting(t *testing.T) {
 	now := time.Now().UTC()
 	fresh := strconv.FormatInt(now.UnixMilli(), 10)
 	http := &echojobsHTTP{
-		pages:     []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
-		detailErr: map[string]bool{"det1": true},
+		pages:     []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
+		detailErr: map[string]bool{"acme-swe": true},
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
