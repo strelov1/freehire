@@ -77,6 +77,22 @@ services:
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:-minioadmin}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:-minioadmin}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
+      # PII_FILTER_URL intentionally has no local default: it fronts a real span-detection
+      # model (services/pii-filter) with no lightweight local stand-in, so unset here is the
+      # correct out-of-the-box state — résumé structuring/import degrade gracefully without
+      # it (internal/resumeextract's Enabled() check), same as an unconfigured LLM.
+      PII_FILTER_URL: "${PII_FILTER_URL:-}"
+      # LLM-backed features (enrich, fit analysis, résumé structuring, the assistant, …)
+      # were silently unreachable locally: these were never passed through from .env at
+      # all, so every model call degraded as "unconfigured" with no error. Empty is a
+      # valid, working default (the same degrade-gracefully behaviour, just intentional
+      # now) — set real values in .env to actually exercise a model-backed surface.
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_MODEL: "${LLM_MODEL:-}"
+      LANGFUSE_BASE_URL: "${LANGFUSE_BASE_URL:-}"
+      LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
+      LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"
       # Required by the auth surface (server fails fast if unset or under 32 bytes).
       # Dev default — set a real, random JWT_SECRET in any non-local deployment.
       JWT_SECRET: "${JWT_SECRET:-dev-insecure-secret-change-me-0123456789}"
