@@ -210,3 +210,67 @@
   board: zones
 - company: Point of Rental Software
   board: pointofrental
+- company: Bravium Consulting
+  board: braviumconsulting
+- company: Builders Mutual
+  board: buildersmutual
+- company: CARFAX
+  board: carfax
+- company: Castle Metals
+  board: castlemetals
+- company: CDW
+  board: cdw
+- company: Cetera
+  board: cetera
+- company: Common Ground
+  board: commonground
+- company: Cronos Group Inc.
+  board: cronosgroup
+- company: Earthjustice
+  board: earthjustice
+- company: Elire Inc
+  board: elire
+- company: Excel
+  board: excel
+- company: GVW Group, LLC
+  board: gvwgroup
+- company: Healthmap Solutions
+  board: healthmapsolutions
+- company: Humble Bundle
+  board: humble-bundle
+- company: LeadVenture
+  board: leadventure
+- company: Mercy Health
+  board: mercy-health
+- company: MetaPhase Consulting
+  board: metaphaseconsulting
+- company: Net Driven
+  board: netdriven
+- company: NRC Health
+  board: nrchealth
+- company: NuScale Power, LLC
+  board: nuscale-power
+- company: Ookla
+  board: ookla
+- company: Pinnacle Treatment
+  board: pinnacletreatment
+- company: PulsePoint
+  board: pulsepoint
+- company: Recurrent Energy
+  board: recurrent-energy
+- company: Salsa
+  board: salsa
+- company: Schneider Geospatial
+  board: schneidergeospatial
+- company: Vail Resorts
+  board: vail-resorts
+- company: Varonis
+  board: varonis
+- company: Ventus Solutions
+  board: ventus-solutions
+- company: VIPRE Security Group
+  board: vipre-security-group
+- company: Ziff Davis
+  board: ziff-davis
+- company: Ziff Davis
+  board: ziffdavis
