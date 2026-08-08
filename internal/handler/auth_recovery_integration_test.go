@@ -9,9 +9,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -48,7 +51,7 @@ func recoveryApp(t *testing.T) (*fiber.App, *captureMailer, *db.Queries, *auth.I
 	mailer := &captureMailer{}
 
 	svc := accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{})
-	svc.WithCodes(accounts.NewQueriesCodeStore(queries), mailer)
+	svc.WithCodes(accounts.NewQueriesCodeStore(queries, pool), mailer)
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{queries: queries, issuer: iss, accounts: svc}
@@ -208,6 +211,55 @@ func TestForgotThenResetPassword(t *testing.T) {
 	defer stale.Body.Close()
 	if stale.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("login with the old password = %d, want 401", stale.StatusCode)
+	}
+}
+
+// TestResetPassword_ConcurrentRequestsConsumeTheCodeOnce drives the real ResetPassword
+// path — through the HTTP handler, the real QueriesCodeStore, and a real Postgres
+// transaction — with the same code presented concurrently. Only one request may consume
+// it; this is the guarantee the FOR UPDATE lock exists to make, and it must hold against
+// the actual production wiring, not just an in-memory fake.
+func TestResetPassword_ConcurrentRequestsConsumeTheCodeOnce(t *testing.T) {
+	app, mailer, _, _ := recoveryApp(t)
+
+	reg := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"racer@example.test","password":"original-pw"}`, "")
+	defer reg.Body.Close()
+
+	forgot := postAuthJSON(t, app, "/api/v1/auth/password/forgot", `{"email":"racer@example.test"}`, "")
+	defer forgot.Body.Close()
+	if forgot.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("forgot status = %d, want 202", forgot.StatusCode)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for len(mailer.reset) == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(mailer.reset) != 1 {
+		t.Fatalf("mailed %d reset codes, want 1", len(mailer.reset))
+	}
+	code := mailer.reset[0]
+
+	const attempts = 10
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(attempts)
+	for i := 0; i < attempts; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			body := fmt.Sprintf(`{"email":"racer@example.test","code":"%s","password":"replacement-pw-%d"}`, code, idx)
+			resp := postAuthJSON(t, app, "/api/v1/auth/password/reset", body, "")
+			defer resp.Body.Close()
+			if resp.StatusCode == fiber.StatusOK {
+				successes.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if got := successes.Load(); got != 1 {
+		t.Errorf("concurrent resets succeeded = %d, want exactly 1", got)
 	}
 }
 

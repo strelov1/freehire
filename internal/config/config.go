@@ -289,7 +289,10 @@ func Load() Settings {
 	return s
 }
 
-// Validate checks that the configuration values are safe for the current environment.
+// Validate checks that the configuration values are safe to boot the auth surface with.
+// The JWT secret check runs in every environment, not just production: HS256 security
+// rests entirely on secret entropy, so a short secret is brute-forceable offline against
+// any captured token regardless of what ENV happens to be set to.
 func (s Settings) Validate() error {
 	if s.Env == "production" && !s.CookieSecure {
 		return errors.New("COOKIE_SECURE must be true in production")
@@ -297,8 +300,8 @@ func (s Settings) Validate() error {
 	if strings.HasPrefix(s.FrontendOrigin, "https://") && !s.CookieSecure {
 		return errors.New("COOKIE_SECURE must be true when using HTTPS origin")
 	}
-	if s.Env == "production" && len(s.JWTSecret) < 32 {
-		return errors.New("JWT_SECRET must be at least 32 characters in production")
+	if len(s.JWTSecret) < 32 {
+		return errors.New("JWT_SECRET is required and must be at least 32 bytes")
 	}
 	return nil
 }

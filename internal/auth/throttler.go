@@ -27,6 +27,13 @@ func NewPGThrottler(pool *pgxpool.Pool) *PGThrottler {
 
 // Allow checks if the given key is within the rate limit over the specified duration window.
 // If the pool is nil or a database error occurs, it logs a warning and fails open.
+//
+// The count and the increment run inside one transaction with the matching rows locked
+// FOR UPDATE. A plain SELECT-count-then-INSERT here would be a check-then-act race: every
+// concurrent request for the same key could read "under limit" before any of them commits
+// its increment, letting a burst — exactly what a scripted brute-force attempt sends —
+// blow past the configured budget. Locking serializes concurrent callers on the same key,
+// the same guarantee codes.go already gives recovery-code consumption via GetEmailCodeForUpdate.
 func (t *PGThrottler) Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, time.Duration, error) {
 	if t == nil || t.pool == nil {
 		return true, 0, nil
@@ -35,16 +42,33 @@ func (t *PGThrottler) Allow(ctx context.Context, key string, limit int, window t
 	now := time.Now().UTC()
 	cutoff := now.Add(-window)
 
-	// Clean up old entries outside the window
-	_, _ = t.pool.Exec(ctx, "DELETE FROM rate_limits WHERE key = $1 AND window_start < $2", key, cutoff)
+	tx, err := t.pool.Begin(ctx)
+	if err != nil {
+		log.Printf("throttler: begin tx error for key %q: %v (failing open)", key, err)
+		return true, 0, nil
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Count requests within window
+	if _, err := tx.Exec(ctx, "DELETE FROM rate_limits WHERE key = $1 AND window_start < $2", key, cutoff); err != nil {
+		log.Printf("throttler: DB delete error for key %q: %v (failing open)", key, err)
+		return true, 0, nil
+	}
+
+	// FOR UPDATE cannot be combined with an aggregate in the same SELECT, so the locked
+	// rows are aggregated from a subquery instead of SUM()/MIN() directly over the table.
 	var count int
 	var oldest time.Time
-	err := t.pool.QueryRow(ctx, "SELECT COALESCE(SUM(request_count), 0), COALESCE(MIN(window_start), $2) FROM rate_limits WHERE key = $1 AND window_start >= $2", key, cutoff).Scan(&count, &oldest)
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(request_count), 0), COALESCE(MIN(window_start), $2)
+		FROM (
+			SELECT window_start, request_count FROM rate_limits
+			WHERE key = $1 AND window_start >= $2
+			FOR UPDATE
+		) locked
+	`, key, cutoff).Scan(&count, &oldest)
 	if err != nil {
 		log.Printf("throttler: DB query error for key %q: %v (failing open)", key, err)
-		return true, 0, nil // Fail open
+		return true, 0, nil
 	}
 
 	if count >= limit {
@@ -55,17 +79,20 @@ func (t *PGThrottler) Allow(ctx context.Context, key string, limit int, window t
 		return false, retryAfter, nil
 	}
 
-	// Insert or increment current window request count
 	windowStart := now.Truncate(time.Second)
-	_, err = t.pool.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO rate_limits (key, window_start, request_count)
 		VALUES ($1, $2, 1)
 		ON CONFLICT (key, window_start)
 		DO UPDATE SET request_count = rate_limits.request_count + 1
-	`, key, windowStart)
-	if err != nil {
+	`, key, windowStart); err != nil {
 		log.Printf("throttler: DB insert error for key %q: %v (failing open)", key, err)
-		return true, 0, nil // Fail open
+		return true, 0, nil
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("throttler: commit error for key %q: %v (failing open)", key, err)
+		return true, 0, nil
 	}
 
 	return true, 0, nil

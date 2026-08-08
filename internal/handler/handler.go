@@ -442,7 +442,7 @@ func Register(app *fiber.App, cfg Config) {
 			// reset). Without it the accounts service keeps registering and
 			// authenticating; only the code-backed flows report 503.
 			authH.accounts.WithCodes(
-				accounts.NewQueriesCodeStore(queries),
+				accounts.NewQueriesCodeStore(queries, cfg.Pool),
 				emailnotify.NewAuthMailer(ec, cfg.NotifyEmailFrom, cfg.FrontendOrigin),
 			)
 			// And it tells a reporter what a moderator decided about their report.
