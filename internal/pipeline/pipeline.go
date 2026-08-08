@@ -92,18 +92,28 @@ type SeenLookup interface {
 type BoardHealth interface {
 	// Cooldown reports the board's cooldown_until and whether it is set. The Runner
 	// skips the board when it is set and in the future.
-	Cooldown(ctx context.Context, provider, board string) (time.Time, bool, error)
+	Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error)
 	// RecordSuccess clears the board's failure state and stamps freshness.
-	RecordSuccess(ctx context.Context, provider, board string, ingested int) error
+	RecordSuccess(ctx context.Context, provider, board, region string, ingested int) error
 	// RecordFailure counts a failed crawl and cools the board down per the backoff policy.
-	RecordFailure(ctx context.Context, provider, board, errMsg string) error
-	// CooledBoards returns up to limit boards of the provider currently in an active
-	// cooldown — the recovery probe's candidates.
-	CooledBoards(ctx context.Context, provider string, limit int) ([]string, error)
+	RecordFailure(ctx context.Context, provider, board, region, errMsg string) error
+	// CooledBoards returns up to limit (board, region) pairs of the provider currently in
+	// an active cooldown — the recovery probe's candidates.
+	CooledBoards(ctx context.Context, provider string, limit int) ([]CooledBoard, error)
 	// ClearCooldowns clears the active cooldown of every currently-cooled board of the
 	// provider and returns how many were cleared. Called once a probe proves the provider
 	// reachable again.
 	ClearCooldowns(ctx context.Context, provider string) (int, error)
+}
+
+// CooledBoard identifies one board currently in an active cooldown. Region disambiguates a
+// board id that repeats across independent regional slices of one provider (e.g. Adzuna's
+// "it-jobs" once per country) — without it, every region's health/cooldown state would
+// collide on the same (provider, board) identity. A provider whose board is region-invariant
+// (everyone but Adzuna today) reports Region == "".
+type CooledBoard struct {
+	Board  string
+	Region string
 }
 
 // Stats reports what a run did: Ingested counts saved jobs, Failed counts boards that
@@ -203,7 +213,7 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 				return
 			}
 
-			boardStats, already := handled[boardKey{e.Provider, e.Board}]
+			boardStats, already := handled[boardKey{e.Provider, e.Board, e.Region}]
 			if !already {
 				boardStats = r.ingestBoard(ctx, e)
 			}
@@ -228,7 +238,7 @@ const maxRecoveryProbes = 3
 
 // boardKey identifies one board within a run: the pair a CompanyEntry, a Claimed
 // cooldown, and a recovery probe all key on.
-type boardKey struct{ provider, board string }
+type boardKey struct{ provider, board, region string }
 
 // recoverProviders is the provider-level circuit breaker's half-open transition. Before
 // the main crawl, for each provider with cooled boards it probes up to maxRecoveryProbes
@@ -275,7 +285,7 @@ func (r Runner) recoverProviders(ctx context.Context, entries []sources.CompanyE
 		}
 		log.Printf("ingest: %s answered a recovery probe — cleared %d cooled board(s) to crawl this cycle", provider, cleared)
 		if reused {
-			handled[boardKey{e.Provider, e.Board}] = st
+			handled[boardKey{e.Provider, e.Board, e.Region}] = st
 		}
 	}
 	return handled
@@ -292,13 +302,13 @@ func (r Runner) recoverProviders(ctx context.Context, entries []sources.CompanyE
 // exercise, so reused is false for it and the main loop still runs it normally. A board
 // absent from this run's entries is skipped (it cannot be probed without its entry), and
 // a cancelled run stops early. answered=false when nothing responded.
-func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []string, entries map[string]sources.CompanyEntry) (e sources.CompanyEntry, st Stats, reused, answered bool) {
+func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []CooledBoard, entries map[entryKey]sources.CompanyEntry) (e sources.CompanyEntry, st Stats, reused, answered bool) {
 	_, streaming := src.(sources.StreamingSource)
 	for _, board := range boards {
 		if ctx.Err() != nil {
 			return sources.CompanyEntry{}, Stats{}, false, false
 		}
-		candidate, ok := entries[board]
+		candidate, ok := entries[entryKey{board.Board, board.Region}]
 		if !ok {
 			continue
 		}
@@ -314,24 +324,29 @@ func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []
 	return sources.CompanyEntry{}, Stats{}, false, false
 }
 
-// entriesByProvider indexes the run's entries as provider → board → entry, so the
-// recovery probe can find the CompanyEntry for a cooled board id.
-func entriesByProvider(entries []sources.CompanyEntry) map[string]map[string]sources.CompanyEntry {
-	byProvider := make(map[string]map[string]sources.CompanyEntry)
+// entryKey is a board's identity within one provider: board alone collides when a provider's
+// board id repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per
+// country), so region joins it. A region-invariant provider's entries all carry Region == "".
+type entryKey struct{ board, region string }
+
+// entriesByProvider indexes the run's entries as provider → entryKey → entry, so the
+// recovery probe can find the CompanyEntry for a cooled (board, region) pair.
+func entriesByProvider(entries []sources.CompanyEntry) map[string]map[entryKey]sources.CompanyEntry {
+	byProvider := make(map[string]map[entryKey]sources.CompanyEntry)
 	for _, e := range entries {
 		boards := byProvider[e.Provider]
 		if boards == nil {
-			boards = make(map[string]sources.CompanyEntry)
+			boards = make(map[entryKey]sources.CompanyEntry)
 			byProvider[e.Provider] = boards
 		}
-		boards[e.Board] = e
+		boards[entryKey{e.Board, e.Region}] = e
 	}
 	return byProvider
 }
 
 // sortedProviders returns the run's providers deterministically, so recovery probes (and
 // tests) are order-stable.
-func sortedProviders(byProvider map[string]map[string]sources.CompanyEntry) []string {
+func sortedProviders(byProvider map[string]map[entryKey]sources.CompanyEntry) []string {
 	providers := make([]string, 0, len(byProvider))
 	for p := range byProvider {
 		providers = append(providers, p)
@@ -541,7 +556,7 @@ func (r Runner) cooledDown(ctx context.Context, e sources.CompanyEntry) bool {
 	if r.BoardHealth == nil {
 		return false
 	}
-	until, set, err := r.BoardHealth.Cooldown(ctx, e.Provider, e.Board)
+	until, set, err := r.BoardHealth.Cooldown(ctx, e.Provider, e.Board, e.Region)
 	if err != nil {
 		log.Printf("ingest: cooldown check %s/%s: %v", e.Provider, e.Board, err)
 		return false
@@ -556,7 +571,7 @@ func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, inges
 	if r.BoardHealth == nil {
 		return
 	}
-	if err := r.BoardHealth.RecordSuccess(ctx, e.Provider, e.Board, ingested); err != nil {
+	if err := r.BoardHealth.RecordSuccess(ctx, e.Provider, e.Board, e.Region, ingested); err != nil {
 		log.Printf("ingest: record board success %s/%s: %v", e.Provider, e.Board, err)
 	}
 }
@@ -565,7 +580,7 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 	if r.BoardHealth == nil {
 		return
 	}
-	if err := r.BoardHealth.RecordFailure(ctx, e.Provider, e.Board, msg); err != nil {
+	if err := r.BoardHealth.RecordFailure(ctx, e.Provider, e.Board, e.Region, msg); err != nil {
 		log.Printf("ingest: record board failure %s/%s: %v", e.Provider, e.Board, err)
 	}
 }

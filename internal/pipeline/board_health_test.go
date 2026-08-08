@@ -16,56 +16,63 @@ import (
 // cooldowns map is the single source of truth for both the recovery probe's candidates
 // (any board with a future cooldown) and the per-board gate, so ClearCooldowns removing a
 // provider's entries lets the subsequent crawl actually reach those boards — modelling the
-// real DB round-trip end to end.
+// real DB round-trip end to end. The key is "provider/board/region" so a board id that
+// repeats across regions (Adzuna's "it-jobs" once per country) gets independent state,
+// mirroring the real board_health table's (provider, board, region) primary key.
 type fakeHealth struct {
-	cooldowns map[string]time.Time // "provider/board" → cooldown_until
+	cooldowns map[string]time.Time // "provider/board/region" → cooldown_until
 	successes []string
 	failures  []string
 	cleared   []string // providers passed to ClearCooldowns, in call order
 }
 
-func (f *fakeHealth) Cooldown(_ context.Context, provider, board string) (time.Time, bool, error) {
-	t, ok := f.cooldowns[provider+"/"+board]
+func healthKey(provider, board, region string) string { return provider + "/" + board + "/" + region }
+
+func (f *fakeHealth) Cooldown(_ context.Context, provider, board, region string) (time.Time, bool, error) {
+	t, ok := f.cooldowns[healthKey(provider, board, region)]
 	return t, ok, nil
 }
 
-func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board string, _ int) error {
-	f.successes = append(f.successes, provider+"/"+board)
+func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region string, _ int) error {
+	f.successes = append(f.successes, healthKey(provider, board, region))
 	return nil
 }
 
-func (f *fakeHealth) RecordFailure(_ context.Context, provider, board, _ string) error {
-	f.failures = append(f.failures, provider+"/"+board)
+func (f *fakeHealth) RecordFailure(_ context.Context, provider, board, region, _ string) error {
+	f.failures = append(f.failures, healthKey(provider, board, region))
 	return nil
 }
 
-// CooledBoards serves up to limit boards of the provider whose canned cooldown is still in
-// the future, soonest-to-expire first — mirroring ListCooledBoards.
-func (f *fakeHealth) CooledBoards(_ context.Context, provider string, limit int) ([]string, error) {
+// CooledBoards serves up to limit (board, region) pairs of the provider whose canned cooldown
+// is still in the future, soonest-to-expire first — mirroring ListCooledBoards.
+func (f *fakeHealth) CooledBoards(_ context.Context, provider string, limit int) ([]CooledBoard, error) {
 	type cand struct {
-		board string
-		until time.Time
+		board, region string
+		until         time.Time
 	}
 	var cands []cand
 	for k, until := range f.cooldowns {
-		p, board, ok := strings.Cut(k, "/")
-		if !ok || p != provider || !until.After(time.Now()) {
+		parts := strings.SplitN(k, "/", 3)
+		if len(parts) != 3 || parts[0] != provider || !until.After(time.Now()) {
 			continue
 		}
-		cands = append(cands, cand{board, until})
+		cands = append(cands, cand{parts[1], parts[2], until})
 	}
 	sort.Slice(cands, func(i, j int) bool {
 		if cands[i].until.Equal(cands[j].until) {
+			if cands[i].board == cands[j].board {
+				return cands[i].region < cands[j].region
+			}
 			return cands[i].board < cands[j].board
 		}
 		return cands[i].until.Before(cands[j].until)
 	})
-	boards := make([]string, 0, limit)
+	boards := make([]CooledBoard, 0, limit)
 	for _, c := range cands {
 		if len(boards) == limit {
 			break
 		}
-		boards = append(boards, c.board)
+		boards = append(boards, CooledBoard{Board: c.board, Region: c.region})
 	}
 	return boards, nil
 }
@@ -155,7 +162,7 @@ func TestRecoverSkipsSingleBoardProvider(t *testing.T) {
 	fetches := 0
 	src := spySource{provider: "gulftalent", fetches: &fetches} // healthy, but must not be probed
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"gulftalent/": time.Now().Add(24 * time.Hour), // one boardless entry, cooled
+		"gulftalent//": time.Now().Add(24 * time.Hour), // one boardless entry, cooled
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
@@ -182,8 +189,8 @@ func TestRecoverLeavesDownMultiBoardProviderCooled(t *testing.T) {
 	fetches := 0
 	src := spySource{provider: "workday", fetches: &fetches, err: errors.New("provider down")}
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"workday/a": time.Now().Add(6 * time.Hour),
-		"workday/b": time.Now().Add(6 * time.Hour),
+		"workday/a/": time.Now().Add(6 * time.Hour),
+		"workday/b/": time.Now().Add(6 * time.Hour),
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
@@ -210,8 +217,8 @@ func TestRecoverProbeRecoversProvider(t *testing.T) {
 	fetches := 0
 	src := spySource{provider: "breezy", fetches: &fetches}
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"breezy/acme": time.Now().Add(24 * time.Hour),
-		"breezy/beta": time.Now().Add(24 * time.Hour),
+		"breezy/acme/": time.Now().Add(24 * time.Hour),
+		"breezy/beta/": time.Now().Add(24 * time.Hour),
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
@@ -230,6 +237,36 @@ func TestRecoverProbeRecoversProvider(t *testing.T) {
 	}
 }
 
+// A board id that repeats across independent regional slices of one provider (Adzuna's
+// "it-jobs" once per country) must not collide: probing and recovering one region's cooled
+// board must not make the main loop treat a DIFFERENT region's same-named board as already
+// handled and skip crawling it. Without region in boardKey/entriesByProvider, the probe's
+// answer for "it-jobs"/gb would satisfy handled["adzuna"/"it-jobs"] for "it-jobs"/us too, so
+// fetches would stop at 1 and us would silently go uncrawled this cycle.
+func TestRecoverProbeDoesNotCollideAcrossRegions(t *testing.T) {
+	fetches := 0
+	src := spySource{provider: "adzuna", fetches: &fetches}
+	health := &fakeHealth{cooldowns: map[string]time.Time{
+		"adzuna/it-jobs/gb": time.Now().Add(24 * time.Hour),
+		"adzuna/it-jobs/us": time.Now().Add(24 * time.Hour),
+	}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Adzuna GB", Provider: "adzuna", Board: "it-jobs", Region: "gb"},
+		{Company: "Adzuna US", Provider: "adzuna", Board: "it-jobs", Region: "us"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if fetches != 2 {
+		t.Errorf("adapter fetched %d times, want 2 — gb and us are independent boards despite sharing a board id", fetches)
+	}
+	if stats.Total().Ingested != 2 || stats.Total().Cooled != 0 {
+		t.Errorf("stats = %+v, want Ingested=2 Cooled=0 (both regions recovered and crawled)", stats.Total())
+	}
+}
+
 // One genuinely-dead board among the cooled set must not mask a recovered provider: the
 // probe tries past the dead candidate to a live one, then clears. This exercises
 // maxRecoveryProbes > 1 — with a single probe (the dead board, first by cooldown order)
@@ -237,8 +274,8 @@ func TestRecoverProbeRecoversProvider(t *testing.T) {
 func TestRecoverProbeTriesPastDeadBoard(t *testing.T) {
 	src := boardKeyedSource{provider: "join", failBoards: map[string]bool{"dead": true}}
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"join/dead": time.Now().Add(1 * time.Hour),  // probed first (soonest to expire)
-		"join/live": time.Now().Add(12 * time.Hour), // probed second
+		"join/dead/": time.Now().Add(1 * time.Hour),  // probed first (soonest to expire)
+		"join/live/": time.Now().Add(12 * time.Hour), // probed second
 	}}
 	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
 
@@ -257,8 +294,8 @@ func TestRecoverProbeTriesPastDeadBoard(t *testing.T) {
 	if stats.Total().Ingested != 1 || stats.Total().Cooled != 0 {
 		t.Errorf("stats = %+v, want Ingested=1 Cooled=0", stats.Total())
 	}
-	if len(health.successes) != 1 || health.successes[0] != "join/live" {
-		t.Errorf("successes = %v, want [join/live]", health.successes)
+	if len(health.successes) != 1 || health.successes[0] != "join/live/" {
+		t.Errorf("successes = %v, want [join/live/]", health.successes)
 	}
 }
 
@@ -271,8 +308,8 @@ func TestRecoverProbeTriesPastDeadBoard(t *testing.T) {
 func TestRecoverProbeReusesTheAnsweringBoardsFetchInsteadOfCrawlingItTwice(t *testing.T) {
 	src := &hydratingSpySource{provider: "workday"}
 	health := &fakeHealth{cooldowns: map[string]time.Time{
-		"workday/acme": time.Now().Add(24 * time.Hour), // probed first (soonest to expire, tie-break by name)
-		"workday/beta": time.Now().Add(24 * time.Hour),
+		"workday/acme/": time.Now().Add(24 * time.Hour), // probed first (soonest to expire, tie-break by name)
+		"workday/beta/": time.Now().Add(24 * time.Hour),
 	}}
 	store := &fakeStore{}
 	r := Runner{Registry: registry(src), Store: store, BoardHealth: health}
@@ -325,11 +362,11 @@ func TestRunRecordsBoardOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(health.successes) != 1 || health.successes[0] != "greenhouse/good" {
-		t.Errorf("successes = %v, want [greenhouse/good]", health.successes)
+	if len(health.successes) != 1 || health.successes[0] != "greenhouse/good/" {
+		t.Errorf("successes = %v, want [greenhouse/good/]", health.successes)
 	}
-	if len(health.failures) != 1 || health.failures[0] != "lever/bad" {
-		t.Errorf("failures = %v, want [lever/bad]", health.failures)
+	if len(health.failures) != 1 || health.failures[0] != "lever/bad/" {
+		t.Errorf("failures = %v, want [lever/bad/]", health.failures)
 	}
 }
 

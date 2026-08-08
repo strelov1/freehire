@@ -29,25 +29,25 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	h := newBoardHealth(pool)
 
 	// Never seen → eligible.
-	if _, cooled, err := h.Cooldown(ctx, "greenhouse", "acme"); err != nil || cooled {
+	if _, cooled, err := h.Cooldown(ctx, "greenhouse", "acme", ""); err != nil || cooled {
 		t.Fatalf("fresh board Cooldown = (_, %v, %v), want (_, false, nil)", cooled, err)
 	}
 
 	// The first two failures stay below the threshold — no cooldown, cron retries.
 	for i := 0; i < 2; i++ {
-		if err := h.RecordFailure(ctx, "greenhouse", "acme", "boom"); err != nil {
+		if err := h.RecordFailure(ctx, "greenhouse", "acme", "", "boom"); err != nil {
 			t.Fatalf("RecordFailure: %v", err)
 		}
 	}
-	if _, cooled, _ := h.Cooldown(ctx, "greenhouse", "acme"); cooled {
+	if _, cooled, _ := h.Cooldown(ctx, "greenhouse", "acme", ""); cooled {
 		t.Error("board should not be cooled below the threshold (2 failures)")
 	}
 
 	// The third consecutive failure crosses the threshold → cooldown is set.
-	if err := h.RecordFailure(ctx, "greenhouse", "acme", "boom again"); err != nil {
+	if err := h.RecordFailure(ctx, "greenhouse", "acme", "", "boom again"); err != nil {
 		t.Fatalf("RecordFailure: %v", err)
 	}
-	until, cooled, err := h.Cooldown(ctx, "greenhouse", "acme")
+	until, cooled, err := h.Cooldown(ctx, "greenhouse", "acme", "")
 	if err != nil || !cooled {
 		t.Fatalf("after 3 failures Cooldown = (%v, %v, %v), want a future cooldown", until, cooled, err)
 	}
@@ -56,10 +56,10 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	}
 
 	// A success self-heals: failure state cleared, cooldown gone.
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme", 7); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme", "", 7); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
-	if _, cooled, _ := h.Cooldown(ctx, "greenhouse", "acme"); cooled {
+	if _, cooled, _ := h.Cooldown(ctx, "greenhouse", "acme", ""); cooled {
 		t.Error("a success must clear the cooldown (self-heal)")
 	}
 
@@ -85,7 +85,7 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	cool := func(provider, board string) {
 		t.Helper()
 		for i := 0; i < 3; i++ { // crosses the cooldown threshold
-			if err := h.RecordFailure(ctx, provider, board, "boom"); err != nil {
+			if err := h.RecordFailure(ctx, provider, board, "", "boom"); err != nil {
 				t.Fatalf("RecordFailure %s/%s: %v", provider, board, err)
 			}
 		}
@@ -94,7 +94,7 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	cool("breezy", "b1")
 	cool("breezy", "b2")
 	cool("breezy", "b3")
-	if err := h.RecordSuccess(ctx, "breezy", "b-ok", 1); err != nil {
+	if err := h.RecordSuccess(ctx, "breezy", "b-ok", "", 1); err != nil {
 		t.Fatalf("RecordSuccess: %v", err)
 	}
 	// join: an unrelated provider's cooled board, to prove clearing is provider-scoped.
@@ -103,7 +103,7 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	// The limit caps the sample, soonest-to-expire first — b1, b2 cooled before b3.
 	if got, err := h.CooledBoards(ctx, "breezy", 2); err != nil {
 		t.Fatalf("CooledBoards: %v", err)
-	} else if len(got) != 2 || got[0] != "b1" || got[1] != "b2" {
+	} else if len(got) != 2 || got[0].Board != "b1" || got[1].Board != "b2" {
 		t.Errorf("CooledBoards(breezy, 2) = %v, want [b1 b2]", got)
 	}
 	// Above the count: exactly the three cooled boards, never the fresh one.
@@ -126,7 +126,47 @@ func TestBoardHealth_CooledBoardsAndClear(t *testing.T) {
 	}
 
 	// join's cooled board is untouched — clearing is scoped to the one provider.
-	if _, cooled, err := h.Cooldown(ctx, "join", "j1"); err != nil || !cooled {
+	if _, cooled, err := h.Cooldown(ctx, "join", "j1", ""); err != nil || !cooled {
 		t.Errorf("join/j1 Cooldown = (_, %v, %v), want still cooled after clearing breezy", cooled, err)
+	}
+}
+
+// A board id that repeats across independent regional slices (Adzuna's "it-jobs" once per
+// country) must not share health state across regions: cooling one region's board leaves a
+// same-named board in another region eligible, and CooledBoards/ClearCooldowns distinguish them.
+func TestBoardHealth_RegionDisambiguates(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	h := newBoardHealth(pool)
+
+	for i := 0; i < 3; i++ { // crosses the cooldown threshold
+		if err := h.RecordFailure(ctx, "adzuna", "it-jobs", "gb", "boom"); err != nil {
+			t.Fatalf("RecordFailure gb: %v", err)
+		}
+	}
+	if err := h.RecordSuccess(ctx, "adzuna", "it-jobs", "us", 42); err != nil {
+		t.Fatalf("RecordSuccess us: %v", err)
+	}
+
+	if _, cooled, err := h.Cooldown(ctx, "adzuna", "it-jobs", "gb"); err != nil || !cooled {
+		t.Fatalf("gb Cooldown = (_, %v, %v), want cooled", cooled, err)
+	}
+	if _, cooled, err := h.Cooldown(ctx, "adzuna", "it-jobs", "us"); err != nil || cooled {
+		t.Fatalf("us Cooldown = (_, %v, %v), want eligible — gb's failures must not bleed into us", cooled, err)
+	}
+
+	got, err := h.CooledBoards(ctx, "adzuna", 10)
+	if err != nil {
+		t.Fatalf("CooledBoards: %v", err)
+	}
+	if len(got) != 1 || got[0].Board != "it-jobs" || got[0].Region != "gb" {
+		t.Fatalf("CooledBoards(adzuna) = %v, want exactly [{it-jobs gb}]", got)
+	}
+
+	if n, err := h.ClearCooldowns(ctx, "adzuna"); err != nil || n != 1 {
+		t.Fatalf("ClearCooldowns(adzuna) = (%d, %v), want (1, nil)", n, err)
+	}
+	if _, cooled, err := h.Cooldown(ctx, "adzuna", "it-jobs", "us"); err != nil || cooled {
+		t.Fatalf("us Cooldown after clearing gb = (_, %v, %v), want still eligible", cooled, err)
 	}
 }

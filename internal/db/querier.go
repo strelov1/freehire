@@ -860,7 +860,9 @@ type Querier interface {
 	// several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
 	GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVByUserRow, error)
 	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
-	// which the caller treats as "never seen, eligible".
+	// which the caller treats as "never seen, eligible". region disambiguates a board id that
+	// repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
+	// other provider passes '' here, matching the column's default.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
 	// One CV owned by the user, including the full data blob. Owner-scoped: a foreign or
 	// missing id returns no row (the handler maps it to 404). job_id is NULL for a base CV and
@@ -1399,10 +1401,10 @@ type Querier interface {
 	ListConnectedGmailUsers(ctx context.Context) ([]ListConnectedGmailUsersRow, error)
 	// The "my contributions" list: one user's contributions, newest first.
 	ListContributionsByUser(ctx context.Context, submittedBy int64) ([]LinkContribution, error)
-	// Up to $2 boards currently in an active cooldown for a provider, soonest-to-expire
-	// first — the recovery probe's candidates. The ordering rotates the sample as cooldowns
-	// lapse, so a run does not keep probing the same few boards.
-	ListCooledBoards(ctx context.Context, arg ListCooledBoardsParams) ([]string, error)
+	// Up to $2 (board, region) pairs currently in an active cooldown for a provider,
+	// soonest-to-expire first — the recovery probe's candidates. The ordering rotates the sample as
+	// cooldowns lapse, so a run does not keep probing the same few boards.
+	ListCooledBoards(ctx context.Context, arg ListCooledBoardsParams) ([]ListCooledBoardsRow, error)
 	// The caller's credit-ledger entries, newest first, for the transaction-history page. Bounded
 	// by a caller-supplied limit and served by the (user_id, created_at DESC) index. The handler
 	// resolves each debit's ref to a human label (the job/CV it named).

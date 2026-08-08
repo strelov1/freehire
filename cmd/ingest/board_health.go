@@ -27,8 +27,8 @@ func newBoardHealth(pool *pgxpool.Pool) *boardHealth { return &boardHealth{q: db
 
 // Cooldown returns the board's cooldown_until; an absent row or a NULL cooldown means
 // eligible.
-func (h *boardHealth) Cooldown(ctx context.Context, provider, board string) (time.Time, bool, error) {
-	ts, err := h.q.GetBoardCooldown(ctx, db.GetBoardCooldownParams{Provider: provider, Board: board})
+func (h *boardHealth) Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error) {
+	ts, err := h.q.GetBoardCooldown(ctx, db.GetBoardCooldownParams{Provider: provider, Board: board, Region: region})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return time.Time{}, false, nil
 	}
@@ -42,10 +42,11 @@ func (h *boardHealth) Cooldown(ctx context.Context, provider, board string) (tim
 }
 
 // RecordSuccess clears the board's failure state and stamps freshness.
-func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board string, ingested int) error {
+func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int) error {
 	return h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
 		Provider:          provider,
 		Board:             board,
+		Region:            region,
 		LastIngestedCount: pgtype.Int4{Int32: int32(ingested), Valid: true},
 	})
 }
@@ -53,10 +54,11 @@ func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board string,
 // RecordFailure bumps the failure count (the query returns the new count), then applies
 // the Go-owned backoff policy: it sets a cooldown only once the count crosses the
 // threshold.
-func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, errMsg string) error {
+func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, region, errMsg string) error {
 	failures, err := h.q.RecordBoardFailure(ctx, db.RecordBoardFailureParams{
 		Provider:  provider,
 		Board:     board,
+		Region:    region,
 		LastError: pgtype.Text{String: errMsg, Valid: true},
 	})
 	if err != nil {
@@ -69,13 +71,23 @@ func (h *boardHealth) RecordFailure(ctx context.Context, provider, board, errMsg
 	return h.q.SetBoardCooldown(ctx, db.SetBoardCooldownParams{
 		Provider:      provider,
 		Board:         board,
+		Region:        region,
 		CooldownUntil: pgtype.Timestamptz{Time: time.Now().Add(d), Valid: true},
 	})
 }
 
-// CooledBoards returns up to limit boards of the provider currently in an active cooldown.
-func (h *boardHealth) CooledBoards(ctx context.Context, provider string, limit int) ([]string, error) {
-	return h.q.ListCooledBoards(ctx, db.ListCooledBoardsParams{Provider: provider, Limit: int32(limit)})
+// CooledBoards returns up to limit (board, region) pairs of the provider currently in an
+// active cooldown.
+func (h *boardHealth) CooledBoards(ctx context.Context, provider string, limit int) ([]pipeline.CooledBoard, error) {
+	rows, err := h.q.ListCooledBoards(ctx, db.ListCooledBoardsParams{Provider: provider, Limit: int32(limit)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]pipeline.CooledBoard, len(rows))
+	for i, r := range rows {
+		out[i] = pipeline.CooledBoard{Board: r.Board, Region: r.Region}
+	}
+	return out, nil
 }
 
 // ClearCooldowns clears the active cooldown and failure count of every currently-cooled
@@ -99,7 +111,11 @@ func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
 	}
 	parts := make([]string, 0, len(rows))
 	for _, r := range rows {
-		desc := fmt.Sprintf("%s/%s(fails=%d", r.Provider, r.Board, r.ConsecutiveFailures)
+		id := r.Provider + "/" + r.Board
+		if r.Region != "" {
+			id += "/" + r.Region
+		}
+		desc := fmt.Sprintf("%s(fails=%d", id, r.ConsecutiveFailures)
 		if r.CooldownUntil.Valid && r.CooldownUntil.Time.After(time.Now()) {
 			desc += ",cooled_until=" + r.CooldownUntil.Time.UTC().Format(time.RFC3339)
 		}

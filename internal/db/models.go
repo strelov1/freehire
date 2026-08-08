@@ -113,6 +113,7 @@ type BoardHealth struct {
 	LastSuccessAt       pgtype.Timestamptz `json:"last_success_at"`
 	LastIngestedCount   pgtype.Int4        `json:"last_ingested_count"`
 	LastRunAt           pgtype.Timestamptz `json:"last_run_at"`
+	Region              string             `json:"region"`
 }
 
 type CommunityPersona struct {
