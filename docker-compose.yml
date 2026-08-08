@@ -33,11 +33,50 @@ services:
     volumes:
       - meilisearch_data:/meili_data
 
+  # Local S3-compatible storage for résumé upload (internal/blobstore). Without it
+  # `PUT/POST /me/resume` runs with storage disabled (S3_* unset) and callers degrade to
+  # the previous per-request extraction — real locally, but no upload persists, so the
+  # fit analysis never sees a structured résumé. minio-init creates the bucket once and
+  # exits; the app waits on that, not on minio itself, since the bucket must exist first.
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data
+    ports:
+      - "${MINIO_HOST_PORT:-9000}:9000"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
+      mc mb -p local/hire-resumes;
+      exit 0;
+      "
+
   app:
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://hire:hire@db:5432/hire?sslmode=disable"
+      # Dev defaults pointing at the local `minio` service above. Prod sets its own
+      # S3_* in its .env, pointing at the real bucket — these values never leave Docker.
+      S3_ENDPOINT: "${S3_ENDPOINT:-http://minio:9000}"
+      S3_BUCKET: "${S3_BUCKET:-hire-resumes}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-minioadmin}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY:-minioadmin}"
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
       # Required by the auth surface (server fails fast if unset or under 32 bytes).
       # Dev default — set a real, random JWT_SECRET in any non-local deployment.
       JWT_SECRET: "${JWT_SECRET:-dev-insecure-secret-change-me-0123456789}"
@@ -58,9 +97,6 @@ services:
       MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-dev-insecure-meili-key}"
     ports:
       - "${HIRE_HOST_PORT:-8080}:8080"
-    depends_on:
-      db:
-        condition: service_healthy
 
   # SvelteKit SSR frontend. nginx (:80) fronts both the Node SSR server and the
   # Go API, keeping them same-origin for the auth cookie. The browser talks only
@@ -82,3 +118,4 @@ services:
 volumes:
   pgdata:
   meilisearch_data:
+  minio_data:
