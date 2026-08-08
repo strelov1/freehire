@@ -2,12 +2,12 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // deletedAccountVersions stands in for the token-version read against an account that
@@ -15,7 +15,7 @@ import (
 type deletedAccountVersions struct{}
 
 func (deletedAccountVersions) GetUserTokenVersion(context.Context, int64) (int32, error) {
-	return 0, errors.New("no rows in result set")
+	return 0, pgx.ErrNoRows
 }
 
 // A token is a claim about who the caller is, not proof that they still exist.

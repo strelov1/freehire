@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 // fakeVersions reports one account's current session generation, standing in for the
@@ -21,7 +21,7 @@ type fakeVersions struct {
 
 func (f fakeVersions) GetUserTokenVersion(_ context.Context, id int64) (int32, error) {
 	if id != f.userID {
-		return 0, errors.New("no such user")
+		return 0, pgx.ErrNoRows
 	}
 	return f.version, nil
 }

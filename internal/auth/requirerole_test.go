@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 )
 
 // fakeRoleLoader returns a canned role (and optional error) for any user id.
@@ -64,9 +65,16 @@ func TestRequireRole_UnauthenticatedWithoutUserID(t *testing.T) {
 	}
 }
 
-func TestRequireRole_UnauthorizedWhenLoaderErrors(t *testing.T) {
-	loader := fakeRoleLoader{err: errors.New("no such user")}
+func TestRequireRole_UnauthorizedWhenUserMissing(t *testing.T) {
+	loader := fakeRoleLoader{err: pgx.ErrNoRows}
 	if got := statusOf(t, roleApp(loader, "moderator", true)); got != http.StatusUnauthorized {
-		t.Errorf("status = %d, want 401", got)
+		t.Errorf("status = %d, want 401 for missing user", got)
+	}
+}
+
+func TestRequireRole_ServiceUnavailableOnInfraError(t *testing.T) {
+	loader := fakeRoleLoader{err: errors.New("db connection timeout")}
+	if got := statusOf(t, roleApp(loader, "moderator", true)); got != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 for DB infra error", got)
 	}
 }

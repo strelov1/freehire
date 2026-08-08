@@ -4,12 +4,35 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/accounts"
 )
+
+// maskEmail redacts an email address for logging to avoid PII leakage (e.g., user@example.com -> u***@e***.com).
+func maskEmail(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "***"
+	}
+	localRunes := []rune(parts[0])
+	localMasked := string(localRunes[0]) + "***"
+
+	domainParts := strings.SplitN(parts[1], ".", 2)
+	domainRunes := []rune(domainParts[0])
+	if len(domainRunes) == 0 {
+		return localMasked + "@***"
+	}
+	domainMasked := string(domainRunes[0]) + "***"
+	if len(domainParts) > 1 {
+		domainMasked += "." + domainParts[1]
+	}
+
+	return localMasked + "@" + domainMasked
+}
 
 // forgotPasswordTimeout bounds the background work a forgot-password request spawns —
 // the account lookup, the bcrypt of the code, and the outbound mail — so a stuck goroutine
@@ -107,7 +130,7 @@ func (h *authHandlers) sendPasswordResetCode(email string) {
 	defer cancel()
 
 	if err := h.accounts.RequestPasswordReset(ctx, email); err != nil {
-		log.Printf("auth: password reset for %q: %v", email, err)
+		log.Printf("auth: password reset for %q: %v", maskEmail(email), err)
 	}
 }
 

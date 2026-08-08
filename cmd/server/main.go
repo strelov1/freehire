@@ -34,11 +34,8 @@ func main() {
 	cfg := config.Load()
 	cv.SetMaxBullets(cfg.CVMaxBullets)
 
-	// Never boot the auth surface with a guessable signing key. HS256 security rests
-	// entirely on secret entropy, so a short secret is brute-forceable offline against
-	// any captured token; require at least 32 bytes.
-	if len(cfg.JWTSecret) < 32 {
-		log.Fatal("config: JWT_SECRET is required and must be at least 32 bytes")
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
 	}
 
 	// Error reporting is optional and env-gated: no DSN ⇒ Init is a no-op. A

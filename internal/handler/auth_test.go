@@ -1,15 +1,16 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
@@ -19,6 +20,8 @@ import (
 // validation cases below all reject inside the service before any repo method
 // runs, so these methods are never reached by those tests.
 type fakeRepo struct{}
+
+func (f fakeRepo) WithTx(pgx.Tx) accounts.Repository { return f }
 
 func (fakeRepo) UserIDByIdentity(context.Context, string, string) (int64, error) {
 	return 0, accounts.ErrIdentityNotFound
@@ -107,5 +110,114 @@ func TestUserResponse_OmitsPasswordHash(t *testing.T) {
 		if _, ok := fields[want]; !ok {
 			t.Errorf("userResponse missing %q", want)
 		}
+	}
+}
+
+func TestAuthRoutes_NoCacheHeaders(t *testing.T) {
+	app := fiber.New()
+	api := app.Group("/api/v1")
+	h := &authHandlers{
+		issuer:   auth.NewIssuer("test-secret", time.Hour),
+		accounts: accounts.New(fakeRepo{}, authHasher{}),
+	}
+	h.register(api, middleware{
+		cookie: namedGate("cookie"),
+		cvKey:  namedGate("cvKey"),
+	})
+
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{fiber.MethodPost, "/api/v1/auth/login"},
+		{fiber.MethodPost, "/api/v1/auth/register"},
+		{fiber.MethodPost, "/api/v1/auth/logout"},
+		{fiber.MethodGet, "/api/v1/auth/me"},
+		{fiber.MethodGet, "/api/v1/me/api-keys"},
+		{fiber.MethodPost, "/api/v1/me/password"},
+		{fiber.MethodDelete, "/api/v1/me"},
+	}
+
+	for _, r := range routes {
+		t.Run(r.method+" "+r.path, func(t *testing.T) {
+			req := httptest.NewRequest(r.method, r.path, nil)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("Test: %v", err)
+			}
+			defer resp.Body.Close()
+
+			if cc := resp.Header.Get("Cache-Control"); cc != "no-store" {
+				t.Errorf("Cache-Control = %q, want %q", cc, "no-store")
+			}
+			if pragma := resp.Header.Get("Pragma"); pragma != "no-cache" {
+				t.Errorf("Pragma = %q, want %q", pragma, "no-cache")
+			}
+		})
+	}
+}
+
+type fakeRepoWithErr struct {
+	fakeRepo
+	err error
+}
+
+func (f fakeRepoWithErr) CreateUser(context.Context, string, string, bool) (accounts.User, error) {
+	return accounts.User{}, f.err
+}
+
+func (f fakeRepoWithErr) UserByEmail(context.Context, string) (accounts.User, string, bool, error) {
+	return accounts.User{}, "", false, f.err
+}
+
+func TestRegister_DuplicateEmail(t *testing.T) {
+	app := fiber.New()
+	h := &authHandlers{
+		issuer:   auth.NewIssuer("test-secret", time.Hour),
+		accounts: accounts.New(fakeRepoWithErr{err: accounts.ErrEmailTaken}, authHasher{}),
+	}
+	app.Post("/register", h.Register)
+
+	if got := postJSON(t, app, "/register", `{"email":"taken@b.com","password":"validpassword123"}`); got != fiber.StatusConflict {
+		t.Errorf("status = %d, want 409 Conflict", got)
+	}
+}
+
+func TestRegister_DBDown(t *testing.T) {
+	app := fiber.New()
+	h := &authHandlers{
+		issuer:   auth.NewIssuer("test-secret", time.Hour),
+		accounts: accounts.New(fakeRepoWithErr{err: errors.New("pgx: connection refused timeout")}, authHasher{}),
+	}
+	app.Post("/register", h.Register)
+
+	if got := postJSON(t, app, "/register", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 Service Unavailable on DB outage", got)
+	}
+}
+
+func TestLogin_WrongPassword(t *testing.T) {
+	app := fiber.New()
+	h := &authHandlers{
+		issuer:   auth.NewIssuer("test-secret", time.Hour),
+		accounts: accounts.New(fakeRepoWithErr{err: accounts.ErrInvalidCredentials}, authHasher{}),
+	}
+	app.Post("/login", h.Login)
+
+	if got := postJSON(t, app, "/login", `{"email":"a@b.com","password":"wrongpassword"}`); got != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 Unauthorized", got)
+	}
+}
+
+func TestLogin_DBDown(t *testing.T) {
+	app := fiber.New()
+	h := &authHandlers{
+		issuer:   auth.NewIssuer("test-secret", time.Hour),
+		accounts: accounts.New(fakeRepoWithErr{err: errors.New("pgx: connection refusal or pool timeout")}, authHasher{}),
+	}
+	app.Post("/login", h.Login)
+
+	if got := postJSON(t, app, "/login", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 Service Unavailable on DB outage", got)
 	}
 }

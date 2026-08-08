@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -55,6 +56,7 @@ type authHandlers struct {
 	// and wrong for a redirect target (see requestOrigin).
 	servedHosts []string
 	accounts    *accounts.Service
+	throttler   auth.Throttler
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
 	// are nil until withAccountDeletion wires them.
@@ -70,6 +72,10 @@ func (h *authHandlers) withAccountDeletion(eraser accountEraser, emails accountE
 }
 
 func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
+	var th auth.Throttler
+	if pool != nil {
+		th = auth.NewPGThrottler(pool)
+	}
 	return &authHandlers{
 		queries:                    queries,
 		issuer:                     issuer,
@@ -81,46 +87,65 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, issuer *auth.Issue
 		extensionRedirectAllowlist: extensionRedirectAllowlist,
 		servedHosts:                servedHosts,
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
+		throttler:                  th,
 	}
 }
 
 func (h *authHandlers) register(api fiber.Router, mw middleware) {
+	noCache := func(c *fiber.Ctx) error {
+		c.Set("Cache-Control", "no-store")
+		c.Set("Pragma", "no-cache")
+		return c.Next()
+	}
+
 	// API-key management is cookie-only (RequireAuth): a leaked key must not be
 	// able to create, list, or revoke keys. The create endpoint returns the
 	// plaintext token exactly once.
 	// Changing the password is cookie-only for the same reason: a leaked credential
 	// must not be able to change the credential it would outlive.
-	api.Post("/me/password", mw.cookie, h.ChangePassword)
-	api.Post("/me/api-keys", mw.cookie, h.CreateAPIKey)
-	api.Get("/me/api-keys", mw.cookie, h.ListAPIKeys)
-	api.Delete("/me/api-keys/:id", mw.cookie, h.RevokeAPIKey)
+	meGroup := api.Group("/me", noCache)
+	meGroup.Post("/password", mw.cookie, h.ChangePassword)
+	meGroup.Post("/api-keys", mw.cookie, h.CreateAPIKey)
+	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
+	meGroup.Delete("/api-keys/:id", mw.cookie, h.RevokeAPIKey)
 
 	// Account deletion is permanent and cookie-only, for the same reason key
 	// management is: a leaked API key must not be able to destroy the account that
 	// issued it. The body confirms the caller's own email address.
-	api.Delete("/me", mw.cookie, h.DeleteAccount)
+	meGroup.Delete("", mw.cookie, h.DeleteAccount)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser
 	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
 	// read of the caller's own user — not key management, which is cookie-only.
-	// Throttle the credential endpoints against online brute-force / credential
-	// stuffing. Keyed on c.IP() (the real client, via the trusted-proxy config); the
-	// per-instance in-memory window is enough friction for a single-node deployment.
-	authLimiter := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
-	authGroup := api.Group("/auth")
-	authGroup.Post("/register", authLimiter, h.Register)
-	authGroup.Post("/login", authLimiter, h.Login)
+	// Throttle credential endpoints against online brute-force / credential stuffing.
+	// Uses PGThrottler if pool is non-nil, falling back to process-local limiter.
+	var loginLimiter, registerLimiter, verifyReqLimiter, verifyConfLimiter, forgotLimiter, resetLimiter fiber.Handler
+	if h.throttler != nil {
+		loginLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "login:" + c.IP() }, 10, time.Minute)
+		registerLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "register:" + c.IP() }, 5, time.Minute)
+		verifyReqLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "verify-req:" + c.IP() }, 5, time.Minute)
+		verifyConfLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "verify-conf:" + c.IP() }, 10, 15*time.Minute)
+		forgotLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "forgot:" + c.IP() }, 3, 5*time.Minute)
+		resetLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "reset:" + c.IP() }, 10, 15*time.Minute)
+	} else {
+		fallback := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
+		loginLimiter, registerLimiter, verifyReqLimiter, verifyConfLimiter, forgotLimiter, resetLimiter = fallback, fallback, fallback, fallback, fallback, fallback
+	}
+
+	authGroup := api.Group("/auth", noCache)
+	authGroup.Post("/register", registerLimiter, h.Register)
+	authGroup.Post("/login", loginLimiter, h.Login)
 	authGroup.Post("/logout", h.Logout)
 	// Email verification. Cookie-only and identified by the session, never by a body
 	// field, so neither endpoint can be pointed at someone else's address. Both ride the
 	// credential limiter: confirm is a code-guessing surface, request is a mail-sending one.
-	authGroup.Post("/verify/request", authLimiter, mw.cookie, h.RequestEmailVerification)
-	authGroup.Post("/verify/confirm", authLimiter, mw.cookie, h.ConfirmEmailVerification)
+	authGroup.Post("/verify/request", verifyReqLimiter, mw.cookie, h.RequestEmailVerification)
+	authGroup.Post("/verify/confirm", verifyConfLimiter, mw.cookie, h.ConfirmEmailVerification)
 	// Password recovery. Public — the mailed code is the credential. forgot always answers
 	// 202 (never an enumeration oracle); reset revokes every session on success.
-	authGroup.Post("/password/forgot", authLimiter, h.ForgotPassword)
-	authGroup.Post("/password/reset", authLimiter, h.ResetPassword)
+	authGroup.Post("/password/forgot", forgotLimiter, h.ForgotPassword)
+	authGroup.Post("/password/reset", resetLimiter, h.ResetPassword)
 	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
 	// is not something a programmatic credential should be able to do.
 	authGroup.Post("/logout-all", mw.cookie, h.LogoutAll)
@@ -192,8 +217,22 @@ func accountsError(err error) error {
 	case errors.Is(err, accounts.ErrUserNotFound):
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	default:
+		if isInfraError(err) {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
+		}
 		return err
 	}
+}
+
+func isInfraError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection") || strings.Contains(msg, "closed") || strings.Contains(msg, "timeout") || strings.Contains(msg, "refusal") || strings.Contains(msg, "pool")
 }
 
 // Register creates an account, starts a session (auth cookie), and returns the
@@ -260,7 +299,7 @@ func (h *authHandlers) LogoutAll(c *fiber.Ctx) error {
 func (h *authHandlers) setSession(c *fiber.Ctx, userID int64) error {
 	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 	}
 	return h.setSessionAt(c, userID, version)
 }

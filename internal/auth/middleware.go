@@ -48,6 +48,15 @@ func KeyScope(c *fiber.Ctx) string {
 	return scope
 }
 
+type sessionResult int
+
+const (
+	sessionOK sessionResult = iota
+	sessionInvalid
+	sessionRevoked
+	sessionInfraError
+)
+
 // TokenVersionLoader resolves an authenticated user id to its current session
 // generation. Like RoleLoader it returns a primitive so this package needs no database
 // import; it is satisfied directly by *db.Queries (GetUserTokenVersion).
@@ -57,15 +66,18 @@ type TokenVersionLoader interface {
 
 // RequireAuth returns middleware that validates the auth cookie and stores the
 // resolved user id in the request locals. It responds 401 on a missing,
-// expired, invalid, or revoked token.
+// expired, invalid, or revoked token, and 503 on database infrastructure errors.
 func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := c.Cookies(CookieName)
 		if token == "" {
 			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 		}
-		id, ok := resolveSession(c, iss, versions, token)
-		if !ok {
+		id, res, _ := resolveSession(c, iss, versions, token)
+		if res == sessionInfraError {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
+		}
+		if res != sessionOK {
 			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired session")
 		}
 		c.Locals(LocalsUserID, id)
@@ -86,7 +98,7 @@ func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 func OptionalCookieAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
-			if id, ok := resolveSession(c, iss, versions, token); ok {
+			if id, res, _ := resolveSession(c, iss, versions, token); res == sessionOK {
 				c.Locals(LocalsUserID, id)
 			}
 		}
@@ -95,18 +107,23 @@ func OptionalCookieAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler 
 }
 
 // resolveSession validates a cookie token and confirms it was not revoked, returning the
-// user id it authenticates. A version-load failure (deleted account, database trouble)
-// fails closed, matching RequireRole: an unverifiable session is not a session.
-func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, token string) (int64, bool) {
+// user id it authenticates and a classification result.
+func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, token string) (int64, sessionResult, error) {
 	id, version, err := iss.Parse(token)
 	if err != nil {
-		return 0, false
+		return 0, sessionInvalid, nil
 	}
 	current, err := versions.GetUserTokenVersion(c.Context(), id)
-	if err != nil || current != version {
-		return 0, false
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, sessionRevoked, nil
+		}
+		return 0, sessionInfraError, err
 	}
-	return id, true
+	if current != version {
+		return 0, sessionRevoked, nil
+	}
+	return id, sessionOK, nil
 }
 
 // UserID returns the authenticated user id stored by RequireAuth or
@@ -154,16 +171,18 @@ func RequireAuthOrKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthe
 func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, allowed ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
-			if id, ok := resolveSession(c, iss, versions, token); ok {
+			id, res, _ := resolveSession(c, iss, versions, token)
+			if res == sessionOK {
 				c.Locals(LocalsUserID, id)
 				return c.Next()
+			}
+			if res == sessionInfraError {
+				return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 			}
 		}
 		b, ok, err := resolveBearer(c, iss, versions, keys)
 		if err != nil {
-			// A lookup failure (DB down, etc.) is not "unauthenticated":
-			// surface it as a 500 rather than masking it as a 401.
-			return err
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if ok {
 			if b.viaKey && !scopeAllowed(b.scope, allowed) {
@@ -198,23 +217,25 @@ func scopeAllowed(scope string, allowed []string) bool {
 // session cookie or API key is present, and otherwise passes through anonymously.
 // An absent, expired, or unknown credential simply leaves no user id in locals, so
 // a public read still succeeds. Used on the job/company detail reads to overlay the
-// caller's own vote without gating the page behind sign-in. A key-lookup failure
-// that is not "no such key" (pgx.ErrNoRows) is a real error and is returned — it
-// must not be silently degraded to anonymous.
+// caller's own vote without gating the page behind sign-in.
+//
+// Asymmetry Note: Cookie DB errors silently degrade to guest mode so public feed access
+// is preserved during database outages. Conversely, explicit Bearer API key lookup failures
+// (e.g. DB outage) return HTTP 503 so programmatic API clients receive actionable status.
 func OptionalAuth(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if token := c.Cookies(CookieName); token != "" {
-			if id, ok := resolveSession(c, iss, versions, token); ok {
+			if id, res, _ := resolveSession(c, iss, versions, token); res == sessionOK {
 				c.Locals(LocalsUserID, id)
 				return c.Next()
 			}
 		}
 		// No scope gate here: an under-scoped key on a public read only enriches the
-		// response with its own owner's overlay.
+		// response with its own owner's overlay. A presented Bearer key lookup failure
+		// (DB down, etc.) is real and returned as 503 — it must not be silently degraded.
 		b, ok, err := resolveBearer(c, iss, versions, keys)
 		if err != nil {
-			// A lookup outage is a real error, not "anonymous": surface it.
-			return err
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if ok {
 			c.Locals(LocalsUserID, b.userID)
@@ -247,7 +268,10 @@ func RequireRole(loader RoleLoader, role string) fiber.Handler {
 		}
 		got, err := loader.GetUserRole(c.Context(), id)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
+			}
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if got != role {
 			return fiber.NewError(fiber.StatusForbidden, "forbidden")
@@ -275,11 +299,12 @@ func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, k
 	if tok == "" {
 		return bearerIdentity{}, false, nil
 	}
-	// A JWT bearer IS a session, so it takes the same revocation check as the cookie —
-	// otherwise "sign out everywhere" would leave the extension's copy of the token
-	// working, which is exactly the device a user reaches for that button to evict.
-	if id, ok := resolveSession(c, iss, versions, tok); ok {
+	id, res, err := resolveSession(c, iss, versions, tok)
+	if res == sessionOK {
 		return bearerIdentity{userID: id}, true, nil
+	}
+	if res == sessionInfraError {
+		return bearerIdentity{}, false, err
 	}
 	identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok))
 	switch {

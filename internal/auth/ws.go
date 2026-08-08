@@ -51,8 +51,8 @@ func RequireAuthWS(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenti
 		// user is well outside what a CV-tailoring credential was minted for.
 		b, ok, err := resolveCredential(c, iss, versions, keys, token)
 		if err != nil {
-			// A key-lookup outage is a real error, not a rejected handshake.
-			return err
+			// A DB infrastructure outage is a 503 service unavailable, not a silent failure or raw error.
+			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if !ok {
 			return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")

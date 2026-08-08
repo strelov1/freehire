@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // fakeRepo is a test double for Repository.
 // It records calls and returns canned responses.
 type fakeRepo struct {
+	mu sync.Mutex
+
 	// UserIDByIdentity responses: looked up in order per call
 	identityResults []idResult
 	identityCallIdx int
@@ -85,7 +89,13 @@ type userByIDResult struct {
 	err  error
 }
 
+func (f *fakeRepo) WithTx(tx pgx.Tx) Repository {
+	return f
+}
+
 func (f *fakeRepo) UserIDByIdentity(_ context.Context, provider, providerUserID string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.identityCallIdx >= len(f.identityResults) {
 		return 0, ErrIdentityNotFound
 	}
@@ -95,6 +105,8 @@ func (f *fakeRepo) UserIDByIdentity(_ context.Context, provider, providerUserID 
 }
 
 func (f *fakeRepo) LinkOrCreateByEmail(_ context.Context, provider, providerUserID, email string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.linkCalls = append(f.linkCalls, linkCall{provider, providerUserID, email})
 	if f.linkCallIdx >= len(f.linkResults) {
 		return 0, errors.New("fakeRepo: unexpected LinkOrCreateByEmail call")
@@ -105,6 +117,8 @@ func (f *fakeRepo) LinkOrCreateByEmail(_ context.Context, provider, providerUser
 }
 
 func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, emailVerified bool) (User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash, emailVerified})
 	if f.createUserCallIdx >= len(f.createUserResults) {
 		return User{}, errors.New("fakeRepo: unexpected CreateUser call")
@@ -115,39 +129,61 @@ func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, ema
 }
 
 func (f *fakeRepo) UserByEmail(_ context.Context, email string) (User, string, bool, error) {
-	if f.userByEmailCallIdx >= len(f.userByEmailResults) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.userByEmailResults) == 0 {
 		return User{}, "", false, ErrUserNotFound
 	}
-	r := f.userByEmailResults[f.userByEmailCallIdx]
-	f.userByEmailCallIdx++
+	idx := f.userByEmailCallIdx
+	if idx >= len(f.userByEmailResults) {
+		idx = len(f.userByEmailResults) - 1
+	} else {
+		f.userByEmailCallIdx++
+	}
+	r := f.userByEmailResults[idx]
 	return r.user, r.passwordHash, r.hasPassword, r.err
 }
 
 func (f *fakeRepo) MarkEmailVerified(_ context.Context, _ int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.markedVerified = true
 	return nil
 }
 
 func (f *fakeRepo) PasswordHash(_ context.Context, _ int64) (string, bool, error) {
-	if f.userByEmailCallIdx >= len(f.userByEmailResults) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.userByEmailResults) == 0 {
 		return "", false, ErrUserNotFound
 	}
-	r := f.userByEmailResults[f.userByEmailCallIdx]
-	f.userByEmailCallIdx++
+	idx := f.userByEmailCallIdx
+	if idx >= len(f.userByEmailResults) {
+		idx = len(f.userByEmailResults) - 1
+	} else {
+		f.userByEmailCallIdx++
+	}
+	r := f.userByEmailResults[idx]
 	return r.passwordHash, r.hasPassword, r.err
 }
 
 func (f *fakeRepo) SetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.setHash = passwordHash
 	return f.setPasswordVersion, nil
 }
 
 func (f *fakeRepo) ResetPassword(_ context.Context, _ int64, passwordHash string) (int32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.resetHash = passwordHash
 	return f.setPasswordVersion, nil
 }
 
 func (f *fakeRepo) UserByID(_ context.Context, id int64) (User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.userByIDCallIdx >= len(f.userByIDResults) {
 		return User{}, ErrUserNotFound
 	}
@@ -159,17 +195,22 @@ func (f *fakeRepo) UserByID(_ context.Context, id int64) (User, error) {
 // fakeHasher is a test double for PasswordHasher.
 // Hash returns "hashed:"+plain; Check returns nil iff hash == "hashed:"+plain.
 type fakeHasher struct {
+	mu         sync.Mutex
 	hashCalls  int
 	checkCalls int
 }
 
 func (h *fakeHasher) Hash(plain string) (string, error) {
+	h.mu.Lock()
 	h.hashCalls++
+	h.mu.Unlock()
 	return "hashed:" + plain, nil
 }
 
 func (h *fakeHasher) Check(hash, plain string) error {
+	h.mu.Lock()
 	h.checkCalls++
+	h.mu.Unlock()
 	if hash == "hashed:"+plain {
 		return nil
 	}

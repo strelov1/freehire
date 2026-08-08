@@ -19,6 +19,14 @@ SELECT code_hash, expires_at, attempts, created_at
 FROM user_email_codes
 WHERE user_id = $1 AND purpose = $2;
 
+-- name: GetEmailCodeForUpdate :one
+-- The outstanding code for a purpose locked for update inside a transaction.
+SELECT code_hash, expires_at, attempts, created_at
+FROM user_email_codes
+WHERE user_id = $1 AND purpose = $2
+FOR UPDATE;
+
+
 -- name: BumpEmailCodeAttempts :one
 -- Count one failed confirmation and return the new total, so the caller can burn the code
 -- once it reaches the ceiling. Atomic, so concurrent guesses cannot share an attempt.

@@ -3,6 +3,9 @@ package accounts
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -187,5 +190,42 @@ func TestChangePasswordRefusesAPasswordlessAccount(t *testing.T) {
 
 	if _, err := s.ChangePassword(context.Background(), 7, "anything", "brand-new-pw"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("err = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestResetPassword_ConcurrentRace(t *testing.T) {
+	repo := &fakeRepo{
+		userByEmailResults: []userByEmailResult{
+			{user: User{ID: 7, Email: "user@example.test"}, passwordHash: "hashed:old", hasPassword: true},
+		},
+	}
+	codes, mailer := newFakeCodes(), &fakeMailer{}
+	s := recoveryService(repo, codes, mailer)
+
+	if err := s.RequestPasswordReset(context.Background(), "user@example.test"); err != nil {
+		t.Fatalf("RequestPasswordReset: %v", err)
+	}
+
+	if len(mailer.reset) != 1 {
+		t.Fatalf("len(mailer.reset) = %d, want 1", len(mailer.reset))
+	}
+	code := mailer.reset[0]
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			newPassword := fmt.Sprintf("new-password-%d", idx)
+			if err := s.ResetPassword(context.Background(), "user@example.test", code, newPassword); err == nil {
+				successes.Add(1)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if successes.Load() != 1 {
+		t.Errorf("successes = %d, want exactly 1 successful code consumption under concurrent calls", successes.Load())
 	}
 }

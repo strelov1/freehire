@@ -226,8 +226,8 @@ func TestRequireAuthOrKey_KeyLookupErrorIsNot401(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusInternalServerError {
-		t.Errorf("status = %d, want 500 (a lookup outage must not masquerade as 401)", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 (a lookup outage must surface as 503)", resp.StatusCode)
 	}
 }
 
@@ -257,13 +257,13 @@ func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
 		t.Fatalf("unknown key: status = %d, want 200", resp.StatusCode)
 	}
 
-	// A lookup outage is surfaced, not silently degraded to anonymous.
+	// A lookup outage is surfaced as 503, not silently degraded to anonymous.
 	resp, err = newApp(errKeyAuth{err: errors.New("connection refused")}).Test(newReq())
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
-	if resp.StatusCode != fiber.StatusInternalServerError {
-		t.Errorf("outage: status = %d, want 500", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
+		t.Errorf("outage: status = %d, want 503", resp.StatusCode)
 	}
 }
 

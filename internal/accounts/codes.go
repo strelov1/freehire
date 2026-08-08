@@ -8,6 +8,8 @@ import (
 	"log"
 	"math/big"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Purposes a mailed code can serve. They share one store keyed by (user, purpose), so a
@@ -70,8 +72,11 @@ type StoredCode struct {
 type CodeStore interface {
 	UpsertCode(ctx context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error
 	Code(ctx context.Context, userID int64, purpose string) (StoredCode, error)
+	GetEmailCodeForUpdate(ctx context.Context, userID int64, purpose string) (StoredCode, error)
 	BumpAttempts(ctx context.Context, userID int64, purpose string) (int32, error)
 	DeleteCode(ctx context.Context, userID int64, purpose string) error
+	WithTx(tx pgx.Tx) CodeStore
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 // CodeMailer delivers the two transactional mails. It is a port so accounts stays free of
@@ -104,9 +109,18 @@ func newCode() (string, error) {
 
 // issueCode mints, stores, and returns a fresh code for one purpose, refusing a resend
 // inside the cooldown. The code is stored only as a hash — a stolen snapshot must not
-// yield live codes.
+// yield live codes. It checks resend cooldown and upserts code atomically inside a transaction.
 func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (string, error) {
-	existing, err := s.codes.Code(ctx, userID, purpose)
+	tx, err := s.codes.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback(ctx) }()
+	}
+	store := s.codes.WithTx(tx)
+
+	existing, err := store.GetEmailCodeForUpdate(ctx, userID, purpose)
 	switch {
 	case err == nil:
 		if s.now().Sub(existing.IssuedAt) < resendCooldown {
@@ -124,26 +138,21 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 	if err != nil {
 		return "", err
 	}
-	if err := s.codes.UpsertCode(ctx, userID, purpose, hash, s.now().Add(codeTTL)); err != nil {
+	if err := store.UpsertCode(ctx, userID, purpose, hash, s.now().Add(codeTTL)); err != nil {
 		return "", err
+	}
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			return "", err
+		}
 	}
 	return code, nil
 }
 
-// consumeCode checks a presented code against the outstanding one and, on success, deletes
-// it so it cannot be replayed. A wrong guess counts toward the ceiling; a code that has spent
-// its budget is dead, so even the right value stops working until a new one is issued.
-// Absent, burnt, and wrong all surface as ErrInvalidCode — the caller learns only that this
-// code does not work.
-//
-// A burnt code keeps its row rather than being deleted. That row is what issueCode reads the
-// resend cooldown off, and deleting it made burning the code the cheapest way to get a fresh
-// one: the ceiling then cost a guesser one round-trip instead of a minute, so five guesses
-// per code was not a rate limit at all. Keeping the row makes the two bounds compose — a
-// guesser gets maxCodeAttempts tries per resendCooldown against a six-digit secret — and
-// costs nothing, since UpsertEmailCode resets attempts when the next code is issued.
-func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presented string) error {
-	stored, err := s.codes.Code(ctx, userID, purpose)
+// consumeCodeTx checks a presented code against the outstanding one using GetEmailCodeForUpdate
+// inside a transaction.
+func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int64, purpose, presented string) error {
+	stored, err := store.GetEmailCodeForUpdate(ctx, userID, purpose)
 	if errors.Is(err, ErrNoCode) {
 		return ErrInvalidCode
 	}
@@ -157,12 +166,35 @@ func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presen
 		return ErrCodeExpired
 	}
 	if s.hasher.Check(stored.Hash, presented) != nil {
-		if _, err := s.codes.BumpAttempts(ctx, userID, purpose); err != nil {
+		if _, err := store.BumpAttempts(ctx, userID, purpose); err != nil {
 			return err
 		}
 		return ErrInvalidCode
 	}
-	return s.codes.DeleteCode(ctx, userID, purpose)
+	return store.DeleteCode(ctx, userID, purpose)
+}
+
+// consumeCode checks a presented code against the outstanding one and, on success, deletes
+// it so it cannot be replayed. It wraps consumeCodeTx in a transaction.
+func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presented string) error {
+	tx, err := s.codes.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback(ctx) }()
+	}
+	store := s.codes.WithTx(tx)
+
+	consumeErr := s.consumeCodeTx(ctx, store, userID, purpose, presented)
+	if tx != nil {
+		if errors.Is(consumeErr, ErrInvalidCode) || consumeErr == nil {
+			if commitErr := tx.Commit(ctx); commitErr != nil && consumeErr == nil {
+				return commitErr
+			}
+		}
+	}
+	return consumeErr
 }
 
 // IssueVerificationCode mails a fresh email-verification code to the account's address.
@@ -185,10 +217,34 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 	if !s.codesEnabled() {
 		return ErrMailUnavailable
 	}
-	if err := s.consumeCode(ctx, userID, PurposeVerifyEmail, code); err != nil {
+	tx, err := s.codes.Begin(ctx)
+	if err != nil {
 		return err
 	}
-	return s.repo.MarkEmailVerified(ctx, userID)
+	if tx != nil {
+		defer func() { _ = tx.Rollback(ctx) }()
+	}
+	txStore := s.codes.WithTx(tx)
+	txRepo := s.repo.WithTx(tx)
+
+	consumeErr := s.consumeCodeTx(ctx, txStore, userID, PurposeVerifyEmail, code)
+	if consumeErr != nil {
+		if tx != nil && errors.Is(consumeErr, ErrInvalidCode) {
+			_ = tx.Commit(ctx)
+		}
+		return consumeErr
+	}
+
+	if err := txRepo.MarkEmailVerified(ctx, userID); err != nil {
+		return err
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // sendVerificationOnRegister mails the new account's first code, best-effort: a mail

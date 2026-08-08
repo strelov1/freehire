@@ -63,15 +63,42 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 		// the user typed a password the rules reject.
 		return err
 	}
-	if err := s.consumeCode(ctx, user.ID, PurposeResetPassword, code); err != nil {
-		return err
-	}
+
+	// Hash the new password BEFORE opening the transaction so CPU-heavy bcrypt work
+	// does not hold DB locks.
 	hash, err := s.hasher.Hash(newPassword)
 	if err != nil {
 		return err
 	}
-	_, err = s.repo.ResetPassword(ctx, user.ID, hash)
-	return err
+
+	tx, err := s.codes.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if tx != nil {
+		defer func() { _ = tx.Rollback(ctx) }()
+	}
+	txStore := s.codes.WithTx(tx)
+	txRepo := s.repo.WithTx(tx)
+
+	consumeErr := s.consumeCodeTx(ctx, txStore, user.ID, PurposeResetPassword, code)
+	if consumeErr != nil {
+		if tx != nil && errors.Is(consumeErr, ErrInvalidCode) {
+			_ = tx.Commit(ctx)
+		}
+		return consumeErr
+	}
+
+	if _, err := txRepo.ResetPassword(ctx, user.ID, hash); err != nil {
+		return err
+	}
+
+	if tx != nil {
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ChangePassword replaces a known password. It returns the account's new session

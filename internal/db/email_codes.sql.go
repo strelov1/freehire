@@ -82,6 +82,38 @@ func (q *Queries) GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (Get
 	return i, err
 }
 
+const getEmailCodeForUpdate = `-- name: GetEmailCodeForUpdate :one
+SELECT code_hash, expires_at, attempts, created_at
+FROM user_email_codes
+WHERE user_id = $1 AND purpose = $2
+FOR UPDATE
+`
+
+type GetEmailCodeForUpdateParams struct {
+	UserID  int64  `json:"user_id"`
+	Purpose string `json:"purpose"`
+}
+
+type GetEmailCodeForUpdateRow struct {
+	CodeHash  string             `json:"code_hash"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	Attempts  int32              `json:"attempts"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// The outstanding code for a purpose locked for update inside a transaction.
+func (q *Queries) GetEmailCodeForUpdate(ctx context.Context, arg GetEmailCodeForUpdateParams) (GetEmailCodeForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getEmailCodeForUpdate, arg.UserID, arg.Purpose)
+	var i GetEmailCodeForUpdateRow
+	err := row.Scan(
+		&i.CodeHash,
+		&i.ExpiresAt,
+		&i.Attempts,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const upsertEmailCode = `-- name: UpsertEmailCode :exec
 INSERT INTO user_email_codes (user_id, purpose, code_hash, expires_at)
 VALUES ($1, $2, $3, $4)

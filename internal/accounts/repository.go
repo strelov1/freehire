@@ -28,6 +28,17 @@ func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository 
 // Compile-time assertion that QueriesRepository satisfies Repository.
 var _ Repository = (*QueriesRepository)(nil)
 
+// WithTx returns a transactional copy of QueriesRepository.
+func (r *QueriesRepository) WithTx(tx pgx.Tx) Repository {
+	if tx == nil {
+		return r
+	}
+	return &QueriesRepository{
+		q:    r.q.WithTx(tx),
+		pool: r.pool,
+	}
+}
+
 // UserIDByIdentity returns the local user id for an external identity, or
 // ErrIdentityNotFound when no identity row matches.
 func (r *QueriesRepository) UserIDByIdentity(ctx context.Context, provider, providerUserID string) (int64, error) {

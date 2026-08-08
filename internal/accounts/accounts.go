@@ -8,6 +8,8 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const minPasswordLen = 8
@@ -120,6 +122,9 @@ type Repository interface {
 
 	// UserByID returns the user with the given id, or ErrUserNotFound when absent.
 	UserByID(ctx context.Context, id int64) (User, error)
+
+	// WithTx returns a Repository bound to the given transaction.
+	WithTx(tx pgx.Tx) Repository
 }
 
 // Service resolves external OAuth identities and handles password auth for
@@ -224,11 +229,16 @@ func (s *Service) Login(ctx context.Context, email, password string) (User, erro
 		return User{}, ErrInvalidCredentials
 	}
 	user, hash, hasPassword, err := s.repo.UserByEmail(ctx, addr)
-	if err != nil || !hasPassword {
-		// Spend one bcrypt Check on a dummy hash so an unknown or passwordless
-		// account costs the same as a real one — otherwise the timing difference
-		// (fast indexed lookup vs. slow bcrypt) discloses which emails have password
-		// accounts, defeating the deliberately-generic error.
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			// Spend one bcrypt Check on a dummy hash so an unknown account costs
+			// the same as a real one — closing the timing side-channel.
+			_ = s.hasher.Check(dummyPasswordHash, password)
+			return User{}, ErrInvalidCredentials
+		}
+		return User{}, err
+	}
+	if !hasPassword {
 		_ = s.hasher.Check(dummyPasswordHash, password)
 		return User{}, ErrInvalidCredentials
 	}
