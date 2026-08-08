@@ -857,6 +857,21 @@ func facetSettings() *meilisearch.Settings {
 			MaxValuesPerFacet: maxValuesPerFacet,
 			SortFacetValuesBy: map[string]meilisearch.SortFacetType{"*": meilisearch.SortFacetTypeCount},
 		},
+		// byAttribute skips computing exact word-to-word distance across the index —
+		// a local benchmark showed Meilisearch's "merging word proximity" indexing
+		// phase alone costing up to ~10s per 200-document batch (search-drain's push
+		// size), backed by a wordPairProximityDocids structure larger than the
+		// documents themselves. Job descriptions are long-form prose, not short
+		// phrases where word adjacency is load-bearing for ranking, so the relevancy
+		// trade-off is negligible. NOTE: prefixSearch was deliberately NOT disabled
+		// here despite being the other half of that same benchmark's savings —
+		// HeaderSearch.svelte and the /jobs list's filters.ts both debounce a
+		// query-as-you-type search through this same index, relying on Meilisearch's
+		// default last-word prefix matching to return results mid-word.
+		//
+		// Like FilterableAttributes above, this setting only takes effect on data
+		// written AFTER a reindex — a full `cmd/reindex` run is required post-deploy.
+		ProximityPrecision: meilisearch.ByAttribute,
 	}
 }
 

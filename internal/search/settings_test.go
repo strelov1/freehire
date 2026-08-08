@@ -3,6 +3,8 @@ package search
 import (
 	"reflect"
 	"testing"
+
+	"github.com/meilisearch/meilisearch-go"
 )
 
 // The reindex split keeps two index configurations: a facet/keyword index with NO
@@ -78,6 +80,28 @@ func contains(xs []string, want string) bool {
 	return false
 }
 
+func TestFacetSettingsSkipsExpensiveProximityIndexing(t *testing.T) {
+	// A local benchmark against a real ~317k-document sample of prod job data
+	// showed Meilisearch's "merging word proximity" indexing phase costing up to
+	// ~10s per 200-document batch (search-drain's push size), backed by a
+	// wordPairProximityDocids structure larger than the documents themselves.
+	// byAttribute skips building that structure entirely; job descriptions are
+	// long-form prose, not short phrases where word adjacency is load-bearing for
+	// ranking, so the relevancy trade-off is negligible.
+	//
+	// prefixSearch is deliberately NOT disabled despite being part of the same
+	// benchmark's savings: HeaderSearch.svelte and the /jobs list's filters.ts both
+	// debounce a query-as-you-type search through this index and rely on
+	// Meilisearch's default last-word prefix matching to return results mid-word.
+	s := facetSettings()
+	if s.ProximityPrecision != meilisearch.ByAttribute {
+		t.Errorf("facetSettings().ProximityPrecision = %q, want %q", s.ProximityPrecision, meilisearch.ByAttribute)
+	}
+	if s.PrefixSearch != nil {
+		t.Errorf("facetSettings().PrefixSearch = %v, want nil (prefix search stays enabled for live query-as-you-type)", *s.PrefixSearch)
+	}
+}
+
 func TestFacetAndSemanticShareKeywordSettings(t *testing.T) {
 	f, s := facetSettings(), semanticSettings()
 	if !reflect.DeepEqual(f.FilterableAttributes, s.FilterableAttributes) {
@@ -88,5 +112,9 @@ func TestFacetAndSemanticShareKeywordSettings(t *testing.T) {
 	}
 	if !reflect.DeepEqual(f.SortableAttributes, s.SortableAttributes) {
 		t.Error("facet and semantic settings must share SortableAttributes")
+	}
+	if f.ProximityPrecision != s.ProximityPrecision {
+		t.Errorf("facet and semantic settings must share ProximityPrecision, got %q vs %q",
+			f.ProximityPrecision, s.ProximityPrecision)
 	}
 }
