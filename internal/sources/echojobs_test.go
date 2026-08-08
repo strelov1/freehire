@@ -6,24 +6,45 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
 )
 
-// echojobsHTTP is a paging-aware test JSONGetter: it serves pages[i] for ?page=i+1 and records
-// every page number requested, so a test can assert the walk stopped where it should.
+// echojobsHTTP is a paging-and-detail-aware test JSONGetter: it serves pages[i] for ?page=i+1
+// (recording every page number requested) and, for a detail request (/api/jobs/{id}), routes by
+// the id in the path — mirroring getmanfredHTTP's list/detail split.
 type echojobsHTTP struct {
-	pages    []string
-	failPage int // 0 = never fail
-	got      []int
+	pages      []string
+	failPage   int // 0 = never fail
+	got        []int
+	details    map[string]string
+	detailErr  map[string]bool
+	gotDetails []string
 }
+
+var echojobsDetailRE = regexp.MustCompile(`/jobs/([^/?]+)$`)
 
 func (f *echojobsHTTP) GetJSON(_ context.Context, u string, v any) error {
 	parsed, err := url.Parse(u)
 	if err != nil {
 		return err
+	}
+	if parsed.RawQuery == "" {
+		if m := echojobsDetailRE.FindStringSubmatch(parsed.Path); m != nil {
+			id := m[1]
+			f.gotDetails = append(f.gotDetails, id)
+			if f.detailErr[id] {
+				return errors.New("echojobsHTTP: detail boom")
+			}
+			raw, ok := f.details[id]
+			if !ok {
+				return errors.New("echojobsHTTP: no detail for id")
+			}
+			return json.Unmarshal([]byte(raw), v)
+		}
 	}
 	page, _ := strconv.Atoi(parsed.Query().Get("page"))
 	f.got = append(f.got, page)
@@ -41,12 +62,16 @@ func echojobsPageJSON(jobs string) string {
 }
 
 func echojobsJobJSON(handle, postedAt string) string {
+	return echojobsJobJSONWithID(handle, handle, postedAt)
+}
+
+func echojobsJobJSONWithID(id, handle, postedAt string) string {
 	return fmt.Sprintf(`{
-		"id":"x","title":"Backend Engineer","company_name":"Acme","domain_name":"acme.com",
+		"id":%q,"title":"Backend Engineer","company_name":"Acme","domain_name":"acme.com",
 		"url":"https://boards.greenhouse.io/acme/jobs/123","job_handle":%q,
 		"posted_at":%s,"locations":["California","New York"],"remote_type":"hybrid",
 		"required_skills":["Go","NotARealSkill"]
-	}`, handle, postedAt)
+	}`, id, handle, postedAt)
 }
 
 func TestEchojobsFetchMapsFields(t *testing.T) {
@@ -138,5 +163,72 @@ func TestEchojobsFetchLaterPageFailureReturnsPartial(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "job-1" {
 		t.Fatalf("want partial result [job-1], got %+v", jobs)
+	}
+}
+
+// The list endpoint carries no description (verified live), so FetchNew hydrates it from the
+// per-posting detail endpoint — but only for a posting the catalogue does not already have.
+func TestEchojobsFetchNewHydratesUnseenPosting(t *testing.T) {
+	now := time.Now().UTC()
+	fresh := strconv.FormatInt(now.UnixMilli(), 10)
+	http := &echojobsHTTP{
+		pages:   []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
+		details: map[string]string{"det1": `{"description":"<p>Great role.</p>"}`},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d", len(jobs))
+	}
+	if jobs[0].Description != "<p>Great role.</p>" {
+		t.Fatalf("Description not hydrated: %q", jobs[0].Description)
+	}
+	if !slices.Equal(http.gotDetails, []string{"det1"}) {
+		t.Fatalf("detail requests = %v, want [det1]", http.gotDetails)
+	}
+}
+
+// A posting the catalogue already has must not cost a detail request: it is refreshed
+// (SeenRefresh) with its list-only identity, preserving whatever description was hydrated when
+// it was new — a content-less re-upsert would wipe it.
+func TestEchojobsFetchNewSkipsDetailForSeenPosting(t *testing.T) {
+	now := time.Now().UTC()
+	fresh := strconv.FormatInt(now.UnixMilli(), 10)
+	http := &echojobsHTTP{
+		pages: []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(externalID string) bool {
+		return externalID == "acme-swe"
+	})
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].SeenRefresh {
+		t.Fatalf("want 1 job with SeenRefresh set, got %+v", jobs)
+	}
+	if len(http.gotDetails) != 0 {
+		t.Fatalf("a seen posting must not cost a detail request, got %v", http.gotDetails)
+	}
+}
+
+// A failed detail request must not drop the posting — it falls back to the list-only job.
+func TestEchojobsFetchNewDetailFailureKeepsPosting(t *testing.T) {
+	now := time.Now().UTC()
+	fresh := strconv.FormatInt(now.UnixMilli(), 10)
+	http := &echojobsHTTP{
+		pages:     []string{echojobsPageJSON(echojobsJobJSONWithID("det1", "acme-swe", fresh)), echojobsPageJSON("")},
+		detailErr: map[string]bool{"det1": true},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Description != "" || jobs[0].ExternalID != "acme-swe" {
+		t.Fatalf("posting should survive a failed detail request: %+v", jobs)
 	}
 }

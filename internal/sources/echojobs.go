@@ -58,12 +58,15 @@ func (echojobs) aggregator() {}
 
 func (echojobs) sweepGrace() time.Duration { return echojobsSweepGrace }
 
-// echojobsPosting is one posting from the /api/jobs feed. The upstream response carries several
+// echojobsPosting is one posting from the /api/jobs list. The upstream response carries several
 // more fields (domain_name, first_seen_at, countries, states, job_function, role, seniority,
 // salary_min_usd/salary_max_usd, employment_type, employee_count, funding) that this adapter
 // deliberately does not read: none of them has a home in the Job shape today, and guessing one
-// (e.g. folding salary into Description) is not this adapter's call to make.
+// (e.g. folding salary into Description) is not this adapter's call to make. Notably absent from
+// this list: description — the list endpoint omits the body entirely (verified live), which is
+// why FetchNew hydrates it from the per-posting detail endpoint (see echojobsDetail).
 type echojobsPosting struct {
+	ID             string   `json:"id"`
 	Title          string   `json:"title"`
 	CompanyName    string   `json:"company_name"`
 	URL            string   `json:"url"`
@@ -74,12 +77,55 @@ type echojobsPosting struct {
 	RequiredSkills []string `json:"required_skills"`
 }
 
-// Fetch walks the feed newest-first, stopping once a page's oldest posting (its last entry) falls
-// outside echojobsFreshnessWindow. Per the house pagination rule, a failure on the first page is a
-// board-level error; a failure on a later page ends the walk with what was already gathered.
+// Fetch is the list-only crawl (no description): kept as the fallback for a caller that does not
+// drive hydration. FetchNew is the hydrating path the pipeline prefers.
 func (e echojobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
+	postings, err := e.crawl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]Job, len(postings))
+	for i, p := range postings {
+		jobs[i] = p.toJob(parseEpochMillis(p.PostedAt))
+	}
+	return jobs, nil
+}
+
+// FetchNew is the hydrating crawl: it pages the same list, but fetches a posting's detail (the
+// description the list omits) only for a posting the catalogue does not already have — seen
+// reports whether a posting's external id is already ingested. A seen posting yields the
+// list-only job with SeenRefresh set (liveness refresh only, no content rewrite — a content-less
+// re-upsert would wipe the description hydrated when it was new); an unseen posting is hydrated
+// with its detail; a single posting's detail failure is isolated (logged, falling back to
+// list-only so the posting is still ingested). Detail fetches run under the shared bounded worker
+// pool, mirroring justjoin's FetchNew.
+func (e echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	postings, err := e.crawl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return fetchDetails(postings, defaultDetailWorkers, func(p echojobsPosting) (Job, bool) {
+		base := p.toJob(parseEpochMillis(p.PostedAt))
+		if seen(base.ExternalID) {
+			base.SeenRefresh = true
+			return base, true
+		}
+		d, ok := e.detail(ctx, p.ID)
+		if !ok {
+			log.Printf("echojobs: detail %q failed; ingesting list-only", p.ID)
+			return base, true
+		}
+		return d.apply(base), true
+	}), nil
+}
+
+// crawl pages the feed newest-first, stopping once a page's oldest posting (its last entry) falls
+// outside echojobsFreshnessWindow, and returns every raw posting gathered — the shared list walk
+// behind Fetch and FetchNew. Per the house pagination rule, a failure on the first page is a
+// board-level error; a failure on a later page ends the walk with what was already gathered.
+func (e echojobs) crawl(ctx context.Context) ([]echojobsPosting, error) {
 	cutoff := time.Now().Add(-echojobsFreshnessWindow)
-	var jobs []Job
+	var postings []echojobsPosting
 	for page := 1; ; page++ {
 		var resp struct {
 			Jobs []echojobsPosting `json:"jobs"`
@@ -88,11 +134,11 @@ func (e echojobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 			if page == 1 {
 				return nil, fmt.Errorf("echojobs: page %d: %w", page, err)
 			}
-			log.Printf("echojobs: page %d failed, stopping with %d jobs gathered: %v", page, len(jobs), err)
-			return jobs, nil
+			log.Printf("echojobs: page %d failed, stopping with %d postings gathered: %v", page, len(postings), err)
+			return postings, nil
 		}
 		if len(resp.Jobs) == 0 {
-			return jobs, nil
+			return postings, nil
 		}
 		stale := false
 		for _, p := range resp.Jobs {
@@ -101,16 +147,44 @@ func (e echojobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 				stale = true
 				continue
 			}
-			jobs = append(jobs, p.toJob(postedAt))
+			postings = append(postings, p)
 		}
 		if stale {
-			return jobs, nil
+			return postings, nil
 		}
 	}
 }
 
 func echojobsPageURL(page int) string {
 	return fmt.Sprintf("%s?page=%d&per_page=%d", echojobsBaseURL, page, echojobsPageSize)
+}
+
+// echojobsDetailURL is the per-posting detail endpoint. It is keyed by the feed's internal id,
+// NOT job_handle (echojobs' own slug, which is what ExternalID carries) — the two are unrelated
+// identifiers on the same posting.
+const echojobsDetailURL = echojobsBaseURL + "/%s"
+
+// echojobsDetail is the per-posting detail payload (GET /api/jobs/{id}). Only Description is
+// read; the detail response also repeats several list fields plus salary/education/yoe ones this
+// adapter does not map, for the same reason echojobsPosting's doc gives.
+type echojobsDetail struct {
+	Description string `json:"description"`
+}
+
+// detail fetches a posting's detail, returning ok=false on a failed request so the caller falls
+// back to the list-only job — a posting is never dropped over a missing detail.
+func (e echojobs) detail(ctx context.Context, id string) (echojobsDetail, bool) {
+	var d echojobsDetail
+	if err := e.http.GetJSON(ctx, fmt.Sprintf(echojobsDetailURL, id), &d); err != nil {
+		return echojobsDetail{}, false
+	}
+	return d, true
+}
+
+// apply enriches a list-derived job with the detail payload's sanitized description.
+func (d echojobsDetail) apply(base Job) Job {
+	base.Description = sanitizeHTML(d.Description)
+	return base
 }
 
 func (p echojobsPosting) toJob(postedAt *time.Time) Job {
