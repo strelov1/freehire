@@ -19,6 +19,7 @@
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
+  import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
@@ -35,6 +36,7 @@
     type CvAtsDelta,
     type CvFont,
     type CvJobMatch,
+    type TailorResult,
   } from '$lib/cv';
   import type { Analysis, AutopilotEntry, Document, RevisionView } from '$lib/generated/contracts';
   import type { Job } from '$lib/types';
@@ -42,7 +44,10 @@
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
 
-  let status = $state<'loading' | 'ready' | 'error'>('loading');
+  // 'analyzing': the bootstrap requires a cached fit analysis that does not exist yet (a job
+  // reached via JD-intake rather than the normal fit-first flow). The workspace runs the
+  // analysis inline instead of sending the candidate to a separate page for it.
+  let status = $state<'loading' | 'ready' | 'error' | 'analyzing'>('loading');
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
@@ -211,6 +216,52 @@
     }
   }
 
+  // Shared tail of every path that reaches a usable workspace (resume, bootstrap, or the
+  // bootstrap retry after an inline fit analysis): flips to ready and kicks off the
+  // accessory reads that don't block first paint.
+  function finishReady() {
+    status = 'ready';
+    // Not awaited: the workspace is usable before the comparison lands, and the comparison
+    // costs two renders. The history is the same kind of accessory read.
+    void refreshAtsDelta();
+    void refreshJobMatch();
+    void loadRevisions();
+    // Not awaited either: an empty list only means the font picker has nothing to offer yet,
+    // and the preview falls back to the template's own face meanwhile.
+    void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
+  }
+
+  // Applies a tailoring bootstrap's result (fresh or retried) to the page state and settles
+  // the CV into the address bar.
+  async function applyTailorResult(tailor: TailorResult) {
+    cvId = tailor.tailor_cv_id;
+    analysis = tailor.analysis;
+    sessionId = tailor.session_id;
+    await loadCv(); // bootstrap has no CV record in hand yet — fetch the tailored copy
+    // Put the CV in the address, replacing this entry rather than adding one. A reload of
+    // the bare /tailor/<slug> is a bootstrap request, and until the address names the CV
+    // the candidate is one F5 away from an empty workspace. Back still leaves the page.
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() supplies the path; the rule can't see through the appended ?cv= query
+    void goto(`${resolve('/tailor/[slug]', { slug })}?cv=${cvId}`, {
+      replaceState: true,
+      noScroll: true,
+      keepFocus: true,
+    });
+  }
+
+  // Retries the bootstrap once the inline fit analysis (rendered while status is 'analyzing')
+  // has landed a cached result, so the second attempt no longer 409s.
+  async function retryBootstrapAfterAnalysis() {
+    try {
+      const tailor = await api.tailorCv(slug);
+      await applyTailorResult(tailor);
+      finishReady();
+    } catch (e) {
+      errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
+      status = 'error';
+    }
+  }
+
   onMount(async () => {
     try {
       if (cvParam) {
@@ -245,43 +296,31 @@
         track('tailor_run', { slug });
         const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
         job = j;
-        cvId = tailor.tailor_cv_id;
-        analysis = tailor.analysis;
-        sessionId = tailor.session_id;
-        await loadCv(); // bootstrap has no CV record in hand yet — fetch the tailored copy
-        // Put the CV in the address, replacing this entry rather than adding one. A reload of
-        // the bare /tailor/<slug> is a bootstrap request, and until the address names the CV
-        // the candidate is one F5 away from an empty workspace. Back still leaves the page.
-        // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() supplies the path; the rule can't see through the appended ?cv= query
-        void goto(`${resolve('/tailor/[slug]', { slug })}?cv=${cvId}`, {
-          replaceState: true,
-          noScroll: true,
-          keepFocus: true,
-        });
+        await applyTailorResult(tailor);
       }
-      status = 'ready';
-      // Not awaited: the workspace is usable before the comparison lands, and the comparison
-      // costs two renders. The history is the same kind of accessory read.
-      void refreshAtsDelta();
-      void refreshJobMatch();
-      void loadRevisions();
-      // Not awaited either: an empty list only means the font picker has nothing to offer yet,
-      // and the preview falls back to the template's own face meanwhile.
-      void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
+      finishReady();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.message === 'run the fit analysis first') {
-        // The bootstrap (tailorCv) requires a cached match to already exist — true for
-        // every vacancy reached the normal way (the match page's "Tailor my CV" button
-        // only ever appears once one has run), but never true for a job that just came
-        // through the JD-intake dialog (paste text/URL/pick a vacancy — none of those
-        // run a match first). Rather than surface that as an error, send the candidate
-        // straight to the match page, which auto-runs on a cold start and hands them
-        // back here once it lands. Matched on the exact message, not just the 409 status:
-        // TailorCV also 409s when the account has no résumé to seed a base CV from, and
-        // that reason has no fix on the match page — silently bouncing there looks like a
-        // dead loop instead of the "add a résumé" error it actually is.
-        void goto(resolve('/match/[slug]', { slug }));
-        return;
+        // The bootstrap (tailorCv) requires a cached match to already exist — true for every
+        // vacancy reached the normal way, but never true for a job that just came through the
+        // JD-intake dialog (paste text/URL/pick a vacancy — none of those run a match first).
+        // Rather than surface that as an error or send the candidate to a separate page, run
+        // the analysis right here: fetch the job (the bootstrap's own fetch was discarded when
+        // Promise.all rejected), show the inline fit-analysis panel, and retry the bootstrap
+        // once it lands (see retryBootstrapAfterAnalysis, wired to MatchAnalysisFull's onDone).
+        // Matched on the exact message, not just the 409 status: TailorCV also 409s when the
+        // account has no résumé to seed a base CV from, and that message differs, so it falls
+        // through to the generic error below (it has no fix an inline analysis could offer).
+        try {
+          job = await api.getJob(slug);
+          status = 'analyzing';
+          return;
+        } catch {
+          // The job fetch itself failed — nothing to show the inline analysis against.
+          errorMsg = 'Could not open the tailoring workspace.';
+          status = 'error';
+          return;
+        }
       }
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
@@ -486,7 +525,18 @@
   {:else if status === 'error'}
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
-      <a href={resolve('/match/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the match</a>
+      <a href={resolve('/jobs/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the role</a>
+    </div>
+  {:else if status === 'analyzing' && job}
+    <!-- No cached fit analysis exists yet for this vacancy (e.g. reached via JD-intake rather
+         than the normal fit-first flow) — run it right here instead of bouncing to a separate
+         page. MatchAnalysisFull auto-runs on mount (no `initial`, so it starts cold) and
+         onDone retries the bootstrap once a result lands. -->
+    <div class="mx-auto flex min-w-0 flex-1 max-w-2xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:py-10">
+      <p class="text-sm text-muted-foreground">
+        This role hasn't been analysed yet — running the fit analysis before opening the workspace.
+      </p>
+      <MatchAnalysisFull {job} stacked onDone={retryBootstrapAfterAnalysis} />
     </div>
   {:else}
     <div class="flex min-w-0 flex-1 flex-col lg:flex-row">

@@ -62,7 +62,7 @@
     </div>
   {:else if analysis}
     {@const tone = verdictTone(analysis.overall_score)}
-    <a href={resolve('/match/[slug]', { slug })} class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-brand/40 hover:bg-accent/40">
+    <a href={resolve('/tailor/[slug]', { slug })} class="group flex flex-col gap-2 rounded-lg border border-border p-3 transition-colors hover:border-brand/40 hover:bg-accent/40">
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-2xl font-bold tabular-nums leading-none {toneText[tone]}">{analysis.overall_score}%</span>
         <span class="text-sm font-medium {toneText[tone]}">{analysis.verdict}</span>
@@ -81,7 +81,7 @@
     <Button
       variant="primary"
       size="lg"
-      href={guest ? undefined : resolve('/match/[slug]', { slug })}
+      href={guest ? undefined : resolve('/tailor/[slug]', { slug })}
       onclick={guest ? () => openAuthDialog('login') : undefined}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >

@@ -13,7 +13,7 @@
     type MatchStreamState,
     type Tone,
   } from '$lib/matchAnalysis';
-  import type { Job, MatchAnalysisResponse } from '$lib/types';
+  import type { Job, MatchAnalysis, MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
   // The full AI fit report + live SSE stream, shared by the /match page and the
@@ -26,18 +26,22 @@
   // breakpoints would otherwise cram two columns into ~480px.
   // `tailorCta` is an optional button the /match page hands down; it renders in the verdict hero
   // card (bottom-right), so it appears exactly when the analysis lands. Other callers omit it.
+  // `onDone` fires once, the moment a run completes with an analysis (from autoRun or Recompute)
+  // — the tailoring workspace uses it to know when its blocking cold-start run has landed.
   let {
     job,
     initial = null,
     autoRun = true,
     stacked = false,
     tailorCta = undefined,
+    onDone = undefined,
   }: {
     job: Job;
     initial?: MatchAnalysisResponse | null;
     autoRun?: boolean;
     stacked?: boolean;
     tailorCta?: Snippet;
+    onDone?: (analysis: MatchAnalysis) => void;
   } = $props();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
@@ -64,6 +68,16 @@
   let recovering = $state(false);
   let destroyed = false;
   let es: EventSource | null = null;
+  // Guards onDone against firing more than once per run: stream.done flips true exactly
+  // once a run lands, but the $effect below re-evaluates on every state change while it
+  // stays true.
+  let announced = false;
+  $effect(() => {
+    if (stream.done && stream.analysis && !announced) {
+      announced = true;
+      onDone?.(stream.analysis);
+    }
+  });
   // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
   let thinkingEl = $state<HTMLElement | null>(null);
   $effect(() => {
@@ -119,6 +133,7 @@
     // seeing in the funnel.
     track('match_run', { slug: job.public_slug });
     stream = initMatchStream();
+    announced = false;
     streaming = true;
     showThinking = true;
     const source = new EventSource(api.matchAnalysisStreamUrl(job.public_slug), { withCredentials: true });
