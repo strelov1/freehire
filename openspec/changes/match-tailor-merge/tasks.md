@@ -41,14 +41,19 @@
 
 - [x] 5.1 `pnpm check` / `pnpm build` in `web/` pass with no route-resolution errors from the
       removed page or the changed link targets. (0 errors, same 18 pre-existing baseline warnings.)
-- [ ] 5.2 Manually open `/tailor/[slug]` for a vacancy with no cached analysis; confirm the stream
+- [x] 5.2 Manually open `/tailor/[slug]` for a vacancy with no cached analysis; confirm the stream
       runs inline, the workspace never navigates away, and the Job Match tab ends up showing the
-      completed analysis. **NOT VERIFIED LIVE** — needs an authenticated user with a stored CV and
-      a configured LLM proxy (`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`), neither available in the
-      sandboxed worktree stack used for this change. See note below.
-- [ ] 5.3 Manually open `/tailor/[slug]` for a vacancy with a fresh cached analysis; confirm it
-      renders immediately from the bootstrap response with no stream. **NOT VERIFIED LIVE** — same
-      blocker as 5.2.
+      completed analysis. **Verified live** end to end (real LLM proxy, real 3-stage chain, real
+      experience-bank import) against the worktree's own Docker stack, with local stand-ins for two
+      services this repo's Docker setup never wired at all: MinIO for résumé S3 storage (now a
+      permanent addition — see the `minio`/`minio-init` services) and a stub PII-filter (NOT
+      committed — see the race-condition note below). This run surfaced and fixed a real bug: the
+      stream's `final` event reaches the client before the analysis is committed to the cache the
+      bootstrap reads, so the immediate retry could 409 again; fixed with a short bounded backoff
+      in `retryBootstrapAfterAnalysis`.
+- [x] 5.3 Manually open `/tailor/[slug]` for a vacancy with a fresh cached analysis; confirm it
+      renders immediately from the bootstrap response with no stream. **Verified live** — reloading
+      the bare URL after 5.2's run landed on `?cv=<id>` within ~2s, no stream, no 'analyzing' state.
 - [x] 5.4 Manually hit the old `/match/[some-slug]` and `/jobs/[some-slug]/fit` URLs; confirm both
       308-redirect to `/tailor/[some-slug]`. Verified live against the worktree's own Docker stack:
       both return `308` with `location: /tailor/some-slug`.
