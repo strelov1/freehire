@@ -249,16 +249,40 @@
     });
   }
 
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   // Retries the bootstrap once the inline fit analysis (rendered while status is 'analyzing')
-  // has landed a cached result, so the second attempt no longer 409s.
+  // has landed a cached result, so the second attempt no longer 409s. The stream's `final`
+  // event reaches the client the instant the server writes it — not once the analysis is
+  // actually committed to the cache the bootstrap reads (that write happens after AnalyzeStream
+  // returns, a few milliseconds later). A retry fired synchronously from `onDone` can beat that
+  // write, so a same-message 409 here is retried a few times with a short backoff before it's
+  // treated as a real failure — confirmed live: without this, the retry lost the race often
+  // enough to strand the candidate on an "run the fit analysis first" error screen right after
+  // watching the analysis complete.
   async function retryBootstrapAfterAnalysis() {
-    try {
-      const tailor = await api.tailorCv(slug);
-      await applyTailorResult(tailor);
-      finishReady();
-    } catch (e) {
-      errorMsg = e instanceof ApiError ? e.message : 'Could not open the tailoring workspace.';
-      status = 'error';
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const tailor = await api.tailorCv(slug);
+        await applyTailorResult(tailor);
+        finishReady();
+        return;
+      } catch (e) {
+        const isCacheRace =
+          e instanceof ApiError && e.status === 409 && e.message === 'run the fit analysis first';
+        if (isCacheRace && attempt < maxAttempts) {
+          await sleep(300 * attempt);
+          continue;
+        }
+        errorMsg = isCacheRace
+          ? 'The analysis finished but the workspace could not pick it up. Try again.'
+          : e instanceof ApiError
+            ? e.message
+            : 'Could not open the tailoring workspace.';
+        status = 'error';
+        return;
+      }
     }
   }
 
