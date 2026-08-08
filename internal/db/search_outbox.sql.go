@@ -69,6 +69,36 @@ func (q *Queries) ClaimSearchOutboxBatch(ctx context.Context, arg ClaimSearchOut
 	return items, nil
 }
 
+const deleteSearchOutboxCreatedBefore = `-- name: DeleteSearchOutboxCreatedBefore :execrows
+DELETE FROM search_outbox o
+USING jobs j
+WHERE o.job_id = j.id
+  AND o.created_at < $1
+  AND j.updated_at < $1
+`
+
+// A full facet reindex reads every job's CURRENT content directly from Postgres, so
+// any entry queued before the run started is provably already reflected in the
+// freshly-swapped live index — cmd/reindex calls this once, after a successful
+// Promote(), with the run's own start timestamp. Entries queued during the run are
+// left alone: some represent a job that changed again after the reindex's scan
+// already passed its row, so a future search-drain run still needs them.
+//
+// created_at alone is NOT enough: EnqueueSearchOutbox's ON CONFLICT (job_id) DO
+// NOTHING means created_at is stamped only on a job's FIRST enqueue since its last
+// drain, so a job re-changed while its outbox row is still pending (e.g. because
+// search-drain is paused for the reindex's whole duration) keeps its OLD created_at.
+// jobs.updated_at is stamped in the same transaction as every EnqueueSearchOutbox
+// call (cmd/ingest/store.go), so requiring it to also predate the cutoff catches a
+// job re-changed during the run even when its outbox row's created_at did not move.
+func (q *Queries) DeleteSearchOutboxCreatedBefore(ctx context.Context, before pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSearchOutboxCreatedBefore, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteSearchOutboxEntries = `-- name: DeleteSearchOutboxEntries :exec
 DELETE FROM search_outbox
 WHERE id = ANY($1::bigint[])

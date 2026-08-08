@@ -39,6 +39,27 @@ RETURNING o.id, o.job_id;
 DELETE FROM search_outbox
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
+-- name: DeleteSearchOutboxCreatedBefore :execrows
+-- A full facet reindex reads every job's CURRENT content directly from Postgres, so
+-- any entry queued before the run started is provably already reflected in the
+-- freshly-swapped live index — cmd/reindex calls this once, after a successful
+-- Promote(), with the run's own start timestamp. Entries queued during the run are
+-- left alone: some represent a job that changed again after the reindex's scan
+-- already passed its row, so a future search-drain run still needs them.
+--
+-- created_at alone is NOT enough: EnqueueSearchOutbox's ON CONFLICT (job_id) DO
+-- NOTHING means created_at is stamped only on a job's FIRST enqueue since its last
+-- drain, so a job re-changed while its outbox row is still pending (e.g. because
+-- search-drain is paused for the reindex's whole duration) keeps its OLD created_at.
+-- jobs.updated_at is stamped in the same transaction as every EnqueueSearchOutbox
+-- call (cmd/ingest/store.go), so requiring it to also predate the cutoff catches a
+-- job re-changed during the run even when its outbox row's created_at did not move.
+DELETE FROM search_outbox o
+USING jobs j
+WHERE o.job_id = j.id
+  AND o.created_at < sqlc.arg(before)
+  AND j.updated_at < sqlc.arg(before);
+
 -- name: RecordSearchOutboxFailure :one
 -- Count a failed attempt: bump attempts, record the error, and dead-letter (set
 -- failed_at) once attempts reach the max. The lease (claimed_at) is intentionally

@@ -638,6 +638,21 @@ type Querier interface {
 	// Returns the affected row count: 0 means it does not exist or is not the caller's
 	// (the handler maps that to 404).
 	DeleteSavedSearch(ctx context.Context, arg DeleteSavedSearchParams) (int64, error)
+	// A full facet reindex reads every job's CURRENT content directly from Postgres, so
+	// any entry queued before the run started is provably already reflected in the
+	// freshly-swapped live index — cmd/reindex calls this once, after a successful
+	// Promote(), with the run's own start timestamp. Entries queued during the run are
+	// left alone: some represent a job that changed again after the reindex's scan
+	// already passed its row, so a future search-drain run still needs them.
+	//
+	// created_at alone is NOT enough: EnqueueSearchOutbox's ON CONFLICT (job_id) DO
+	// NOTHING means created_at is stamped only on a job's FIRST enqueue since its last
+	// drain, so a job re-changed while its outbox row is still pending (e.g. because
+	// search-drain is paused for the reindex's whole duration) keeps its OLD created_at.
+	// jobs.updated_at is stamped in the same transaction as every EnqueueSearchOutbox
+	// call (cmd/ingest/store.go), so requiring it to also predate the cutoff catches a
+	// job re-changed during the run even when its outbox row's created_at did not move.
+	DeleteSearchOutboxCreatedBefore(ctx context.Context, before pgtype.Timestamptz) (int64, error)
 	DeleteSearchOutboxEntries(ctx context.Context, ids []int64) error
 	DeleteSemanticEntriesBatch(ctx context.Context, ids []int64) error
 	// Unsubscribe, scoped to its owner. Returns the affected row count: 0 means it

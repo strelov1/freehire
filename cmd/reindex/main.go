@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -58,6 +60,13 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	// Captured before anything else runs (including the duplicate-marker recompute
+	// passes below, which can themselves take minutes under load): a full facet
+	// reindex reads every job's CURRENT content, so any search_outbox row queued
+	// before this instant is provably already reflected in what the scan reads.
+	// Purged after a successful facet-only swap — see the call site near the bottom.
+	startedAt := time.Now()
 
 	// Bootstrap owns config + pool, so this required-config check lands just after
 	// the pool opens rather than before it. The connect is cheap and cleanup closes
@@ -198,6 +207,18 @@ func run() int {
 		return 1
 	}
 	log.Printf("reindex done: target=%s scope=%s indexed=%d skipped=%d", target, scope, indexed, skipped)
+
+	// search_outbox belongs only to the facet index (the semantic index has its own,
+	// unrelated semantic_outbox) — see the startedAt comment above for the safety
+	// argument. Best-effort: the reindex itself already succeeded, so a purge failure
+	// just leaves those rows for the next cycle rather than failing this run.
+	if !semantic {
+		if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgtype.Timestamptz{Time: startedAt, Valid: true}); err != nil {
+			log.Printf("reindex: purge stale search_outbox entries: %v", err)
+		} else if n > 0 {
+			log.Printf("reindex: purged %d stale search_outbox entries queued before this run", n)
+		}
+	}
 	return 0
 }
 
