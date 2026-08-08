@@ -66,7 +66,7 @@ The system SHALL sanitize every CV `Document` before persisting it: bound each s
 
 ### Requirement: Render a CV to an ATS-clean PDF on demand
 
-The system SHALL render a CV to PDF on request and stream it as `application/pdf` without persisting the file. The rendered PDF SHALL contain a selectable text layer (not a rasterized image) with embedded fonts and without problematic ligatures, regardless of template. Templates marked ATS-safe SHALL additionally follow the ATS layout contract: a single column with standard section headings. Templates not marked ATS-safe MAY use richer layouts (such as a sidebar) as long as the text layer remains extractable. The render SHALL consult the CV's link-tracing flag and, when it is set, substitute the target of each eligible outbound link while leaving the text shown to a reader unchanged; the stored CV document SHALL NOT be modified by rendering.
+The system SHALL render a CV to PDF on request and stream it as `application/pdf` without persisting the file. The rendered PDF SHALL contain a selectable text layer (not a rasterized image) with embedded fonts and without problematic ligatures, regardless of template — including richer layouts (such as a sidebar) that use more than a single column. The render SHALL consult the CV's link-tracing flag and, when it is set, substitute the target of each eligible outbound link while leaving the text shown to a reader unchanged; the stored CV document SHALL NOT be modified by rendering.
 
 #### Scenario: Download a CV PDF
 
@@ -78,9 +78,9 @@ The system SHALL render a CV to PDF on request and stream it as `application/pdf
 - **WHEN** the CV PDF is rendered and its text layer is extracted
 - **THEN** the candidate's name and skills appear as selectable text in the extracted output
 
-#### Scenario: Non-ATS-safe template still yields extractable text
+#### Scenario: A multi-column template still yields extractable text
 
-- **WHEN** a CV using a template not marked ATS-safe (e.g. `sidebar`) is rendered and its text layer is extracted
+- **WHEN** a CV using a richer, multi-column template (e.g. `sidebar`) is rendered and its text layer is extracted
 - **THEN** the candidate's name and skills still appear as selectable text
 
 #### Scenario: A traced render leaves the extracted text alone
@@ -160,17 +160,17 @@ Each CV SHALL reference a template by `template_id`, defaulting to the ATS templ
 
 ### Requirement: Available CV templates are discoverable via the API
 
-The system SHALL expose the registered CV templates over a read endpoint so clients can list the available templates without hard-coding them. Each entry SHALL include the template `id`, a human-facing `label`, a short style descriptor, an `ats_safe` boolean indicating whether the template follows the ATS single-column contract, and a `photo` boolean indicating whether the template prints a headshot. The endpoint SHALL be available to any authenticated user allowed to use the CV builder.
+The system SHALL expose the registered CV templates over a read endpoint so clients can list the available templates without hard-coding them. Each entry SHALL include the template `id`, a human-facing `label`, a short style descriptor, and a `photo` boolean indicating whether the template prints a headshot. The endpoint SHALL be available to any authenticated user allowed to use the CV builder.
 
 #### Scenario: List available templates
 
 - **WHEN** an authorized user requests the CV templates list endpoint
-- **THEN** the system returns every registered template with its `id`, `label`, style descriptor, `ats_safe` flag, and `photo` flag, including `classic-ats` marked as ATS-safe and photoless, and `sidebar` marked as not ATS-safe
+- **THEN** the system returns every registered template with its `id`, `label`, style descriptor, and `photo` flag, including `classic-ats` marked photoless
 
 #### Scenario: Photo-bearing templates are identifiable
 
 - **WHEN** an authorized user lists the CV templates
-- **THEN** the photo-bearing templates are returned with `photo` true and `ats_safe` false, so a client can prompt for a headshot upload before the template is used
+- **THEN** the photo-bearing templates are returned with `photo` true, so a client can prompt for a headshot upload before the template is used
 
 ### Requirement: A CV's template can be set independently of its document
 
@@ -188,7 +188,7 @@ The system SHALL provide an endpoint to change only a CV's `template_id` without
 
 ### Requirement: Templates are chosen from a visual gallery
 
-The tailoring artifact panel SHALL present the available templates as a gallery of preview thumbnails, one static preview image per registered template. The gallery SHALL indicate the currently selected template, and selecting a thumbnail SHALL persist the choice and re-render the CV PDF preview with the chosen template. Templates that are not ATS-safe SHALL be visually indicated as such. Every registered template SHALL have a committed preview image so the gallery has no missing thumbnails.
+The tailoring artifact panel SHALL present the available templates as a gallery of preview thumbnails, one static preview image per registered template. The gallery SHALL indicate the currently selected template, and selecting a thumbnail SHALL persist the choice and re-render the CV PDF preview with the chosen template. Every registered template SHALL have a committed preview image so the gallery has no missing thumbnails.
 
 #### Scenario: Selecting a template from the gallery updates the CV
 
@@ -199,11 +199,6 @@ The tailoring artifact panel SHALL present the available templates as a gallery 
 
 - **WHEN** the templates gallery is shown
 - **THEN** each registered template (`classic-ats`, `centered`, `modern-sans`, `sidebar`) displays its own preview image with no missing thumbnails
-
-#### Scenario: Non-ATS-safe template is indicated
-
-- **WHEN** the gallery lists a template that is not ATS-safe (e.g. `sidebar`)
-- **THEN** that template is shown with an indication that it may not parse cleanly in some ATS
 
 ### Requirement: CV documents carry configurable page margins
 

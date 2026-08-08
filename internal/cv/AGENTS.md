@@ -7,7 +7,7 @@ rendering.
 ## Templates
 
 Templates are Typst source files under `templates/<id>.typ`, embedded via `//go:embed`. The
-registry is `templates []TemplateInfo` in `template.go` (id, label, style, `ats_safe`, `photo`).
+registry is `templates []TemplateInfo` in `template.go` (id, label, style, `photo`).
 `ResolveTemplate(id)` defaults an empty id to `classic-ats` and rejects unknown ids with
 `ErrUnknownTemplate`; `Templates()` exposes the metadata for the UI gallery and preview
 generation.
@@ -16,14 +16,18 @@ generation.
 1. Add `templates/<id>.typ` — a self-contained file reading the CV from `json("data.json")`
    (helpers `s`/`arr`/`daterange` are duplicated per file; the renderer only stages
    `template.typ` + `data.json` + fonts, so Typst `#import` of a shared module won't resolve).
-2. Append a `TemplateInfo` entry to `templates`. Mark `ATSSafe: false` for anything that is
-   not single-column with standard headings (e.g. `sidebar`), and `Photo: true` if it prints
-   the headshot (see below). A photo template is never ATS-safe.
+2. Append a `TemplateInfo` entry to `templates`, and mark `Photo: true` if it prints the
+   headshot (see below).
 3. Copy the style preamble from an existing template and set its three fallbacks to your own
    font, size, and leading. **Every internal `size:` must be an em multiple of the base**
    (`(18 / 9.5) * 1em`, not `18pt`) or a raised base size will leave your headings behind and
    flatten the hierarchy. Ratios are written as a division so the old absolute value stays
-   legible.
+   legible. **Keep the font-size/leading fallback at 9.5pt / 0.5em unless the template needs a
+   different face's metrics** — `web/src/lib/tailor/geometry.ts` (`TEMPLATE_FONT_SIZE_PT`,
+   `PREVIEW_FONT_SIZE_PX`, `PREVIEW_LINE_HEIGHT`) hardcodes that base for every template's live
+   HTML preview, so a `.typ` file that defaults to something else silently desyncs the preview's
+   pagination from the rendered PDF's. Reach for density through spacing between blocks instead
+   (see `compact.typ`).
 4. **Print every link through `link()`**, and take its target from `hrefAt(kind, i, shown)` rather
    than from the printed text — the helper is duplicated per file like `s`/`arr`. Two reasons, and
    the first is not cosmetic: opt-in link tracing substitutes the *target* while leaving the text

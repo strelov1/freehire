@@ -44,11 +44,8 @@ func TestListCVTemplates(t *testing.T) {
 		}
 		got[ti.ID] = ti
 	}
-	if !got["classic-ats"].ATSSafe {
-		t.Error("classic-ats should be ats_safe")
-	}
-	if got["sidebar"].ATSSafe {
-		t.Error("sidebar should not be ats_safe")
+	if _, ok := got["classic-ats"]; !ok {
+		t.Error("classic-ats not registered")
 	}
 }
 

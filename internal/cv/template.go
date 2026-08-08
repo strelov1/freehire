@@ -13,31 +13,31 @@ var templateFS embed.FS
 // DefaultTemplateID is the template assigned when a CV names none.
 const DefaultTemplateID = "classic-ats"
 
-// TemplateInfo is a registered template's display metadata. ATSSafe marks the
-// single-column, standard-heading layouts that parse cleanly in résumé-scanning
-// software; richer layouts (e.g. a sidebar) are listed but flagged unsafe.
+// TemplateInfo is a registered template's display metadata.
 //
 // Photo marks the templates that print the member's headshot. It is what stops the
 // render path reaching for object storage on a template that would not use the image,
 // and what lets the gallery prompt for an upload before the template is chosen.
 type TemplateInfo struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Style   string `json:"style"`
-	ATSSafe bool   `json:"ats_safe"`
-	Photo   bool   `json:"photo"`
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Style string `json:"style"`
+	Photo bool   `json:"photo"`
 }
 
 // templates is the registry of known templates. A CV's template_id must be one of
 // these; the seam to add more is: append an entry here and drop a matching
 // templates/<id>.typ file, then regenerate the gallery thumbnails with `make cv-previews`.
 var templates = []TemplateInfo{
-	{ID: DefaultTemplateID, Label: "Classic", Style: "single-column · serif", ATSSafe: true},
-	{ID: "centered", Label: "Centered", Style: "centered · serif", ATSSafe: true},
-	{ID: "modern-sans", Label: "Modern", Style: "single-column · sans", ATSSafe: true},
-	{ID: "sidebar", Label: "Sidebar", Style: "two-column · serif", ATSSafe: false},
-	{ID: "portrait", Label: "Portrait", Style: "two-column · photo · serif", ATSSafe: false, Photo: true},
-	{ID: "headshot", Label: "Headshot", Style: "single-column · photo · sans", ATSSafe: false, Photo: true},
+	{ID: DefaultTemplateID, Label: "Classic", Style: "single-column · serif"},
+	{ID: "centered", Label: "Centered", Style: "centered · serif"},
+	{ID: "modern-sans", Label: "Modern", Style: "single-column · sans"},
+	{ID: "timeline", Label: "Timeline", Style: "single-column · rail · serif"},
+	{ID: "compact", Label: "Compact", Style: "single-column · dense · serif"},
+	{ID: "mono-tech", Label: "Mono", Style: "single-column · monospace"},
+	{ID: "sidebar", Label: "Sidebar", Style: "two-column · serif"},
+	{ID: "portrait", Label: "Portrait", Style: "two-column · photo · serif", Photo: true},
+	{ID: "headshot", Label: "Headshot", Style: "single-column · photo · sans", Photo: true},
 }
 
 // ErrUnknownTemplate is returned when a template_id is not in the registry. The handler

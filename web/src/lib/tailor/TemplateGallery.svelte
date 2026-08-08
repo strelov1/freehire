@@ -5,9 +5,9 @@
   // The template gallery for one CV: a grid of static preview thumbnails (served from
   // /cv-previews/<id>.svg) with the current template highlighted. Picking one persists it via
   // the set-template endpoint and calls onSelected(id) so the host can keep its own template id in
-  // step (autosave writes it too) and cache-bust the PDF. Non-ATS-safe templates carry an inline
-  // caution, and a template that prints a headshot says so when none is stored — the render would
-  // otherwise silently fall back to the placeholder, which is easy to send without noticing.
+  // step (autosave writes it too) and cache-bust the PDF. A template that prints a headshot says
+  // so when none is stored — the render would otherwise silently fall back to the placeholder,
+  // which is easy to send without noticing.
   let { cvId, onSelected }: { cvId: string; onSelected: (id: string) => void } = $props();
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
@@ -95,11 +95,6 @@
           <span class="flex flex-col gap-0.5 px-2.5 py-2">
             <span class="text-sm font-medium text-foreground">{t.label}</span>
             <span class="text-xs text-muted-foreground">{t.style}</span>
-            {#if !t.ats_safe}
-              <span class="mt-0.5 text-[11px] leading-tight text-warning-strong">
-                May not parse cleanly in some ATS
-              </span>
-            {/if}
             {#if t.photo && hasPhoto === false}
               <span class="mt-0.5 text-[11px] leading-tight text-muted-foreground">
                 Add a photo in your profile — this template shows one

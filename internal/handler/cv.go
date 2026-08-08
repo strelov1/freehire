@@ -234,7 +234,7 @@ func recordResponse(rec cv.Record) cvResponse {
 }
 
 // ListCVTemplates returns the registered CV templates and their display metadata (id, label,
-// style, ats_safe) so the UI can render the template gallery. Static registry data — no DB.
+// style, photo) so the UI can render the template gallery. Static registry data — no DB.
 func (h *cvHandlers) ListCVTemplates(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": cv.Templates()})
 }

@@ -1532,7 +1532,7 @@ export function createApi(
     await call('/api/v1/me/photo', { method: 'DELETE' });
   }
 
-  /** List the available CV templates (id, label, style, ats_safe, photo) for the gallery. */
+  /** List the available CV templates (id, label, style, photo) for the gallery. */
   async function listCvTemplates(): Promise<CvTemplate[]> {
     return requestData<CvTemplate[]>('/api/v1/cv-templates');
   }

@@ -16,9 +16,6 @@ func TestTemplatesReportsMetadata(t *testing.T) {
 		t.Fatalf("Templates() missing default %q; got %+v", DefaultTemplateID, tmpls)
 	}
 	def := tmpls[idx]
-	if !def.ATSSafe {
-		t.Errorf("default template %q should be ATS-safe", def.ID)
-	}
 	if def.Label == "" {
 		t.Errorf("default template %q has no label", def.ID)
 	}
@@ -40,7 +37,7 @@ func TestRegisteredTemplatesResolveToSource(t *testing.T) {
 
 func TestExpectedTemplatesRegistered(t *testing.T) {
 	ids := TemplateIDs()
-	for _, want := range []string{"classic-ats", "centered", "modern-sans", "sidebar", "portrait", "headshot"} {
+	for _, want := range []string{"classic-ats", "centered", "modern-sans", "timeline", "compact", "mono-tech", "sidebar", "portrait", "headshot"} {
 		if !slices.Contains(ids, want) {
 			t.Errorf("template %q not registered; got %v", want, ids)
 		}
@@ -52,6 +49,9 @@ func TestPhotoFlagMarksTheTemplatesThatPrintAPortrait(t *testing.T) {
 		"classic-ats": false,
 		"centered":    false,
 		"modern-sans": false,
+		"timeline":    false,
+		"compact":     false,
+		"mono-tech":   false,
 		"sidebar":     false,
 		"portrait":    true,
 		"headshot":    true,
@@ -64,11 +64,6 @@ func TestPhotoFlagMarksTheTemplatesThatPrintAPortrait(t *testing.T) {
 		}
 		if ti.Photo != w {
 			t.Errorf("template %q: photo = %v, want %v", ti.ID, ti.Photo, w)
-		}
-		// A photo template cannot be ATS-safe: a portrait is exactly what a single-column
-		// scanner contract excludes.
-		if ti.Photo && ti.ATSSafe {
-			t.Errorf("template %q claims both a photo and ATS safety", ti.ID)
 		}
 	}
 }
@@ -85,18 +80,6 @@ func TestResolveTemplateCarriesThePhotoFlag(t *testing.T) {
 			t.Errorf("template %q: resolved photo = %v, registry says %v", ti.ID, tmpl.Photo, ti.Photo)
 		}
 	}
-}
-
-func TestSidebarIsNotATSSafe(t *testing.T) {
-	for _, ti := range Templates() {
-		if ti.ID == "sidebar" {
-			if ti.ATSSafe {
-				t.Error("sidebar must be flagged not ATS-safe")
-			}
-			return
-		}
-	}
-	t.Error("sidebar template not registered")
 }
 
 func TestTemplateIDsMatchTemplates(t *testing.T) {
