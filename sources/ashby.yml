@@ -8112,3 +8112,5 @@
   board: withpace
 - company: WorkHero
   board: workhero
+- company: Hex
+  board: hex
