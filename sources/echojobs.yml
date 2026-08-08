@@ -1,0 +1,5 @@
+# echojobs.io multi-employer tech-jobs aggregator. Boardless: one global keyless feed
+# (echojobs.io/api/jobs), so the entry carries no board, and each job's company and URL (the
+# upstream ATS link) come from the posting, not this placeholder.
+- company: echojobs
+  provider: echojobs
