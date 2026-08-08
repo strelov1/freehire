@@ -271,11 +271,11 @@ func All(c HTTPClient) map[string]Source {
 		NewVK(c),
 		NewTwoGIS(c),
 	)
-	// usajobs, reed and whatjobs are the keyed sources: each needs a credential read from the
-	// environment, never from a board file. The credential gates the CRAWL registry only — a
+	// usajobs, reed, whatjobs and adzuna are the keyed sources: each needs a credential read from
+	// the environment, never from a board file. The credential gates the CRAWL registry only — a
 	// host without it must not register a provider whose every board would fail to authenticate,
 	// so its board file fails config validation before a request goes out. The taxonomy path
-	// (c == nil, see Taxonomy) registers all three regardless, empty credential included.
+	// (c == nil, see Taxonomy) registers all four regardless, empty credential included.
 	// Conflating the two classified whatjobs — a CPC reseller of first-party ATS postings — as
 	// an ATS on every keyless host, so none of its copies was ever suppressed.
 	if key := os.Getenv("USAJOBS_API_KEY"); c == nil || key != "" {
@@ -283,6 +283,10 @@ func All(c HTTPClient) map[string]Source {
 	}
 	if key := os.Getenv("REED_API_KEY"); c == nil || key != "" {
 		registry["reed"] = NewReed(c, key)
+	}
+	// Adzuna's credential is an app_id/app_key pair rather than a single key; both must be set.
+	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {
+		registry["adzuna"] = NewAdzuna(c, appID, appKey)
 	}
 	// whatjobs' credential is a publisher id rather than an API key; it is per-country, and this
 	// account serves US inventory. Its requests go through a shared in-flight cap: the feed
