@@ -360,7 +360,7 @@
             </Button>
           {/if}
           {#if hasPosting}
-            <!-- The analysis is already in this panel; sending the user to /match would
+            <!-- The analysis is already in this panel; sending the user to /tailor would
                  close the application to show them something it contains. -->
             <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class="gap-1.5">
               <Target class="size-3.5" />

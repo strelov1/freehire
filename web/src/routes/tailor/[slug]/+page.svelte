@@ -531,11 +531,17 @@
     <!-- No cached fit analysis exists yet for this vacancy (e.g. reached via JD-intake rather
          than the normal fit-first flow) — run it right here instead of bouncing to a separate
          page. MatchAnalysisFull auto-runs on mount (no `initial`, so it starts cold) and
-         onDone retries the bootstrap once a result lands. -->
+         onDone retries the bootstrap once a result lands. A manual way out stays visible the
+         whole time: a malformed/empty stream completion leaves stream.done true with no
+         analysis and no stream.error, so onDone never fires and this state would otherwise
+         have no exit. -->
     <div class="mx-auto flex min-w-0 flex-1 max-w-2xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:py-10">
-      <p class="text-sm text-muted-foreground">
-        This role hasn't been analysed yet — running the fit analysis before opening the workspace.
-      </p>
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm text-muted-foreground">
+          This role hasn't been analysed yet — running the fit analysis before opening the workspace.
+        </p>
+        <a href={resolve('/jobs/[slug]', { slug })} class="shrink-0 text-sm text-brand hover:underline">Back to the role</a>
+      </div>
       <MatchAnalysisFull {job} stacked onDone={retryBootstrapAfterAnalysis} />
     </div>
   {:else}

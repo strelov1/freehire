@@ -49,7 +49,7 @@
       <h1 class="text-2xl font-semibold">Tailored CVs</h1>
       <p class="text-sm text-muted-foreground">
         CVs you tailored for specific roles. Open one to resume its tailoring session, or start a
-        new one from any vacancy’s match page.
+        new one by opening the tailoring workspace from any vacancy.
       </p>
     </div>
     <Button variant="outline" class="shrink-0" onclick={() => (showIntake = true)}>

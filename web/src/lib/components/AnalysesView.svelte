@@ -9,8 +9,8 @@
   import States from './States.svelte';
 
   // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on. Read-only —
-  // never triggers the LLM (each row links to the fit page, which owns compute/recompute). The
-  // AI-credits balance lives on its own page (/my/credits), not inline here.
+  // never triggers the LLM (each row links to the Tailor workspace, which owns compute/recompute).
+  // The AI-credits balance lives on its own page (/my/credits), not inline here.
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let items = $state<MyAnalysisItem[]>([]);
 

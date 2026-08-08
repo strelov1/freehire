@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, type Snippet } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { resolve } from '$app/paths';
   import { RefreshCw, FileText, Check, Loader, TriangleAlert } from '@lucide/svelte';
   import { api } from '$lib/api';
@@ -16,16 +16,15 @@
   import type { Job, MatchAnalysis, MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  // The full AI fit report + live SSE stream, shared by the /match page and the
-  // tracking card's Job Match tab. `initial` seeds from an SSR-cached fit (the page
-  // passes its load data for an instant paint); when absent (the card, which has no
-  // SSR), the cached fit is fetched on mount. `autoRun` starts the stream on a cold
-  // start — the same "never silently recompute a cached analysis" gate as the page.
-  // `stacked` forces every multi-column section into a single column regardless of viewport
-  // width — for the narrow tailoring artifact panel, where the viewport-based `lg:`/`sm:`
-  // breakpoints would otherwise cram two columns into ~480px.
-  // `tailorCta` is an optional button the /match page hands down; it renders in the verdict hero
-  // card (bottom-right), so it appears exactly when the analysis lands. Other callers omit it.
+  // The full AI fit report + live SSE stream. Three callers: `ArtifactPanel`'s Job Match tab
+  // (seeded, read-only, `autoRun=false`), and the tailoring workspace's cold-start `'analyzing'`
+  // state (`/tailor/[slug]`, no `initial`, so it starts cold and calls `onDone` once it lands).
+  // `initial` seeds from an SSR-cached fit for an instant paint when the caller has one; when
+  // absent, the cached fit is fetched on mount. `autoRun` starts the stream on a cold start —
+  // the "never silently recompute a cached analysis" gate. `stacked` forces every multi-column
+  // section into a single column regardless of viewport width — for callers narrower than the
+  // viewport-based `lg:`/`sm:` breakpoints assume (the tailoring artifact panel, the workspace's
+  // full-width-but-narrow-column 'analyzing' state).
   // `onDone` fires once, the moment a run completes with an analysis (from autoRun or Recompute)
   // — the tailoring workspace uses it to know when its blocking cold-start run has landed.
   let {
@@ -33,14 +32,12 @@
     initial = null,
     autoRun = true,
     stacked = false,
-    tailorCta = undefined,
     onDone = undefined,
   }: {
     job: Job;
     initial?: MatchAnalysisResponse | null;
     autoRun?: boolean;
     stacked?: boolean;
-    tailorCta?: Snippet;
     onDone?: (analysis: MatchAnalysis) => void;
   } = $props();
 
@@ -339,11 +336,6 @@
             </Button>
           </div>
         </div>
-        {#if tailorCta}
-          <div class="relative mt-6 flex justify-center sm:justify-end">
-            {@render tailorCta()}
-          </div>
-        {/if}
       </section>
     {/if}
 
