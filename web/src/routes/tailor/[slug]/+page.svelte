@@ -272,14 +272,17 @@
       // and the preview falls back to the template's own face meanwhile.
       void api.listCvFonts().then((f) => (fonts = f)).catch(() => {});
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
+      if (e instanceof ApiError && e.status === 409 && e.message === 'run the fit analysis first') {
         // The bootstrap (tailorCv) requires a cached match to already exist — true for
         // every vacancy reached the normal way (the match page's "Tailor my CV" button
         // only ever appears once one has run), but never true for a job that just came
         // through the JD-intake dialog (paste text/URL/pick a vacancy — none of those
         // run a match first). Rather than surface that as an error, send the candidate
         // straight to the match page, which auto-runs on a cold start and hands them
-        // back here once it lands.
+        // back here once it lands. Matched on the exact message, not just the 409 status:
+        // TailorCV also 409s when the account has no résumé to seed a base CV from, and
+        // that reason has no fix on the match page — silently bouncing there looks like a
+        // dead loop instead of the "add a résumé" error it actually is.
         void goto(resolve('/match/[slug]', { slug }));
         return;
       }

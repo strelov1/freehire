@@ -74,9 +74,12 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// When the base CV is behind the latest résumé upload, refresh it from the seed before
 	// Tailor copies it into a new vacancy-bound row. Reload of an existing tailored copy
 	// still returns that copy unchanged (Tailor is idempotent); the base refresh is a no-op
-	// once updated_at catches the upload stamp.
+	// once updated_at catches the upload stamp. Best-effort: this refresh exists to keep the
+	// base in sync, not to gate opening the tailor workspace — a role over the bullet cap (or
+	// any other refresh failure) must not block bootstrap. Tailor below falls back to the base
+	// as it currently stands.
 	if err := h.reseedBaseIfStaleVsUpload(c, userID); err != nil {
-		return err
+		log.Printf("cv: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
 	base, tailored, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource())
 	if errors.Is(err, cv.ErrNoResume) {
