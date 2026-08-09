@@ -5,9 +5,9 @@ granularity.
 
 ## 1. Prerequisite refactor
 
-- [ ] 1.1 Extract `buildAnalysisInput` out of `runAnalysis` in `internal/handler/match_analysis.go` (pure, behavior-preserving — no new test needed, existing `TestMatchAnalysisEndpoints` is the safety net)
-- [ ] 1.2 Run `go test -tags=integration ./internal/handler/ -run TestMatchAnalysisEndpoints -v` and confirm PASS
-- [ ] 1.3 Run `go build ./...` and `go vet -tags=integration ./...`, confirm clean
+- [x] 1.1 Extract `buildAnalysisInput` out of `runAnalysis` in `internal/handler/match_analysis.go` (pure, behavior-preserving — no new test needed, existing `TestMatchAnalysisEndpoints` is the safety net)
+- [x] 1.2 Run `go test -tags=integration ./internal/handler/ -run TestMatchAnalysisEndpoints -v` and confirm PASS
+- [x] 1.3 Run `go build ./...` and `go vet -tags=integration ./...`, confirm clean
 
 ## 2. Guaranteed post-run fit-analysis refresh
 
