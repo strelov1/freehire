@@ -177,16 +177,26 @@ type Querier interface {
 	// Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
 	// Unlike ClaimEnrichmentBatch this does NOT filter unindexable jobs out: a closed OR
 	// non-canonical (duplicate_of) entry is the removal signal, so the worker must receive
-	// it and branch on `closed` (true = remove the document). The jobs join supplies both
-	// the freshness order and that flag. Freshness is
-	// COALESCE(posted_at, created_at): jobs without a source post date fall back to ingest
-	// time so they rank by recency instead of starving under NULLS LAST. FOR UPDATE OF o
-	// locks only outbox rows (a bare FOR UPDATE would also lock jobs, making concurrent
-	// claim waves contend); SKIP LOCKED lets concurrent workers take disjoint rows; the
-	// lease predicate reclaims entries whose worker died (stale claimed_at), so no separate
-	// reaper process is needed.
+	// it and branch on `closed` (true = remove the document).
+	//
+	// Orders by the outbox's OWN job_posted_at (denormalized at enqueue time from
+	// COALESCE(jobs.posted_at, jobs.created_at) — see EnqueuePendingSemanticJobs) rather
+	// than joining jobs to compute it. A join-for-ordering here means Postgres cannot push
+	// the LIMIT below the sort — it has to nested-loop-join and sort the ENTIRE claimable
+	// set before taking the batch, independent of batch_size. Measured live on prod at
+	// ~906k claimable rows: 109s for a single claim call. See
+	// openspec/changes/prod-semantic-embed-steady-state/design.md Decision 8. NULLS LAST
+	// is defensive (every row written by EnqueuePendingSemanticJobs always populates the
+	// column; this only guards a row that predates the backfill migration).
+	//
+	// FOR UPDATE OF o locks only outbox rows (a bare FOR UPDATE would also lock jobs,
+	// making concurrent claim waves contend); SKIP LOCKED lets concurrent workers take
+	// disjoint rows; the lease predicate reclaims entries whose worker died (stale
+	// claimed_at), so no separate reaper process is needed.
 	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
-	// FROM) so the removal branch gets the job's closed flag without a second query.
+	// FROM) so the removal branch gets the job's closed flag without a second query. This
+	// join is over just the claimed batch (batch_size rows), not the whole claimable set —
+	// cheap, unlike the ordering join this replaces above.
 	ClaimSemanticBatch(ctx context.Context, arg ClaimSemanticBatchParams) ([]ClaimSemanticBatchRow, error)
 	// Lease a batch of pending, live matches for active subscriptions by stamping
 	// claimed_at, oldest-claimable first, ordered by subscription so the worker can
@@ -751,7 +761,9 @@ type Querier interface {
 	//      mirrors the facet index: the full reindex --semantic also drops reposts (shared
 	//      splitJobs), so the incremental path must not re-add them.
 	// ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
-	// command invocation never duplicates work.
+	// command invocation never duplicates work. job_posted_at denormalizes
+	// COALESCE(posted_at, created_at) onto the outbox row so ClaimSemanticBatch can sort by
+	// it without joining jobs on every claim (see that query's doc comment).
 	EnqueuePendingSemanticJobs(ctx context.Context, targetModel string) (int64, error)
 	// Queue a job for the live facet index. Called by cmd/ingest inside the same
 	// transaction as the job's upsert, only when the write inserted or changed indexed
