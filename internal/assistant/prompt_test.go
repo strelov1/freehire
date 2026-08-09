@@ -160,17 +160,43 @@ func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
 
 // The evidence-citation gate only checks that a bullet cites something real; it says
 // nothing about whether the wording stays inside what that evidence actually claims. The
-// prompt has to tell the agent to check that itself — nothing server-side catches an
-// evidenced bullet that overstates scope, seniority, or a metric.
+// instruction to check that itself has to sit beside the honesty rule it backs up — not
+// merely exist somewhere in the prompt — and has to say what to do about a bad result.
 func TestTailorPromptChecksItsOwnWordingAgainstTheEvidence(t *testing.T) {
 	p := SystemPrompt(PresetTailor)
 
-	if !strings.Contains(p, "check_evidence_fidelity") {
-		t.Error("the tailoring prompt never mentions check_evidence_fidelity, so the agent has no instruction to re-read what it cited")
+	honestyIdx := strings.Index(p, "Never invent, inflate or imply")
+	if honestyIdx == -1 {
+		t.Fatal("the tailoring prompt lost its honesty-wall paragraph")
 	}
-	lower := strings.ToLower(p)
-	if !strings.Contains(lower, "inflate") && !strings.Contains(lower, "stretch") && !strings.Contains(lower, "overstate") {
-		t.Error("the prompt does not tie check_evidence_fidelity to the risk of overstating what the evidence says")
+	window := p[honestyIdx:min(len(p), honestyIdx+700)]
+
+	if !strings.Contains(window, "check_evidence_fidelity") {
+		t.Error("check_evidence_fidelity is not mentioned near the honesty rule, so the agent has no instruction to re-read what it cited")
+	}
+	if !strings.Contains(window, "cv_edit") {
+		t.Error("the prompt never tells the agent to revise with cv_edit after checking fidelity")
+	}
+	lower := strings.ToLower(window)
+	if !strings.Contains(lower, "scope") && !strings.Contains(lower, "seniority") && !strings.Contains(lower, "metric") {
+		t.Error("the instruction does not say what kind of overstatement to look for")
+	}
+}
+
+// An unattended run has no candidate in the loop to notice an overstated bullet either —
+// the check matters just as much there, and the section states its other self-checks
+// (job_match) explicitly rather than leaving them implied by "the method does not change".
+func TestTailorPromptChecksFidelityDuringUnattendedRuns(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+
+	unattendedIdx := strings.Index(p, "UNATTENDED RUNS")
+	if unattendedIdx == -1 {
+		t.Fatal("the tailoring prompt lost its UNATTENDED RUNS section")
+	}
+	unattended := p[unattendedIdx:]
+
+	if !strings.Contains(unattended, "check_evidence_fidelity") {
+		t.Error("the unattended-run section never mentions check_evidence_fidelity; a run has no server-side backstop for overstated wording either")
 	}
 }
 
