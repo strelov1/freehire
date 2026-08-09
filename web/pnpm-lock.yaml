@@ -6,6 +6,7 @@ settings:
 
 overrides:
   cookie@<0.7.0: 0.7.2
+  postcss@<8.5.23: 8.5.23
 
 importers:
 
@@ -2256,7 +2257,7 @@ packages:
     resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
     engines: {node: '>= 10'}
     peerDependencies:
-      postcss: '>=8.0.9'
+      postcss: 8.5.23
       ts-node: '>=9.0.0'
     peerDependenciesMeta:
       postcss:
@@ -2268,13 +2269,13 @@ packages:
     resolution: {integrity: sha512-0AioNCJZ2DPYz5ABT6bddIqlhgwhpHZ/l65YAYo0BCIn0xiDpsnTHz0gnoTGk0OXZW0JRs+cDwL8u/teRdz+8A==}
     engines: {node: '>=18.0'}
     peerDependencies:
-      postcss: ^8.4.31
+      postcss: 8.5.23
 
   postcss-scss@4.0.9:
     resolution: {integrity: sha512-AjKOeiwAitL/MXxQW2DliT28EKukvvbEWx3LBmJIRN8KfBGZbRTxNYW0kSqi1COiTZ57nZ9NW06S6ux//N1c9A==}
     engines: {node: '>=12.0'}
     peerDependencies:
-      postcss: ^8.4.29
+      postcss: 8.5.23
 
   postcss-selector-parser@6.0.10:
     resolution: {integrity: sha512-IQ7TZdoaqbT+LCpShg46jnZVlhWD2w6iQYAcYXfHARZ7X1t/UGhhceQDs5X0cGqKvYlHNOuv7Oa1xmb0oQuA3w==}
@@ -2287,8 +2288,8 @@ packages:
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
 
-  postcss@8.5.21:
-    resolution: {integrity: sha512-v4sDNP3fdNiWMfabO7OwOQdOX8TiQSztKyT1Wj0w+j7LDallJThJRBBBmzVGyYj0crMh7jlV4zepPkiNu9UwDQ==}
+  postcss@8.5.23:
+    resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
     engines: {node: ^10 || ^12 || >=14}
 
   posthog-js@1.406.2:
@@ -4149,9 +4150,9 @@ snapshots:
       esutils: 2.0.3
       globals: 16.5.0
       known-css-properties: 0.37.0
-      postcss: 8.5.21
-      postcss-load-config: 3.1.4(postcss@8.5.21)
-      postcss-safe-parser: 7.0.1(postcss@8.5.21)
+      postcss: 8.5.23
+      postcss-load-config: 3.1.4(postcss@8.5.23)
+      postcss-safe-parser: 7.0.1(postcss@8.5.23)
       semver: 7.8.5
       svelte-eslint-parser: 1.8.0(svelte@5.56.7(@typescript-eslint/types@8.65.0))
     optionalDependencies:
@@ -4726,20 +4727,20 @@ snapshots:
 
   picomatch@4.0.5: {}
 
-  postcss-load-config@3.1.4(postcss@8.5.21):
+  postcss-load-config@3.1.4(postcss@8.5.23):
     dependencies:
       lilconfig: 2.1.0
       yaml: 1.10.3
     optionalDependencies:
-      postcss: 8.5.21
+      postcss: 8.5.23
 
-  postcss-safe-parser@7.0.1(postcss@8.5.21):
+  postcss-safe-parser@7.0.1(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.21
+      postcss: 8.5.23
 
-  postcss-scss@4.0.9(postcss@8.5.21):
+  postcss-scss@4.0.9(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.21
+      postcss: 8.5.23
 
   postcss-selector-parser@6.0.10:
     dependencies:
@@ -4753,7 +4754,7 @@ snapshots:
 
   postcss-value-parser@4.2.0: {}
 
-  postcss@8.5.21:
+  postcss@8.5.23:
     dependencies:
       nanoid: 3.3.16
       picocolors: 1.1.1
@@ -4977,8 +4978,8 @@ snapshots:
       eslint-scope: 8.4.0
       eslint-visitor-keys: 4.2.1
       espree: 10.4.0
-      postcss: 8.5.21
-      postcss-scss: 4.0.9(postcss@8.5.21)
+      postcss: 8.5.23
+      postcss-scss: 4.0.9(postcss@8.5.23)
       postcss-selector-parser: 7.1.4
       semver: 7.8.5
     optionalDependencies:
@@ -5167,7 +5168,7 @@ snapshots:
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
-      postcss: 8.5.21
+      postcss: 8.5.23
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:

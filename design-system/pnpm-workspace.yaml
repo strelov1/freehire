@@ -8,3 +8,8 @@ allowBuilds:
 # postinstall, and svelte-preprocess arrives transitively with nothing here
 # compiling through it. strictDepBuilds: false lets install proceed regardless.
 strictDepBuilds: false
+# GHSA-6g55-p6wh-862q: postcss reads an attacker-controlled sourceMappingURL
+# path when `from` is unset, letting a crafted stylesheet exfiltrate
+# arbitrary local .map files. Pulled in transitively by vite (Storybook builder).
+overrides:
+  postcss@<8.5.23: 8.5.23

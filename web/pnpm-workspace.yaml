@@ -13,3 +13,7 @@ strictDepBuilds: false
 # an unbounded override would silently ride a major bump its own tests never ran.
 overrides:
   cookie@<0.7.0: 0.7.2
+  # GHSA-6g55-p6wh-862q: postcss reads an attacker-controlled sourceMappingURL
+  # path when `from` is unset, letting a crafted stylesheet exfiltrate
+  # arbitrary local .map files. Pulled in transitively by vite/eslint-plugin-svelte.
+  postcss@<8.5.23: 8.5.23
