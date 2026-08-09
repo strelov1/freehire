@@ -50,21 +50,37 @@ while their ambiguous lowercase forms SHALL NOT resolve. Each acronym SHALL map 
 a canonical that already exists in the vocabulary (an acronym is an additional
 alias, never a new facet value).
 
-Acronyms SHALL be split into two tiers: a **shared** set applied to all text
-(jobs and résumés), and a **résumé-scoped** set applied only when the caller opts
-in for résumé parsing. An acronym whose uppercase form is ambiguous in job
-descriptions (e.g. "RAG status") SHALL be résumé-scoped so it never tags jobs.
+Acronyms SHALL be split into three tiers: a **shared** set applied to all text
+(jobs and résumés), a **résumé-scoped** set applied only when the caller opts in
+for résumé parsing, and a **category-scoped** set applied to job text only when
+the caller supplies a job category present in that acronym's own allow-list. An
+acronym whose uppercase form is ambiguous in job descriptions generally (e.g.
+"RAG status") but unambiguous within a specific job category SHALL be
+category-scoped rather than omitted from job parsing entirely; an acronym with no
+such safe category SHALL remain résumé-scoped.
+
+`RAG` SHALL be category-scoped, resolving to `rag` (retrieval-augmented
+generation) on job postings whose category is `ai_engineering` or `ml_ai`, and
+SHALL remain résumé-scoped for résumé parsing regardless of any category.
 
 #### Scenario: Shared acronym resolves everywhere
 - **WHEN** any text contains "ML" as a standalone token
 - **THEN** the matcher emits "machine-learning"
 
-#### Scenario: Résumé-scoped acronym resolves only in résumé mode
+#### Scenario: Résumé-scoped acronym resolves in résumé mode
 - **WHEN** a résumé is parsed with the résumé option and contains "RAG"
 - **THEN** the matcher emits "rag" (retrieval-augmented generation)
 
-#### Scenario: Résumé-scoped acronym never tags job text
-- **WHEN** default (job) parsing sees "RAG" — including "RAG status"
+#### Scenario: Category-scoped acronym resolves for its allow-listed job category
+- **WHEN** job text in category `ai_engineering` contains "RAG" as a standalone token
+- **THEN** the matcher emits "rag"
+
+#### Scenario: Category-scoped acronym does not resolve outside its allow-list
+- **WHEN** job text in category `backend` contains "RAG" — including "RAG status"
+- **THEN** the matcher does NOT emit "rag"
+
+#### Scenario: Category-scoped acronym does not resolve when no category is supplied
+- **WHEN** default (job) parsing with no category option sees "RAG"
 - **THEN** the matcher does NOT emit "rag"
 
 #### Scenario: Ambiguous lowercase form does not resolve
