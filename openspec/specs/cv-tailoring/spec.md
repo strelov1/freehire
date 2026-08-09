@@ -78,21 +78,31 @@ orphaned tailored copy has no base CV and SHALL get one seeded.
 - **WHEN** a user whose only vacancy-less CV is an orphaned tailored copy requests tailoring
 - **THEN** a base CV is seeded from their résumé, and the orphan is left untouched
 
-### Requirement: Tailoring requires an existing fit analysis
+### Requirement: The bootstrap response flags a first-time cold start
 
-The system SHALL require a cached fit analysis for the (user, vacancy) pair before tailoring, and
-MUST NOT recompute it. When no cached analysis exists, the bootstrap MUST fail with a 409 telling
-the user to run the fit analysis first.
+The system SHALL NOT require a cached fit analysis to exist before starting tailoring. The
+bootstrap response SHALL carry a boolean indicating whether this call just created a new tailored
+CV for a (user, vacancy) pair that had none yet — reusing the same "just created" signal the
+bootstrap already computes today — so the workspace can tell a genuine cold start from re-opening
+an existing CV. Nothing about analysis or autopilot is started by the bootstrap itself; the flag
+only signals the workspace to trigger the autopilot run automatically (see `tailor-autopilot`'s
+cold-start requirements), instead of gating or sequencing anything server-side at bootstrap time.
 
-#### Scenario: Tailoring is refused when no analysis is cached
+Repeating the bootstrap for the same (user, vacancy) pair MUST NOT report a cold start a second
+time — the existing idempotency rule (same CV, same conversation, no second debit) extends to this
+flag: it is true on at most one bootstrap call per (user, vacancy).
 
-- **WHEN** a beta user requests tailoring for a vacancy they have never analyzed
-- **THEN** the request fails with a 409 telling them to run the fit analysis first
+#### Scenario: A first-time bootstrap flags a cold start
 
-#### Scenario: Bootstrap returns the cached analysis without recomputing
+- **WHEN** a beta user with a base CV requests tailoring for a vacancy they have never tailored
+  before
+- **THEN** the bootstrap response returns immediately with the new tailored CV, the session id, and
+  the cold-start flag set to true, without waiting on any analysis or autopilot run
 
-- **WHEN** a beta user with a cached analysis requests tailoring
-- **THEN** the response carries that cached analysis and no LLM call is made
+#### Scenario: Repeating the bootstrap does not flag a cold start again
+
+- **WHEN** the bootstrap is requested again for a (user, vacancy) pair that already has a tailored CV
+- **THEN** the existing CV and conversation are returned and the cold-start flag is false
 
 ### Requirement: CV edits are applied as sanitized field-level patches
 
@@ -143,21 +153,15 @@ an authenticated caller (session cookie or API key).
 - **WHEN** an authenticated owner reads the tailoring context for their tailored CV
 - **THEN** the response lists the verdict, recommendation, dimension comments, and requirements labelled `missing-have` versus `missing-gap`
 
-### Requirement: Tailoring is beta-gated and surfaced only after analysis
+### Requirement: Tailoring is beta-gated
 
-The system SHALL gate every tailoring endpoint behind beta access (the union of the CV builder gate
-and the agent's beta-tester flag), and the fit page SHALL surface the "tailor my CV" entry point
-only when a cached, non-stale analysis exists for that user and vacancy.
+The system SHALL gate every tailoring endpoint behind beta access — the union of the CV builder
+gate and the agent's beta-tester flag.
 
 #### Scenario: A non-beta user cannot reach tailoring
 
 - **WHEN** a signed-in non-beta user calls the tailoring bootstrap
 - **THEN** the request is refused by the beta gate
-
-#### Scenario: The CTA is hidden without an analysis
-
-- **WHEN** a beta user opens a fit page for a vacancy they have not analyzed
-- **THEN** the "tailor my CV" entry point is not shown
 
 ### Requirement: Tailoring respects hard-constraint guardrails
 

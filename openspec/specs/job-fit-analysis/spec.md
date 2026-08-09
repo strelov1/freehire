@@ -287,40 +287,61 @@ both paths MUST produce the same final analysis for the same inputs.
 - **WHEN** a stage fails mid-stream
 - **THEN** the stream emits an error event and closes without caching a partial analysis
 
-### Requirement: Dedicated fit analysis page
+### Requirement: Fit analysis surfaces in the tailoring workspace
 
-The SPA SHALL provide a dedicated page at `/jobs/[slug]/fit` presenting the full analysis in a
-detailed, full-width layout (overall score + verdict, the six dimensions with their rationale, the
-ATS requirement match, strengths, gaps, recommendation). When a fresh cached analysis exists it MUST
-be server-rendered on first paint; otherwise (or on explicit recompute) the page MUST open the stream
-and render the stage progress, the thinking panel, and each section progressively as it resolves.
+The SPA SHALL NOT provide a dedicated, standalone fit-analysis page. The Tailor workspace's Job
+Match tab (`/tailor/[slug]`) is the sole surface presenting the full analysis (overall score +
+verdict, the six dimensions with their rationale, the ATS requirement match, strengths, gaps,
+recommendation). When the tailoring bootstrap returns an existing cached analysis, the tab renders
+it immediately from that response. When the bootstrap flags a first-time cold start (no cached
+analysis existed yet — see `cv-tailoring`'s "The bootstrap response flags a first-time cold start"),
+the workspace SHALL NOT open a separate fit-analysis stream or block on one — the analysis is
+computed as a precondition step inside the automatically-triggered autopilot run itself (see
+`tailor-autopilot`'s "An autopilot run satisfies its own analysis precondition"), on the same
+request/stream the workspace is already consuming for the live build. The Job Match tab SHALL show
+an in-progress state until the analysis lands, then render it, without the candidate taking any
+action or being sent to a separate screen.
 
-#### Scenario: Fresh cache server-rendered
+Requests to the former standalone page path (`/match/[slug]`) and its earlier legacy alias
+(`/jobs/[slug]/fit`) SHALL redirect (308) to `/tailor/[slug]`.
 
-- **WHEN** the user opens the page for a job whose analysis is cached and fresh
-- **THEN** the full analysis is in the server-rendered HTML with no client stream needed
+#### Scenario: Cached analysis renders from the bootstrap response
 
-#### Scenario: Cold page streams progressively
+- **WHEN** the user opens `/tailor/[slug]` for a vacancy with a fresh cached analysis
+- **THEN** the Job Match tab shows the full analysis immediately, with no separate fetch or stream
 
-- **WHEN** the user opens the page with no fresh cached analysis
-- **THEN** the page shows the stage stepper and fills the overall/dimensions/requirements/verdict sections as each stage resolves, ending on the complete analysis
+#### Scenario: A cold-start analysis populates the tab once it lands
+
+- **WHEN** the user opens `/tailor/[slug]` for a vacancy with no cached analysis, triggering the
+  automatic cold-start autopilot run
+- **THEN** the Job Match tab shows an in-progress state, and renders the full analysis once that
+  run's inline analysis step completes, without the workspace blocking on it or the candidate
+  triggering anything
+
+#### Scenario: Old links redirect into the workspace
+
+- **WHEN** a request is made to `/match/[slug]` or `/jobs/[slug]/fit`
+- **THEN** the system responds with a 308 redirect to `/tailor/[slug]`
 
 ### Requirement: Sidebar reduced to a summary linking to the page
 
 The Profile-match sidebar block SHALL show only a short fit summary — the overall percentage, the
-verdict label, and the single most important gap — with a link to the dedicated page. It MUST NOT run
-the analysis inline. When no analysis is cached it MUST show an action that navigates to the page
-(which starts the stream) rather than computing in the sidebar.
+verdict label, and the single most important gap — with a link to the dedicated page. It MUST NOT
+run the analysis inline. When no analysis is cached it MUST show an action that navigates to the
+page (which starts the stream) rather than computing in the sidebar.
+
+The "dedicated page" this links to is the Tailor workspace (`/tailor/[slug]`), not a separate
+fit-analysis page — see "Fit analysis surfaces in the tailoring workspace".
 
 #### Scenario: Sidebar summarizes and links
 
 - **WHEN** a cached analysis exists and the user views the job
-- **THEN** the sidebar shows the overall %, the verdict, and the top gap, with a link to the full analysis page
+- **THEN** the sidebar shows the overall %, the verdict, and the top gap, with a link to `/tailor/[slug]`
 
-#### Scenario: Sidebar with no analysis links to the page
+#### Scenario: Sidebar with no analysis links to the workspace
 
 - **WHEN** no analysis is cached
-- **THEN** the sidebar shows an action that navigates to `/jobs/[slug]/fit` instead of computing inline
+- **THEN** the sidebar shows an action that navigates to `/tailor/[slug]` instead of computing inline
 
 ### Requirement: Per-user monthly fit-analysis quota
 

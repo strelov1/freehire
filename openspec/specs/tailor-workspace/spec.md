@@ -24,19 +24,25 @@ reads, so the CV can re-open its exact session later. Writing the session id MUS
 The system SHALL, when `/tailor/[slug]` is opened for an existing tailored CV (`?cv=<id>`),
 re-attach to that CV's stored agent session WITHOUT bootstrapping a new CV or sending a kickoff
 prompt. Opening `/tailor/[slug]` without a CV reference SHALL bootstrap a new tailored CV and
-session and store the session id on it. A bootstrapped session MUST NOT start talking on its own:
-the empty chat SHALL offer two actions — running the tailoring unattended, or walking the gaps in
-conversation — and the turn begins when one is chosen.
+session and store the session id on it. When the bootstrap response flags a first-time cold start
+(per `cv-tailoring`'s "The bootstrap response flags a first-time cold start"), the workspace MUST
+NOT offer a menu of actions before starting: it SHALL immediately start the autopilot run itself
+(the same call the workspace's own "tailor it for me" action makes), and the empty chat instead
+reflects the run in progress. The candidate MAY still send an ordinary message at any time,
+including while the cold-start run is in flight. A session re-attached or re-minted OUTSIDE a
+cold start (an existing CV with no bound session yet) still offers the two actions and MUST NOT
+start talking on its own until one is chosen.
 
 #### Scenario: Re-opening a CV continues its conversation
 
 - **WHEN** a user opens the workspace for an existing tailored CV
 - **THEN** the existing agent session is attached (its prior messages replay) and no new session or kickoff is created
 
-#### Scenario: Opening without a CV starts a fresh session
+#### Scenario: Opening without a CV starts a fresh session and runs automatically
 
-- **WHEN** a user opens the workspace from the match CTA (no CV reference)
-- **THEN** a new tailored CV + seeded session are created, the session id is stored on the new CV, and the empty chat offers the two actions without sending anything
+- **WHEN** a user opens the workspace for a vacancy with no tailored CV yet (no CV reference)
+- **THEN** a new tailored CV + seeded session are created, the session id is stored on the new CV,
+  and the cold-start autopilot run begins immediately without the candidate choosing an action first
 
 #### Scenario: Choosing an action starts the turn
 
@@ -68,9 +74,10 @@ CV the chat and preview show) AND reflect in the centre preview without a page r
 ### Requirement: The CV list re-opens sessions and has no create action
 
 The CV list SHALL show the user's tailored CVs, each linking to its tailoring workspace
-(`/tailor/[slug]?cv=<id>`, resume), and SHALL NOT offer a create action — a tailored CV is
-created only from the match page. The list MUST carry the job slug and the session id needed to
-build each re-open link.
+(`/tailor/[slug]?cv=<id>`, resume), and SHALL NOT offer a create action — a tailored CV is created
+by opening the tailoring workspace for a vacancy (`/tailor/[slug]`), which bootstraps one if none
+exists yet; there is no separate page to create it from. The list MUST carry the job slug and the
+session id needed to build each re-open link.
 
 #### Scenario: A list item re-opens its workspace
 
@@ -154,6 +161,24 @@ across sheets while the narrow sidebar column renders on the first sheet.
 
 - **WHEN** the user activates Download PDF
 - **THEN** the browser fetches the CV's rendered PDF from the existing per-CV PDF endpoint
+
+### Requirement: The CV preview updates live during a cold-start run
+
+The system SHALL refresh the displayed CV document after each `cv_edit` tool call an autopilot run
+makes, not only once at the end of the turn, so the candidate sees bullets and sections fill in as
+the run progresses. This applies to every autopilot run (cold-start or manually started), reusing
+the same document refresh already performed at turn end.
+
+#### Scenario: A bullet appears as the run writes it
+
+- **WHEN** an autopilot run's `cv_edit` tool call successfully rewrites a bullet
+- **THEN** the CV preview reflects that change before the run's turn has finished
+
+#### Scenario: The end-of-turn refresh still runs
+
+- **WHEN** an autopilot run's turn completes
+- **THEN** the CV preview is refreshed once more, covering any change whose per-call refresh was
+  missed
 
 ### Requirement: The workspace offers a template picker
 
