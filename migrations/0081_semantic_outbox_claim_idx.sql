@@ -1,0 +1,27 @@
+-- migrate: no-transaction
+--
+-- Partial index over the claimable set (mirrors semantic_outbox_claimable_idx's WHERE
+-- clause), pre-sorted in the exact order ClaimSemanticBatch's CTE now requests (see
+-- 0080_semantic_outbox_job_posted_at.sql) — a plain index scan with LIMIT, no join, no
+-- materialize-then-sort.
+--
+-- Split into its own file, mirroring 0078 (jobs_source_id_idx) for the identical
+-- reason: semantic_outbox is under continuous prod write traffic (cmd/ingest's
+-- enqueue, cmd/embed's claim/update/failure paths), and a plain CREATE INDEX holds a
+-- SHARE lock blocking writes for the whole build. CONCURRENTLY takes SHARE UPDATE
+-- EXCLUSIVE instead, blocking neither readers nor writers, at the cost of two table
+-- passes — but Postgres forbids CONCURRENTLY inside a transaction block, and a
+-- migration file's statements sent as one multi-statement query run in an implicit
+-- transaction regardless of the no-transaction marker (that marker only stops
+-- internal/migrate's OWN wrapping BEGIN/COMMIT — it does not change how Postgres
+-- itself batches a multi-statement message). A file mixing this with 0080's
+-- ADD COLUMN/UPDATE therefore fails with "CREATE INDEX CONCURRENTLY cannot run inside
+-- a transaction block" — confirmed live against prod. One statement per no-transaction
+-- file sidesteps it.
+--
+-- Applied to a fresh volume by initdb after 0080; on an existing prod volume build it
+-- by hand, detached from the SSH session (systemd-run or nohup) — a CONCURRENTLY build
+-- dies with its ssh session and leaves an INVALID index behind (same warning 0078 and
+-- 0056 already give).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS semantic_outbox_claim_idx ON public.semantic_outbox
+    USING btree (job_posted_at DESC, job_id DESC) WHERE (failed_at IS NULL);

@@ -1,12 +1,14 @@
--- migrate: no-transaction
---
 -- ClaimSemanticBatch orders by COALESCE(jobs.posted_at, jobs.created_at) via a join to
 -- jobs, so Postgres cannot push the LIMIT below the sort: it nested-loop-joins EVERY
 -- claimable row against jobs before sorting and taking the batch. Measured live on prod
 -- at ~906k claimable rows: 109s for a single claim call, independent of batch size (see
 -- openspec/changes/prod-semantic-embed-steady-state/design.md Decision 8 for the full
 -- EXPLAIN ANALYZE). Denormalizing the sort key onto semantic_outbox itself lets the
--- claim query use a plain index scan with no join.
+-- claim query use a plain index scan with no join — the supporting index is
+-- 0081_semantic_outbox_claim_idx.sql (CREATE INDEX CONCURRENTLY needs its own
+-- no-transaction file: Postgres runs a multi-statement file sent as one query in an
+-- implicit transaction, which CONCURRENTLY forbids, and this file's other statements
+-- don't need that treatment — see 0081's own header for why they're split).
 --
 -- Nullable — not NOT NULL — deliberately: a SET NOT NULL on a 900k+ row table takes an
 -- exclusive lock to validate. The application always populates this column going
@@ -25,28 +27,16 @@
 -- affects only claim ORDER (which job gets embedded first under backlog), never
 -- correctness (which jobs get embedded, or duplicated).
 --
--- WHY no-transaction, and why the index is CONCURRENTLY: mirrors 0078
--- (jobs_source_id_idx) for the identical reason — semantic_outbox is under continuous
--- prod write traffic (cmd/ingest's enqueue, cmd/embed's claim/update/failure paths), and
--- a plain CREATE INDEX holds a SHARE lock blocking writes for the whole build.
--- CONCURRENTLY takes SHARE UPDATE EXCLUSIVE instead, blocking neither readers nor
--- writers, at the cost of two table passes. ADD COLUMN (no default) is metadata-only
--- (PG11+); the backfill UPDATE below takes only row-level locks as it proceeds, not a
--- table-level one, so it does not need the same treatment.
---
 -- Applied to a fresh volume by initdb after 0079; on an existing prod volume run this
 -- manually (SET ROLE hire) BEFORE deploying code that reads/writes the column.
 ALTER TABLE public.semantic_outbox ADD COLUMN job_posted_at timestamp with time zone;
 
--- One-time backfill for rows already queued before this column existed.
+-- One-time backfill for rows already queued before this column existed. Plain UPDATE:
+-- takes only row-level locks as it proceeds, not a table-level one, so — unlike the
+-- CONCURRENTLY index in 0081 — it does not need to run outside this migration's normal
+-- transaction.
 UPDATE public.semantic_outbox o
 SET job_posted_at = COALESCE(j.posted_at, j.created_at)
 FROM public.jobs j
 WHERE j.id = o.job_id
   AND o.job_posted_at IS NULL;
-
--- Partial index over the claimable set (mirrors semantic_outbox_claimable_idx's WHERE
--- clause), pre-sorted in the exact order ClaimSemanticBatch's CTE now requests — a plain
--- index scan with LIMIT, no join, no materialize-then-sort.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS semantic_outbox_claim_idx ON public.semantic_outbox
-    USING btree (job_posted_at DESC, job_id DESC) WHERE (failed_at IS NULL);

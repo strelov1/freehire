@@ -92,9 +92,22 @@ query: see design.md Decision 8 for the full root-cause writeup and design.
 - [x] 2a.5 Full verification suite: `go build/vet ./...`,
       `go test ./...`, `go vet -tags=integration ./...`,
       `go test -tags=integration ./internal/db/... ./cmd/embed/...`. All green.
-- [ ] 2a.6 PR, merge, deploy (`release.sh freehire`) — applies the migration to
-      prod as part of the deploy (matches how 0078 was applied the same way,
-      confirmed earlier this session).
+- [x] 2a.6 PR, merge, deploy (`release.sh freehire`). First attempt FAILED live:
+      `CREATE INDEX CONCURRENTLY cannot run inside a transaction block` —
+      `release.sh` correctly aborted without touching the live color (verified
+      prod's `semantic_outbox` had no `job_posted_at` column and no
+      `schema_migrations` row for 0080 afterward — clean rollback, no partial
+      state). Root cause: a migration file's statements are sent to Postgres as
+      one multi-statement message, which Postgres itself implicitly wraps in a
+      transaction regardless of the `no-transaction` marker (that marker only
+      stops `internal/migrate`'s own `BEGIN`/`COMMIT` wrapping) — `CONCURRENTLY`
+      forbids running inside ANY transaction block, implicit or explicit. 0078
+      worked because it has exactly one statement per file; this migration had
+      three. Fixed by splitting: `0080` keeps `ADD COLUMN` + the `UPDATE`
+      backfill (ordinary transactional DML, no change needed there); `0081`
+      is `CREATE INDEX CONCURRENTLY IF NOT EXISTS` alone, matching 0078's
+      exact working shape. Re-verified locally (fresh testcontainer Postgres
+      applies both files cleanly) before redeploying.
 
 ## 3. Publish a clean jobs_semantic (host2 ops)
 
