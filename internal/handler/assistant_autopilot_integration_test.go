@@ -194,12 +194,16 @@ func TestAutopilotComputesAnalysisWhenMissing(t *testing.T) {
 		db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID}); err != nil {
 		t.Errorf("analysis not cached after the run: %v", err)
 	}
+	if fitM.n != 6 {
+		t.Errorf("fit model called %d times, want 6 (one full chain run before the run, one after) — the post-run refresh must fire even when the pre-run step just computed one", fitM.n)
+	}
 }
 
-// TestAutopilotReusesAnExistingCachedAnalysis: when an analysis is already cached for the
-// vacancy, an autopilot run must not recompute it — the fit chain is not free, and cv_context
-// already has something to read.
-func TestAutopilotReusesAnExistingCachedAnalysis(t *testing.T) {
+// TestAutopilotRefreshesAnalysisAfterEveryRun: the fit analysis is no longer a frozen
+// snapshot of the base profile (see docs/superpowers/specs/2026-08-09-fit-analysis-post-autopilot-verify-design.md).
+// An autopilot run must recompute and overwrite the cached (user, job) row once it ends,
+// even when a (now-stale) analysis was already cached and the run itself made zero edits.
+func TestAutopilotRefreshesAnalysisAfterEveryRun(t *testing.T) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -232,7 +236,7 @@ func TestAutopilotReusesAnExistingCachedAnalysis(t *testing.T) {
 	h.register(api, mw)
 	h.cv.register(api, mw)
 
-	userID, cookie := assistantUser(t, pool, iss, "autopilot-cached@example.test", true)
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-refresh@example.test", true)
 	seedBankedCareer(t, queries, userID)
 	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
 
@@ -240,8 +244,11 @@ func TestAutopilotReusesAnExistingCachedAnalysis(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), `SELECT job_id FROM cvs WHERE id = $1`, cvID).Scan(&jobID); err != nil {
 		t.Fatalf("read job id: %v", err)
 	}
+	// A stale analysis under a model id the fake never produces, so a later match on the
+	// LIVE model id (empty string — llm.NewWithModel sets none) can only mean the row was
+	// actually overwritten, not left alone.
 	if err := queries.UpsertUserJobAnalysis(context.Background(), db.UpsertUserJobAnalysisParams{
-		UserID: userID, JobID: jobID, Analysis: []byte(`{"verdict":"Good Fit","overall_score":70}`), Model: "test-model",
+		UserID: userID, JobID: jobID, Analysis: []byte(`{"verdict":"Good Fit","overall_score":70}`), Model: "stale-model",
 	}); err != nil {
 		t.Fatalf("seed cached analysis: %v", err)
 	}
@@ -254,8 +261,15 @@ func TestAutopilotReusesAnExistingCachedAnalysis(t *testing.T) {
 	io.ReadAll(resp.Body)
 	resp.Body.Close()
 
-	if fitM.n != 0 {
-		t.Errorf("fit model called %d times, want 0 — an already-cached analysis must not be recomputed", fitM.n)
+	if fitM.n != 3 {
+		t.Errorf("fit model called %d times, want exactly 3 (one full chain run) — a cached analysis must still be refreshed once, not skipped and not recomputed twice", fitM.n)
+	}
+	row, err := queries.GetUserJobAnalysis(context.Background(), db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID})
+	if err != nil {
+		t.Fatalf("read cached analysis: %v", err)
+	}
+	if row.Model == "stale-model" {
+		t.Error("cached analysis still carries the pre-run model stamp — the row was not overwritten")
 	}
 }
 

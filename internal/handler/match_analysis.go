@@ -284,6 +284,40 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
 }
 
+// prepareAutopilotRun ensures the fit analysis is cached before an autopilot run starts —
+// exactly ensureCachedAnalysis's fill-if-empty, so cv_context has something to read — and
+// returns the closure PostAssistantAutopilot calls once the run ends, which UNCONDITIONALLY
+// recomputes the chain and overwrites the (user, job) cache, even when nothing was cached
+// or an analysis was already there. This is what repeals the fit-analysis-post-autopilot-verify
+// design's predecessor rule that the fit analysis is a frozen snapshot of the base profile.
+//
+// Both halves share one assembled Input/Analyzer pair so the profile/blockers/bank reads
+// happen once per autopilot invocation rather than twice. Built here, while c is valid,
+// because the returned closure runs later from the SSE writer's detached goroutine, which
+// only has a plain context.Context (see cacheAnalysis's own comment on the same
+// constraint). Never debits credits — this path, like ensureCachedAnalysis, is unmetered.
+func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.Job) func(context.Context) {
+	h.ensureCachedAnalysis(c, userID, job)
+
+	profile, _ := h.userProfile.Get(c.Context(), userID)
+	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	input := h.buildAnalysisInput(c, job, userID, profile, blockers)
+	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+
+	return func(ctx context.Context) {
+		analysis, err := analyzer.Analyze(ctx, input)
+		if err != nil {
+			log.Printf("matchanalysis: post-autopilot refresh, user %d job %d: %v", userID, job.ID, err)
+			return
+		}
+		if analysis == nil {
+			return // LLM unconfigured — nothing to cache
+		}
+		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+	}
+}
+
 // creditsBalance reports the caller's current points, or nil on a DB error (logged).
 // Best-effort: a transient hiccup must neither block a legitimate analysis nor 402 the
 // caller — the atomic Debit remains the real ceiling.
