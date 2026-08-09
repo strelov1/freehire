@@ -2,14 +2,18 @@
 // currently live ONLY in the Meilisearch `jobs_semantic` index. Those vectors are the
 // product of a one-time, weeks-long embedding pass; until they exist in Postgres too,
 // the nightly pg_dump does not back them up and a lost Meili volume would force a full
-// re-embed. This one-off pages the index (id + stored vector), copies each vector into
-// jobs.semantic_embedding, and exits.
+// re-embed. This one-off pages the index (id + stored chunk vectors), copies each
+// job's FULL set of vectors into jobs.semantic_embedding, and exits — a job carries one
+// vector per chunk of its description (see internal/search.chunkText), and this tool
+// copies all of them, not just the first, so a disaster-recovery re-run after a job has
+// been re-embedded under the chunked scheme does not truncate it back down to one.
 //
 // It is pure data movement: it reads the already-computed vectors and NEVER calls the
 // embedding model, NEVER touches the provenance stamps (semantic_embedded_model/hash)
 // or the semantic_outbox, and NEVER changes the embedder identity — so it cannot
-// trigger a re-embed of anything. Idempotent: re-running rewrites the same values, so
-// an interrupted run just resumes by starting over.
+// trigger a re-embed of anything. Idempotent: re-running rewrites the same values (Meili
+// and Postgres agree on what a job's vectors are, since neither side changed), so an
+// interrupted run just resumes by starting over.
 //
 // Env knobs: DRY_RUN (any non-empty value reads Meili and writes nothing);
 // PAGE_SIZE (documents per Meili page + Postgres batch, default 500).
@@ -75,15 +79,18 @@ func (m meiliSource) Page(ctx context.Context, offset, limit int) ([]search.Sema
 	return m.client.ListSemanticVectors(ctx, offset, limit)
 }
 
-// pgSink writes a page of vectors into jobs.semantic_embedding in one batched round
-// trip. The UPDATE is by primary key and unconditional, so it is idempotent and a
-// vector for a since-deleted job simply affects zero rows.
+// pgSink writes a page of jobs' chunk vectors into jobs.semantic_embedding in one
+// batched round trip. Each job's FULL set of chunk vectors is written (not just its
+// first), so a job already re-embedded under the chunked scheme keeps every chunk
+// rather than being truncated back down to one. The UPDATE is by primary key and
+// unconditional, so it is idempotent and a vector for a since-deleted job simply
+// affects zero rows.
 type pgSink struct{ pool *pgxpool.Pool }
 
 func (s pgSink) Save(ctx context.Context, vecs []search.SemanticVector) (int64, error) {
 	batch := &pgx.Batch{}
 	for _, v := range vecs {
-		batch.Queue(`UPDATE jobs SET semantic_embedding = $1 WHERE id = $2`, v.Vector, v.ID)
+		batch.Queue(`UPDATE jobs SET semantic_embedding = $1 WHERE id = $2`, v.Vectors, v.ID)
 	}
 	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()

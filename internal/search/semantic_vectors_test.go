@@ -4,7 +4,7 @@ import "testing"
 
 func TestParseSemanticVectorsPage(t *testing.T) {
 	// Shape mirrors the live Meili response: _vectors.default.embeddings is a list of
-	// embeddings ([[...]]) and the seeded vector is its single element.
+	// embeddings ([[...]]).
 	raw := []byte(`{
 	  "results": [
 	    {"id": 1, "_vectors": {"default": {"embeddings": [[0.1, 0.2, 0.3]], "regenerate": false}}},
@@ -24,8 +24,35 @@ func TestParseSemanticVectorsPage(t *testing.T) {
 		t.Fatalf("ids = %d,%d; want 1,2", got[0].ID, got[1].ID)
 	}
 	want0 := []float32{0.1, 0.2, 0.3}
-	if len(got[0].Vector) != 3 || got[0].Vector[0] != want0[0] || got[0].Vector[2] != want0[2] {
-		t.Fatalf("vector[0] = %v; want %v", got[0].Vector, want0)
+	if len(got[0].Vectors) != 1 || got[0].Vectors[0][0] != want0[0] || got[0].Vectors[0][2] != want0[2] {
+		t.Fatalf("vectors[0] = %v; want [%v]", got[0].Vectors, want0)
+	}
+}
+
+// A job re-embedded under the chunked scheme carries SEVERAL vectors in Meili — all of
+// them must survive the read, not just the first. Silently dropping the rest would make
+// this tool (a disaster-recovery Meili -> Postgres copy) destructively truncate an
+// already-chunked job's vectors back down to one if ever re-run after this ships.
+func TestParseSemanticVectorsPageKeepsAllChunks(t *testing.T) {
+	raw := []byte(`{
+	  "results": [
+	    {"id": 1, "_vectors": {"default": {"embeddings": [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], "regenerate": false}}}
+	  ],
+	  "offset": 0, "limit": 1, "total": 1
+	}`)
+
+	got, err := parseSemanticVectorsPage(raw)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d docs, want 1", len(got))
+	}
+	if len(got[0].Vectors) != 3 {
+		t.Fatalf("got %d chunk vectors for id 1, want 3: %v", len(got[0].Vectors), got[0].Vectors)
+	}
+	if got[0].Vectors[1][0] != 0.3 || got[0].Vectors[2][1] != 0.6 {
+		t.Fatalf("chunk vectors out of order or wrong: %v", got[0].Vectors)
 	}
 }
 

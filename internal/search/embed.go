@@ -32,23 +32,30 @@ const embedAttemptTimeout = 60 * time.Second
 // 4s, …). A package var, not a const, so tests can shrink it to keep them fast.
 var embedRetryBase = time.Second
 
-// jobPassage renders a job document into the text embedded for semantic retrieval.
-// e5 is asymmetric: the corpus side carries the "passage:" prefix and the query side
-// carries "query:" (see EmbedText), so they must be embedded the same way to be
-// comparable.
+// jobPassages renders a job document into the texts embedded for semantic retrieval,
+// one per chunk of the full description (see chunkText) — the multi-vector shape this
+// change adds so nothing past chunkBudgetRunes silently disappears (proposal.md). e5 is
+// asymmetric: the corpus side carries the "passage:" prefix and the query side carries
+// "query:" (see EmbedText), so they must be embedded the same way to be comparable, and
+// EVERY chunk carries it (plus the title/company context) since each chunk becomes an
+// independently-scored vector (tasks.md task 1's Meilisearch spike: nearest-of-N).
 //
-// It prefers the enrichment summary over the raw description: the summary is a short,
-// model-written synopsis (capped well under e5's 512-token window) that captures the
-// whole role — including requirements a long description buries past the truncation
-// point — so it embeds the job more faithfully than the head-truncated description, and
-// its distilled form is closer to a CV query. Unenriched jobs fall back to the
-// description (already capped at maxIndexedDescriptionRunes).
-func jobPassage(d JobDocument) string {
-	body := d.Description
-	if s := d.Enrichment.Summary; s != "" {
-		body = s
+// It chunks semanticText — FromJob's full, HTML-stripped copy of the description, NOT
+// the facet-index-capped Description field and NOT the enrichment summary (design.md
+// Decision 5: the summary's only advantage over the description, dodging truncation,
+// no longer applies once the full text is chunked rather than capped). A job with no
+// description text yields no passages at all, not one passage of just the prefix.
+func jobPassages(d JobDocument) []string {
+	chunks := chunkText(d.semanticText)
+	if len(chunks) == 0 {
+		return nil
 	}
-	return "passage: " + d.Title + " at " + d.Company + ". " + body
+	prefix := "passage: " + d.Title + " at " + d.Company + ". "
+	out := make([]string, len(chunks))
+	for i, c := range chunks {
+		out[i] = prefix + c
+	}
+	return out
 }
 
 // embedBatch turns texts into vectors, in input order, by calling the embedding backend
@@ -219,28 +226,50 @@ func parseEmbeddings(raw []byte) ([][]float64, error) {
 	return nil, fmt.Errorf("search: embed: unrecognized response shape")
 }
 
-// semanticDocument is a JobDocument carrying its precomputed embedding for the
+// semanticDocument is a JobDocument carrying its precomputed chunk vectors for the
 // userProvided embedder. The embedded JobDocument flattens its own fields into the
-// document; _vectors adds the vector Meilisearch stores and searches by.
+// document; _vectors adds the vectors Meilisearch stores and searches by — a bare
+// array of vectors, one per chunk (verified directly against a disposable Meilisearch
+// v1.49.0 instance, 2026-08-09: `_vectors.<name>` accepts `[][]float32` with no
+// `{"embeddings": ...}` wrapper needed, and scores each document by the nearest of its
+// vectors — design.md Decision 3 / tasks.md task 1).
 type semanticDocument struct {
 	JobDocument
-	Vectors map[string][]float32 `json:"_vectors"`
+	Vectors map[string][][]float32 `json:"_vectors"`
 }
 
-// embedDocs embeds each job's passage text and wraps it with its vector, ready to push
-// into the semantic index.
+// embedDocs embeds each job's chunk passages and wraps them with their vectors, ready
+// to push into the semantic index. Every doc's chunks are flattened into ONE embedBatch
+// call (so a whole reindex wave still costs one round of TEI batching, not one call per
+// job) and regrouped back per job afterward, keyed by position rather than job id — a
+// job that contributes zero passages (no description text) is simply left out of the
+// result, which vectorsByID and its callers already treat as "nothing to persist yet"
+// the same way a claim wave's missing entries are.
 func (c *Client) embedDocs(ctx context.Context, docs []JobDocument) ([]semanticDocument, error) {
-	inputs := make([]string, len(docs))
+	var inputs []string
+	chunkCounts := make([]int, len(docs))
 	for i, d := range docs {
-		inputs[i] = jobPassage(d)
+		passages := jobPassages(d)
+		chunkCounts[i] = len(passages)
+		inputs = append(inputs, passages...)
 	}
 	vecs, err := c.embedBatch(ctx, inputs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]semanticDocument, len(docs))
+	out := make([]semanticDocument, 0, len(docs))
+	pos := 0
 	for i, d := range docs {
-		out[i] = semanticDocument{JobDocument: d, Vectors: map[string][]float32{embedderName: toFloat32(vecs[i])}}
+		n := chunkCounts[i]
+		if n == 0 {
+			continue
+		}
+		chunkVecs := make([][]float32, n)
+		for j := 0; j < n; j++ {
+			chunkVecs[j] = toFloat32(vecs[pos])
+			pos++
+		}
+		out = append(out, semanticDocument{JobDocument: d, Vectors: map[string][][]float32{embedderName: chunkVecs}})
 	}
 	return out, nil
 }

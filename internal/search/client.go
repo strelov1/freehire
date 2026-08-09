@@ -41,7 +41,15 @@ const (
 	// OpenAI — reached over TEI's native /embed route (embedderURL). Multilingual
 	// e5 gives far sharper skill matching than the old in-engine MiniLM, and offloading
 	// the compute keeps it off Meilisearch's single task queue.
-	embedderModel = "intfloat/multilingual-e5-base"
+	//
+	// The "@chunked-v1" suffix is a staleness KEY, not a display value or the literal
+	// HF model id — the underlying TEI endpoint and weights are unchanged. Bumped here
+	// (design.md Decision 4) to force a full re-embed: EnqueuePendingSemanticJobs'
+	// `IS DISTINCT FROM` staleness check already treats "the embedding strategy
+	// changed" as a model migration, and the plain-text-extraction + chunking change
+	// this suffix marks IS one in that sense, even though the HTTP endpoint is
+	// identical. Every previously-current job re-enqueues once this ships.
+	embedderModel = "intfloat/multilingual-e5-base@chunked-v1"
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
 	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
 	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend
@@ -393,11 +401,11 @@ func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 }
 
 // IndexSemanticJobs embeds a batch (via TEI) and upserts it into the semantic index
-// with each document's vector, since that index uses a userProvided embedder. It
-// returns the computed vectors keyed by job id so the caller can persist them to
+// with each document's chunk vectors, since that index uses a userProvided embedder.
+// It returns the computed vectors keyed by job id so the caller can persist them to
 // Postgres in the same unit of work — the durable copy that lets the index be
 // rehydrated without re-embedding. Used by the incremental embed worker.
-func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
+func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map[int64][][]float32, error) {
 	if len(docs) == 0 {
 		return nil, nil
 	}
@@ -444,12 +452,12 @@ func (c *Client) IndexSemanticJobsFromPG(ctx context.Context, docs []JobDocument
 	return c.awaitTask(ctx, c.semantic, task.TaskUID)
 }
 
-// EmbedJobs computes each document's vector WITHOUT touching Meilisearch, returning them
-// keyed by job id. It is the pg-only backfill path: the vector is persisted to Postgres
-// (the durable source of truth) and the semantic index is rebuilt from Postgres in one
-// pass afterwards (reindex --semantic --from-pg), so a fast bulk embed is never gated by
-// Meilisearch's serial task queue.
-func (c *Client) EmbedJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
+// EmbedJobs computes each document's chunk vectors WITHOUT touching Meilisearch,
+// returning them keyed by job id. It is the pg-only backfill path: the vectors are
+// persisted to Postgres (the durable source of truth) and the semantic index is
+// rebuilt from Postgres in one pass afterwards (reindex --semantic --from-pg), so a
+// fast bulk embed is never gated by Meilisearch's serial task queue.
+func (c *Client) EmbedJobs(ctx context.Context, docs []JobDocument) (map[int64][][]float32, error) {
 	if len(docs) == 0 {
 		return nil, nil
 	}
@@ -460,9 +468,9 @@ func (c *Client) EmbedJobs(ctx context.Context, docs []JobDocument) (map[int64][
 	return vectorsByID(sdocs), nil
 }
 
-// vectorsByID pulls the per-job vectors out of the embedded documents.
-func vectorsByID(sdocs []semanticDocument) map[int64][]float32 {
-	vectors := make(map[int64][]float32, len(sdocs))
+// vectorsByID pulls the per-job chunk vectors out of the embedded documents.
+func vectorsByID(sdocs []semanticDocument) map[int64][][]float32 {
+	vectors := make(map[int64][][]float32, len(sdocs))
 	for _, sd := range sdocs {
 		vectors[sd.ID] = sd.Vectors[embedderName]
 	}
@@ -712,7 +720,7 @@ func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDoc
 // EmbedText embeds text through the SAME path (TEI, same model) that embeds jobs and
 // returns the vector plus the embedder identity that produced it, so a CV vector is
 // directly comparable to the job corpus. The CV is the query side of e5's asymmetric
-// retrieval, so it carries the "query:" prefix (jobs carry "passage:", see jobPassage).
+// retrieval, so it carries the "query:" prefix (jobs carry "passage:", see jobPassages).
 func (c *Client) EmbedText(ctx context.Context, text string) ([]float64, string, error) {
 	vecs, err := c.embedBatch(ctx, []string{"query: " + text})
 	if err != nil {

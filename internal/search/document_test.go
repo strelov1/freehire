@@ -216,3 +216,22 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 		t.Errorf("short description altered: got %q, want %q", docShort.Description, short)
 	}
 }
+
+// FromJob's semanticText — the text jobPassages chunks and embeds — must stay UNTRUNCATED (unlike
+// the facet-index Description, capped at maxIndexedDescriptionRunes) and HTML-free
+// (unlike the raw jobs.description column, which keeps structural tags for {@html}
+// rendering — see stripToPlainText). Otherwise the embedding model would see the same
+// truncated, tag-laden text this whole change exists to fix.
+func TestFromJob_SemanticTextIsFullAndPlain(t *testing.T) {
+	longHTML := "<p>" + strings.Repeat("alpha beta ", 600) + "</p>" // ~6000 runes of prose
+	doc, err := FromJob(db.Job{ID: 1, Title: "Go Dev", Description: longHTML})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if strings.ContainsAny(doc.semanticText, "<>") {
+		t.Errorf("semanticText still carries HTML: %q", doc.semanticText)
+	}
+	if n := utf8.RuneCountInString(doc.semanticText); n <= maxIndexedDescriptionRunes {
+		t.Errorf("semanticText = %d runes, want > %d (facet-index cap must not apply)", n, maxIndexedDescriptionRunes)
+	}
+}

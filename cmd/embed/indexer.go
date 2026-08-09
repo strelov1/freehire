@@ -27,7 +27,7 @@ type searchIndexer struct {
 	pgOnly bool
 }
 
-func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error) {
+func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][][]float32, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	for _, job := range jobs {
 		doc, err := search.FromJob(job)

@@ -45,11 +45,24 @@ type JobDocument struct {
 	// document (not jobview.Job), so it backs the `roles` facet but is never part
 	// of the served public wire shape.
 	Roles []string `json:"roles"`
-	// semanticVector is the job's persisted embedding (jobs.semantic_embedding), carried
-	// transiently so a --from-pg rebuild can rehydrate the semantic index from the stored
-	// vectors instead of re-embedding via TEI. Unexported, so it is never serialized into
-	// the Meili document body — the vector rides _vectors on the semanticDocument wrapper.
-	semanticVector []float32
+	// semanticVectors is the job's persisted chunk vectors (jobs.semantic_embedding),
+	// carried transiently so a --from-pg rebuild can rehydrate the semantic index from
+	// the stored vectors instead of re-embedding via TEI. Reshaped from the raw column
+	// via SemanticChunksFromArray, which also tolerates a row still holding the OLD
+	// single-vector shape (design.md Decision 3) — this field is always "the chunk
+	// vectors," whether there is one (legacy) or several (chunked). Unexported, so it
+	// is never serialized into the Meili document body — the vectors ride _vectors on
+	// the semanticDocument wrapper.
+	semanticVectors [][]float32
+	// semanticText is the FULL description, HTML stripped to plain prose (see
+	// stripToPlainText), that jobPassages chunks and embeds. It is deliberately NOT the
+	// same string as Description above: Description is capped at
+	// maxIndexedDescriptionRunes for the facet index's on-disk footprint, a constraint
+	// that has nothing to do with embedding — capping the embedding input would
+	// silently drop everything past the opening ~20% of an average posting (see
+	// proposal.md). Unexported for the same reason as semanticVectors: it is not part
+	// of the served/searchable document body.
+	semanticText string
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -65,12 +78,17 @@ func FromJob(j db.Job) (JobDocument, error) {
 	if err != nil {
 		return JobDocument{}, err
 	}
+	// Compute the embedding text from the full, untruncated description BEFORE capping
+	// view.Description below — semanticText and the facet-index Description serve
+	// unrelated constraints (see their doc comments) and must not share a value.
+	semanticText := stripToPlainText(view.Description)
 	// Cap the indexed description (see maxIndexedDescriptionRunes). This trims only
 	// the search document — the detail endpoint serves the full description from
 	// its own jobview.FromRow, unaffected by this local copy.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{ID: j.ID, Job: view, Roles: roletag.Derive(j.Seniority, j.Category, j.Title)}
-	doc.semanticVector = j.SemanticEmbedding
+	doc.semanticVectors = SemanticChunksFromArray(j.SemanticEmbedding)
+	doc.semanticText = semanticText
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}

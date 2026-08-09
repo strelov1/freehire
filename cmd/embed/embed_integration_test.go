@@ -198,6 +198,49 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	}
 }
 
+// A job already embedded under an OLDER embedderModel — same content, so it would NOT
+// re-enqueue for a content reason — must still be picked up and re-embedded once
+// TargetModel changes. This is the mechanism (design.md Decision 4) that forces a full
+// re-embed under the new chunked scheme via a versioned embedderModel string, reusing
+// EnqueuePendingSemanticJobs' existing model-mismatch staleness check rather than a new
+// staleness concept.
+func TestIntegration_EmbedWorkerReEmbedsOnModelBump(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := startPostgres(t)
+
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
+	if err := client.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	id := seedJob(t, pool, "modelbump", "Staff Backend Engineer", false, true)
+	// Stamp as already embedded under an OLDER model, same content_hash the job was
+	// seeded with — content-based re-enqueue must NOT be why this job gets picked up.
+	if _, err := pool.Exec(ctx,
+		"UPDATE jobs SET semantic_embedded_model = $1, semantic_embedded_hash = content_hash WHERE id = $2",
+		"intfloat/multilingual-e5-base", id); err != nil {
+		t.Fatalf("seed stale stamp: %v", err)
+	}
+
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	stats, err := runner.Run(ctx, embed.RunOptions{
+		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 1 {
+		t.Fatalf("stats = %+v, want indexed=1 (model-stale job re-embedded)", stats)
+	}
+	if model, _ := jobStamp(t, pool, id); model == nil || *model != search.CurrentEmbedderModel() {
+		t.Errorf("stamp model = %v, want current model %q", model, search.CurrentEmbedderModel())
+	}
+	if !meiliDocExists(t, meiliURL, key, id) {
+		t.Errorf("job %d not in jobs_semantic after model-bump re-embed", id)
+	}
+}
+
 func seedJob(t *testing.T, pool *pgxpool.Pool, ext, title string, closed, withHash bool) int64 {
 	t.Helper()
 	var id int64

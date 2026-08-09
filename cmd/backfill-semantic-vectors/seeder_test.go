@@ -42,7 +42,7 @@ func (f *fakeSink) Save(_ context.Context, vecs []search.SemanticVector) (int64,
 func vecs(ids ...int64) []search.SemanticVector {
 	out := make([]search.SemanticVector, len(ids))
 	for i, id := range ids {
-		out[i] = search.SemanticVector{ID: id, Vector: []float32{float32(id)}}
+		out[i] = search.SemanticVector{ID: id, Vectors: [][]float32{{float32(id)}}}
 	}
 	return out
 }

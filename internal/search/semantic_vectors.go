@@ -8,12 +8,14 @@ import (
 	"net/http"
 )
 
-// SemanticVector is one job's persisted vector read back from the semantic index —
-// the (job id, vector) pair the Postgres backfill needs so the durable copy of the
-// embeddings can live beside the jobs they belong to.
+// SemanticVector is one job's persisted chunk vectors read back from the semantic
+// index — the (job id, vectors) pair the Postgres backfill needs so the durable copy
+// of the embeddings can live beside the jobs they belong to. A job carries one vector
+// per chunk of its description (see chunkText); ALL of them are kept, not just the
+// first, so this stays a faithful copy of what Meilisearch actually holds.
 type SemanticVector struct {
-	ID     int64
-	Vector []float32
+	ID      int64
+	Vectors [][]float32
 }
 
 // ListSemanticVectors reads one offset-paged window of (id, vector) pairs from the
@@ -46,15 +48,16 @@ func (c *Client) ListSemanticVectors(ctx context.Context, offset, limit int) ([]
 }
 
 // parseSemanticVectorsPage decodes one page of the `GET /indexes/<uid>/documents?
-// retrieveVectors=true` response into (id, vector) pairs. Documents that carry no
-// stored vector are skipped, so the caller only persists real embeddings.
+// retrieveVectors=true` response into (id, chunk vectors) pairs. Documents that carry
+// no stored vector are skipped, so the caller only persists real embeddings. ALL of a
+// document's embeddings are kept, not just the first — a userProvided doc carries one
+// per chunk (see chunkText), and dropping the rest would silently truncate an
+// already-chunked job's vectors if this backfill is ever re-run after the fact.
 func parseSemanticVectorsPage(raw []byte) ([]SemanticVector, error) {
 	var page struct {
 		Results []struct {
 			ID      int64 `json:"id"`
 			Vectors map[string]struct {
-				// embeddings is a LIST of embeddings ([[...]]); a userProvided doc
-				// carries exactly one, so its vector is embeddings[0].
 				Embeddings [][]float32 `json:"embeddings"`
 			} `json:"_vectors"`
 		} `json:"results"`
@@ -65,10 +68,10 @@ func parseSemanticVectorsPage(raw []byte) ([]SemanticVector, error) {
 	out := make([]SemanticVector, 0, len(page.Results))
 	for _, r := range page.Results {
 		emb := r.Vectors[embedderName].Embeddings
-		if len(emb) == 0 || len(emb[0]) == 0 {
+		if len(emb) == 0 {
 			continue // no stored vector — nothing to persist
 		}
-		out = append(out, SemanticVector{ID: r.ID, Vector: emb[0]})
+		out = append(out, SemanticVector{ID: r.ID, Vectors: emb})
 	}
 	return out, nil
 }

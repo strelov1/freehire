@@ -279,21 +279,26 @@ func (q *Queries) RecordSemanticFailure(ctx context.Context, arg RecordSemanticF
 
 const setSemanticEmbedding = `-- name: SetSemanticEmbedding :exec
 UPDATE jobs
-SET semantic_embedding = $1::real[]
+SET semantic_embedding = $1
 WHERE id = $2
 `
 
 type SetSemanticEmbeddingParams struct {
-	Embedding []float32 `json:"embedding"`
-	ID        int64     `json:"id"`
+	Embedding pgtype.Array[float32] `json:"embedding"`
+	ID        int64                 `json:"id"`
 }
 
-// Persist one job's semantic vector — the durable copy of what was just upserted into
+// Persist one job's chunk vectors — the durable copy of what was just upserted into
 // the jobs_semantic index. Called once per embedded job inside the SAME transaction as
-// StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
-// commit together (a job is never marked embedded without its vector reaching Postgres).
-// Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
-// up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
+// StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vectors
+// commit together (a job is never marked embedded without its vectors reaching Postgres).
+// Postgres thus becomes the source of truth, and reindex can rehydrate Meili from it
+// without re-embedding. No `::real[]` cast (unlike other array params in this file):
+// an explicit cast would fix the parameter's Postgres type directly rather than let sqlc
+// trace it back to jobs.semantic_embedding's own overridden Go type (see sqlc.yaml) — the
+// untyped form lets Postgres infer the same underlying array type from the target column,
+// while still generating the pgtype.Array[float32] the caller now provides. Idempotent by
+// primary key.
 func (q *Queries) SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error {
 	_, err := q.db.Exec(ctx, setSemanticEmbedding, arg.Embedding, arg.ID)
 	return err

@@ -9,12 +9,12 @@ package search
 func semanticDocsFromPG(docs []JobDocument) []semanticDocument {
 	out := make([]semanticDocument, 0, len(docs))
 	for _, d := range docs {
-		if len(d.semanticVector) == 0 {
+		if len(d.semanticVectors) == 0 {
 			continue
 		}
 		out = append(out, semanticDocument{
 			JobDocument: d,
-			Vectors:     map[string][]float32{embedderName: d.semanticVector},
+			Vectors:     map[string][][]float32{embedderName: d.semanticVectors},
 		})
 	}
 	return out

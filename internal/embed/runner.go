@@ -43,10 +43,11 @@ type Store interface {
 	// aborts the whole load, so the runner retries such a batch per item to isolate it.
 	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
 	// CompleteOpen stamps each entry's job embed provenance (model + its current
-	// content_hash), persists each job's semantic vector, and deletes the outbox
-	// entries, atomically. vectors maps job id to the vector just upserted into the
-	// index, so the durable Postgres copy commits with the provenance stamp.
-	CompleteOpen(ctx context.Context, entries []Claimed, model string, vectors map[int64][]float32) error
+	// content_hash), persists each job's semantic chunk vectors, and deletes the
+	// outbox entries, atomically. vectors maps job id to the chunk vectors just
+	// upserted into the index, so the durable Postgres copy commits with the
+	// provenance stamp.
+	CompleteOpen(ctx context.Context, entries []Claimed, model string, vectors map[int64][][]float32) error
 	// CompleteClosed clears each entry's job embed provenance and deletes the outbox
 	// entries, atomically (their documents were just removed from the index).
 	CompleteClosed(ctx context.Context, entries []Claimed) error
@@ -56,10 +57,10 @@ type Store interface {
 
 // Indexer is the semantic-index side: embed+upsert open jobs, or remove closed ones.
 type Indexer interface {
-	// IndexOpen embeds the jobs' documents and upserts their vectors into the semantic
-	// index in one batch, returning the vectors keyed by job id so they can be persisted
-	// to Postgres alongside the provenance stamp.
-	IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error)
+	// IndexOpen embeds the jobs' documents and upserts their chunk vectors into the
+	// semantic index in one batch, returning the vectors keyed by job id so they can be
+	// persisted to Postgres alongside the provenance stamp.
+	IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][][]float32, error)
 	// RemoveClosed deletes the jobs' documents from the semantic index in one batch.
 	RemoveClosed(ctx context.Context, ids []int64) error
 }

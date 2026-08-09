@@ -29,6 +29,14 @@ sql:
           # bytes marshal straight through to the profile response (null stays null).
           - column: "user_profiles.location_preferences"
             go_type: "encoding/json.RawMessage"
+          # jobs.semantic_embedding holds either the OLD single-vector shape (a
+          # 1-dimension real[]) or the NEW per-chunk shape (a 2-dimension real[][] —
+          # Postgres does not distinguish the two at the catalog level, see
+          # openspec/changes/semantic-embed-full-clean-chunked/design.md Decision 3).
+          # pgtype.Array[float32] scans either shape without erroring; internal/search's
+          # SemanticChunksFromArray/SemanticChunksToArray reshape to/from [][]float32.
+          - column: "jobs.semantic_embedding"
+            go_type: "github.com/jackc/pgx/v5/pgtype.Array[float32]"
           # Referral ids are random UUIDs for the same reason CV ids are, and with
           # a sharper edge: an incoming request's CV is served to an approved
           # referrer rather than to the owner, so its check is a membership

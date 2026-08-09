@@ -695,10 +695,12 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 	}
 }
 
-// A --from-pg semantic rebuild rehydrates the index from the vectors persisted in
-// Postgres (jobs.semantic_embedding) instead of re-embedding via TEI: a job carrying a
-// stored vector lands in jobs_semantic with that exact vector, and a job without one is
-// left out (for the embed worker to fill). This is the disaster-recovery path.
+// A --from-pg semantic rebuild rehydrates the index from the chunk vectors persisted in
+// Postgres (jobs.semantic_embedding) instead of re-embedding via TEI: a job carrying
+// stored vectors lands in jobs_semantic with those exact vectors — whether it holds the
+// OLD single-vector shape (not yet re-embedded, design.md Decision 3) or a real
+// multi-chunk row — and a job without one is left out (for the embed worker to fill).
+// This is the disaster-recovery path.
 func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
 	ctx := context.Background()
 	c := startMeili(t)
@@ -715,12 +717,19 @@ func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
 			Description: "Build backend services in Go.",
 			PublicSlug:  "senior-golang-engineer-acme-aaa",
 			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+			// A legacy, not-yet-re-embedded row: one vector, no outer chunk dimension.
 			// 0.5 is exactly representable in float32, so the round-trip is exact.
-			SemanticEmbedding: vec(0.5)},
+			SemanticEmbedding: SemanticChunksToArray([][]float32{vec(0.5)})},
 		{ID: 2, Title: "Frontend Developer", Company: "Beta", Location: "Remote",
 			Description: "Build UIs in React.",
 			PublicSlug:  "frontend-developer-beta-bbb",
 			Enrichment:  enrichedJSON(t, enrich.Enrichment{})}, // no persisted vector
+		{ID: 3, Title: "Staff Data Engineer", Company: "Gamma", Location: "Remote",
+			Description: "Own the data platform end to end.",
+			PublicSlug:  "staff-data-engineer-gamma-ccc",
+			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
+			// A real multi-chunk row: two distinct vectors, in order.
+			SemanticEmbedding: SemanticChunksToArray([][]float32{vec(0.25), vec(0.75)})},
 	}
 
 	// In-place rehydration: reset the live index to empty, then upsert the Postgres
@@ -732,20 +741,55 @@ func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
 		t.Fatalf("IndexSemanticJobsFromPG: %v", err)
 	}
 
+	// Fetch job 3's raw indexed document with its vectors: ListSemanticVectors /
+	// parseSemanticVectorsPage only ever reads back embeddings[0] (documented
+	// limitation, out of scope here — it backs a different, historical tool), so it
+	// can't tell "one chunk" from "several truncated to one." Reading the document
+	// directly proves BOTH persisted chunks actually reached Meilisearch, in order.
+	var doc3 struct {
+		ID      int64 `json:"id"`
+		Vectors struct {
+			Default struct {
+				Embeddings [][]float32 `json:"embeddings"`
+			} `json:"default"`
+		} `json:"_vectors"`
+	}
+	if err := c.semantic.GetDocument("3", &meilisearch.DocumentQuery{RetrieveVectors: true}, &doc3); err != nil {
+		t.Fatalf("GetDocument(3): %v", err)
+	}
+	if len(doc3.Vectors.Default.Embeddings) != 2 {
+		t.Fatalf("job 3 has %d stored vectors, want 2: %v", len(doc3.Vectors.Default.Embeddings), doc3.Vectors.Default.Embeddings)
+	}
+	if v := doc3.Vectors.Default.Embeddings[0]; len(v) != embedderDimensions || v[0] != 0.25 {
+		t.Errorf("job 3 chunk 1 = %v; want first element 0.25", v)
+	}
+	if v := doc3.Vectors.Default.Embeddings[1]; len(v) != embedderDimensions || v[0] != 0.75 {
+		t.Errorf("job 3 chunk 2 = %v; want first element 0.75", v)
+	}
+
+	// ListSemanticVectors (the separate cmd/backfill-semantic-vectors disaster-recovery
+	// tool's own read path) must also see every chunk, not just the first — it was
+	// fixed this session precisely so a re-run after this ships can't silently truncate
+	// an already-chunked job's vectors.
 	got, err := c.ListSemanticVectors(ctx, 0, 100)
 	if err != nil {
 		t.Fatalf("ListSemanticVectors: %v", err)
 	}
-	byID := make(map[int64][]float32, len(got))
+	byID := make(map[int64][][]float32, len(got))
 	for _, v := range got {
-		byID[v.ID] = v.Vector
+		byID[v.ID] = v.Vectors
 	}
 	if v, ok := byID[1]; !ok {
 		t.Fatal("job 1 missing from jobs_semantic after from-pg rebuild")
-	} else if len(v) != embedderDimensions || v[0] != 0.5 {
-		t.Errorf("job 1 vector[0] = %v (len %d); want 0.5 (len %d)", v[0], len(v), embedderDimensions)
+	} else if len(v) != 1 || len(v[0]) != embedderDimensions || v[0][0] != 0.5 {
+		t.Errorf("job 1 vectors = %v; want one chunk starting with 0.5 (len %d)", v, embedderDimensions)
 	}
 	if _, ok := byID[2]; ok {
 		t.Error("job 2 has no persisted vector and must be absent from the rehydrated index")
+	}
+	if v, ok := byID[3]; !ok {
+		t.Fatal("job 3 missing from jobs_semantic after from-pg rebuild")
+	} else if len(v) != 2 || v[0][0] != 0.25 || v[1][0] != 0.75 {
+		t.Errorf("job 3 vectors = %v; want two chunks starting with 0.25, 0.75", v)
 	}
 }
