@@ -3,8 +3,8 @@
   // each one MEASURES, so no tab mixes numbers taken against different baselines.
   //
   //  - Job Match — the live, deterministic score of the document being edited against this
-  //    vacancy, with the cached LLM fit analysis beneath it, labelled as the snapshot of the
-  //    base profile that it is.
+  //    vacancy, with the cached LLM fit analysis beneath it — refreshed by every autopilot
+  //    run, not a frozen snapshot.
   //  - Score — what tailoring did to the CV's ATS readability against the base CV, and the
   //    last autopilot run's log.
   //  - Job — the vacancy's own text.
@@ -55,8 +55,8 @@
     analysis: Analysis | null;
     tab?: Tab;
     mobileVisible?: boolean;
-    /** The last unattended run's log, shown in the Score tab. The fit analysis is untouched
-     *  by a run — it measures the base profile, not this tailored copy. */
+    /** The last unattended run's log, shown in the Score tab. The fit analysis (Job Match
+     *  tab) is refreshed by every run — see prepareAutopilotRun on the server. */
     autopilotReport?: AutopilotEntry[];
     autopilotBusy?: boolean;
     /** What tailoring did to the CV's ATS readiness. Null renders nothing — an unavailable
@@ -244,15 +244,12 @@
     {:else}
       <div class="p-4">
         <JobMatch data={jobMatch} />
-        <!-- The fit analysis measures the candidate's BASE profile, not the document being
-             edited, and says so. An unlabelled fit score beside a live one teaches the
-             candidate that tailoring does not move the number — true of that score, false of
-             this surface as a whole. -->
+        <!-- The fit analysis used to be a frozen base-profile snapshot; it is now refreshed
+             by every autopilot run, so it says that instead of implying it never moves. -->
         <div class="mb-3 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
           <h3 class="text-sm font-semibold text-foreground">Fit analysis</h3>
           <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
-            A snapshot of your base profile against this vacancy. It does not move as you edit
-            this CV — recompute it below to take it again.
+            Refreshed automatically after every autopilot run. Recompute it below any time.
           </p>
         </div>
         <!-- Keyed on whether an analysis is present: MatchAnalysisFull seeds its internal state
