@@ -135,6 +135,29 @@ func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
 	}
 }
 
+// TestTailorPromptSelfChecksWithJobMatchBeforeReporting: an unattended run must verify its
+// own edits against the deterministic job_match score before it reports — the agent
+// cannot be trusted to know whether an edit actually reads as closing a requirement (see
+// openspec/changes/fit-analysis-post-autopilot-verify/design.md).
+func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+
+	unattendedIdx := strings.Index(p, "UNATTENDED RUNS")
+	if unattendedIdx == -1 {
+		t.Fatal("the tailoring prompt lost its UNATTENDED RUNS section")
+	}
+	unattended := p[unattendedIdx:]
+
+	for _, want := range []string{"job_match", "missing_have", "missing_gap", "tailor_report"} {
+		if !strings.Contains(unattended, want) {
+			t.Errorf("the unattended-run section never mentions %q; the agent has no instruction to verify its own edits before reporting", want)
+		}
+	}
+	if strings.Index(unattended, "job_match") > strings.Index(unattended, "tailor_report") {
+		t.Error("job_match must be checked BEFORE tailor_report, not after — the report should reflect what the check found")
+	}
+}
+
 // Two recorded sessions opened with a long restatement of the fit analysis the candidate had
 // open beside the chat, then spent every remaining round searching the bank one requirement at
 // a time — and edited nothing. The prompt now says where the evidence already is, and to spend
