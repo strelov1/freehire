@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/adzunadesc"
 	"github.com/strelov1/freehire/internal/applyform"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
@@ -265,6 +266,16 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 	if applyform.NeedsRequestCapture(saved.source) {
 		if _, err := s.q.EnqueueApplyFormCapture(ctx, saved.id); err != nil {
 			log.Printf("ingest: queue apply-form capture for job %d: %v", saved.id, err)
+		}
+	}
+
+	// Queue a full-description fetch for an Adzuna posting whose stored URL is Adzuna's
+	// own hosted job page — the API gives only a ~500-character snippet. Same after-
+	// commit, never-fatal, gated-on-not-done-yet shape as the apply-form capture above;
+	// see adzunadesc.Eligible for why only a subset of Adzuna's own URLs qualify.
+	if adzunadesc.Eligible(saved.source, params.URL) {
+		if _, err := s.q.EnqueueAdzunaDescriptionCapture(ctx, saved.id); err != nil {
+			log.Printf("ingest: queue adzuna description capture for job %d: %v", saved.id, err)
 		}
 	}
 

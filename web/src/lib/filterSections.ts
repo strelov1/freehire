@@ -112,9 +112,6 @@ export type RailKind =
   | 'language'
   | 'relocation'
   | 'posted'
-  // Client-only profile-match threshold — not a facet param, see FilterModal's
-  // `minMatch` prop. Only shown when the caller marks it available.
-  | 'match'
   // The job modal's "My filters" (saved searches) tab — renders SavedSearches, not a facet control.
   | 'saved';
 
@@ -135,7 +132,6 @@ export const RAIL: RailEntry[] = [
   // reachable via the seniority pill); the picker is the natural-language entry,
   // the pills/chips the browse-by-axis entry.
   { key: 'category', label: 'Role', section: 'ROLE', kind: 'category' },
-  { key: 'is_tech', label: 'Tech / Non-tech', section: 'ROLE', kind: 'facet', facetParam: 'is_tech' },
   { key: 'location', label: 'Location', section: 'ROLE', kind: 'location' },
   { key: 'work', label: 'Work & employment', section: 'ROLE', kind: 'work' },
   { key: 'skills', label: 'Skills', section: 'ROLE', kind: 'facet', facetParam: 'skills' },
@@ -145,7 +141,4 @@ export const RAIL: RailEntry[] = [
   { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
   { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
   { key: 'posted', label: 'Posted', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'posted' },
-  // Hidden unless the caller marks it available (signed in, profile has skills) — see
-  // FilterModal's `matchAvailable` prop and the `visibleRail` filter.
-  { key: 'match', label: 'Match', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'match' },
 ];

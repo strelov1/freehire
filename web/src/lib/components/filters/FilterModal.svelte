@@ -72,10 +72,10 @@
     // Extra content rendered above the pane, handed the staged store so it can edit it
     // (e.g. the profile editor's "import skills from CV").
     extra?: Snippet<[StagedFilters]>;
-    // The "Match" pane: a client-only threshold over the viewer's own profile skills,
-    // not a JobFilters facet (the match percent depends on who's looking, so there's
-    // nothing to put in JobFilters/the URL — see JobsView's `minMatch`). The rail entry
-    // is hidden unless the caller has a real percent to filter on.
+    // The "Minimum skill match" slider atop the Skills pane: a client-only threshold
+    // over the viewer's own profile skills, not a JobFilters facet (the match percent
+    // depends on who's looking, so there's nothing to put in JobFilters/the URL — see
+    // JobsView's `minMatch`). Hidden unless the caller has a real percent to filter on.
     matchAvailable?: boolean;
     minMatch?: number | null;
     onMinMatchChange?: (value: number | null) => void;
@@ -120,15 +120,11 @@
   const SECTIONS: RailSection[] = ['SAVED', ...RAIL_SECTIONS];
 
   // Rail entries visible under the current scope: restricted to `railKeys` when given,
-  // a 'facet' entry is hidden when its param is excluded (e.g. Company on a company
-  // page), and 'match' is hidden unless the caller has a real percent to filter on.
+  // and a 'facet' entry is hidden when its param is excluded (e.g. Company on a company page).
   const visibleRail = $derived([
     ...(hasSavedTab ? [SAVED_ENTRY] : []),
     ...RAIL.filter(
-      (e) =>
-        (!railKeys || railKeys.includes(e.key)) &&
-        !(e.facetParam && exclude.includes(e.facetParam)) &&
-        (e.kind !== 'match' || matchAvailable),
+      (e) => (!railKeys || railKeys.includes(e.key)) && !(e.facetParam && exclude.includes(e.facetParam)),
     ),
   ]);
 
@@ -149,7 +145,9 @@
     if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
     if (e.kind === 'relocation') return selCount(f, 'relocation') + (f.visa ? 1 : 0);
     if (e.kind === 'posted') return f.postedWithinDays != null ? 1 : 0;
-    if (e.kind === 'match') return minMatch != null ? 1 : 0;
+    // The Minimum skill match threshold lives at the top of the Skills pane, so it
+    // counts toward that tab's badge alongside the skills facet selections.
+    if (e.key === 'skills') return selCount(f, 'skills') + (minMatch != null ? 1 : 0);
     return selCount(f, e.facetParam ?? e.key);
   }
 
@@ -268,6 +266,24 @@
     <LocationPane store={staged} counts={c} />
   {:else if entry.kind === 'facet'}
     {@const def = facetDefFor(entry.facetParam)}
+    {#if entry.key === 'skills' && matchAvailable}
+      <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props): re-filters
+           the already-fetched page in memory, so it applies immediately, no debounce. -->
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
+        <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
+      </div>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+        value={minMatch ?? 0}
+        oninput={(e) => onMinMatchChange?.(Number(e.currentTarget.value) || null)}
+        aria-label="Minimum skill match"
+        class="mb-6 w-full accent-primary"
+      />
+    {/if}
     {#if def}<FacetSection {def} store={staged} counts={c} expand />{/if}
   {:else if entry.kind === 'salary'}
     <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
@@ -322,23 +338,6 @@
       value={freshnessIndex}
       oninput={(e) => staged.setPostedWithinDays(FRESHNESS_PRESETS[Number(e.currentTarget.value)]?.days ?? null)}
       aria-label="Posted within"
-      class="w-full accent-primary"
-    />
-  {:else if entry.kind === 'match'}
-    <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props): re-filters
-         the already-fetched page in memory, so it applies immediately, no debounce. -->
-    <div class="mb-2 flex items-center justify-between">
-      <h3 class="text-sm font-semibold tracking-tight">Minimum skill match</h3>
-      <span class="text-xs font-medium text-muted-foreground">{minMatch != null ? `${minMatch}%+` : 'Any'}</span>
-    </div>
-    <input
-      type="range"
-      min="0"
-      max="100"
-      step="5"
-      value={minMatch ?? 0}
-      oninput={(e) => onMinMatchChange?.(Number(e.currentTarget.value) || null)}
-      aria-label="Minimum skill match"
       class="w-full accent-primary"
     />
   {/if}
