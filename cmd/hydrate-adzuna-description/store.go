@@ -79,6 +79,13 @@ func (s *dbStore) Save(ctx context.Context, outboxID, jobID int64, description s
 	return tx.Commit(ctx)
 }
 
+// Discard retires a capture whose URL drifted to the ad-network redirect since it was
+// enqueued. No description is stored and the job is NOT marked hydrated, so a later crawl
+// that finds it eligible again (Adzuna's own hosted page) is free to re-enqueue it.
+func (s *dbStore) Discard(ctx context.Context, outboxID int64) error {
+	return s.q.DeleteAdzunaDescriptionEntry(ctx, outboxID)
+}
+
 func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (bool, error) {
 	row, err := s.q.RecordAdzunaDescriptionFailure(ctx, db.RecordAdzunaDescriptionFailureParams{
 		ID:          outboxID,

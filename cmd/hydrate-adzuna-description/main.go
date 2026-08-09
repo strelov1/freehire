@@ -56,8 +56,8 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("hydrate-adzuna-description done: captured=%d failed=%d dead_lettered=%d",
-		stats.Captured, stats.Failed, stats.DeadLettered)
+	log.Printf("hydrate-adzuna-description done: captured=%d failed=%d skipped=%d dead_lettered=%d",
+		stats.Captured, stats.Failed, stats.Skipped, stats.DeadLettered)
 	if stats.Degraded() {
 		return 1
 	}

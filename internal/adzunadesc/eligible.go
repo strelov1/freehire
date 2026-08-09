@@ -23,7 +23,18 @@ const adzunaSource = "adzuna"
 // this package can actually read a full description from. source must be "adzuna": every
 // other provider's postings are out of scope regardless of what their URL looks like.
 func Eligible(source, rawURL string) bool {
-	if source != adzunaSource || rawURL == "" {
+	return source == adzunaSource && detailsPageURL(rawURL)
+}
+
+// detailsPageURL reports whether rawURL is Adzuna's own hosted job page rather than its
+// ad-network tracking redirect. Split out from Eligible because the runner re-checks this
+// half alone, on the URL a claim carries — a stored job's url can drift between the two
+// shapes for the SAME posting across re-crawls (Adzuna's API answered redirect_url
+// differently for one posting between 03:03 and 08:25 on 2026-08-09, live in prod), so an
+// enqueue decided at write time is not a promise about what the claim will find hours
+// later when the worker gets to it.
+func detailsPageURL(rawURL string) bool {
+	if rawURL == "" {
 		return false
 	}
 	u, err := url.Parse(rawURL)

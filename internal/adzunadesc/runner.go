@@ -2,11 +2,16 @@ package adzunadesc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 )
+
+// errURLDrifted marks a claim whose job's stored URL has moved to the ad-network tracking
+// redirect since it was enqueued — not a fetch failure, so it is never retried.
+var errURLDrifted = errors.New("adzunadesc: job's url drifted to the ad-network redirect since enqueue")
 
 // Claimed is one capture leased to this run.
 type Claimed struct {
@@ -27,6 +32,11 @@ type Store interface {
 	Save(ctx context.Context, outboxID, jobID int64, description string) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// Discard retires an entry without storing anything and without counting an attempt —
+	// for a claim errURLDrifted rejects, which will never succeed by retrying because the
+	// URL itself is now wrong, not the fetch. Deleting rather than dead-lettering leaves the
+	// job free to be re-enqueued the next time a crawl finds it eligible again.
+	Discard(ctx context.Context, outboxID int64) error
 }
 
 // FetchFunc reads one posting's page and returns its full, sanitized description.
@@ -48,8 +58,11 @@ type RunOptions struct {
 
 // RunStats is what the run did.
 type RunStats struct {
-	Captured     int
-	Failed       int
+	Captured int
+	Failed   int
+	// Skipped counts claims discarded for errURLDrifted — not a failure of the fetch, so
+	// not retried and not dead-lettered.
+	Skipped      int
 	DeadLettered int
 }
 
@@ -72,7 +85,7 @@ func Run(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions) (RunSta
 	for {
 		batch := opts.BatchSize
 		if opts.MaxPerRun > 0 {
-			remaining := opts.MaxPerRun - (stats.Captured + stats.Failed)
+			remaining := opts.MaxPerRun - (stats.Captured + stats.Failed + stats.Skipped)
 			if remaining <= 0 {
 				return stats, nil
 			}
@@ -90,6 +103,7 @@ func Run(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions) (RunSta
 		wave := runWave(ctx, s, fetch, opts, claims)
 		stats.Captured += wave.Captured
 		stats.Failed += wave.Failed
+		stats.Skipped += wave.Skipped
 		stats.DeadLettered += wave.DeadLettered
 
 		if ctx.Err() != nil {
@@ -124,6 +138,16 @@ func runWave(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions, cla
 				return
 			}
 
+			if errors.Is(err, errURLDrifted) {
+				if discardErr := s.Discard(ctx, c.OutboxID); discardErr != nil {
+					log.Printf("adzunadesc: discard drifted capture %d: %v", c.OutboxID, discardErr)
+				}
+				mu.Lock()
+				stats.Skipped++
+				mu.Unlock()
+				return
+			}
+
 			dead, failErr := s.Fail(ctx, c.OutboxID, err.Error(), opts.MaxAttempts)
 			if failErr != nil {
 				log.Printf("adzunadesc: record failure for capture %d: %v", c.OutboxID, failErr)
@@ -146,6 +170,11 @@ func runWave(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions, cla
 
 // captureOne fetches and stores one posting's description.
 func captureOne(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions, c Claimed) error {
+	// Re-check the URL shape against what the claim carries NOW, not what it was at
+	// enqueue time — see errURLDrifted.
+	if !detailsPageURL(c.URL) {
+		return errURLDrifted
+	}
 	if opts.CallTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.CallTimeout)

@@ -16,6 +16,7 @@ type fakeStore struct {
 	saved          map[int64]string // outboxID -> description
 	failed         map[int64]int    // outboxID -> fail count
 	deadLetteredID []int64
+	discardedID    []int64
 	claimErr       error
 }
 
@@ -57,6 +58,53 @@ func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, maxAttempt
 	return dead, nil
 }
 
+func (s *fakeStore) Discard(_ context.Context, outboxID int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.discardedID = append(s.discardedID, outboxID)
+	return nil
+}
+
+func TestRunDiscardsAClaimWhoseURLDriftedToTheAdNetworkRedirect(t *testing.T) {
+	// A job's stored URL was Adzuna's own hosted page when this row was enqueued, but a
+	// later re-crawl overwrote it with the ad-network tracking-redirect shape before the
+	// worker got to it — reproduces the drift confirmed live 2026-08-09 (03:03 enqueue,
+	// 08:25 job re-crawled with a /land/ad/ URL, 10:18 claim 403-ed three times and
+	// dead-lettered). The claim carries the CURRENT (now-ineligible) URL.
+	store := &fakeStore{pending: []Claimed{
+		{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/land/ad/5829591081?se=x"},
+		{OutboxID: 2, JobID: 20, URL: "https://www.adzuna.co.uk/jobs/details/2"},
+	}}
+	fetchCalled := 0
+	fetch := func(_ context.Context, url string) (string, error) {
+		fetchCalled++
+		return "full text for " + url, nil
+	}
+
+	stats, err := Run(context.Background(), store, fetch, RunOptions{BatchSize: 10, Concurrency: 2, MaxAttempts: 3})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Skipped != 1 {
+		t.Errorf("Skipped = %d, want 1", stats.Skipped)
+	}
+	if stats.Captured != 1 {
+		t.Errorf("Captured = %d, want 1 (the still-eligible claim)", stats.Captured)
+	}
+	if stats.Failed != 0 || stats.DeadLettered != 0 {
+		t.Errorf("stats = %+v, want no Failed/DeadLettered — a drifted URL is not retried", stats)
+	}
+	if fetchCalled != 1 {
+		t.Errorf("fetch called %d times, want 1 (never called for the drifted claim)", fetchCalled)
+	}
+	if len(store.discardedID) != 1 || store.discardedID[0] != 1 {
+		t.Errorf("discarded = %v, want [1]", store.discardedID)
+	}
+	if stats.Degraded() {
+		t.Error("a discarded drift should not mark the run degraded")
+	}
+}
+
 func TestRunCapturesEveryClaim(t *testing.T) {
 	store := &fakeStore{pending: []Claimed{
 		{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/details/1"},
@@ -79,7 +127,7 @@ func TestRunCapturesEveryClaim(t *testing.T) {
 }
 
 func TestRunRetriesThenDeadLettersAFailingFetch(t *testing.T) {
-	store := &fakeStore{pending: []Claimed{{OutboxID: 1, JobID: 10, URL: "https://x"}}}
+	store := &fakeStore{pending: []Claimed{{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/details/1"}}}
 	fetch := func(_ context.Context, _ string) (string, error) {
 		return "", errors.New("blocked")
 	}
@@ -98,9 +146,9 @@ func TestRunRetriesThenDeadLettersAFailingFetch(t *testing.T) {
 
 func TestRunStopsAtMaxPerRun(t *testing.T) {
 	store := &fakeStore{pending: []Claimed{
-		{OutboxID: 1, JobID: 10, URL: "https://a"},
-		{OutboxID: 2, JobID: 20, URL: "https://b"},
-		{OutboxID: 3, JobID: 30, URL: "https://c"},
+		{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/details/1"},
+		{OutboxID: 2, JobID: 20, URL: "https://www.adzuna.co.uk/jobs/details/2"},
+		{OutboxID: 3, JobID: 30, URL: "https://www.adzuna.co.uk/jobs/details/3"},
 	}}
 	fetch := func(_ context.Context, url string) (string, error) { return "text", nil }
 
