@@ -573,18 +573,18 @@
       >
         <!-- Own tab bar (and save status) is desktop-only; the mobile bar drives the tab there. -->
         <div class="hidden items-center justify-between gap-2 border-b border-border px-2 py-1.5 text-sm lg:flex">
-          <div class="flex items-center gap-1">
+          <div class="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto">
             {#each leftTabs as [id, label] (id)}
               <button
                 type="button"
                 onclick={() => (leftTab = id)}
-                class={['rounded px-2 py-1 transition-colors', leftTab === id ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
+                class={['shrink-0 rounded px-2 py-1 transition-colors', leftTab === id ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
               >
                 {label}
               </button>
             {/each}
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex shrink-0 items-center gap-1">
             {#if leftTab === 'editor' || leftTab === 'settings'}
               <span
                 class={['text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
