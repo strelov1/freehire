@@ -19,7 +19,6 @@
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
-  import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
@@ -44,14 +43,15 @@
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
 
-  // 'analyzing': the bootstrap requires a cached fit analysis that does not exist yet (a job
-  // reached via JD-intake rather than the normal fit-first flow). The workspace runs the
-  // analysis inline instead of sending the candidate to a separate page for it.
-  let status = $state<'loading' | 'ready' | 'error' | 'analyzing'>('loading');
+  let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
   let sessionId = $state<string | undefined>(undefined);
   let resuming = $state(false);
   let cvId = $state('');
+  // True exactly on a bootstrap that just created the tailored CV — the empty chat runs the
+  // autopilot pass itself instead of offering the two-action menu. Never true when resuming
+  // an existing CV (?cv=<id>).
+  let coldStartRunning = $state(false);
   // The CV's own consent flag, read with the document and written by its own endpoint — it is
   // not part of the document, so autosave neither carries nor overwrites it.
   let tracerLinksEnabled = $state(false);
@@ -216,9 +216,8 @@
     }
   }
 
-  // Shared tail of every path that reaches a usable workspace (resume, bootstrap, or the
-  // bootstrap retry after an inline fit analysis): flips to ready and kicks off the
-  // accessory reads that don't block first paint.
+  // Shared tail of every path that reaches a usable workspace (resume or bootstrap): flips to
+  // ready and kicks off the accessory reads that don't block first paint.
   function finishReady() {
     status = 'ready';
     // Not awaited: the workspace is usable before the comparison lands, and the comparison
@@ -237,6 +236,7 @@
     cvId = tailor.tailor_cv_id;
     analysis = tailor.analysis;
     sessionId = tailor.session_id;
+    coldStartRunning = tailor.cold_start_running;
     await loadCv(); // bootstrap has no CV record in hand yet — fetch the tailored copy
     // Put the CV in the address, replacing this entry rather than adding one. A reload of
     // the bare /tailor/<slug> is a bootstrap request, and until the address names the CV
@@ -247,43 +247,6 @@
       noScroll: true,
       keepFocus: true,
     });
-  }
-
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  // Retries the bootstrap once the inline fit analysis (rendered while status is 'analyzing')
-  // has landed a cached result, so the second attempt no longer 409s. The stream's `final`
-  // event reaches the client the instant the server writes it — not once the analysis is
-  // actually committed to the cache the bootstrap reads (that write happens after AnalyzeStream
-  // returns, a few milliseconds later). A retry fired synchronously from `onDone` can beat that
-  // write, so a same-message 409 here is retried a few times with a short backoff before it's
-  // treated as a real failure — confirmed live: without this, the retry lost the race often
-  // enough to strand the candidate on an "run the fit analysis first" error screen right after
-  // watching the analysis complete.
-  async function retryBootstrapAfterAnalysis() {
-    const maxAttempts = 4;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const tailor = await api.tailorCv(slug);
-        await applyTailorResult(tailor);
-        finishReady();
-        return;
-      } catch (e) {
-        const isCacheRace =
-          e instanceof ApiError && e.status === 409 && e.message === 'run the fit analysis first';
-        if (isCacheRace && attempt < maxAttempts) {
-          await sleep(300 * attempt);
-          continue;
-        }
-        errorMsg = isCacheRace
-          ? 'The analysis finished but the workspace could not pick it up. Try again.'
-          : e instanceof ApiError
-            ? e.message
-            : 'Could not open the tailoring workspace.';
-        status = 'error';
-        return;
-      }
-    }
   }
 
   onMount(async () => {
@@ -324,28 +287,6 @@
       }
       finishReady();
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409 && e.message === 'run the fit analysis first') {
-        // The bootstrap (tailorCv) requires a cached match to already exist — true for every
-        // vacancy reached the normal way, but never true for a job that just came through the
-        // JD-intake dialog (paste text/URL/pick a vacancy — none of those run a match first).
-        // Rather than surface that as an error or send the candidate to a separate page, run
-        // the analysis right here: fetch the job (the bootstrap's own fetch was discarded when
-        // Promise.all rejected), show the inline fit-analysis panel, and retry the bootstrap
-        // once it lands (see retryBootstrapAfterAnalysis, wired to MatchAnalysisFull's onDone).
-        // Matched on the exact message, not just the 409 status: TailorCV also 409s when the
-        // account has no résumé to seed a base CV from, and that message differs, so it falls
-        // through to the generic error below (it has no fix an inline analysis could offer).
-        try {
-          job = await api.getJob(slug);
-          status = 'analyzing';
-          return;
-        } catch {
-          // The job fetch itself failed — nothing to show the inline analysis against.
-          errorMsg = 'Could not open the tailoring workspace.';
-          status = 'error';
-          return;
-        }
-      }
       if (e instanceof ApiError && e.status === 402) {
         // Out of AI credits: surface the message plus when the monthly grant renews.
         const resetsAt = typeof e.body?.resets_at === 'string' ? e.body.resets_at : null;
@@ -488,6 +429,19 @@
     }
   });
 
+  // Refreshes just the document, live, as a run's cv_edit calls resolve — so the preview fills
+  // in while the run is still going instead of waiting for it to finish. Deliberately lighter
+  // than onTurnComplete: the accessory reads (ATS delta, job match, revisions) stay end-of-turn
+  // only, or a 30-step run would fire ten of each.
+  async function onDocumentEdited() {
+    try {
+      await loadCv();
+      pdfVersion += 1;
+    } catch {
+      /* best-effort; onTurnComplete reconciles at the end regardless */
+    }
+  }
+
   // After an agent turn the CV may have changed server-side: flush any pending human edit, then
   // refetch and replace the shared document so the Editor and preview reflect it.
   async function onTurnComplete() {
@@ -498,6 +452,12 @@
       void loadRevisions(true);
       void refreshAtsDelta();
       void refreshJobMatch();
+      // A cold-start run computes the fit analysis inline as its own first step (see
+      // internal/handler.PostAssistantAutopilot); the bootstrap response predates that, so the
+      // Job Match tab is still showing its empty/pending state until this picks it up.
+      if (!analysis) {
+        analysis = (await api.getMatchAnalysis(slug).catch(() => null))?.analysis ?? null;
+      }
     } catch {
       /* best-effort refresh; the next edit or reload will reconcile */
     }
@@ -550,23 +510,6 @@
     <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <p class="max-w-md text-sm text-destructive">{errorMsg}</p>
       <a href={resolve('/jobs/[slug]', { slug })} class="text-sm text-brand hover:underline">Back to the role</a>
-    </div>
-  {:else if status === 'analyzing' && job}
-    <!-- No cached fit analysis exists yet for this vacancy (e.g. reached via JD-intake rather
-         than the normal fit-first flow) — run it right here instead of bouncing to a separate
-         page. MatchAnalysisFull auto-runs on mount (no `initial`, so it starts cold) and
-         onDone retries the bootstrap once a result lands. A manual way out stays visible the
-         whole time: a malformed/empty stream completion leaves stream.done true with no
-         analysis and no stream.error, so onDone never fires and this state would otherwise
-         have no exit. -->
-    <div class="mx-auto flex min-w-0 flex-1 max-w-2xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:py-10">
-      <div class="flex items-center justify-between gap-3">
-        <p class="text-sm text-muted-foreground">
-          This role hasn't been analysed yet — running the fit analysis before opening the workspace.
-        </p>
-        <a href={resolve('/jobs/[slug]', { slug })} class="shrink-0 text-sm text-brand hover:underline">Back to the role</a>
-      </div>
-      <MatchAnalysisFull {job} stacked onDone={retryBootstrapAfterAnalysis} />
     </div>
   {:else}
     <div class="flex min-w-0 flex-1 flex-col lg:flex-row">
@@ -713,10 +656,12 @@
             <AssistantChat
               bind:this={chatRef}
               session={sessionId}
-              openingActions={opening}
+              openingActions={coldStartRunning ? undefined : opening}
+              autoRun={coldStartRunning}
               {sessionLabel}
               showSessionRail={false}
               {onTurnComplete}
+              {onDocumentEdited}
               onRunStateChange={(running) => (runActive = running)}
               onTurnStateChange={(active) => (turnActive = active)}
               beforeTurn={flushPendingSave}

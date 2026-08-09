@@ -61,6 +61,7 @@
     kickoff = undefined,
     sessionLabel = undefined,
     onTurnComplete = undefined,
+    onDocumentEdited = undefined,
     onRunStateChange = undefined,
     onTurnStateChange = undefined,
     beforeTurn = undefined,
@@ -68,11 +69,17 @@
     showSessionRail = true,
     preset = 'chat',
     openingActions = undefined,
+    autoRun = false,
   }: {
     session?: string;
     kickoff?: string;
     sessionLabel?: string;
     onTurnComplete?: () => void;
+    /** Told after each successful `cv_edit` tool call resolves — not just at the end of the
+     *  turn — so the tailoring host can refresh the CV preview as a run writes it instead of
+     *  only once the whole turn finishes. `onTurnComplete` still fires at turn end regardless
+     *  (the safety net for anything this per-call signal missed); this is additive. */
+    onDocumentEdited?: () => void;
     /** Told when an UNATTENDED run starts and ends. The tailoring host locks its editor for
      *  the duration: a run rewrites the same document the editor holds and saves on a
      *  debounce, and whoever writes last would silently win. */
@@ -94,6 +101,12 @@
     /** Which unbound conversation a NEW session starts as. An existing session keeps
      *  whatever preset it was created with. */
     preset?: ChatPreset;
+    /** Start an unattended run the moment the session is ready, instead of waiting for the
+     *  candidate to pick an opening action. The tailoring host sets this on a cold-start
+     *  bootstrap (a vacancy tailored for the first time) — only on an empty session, and only
+     *  once, the same guard `kickoff` already uses. A host that passes this should not also
+     *  pass `openingActions`: there is nothing left to offer once the run is already starting. */
+    autoRun?: boolean;
   } = $props();
 
   let phase = $state<Phase>('loading');
@@ -302,6 +315,13 @@
         // opens by reading its context. The empty-transcript guard is the client half of
         // the backend's: a reload replays the conversation rather than restarting it.
         void dispatch({ kind: 'opening' });
+      } else if (autoRun && chat.messages.length === 0) {
+        // Cold start: the tailoring workspace runs the unattended pass itself instead of
+        // offering the two-action menu. Same empty-transcript guard as the branches above —
+        // boot() re-runs on every return to the bare address, and a session that already has
+        // a message (the run already started, or the candidate answered its closing question)
+        // must not be run again.
+        void dispatch({ kind: 'autopilot' });
       }
     } catch (err) {
       report(err, 'Could not reach the assistant.');
@@ -520,6 +540,9 @@
     if (event.type === 'tool_result' && event.is_error) {
       const alert = bulletCapUserMessage(event.result);
       if (alert) bulletCapAlert = alert;
+    }
+    if (event.type === 'tool_result' && event.name === 'cv_edit' && !event.is_error) {
+      onDocumentEdited?.();
     }
     chat = reduceTurnEvent(chat, event);
     if (event.type === 'result') {
@@ -824,7 +847,10 @@
                 <p class="mt-2 text-xs text-muted-foreground">{action.hint}</p>
               {/each}
             </div>
-          {:else if chat.messages.length === 0}
+          {:else if chat.messages.length === 0 && !autoRun}
+            <!-- Never shown on a cold start (autoRun): the brief hasn't landed as a message
+                 yet, but the run has already started — inviting the candidate to type here
+                 would contradict the "Crunching…" indicator already on screen. -->
             <p class="text-sm text-muted-foreground">Ask the agent anything to get started.</p>
           {/if}
 

@@ -255,7 +255,14 @@
             this CV — recompute it below to take it again.
           </p>
         </div>
-        <MatchAnalysisFull {job} initial={fit} autoRun={false} stacked />
+        <!-- Keyed on whether an analysis is present: MatchAnalysisFull seeds its internal state
+             from `initial` once, on mount, and does not re-read it if the prop changes later —
+             so when a cold-start run's inline analysis step lands after the tab first rendered
+             empty, this forces a clean remount to pick it up rather than staying stuck showing
+             the pending stepper forever. -->
+        {#key !!analysis}
+          <MatchAnalysisFull {job} initial={fit} autoRun={false} stacked />
+        {/key}
       </div>
     {/if}
   </div>

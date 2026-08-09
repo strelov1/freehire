@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
+	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -200,21 +201,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// (below) and the same list caps the served score (applyBlockers, after caching).
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
-	analysis, err := analyzer.Analyze(c.Context(), matchanalysis.Input{
-		JobTitle:            job.Title,
-		JobDescription:      job.Description,
-		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    h.candidateProfile(c, userID),
-		Match:               jobmatch.Compute(job.Skills, profile.Skills),
-		JobWorkMode:         job.WorkMode,
-		JobRemote:           job.Remote,
-		JobLocation:         job.Location,
-		JobRegions:          job.Regions,
-		JobCountries:        job.Countries,
-		LocationPreferences: string(profile.LocationPreferences),
-		Blockers:            blockers,
-	})
+	analysis, err := h.runAnalysis(c, userID, job, profile, blockers)
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
 		log.Printf("matchanalysis: analyze failed for user %d job %d: %v", userID, job.ID, err)
@@ -232,6 +219,60 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// already computed for the prompt (same recompute-on-read the GET path does).
 	applyBlockers(analysis, blockers)
 	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: false, Analysis: analysis}})
+}
+
+// runAnalysis builds the fit-chain input from the candidate's profile and the vacancy, and runs
+// the three-stage chain under the caller's own attribution. Shared by the on-demand endpoint and
+// the cold-start autopilot's inline precondition (ensureCachedAnalysis) — both assemble the exact
+// same input the exact same way; only what happens to the RESULT (credits, response shape,
+// whether the caller even asked for one) differs between them.
+func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker) (*matchanalysis.Analysis, error) {
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	return analyzer.Analyze(c.Context(), matchanalysis.Input{
+		JobTitle:            job.Title,
+		JobDescription:      job.Description,
+		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
+		StructuredResume:    h.candidateProfile(c, userID),
+		Match:               jobmatch.Compute(job.Skills, profile.Skills),
+		JobWorkMode:         job.WorkMode,
+		JobRemote:           job.Remote,
+		JobLocation:         job.Location,
+		JobRegions:          job.Regions,
+		JobCountries:        job.Countries,
+		LocationPreferences: string(profile.LocationPreferences),
+		Blockers:            blockers,
+	})
+}
+
+// ensureCachedAnalysis computes and caches the fit analysis for (user, job) when none is cached
+// yet, reusing the exact compute path PostMatchAnalysis uses. It exists for the cold-start
+// autopilot run, whose first tool call (cv_context) reads the cache and errors without one — this
+// is what lets that run start without requiring the candidate to have produced an analysis first.
+//
+// Best-effort and silent: a lookup or compute failure (no LLM configured, an analyzer error) is
+// logged and left uncached, exactly as PostMatchAnalysis already degrades. No credits debit — this
+// path is unmetered, tracked only by the same LLM spend attribution every call already carries
+// (see the tailor-coldstart-autopilot design's "no new metering" decision).
+func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.Job) {
+	if _, err := h.matchAnalysisCache.GetUserJobAnalysis(c.Context(),
+		db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID}); err == nil {
+		return // already cached
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v", userID, job.ID, err)
+		return
+	}
+	profile, _ := h.userProfile.Get(c.Context(), userID)
+	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	analysis, err := h.runAnalysis(c, userID, job, profile, blockers)
+	if err != nil {
+		log.Printf("matchanalysis: inline compute before an autopilot run, user %d job %d: %v", userID, job.ID, err)
+		return
+	}
+	if analysis == nil {
+		return // LLM unconfigured — nothing to cache
+	}
+	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
+	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
 }
 
 // creditsBalance reports the caller's current points, or nil on a DB error (logged).

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { ArrowRight, FileText, ScanSearch } from '@lucide/svelte';
+  import { ArrowRight, FileText, SquarePen } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
@@ -85,8 +85,8 @@
       onclick={guest ? () => openAuthDialog('login') : undefined}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
-      Analyze match
-      <ScanSearch class="size-[1.15rem]" aria-hidden="true" />
+      Tailor my CV
+      <SquarePen class="size-[1.15rem]" aria-hidden="true" />
     </Button>
     <!-- The line under the button says what happens next: for a signed-in viewer that's
          the credit it will spend, for a guest that it runs on a CV they haven't given us

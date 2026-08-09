@@ -8,6 +8,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -15,15 +16,19 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/llm"
+	"github.com/strelov1/freehire/internal/matchanalysis"
+	"github.com/strelov1/freehire/internal/resume"
 )
 
 // seedTailoringSession creates a CV bound to a vacancy plus the tailoring session that
@@ -121,6 +126,136 @@ func TestAutopilotOnAForeignSessionIsNotFound(t *testing.T) {
 		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", strangerCookie, nil)
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Errorf("foreign session: status %d, want 404 — ownership never leaks as 403", resp.StatusCode)
+	}
+}
+
+// TestAutopilotComputesAnalysisWhenMissing: the tailoring bootstrap no longer requires a
+// pre-existing fit analysis (tailor-coldstart-autopilot). cv_context — the run's first tool call
+// — still reads the analysis from the cache, so an autopilot run started on a vacancy with none
+// cached must compute and cache one itself, inline, before the turn proceeds.
+func TestAutopilotComputesAnalysisWhenMissing(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
+	fitM := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
+	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
+
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries,
+		maxPrompt:  defaultAssistantMaxPrompt,
+		stages:     queries,
+		experience: bank,
+		cv: &cvHandlers{
+			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:            queries,
+			jobReader:          queries,
+			matchAnalysisCache: queries,
+			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
+		},
+	}
+	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	mw := middleware{
+		cookie: auth.RequireAuth(iss, testVersions),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
+	}
+	h.register(api, mw)
+	h.cv.register(api, mw)
+
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-analysis@example.test", true)
+	// The fit chain refuses to analyze a candidate with an empty bank (there is nothing to
+	// reason over) — without this, ensureCachedAnalysis would correctly compute nothing, and
+	// the test would pass for the wrong reason.
+	seedBankedCareer(t, queries, userID)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+
+	var jobID int64
+	if err := pool.QueryRow(context.Background(), `SELECT job_id FROM cvs WHERE id = $1`, cvID).Scan(&jobID); err != nil {
+		t.Fatalf("read job id: %v", err)
+	}
+	if _, err := queries.GetUserJobAnalysis(context.Background(),
+		db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("test setup: analysis already cached (err = %v), want none", err)
+	}
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("autopilot: status %d", resp.StatusCode)
+	}
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if _, err := queries.GetUserJobAnalysis(context.Background(),
+		db.GetUserJobAnalysisParams{UserID: userID, JobID: jobID}); err != nil {
+		t.Errorf("analysis not cached after the run: %v", err)
+	}
+}
+
+// TestAutopilotReusesAnExistingCachedAnalysis: when an analysis is already cached for the
+// vacancy, an autopilot run must not recompute it — the fit chain is not free, and cv_context
+// already has something to read.
+func TestAutopilotReusesAnExistingCachedAnalysis(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	turnM := &turnModel{replies: []*llms.ContentChoice{{Content: "Walked the requirements."}}}
+	fitM := &fitModel{resp: []string{fitStage1, fitStage2, fitStage3}}
+	an := matchanalysis.NewAnalyzer(llm.NewWithModel(fitM))
+
+	bank := experience.NewStore(experience.NewQueriesRepository(queries))
+	h := &assistantHandlers{
+		store: assistant.NewStore(queries), queries: queries,
+		maxPrompt:  defaultAssistantMaxPrompt,
+		stages:     queries,
+		experience: bank,
+		cv: &cvHandlers{
+			cvStore:            cv.NewStore(cv.NewQueriesRepository(queries)),
+			editor:             cvedit.NewEditor(cvedit.NewRepository(pool, queries), bankGate{bank: bank}),
+			queries:            queries,
+			jobReader:          queries,
+			matchAnalysisCache: queries,
+			match:              fitAPI(pool, queries, iss, resume.New(nil, resume.NewQueriesRepository(queries)), an),
+		},
+	}
+	h.runner = assistant.NewRunner(turnM, h.store, assistant.RunnerConfig{MaxSteps: 3})
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	mw := middleware{
+		cookie: auth.RequireAuth(iss, testVersions),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
+	}
+	h.register(api, mw)
+	h.cv.register(api, mw)
+
+	userID, cookie := assistantUser(t, pool, iss, "autopilot-cached@example.test", true)
+	seedBankedCareer(t, queries, userID)
+	sessionID, cvID := seedTailoringSession(t, pool, h, userID)
+
+	var jobID int64
+	if err := pool.QueryRow(context.Background(), `SELECT job_id FROM cvs WHERE id = $1`, cvID).Scan(&jobID); err != nil {
+		t.Fatalf("read job id: %v", err)
+	}
+	if err := queries.UpsertUserJobAnalysis(context.Background(), db.UpsertUserJobAnalysisParams{
+		UserID: userID, JobID: jobID, Analysis: []byte(`{"verdict":"Good Fit","overall_score":70}`), Model: "test-model",
+	}); err != nil {
+		t.Fatalf("seed cached analysis: %v", err)
+	}
+
+	resp := assistantRequest(t, app, fiber.MethodPost,
+		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("autopilot: status %d", resp.StatusCode)
+	}
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if fitM.n != 0 {
+		t.Errorf("fit model called %d times, want 0 — an already-cached analysis must not be recomputed", fitM.n)
 	}
 }
 

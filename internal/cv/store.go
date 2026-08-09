@@ -285,26 +285,27 @@ func (s *Store) CreateTailored(ctx context.Context, userID, jobID int64, title, 
 }
 
 // Tailor ensures the user has a base CV — seeding one from their extracted résumé when they
-// have none — then creates a vacancy-bound tailored copy of it. It returns the base and the
-// tailored metadata, or ErrNoResume when there is nothing to seed a base from. The base CV is
-// never modified: tailoring only ever writes the new tailored row.
-func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle string, seeder Seeder) (Meta, Meta, error) {
+// have none — then creates a vacancy-bound tailored copy of it. It returns the base and tailored
+// metadata plus whether THIS call is the one that just created the tailored copy (false when an
+// existing one was reused instead). It returns ErrNoResume when there is nothing to seed a base
+// from. The base CV is never modified: tailoring only ever writes the new tailored row.
+func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle string, seeder Seeder) (Meta, Meta, bool, error) {
 	base, ok, err := s.BaseCV(ctx, userID)
 	if err != nil {
-		return Meta{}, Meta{}, err
+		return Meta{}, Meta{}, false, err
 	}
 	if !ok {
 		st, hasResume, err := seeder.Structured(ctx, userID)
 		if err != nil {
-			return Meta{}, Meta{}, err
+			return Meta{}, Meta{}, false, err
 		}
 		if !hasResume {
-			return Meta{}, Meta{}, ErrNoResume
+			return Meta{}, Meta{}, false, ErrNoResume
 		}
 		doc := Seed(st)
 		meta, err := s.Create(ctx, userID, defaultBaseTitle, DefaultTemplateID, doc)
 		if err != nil {
-			return Meta{}, Meta{}, err
+			return Meta{}, Meta{}, false, err
 		}
 		base = Record{Meta: meta, Document: doc}
 	}
@@ -312,16 +313,16 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 	// reload re-runs this exact request; minting a second copy leaves the candidate's
 	// conversation bound to the first one, which is what "my chat disappeared" looks like.
 	if existing, err := s.tailoredForJob(ctx, userID, jobID); err == nil {
-		return base.Meta, existing, nil
+		return base.Meta, existing, false, nil
 	} else if !errors.Is(err, ErrNotFound) {
-		return Meta{}, Meta{}, err
+		return Meta{}, Meta{}, false, err
 	}
 
 	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, base.Document)
 	if err != nil {
-		return Meta{}, Meta{}, err
+		return Meta{}, Meta{}, false, err
 	}
-	return base.Meta, tailored, nil
+	return base.Meta, tailored, true, nil
 }
 
 // tailoredForJob returns the user's existing tailored copy for a vacancy, or ErrNotFound.

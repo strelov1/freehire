@@ -13,32 +13,27 @@
     type MatchStreamState,
     type Tone,
   } from '$lib/matchAnalysis';
-  import type { Job, MatchAnalysis, MatchAnalysisResponse } from '$lib/types';
+  import type { Job, MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  // The full AI fit report + live SSE stream. Three callers: `ArtifactPanel`'s Job Match tab
-  // (seeded, read-only, `autoRun=false`), and the tailoring workspace's cold-start `'analyzing'`
-  // state (`/tailor/[slug]`, no `initial`, so it starts cold and calls `onDone` once it lands).
+  // The full AI fit report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab (seeded,
+  // read-only, `autoRun=false`) — the tailoring workspace's own cold start computes the analysis
+  // inline as part of its autopilot run rather than through this component's stream.
   // `initial` seeds from an SSR-cached fit for an instant paint when the caller has one; when
   // absent, the cached fit is fetched on mount. `autoRun` starts the stream on a cold start —
   // the "never silently recompute a cached analysis" gate. `stacked` forces every multi-column
   // section into a single column regardless of viewport width — for callers narrower than the
-  // viewport-based `lg:`/`sm:` breakpoints assume (the tailoring artifact panel, the workspace's
-  // full-width-but-narrow-column 'analyzing' state).
-  // `onDone` fires once, the moment a run completes with an analysis (from autoRun or Recompute)
-  // — the tailoring workspace uses it to know when its blocking cold-start run has landed.
+  // viewport-based `lg:`/`sm:` breakpoints assume (the tailoring artifact panel).
   let {
     job,
     initial = null,
     autoRun = true,
     stacked = false,
-    onDone = undefined,
   }: {
     job: Job;
     initial?: MatchAnalysisResponse | null;
     autoRun?: boolean;
     stacked?: boolean;
-    onDone?: (analysis: MatchAnalysis) => void;
   } = $props();
 
   let fit = $state<MatchAnalysisResponse | null>(initial);
@@ -65,16 +60,6 @@
   let recovering = $state(false);
   let destroyed = false;
   let es: EventSource | null = null;
-  // Guards onDone against firing more than once per run: stream.done flips true exactly
-  // once a run lands, but the $effect below re-evaluates on every state change while it
-  // stays true.
-  let announced = false;
-  $effect(() => {
-    if (stream.done && stream.analysis && !announced) {
-      announced = true;
-      onDone?.(stream.analysis);
-    }
-  });
   // The thinking panel tails the model's reasoning: keep it pinned to the newest tokens.
   let thinkingEl = $state<HTMLElement | null>(null);
   $effect(() => {
@@ -130,7 +115,6 @@
     // seeing in the funnel.
     track('match_run', { slug: job.public_slug });
     stream = initMatchStream();
-    announced = false;
     streaming = true;
     showThinking = true;
     const source = new EventSource(api.matchAnalysisStreamUrl(job.public_slug), { withCredentials: true });

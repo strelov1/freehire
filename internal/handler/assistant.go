@@ -755,8 +755,29 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if sess.Preset != assistant.PresetTailor || sess.CVID == nil || sess.JobID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
+	h.ensureAnalysisForRun(c, sess)
 	h.layDownRunPlan(c.Context(), sess)
 	return h.streamTurn(c, sess, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps})
+}
+
+// ensureAnalysisForRun computes and caches the fit analysis for the run's vacancy when none is
+// cached yet, so cv_context — the run's first tool call — has something to read instead of
+// erroring: cold start no longer requires the candidate to have produced an analysis first.
+//
+// Best-effort: a missing match surface (a deployment/test harness that never wired one) or a
+// compute failure simply leaves the run to proceed without a cache — cv_context's own "run the fit
+// analysis first" error then reaches the agent as an ordinary tool failure, the same degradation
+// path an autopilot run failing for any other reason already goes through.
+func (h *assistantHandlers) ensureAnalysisForRun(c *fiber.Ctx, sess assistant.Session) {
+	if h.cv == nil || h.cv.match == nil {
+		return
+	}
+	job, err := h.queries.GetJob(c.Context(), *sess.JobID)
+	if err != nil {
+		log.Printf("assistant: loading job %d for autopilot's analysis precondition: %v", *sess.JobID, err)
+		return
+	}
+	h.cv.match.ensureCachedAnalysis(c, sess.UserID, job)
 }
 
 // layDownRunPlan writes the vacancy's requirements onto the CV as `not_reached` before the

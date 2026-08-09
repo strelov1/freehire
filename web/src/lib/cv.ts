@@ -80,6 +80,9 @@ export interface TailorResult {
   base_cv_id: string;
   analysis: Analysis | null;
   session_id: string;
+  /** True exactly when this call just created the tailored CV — the workspace's signal to
+   *  start the autopilot run itself instead of offering the opening-action menu. */
+  cold_start_running: boolean;
 }
 
 /** Request body for replacing a CV. */

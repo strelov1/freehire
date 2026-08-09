@@ -1,9 +1,9 @@
 //go:build integration
 
 // Integration tests for the CV-tailoring HTTP surface (add-cv-tailoring): the tailoring
-// bootstrap's preconditions (cached analysis + résumé) and success, field-level PATCH via a
-// minted API key (apply / 422 bad addressing / 404 owner isolation), and the tailoring-context
-// requirement split. Run with: go test -tags=integration ./internal/handler/
+// bootstrap's one remaining precondition (a résumé to seed a base CV from) and success,
+// field-level PATCH via a minted API key (apply / 422 bad addressing / 404 owner isolation), and
+// the tailoring-context requirement split. Run with: go test -tags=integration ./internal/handler/
 package handler
 
 import (
@@ -152,21 +152,16 @@ func TestTailorCVBootstrap(t *testing.T) {
 	tok, _ := iss.Issue(user, testTokenVersion)
 	jobID := seedJobSlug(t, pool, "backend-eng")
 
-	// No cached analysis yet → 409.
-	if resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"}); resp.StatusCode != fiber.StatusConflict {
-		t.Fatalf("no-analysis = %d, want 409", resp.StatusCode)
-	}
-
-	seedAnalysis(t, h, user, jobID)
-
-	// Analysis present but no résumé to seed a base → 409.
+	// No résumé to seed a base → 409. No cached analysis exists either, and that no longer
+	// gates the bootstrap — the résumé gate is the only precondition left.
 	if resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"}); resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("no-résumé = %d, want 409", resp.StatusCode)
 	}
 
 	seedFreshResume(t, pool, user)
 
-	// Now bootstrap succeeds.
+	// Bootstrap succeeds with no cached analysis: the tailored CV is created, and the
+	// response's analysis is nil since none has been computed yet.
 	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "backend-eng"})
 	if resp.StatusCode != fiber.StatusCreated {
 		t.Fatalf("bootstrap = %d, want 201", resp.StatusCode)
@@ -200,8 +195,11 @@ func TestTailorCVBootstrap(t *testing.T) {
 	if boundSession != got.Data.SessionID {
 		t.Errorf("cv.agent_session_id = %q, want the minted session %q", boundSession, got.Data.SessionID)
 	}
-	if got.Data.Analysis == nil || got.Data.Analysis.Verdict != "Good Fit" {
-		t.Errorf("analysis not returned: %+v", got.Data.Analysis)
+	if got.Data.Analysis != nil {
+		t.Errorf("analysis = %+v, want nil (none cached yet)", got.Data.Analysis)
+	}
+	if !got.Data.ColdStartRunning {
+		t.Errorf("cold_start_running = false, want true on a bootstrap that just created the CV")
 	}
 	// Creating the tailored CV debited the tailor cost (3) from the monthly grant (20).
 	var remaining int
@@ -513,6 +511,9 @@ func TestTailorCVBootstrapIsIdempotentPerVacancy(t *testing.T) {
 	}
 
 	first := bootstrap()
+	if !first.ColdStartRunning {
+		t.Errorf("first bootstrap: cold_start_running = false, want true (it just created the CV)")
+	}
 	// Something was said in that conversation, so losing it would be losing real work.
 	if _, err := pool.Exec(context.Background(),
 		`INSERT INTO assistant_messages (session_id, seq, role, content)
@@ -527,6 +528,9 @@ func TestTailorCVBootstrapIsIdempotentPerVacancy(t *testing.T) {
 	}
 	if second.SessionID != first.SessionID {
 		t.Errorf("reload rebound the conversation (%s vs %s) — the candidate's messages are on the old one", second.SessionID, first.SessionID)
+	}
+	if second.ColdStartRunning {
+		t.Errorf("reload: cold_start_running = true, want false — the CV already existed")
 	}
 
 	var cvs, sessions int

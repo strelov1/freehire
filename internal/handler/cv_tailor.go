@@ -34,13 +34,17 @@ type tailorCVResponse struct {
 	BaseCVID   string                  `json:"base_cv_id"`
 	Analysis   *matchanalysis.Analysis `json:"analysis"`
 	SessionID  string                  `json:"session_id"`
+	// ColdStartRunning is true exactly when this call just created the tailored CV — the
+	// workspace's signal to start the autopilot run itself immediately instead of offering
+	// the opening-action menu. False on every subsequent bootstrap for the same vacancy.
+	ColdStartRunning bool `json:"cold_start_running"`
 }
 
-// TailorCV bootstraps a tailoring session for a vacancy: it requires a cached fit analysis
-// (409 otherwise), ensures the user has a base CV (seeding one from their résumé, 409 when
-// they have none), creates a vacancy-bound tailored copy, mints the CLI credential, and
-// returns the ids plus the analysis. Cookie-only (the browser starts tailoring); never calls
-// the LLM.
+// TailorCV bootstraps a tailoring session for a vacancy: it ensures the user has a base CV
+// (seeding one from their résumé, 409 when they have none), creates a vacancy-bound tailored
+// copy, mints the CLI credential, and returns the ids plus the cached analysis if one already
+// exists — no cached analysis is required to start. Cookie-only (the browser starts tailoring);
+// never calls the LLM.
 func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -58,10 +62,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return err // unknown slug → pgx.ErrNoRows → 404 via RenderError
 	}
-	analysis, err := h.cachedAnalysis(c, userID, job.ID)
-	if err != nil {
-		return err
-	}
+	analysis := h.optionalAnalysis(c.Context(), userID, job.ID)
 	// Attach the hard-constraint blockers + score ceiling to the analysis the tailoring
 	// agent receives, so its Action strings ("do not claim X unless true") guard the
 	// tailored output against fabricating a credential/degree/authorization.
@@ -81,7 +82,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err := h.reseedBaseIfStaleVsUpload(c, userID); err != nil {
 		log.Printf("cv: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
-	base, tailored, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource())
+	base, tailored, justCreated, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource())
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}
@@ -92,7 +93,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// rather than mid-story with the first edit. Best-effort and idempotency-aware: Tailor
 	// returns the EXISTING copy on a reload, and a second milestone would be a second
 	// "created from your base CV" under a CV that was created once.
-	if tailored.CreatedAt.Equal(tailored.UpdatedAt) {
+	if justCreated {
 		if _, err := h.editor.Seed(c.Context(), tailored.ID, userID, "Created from your base CV"); err != nil {
 			log.Printf("cv: seeding the revision history for %s: %v", tailored.ID, err)
 		}
@@ -121,6 +122,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
 		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
+		ColdStartRunning: justCreated,
 	}})
 }
 
@@ -329,11 +331,12 @@ func (h *cvHandlers) TailorContext(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": ctx})
 }
 
-// cachedAnalysis loads the cached fit analysis for (user, job), or a 409 telling the caller to
-// run the fit analysis first when none is cached (or the cached blob is empty/corrupt). It
-// never recomputes.
-func (h *cvHandlers) cachedAnalysis(c *fiber.Ctx, userID, jobID int64) (*matchanalysis.Analysis, error) {
-	return h.cachedAnalysisCtx(c.Context(), userID, jobID)
+// optionalAnalysis loads the cached fit analysis for (user, job) if one exists, returning nil
+// without error when none is cached yet (or the cached blob is empty/corrupt) rather than a
+// 409 — the tailoring bootstrap no longer requires one to exist before starting.
+func (h *cvHandlers) optionalAnalysis(ctx context.Context, userID, jobID int64) *matchanalysis.Analysis {
+	analysis, _ := h.cachedAnalysisCtx(ctx, userID, jobID)
+	return analysis
 }
 
 // cachedAnalysisCtx is cachedAnalysis over a plain context, so the assistant's CV
