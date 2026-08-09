@@ -22,11 +22,11 @@
 
 ## 3. Integration coverage
 
-- [ ] 3.1 Scripted-model integration test (`//go:build integration`, mirrors existing
+- [x] 3.1 Scripted-model integration test (`//go:build integration`, mirrors existing
       `internal/handler` assistant CV tool tests): a turn writes a bullet citing evidence, calls
       the fidelity-check tool, and the scripted model's next turn revises the bullet via `cv_edit`
       — assert the tool call and the revision both land in the CV's revision history.
-- [ ] 3.2 Scripted-model integration test: the fidelity-check tool is called with an id that does
+- [x] 3.2 Scripted-model integration test: the fidelity-check tool is called with an id that does
       not resolve — assert the same not-found-style message a bad `evidence_id` gets elsewhere,
       and that no CV state changes.
 
