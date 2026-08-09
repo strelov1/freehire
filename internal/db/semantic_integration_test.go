@@ -14,6 +14,7 @@ import (
 	"context"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -57,6 +58,19 @@ func semanticOutboxJobIDs(t *testing.T, pool *pgxpool.Pool) []int64 {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// semanticOutboxJobPostedAt reads the denormalized freshness key ClaimSemanticBatch
+// sorts by directly, avoiding a join to jobs on every claim (see
+// openspec/changes/prod-semantic-embed-steady-state/design.md Decision 8).
+func semanticOutboxJobPostedAt(t *testing.T, pool *pgxpool.Pool, jobID int64) time.Time {
+	t.Helper()
+	var ts time.Time
+	if err := pool.QueryRow(context.Background(),
+		"SELECT job_posted_at FROM semantic_outbox WHERE job_id = $1", jobID).Scan(&ts); err != nil {
+		t.Fatalf("read job_posted_at: %v", err)
+	}
+	return ts
 }
 
 func semanticStamp(t *testing.T, pool *pgxpool.Pool, jobID int64) (model, hash *string) {
@@ -166,6 +180,26 @@ func TestSemanticEnqueue(t *testing.T) {
 		sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
 		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 			t.Errorf("enqueued = %v, want %v (closed+embedded queued for removal, closed+unembedded skipped)", got, want)
+		}
+	})
+
+	t.Run("job_posted_at is denormalized from COALESCE(posted_at, created_at)", func(t *testing.T) {
+		// ClaimSemanticBatch sorts by this column directly instead of joining jobs on
+		// every claim (design.md Decision 8) — it must stay in sync with the same
+		// COALESCE the claim ordering has always promised (the "undated jobs rank by
+		// created_at" test below asserts the ordering behavior this value feeds).
+		truncate(t, pool)
+		dated := insertJob(t, pool, "dated-posted")
+		setPostedAt(t, pool, dated, "2024-01-01T00:00:00Z")
+		undated := insertJob(t, pool, "undated-posted") // posted_at NULL, falls back to created_at
+		enqueue(t)
+		gotDated := semanticOutboxJobPostedAt(t, pool, dated)
+		if !gotDated.Equal(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("dated job_posted_at = %v, want 2024-01-01", gotDated)
+		}
+		gotUndated := semanticOutboxJobPostedAt(t, pool, undated)
+		if gotUndated.Before(time.Now().Add(-time.Minute)) {
+			t.Errorf("undated job_posted_at = %v, want ~now (fell back to created_at)", gotUndated)
 		}
 	})
 

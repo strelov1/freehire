@@ -638,6 +638,7 @@ type SemanticOutbox struct {
 	FailedAt    pgtype.Timestamptz `json:"failed_at"`
 	LastError   string             `json:"last_error"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	JobPostedAt pgtype.Timestamptz `json:"job_posted_at"`
 }
 
 type Subscription struct {
