@@ -13,7 +13,7 @@
 
 ## 2. Prompt instruction
 
-- [ ] 2.1 Add a `tailorPrompt` paragraph (near the existing evidence-citation instruction) telling
+- [x] 2.1 Add a `tailorPrompt` paragraph (near the existing evidence-citation instruction) telling
       the agent to call the new tool after a batch of edits that cited evidence, compare its own
       wording against what the tool returns, and revise via `cv_edit` if the wording claims more
       scope, seniority, or a bigger metric than the atom supports. State the same soft-cap framing

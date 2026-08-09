@@ -158,6 +158,22 @@ func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
 	}
 }
 
+// The evidence-citation gate only checks that a bullet cites something real; it says
+// nothing about whether the wording stays inside what that evidence actually claims. The
+// prompt has to tell the agent to check that itself — nothing server-side catches an
+// evidenced bullet that overstates scope, seniority, or a metric.
+func TestTailorPromptChecksItsOwnWordingAgainstTheEvidence(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+
+	if !strings.Contains(p, "check_evidence_fidelity") {
+		t.Error("the tailoring prompt never mentions check_evidence_fidelity, so the agent has no instruction to re-read what it cited")
+	}
+	lower := strings.ToLower(p)
+	if !strings.Contains(lower, "inflate") && !strings.Contains(lower, "stretch") && !strings.Contains(lower, "overstate") {
+		t.Error("the prompt does not tie check_evidence_fidelity to the risk of overstating what the evidence says")
+	}
+}
+
 // Two recorded sessions opened with a long restatement of the fit analysis the candidate had
 // open beside the chat, then spent every remaining round searching the bank one requirement at
 // a time — and edited nothing. The prompt now says where the evidence already is, and to spend
