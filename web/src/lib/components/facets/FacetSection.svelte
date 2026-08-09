@@ -20,13 +20,16 @@
   // Excludable facets cycle through the exclude state; the rest only toggle include.
   const onToggle = (v: string) => (def.excludable ? store.cycle(def.param, v) : store.pick(def.param, v));
 
-  // Options for a select facet: static for closed vocabularies, or built from the
+  // Options for a select facet: static for closed vocabularies (with the live
+  // distribution merged in, same as ChipFacet does for its pills), or built from the
   // live distribution (value → count, busiest first) for dynamic ones. Selected
   // values absent from the current distribution are still listed so they stay
   // removable.
   const selectOptions = $derived.by((): FacetOption[] => {
-    if (!def.dynamic) return def.options ?? [];
-    return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
+    if (def.dynamic) return dynamicOptions(def.param, counts?.facets?.[def.param] ?? {}, [...st.include, ...st.exclude]);
+    const dist = counts?.facets?.[def.param];
+    const base = def.options ?? [];
+    return dist ? base.map((o) => ({ ...o, count: dist[o.value] ?? 0 })) : base;
   });
   // The match/clear actions only appear once something is selected — so their
   // meaning is clear ("you picked these — match all, or clear them") rather than

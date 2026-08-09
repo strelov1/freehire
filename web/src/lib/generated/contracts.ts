@@ -872,6 +872,12 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
 */
 
 /**
+ * DefaultMaxBullets is the per-experience / per-project bullet ceiling when
+ * CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
+ * than let Sanitize drop trailing content silently.
+ */
+export const DefaultMaxBullets = 20;
+/**
  * Document is the typed, sanitized CV. Every field is optional; sections the user has
  * not filled in are left empty rather than invented, and Sanitize drops empty entries.
  */
@@ -1097,7 +1103,7 @@ export interface Question {
   answer?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'echojobs', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -1138,6 +1144,8 @@ export const COMPANY_TYPE_VALUES = ['product', 'startup', 'outsource', 'outstaff
 export type CompanyType = (typeof COMPANY_TYPE_VALUES)[number];
 export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gamedev', 'media', 'travel', 'healthcare', 'edtech', 'govtech', 'devtools', 'cybersecurity', 'ai', 'hrtech', 'adtech', 'proptech', 'logistics', 'mobility', 'climatetech', 'other'] as const;
 export type Domain = (typeof DOMAIN_VALUES)[number];
+export const AI_ARCHETYPE_VALUES = ['rag_app_builder', 'agent_builder', 'cloud_ml_platform_engineer', 'ml_trainer_researcher', 'fullstack_ai_engineer', 'devops_infra_engineer'] as const;
+export type AIArchetype = (typeof AI_ARCHETYPE_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
 export type EmailStatusSignal = (typeof EMAIL_STATUS_SIGNAL_VALUES)[number];
 export const SIGNAL_STAGE = {
@@ -1297,6 +1305,7 @@ export const ROLE_LABELS = {
   'ai_product_engineer': 'AI Product Engineer',
   'analytics_engineer': 'Analytics Engineer',
   'android_developer': 'Android Developer',
+  'applied_ai_engineer': 'Applied AI Engineer',
   'architecture': 'Architect',
   'art_director': 'Art Director',
   'backend': 'Backend Engineer',
@@ -1316,6 +1325,7 @@ export const ROLE_LABELS = {
   'c_level_ai_product_engineer': 'C-Level AI Product Engineer',
   'c_level_analytics_engineer': 'C-Level Analytics Engineer',
   'c_level_android_developer': 'C-Level Android Developer',
+  'c_level_applied_ai_engineer': 'C-Level Applied AI Engineer',
   'c_level_architecture': 'C-Level Architect',
   'c_level_backend': 'C-Level Backend Engineer',
   'c_level_bdr': 'C-Level Business Development Representative',
@@ -1346,6 +1356,7 @@ export const ROLE_LABELS = {
   'c_level_data_science': 'C-Level Data Scientist',
   'c_level_deep_learning_engineer': 'C-Level Deep Learning Engineer',
   'c_level_demand_generation_manager': 'C-Level Demand Generation Manager',
+  'c_level_deployment_engineer': 'C-Level Deployment Engineer',
   'c_level_design': 'C-Level Designer',
   'c_level_design_engineer': 'C-Level Design Engineer',
   'c_level_developer_advocate': 'C-Level Developer Advocate',
@@ -1468,6 +1479,7 @@ export const ROLE_LABELS = {
   'data_science': 'Data Scientist',
   'deep_learning_engineer': 'Deep Learning Engineer',
   'demand_generation_manager': 'Demand Generation Manager',
+  'deployment_engineer': 'Deployment Engineer',
   'design': 'Designer',
   'design_engineer': 'Design Engineer',
   'design_ops': 'Design Ops',
@@ -1526,6 +1538,7 @@ export const ROLE_LABELS = {
   'intern_ai_product_engineer': 'Intern AI Product Engineer',
   'intern_analytics_engineer': 'Intern Analytics Engineer',
   'intern_android_developer': 'Intern Android Developer',
+  'intern_applied_ai_engineer': 'Intern Applied AI Engineer',
   'intern_architecture': 'Intern Architect',
   'intern_backend': 'Intern Backend Engineer',
   'intern_bdr': 'Intern Business Development Representative',
@@ -1556,6 +1569,7 @@ export const ROLE_LABELS = {
   'intern_data_science': 'Intern Data Scientist',
   'intern_deep_learning_engineer': 'Intern Deep Learning Engineer',
   'intern_demand_generation_manager': 'Intern Demand Generation Manager',
+  'intern_deployment_engineer': 'Intern Deployment Engineer',
   'intern_design': 'Intern Designer',
   'intern_design_engineer': 'Intern Design Engineer',
   'intern_developer_advocate': 'Intern Developer Advocate',
@@ -1665,6 +1679,7 @@ export const ROLE_LABELS = {
   'junior_ai_product_engineer': 'Junior AI Product Engineer',
   'junior_analytics_engineer': 'Junior Analytics Engineer',
   'junior_android_developer': 'Junior Android Developer',
+  'junior_applied_ai_engineer': 'Junior Applied AI Engineer',
   'junior_architecture': 'Junior Architect',
   'junior_backend': 'Junior Backend Engineer',
   'junior_bdr': 'Junior Business Development Representative',
@@ -1695,6 +1710,7 @@ export const ROLE_LABELS = {
   'junior_data_science': 'Junior Data Scientist',
   'junior_deep_learning_engineer': 'Junior Deep Learning Engineer',
   'junior_demand_generation_manager': 'Junior Demand Generation Manager',
+  'junior_deployment_engineer': 'Junior Deployment Engineer',
   'junior_design': 'Junior Designer',
   'junior_design_engineer': 'Junior Design Engineer',
   'junior_developer_advocate': 'Junior Developer Advocate',
@@ -1803,6 +1819,7 @@ export const ROLE_LABELS = {
   'lead_ai_product_engineer': 'Lead AI Product Engineer',
   'lead_analytics_engineer': 'Lead Analytics Engineer',
   'lead_android_developer': 'Lead Android Developer',
+  'lead_applied_ai_engineer': 'Lead Applied AI Engineer',
   'lead_architecture': 'Lead Architect',
   'lead_backend': 'Lead Backend Engineer',
   'lead_bdr': 'Lead Business Development Representative',
@@ -1833,6 +1850,7 @@ export const ROLE_LABELS = {
   'lead_data_science': 'Lead Data Scientist',
   'lead_deep_learning_engineer': 'Lead Deep Learning Engineer',
   'lead_demand_generation_manager': 'Lead Demand Generation Manager',
+  'lead_deployment_engineer': 'Lead Deployment Engineer',
   'lead_design': 'Lead Designer',
   'lead_design_engineer': 'Lead Design Engineer',
   'lead_developer_advocate': 'Lead Developer Advocate',
@@ -1951,6 +1969,7 @@ export const ROLE_LABELS = {
   'middle_ai_product_engineer': 'Middle AI Product Engineer',
   'middle_analytics_engineer': 'Middle Analytics Engineer',
   'middle_android_developer': 'Middle Android Developer',
+  'middle_applied_ai_engineer': 'Middle Applied AI Engineer',
   'middle_architecture': 'Middle Architect',
   'middle_backend': 'Middle Backend Engineer',
   'middle_bdr': 'Middle Business Development Representative',
@@ -1981,6 +2000,7 @@ export const ROLE_LABELS = {
   'middle_data_science': 'Middle Data Scientist',
   'middle_deep_learning_engineer': 'Middle Deep Learning Engineer',
   'middle_demand_generation_manager': 'Middle Demand Generation Manager',
+  'middle_deployment_engineer': 'Middle Deployment Engineer',
   'middle_design': 'Middle Designer',
   'middle_design_engineer': 'Middle Design Engineer',
   'middle_developer_advocate': 'Middle Developer Advocate',
@@ -2101,6 +2121,7 @@ export const ROLE_LABELS = {
   'principal_ai_product_engineer': 'Principal AI Product Engineer',
   'principal_analytics_engineer': 'Principal Analytics Engineer',
   'principal_android_developer': 'Principal Android Developer',
+  'principal_applied_ai_engineer': 'Principal Applied AI Engineer',
   'principal_architecture': 'Principal Architect',
   'principal_backend': 'Principal Backend Engineer',
   'principal_bdr': 'Principal Business Development Representative',
@@ -2131,6 +2152,7 @@ export const ROLE_LABELS = {
   'principal_data_science': 'Principal Data Scientist',
   'principal_deep_learning_engineer': 'Principal Deep Learning Engineer',
   'principal_demand_generation_manager': 'Principal Demand Generation Manager',
+  'principal_deployment_engineer': 'Principal Deployment Engineer',
   'principal_design': 'Principal Designer',
   'principal_design_engineer': 'Principal Design Engineer',
   'principal_developer_advocate': 'Principal Developer Advocate',
@@ -2259,6 +2281,7 @@ export const ROLE_LABELS = {
   'senior_ai_product_engineer': 'Senior AI Product Engineer',
   'senior_analytics_engineer': 'Senior Analytics Engineer',
   'senior_android_developer': 'Senior Android Developer',
+  'senior_applied_ai_engineer': 'Senior Applied AI Engineer',
   'senior_architecture': 'Senior Architect',
   'senior_backend': 'Senior Backend Engineer',
   'senior_bdr': 'Senior Business Development Representative',
@@ -2289,6 +2312,7 @@ export const ROLE_LABELS = {
   'senior_data_science': 'Senior Data Scientist',
   'senior_deep_learning_engineer': 'Senior Deep Learning Engineer',
   'senior_demand_generation_manager': 'Senior Demand Generation Manager',
+  'senior_deployment_engineer': 'Senior Deployment Engineer',
   'senior_design': 'Senior Designer',
   'senior_design_engineer': 'Senior Design Engineer',
   'senior_developer_advocate': 'Senior Developer Advocate',
@@ -2407,6 +2431,7 @@ export const ROLE_LABELS = {
   'staff_ai_product_engineer': 'Staff AI Product Engineer',
   'staff_analytics_engineer': 'Staff Analytics Engineer',
   'staff_android_developer': 'Staff Android Developer',
+  'staff_applied_ai_engineer': 'Staff Applied AI Engineer',
   'staff_architecture': 'Staff Architect',
   'staff_backend': 'Staff Backend Engineer',
   'staff_bdr': 'Staff Business Development Representative',
@@ -2437,6 +2462,7 @@ export const ROLE_LABELS = {
   'staff_data_science': 'Staff Data Scientist',
   'staff_deep_learning_engineer': 'Staff Deep Learning Engineer',
   'staff_demand_generation_manager': 'Staff Demand Generation Manager',
+  'staff_deployment_engineer': 'Staff Deployment Engineer',
   'staff_design': 'Staff Designer',
   'staff_design_engineer': 'Staff Design Engineer',
   'staff_developer_advocate': 'Staff Developer Advocate',
@@ -2563,6 +2589,7 @@ export const ROLE_ALIASES = {
   'ai_product_engineer': ['ai product engineer', 'ai-product engineer'],
   'analytics_engineer': ['analytics engineer'],
   'android_developer': ['android developer', 'android engineer', 'android software engineer'],
+  'applied_ai_engineer': ['applied ai engineer'],
   'architecture': ['architect', 'cloud architect', 'enterprise architect', 'software architect', 'solutions architect', 'архитектор'],
   'art_director': ['art director'],
   'backend': ['1c', '1с', 'back end', 'back-end', 'backend', 'бекенд', 'бэкенд'],
@@ -2597,6 +2624,7 @@ export const ROLE_ALIASES = {
   'data_science': ['data scien', 'data science', 'data scientist', 'дата-сайентист'],
   'deep_learning_engineer': ['deep learning engineer'],
   'demand_generation_manager': ['demand gen', 'demand generation'],
+  'deployment_engineer': ['deployment engineer'],
   'design': ['design', 'design engineer, product', 'design system engineer', 'design systems engineer', 'designer', 'experience design engineer', 'game design engineer', 'product design engineer', 'service design engineer', 'sound design engineer', 'ui', 'ui design engineer', 'ui/ux design engineer', 'ux', 'ux design engineer', 'web design engineer', 'дизайн', 'дизайнер'],
   'design_engineer': ['design engineer', 'design system engineer', 'design systems engineer', 'product design engineer'],
   'design_ops': ['design operations', 'design ops', 'designops'],
@@ -2615,7 +2643,7 @@ export const ROLE_ALIASES = {
   'financial_analyst': ['financial analyst'],
   'firmware_engineer': ['firmware engineer'],
   'flutter_developer': ['flutter'],
-  'forward_deployed_engineer': ['forward deployed engineer'],
+  'forward_deployed_engineer': ['fde', 'forward deploy', 'forward deployed engineer', 'forward-deployed'],
   'founder': ['co-founder', 'cofounder', 'founder', 'technical co-founder'],
   'founding_designer': ['founding designer'],
   'founding_engineer': ['founding engineer'],

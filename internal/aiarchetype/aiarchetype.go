@@ -75,6 +75,18 @@ var rules = []rule{
 	},
 }
 
+// Archetypes returns every archetype slug the rule table can derive, in
+// priority order. Exposed so callers outside this package (a cross-check test,
+// a future catalog) can enumerate the vocabulary without duplicating the rule
+// table.
+func Archetypes() []string {
+	out := make([]string, len(rules))
+	for i, r := range rules {
+		out[i] = r.archetype
+	}
+	return out
+}
+
 // Derive returns the single skill-signature archetype a job's skills and
 // category resolve to, or "" if category is out of scope or no rule matches.
 // It never returns more than one archetype: the archetypes are the

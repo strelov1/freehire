@@ -1,6 +1,22 @@
 package aiarchetype
 
-import "testing"
+import (
+	"slices"
+	"testing"
+
+	"github.com/strelov1/freehire/internal/vocab"
+)
+
+// Archetypes() is the source of truth for the frontend-facing enum
+// (vocab.AIArchetypeValues, generated into the web contracts); this cross-check
+// guards against the two silently drifting apart.
+func TestArchetypesMatchesVocabValues(t *testing.T) {
+	got := Archetypes()
+	want := vocab.AIArchetypeValues
+	if !slices.Equal(got, want) {
+		t.Errorf("Archetypes() = %v, want vocab.AIArchetypeValues = %v", got, want)
+	}
+}
 
 func TestDerive(t *testing.T) {
 	cases := []struct {

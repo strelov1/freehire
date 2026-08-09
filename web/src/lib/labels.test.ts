@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { CATEGORY_LABELS, RELOCATION_LABELS, categoryLabel, titleCase } from './labels';
+import {
+  CATEGORY_LABELS,
+  RELOCATION_LABELS,
+  AI_ARCHETYPE_LABELS,
+  categoryLabel,
+  titleCase,
+} from './labels';
+import { AI_ARCHETYPE_VALUES } from './generated/contracts';
 
 // Exhaustiveness over the generated vocabulary is enforced by the type checker rather
 // than here: CATEGORY_LABELS carries `satisfies Record<Category, string>`, so
@@ -31,6 +38,18 @@ describe('categoryLabel', () => {
 describe('titleCase', () => {
   it('capitalizes every word of a snake_case code', () => {
     expect(titleCase('network_engineering')).toBe('Network Engineering');
+  });
+});
+
+describe('AI_ARCHETYPE_LABELS', () => {
+  it('covers every generated archetype value with a human label', () => {
+    for (const value of AI_ARCHETYPE_VALUES) {
+      expect(AI_ARCHETYPE_LABELS[value], `missing label for ${value}`).toBeTruthy();
+    }
+  });
+
+  it('spells out RAG rather than title-casing the acronym', () => {
+    expect(AI_ARCHETYPE_LABELS.rag_app_builder).toBe('RAG Application Builder');
   });
 });
 

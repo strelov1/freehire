@@ -47,6 +47,7 @@
     push('Search', f.q.trim() ? [{ text: f.q, exclude: false, remove: () => store.setQuery('') }] : []);
 
     facetGroup('category', 'Specialization');
+    facetGroup('ai_archetype', 'AI Specialization');
     // Location: regions + countries + cities under one heading.
     push('Location', [...facetChips('regions'), ...facetChips('countries'), ...facetChips('cities')]);
 

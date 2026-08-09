@@ -130,4 +130,13 @@ var (
 	}
 	CompanyTypeValues = []string{"product", "startup", "outsource", "outstaff", "agency", "inhouse", "government"}
 	CompanySizeValues = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
+	// AIArchetypeValues is the six AI skill-signature archetype slugs
+	// internal/aiarchetype's rule table can derive, in priority order. Kept here
+	// (rather than only inside internal/aiarchetype) so cmd/gen-contracts can emit
+	// it into the web contracts without importing the AI-enrichment layer; a test
+	// in internal/aiarchetype cross-checks this list against the rule table itself.
+	AIArchetypeValues = []string{
+		"rag_app_builder", "agent_builder", "cloud_ml_platform_engineer",
+		"ml_trainer_researcher", "fullstack_ai_engineer", "devops_infra_engineer",
+	}
 )

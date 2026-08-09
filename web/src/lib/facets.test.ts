@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { COLLECTIONS } from './generated/contracts';
+import { COLLECTIONS, AI_ARCHETYPE_VALUES } from './generated/contracts';
 import { cityOption, countryLabel, FACETS } from './facets';
 
 const collectionOptions = () => FACETS.find((f) => f.param === 'collections')?.options ?? [];
+
+describe('the ai_archetype facet', () => {
+  it('is registered right after category', () => {
+    const categoryIndex = FACETS.findIndex((f) => f.param === 'category');
+    const archetypeIndex = FACETS.findIndex((f) => f.param === 'ai_archetype');
+    expect(archetypeIndex).toBe(categoryIndex + 1);
+  });
+
+  it('offers every generated archetype value as a static select option, with counts', () => {
+    const facet = FACETS.find((f) => f.param === 'ai_archetype');
+    expect(facet?.control).toBe('select');
+    expect(facet?.dynamic).toBeFalsy();
+    const offered = (facet?.options ?? []).map((o) => o.value).toSorted();
+    expect(offered).toEqual(AI_ARCHETYPE_VALUES.toSorted());
+  });
+});
 
 describe('the collections facet', () => {
   it('offers every collection in the registry as a filter option', () => {

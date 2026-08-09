@@ -152,3 +152,16 @@ export const DOMAIN_LABELS: Record<string, string> = {
 };
 
 export const COMPANY_TYPE_LABELS: Record<string, string> = { inhouse: 'In-house' };
+
+// The six AI skill-signature archetypes (vocab.AIArchetypeValues). Listed in full
+// rather than override-only: the title-cased fallback would render "Rag App
+// Builder" for an acronym that must read "RAG", so every value needs an explicit
+// entry regardless.
+export const AI_ARCHETYPE_LABELS: Record<string, string> = {
+  rag_app_builder: 'RAG Application Builder',
+  agent_builder: 'Agent Builder',
+  cloud_ml_platform_engineer: 'Cloud/ML Platform Engineer',
+  ml_trainer_researcher: 'ML Trainer/Researcher',
+  fullstack_ai_engineer: 'Full-Stack AI Engineer',
+  devops_infra_engineer: 'DevOps/Infra Engineer',
+};

@@ -320,6 +320,9 @@ func genVocab() string {
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))
 	b.WriteString(emitVocab("CompanyType", "COMPANY_TYPE_VALUES", vocab.CompanyTypeValues))
 	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", vocab.DomainValues))
+	// The six AI skill-signature archetype slugs (internal/aiarchetype), generated
+	// so the AI Specialization filter's valid values can't drift from the rule table.
+	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
 	// The classified-mail vocabulary. It is generated rather than retyped because the
 	// inbox renders a label and a badge colour per signal, and a signal added in Go
 	// but missing from the SPA's maps rendered as a blank chip with every test green.

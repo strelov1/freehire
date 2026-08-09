@@ -17,12 +17,13 @@ import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, ROLE_LABELS, ROLE_ALIASES,
+  AI_ARCHETYPE_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS, titleCase,
+  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { ROLE_RELATED } from './roleRelated';
@@ -380,6 +381,10 @@ const CATEGORY: FacetOption[] = options(CATEGORY_VALUES, CATEGORY_LABELS);
 // profile's specialization picker) so the same labels/order are shared, not duplicated.
 export const CATEGORY_OPTIONS: FacetOption[] = CATEGORY;
 
+// Six fixed values (internal/aiarchetype) — a static select like CATEGORY/DOMAINS,
+// not a dynamic (distribution-driven) control like role/skills.
+const AI_ARCHETYPE: FacetOption[] = options(AI_ARCHETYPE_VALUES, AI_ARCHETYPE_LABELS);
+
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
 export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
@@ -525,6 +530,7 @@ export const FACETS: FacetDef[] = [
   { param: 'work_mode', label: 'Work format', control: 'pills', options: WORK_MODE, excludable: true },
   { param: 'role', label: 'Role', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search roles', cap: 8, related: ROLE_RELATED, searchAliases: ROLE_ALIASES },
   { param: 'category', label: 'Specialization', control: 'select', options: CATEGORY, excludable: true, placeholder: 'Search specializations' },
+  { param: 'ai_archetype', label: 'AI Specialization', control: 'select', options: AI_ARCHETYPE, excludable: true, placeholder: 'Search AI specializations' },
   { param: 'seniority', label: 'Seniority', control: 'pills', options: SENIORITY, excludable: true },
   { param: 'skills', label: 'Skills', control: 'select', dynamic: true, excludable: true, hasAndOr: true, placeholder: 'Search skills' },
   { param: 'domains', label: 'Industry', control: 'select', options: DOMAINS, excludable: true, placeholder: 'Search industries' },
