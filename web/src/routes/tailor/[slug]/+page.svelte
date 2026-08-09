@@ -21,6 +21,7 @@
   import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
   import CvHtmlPreview from '$lib/tailor/CvHtmlPreview.svelte';
   import CvSectionForm from '$lib/components/cv/CvSectionForm.svelte';
+  import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
   import MarginSettings from '$lib/components/cv/MarginSettings.svelte';
   import TracerLinksSettings from '$lib/components/cv/TracerLinksSettings.svelte';
   import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
@@ -97,14 +98,14 @@
   // switches (hidden, not unmounted) so its live session is never dropped.
   // The left panel holds what CHANGES the document — its text, its template, its typography —
   // and the chat that does all three by asking. Measuring the document is the right panel's job.
-  type LeftTab = 'chat' | 'editor' | 'templates' | 'settings';
+  type LeftTab = 'chat' | 'editor' | 'experience' | 'templates' | 'settings';
   let leftTab = $state<LeftTab>('chat');
-  // Templates before Settings: a template is chosen first and then tuned.
   const leftTabs: [LeftTab, string][] = [
+    ['chat', 'Chat'],
     ['editor', 'Editor'],
+    ['experience', 'Experience'],
     ['templates', 'Templates'],
     ['settings', 'Settings'],
-    ['chat', 'Chat'],
   ];
   let leftWidth = $state(350);
   // Folded to a rail so the centre CV preview can take the width. Desktop-only: below lg the
@@ -124,10 +125,11 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'history';
+  type MobileView = 'chat' | 'editor' | 'experience' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'history';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
+    ['experience', 'Experience'],
     ['templates', 'Templates'],
     ['settings', 'Settings'],
     ['preview', 'Preview'],
@@ -143,7 +145,7 @@
   let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
-    if (v === 'chat' || v === 'editor' || v === 'templates' || v === 'settings') leftTab = v;
+    if (v === 'chat' || v === 'editor' || v === 'experience' || v === 'templates' || v === 'settings') leftTab = v;
     else if (v !== 'preview') artifactTab = v;
   }
 
@@ -562,7 +564,7 @@
         bind:this={leftPanelEl}
         class={[
           'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none',
-          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'templates' || mobileView === 'settings'
+          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'experience' || mobileView === 'templates' || mobileView === 'settings'
             ? 'flex'
             : 'hidden',
           leftCollapsed ? 'lg:hidden' : 'lg:flex',
@@ -622,6 +624,12 @@
             <fieldset disabled={runActive} class="contents">
               <CvSectionForm bind:doc bind:title />
             </fieldset>
+          </div>
+          <!-- The experience bank as its owner sees it on /my/profile — same component, so
+               checking, confirming, or editing what the assistant knows never means leaving the
+               workspace. -->
+          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
+            <ExperienceBankView />
           </div>
           <!-- Presentation, in two blocks of label→control rows. Both write straight into the
                shared document, so the centre preview re-renders live and autosave persists them

@@ -84,6 +84,21 @@
     }
   }
 
+  /** Confirms an unconfirmed atom without opening the edit field: re-submits its own claim
+   *  unchanged, which the server re-stamps to `manual` provenance the same as any edit does. */
+  async function confirmAtom(atom: ExperienceAtom) {
+    if (busy) return;
+    busy = true;
+    try {
+      await api.updateExperienceAtom(atom.id, { ...atom, claim: atom.claim });
+      await load();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not confirm that achievement.';
+    } finally {
+      busy = false;
+    }
+  }
+
   async function removeAtom(atom: ExperienceAtom) {
     if (busy) return;
     if (!confirm(`Remove “${atom.claim}” from your experience?`)) return;
@@ -142,7 +157,8 @@
       <div class="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
         <strong class="font-medium">{needsConfirming} not confirmed.</strong>
         The assistant recorded these as its own reading of something you said. They will not
-        appear on any CV until you confirm them — edit one to make it yours, or remove it.
+        appear on any CV until you confirm them — click the check to confirm as-is, edit one to
+        change it first, or remove it.
       </div>
     {/if}
 
@@ -255,6 +271,18 @@
              the right row means most people never learn it is possible, and a touch device
              never hovers at all. -->
         <div class="flex shrink-0 gap-1">
+          {#if unconfirmed(atom)}
+            <Button
+              size="icon"
+              variant="ghost"
+              onclick={() => confirmAtom(atom)}
+              disabled={busy}
+              aria-label="Confirm achievement"
+              class="text-muted-foreground hover:bg-brand-muted hover:text-brand-strong"
+            >
+              <Check class="size-4" />
+            </Button>
+          {/if}
           <Button
             size="icon"
             variant="ghost"
