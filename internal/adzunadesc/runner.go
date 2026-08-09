@@ -148,7 +148,14 @@ func runWave(ctx context.Context, s Store, fetch FetchFunc, opts RunOptions, cla
 				return
 			}
 
-			dead, failErr := s.Fail(ctx, c.OutboxID, err.Error(), opts.MaxAttempts)
+			// A terminal error (see fetch.go) will answer the same way on a retry, so it
+			// dead-letters on this first attempt regardless of opts.MaxAttempts — no point
+			// spending two more requests to learn the same thing twice.
+			maxAttempts := opts.MaxAttempts
+			if terminal(err) {
+				maxAttempts = 1
+			}
+			dead, failErr := s.Fail(ctx, c.OutboxID, err.Error(), maxAttempts)
 			if failErr != nil {
 				log.Printf("adzunadesc: record failure for capture %d: %v", c.OutboxID, failErr)
 			} else if dead {

@@ -144,6 +144,32 @@ func TestRunRetriesThenDeadLettersAFailingFetch(t *testing.T) {
 	}
 }
 
+func TestRunDeadLettersATerminalFailureOnTheFirstAttempt(t *testing.T) {
+	// errNoJobPosting/errEmptyDescription/a 404 are deterministic: the same URL will
+	// answer the same way every time, so retrying wastes two more requests against a page
+	// already known to fail — confirmed live 2026-08-09 (a normal-looking, non-blocked
+	// Adzuna page whose ld+json simply carries no JobPosting block, majority failure mode
+	// of the first production runs).
+	store := &fakeStore{pending: []Claimed{{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/details/1"}}}
+	fetch := func(_ context.Context, _ string) (string, error) {
+		return "", errNoJobPosting
+	}
+
+	// MaxAttempts=3 would normally take three failing runs to dead-letter (see
+	// TestRunRetriesThenDeadLettersAFailingFetch, which needs MaxAttempts=1 to dead-letter
+	// in one call) — a terminal error skips straight there on the FIRST attempt.
+	stats, err := Run(context.Background(), store, fetch, RunOptions{BatchSize: 10, Concurrency: 1, MaxAttempts: 3})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stats.Failed != 1 || stats.DeadLettered != 1 {
+		t.Errorf("stats = %+v, want Failed=1 DeadLettered=1 (dead-lettered on the first attempt)", stats)
+	}
+	if store.failed[1] != 1 {
+		t.Errorf("Fail was called %d times for outbox 1, want exactly 1", store.failed[1])
+	}
+}
+
 func TestRunStopsAtMaxPerRun(t *testing.T) {
 	store := &fakeStore{pending: []Claimed{
 		{OutboxID: 1, JobID: 10, URL: "https://www.adzuna.co.uk/jobs/details/1"},
