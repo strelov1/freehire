@@ -226,9 +226,13 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 // the cold-start autopilot's inline precondition (ensureCachedAnalysis) — both assemble the exact
 // same input the exact same way; only what happens to the RESULT (credits, response shape,
 // whether the caller even asked for one) differs between them.
-func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker) (*matchanalysis.Analysis, error) {
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
-	return analyzer.Analyze(c.Context(), matchanalysis.Input{
+// buildAnalysisInput assembles the fit chain's input from the candidate's profile and the
+// vacancy. Split out of runAnalysis so a caller that must run the chain from a plain
+// context — the autopilot's post-run refresh, which runs from the SSE writer's detached
+// goroutine after the fiber ctx is gone — can build the Input once, while c is still
+// valid, and carry only the plain value into that goroutine.
+func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker) matchanalysis.Input {
+	return matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
 		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
@@ -241,7 +245,12 @@ func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, prof
 		JobCountries:        job.Countries,
 		LocationPreferences: string(profile.LocationPreferences),
 		Blockers:            blockers,
-	})
+	}
+}
+
+func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker) (*matchanalysis.Analysis, error) {
+	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers))
 }
 
 // ensureCachedAnalysis computes and caches the fit analysis for (user, job) when none is cached
