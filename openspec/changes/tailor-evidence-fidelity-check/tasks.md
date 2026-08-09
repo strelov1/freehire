@@ -32,7 +32,7 @@
 
 ## 4. Verification
 
-- [ ] 4.1 `go build ./... && go vet ./...`
-- [ ] 4.2 `go vet -tags=integration ./...`
-- [ ] 4.3 `go test -tags=integration ./internal/handler/...` (scripted model, no live LLM needed)
-- [ ] 4.4 `go test ./...`
+- [x] 4.1 `go build ./... && go vet ./...`
+- [x] 4.2 `go vet -tags=integration ./...`
+- [x] 4.3 `go test -tags=integration ./internal/handler/...` (scripted model, no live LLM needed)
+- [x] 4.4 `go test ./...`
