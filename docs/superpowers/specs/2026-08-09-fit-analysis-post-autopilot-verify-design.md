@@ -1,5 +1,10 @@
 # Fit analysis: verify after autopilot, not just before — design
 
+> **Superseded:** the change shipped as the OpenSpec change
+> `openspec/changes/fit-analysis-post-autopilot-verify/` (proposal/design/specs/tasks) — that
+> `design.md` is current, including a context-cancellation fix found during implementation review
+> that this doc predates. Kept here as the original architectural rationale.
+
 Builds on `2026-08-09-tailor-coldstart-autopilot-design.md` (fit analysis computed
 in the background around the cold-start autopilot run) and repeals part of the
 `2026-07-31-tailor-job-match-tab` change (the "cached fit analysis is a frozen

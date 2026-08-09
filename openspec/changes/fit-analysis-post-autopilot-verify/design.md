@@ -81,10 +81,18 @@ refreshAnalysis := h.prepareAutopilotAnalysis(c, sess)
 h.layDownRunPlan(c.Context(), sess)
 return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
     err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
-    refreshAnalysis(ctx)
+    refreshAnalysis(context.WithoutCancel(ctx))
     return err
 })
 ```
+
+`ctx` here is the same cancellable context `CancelAssistantTurn` cancels (`streamSSE`'s
+`context.WithCancel(context.Background())`, registered with the turn's `turnRegistry` slot) —
+found during review: without `context.WithoutCancel`, a candidate who stops a run mid-flight
+silently defeats the "unconditional, every time" guarantee, because the refresh's own LLM call
+fails near-instantly against an already-cancelled context. `TestAutopilotRefreshSurvivesACancelledRun`
+(`internal/handler/assistant_autopilot_integration_test.go`) proves the fix by cancelling a
+blocked run mid-turn and asserting the refresh still ran.
 
 `prepareAutopilotAnalysis` (replacing today's `ensureAnalysisForRun`) resolves the job and
 delegates to a new `matchHandlers.prepareAutopilotRun(c, userID, job) func(context.Context)`,
@@ -142,6 +150,13 @@ trade prompt/quality risk for a cost reduction that isn't proven necessary yet. 
   `internal/matchanalysis/AGENTS.md`'s existing "best-effort throughout" rule — on failure the
   previous cached analysis is left as-is; the autopilot turn's own success/failure is unaffected
   (the refresh runs after `runner.Run` has already returned).
+- **[Risk] The session's turn slot stays held for the refresh's duration, not just the turn's.**
+  `turnRegistry.release` (which lets a queued follow-up message on the same session start) fires
+  only after the whole `streamSSE` `start` closure returns — so a message sent right after an
+  autopilot run now waits a few extra seconds for the guaranteed refresh, where it previously
+  didn't. → **Mitigation:** the existing queued-message UX already handles this (an `EventQueued`
+  event plus a one-minute wait), so this is a few extra seconds of "queued," not a new failure
+  mode.
 
 ## Migration Plan
 
