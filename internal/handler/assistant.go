@@ -759,7 +759,10 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	h.layDownRunPlan(c.Context(), sess)
 	return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
 		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
-		refreshAnalysis(ctx)
+		// The refresh is unconditional — it must run even when the candidate cancelled the
+		// run partway through (CancelAssistantTurn cancels this very ctx) — so it runs on a
+		// detached copy, the same way boundRunner's credential-forget already does.
+		refreshAnalysis(context.WithoutCancel(ctx))
 		return err
 	})
 }

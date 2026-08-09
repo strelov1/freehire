@@ -291,11 +291,14 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 // or an analysis was already there. This is what repeals the fit-analysis-post-autopilot-verify
 // design's predecessor rule that the fit analysis is a frozen snapshot of the base profile.
 //
-// Both halves share one assembled Input/Analyzer pair so the profile/blockers/bank reads
-// happen once per autopilot invocation rather than twice. Built here, while c is valid,
-// because the returned closure runs later from the SSE writer's detached goroutine, which
-// only has a plain context.Context (see cacheAnalysis's own comment on the same
-// constraint). Never debits credits — this path, like ensureCachedAnalysis, is unmetered.
+// The Input/Analyzer for the guaranteed refresh is assembled here, before returning, so it
+// closes over plain values rather than c — the closure runs later from the SSE writer's
+// detached goroutine, which only has a plain context.Context (see cacheAnalysis's own
+// comment on the same constraint). ensureCachedAnalysis assembles its own Input on a cache
+// miss; the two are not shared, so a cold cache costs the profile/blockers/bank reads
+// twice in one autopilot invocation — an accepted cost of keeping this function simple,
+// since a cache miss on the run's own vacancy is the rarer path. Never debits credits —
+// this path, like ensureCachedAnalysis, is unmetered.
 func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.Job) func(context.Context) {
 	h.ensureCachedAnalysis(c, userID, job)
 
