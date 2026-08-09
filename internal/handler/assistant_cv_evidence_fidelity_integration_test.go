@@ -20,6 +20,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/experience"
 )
 
@@ -96,6 +97,25 @@ func TestAutopilotRevisesAnOverstatedBulletAfterFidelityCheck(t *testing.T) {
 	if bullet != "Familiar with AWS." {
 		t.Errorf("bullet = %q, want the revised, evidence-faithful wording", bullet)
 	}
+
+	// Both cv_edit calls actually landed as revisions — the fidelity check itself writes
+	// nothing, but the edit it prompted must be as durable and undoable as any other.
+	var feed struct {
+		Data []cvedit.RevisionView `json:"data"`
+	}
+	decodeJSON(t, assistantRequest(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+cvID.String()+"/revisions", cookie, nil), &feed)
+	if len(feed.Data) != 2 {
+		t.Fatalf("revision feed holds %d entries, want 2 (the overstated insert, then its revision): %+v", len(feed.Data), feed.Data)
+	}
+	batch := feed.Data[0].BatchID
+	for _, rev := range feed.Data {
+		if rev.Origin != string(cvedit.OriginTailorAgent) {
+			t.Errorf("revision %+v has origin %q, want %q", rev, rev.Origin, cvedit.OriginTailorAgent)
+		}
+		if rev.BatchID == "" || rev.BatchID != batch {
+			t.Errorf("revision %+v does not share the run's batch id %q — both edits happened in the same turn", rev, batch)
+		}
+	}
 }
 
 // A bad evidence_id must fail the same way it fails everywhere else this tool surface cites
@@ -121,6 +141,10 @@ func TestFidelityCheckRefusesAnUnresolvedEvidenceId(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE cvs SET data = $2::jsonb WHERE id = $1`, cvID, seeded); err != nil {
 		t.Fatalf("seed cv document: %v", err)
 	}
+	var before []byte
+	if err := pool.QueryRow(ctx, `SELECT data FROM cvs WHERE id = $1`, cvID).Scan(&before); err != nil {
+		t.Fatalf("read seeded document: %v", err)
+	}
 
 	resp := assistantRequest(t, app, fiber.MethodPost,
 		"/api/v1/assistant/sessions/"+sessionID+"/autopilot", cookie, nil)
@@ -141,11 +165,22 @@ func TestFidelityCheckRefusesAnUnresolvedEvidenceId(t *testing.T) {
 		t.Errorf("an unresolved evidence_id was not named in the refusal; tool results were %q", model.seen)
 	}
 
-	rec, err := h.cv.cvStore.Get(ctx, cvID, userID)
-	if err != nil {
-		t.Fatalf("get cv: %v", err)
+	// Byte-for-byte against what was seeded — not just the bullets — so a stray write to
+	// any other field would fail this too, not only an unscripted cv_edit that never happened.
+	var after []byte
+	if err := pool.QueryRow(ctx, `SELECT data FROM cvs WHERE id = $1`, cvID).Scan(&after); err != nil {
+		t.Fatalf("read document after the run: %v", err)
 	}
-	if len(rec.Document.Experience) == 0 || len(rec.Document.Experience[0].Bullets) != 0 {
-		t.Fatalf("document = %+v, want the seeded document untouched — the fidelity check never writes", rec.Document)
+	if string(after) != string(before) {
+		t.Errorf("document changed from %s to %s — the fidelity check must never write", before, after)
+	}
+
+	// No revision either: a read-only tool call must not create an entry in the CV's history.
+	var feed struct {
+		Data []cvedit.RevisionView `json:"data"`
+	}
+	decodeJSON(t, assistantRequest(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+cvID.String()+"/revisions", cookie, nil), &feed)
+	if len(feed.Data) != 0 {
+		t.Errorf("revision feed holds %d entries, want 0 — a refused lookup must leave no trace: %+v", len(feed.Data), feed.Data)
 	}
 }
