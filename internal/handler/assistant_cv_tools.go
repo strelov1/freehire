@@ -65,6 +65,7 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchI
 		h.tailorReportTool(cvID),
 		h.requestConfirmationTool(),
 		h.cvJobMatchTool(cvID, jobID),
+		h.cvEvidenceFidelityTool(),
 	}
 }
 
@@ -245,6 +246,57 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 				return map[string]any{"available": false, "reason": "nothing about this vacancy could be matched automatically"}, nil
 			}
 			return map[string]any{"available": true, "score": score}, nil
+		},
+	}
+}
+
+// cvEvidenceFidelityTool re-surfaces the text behind a citation the agent already used, so it
+// can compare its own wording against what the evidence actually says and catch a bullet that
+// claims more scope, seniority, or a bigger metric than it supports. This checks no new fact:
+// the agent already saw the atom's claim once, from experience_search or cv_context, before
+// writing — the value here is the forced second look, not new information. Read-only: no model
+// call, no write to the CV, the report, or the bank.
+func (h *assistantHandlers) cvEvidenceFidelityTool() assistant.Tool {
+	return assistant.Tool{
+		Name: "check_evidence_fidelity",
+		Description: "Re-read the evidence behind an evidence_id you just cited in cv_edit, so you can compare " +
+			"your own wording against it. Call this after writing a bullet, summary, technology, or skill that " +
+			"cites evidence, and revise with cv_edit if what you wrote claims more scope, seniority, or a bigger " +
+			"metric than this evidence actually supports. No model call, and nothing about the CV changes.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"evidence_id": map[string]any{
+					"type":        "string",
+					"description": "The evidence_id you cited in the cv_edit you want to double-check.",
+				},
+			},
+			"required":             []string{"evidence_id"},
+			"additionalProperties": false,
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				EvidenceID string `json:"evidence_id"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			id, err := uuid.Parse(strings.TrimSpace(in.EvidenceID))
+			if err != nil {
+				return nil, errors.New("evidence_id must be an achievement id from experience_search or cv_context")
+			}
+			atom, err := h.experience.GetAtom(ctx, id, userID)
+			if errors.Is(err, experience.ErrNotFound) {
+				return nil, fmt.Errorf("no banked achievement with id %s — check the evidence_id you cited", id)
+			}
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{
+				"claim":   atom.Claim,
+				"context": atom.Context,
+				"metrics": atom.Metrics,
+			}, nil
 		},
 	}
 }

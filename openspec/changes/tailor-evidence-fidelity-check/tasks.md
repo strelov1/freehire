@@ -1,14 +1,14 @@
 ## 1. Fidelity-check tool
 
-- [ ] 1.1 Add a tool function in `internal/handler/assistant_cv_tools.go` (alongside
+- [x] 1.1 Add a tool function in `internal/handler/assistant_cv_tools.go` (alongside
       `cvJobMatchTool`/`cvEditTool`) that takes `evidence_id`, resolves it via the same
       `experienceBankTools`/`bank.GetAtom` read `bankGate.Publishable` already uses, and returns
       `{claim, context, metrics}`. No model call, no write to CV/report/bank. Reuse `cvToolError`-
       style handling for an id that does not resolve (owner isolation: foreign atom reported as
       missing, not forbidden).
-- [ ] 1.2 Register the tool in the tailoring session's tool list next to `cv_edit`/`job_match`
+- [x] 1.2 Register the tool in the tailoring session's tool list next to `cv_edit`/`job_match`
       (wherever that list is assembled for the tailoring preset).
-- [ ] 1.3 Unit test: tool returns the atom's `claim`/`context`/`metrics` for a valid id; returns a
+- [x] 1.3 Unit test: tool returns the atom's `claim`/`context`/`metrics` for a valid id; returns a
       not-found-style error for an unknown or foreign id; makes no state change.
 
 ## 2. Prompt instruction
