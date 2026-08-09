@@ -2,7 +2,10 @@ package skilltag
 
 import (
 	"reflect"
+	"slices"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/vocab"
 )
 
 // TestDictionaryInvariants guards the two properties the engine relies on:
@@ -40,6 +43,23 @@ func TestDictionaryInvariants(t *testing.T) {
 			assertSlug(t, tier+"["+surface+"]", c)
 			if !existing[c] {
 				t.Errorf("%s[%q] → %q is not an existing canonical (would create a new facet value)", tier, surface, c)
+			}
+		}
+	}
+
+	// categoryScopedAcronyms shares the same invariant as the two tiers above (its
+	// canonical must be a valid slug already reachable via an existing alias), plus
+	// its own: every allow-listed category must be a real vocab.CategoryValues
+	// member, so a typo'd category string can't silently make the tier permanently
+	// dead (it would never match any job's resolved category).
+	for surface, ca := range categoryScopedAcronyms {
+		assertSlug(t, "categoryScopedAcronyms["+surface+"]", ca.canonical)
+		if !existing[ca.canonical] {
+			t.Errorf("categoryScopedAcronyms[%q] → %q is not an existing canonical (would create a new facet value)", surface, ca.canonical)
+		}
+		for category := range ca.allowedCategories {
+			if !slices.Contains(vocab.CategoryValues, category) {
+				t.Errorf("categoryScopedAcronyms[%q] allows category %q, not a member of vocab.CategoryValues", surface, category)
 			}
 		}
 	}

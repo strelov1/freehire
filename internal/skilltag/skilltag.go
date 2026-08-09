@@ -133,7 +133,8 @@ func wordTokens(norm string) []string {
 type Option func(*options)
 
 type options struct {
-	resumeAcronyms bool
+	resumeAcronyms  bool
+	acronymCategory string
 }
 
 // WithResumeAcronyms enables the résumé-scoped acronym tier (resumeAcronyms, e.g.
@@ -143,6 +144,15 @@ type options struct {
 // profile's claimed skills) sets it.
 func WithResumeAcronyms() Option {
 	return func(o *options) { o.resumeAcronyms = true }
+}
+
+// WithAcronymCategory enables the category-scoped acronym tier
+// (categoryScopedAcronyms, e.g. RAG) for a Parse call, resolving an acronym
+// only when category is on that acronym's own allow-list. The job ingest path
+// (internal/jobderive) passes the job's already-resolved category; every other
+// caller omits it, so the tier stays off by default.
+func WithAcronymCategory(category string) Option {
+	return func(o *options) { o.acronymCategory = category }
 }
 
 // Parse scans free text and returns the curated canonical skill slugs it contains,
@@ -178,6 +188,16 @@ func Parse(text string, opts ...Option) []string {
 	matchAcronyms(cased, sharedAcronyms, strong)
 	if o.resumeAcronyms {
 		matchAcronyms(cased, resumeAcronyms, strong)
+	}
+	// Inlined rather than routed through matchAcronyms: its map value is a bare
+	// canonical string, but a categoryScopedAcronym also carries the allow-list
+	// matchAcronyms has no way to consult.
+	if o.acronymCategory != "" {
+		for surface, ca := range categoryScopedAcronyms {
+			if ca.allowedCategories[o.acronymCategory] && wordmatch.Contains(cased, surface, wordmatch.UnicodeBoundary) {
+				strong[ca.canonical] = struct{}{}
+			}
+		}
 	}
 
 	norm := normalize(text)

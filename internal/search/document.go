@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/aiarchetype"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -45,6 +46,13 @@ type JobDocument struct {
 	// document (not jobview.Job), so it backs the `roles` facet but is never part
 	// of the served public wire shape.
 	Roles []string `json:"roles"`
+	// AIArchetype is the job's skill-signature AI archetype, derived at index
+	// time by aiarchetype from its already-resolved skills and category (empty
+	// for categories outside its ai_engineering/ml_ai scope, or when no rule
+	// matches). Like Roles, it is declared on the document, not jobview.Job, so
+	// it backs the `ai_archetype` facet but is never part of the served public
+	// wire shape.
+	AIArchetype string `json:"ai_archetype"`
 	// semanticVector is the job's persisted embedding (jobs.semantic_embedding), carried
 	// transiently so a --from-pg rebuild can rehydrate the semantic index from the stored
 	// vectors instead of re-embedding via TEI. Unexported, so it is never serialized into
@@ -69,7 +77,12 @@ func FromJob(j db.Job) (JobDocument, error) {
 	// the search document — the detail endpoint serves the full description from
 	// its own jobview.FromRow, unaffected by this local copy.
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
-	doc := JobDocument{ID: j.ID, Job: view, Roles: roletag.Derive(j.Seniority, j.Category, j.Title)}
+	doc := JobDocument{
+		ID:          j.ID,
+		Job:         view,
+		Roles:       roletag.Derive(j.Seniority, j.Category, j.Title),
+		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
+	}
 	doc.semanticVector = j.SemanticEmbedding
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()

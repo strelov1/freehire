@@ -32,6 +32,7 @@ var StringFacets = map[string]string{
 	"skills":           "skills",
 	"is_tech":          "is_tech",
 	"role":             "roles",
+	"ai_archetype":     "ai_archetype",
 	"reality":          "reality.class",
 	"collections":      "collections",
 	"relocation":       "enrichment.relocation",

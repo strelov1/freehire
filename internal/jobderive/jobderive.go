@@ -172,8 +172,12 @@ func Derive(in Input) Derived {
 		Cities:      cities,
 		WorkMode:    workMode,
 		// Skills is a set: the structured source skills are unioned with the
-		// dictionary skills, neither replacing the other.
-		Skills:             unionSkills(in.Skills, skilltag.Parse(in.Description)),
+		// dictionary skills, neither replacing the other. The category-scoped
+		// acronym tier (e.g. RAG on an ai_engineering/ml_ai job) takes the
+		// resolved local `category` — NOT in.Category — so it also fires when the
+		// title dictionary supplied the category, the common case since most
+		// sources carry no structured category signal.
+		Skills:             unionSkills(in.Skills, skilltag.Parse(in.Description, skilltag.WithAcronymCategory(category))),
 		Seniority:          seniority,
 		Category:           category,
 		IsTech:             isTech,

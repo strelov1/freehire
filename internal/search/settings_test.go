@@ -50,6 +50,19 @@ func TestRolesIsFilterable(t *testing.T) {
 	}
 }
 
+func TestAIArchetypeIsFilterable(t *testing.T) {
+	// The ai_archetype facet filters on a bare top-level `ai_archetype` attribute
+	// (derived at index time by aiarchetype), so it must be declared filterable
+	// for `ai_archetype=` to take effect.
+	s := facetSettings()
+	if !contains(s.FilterableAttributes, "ai_archetype") {
+		t.Errorf("ai_archetype must be filterable for the ai_archetype facet, got %v", s.FilterableAttributes)
+	}
+	if StringFacets["ai_archetype"] != "ai_archetype" {
+		t.Errorf("StringFacets[ai_archetype] = %q, want the bare attribute \"ai_archetype\"", StringFacets["ai_archetype"])
+	}
+}
+
 func TestIsTechIsFilterableFacet(t *testing.T) {
 	// is_tech is served top-level (jobview) and filtered on the bare attribute, so it
 	// must be declared filterable for `is_tech=` to take effect and its facet counts.

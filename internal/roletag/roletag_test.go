@@ -85,6 +85,18 @@ func TestDerive(t *testing.T) {
 
 		// Never guesses: no seniority, no category, no named alias.
 		{"nothing resolvable", "", "", "Rockstar Ninja Guru", nil},
+
+		// FDE alias coverage (refine-ai-role-classification): the field guide's own
+		// matching rule is title contains "FDE" or "forward deploy", case-insensitive.
+		{"bare fde", "", "ai_engineering", "FDE - Enterprise AI", []string{"ai_engineering", "forward_deployed_engineer"}},
+		{"forward deploy engineer", "", "ai_engineering", "Forward Deploy Engineer", []string{"ai_engineering", "forward_deployed_engineer"}},
+		{"forward-deployed engineer hyphenated", "", "ai_engineering", "Forward-Deployed Engineer", []string{"ai_engineering", "forward_deployed_engineer"}},
+		{"forward deployed engineer unchanged", "", "ai_engineering", "Forward Deployed Engineer", []string{"ai_engineering", "forward_deployed_engineer"}},
+		// Synonym titles get their own slug, not merged into FDE — title fidelity.
+		{"applied ai engineer own slug", "", "ai_engineering", "Applied AI Engineer", []string{"ai_engineering", "applied_ai_engineer"}},
+		{"deployment engineer own slug", "", "", "Deployment Engineer", []string{"deployment_engineer"}},
+		// Gradeable, like every other single-phrase named role in this table.
+		{"senior forward deployed engineer composes", "senior", "ai_engineering", "Senior Forward Deployed Engineer", []string{"senior", "ai_engineering", "senior_ai_engineering", "forward_deployed_engineer", "senior_forward_deployed_engineer"}},
 	}
 
 	for _, tc := range cases {

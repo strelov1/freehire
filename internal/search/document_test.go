@@ -116,6 +116,56 @@ func TestMergeClusterGeography_EmptyClusterLeavesFacetsUnchanged(t *testing.T) {
 	}
 }
 
+func TestFromJob_AIArchetypeDerivedButIndexOnly(t *testing.T) {
+	doc, err := FromJob(db.Job{
+		ID: 1, PublicSlug: "s", Category: "ai_engineering",
+		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
+	})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if doc.AIArchetype != "rag_app_builder" {
+		t.Errorf("ai_archetype = %q, want rag_app_builder", doc.AIArchetype)
+	}
+
+	// A non-AI category yields no archetype, regardless of skills.
+	nonAI, err := FromJob(db.Job{
+		ID: 2, PublicSlug: "s2", Category: "backend",
+		Skills: []string{"rag", "langchain", "langgraph", "vector-databases"},
+	})
+	if err != nil {
+		t.Fatalf("FromJob: %v", err)
+	}
+	if nonAI.AIArchetype != "" {
+		t.Errorf("ai_archetype = %q, want empty for category backend", nonAI.AIArchetype)
+	}
+
+	// ai_archetype rides the document top level (like roles) so it is filterable...
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("marshal doc: %v", err)
+	}
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &full); err != nil {
+		t.Fatalf("unmarshal doc: %v", err)
+	}
+	if _, ok := full["ai_archetype"]; !ok {
+		t.Errorf("document should carry a top-level ai_archetype field: %s", raw)
+	}
+	// ...but it must NOT be part of the public wire shape (the served jobview.Job).
+	viewRaw, err := json.Marshal(doc.Job)
+	if err != nil {
+		t.Fatalf("marshal view: %v", err)
+	}
+	var view map[string]json.RawMessage
+	if err := json.Unmarshal(viewRaw, &view); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	if _, ok := view["ai_archetype"]; ok {
+		t.Errorf("ai_archetype leaked into the public job wire shape: %s", viewRaw)
+	}
+}
+
 func TestFromJob_DocumentFlattensIDAndViewToTopLevelJSON(t *testing.T) {
 	// Meilisearch reads the primary key "id" from the top level of the document,
 	// and the embedded jobview.Job must flatten (no nesting) so its fields are

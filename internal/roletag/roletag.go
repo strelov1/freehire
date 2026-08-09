@@ -115,7 +115,16 @@ var namedRoleTable = []struct {
 	{"founding_pm", "Founding Product Manager", []string{"founding product manager", "founding pm"}},
 	{"staff_engineer", "Staff Engineer", []string{"staff engineer"}},
 	{"technical_lead", "Technical Lead", []string{"technical lead", "tech lead"}},
-	{"forward_deployed_engineer", "Forward Deployed Engineer", []string{"forward deployed engineer"}},
+	// Alias set matches the field guide's own FDE methodology: title contains "FDE"
+	// or "forward deploy", case-insensitive. "forward-deployed" is its own alias
+	// because a hyphen is a word boundary here (same trap documented elsewhere in
+	// this table) — "forward deploy" alone would not match the hyphenated spelling.
+	{"forward_deployed_engineer", "Forward Deployed Engineer", []string{"forward deployed engineer", "forward deploy", "forward-deployed", "fde"}},
+	// Field-guide-documented synonym titles for the same class of work, kept as
+	// their own slugs rather than merged into forward_deployed_engineer — a job's
+	// derived role should reflect the title it was actually posted under.
+	{"applied_ai_engineer", "Applied AI Engineer", []string{"applied ai engineer"}},
+	{"deployment_engineer", "Deployment Engineer", []string{"deployment engineer"}},
 	{"growth_engineer", "Growth Engineer", []string{"growth engineer"}},
 	{"developer_advocate", "Developer Advocate", []string{"developer advocate", "developer relations", "developer evangelist", "devrel"}},
 	{"research_engineer", "Research Engineer", []string{"research engineer"}},

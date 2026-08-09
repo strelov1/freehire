@@ -171,6 +171,35 @@ func TestParse_Acronyms(t *testing.T) {
 	}
 }
 
+// Category-scoped acronym pass (refine-ai-role-classification): RAG resolves on
+// job text when the caller supplies a job category on the acronym's own
+// allow-list (ai_engineering, ml_ai), and does not resolve otherwise — the
+// category already evidences an AI-flavored posting, so it substitutes for
+// corroboration without reopening the "RAG status" collision catalogue-wide.
+func TestParse_CategoryScopedAcronyms(t *testing.T) {
+	has := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+
+	if got := Parse("Built RAG pipelines over pgvector", WithAcronymCategory("ai_engineering")); !has(got, "rag") {
+		t.Errorf("Parse RAG (category ai_engineering) = %v, want rag", got)
+	}
+	if got := Parse("Built RAG pipelines over pgvector", WithAcronymCategory("ml_ai")); !has(got, "rag") {
+		t.Errorf("Parse RAG (category ml_ai) = %v, want rag", got)
+	}
+	if got := Parse("We report RAG status weekly", WithAcronymCategory("backend")); has(got, "rag") {
+		t.Errorf("Parse 'RAG status' (category backend) = %v, must not emit rag", got)
+	}
+	if got := Parse("Built RAG pipelines over pgvector"); has(got, "rag") {
+		t.Errorf("Parse RAG (no category option) = %v, must not emit rag", got)
+	}
+}
+
 // New tech/methodology vocabulary (skills-vocab-gaps): each resolves from a
 // realistic description; bare "rest" never tags (only "REST API"/"RESTful").
 func TestParse_NewTechVocab(t *testing.T) {
@@ -196,6 +225,7 @@ func TestParse_NewTechVocab(t *testing.T) {
 		{"rest via rest api", "You will design a REST API.", []string{"rest"}, nil},
 		{"power bi", "Dashboards in Power BI.", []string{"powerbi"}, nil},
 		{"rest trap", "You will support the rest of the team and ship features.", nil, []string{"rest"}},
+		{"mcp", "Experience building tools with MCP and LangGraph.", []string{"mcp"}, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

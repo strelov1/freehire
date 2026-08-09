@@ -2,6 +2,7 @@ package jobderive
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/normalize"
@@ -379,6 +380,48 @@ func TestDerive_SourceSkillsUnionWithDictionary(t *testing.T) {
 	})
 	if !reflect.DeepEqual(got.Skills, []string{"go", "kubernetes"}) {
 		t.Errorf("Skills = %v, want [go kubernetes] (source ∪ dictionary, deduped+sorted)", got.Skills)
+	}
+}
+
+// The job's resolved category is passed into skilltag.Parse's category-scoped
+// acronym tier (refine-ai-role-classification), so a bare "RAG" mention resolves
+// to the "rag" skill on an AI-category job — closing the under-tagging gap the
+// résumé-only acronym left on job postings. Input.Category is deliberately left
+// empty here: the resolved category must come from the title dictionary
+// (class.Category), the common real-world path since most sources carry no
+// structured category signal — passing the raw in.Category instead of the
+// resolved local would compile fine and pass a test that set Category directly,
+// but silently miss this path.
+func TestDerive_CategoryScopedAcronymFillsSkills(t *testing.T) {
+	got := Derive(Input{
+		Title:       "AI Engineer", // resolves to category ai_engineering via the title dictionary
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "1",
+		Description: "Built RAG pipelines over pgvector.",
+	})
+	if got.Category != "ai_engineering" {
+		t.Fatalf("Category = %q, want ai_engineering (test setup precondition)", got.Category)
+	}
+	if !slices.Contains(got.Skills, "rag") {
+		t.Errorf("Skills = %v, want to contain \"rag\" (category-scoped RAG acronym)", got.Skills)
+	}
+}
+
+// The category-scoped acronym tier only fires for categories on its own
+// allow-list — a category outside ai_engineering/ml_ai must not tag bare "RAG",
+// same as today.
+func TestDerive_CategoryScopedAcronymDoesNotFireOutsideAllowList(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Backend Engineer",
+		Company:     "Acme",
+		Source:      "getmatch",
+		ExternalID:  "1",
+		Category:    "backend",
+		Description: "We report RAG status weekly.",
+	})
+	if slices.Contains(got.Skills, "rag") {
+		t.Errorf("Skills = %v, must not contain \"rag\" for category backend", got.Skills)
 	}
 }
 

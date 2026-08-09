@@ -245,21 +245,25 @@ var wordAliases = map[string]string{
 	"langgraph":  "langgraph",
 	"langsmith":  "langsmith",
 	"llamaindex": "llamaindex",
-	"crewai":     "crewai",
-	"autogen":    "autogen",
-	"anthropic":  "anthropic",
-	"cohere":     "cohere",
-	"mistral":    "mistral",
-	"ollama":     "ollama",
-	"vllm":       "vllm",
-	"tensorrt":   "tensorrt",
-	"triton":     "triton",
-	"onnx":       "onnx",
-	"deepspeed":  "deepspeed",
-	"bentoml":    "bentoml",
-	"peft":       "peft",
-	"yolo":       "yolo",
-	"sagemaker":  "sagemaker",
+	// "Microsoft Certified Professional" is the only real-world collision, and it's a
+	// legacy-2000s abbreviation essentially absent from current job postings — unlike the
+	// live English-word collisions ambiguousWords exists for. Strong, ungated alias.
+	"mcp":       "mcp",
+	"crewai":    "crewai",
+	"autogen":   "autogen",
+	"anthropic": "anthropic",
+	"cohere":    "cohere",
+	"mistral":   "mistral",
+	"ollama":    "ollama",
+	"vllm":      "vllm",
+	"tensorrt":  "tensorrt",
+	"triton":    "triton",
+	"onnx":      "onnx",
+	"deepspeed": "deepspeed",
+	"bentoml":   "bentoml",
+	"peft":      "peft",
+	"yolo":      "yolo",
+	"sagemaker": "sagemaker",
 	// mobile
 	"android": "android",
 	"ios":     "ios",
@@ -1207,4 +1211,25 @@ var sharedAcronyms = map[string]string{
 // in résumés that collision is near-absent. Each value is an existing canonical.
 var resumeAcronyms = map[string]string{
 	"RAG": "rag",
+}
+
+// categoryScopedAcronym pairs a canonical with the job categories it may resolve
+// for (see WithAcronymCategory) — a third acronym tier, for a term ambiguous in
+// job text generally but unambiguous within a specific category. The category
+// already evidences an AI-flavored posting (it required an AI-flavored title to
+// classify into it), so it substitutes for corroboration without reopening the
+// collision catalogue-wide.
+type categoryScopedAcronym struct {
+	canonical         string
+	allowedCategories map[string]bool
+}
+
+// categoryScopedAcronyms resolve on JOB text only when the caller supplies a
+// category on the acronym's own allow-list. RAG collides with "RAG status"
+// (red/amber/green project health) in general job text — hence resumeAcronyms
+// above — but within ai_engineering/ml_ai postings that collision is negligible
+// and the acronym is the dominant real-world spelling (vs. the spelled-out
+// "retrieval augmented generation" phrase).
+var categoryScopedAcronyms = map[string]categoryScopedAcronym{
+	"RAG": {canonical: "rag", allowedCategories: map[string]bool{"ai_engineering": true, "ml_ai": true}},
 }

@@ -810,6 +810,9 @@ func facetSettings() *meilisearch.Settings {
 			// roles is derived at index time (roletag) and served top-level like the
 			// other bare facets, so it filters on the plain attribute, not a dot path.
 			"roles",
+			// ai_archetype is derived at index time (aiarchetype) from skills+category,
+			// same pattern as roles.
+			"ai_archetype",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",
