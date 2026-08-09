@@ -1,26 +1,38 @@
-# Programmatic SEO: cross-linked filter & company collections
+# Programmatic SEO: collection count-in-title & job-page cross-links
 
 **Date:** 2026-08-09
 **Status:** approved, not yet planned/implemented
 
 ## Problem
 
-`freehire` already has a job-facet-based programmatic SEO surface
-(`/collections/[slug]`, backed by `FILTER_COLLECTIONS` in `web/src/lib/collections.ts`)
-covering remote-region and skill landing pages. Three gaps limit its SEO value:
+`freehire` already has a unified `/collections/[slug]` programmatic SEO surface
+covering **two** kinds of collection: filter collections (`FILTER_COLLECTIONS` in
+`web/src/lib/collections.ts` — remote-region, skill, category, seniority, role
+landings, frontend-only) and company collections (`internal/collections`'s
+registry — YC, Techstars, a16z, Big Tech, Unicorns, visa-sponsor registers —
+propagated onto every job as `jobs.collections` and resolved through the same
+route via `COLLECTIONS` in `web/src/lib/generated/contracts.ts`). Two gaps limit
+its SEO value:
 
 1. Its `<title>`/`<h1>`/OG tags are static strings — they never surface the live
    job count, so search snippets look generic and don't communicate freshness/scale.
-2. The collection list is small and hand-picked; several obvious high-intent
-   patterns (more countries, more roles, more skills) aren't covered.
-3. There's no internal-link path from a job posting into these collection pages,
-   so Google has to discover and re-crawl them independently rather than reaching
-   them from the highest-volume page type on the site (job postings).
-4. Company-level facets that already exist as filterable data — YC status
-   (`yc_flags`, `yc_batch`), industry, company type — have no landing-page
-   equivalent at all; they're only reachable via manual `/companies?...` filters.
+   This applies to both collection kinds, since they render through the one route.
+2. The filter-collection list is small and hand-picked; several obvious
+   high-intent patterns (more countries, more roles, more skills) aren't covered.
+3. There's no internal-link path from a job posting into either collection kind's
+   landing pages, so Google has to discover and re-crawl them independently
+   rather than reaching them from the highest-volume page type on the site (job
+   postings).
+
+Company-level landing pages (YC, Big Tech, etc.) already exist and are
+out of scope here — the only gap for them is #1 and #3 above, both already
+covered by the design below since the two kinds share one route.
 
 ## Non-goals
+
+- No new company-collection page type or route — `/collections/yc` and its
+  siblings already exist (`internal/collections`'s registry, unified with
+  `FILTER_COLLECTIONS` through `collectionBySlug`). Nothing here duplicates that.
 
 - No auto-generated cross-product of every facet combination. Combinations stay
   hand-curated (same discipline as today's `FILTER_COLLECTIONS`: each entry is
@@ -78,68 +90,50 @@ that already exist as first-class dictionary entries (`internal/skilltag`,
 No structural change to the `FilterCollection` type or the route — this is
 purely growing the array.
 
-### 3. New company-collection page type
-
-Mirrors the job-collection pattern one-to-one for company-level facets
-(`yc_flags`, `yc_batch`, `company_type`, `subindustry` — all already
-filterable on `GET /api/v1/companies`, per `internal/ycdir/AGENTS.md` and
-`internal/handler/companies.go`).
-
-- New data file, same shape as `FilterCollection`: `slug`, `title`,
-  `description`, `params` (company-search facet params instead of job-search
-  ones). Lives alongside `FILTER_COLLECTIONS` in `collections.ts` as e.g.
-  `COMPANY_FILTER_COLLECTIONS`, or a sibling file if that keeps the module
-  focused — implementation's call.
-- New route `web/src/routes/companies/collections/[slug]/+page.svelte` +
-  `+page.server.ts`, structurally mirroring `collections/[slug]`: resolve slug
-  → params, SSR the first page of `/companies` filtered by those params, live
-  count from the list response total.
-- Title/H1/OG pattern matches part 1: `"{total} {title} · freehire"`, e.g.
-  `"142 YC Companies Hiring · freehire"`.
-- First entries: YC-backed (`yc_flags` overlap on `hiring` and/or `top_company`),
-  possibly split by `yc_batch` era if counts justify it. Do not import YC
-  `tier` as a facet (project convention, per `hire-backer-badges-shipped`:
-  tier is not meant to be surfaced as a market-facing facet).
-
-### 4. "See also" block on the job posting page
+### 3. "See also" block on the job posting page
 
 New component (or inline block) on `web/src/routes/jobs/[slug]` (the job
-detail page) rendering a fixed-size set of internal links
-(target ~4-6) built from two independent sources, evaluated at SSR time using
-data the job page already has loaded (its own facets, and its company's
-`yc_flags`):
+detail page) rendering a fixed-size set of internal links (target ~4-6) built
+from two independent sources, evaluated at SSR time using data the job page
+already has loaded — its own facets, and its own `collections` field (already
+populated by the existing propagation from company membership, per
+`internal/collections`):
 
 - **Source A — job facets:** the current job's role/category, region
   (country/remote-region), and skills, matched against existing
   `FILTER_COLLECTIONS` entries (exact `params` match against the job's own
   facet values — e.g. job has `skills: ['react']` → matches the `react`
   collection entry).
-- **Source B — company facts:** if the job's company has YC flags set, match
-  against `COMPANY_FILTER_COLLECTIONS` (e.g. `yc_flags` includes `hiring` →
-  link to the YC-hiring company collection).
+- **Source B — company collections:** the job's own `collections` field (e.g.
+  `['yc']` for a YC-backed company's job) matched against the existing
+  `COLLECTIONS` registry (`web/src/lib/generated/contracts.ts`, mirroring
+  `internal/collections`) — no new data source, this field already exists on
+  every job today.
 - **Fill logic:** concatenate A then B matches (order: most specific first —
-  skill/role before region, job facets before company facts), dedupe by slug,
-  then if the combined count is below the target size, pad with a fixed
+  skill/role before region, job facets before company collections), dedupe by
+  slug, then if the combined count is below the target size, pad with a fixed
   fallback list of the most general/popular collections (e.g.
   `remote-worldwide`, top 1-2 skill collections) until the target is reached
   or the available collection pool is exhausted (never fabricate a link to a
   non-existent slug).
-- Every link target is a real, already-existing `/collections/[slug]` or
-  `/companies/collections/[slug]` page — this block never links to a slug
-  that isn't in one of the two curated arrays.
+- Every link target is a real, already-existing `/collections/[slug]` page
+  (the one unified route resolves both `FILTER_COLLECTIONS` and `COLLECTIONS`
+  slugs already) — this block never links to a slug that isn't in one of the
+  two curated arrays.
 - No live count fetch needed for the block itself (the linked pages compute
   their own count on load); the block only needs the two static arrays plus
-  the current job/company's already-loaded facet values.
+  the current job's already-loaded `collections`/facet values.
 
 ## Testing
 
 - Unit test for the "see also" matching/padding logic (source A + source B +
   dedupe + fallback-fill + never-exceed-available-pool), independent of any
-  HTTP call — pure function over (job facets, company facts, both collection
+  HTTP call — pure function over (job facets, job collections, both registry
   arrays) → ordered slug list.
-- Verify title/H1/OG count interpolation on both collection route types with
-  a fixture total (e.g. snapshot the rendered `<title>` string given a known
-  `meta.total`).
-- Manual check per new `FILTER_COLLECTIONS`/`COMPANY_FILTER_COLLECTIONS` entry
-  during implementation: live count is non-empty (same discipline as existing
-  entries), per the design's non-goal on avoiding thin pages.
+- Verify title/H1/OG count interpolation on `/collections/[slug]` with a
+  fixture total (e.g. snapshot the rendered `<title>` string given a known
+  `meta.total`), covering one filter-collection slug and one company-collection
+  slug since they share the route.
+- Manual check per new `FILTER_COLLECTIONS` entry during implementation: live
+  count is non-empty (same discipline as existing entries), per the design's
+  non-goal on avoiding thin pages.
