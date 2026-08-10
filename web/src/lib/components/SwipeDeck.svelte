@@ -8,6 +8,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { cardTags, formatSalary } from '$lib/enrichment';
   import { FilterStore, filtersToParams } from '$lib/filters';
+  import { toSearchString } from '$lib/urlSearchString';
   import { latestOnly } from '$lib/latestOnly';
   import type { Job, FacetCounts } from '$lib/types';
   import { Badge } from '$lib/ui';
@@ -182,7 +183,7 @@
   // Leave the deck. Carry the (possibly refined) filters back to the list so it
   // reflects what the swipe session ended on.
   function close() {
-    const qs = deckParams().toString();
+    const qs = toSearchString(deckParams());
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/') + (qs ? `?${qs}` : ''));
   }

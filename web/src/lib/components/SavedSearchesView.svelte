@@ -8,6 +8,7 @@
   import { notifications } from '$lib/notifications.svelte';
   import type { SavedSearch } from '$lib/types';
   import { Button, Input } from '$lib/ui';
+  import { toSearchString } from '$lib/urlSearchString';
   import ProviderIcon from './ProviderIcon.svelte';
   import AlertChannels from './filters/AlertChannels.svelte';
   import States from './States.svelte';
@@ -99,6 +100,13 @@
   // renders after auth on the client, so origin is always available here.
   function boardUrl(slug: string): string {
     return `${location.origin}/b/${slug}`;
+  }
+
+  // The stored query may carry a %2C from URLSearchParams' own encoding (see
+  // urlSearchString.ts); normalize it back to a literal comma for the "Open" link
+  // so a multi-value facet reads the same compact way it does everywhere else.
+  function openHref(query: string): string {
+    return `/?${toSearchString(new URLSearchParams(query))}`;
   }
 
   function startShare(s: SavedSearch) {
@@ -246,7 +254,7 @@
                 </span>
               </div>
               <div class="flex shrink-0 items-center gap-1">
-                <Button variant="secondary" size="sm" href={`/?${s.query}`}>Open</Button>
+                <Button variant="secondary" size="sm" href={openHref(s.query)}>Open</Button>
                 <button
                   type="button"
                   aria-label="Rename “{s.name}”"

@@ -30,6 +30,7 @@
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
+  import { toSearchString } from '$lib/urlSearchString';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import { track } from '$lib/analytics';
   import type { Job, FacetCounts } from '$lib/types';
@@ -346,7 +347,7 @@
   // fixed context (e.g. company_slug) and go along too.
   function openSwipe() {
     const params = scopedParams();
-    const qs = params.toString();
+    const qs = toSearchString(params);
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/jobs/swipe') + (qs ? `?${qs}` : ''));
   }
