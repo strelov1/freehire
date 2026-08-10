@@ -1,13 +1,13 @@
 ## 1. Data model
 
-- [ ] 1.1 Add migration: `talent_network_visibility` enum column on `users`
+- [x] 1.1 Add migration: `talent_network_visibility` enum column on `users`
       (`off` / `public` / `anonymous`, default `off`, not null) plus a
       `talent_network_public_id uuid DEFAULT gen_random_uuid() NOT NULL
       UNIQUE` column for the opaque public URL. Do NOT touch `users.id` — this
       is a new, feature-scoped column, not a PK swap (see design.md decision
       and `hire-opaque-ids-uuid-swap` precedent for why a PK swap is the wrong
       tool here).
-- [ ] 1.2 Add sqlc queries: get/set `talent_network_visibility` for a user by
+- [x] 1.2 Add sqlc queries: get/set `talent_network_visibility` for a user by
       `users.id` (owner-scoped), and a lookup by `talent_network_public_id`
       returning the fields the public page needs (visibility,
       resume_structured, user_profiles join). Run `make sqlc`.
