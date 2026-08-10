@@ -93,9 +93,23 @@ func (h *talentNetworkProfileHandlers) GetProfile(c *fiber.Ctx) error {
 		_ = json.Unmarshal(row.ResumeStructured, &structured)
 	}
 
+	// row.Specializations/row.Skills come from a LEFT JOIN to user_profiles (a candidate
+	// can enable visibility before ever saving a profile), so they are nil rather than
+	// []string{} when that row doesn't exist. types.ts declares both non-nullable
+	// string[]; default them here so the wire contract never lies, even though the
+	// frontend also defends with `?? []`.
+	specializations := row.Specializations
+	if specializations == nil {
+		specializations = []string{}
+	}
+	skills := row.Skills
+	if skills == nil {
+		skills = []string{}
+	}
+
 	resp := talentNetworkProfileResponse{
-		Specializations: row.Specializations,
-		Skills:          row.Skills,
+		Specializations: specializations,
+		Skills:          skills,
 	}
 	if row.TalentNetworkVisibility == "anonymous" {
 		resp.CV = structured.Anonymous()

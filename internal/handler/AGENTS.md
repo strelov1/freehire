@@ -147,6 +147,13 @@ every later turn, so a name that lands there stays for the conversation's life. 
 caller with no profile gets a result naming `/my/profile`, never an error and never an
 empty profile the model would read as "no preferences".
 
+## Talent Network public profile (`talent_network_profile.go`)
+
+- `GET /talent-network/:publicID` is the **only** unauthenticated route that serves candidate CV content — it takes no `mw` middleware at all, unlike `get_profile`/`GET /me/profile`, which at least require a session or key. `:publicID` is `users.talent_network_public_id` (an opaque UUID, never `users.id`), minted for every user by migration `0085` regardless of opt-in state.
+- **The 404-identity invariant:** `talent_network_visibility = 'off'` and "no such id" render the byte-identical `{"error":"not found"}` body. A malformed (non-UUID) `:publicID` also 404s rather than 400 — see `talentNetworkPublicID` — so a probe cannot distinguish "not a UUID" from "no such profile" from "a real profile that opted out". Do not add a distinct status/message for any of these three cases; that is the leak this route is built to not have.
+- The response body is built from `resumeextract.Structured.Anonymous()`/`.Public()` (`internal/resumeextract/visibility.go`), never `Structured` or `Professional` directly — those two functions are the only place project-link stripping and current-employer masking happen, so this handler must not re-derive or bypass them (e.g. by reaching into `row.ResumeStructured` for anything but the `json.Unmarshal` into `Structured`).
+- `full_name` is populated only for `visibility = 'public'`; `GetProfile` leaves it as the Go zero value for `'anonymous'`, and `omitempty` drops the key entirely rather than serializing it empty — there is no name field an anonymous response could accidentally carry.
+
 ## Application forms (`apply_form.go`)
 
 - `GET /jobs/:slug/apply-form` serves the questions a posting's application will ask,

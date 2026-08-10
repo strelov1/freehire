@@ -29,11 +29,22 @@
 -- of the 2026-07-30 incident 0071 documents.
 --
 -- So: run the statements outside a transaction, and use the split 0049/0071
--- already name as the remedy. ADD COLUMN with a non-volatile default
--- ('off'::text) is metadata-only (PG11+), ADD ... NOT VALID skips the scan,
--- and VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE, which blocks
--- neither readers nor writers. Validation cannot fail: every existing row's
--- default is 'off', which the CHECK permits.
+-- already name as the remedy for the CHECK constraint. ADD COLUMN with a
+-- non-volatile default ('off'::text) is metadata-only (PG11+); ADD ... NOT
+-- VALID skips the scan, and VALIDATE CONSTRAINT takes only SHARE UPDATE
+-- EXCLUSIVE, which blocks neither readers nor writers. Validation cannot
+-- fail: every existing row's default is 'off', which the CHECK permits.
+--
+-- talent_network_public_id is a DIFFERENT story: gen_random_uuid() is a
+-- VOLATILE function, and PG11's ADD COLUMN fast path only applies to a
+-- non-volatile default — a volatile one still forces Postgres to rewrite
+-- every row (to mint each one its own uuid) under ACCESS EXCLUSIVE, same as
+-- before PG11. That statement is therefore NOT metadata-only, despite
+-- running in the same no-transaction file as the one that is. It is
+-- accepted here only because `users` is small today; this file is not a
+-- copy-paste precedent for adding a random-default column to a large or hot
+-- table — that would need the nullable-column-plus-batched-backfill pattern
+-- this migration deliberately does not use.
 --
 -- Applied to a fresh volume by initdb after 0084; on an existing prod volume
 -- run this manually (SET ROLE hire) BEFORE deploying code that reads it.

@@ -17,10 +17,11 @@ existing yet.
 - New public, unauthenticated page at a stable, unguessable URL per candidate,
   rendering their profile according to the selected mode:
   - `off` → 404 for everyone but the owner (who manages it from `my/profile`).
-  - `public` → name, photo, work history, skills. No email/phone/links.
-  - `anonymous` → same as `public` minus name and photo, plus the most recent
-    `experience` entry's company name is masked (older entries are shown
-    as-is).
+  - `public` → name, work history, skills. No email/phone/links, no project
+    links, and no photo yet (deferred — see design.md's Non-Goals).
+  - `anonymous` → same as `public` minus the name, plus every `experience`
+    entry whose `End` reads as "not ended" (content-based, not positional —
+    see design.md) has its company name masked.
 - No new parsing: page content is sourced entirely from the existing
   `users.resume_structured` (via `internal/resumeextract`) and `user_profiles`.
 

@@ -164,6 +164,43 @@ func TestTalentNetworkProfile_AnonymousMode(t *testing.T) {
 	forbidSubstrings(t, body, "ada@example.com", "+1-555-0100", "linkedin.com/in/ada")
 }
 
+// TestTalentNetworkProfile_ProjectLinkNeverReachesEitherMode is an end-to-end regression
+// test for the whole-branch-review finding: Structured.Professional() strips contact
+// fields but did not strip Project.Link, so a candidate's GitHub/portfolio URL — a
+// de-anonymizing identifier stronger than the name anonymous mode withholds — was
+// reaching this unauthenticated route through both modes. The fix lives in
+// internal/resumeextract/visibility.go; this test exercises the whole HTTP path so a
+// future change that bypasses Anonymous()/Public() (e.g. serializing row.ResumeStructured
+// some other way) fails here too, not just at the unit level.
+func TestTalentNetworkProfile_ProjectLinkNeverReachesEitherMode(t *testing.T) {
+	for _, visibility := range []string{"public", "anonymous"} {
+		t.Run(visibility, func(t *testing.T) {
+			structured := resumeextract.Structured{
+				FullName: "Ada Lovelace",
+				Projects: []resumeextract.Project{
+					{Name: "difference-engine", Link: "https://github.com/ada-lovelace"},
+				},
+			}
+			store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{
+				TalentNetworkVisibility: visibility,
+				ResumeStructured:        mustMarshal(t, structured),
+			}}
+			app := talentNetworkProfileApp(store)
+
+			resp := doTalentNetworkProfile(t, app, uuid.New().String())
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("status = %d, want 200", resp.StatusCode)
+			}
+
+			body := talentNetworkReadBody(t, resp)
+			forbidSubstrings(t, body, "github.com/ada-lovelace")
+			if !strings.Contains(body, "difference-engine") {
+				t.Errorf("project name should still be shown, only the link stripped: %s", body)
+			}
+		})
+	}
+}
+
 func TestTalentNetworkProfile_VisibilityOff(t *testing.T) {
 	store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{TalentNetworkVisibility: "off"}}
 	app := talentNetworkProfileApp(store)
@@ -215,6 +252,34 @@ func TestTalentNetworkProfile_OffAndNotFoundHaveIdenticalBody(t *testing.T) {
 
 	if offBody != missingBody || offBody != malformedBody {
 		t.Errorf("expected identical bodies, got off=%q missing=%q malformed=%q", offBody, missingBody, malformedBody)
+	}
+}
+
+// TestTalentNetworkProfile_NilProfileFacetsSerializeAsEmptyArrays covers a candidate who
+// enabled visibility with no user_profiles row at all (design decision: "Missing/empty
+// CV does not block enabling the toggle") — the LEFT JOIN in
+// GetTalentNetworkProfileByPublicID then returns nil, not []string{}, for both facets.
+// types.ts declares specializations/skills as non-nullable string[]; the wire response
+// must not serialize them as JSON null even though the frontend also defends with `?? []`.
+func TestTalentNetworkProfile_NilProfileFacetsSerializeAsEmptyArrays(t *testing.T) {
+	store := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{
+		TalentNetworkVisibility: "public",
+		Specializations:         nil,
+		Skills:                  nil,
+	}}
+	app := talentNetworkProfileApp(store)
+
+	resp := doTalentNetworkProfile(t, app, uuid.New().String())
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	body := talentNetworkReadBody(t, resp)
+	if !strings.Contains(body, `"specializations":[]`) {
+		t.Errorf(`body must serialize specializations as "[]", not null: %s`, body)
+	}
+	if !strings.Contains(body, `"skills":[]`) {
+		t.Errorf(`body must serialize skills as "[]", not null: %s`, body)
 	}
 }
 

@@ -98,10 +98,13 @@ to be array-adjacent to nothing would misrepresent the candidate's history
 without protecting anything.
 
 **Public mode still strips contact info.** Even though `public` mode shows
-name and photo, it uses the same contact-stripped base as `anonymous`
-(no email/phone/links) — because the page is unauthenticated and publicly
-reachable, and contact info displayed there would be scraped by bots
-regardless of the candidate's intent to be identifiable.
+the candidate's name, it uses the same contact-stripped base as `anonymous`
+(no email/phone/links, and no project link either — a project's link is as
+de-anonymizing as the four fields `Professional()` already withholds) —
+because the page is unauthenticated and publicly reachable, and contact info
+displayed there would be scraped by bots regardless of the candidate's
+intent to be identifiable. (No photo: see Non-Goals — that's deferred,
+`public` mode does not show one yet.)
 
 **404, not 403, for `off` and not-found.** A disabled profile and a
 nonexistent one return the identical 404 response — the route must not leak
@@ -121,12 +124,19 @@ otherwise enforced elsewhere in the product.
   shareable-link design); document this clearly in the toggle's UI copy so
   the trade-off is visible before the candidate enables it. No mitigation
   work is in scope for this change beyond that copy.
-- **[Risk]** Anonymous mode's single "mask most-recent employer" rule doesn't
-  cover a candidate with multiple concurrent roles or a very recently-ended
-  role still readable as "current" by context → **Mitigation**: accept this
-  limitation for slice 1; the design spec explicitly scoped the masking rule
-  to the newest `experience` entry rather than attempting to infer "current"
-  semantically.
+- **[Risk]** Anonymous mode's masking rule recognizes "current" only from a
+  fixed dictionary of `End` labels (empty, `present`, `current`, `now`,
+  `ongoing` — case-insensitively; see Decisions, "Masking is content-based")
+  → **Mitigation**: accept this limitation for slice 1; a CV that phrases its
+  current role's `End` some other way (not empty and not one of that list)
+  won't be recognized as current, and that entry's employer will not be
+  masked. This is a dictionary-coverage gap, not a flaw in the content-based
+  approach itself — multiple genuinely concurrent roles ARE all masked
+  correctly, since the rule checks every entry rather than assuming one
+  "most recent" position. Expand the shared label set
+  (`internal/resumeextract/visibility.go`'s `notEndedLabels`,
+  `internal/experience/import_resume.go`'s `currentEndLabels`) if real CVs
+  surface phrasing it misses.
 - **[Risk]** Public unauthenticated pages are an SEO/scraping surface with no
   rate limiting by default → **Mitigation**: out of scope for this change;
   flag for follow-up if abuse is observed after launch (consistent with the
