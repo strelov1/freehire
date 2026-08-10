@@ -5,11 +5,15 @@
   import { Button } from '$lib/ui';
 
   // The Talent Network opt-in: Off (default) / Public / Anonymous, plus a preview of the
-  // resulting shareable URL. The public page itself is a later, separate piece of work —
-  // this only reads/writes the setting via GET/PUT /me/talent-network and shows what the
-  // link would be, built from the same path the backend's public route is mounted at
-  // (see internal/handler/talent_network_profile.go's register: "/talent-network/:publicID",
-  // sibling to /api/v1, not under it — see handler.go).
+  // resulting shareable URL. The public page itself is a later, separate piece of work
+  // (no SvelteKit route exists yet) — this only reads/writes the setting via
+  // GET/PUT /me/talent-network. The preview URL is built as origin + "/talent-network/" +
+  // the public id, following this codebase's convention that a public-facing page path
+  // mirrors its API resource name minus the "/api/v1" prefix (see how
+  // SavedSearchesView.svelte's boardUrl() builds "/b/<slug>" from the "/api/v1/boards/<slug>"
+  // API; internal/handler/talent_network_profile.go registers the API side at
+  // "/api/v1/talent-network/:publicID"). Whichever route the later task actually adds is the
+  // source of truth if this ever needs adjusting.
 
   let { onError }: { onError: (message: string | null) => void } = $props();
 
