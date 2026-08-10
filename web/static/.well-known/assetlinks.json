@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "me.freehire.mobile",
+      "sha256_cert_fingerprints": [
+        "84:D1:CC:CD:7F:2B:80:2F:5A:13:67:1F:16:2C:33:EC:A8:CF:14:59:4A:7C:1E:E9:B2:EF:94:09:2D:FE:51:0C"
+      ]
+    }
+  }
+]
