@@ -2,6 +2,8 @@ package resumeextract
 
 import (
 	"encoding/json"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -134,6 +136,86 @@ func TestAnonymous_OmitsContactFields(t *testing.T) {
 	}
 }
 
+// TestAnonymous_StripsProjectLinks guards against a project link — e.g.
+// "github.com/<handle>" or a personal portfolio domain — reaching the anonymous public
+// projection. A project's Link is a stronger de-anonymizing identifier than the name
+// that Professional() already strips, so it must not survive Anonymous() either. The
+// project's other fields (name, highlights) are legitimate signal and must stay.
+func TestAnonymous_StripsProjectLinks(t *testing.T) {
+	s := fullStructured() // carries a project with a non-empty Link
+
+	got := s.Anonymous()
+
+	if len(got.Projects) == 0 {
+		t.Fatalf("Projects is empty, fixture should carry at least one")
+	}
+	for _, p := range got.Projects {
+		if p.Link != "" {
+			t.Errorf("project %q carries Link %q, want stripped", p.Name, p.Link)
+		}
+		if p.Name == "" {
+			t.Errorf("project lost its Name too — only Link should be stripped")
+		}
+	}
+
+	blob, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal projection: %v", err)
+	}
+	if strings.Contains(string(blob), `"link"`) {
+		t.Errorf("anonymous projection JSON still carries a project link key: %s", blob)
+	}
+}
+
+// TestAnonymous_StripProjectLinksDoesNotMutateSource mirrors
+// TestAnonymous_DoesNotMutateSource: stripping a project's Link must operate on a copy,
+// not the backing array Professional()'s Projects slice shares with s.Projects.
+func TestAnonymous_StripProjectLinksDoesNotMutateSource(t *testing.T) {
+	s := fullStructured()
+	original := s.Projects[0].Link
+
+	_ = s.Anonymous()
+
+	if s.Projects[0].Link != original {
+		t.Errorf("source Structured.Projects[0].Link = %q, mutated (want %q)", s.Projects[0].Link, original)
+	}
+}
+
+// TestAnonymous_IsAWhitelist mirrors TestProfessional_IsAWhitelist (professional_test.go)
+// against Anonymous()'s actual output. Professional's own whitelist test guards fields
+// reaching that internal projection (used by the LLM fit chain, the assistant, and the
+// authenticated profile read) — it does NOT guard whether a field that's fine for those
+// authenticated, internal consumers should also reach the UNAUTHENTICATED, public Talent
+// Network route. This is that second gate: it fails the moment a field is added to
+// Professional without anyone re-reviewing that public exposure.
+func TestAnonymous_IsAWhitelist(t *testing.T) {
+	blob, err := json.Marshal(fullStructured().Anonymous())
+	if err != nil {
+		t.Fatalf("marshal projection: %v", err)
+	}
+
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(blob, &got); err != nil {
+		t.Fatalf("unmarshal projection: %v", err)
+	}
+	keys := make([]string, 0, len(got))
+	for k := range got {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	want := []string{
+		"certifications", "education", "experience", "headline", "languages",
+		"location", "projects", "skills", "summary", "total_years",
+	}
+	slices.Sort(want)
+
+	if !slices.Equal(keys, want) {
+		t.Errorf("Anonymous() top-level keys = %v, want %v — a field reached the public, "+
+			"unauthenticated Talent Network route without being reviewed for that exposure", keys, want)
+	}
+}
+
 func TestPublic_KeepsName(t *testing.T) {
 	s := fullStructured()
 
@@ -183,3 +265,82 @@ func TestPublic_ExperienceUnmodifiedIncludingCurrent(t *testing.T) {
 		t.Errorf("current Experience[2].Company = %q, want unchanged (\"Babbage Systems\")", got.Experience[2].Company)
 	}
 }
+
+// TestPublic_StripsProjectLinks is Public()'s counterpart to
+// TestAnonymous_StripsProjectLinks: public mode shows the candidate's name, but a
+// project link is still a personal URL the page must not hand out — same rationale as
+// the contact-field stripping this projection already does.
+func TestPublic_StripsProjectLinks(t *testing.T) {
+	s := fullStructured() // carries a project with a non-empty Link
+
+	got := s.Public()
+
+	if len(got.Projects) == 0 {
+		t.Fatalf("Projects is empty, fixture should carry at least one")
+	}
+	for _, p := range got.Projects {
+		if p.Link != "" {
+			t.Errorf("project %q carries Link %q, want stripped", p.Name, p.Link)
+		}
+		if p.Name == "" {
+			t.Errorf("project lost its Name too — only Link should be stripped")
+		}
+	}
+
+	blob, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal projection: %v", err)
+	}
+	if strings.Contains(string(blob), `"link"`) {
+		t.Errorf("public projection JSON still carries a project link key: %s", blob)
+	}
+}
+
+// TestPublic_StripProjectLinksDoesNotMutateSource is Public()'s counterpart to
+// TestAnonymous_StripProjectLinksDoesNotMutateSource.
+func TestPublic_StripProjectLinksDoesNotMutateSource(t *testing.T) {
+	s := fullStructured()
+	original := s.Projects[0].Link
+
+	_ = s.Public()
+
+	if s.Projects[0].Link != original {
+		t.Errorf("source Structured.Projects[0].Link = %q, mutated (want %q)", s.Projects[0].Link, original)
+	}
+}
+
+// TestPublic_IsAWhitelist is TestAnonymous_IsAWhitelist's counterpart for Public(),
+// which additionally carries full_name (the whole point of public mode).
+func TestPublic_IsAWhitelist(t *testing.T) {
+	blob, err := json.Marshal(fullStructured().Public())
+	if err != nil {
+		t.Fatalf("marshal projection: %v", err)
+	}
+
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(blob, &got); err != nil {
+		t.Fatalf("unmarshal projection: %v", err)
+	}
+	keys := make([]string, 0, len(got))
+	for k := range got {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	want := []string{
+		"certifications", "education", "experience", "full_name", "headline",
+		"languages", "location", "projects", "skills", "summary", "total_years",
+	}
+	slices.Sort(want)
+
+	if !slices.Equal(keys, want) {
+		t.Errorf("Public() top-level keys = %v, want %v — a field reached the public, "+
+			"unauthenticated Talent Network route without being reviewed for that exposure", keys, want)
+	}
+}
+
+// TestProfessional_IsAWhitelist (professional_test.go) already covers Professional's
+// field set via reflect.TypeOf; TestAnonymous_IsAWhitelist/TestPublic_IsAWhitelist above
+// use the marshaled JSON of the actual public projections instead —
+// reflect.TypeOf(Public{}) would see the embedded Professional as a single unnamed
+// field, not its flattened JSON keys.
