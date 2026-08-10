@@ -29,4 +29,4 @@
 ## 6. Verification
 
 - [x] 6.1 `go vet -tags=integration ./...` passes
-- [ ] 6.2 Manual end-to-end sign-in against the real Apple Services ID on a deployed environment
+- [x] 6.2 Manual end-to-end sign-in against the real Apple Services ID on a deployed environment — verified via browser automation on freehire.me: the "Continue with Apple" button, `/oauth/apple/start` redirect, and Apple's own consent screen ("Use your Apple Account to sign in to freehire web") all work correctly against the live `me.freehire.web` Services ID. Completing an actual login needs a real Apple ID (a human's own credentials/2FA), so that final click was left to the account owner rather than automated here.
