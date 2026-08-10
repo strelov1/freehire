@@ -1638,6 +1638,12 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
+	// Jobs that closed recently while the tracking user still has an application in a
+	// non-terminal stage on them (any stage userjob.SilenceThresholdDays accrues
+	// silence for — the same active/terminal split every other silence reader uses).
+	// Bounded to a recency window on closed_at for the same first-deploy reason as
+	// the other two candidate scans.
+	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]ListJobClosedCandidatesRow, error)
 	// The emails linked to one of the caller's applications, newest first, for the
 	// application detail page.
 	ListJobEmails(ctx context.Context, arg ListJobEmailsParams) ([]ListJobEmailsRow, error)

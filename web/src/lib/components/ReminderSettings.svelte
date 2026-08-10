@@ -7,14 +7,14 @@
   import ProviderIcon from './ProviderIcon.svelte';
 
   // The single account-level notification rule: turn notifications on and pick
-  // the delivery channels. It gates three things at once — the saved-job apply
-  // reminder, the follow-up nudge (an application has gone quiet), and the
-  // interview-prep nudge (a stage moved to interview) — there is no separate
-  // control for any of them, and no per-job override. Changes autosave — there is
-  // no Save button. The UI keeps the rule valid so an invalid payload never
-  // reaches the server: enabling defaults to the email channel, and the last
-  // channel can't be removed while notifications are on (an enabled rule
-  // requires at least one channel).
+  // the delivery channels. It gates four things at once — the saved-job apply
+  // reminder, the follow-up nudge (an application has gone quiet), the
+  // interview-prep nudge (a stage moved to interview), and the job-closed nudge
+  // (a tracked listing closed) — there is no separate control for any of them,
+  // and no per-job override. Changes autosave — there is no Save button. The UI
+  // keeps the rule valid so an invalid payload never reaches the server: enabling
+  // defaults to the email channel, and the last channel can't be removed while
+  // notifications are on (an enabled rule requires at least one channel).
 
   let enabled = $state(false);
   let channels = $state<string[]>([]);
@@ -105,7 +105,7 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Notifications</h2>
       <p class="text-xs text-muted-foreground">
-        Come back to a saved job before it goes stale, follow up when an application goes quiet, and prepare before an interview.
+        Come back to a saved job before it goes stale, follow up when an application goes quiet, prepare before an interview, and hear about it if a listing you're tracking closes.
       </p>
     </div>
 
@@ -185,6 +185,10 @@
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
             <dd>right when you move a card to Interview.</dd>
+          </div>
+          <div class="flex gap-1.5">
+            <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
+            <dd>right when a job you're still actively tracking closes.</dd>
           </div>
         </dl>
       </div>

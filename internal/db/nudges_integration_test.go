@@ -148,6 +148,65 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 	}
 }
 
+func TestListJobClosedCandidates(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	resetNudgeTables(t, pool)
+
+	uid := insertUser(t, pool, "closed@example.test")
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, Channels: []string{"email"}}); err != nil {
+		t.Fatalf("upsert settings: %v", err)
+	}
+
+	// Truncated to microsecond precision — see the same note in TestListFollowUpCandidates.
+	recentClose := time.Now().Add(-2 * 24 * time.Hour).Truncate(time.Microsecond)
+	staleClose := time.Now().Add(-10 * 24 * time.Hour).Truncate(time.Microsecond)
+	appliedAt := time.Now().Add(-30 * 24 * time.Hour)
+
+	activeJob := insertJob(t, pool, "closed-active")
+	insertApplication(t, pool, uid, activeJob, appliedAt, "screening")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1 WHERE id = $2", recentClose, activeJob); err != nil {
+		t.Fatalf("close active job: %v", err)
+	}
+
+	settledJob := insertJob(t, pool, "closed-settled")
+	insertApplication(t, pool, uid, settledJob, appliedAt, "withdrawn")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1 WHERE id = $2", recentClose, settledJob); err != nil {
+		t.Fatalf("close settled job: %v", err)
+	}
+
+	staleJob := insertJob(t, pool, "closed-stale")
+	insertApplication(t, pool, uid, staleJob, appliedAt, "screening")
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = $1 WHERE id = $2", staleClose, staleJob); err != nil {
+		t.Fatalf("close stale job: %v", err)
+	}
+
+	openJob := insertJob(t, pool, "still-open")
+	insertApplication(t, pool, uid, openJob, appliedAt, "screening")
+
+	rows, err := q.ListJobClosedCandidates(ctx, 7)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("candidates = %d, want 2 (both in-window closures; the Go-side active-stage filter drops the settled one)", len(rows))
+	}
+	byJob := map[int64]ListJobClosedCandidatesRow{}
+	for _, r := range rows {
+		byJob[r.JobID.Int64] = r
+	}
+	if _, ok := byJob[activeJob]; !ok {
+		t.Errorf("missing the active application's closed job, got %+v", rows)
+	}
+	if _, ok := byJob[settledJob]; !ok {
+		t.Errorf("missing the settled application's closed job (SQL doesn't filter stage; Go does), got %+v", rows)
+	}
+	if got := byJob[activeJob]; !got.ClosedAt.Valid || !got.ClosedAt.Time.Equal(recentClose) {
+		t.Errorf("closed_at = %v, want %v", got.ClosedAt, recentClose)
+	}
+}
+
 func TestRecordNudge_IsIdempotentPerEpisode(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)

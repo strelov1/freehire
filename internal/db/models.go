@@ -608,12 +608,6 @@ type PrunedJob struct {
 	PrunedAt    pgtype.Timestamptz `json:"pruned_at"`
 }
 
-type RateLimit struct {
-	Key          string             `json:"key"`
-	WindowStart  pgtype.Timestamptz `json:"window_start"`
-	RequestCount int32              `json:"request_count"`
-}
-
 type ReferralOffer struct {
 	UserID         int64              `json:"user_id"`
 	CompanySlug    string             `json:"company_slug"`

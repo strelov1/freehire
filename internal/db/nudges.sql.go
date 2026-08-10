@@ -256,6 +256,53 @@ func (q *Queries) ListInterviewPrepCandidates(ctx context.Context, windowDays in
 	return items, nil
 }
 
+const listJobClosedCandidates = `-- name: ListJobClosedCandidates :many
+SELECT a.user_id, a.job_id, a.stage, j.closed_at
+FROM applications a
+JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
+JOIN jobs j ON j.id = a.job_id
+WHERE a.applied_at IS NOT NULL
+  AND j.closed_at IS NOT NULL
+  AND j.closed_at > now() - make_interval(days => $1::int)
+`
+
+type ListJobClosedCandidatesRow struct {
+	UserID   int64              `json:"user_id"`
+	JobID    pgtype.Int8        `json:"job_id"`
+	Stage    pgtype.Text        `json:"stage"`
+	ClosedAt pgtype.Timestamptz `json:"closed_at"`
+}
+
+// Jobs that closed recently while the tracking user still has an application in a
+// non-terminal stage on them (any stage userjob.SilenceThresholdDays accrues
+// silence for — the same active/terminal split every other silence reader uses).
+// Bounded to a recency window on closed_at for the same first-deploy reason as
+// the other two candidate scans.
+func (q *Queries) ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]ListJobClosedCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listJobClosedCandidates, windowDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListJobClosedCandidatesRow{}
+	for rows.Next() {
+		var i ListJobClosedCandidatesRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.JobID,
+			&i.Stage,
+			&i.ClosedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markNudgeDelivered = `-- name: MarkNudgeDelivered :execrows
 UPDATE application_nudges
 SET status = 'delivered', delivered_at = now()

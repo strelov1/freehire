@@ -52,6 +52,10 @@ func (n *TelegramNotifier) render(m Message) string {
 		return fmt.Sprintf(
 			"🎯 You're interviewing for <b>%s</b> at <b>%s</b>. Ready to rehearse?\n<a href=\"%s\">Open your tracking board →</a>",
 			title, company, n.trackingURL)
+	case KindJobClosed:
+		return fmt.Sprintf(
+			"📪 The listing for <b>%s</b> at <b>%s</b> has closed while your application was still active.\n<a href=\"%s\">Open your tracking board →</a>",
+			title, company, n.trackingURL)
 	default:
 		return fmt.Sprintf("<b>%s</b> at <b>%s</b>: <a href=\"%s\">Open your tracking board →</a>", title, company, n.trackingURL)
 	}
@@ -95,6 +99,14 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 				`<p><a href="%s">Open your tracking board to rehearse →</a></p>`,
 			title, company, n.trackingURL)
 		textBody = fmt.Sprintf("You're interviewing for %s at %s.\n\nOpen your tracking board: %s\n",
+			m.JobTitle, m.Company, n.trackingURL)
+	case KindJobClosed:
+		subject = fmt.Sprintf("Listing closed: %s at %s", m.JobTitle, m.Company)
+		htmlBody = fmt.Sprintf(
+			`<p>The listing for <strong>%s</strong> at <strong>%s</strong> has closed while your application was still active.</p>`+
+				`<p><a href="%s">Open your tracking board →</a></p>`,
+			title, company, n.trackingURL)
+		textBody = fmt.Sprintf("The listing for %s at %s has closed while your application was still active.\n\nOpen your tracking board: %s\n",
 			m.JobTitle, m.Company, n.trackingURL)
 	default:
 		subject = fmt.Sprintf("%s at %s", m.JobTitle, m.Company)

@@ -37,6 +37,20 @@ WHERE ev.kind = 'stage_set'
   AND ev.job_id IS NOT NULL
   AND ev.occurred_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
+-- name: ListJobClosedCandidates :many
+-- Jobs that closed recently while the tracking user still has an application in a
+-- non-terminal stage on them (any stage userjob.SilenceThresholdDays accrues
+-- silence for — the same active/terminal split every other silence reader uses).
+-- Bounded to a recency window on closed_at for the same first-deploy reason as
+-- the other two candidate scans.
+SELECT a.user_id, a.job_id, a.stage, j.closed_at
+FROM applications a
+JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
+JOIN jobs j ON j.id = a.job_id
+WHERE a.applied_at IS NOT NULL
+  AND j.closed_at IS NOT NULL
+  AND j.closed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+
 -- name: RecordNudge :execrows
 -- Record one matched nudge candidate. The unique index on
 -- (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the

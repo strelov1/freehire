@@ -16,6 +16,7 @@ import (
 type fakeStore struct {
 	followUp      []db.ListFollowUpCandidatesRow
 	interviewPrep []db.ListInterviewPrepCandidatesRow
+	jobClosed     []db.ListJobClosedCandidatesRow
 	recorded      []db.RecordNudgeParams
 
 	due []int64
@@ -32,6 +33,9 @@ func (s *fakeStore) ListFollowUpCandidates(context.Context, int32) ([]db.ListFol
 }
 func (s *fakeStore) ListInterviewPrepCandidates(context.Context, int32) ([]db.ListInterviewPrepCandidatesRow, error) {
 	return s.interviewPrep, nil
+}
+func (s *fakeStore) ListJobClosedCandidates(context.Context, int32) ([]db.ListJobClosedCandidatesRow, error) {
+	return s.jobClosed, nil
 }
 func (s *fakeStore) RecordNudge(_ context.Context, arg db.RecordNudgeParams) (int64, error) {
 	for _, r := range s.recorded {
@@ -176,6 +180,48 @@ func TestMatch_InterviewPrep_RecordsCandidate(t *testing.T) {
 	}
 }
 
+// --- MATCH: job-closed ---------------------------------------------------------
+
+func TestMatch_JobClosed_ActiveApplicationIsRecorded(t *testing.T) {
+	closedAt := fixedNow.Add(-2 * time.Hour)
+	store := &fakeStore{jobClosed: []db.ListJobClosedCandidatesRow{
+		{UserID: 5, JobID: pgtype.Int8{Int64: 6, Valid: true}, Stage: pgtype.Text{String: "screening", Valid: true}, ClosedAt: ts(closedAt)},
+	}}
+	r := newRunner(store, &fakeNotifier{})
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 1 {
+		t.Fatalf("recorded = %d, want 1", len(store.recorded))
+	}
+	got := store.recorded[0]
+	if got.UserID != 5 || got.JobID != 6 || got.Kind != KindJobClosed {
+		t.Errorf("recorded = %+v, want (5,6,job_closed)", got)
+	}
+	if !got.EpisodeKey.Time.Equal(closedAt) {
+		t.Errorf("episode key = %v, want closed_at %v", got.EpisodeKey.Time, closedAt)
+	}
+	if stats.Matched != 1 {
+		t.Errorf("stats.Matched = %d, want 1", stats.Matched)
+	}
+}
+
+func TestMatch_JobClosed_SettledApplicationIsNotRecorded(t *testing.T) {
+	store := &fakeStore{jobClosed: []db.ListJobClosedCandidatesRow{
+		{UserID: 5, JobID: pgtype.Int8{Int64: 6, Valid: true}, Stage: pgtype.Text{String: "withdrawn", Valid: true}, ClosedAt: ts(fixedNow)},
+	}}
+	r := newRunner(store, &fakeNotifier{})
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recorded) != 0 {
+		t.Errorf("recorded = %d, want 0 (a settled application does not care that the listing closed)", len(store.recorded))
+	}
+}
+
 // --- DELIVER -----------------------------------------------------------------
 
 func deliveryRow(kind string, stage string, daysSilent int, notificationsEnabled, jobOpen bool, channels []string, chatID *int64, email string) db.GetNudgeForDeliveryRow {
@@ -267,6 +313,41 @@ func TestDeliver_InterviewPrep_CancelsWhenStageMoved(t *testing.T) {
 	}
 	if len(notifier.sent) != 0 {
 		t.Errorf("must not send once the stage has moved on, sent %v", notifier.sent)
+	}
+	if len(store.cancelled) != 1 {
+		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)
+	}
+}
+
+func TestDeliver_JobClosed_DeliversWhileApplicationStillActive(t *testing.T) {
+	chat := int64(555)
+	// jobOpen=false: the job stays closed, which is the whole point of this kind.
+	store := &fakeStore{due: []int64{1}, row: deliveryRow(KindJobClosed, "screening", 0, true, false, []string{"telegram"}, &chat, "")}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Errorf("sent = %v, want 1 message", notifier.sent)
+	}
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want [1]", store.delivered)
+	}
+}
+
+func TestDeliver_JobClosed_CancelsWhenApplicationSettled(t *testing.T) {
+	chat := int64(555)
+	store := &fakeStore{due: []int64{1}, row: deliveryRow(KindJobClosed, "withdrawn", 0, true, false, []string{"telegram"}, &chat, "")}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 0 {
+		t.Errorf("must not send once the application has settled, sent %v", notifier.sent)
 	}
 	if len(store.cancelled) != 1 {
 		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)

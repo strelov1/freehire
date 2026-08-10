@@ -1,8 +1,9 @@
 // Package nudge is the lifecycle-notification decision layer: it watches tracked
-// applications and drives two one-shot nudges — follow-up (an application has gone
-// silent past its stage's tolerated threshold, per userjob.SilenceStateFor) and
-// interview-prep (a stage_set moved an application into `interview`) — over the
-// same account-level notification_settings rule internal/reminder reads.
+// applications and drives three one-shot nudges — follow-up (an application has
+// gone silent past its stage's tolerated threshold, per userjob.SilenceStateFor),
+// interview-prep (a stage_set moved an application into `interview`), and
+// job-closed (a listing the candidate is still actively tracking closed) — over
+// the same account-level notification_settings rule internal/reminder reads.
 //
 // One pass (Runner.Run) does MATCH then DELIVER, mirroring internal/notify: MATCH
 // re-scans current state and records new candidates in the application_nudges
@@ -32,10 +33,12 @@ import (
 	"github.com/strelov1/freehire/internal/userjob"
 )
 
-// Nudge kinds. Also the CHECK constraint on application_nudges.kind (migration 0083).
+// Nudge kinds. Also the CHECK constraint on application_nudges.kind (migrations
+// 0083, widened by 0084).
 const (
 	KindFollowUp      = "follow_up"
 	KindInterviewPrep = "interview_prep"
+	KindJobClosed     = "job_closed"
 )
 
 // Message is the display shape of one nudge, rendered by a Notifier into a
@@ -83,6 +86,7 @@ var _ Store = (*db.Queries)(nil)
 type Store interface {
 	ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]db.ListFollowUpCandidatesRow, error)
 	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]db.ListInterviewPrepCandidatesRow, error)
+	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]db.ListJobClosedCandidatesRow, error)
 	RecordNudge(ctx context.Context, arg db.RecordNudgeParams) (int64, error)
 	ClaimDueNudges(ctx context.Context, arg db.ClaimDueNudgesParams) ([]int64, error)
 	GetNudgeForDelivery(ctx context.Context, id int64) (db.GetNudgeForDeliveryRow, error)
@@ -101,6 +105,8 @@ type Config struct {
 	// InterviewPrepWindowDays is the same bound on ListInterviewPrepCandidates'
 	// occurred_at.
 	InterviewPrepWindowDays int32
+	// JobClosedWindowDays is the same bound on ListJobClosedCandidates' closed_at.
+	JobClosedWindowDays int32
 	// LeaseSeconds is the delivery lease: a claimed-but-unfinished nudge is
 	// reclaimable after this, which doubles as the crash reaper.
 	LeaseSeconds int32
@@ -116,6 +122,7 @@ func DefaultConfig() Config {
 	return Config{
 		FollowUpWindowDays:      30,
 		InterviewPrepWindowDays: 7,
+		JobClosedWindowDays:     7,
 		LeaseSeconds:            600,
 		ClaimBatch:              500,
 		MaxAttempts:             5,
@@ -160,9 +167,9 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	return stats, nil
 }
 
-// match records every current follow-up and interview-prep candidate. Re-running
-// over an unchanged episode is a no-op (the ledger's unique key), so this can
-// freely re-scan the same candidates every pass.
+// match records every current follow-up, interview-prep, and job-closed candidate.
+// Re-running over an unchanged episode is a no-op (the ledger's unique key), so
+// this can freely re-scan the same candidates every pass.
 func (r *Runner) match(ctx context.Context, stats *Stats) error {
 	candidates, err := r.store.ListFollowUpCandidates(ctx, r.cfg.FollowUpWindowDays)
 	if err != nil {
@@ -204,6 +211,31 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		})
 		if err != nil {
 			return fmt.Errorf("record interview-prep nudge: %w", err)
+		}
+		stats.Matched += int(affected)
+	}
+
+	closed, err := r.store.ListJobClosedCandidates(ctx, r.cfg.JobClosedWindowDays)
+	if err != nil {
+		return fmt.Errorf("list job-closed candidates: %w", err)
+	}
+	for _, c := range closed {
+		if !c.JobID.Valid || !c.ClosedAt.Valid {
+			continue // defensive: the query's WHERE clause already guarantees both are set
+		}
+		stage := ""
+		if c.Stage.Valid {
+			stage = c.Stage.String
+		}
+		if _, active := userjob.SilenceThresholdDays(stage); !active {
+			continue // a settled application does not care that the listing closed
+		}
+		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
+			UserID: c.UserID, JobID: c.JobID.Int64, Kind: KindJobClosed,
+			EpisodeKey: c.ClosedAt,
+		})
+		if err != nil {
+			return fmt.Errorf("record job-closed nudge: %w", err)
 		}
 		stats.Matched += int(affected)
 	}
@@ -277,11 +309,13 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 }
 
 // actionable re-derives the triggering condition from the live delivery context: a
-// closed job or a disabled notification rule cancels either kind; a follow-up needs
-// the current silence state still Silent, an interview-prep needs the current
-// stage still `interview`.
+// disabled notification rule cancels every kind. follow-up and interview-prep
+// additionally need the job still open (closing settles the application one way
+// or another) and their own live condition; job-closed needs the opposite — the
+// job stays closed once closed, so it only needs the application to still be in a
+// stage that accrues silence (a settled one no longer cares that the listing shut).
 func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
-	if !info.JobOpen || !info.NotificationsEnabled {
+	if !info.NotificationsEnabled {
 		return false
 	}
 	stage := ""
@@ -290,13 +324,19 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	}
 	switch info.Kind {
 	case KindFollowUp:
+		if !info.JobOpen {
+			return false
+		}
 		days := 0
 		if info.LastActivityAt.Valid {
 			days = userjob.DaysSilent(r.now(), info.LastActivityAt.Time)
 		}
 		return userjob.SilenceStateFor(stage, days, info.HasPendingSuggestion) == userjob.SilenceSilent
 	case KindInterviewPrep:
-		return stage == "interview"
+		return info.JobOpen && stage == "interview"
+	case KindJobClosed:
+		_, active := userjob.SilenceThresholdDays(stage)
+		return active
 	default:
 		return false
 	}
