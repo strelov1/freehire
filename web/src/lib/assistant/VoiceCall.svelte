@@ -224,7 +224,7 @@
     </button>
   {:else}
     {#if endingSoon}
-      <p class="text-xs font-medium text-amber-600 dark:text-amber-400">
+      <p class="text-xs font-medium text-warning-strong">
         This call ends in about a minute.
       </p>
     {/if}
