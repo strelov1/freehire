@@ -27,7 +27,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Saved searches & subscriptions](#saved-searches-subscriptions)
 - [Account, credits & extension](#account-credits-extension)
 - [Link intake & discovery](#link-intake-discovery)
-- [Votes, reminders & discussions](#votes-reminders-discussions)
+- [Votes, notifications & discussions](#votes-notifications-discussions)
 - [Market insights & stats](#market-insights-stats)
 - [Employee referrals](#employee-referrals)
 - [CV builder & tailoring](#cv-builder-tailoring)
@@ -80,8 +80,8 @@ Most of this API is also a CLI. If you are writing an agent rather than an integ
 
 These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine any of them with full-text `q`.
 
-- Repeat any facet param to OR its values: `skills=go&skills=rust` matches either.
-- Add `<param>_mode=and` to require all selected values: `skills=go&skills=rust&skills_mode=and` matches both.
+- Pass multiple values as a comma-separated list to OR them: `skills=go,rust` matches either. Repeating the param (`skills=go&skills=rust`) also works.
+- Add `<param>_mode=and` to require all selected values: `skills=go,rust&skills_mode=and` matches both.
 - Add `<param>_exclude=<value>` to exclude matches: `company_type_exclude=outstaff` drops outstaff jobs.
 - Different facets are ANDed together; numeric and boolean filters are ANDed too.
 - Use `regions=none` to match jobs with no resolved geography (an empty region set); it ORs with real region values and supports `_exclude` like any region.
@@ -95,9 +95,9 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `collections` | Collection | yc, techstars, a16z-portfolio, a16z-speedrun, european, ai, mag7, bigtech, unicorn, fortune500, eastern-roots, ai-native, uk-skilled-worker-sponsor, nl-recognised-sponsor, us-h1b-sponsor |
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
-| `is_tech` | Tech / Non-tech | tech, non_tech |
 | `role` | Role | Open vocabulary — call /jobs/facets for live values |
 | `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, engineering_design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
+| `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
 | `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
 | `domains` | Industry | fintech, crypto, ecommerce, gambling, gamedev, media, travel, healthcare, edtech, govtech, devtools, cybersecurity, ai, hrtech, adtech, proptech, logistics, mobility, climatetech, other |
@@ -130,7 +130,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 
 - **Senior Go, remote, in the CIS region** — `q=go&seniority=senior&work_mode=remote&regions=cis`
 - **Backend roles, freshest first, in Germany** — `category=backend&countries=DE&sort=posted_at&order=desc`
-- **Must use both Go and Rust** — `skills=go&skills=rust&skills_mode=and`
+- **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`
 - **Exclude outstaff companies** — `company_type_exclude=outstaff`
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
 
@@ -943,25 +943,21 @@ curl -X POST "https://freehire.me/api/v1/jobs/<slug>/view" -H "Authorization: Be
 
 Mark the job as applied to.
 
+Send `applied_on` to record an application on the day it was actually sent — importing a history, or correcting a date already stored. A date you state overrides one we inferred. The day is stored at noon UTC, because you are stating a day and midnight reads as the previous date west of Greenwich. A date in the future, older than a year, or not a calendar date, is a 400. Without a body the application is stamped now, as before.
+
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `slug` | string | yes | The job `public_slug`. |
 
-**Body** (optional)
+**Body**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `applied_on` | string | no | The day you actually applied, as `YYYY-MM-DD`. Omit it and the application is stamped now, as before. |
-
-Send `applied_on` to record a history after the fact — importing past applications, or correcting a date already stored. A date you state overrides one we recorded, because you know when you applied and we inferred it. A date in the future, or more than a year old, is a `400`, as is one that is not a calendar date.
-
-The day is stored at noon UTC. You are stating a day, not an instant, and midnight would render as the previous date for anyone west of Greenwich.
+| `applied_on` | string | no | The day the application was sent (`YYYY-MM-DD`). Defaults to today. (e.g. `2026-07-27`) |
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" -H "Authorization: Bearer $FREEHIRE_API_KEY"
-
 curl -X POST "https://freehire.me/api/v1/jobs/<slug>/apply" \
   -H "Authorization: Bearer $FREEHIRE_API_KEY" -H 'Content-Type: application/json' \
   -d '{"applied_on":"2026-07-27"}'
@@ -1017,9 +1013,7 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: 
 
 Set the application stage and/or notes.
 
-A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an unknown value is a 400).
-
-`expired` is the outcome for an application nobody answered — the employer never replied, or the posting went away. Nothing sets it for you: silence is reported separately, by `silence_state` on the tracking list, and this stage is your own conclusion that no answer is coming. Setting it settles the application, so it stops accruing silence.
+A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an unknown value is a 400). `expired` is the outcome for an application nobody answered; nothing sets it for you.
 
 **Path parameters**
 
@@ -1133,11 +1127,7 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/dismiss" -H "Authorizatio
 
 Your tracked jobs joined with the job data.
 
-Each item carries a **card** of the job with your interaction timestamps alongside it. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay listed so your history never shrinks.
-
-The card is what a list row draws: `public_slug`, `title`, `company`, `closed_at`, the stated facets (`work_mode`, `seniority`, `employment_type`, `countries`, `regions`), `skills`, `collections`, `posted_at`, and `blurb` — a short summary already cut to length. It does **not** carry the posting's description; the full public job view, description included, is on `GET /me/tracking/:slug`.
-
-> **Changed:** this listing previously returned the complete job view on every row. Over 500 applications the descriptions alone were 2.37 MB of a 2.83 MB response, for text no row renders.
+Each item carries a card of the job with your interaction timestamps alongside it — what a list row draws: slug, title, company, closed_at, the stated facets, skills, collections, posted_at, and a `blurb` already cut to length. It does NOT carry the description; the full job view is on `GET /me/tracking/:slug`. `meta.counts` gives the per-filter totals for tab badges. Closed jobs stay listed so your history never shrinks.
 
 **Query parameters**
 
@@ -1274,16 +1264,11 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "withdrawn": 0,
-      "expired": 3
+      "withdrawn": 0
     }
   }
 }
 ```
-
-Group the stages yourself if you want the four coarse states the tracking board shows: `applied`/`screening`/`responded` → **Applied**, `interview` → **Interview**, `offer` → **Offer**, `accepted`/`rejected`/`withdrawn`/`expired` → **Closed**.
-
-> **Changed:** this response previously carried a `buckets` object with seven differently-named keys (`no_answer`, `in_progress`, `declined`, …). Those names existed nowhere else in the product and have been removed in favour of the stage vocabulary you already set through `PUT /me/tracking/:slug`.
 
 ### `GET /me/tracking/swipe`
 
@@ -2251,9 +2236,7 @@ curl "https://freehire.me/api/v1/me/credits/history" -H "Authorization: Bearer f
 
 One tracked application, with the mail linked to it and its history.
 
-`events` is the application's ledger, newest first — what happened to it: the apply, employer replies, follow-ups, stage changes, scheduled interviews. Each carries the same shape `GET /me/timeline` serves, and `observed` says whether anybody other than you set its date. Bounded at 100; empty on an application nothing has happened to yet. This is also where the full public job view lives, description included — the listing at `GET /me/tracking` carries only a card.
-
-A slug you do not track is a 404.
+`events` is the application's ledger, newest first — the apply, employer replies, follow-ups, stage changes, scheduled interviews — in the shape `GET /me/timeline` serves, bounded at 100 and empty when nothing has happened yet. This read also carries the full job view; the listing carries only a card. A slug you do not track is a 404.
 
 **Path parameters**
 
@@ -2266,7 +2249,18 @@ curl "https://freehire.me/api/v1/me/tracking/senior-backend-engineer-acme-1a2b" 
 ```
 
 ```json
-{ "data": { "slug": "senior-backend-engineer-acme-1a2b", "stage": "interview", "applied_at": "2026-07-24T09:00:00Z", "emails": [ { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation" } ] } }
+{
+  "data": {
+    "slug": "senior-backend-engineer-acme-1a2b",
+    "stage": "interview",
+    "applied_at": "2026-07-24T09:00:00Z",
+    "emails": [ { "id": 4821, "subject": "Interview for …", "status_signal": "interview_invitation" } ],
+    "events": [
+      { "id": 991, "kind": "employer_reply", "signal": "interview_invitation", "source": "mail_gmail", "observed": true, "occurred_at": "2026-07-29T11:04:00Z" },
+      { "id": 802, "kind": "applied", "source": "user", "observed": false, "occurred_at": "2026-07-24T09:00:00Z" }
+    ]
+  }
+}
 ```
 
 ### `GET /me/tracking/dismissed`
@@ -2427,9 +2421,9 @@ curl -X POST "https://freehire.me/api/v1/me/contributions" \
 { "data": { "source": "greenhouse", "board": "acme", "state": "pending" } }
 ```
 
-## Votes, reminders & discussions
+## Votes, notifications & discussions
 
-The lighter per-user surfaces: a vote on a job or company, a reminder to come back to an application, and the public discussion threads. Votes and reminders take a key; posting to a thread is browser-owned.
+The lighter per-user surfaces: a vote on a job or company, the account-level notification rule (gates the saved-job apply reminder and both lifecycle nudges), and the public discussion threads. Votes and notification settings take a key; posting to a thread is browser-owned.
 
 ### `POST /jobs/{slug}/vote`
 
@@ -2525,83 +2519,40 @@ curl -X DELETE "https://freehire.me/api/v1/companies/acme/vote" -H "Authorizatio
 { "data": { "score": 41, "my_vote": 0 } }
 ```
 
-### `PATCH /jobs/{slug}/reminder`
+### `GET /me/notification-settings`
 
-**Auth:** Session or API key
+**Auth:** Session only
 
-Set or move the reminder on a saved job.
+Your notification rule (gates saved-job reminders and both lifecycle nudges).
 
-**Path parameters**
+```bash
+curl "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt
+```
 
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `slug` | string | yes | The job `public_slug`. |
+```json
+{ "data": { "enabled": true, "channels": ["email"] } }
+```
+
+### `PUT /me/notification-settings`
+
+**Auth:** Session only
+
+Change your notification rule.
 
 **Body**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `fire_at` | string (RFC3339) | yes | When to remind you. |
+| `enabled` | boolean | no | Turn notifications on or off. |
+| `channels` | string[] | no | Delivery channels: `email`, `telegram`. |
 
 ```bash
-curl -X PATCH "https://freehire.me/api/v1/jobs/senior-backend-engineer-acme-1a2b/reminder" \
-  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"fire_at":"2026-08-04T09:00:00Z"}'
+curl -X PUT "https://freehire.me/api/v1/me/notification-settings" -b cookies.txt \
+  -H 'Content-Type: application/json' -d '{"enabled":true,"channels":["email"]}'
 ```
 
 ```json
-{ "data": { "fire_at": "2026-08-04T09:00:00Z" } }
-```
-
-### `DELETE /jobs/{slug}/reminder`
-
-**Auth:** Session or API key
-
-Cancel the reminder.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `slug` | string | yes | The job `public_slug`. |
-
-```bash
-curl -X DELETE "https://freehire.me/api/v1/jobs/senior-backend-engineer-acme-1a2b/reminder" -H "Authorization: Bearer fhk_…"
-```
-
-### `GET /me/reminder-settings`
-
-**Auth:** Session only
-
-Your reminder defaults.
-
-```bash
-curl "https://freehire.me/api/v1/me/reminder-settings" -b cookies.txt
-```
-
-```json
-{ "data": { "enabled": true, "default_days": 7 } }
-```
-
-### `PUT /me/reminder-settings`
-
-**Auth:** Session only
-
-Change your reminder defaults.
-
-**Body**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `enabled` | boolean | no | Turn reminders on or off. |
-| `default_days` | integer | no | How long after saving to remind you. |
-
-```bash
-curl -X PUT "https://freehire.me/api/v1/me/reminder-settings" -b cookies.txt \
-  -H 'Content-Type: application/json' -d '{"enabled":true,"default_days":5}'
-```
-
-```json
-{ "data": { "enabled": true, "default_days": 5 } }
+{ "data": { "enabled": true, "channels": ["email"] } }
 ```
 
 ### `GET /threads`
@@ -3391,6 +3342,28 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/tailor-session" -b cooki
 
 ```json
 { "data": { "tailor_cv_id": "7d1a…", "base_cv_id": "0f2c…", "session_id": "s_9f…" } }
+```
+
+### `POST /me/cvs/{id}/reset-from-resume`
+
+**Auth:** Session only
+
+Rebuild this tailored CV from your résumé.
+
+Replaces the tailored document's content from the current résumé seed (experience bank + structured extract) and refreshes your base CV from the same seed. Keeps the same tailored id and agent session; preserves template and typography on each row. 409 when the CV is not tailored or there is no usable résumé seed. Upload alone does not do this — this is the explicit apply.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The tailored CV id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/reset-from-resume" -b cookies.txt
+```
+
+```json
+{ "data": { "id": "7d1a…", "title": "Tailored for …", "template_id": "classic-ats", "document": { … } } }
 ```
 
 ### `GET /me/cvs/{id}/tailor-context`

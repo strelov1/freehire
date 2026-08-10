@@ -15,8 +15,8 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Update the filter-format example and wording in `web/src/lib/docs/filters.ts` to show `skills=go,react` as primary, with a note that `skills=go&skills=react` still works
-- [ ] 3.2 Regenerate `docs/API.md` via `gen:api-docs` and confirm the new wording appears
+- [x] 3.1 Update the filter-format example and wording in `web/src/lib/docs/filters.ts` to show `skills=go,react` as primary, with a note that `skills=go&skills=react` still works
+- [x] 3.2 Regenerate `docs/API.md` via `gen:api-docs` and confirm the new wording appears
 
 ## 4. Verification
 
