@@ -4,6 +4,7 @@ import {
   collectionHeading,
   collectionPageJsonLd,
   companyListItems,
+  companyMetaDescription,
   datasetJsonLd,
   jobListItems,
   jobPostingJsonLd,
@@ -58,6 +59,43 @@ describe('collectionHeading', () => {
 
   it('renders a zero count honestly rather than hiding it', () => {
     expect(collectionHeading('React', 0)).toBe('0 React jobs');
+  });
+});
+
+describe('companyMetaDescription', () => {
+  it('falls back to the generic template when no facts are present', () => {
+    expect(companyMetaDescription(company())).toBe('Open jobs at Acme, aggregated by freehire.');
+  });
+
+  it('leads with the tagline and appends industries, headcount and HQ', () => {
+    expect(
+      companyMetaDescription(
+        company({
+          tagline: 'Rockets, on demand',
+          industries: ['Aerospace', 'Robotics', 'Defense'],
+          employee_count: 250,
+          hq_country: 'us',
+        })
+      )
+    ).toBe('Rockets, on demand — Aerospace & Robotics, 250+ employees, United States. Open roles on freehire.');
+  });
+
+  it('prefers company_info.description over the tagline when no tagline is set', () => {
+    expect(
+      companyMetaDescription(company({ company_info: { description: 'Acme builds rockets.' } }))
+    ).toBe('Acme builds rockets. Open roles at Acme on freehire.');
+  });
+
+  it('uses only the facts when there is no tagline or description', () => {
+    expect(companyMetaDescription(company({ hq_country: 'de' }))).toBe(
+      'Acme: Germany. Open roles on freehire.'
+    );
+  });
+
+  it('truncates to max length with an ellipsis', () => {
+    const result = companyMetaDescription(company({ tagline: 'x'.repeat(250) }), 50);
+    expect(result.length).toBe(50);
+    expect(result.endsWith('…')).toBe(true);
   });
 });
 

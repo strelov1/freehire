@@ -20,7 +20,14 @@
   const canonical = $derived(`${origin}/jobs/${data.job.public_slug}`);
   // The per-job OG preview lives beside the canonical URL; og:image must be absolute.
   const ogImage = $derived(`${canonical}/og.png`);
-  const description = $derived(metaDescription(data.job.description));
+  // A blank job body strips to "", which would otherwise suppress the
+  // <meta name="description"> tag entirely (Seo.svelte omits it when empty).
+  const description = $derived(
+    metaDescription(data.job.description) ||
+      (data.job.company
+        ? `${data.job.title} at ${data.job.company} — apply on freehire.`
+        : `${data.job.title} — apply on freehire.`)
+  );
   const jsonLd = $derived(
     jsonLdScript([
       jobPostingJsonLd(data.job, origin),

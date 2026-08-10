@@ -3,6 +3,7 @@
 // crawlers and Google Jobs see structured data in the initial HTML.
 
 import type { PostMeta } from './blog';
+import { countryLabel } from './facets';
 import { REGION_NAMES } from './labels';
 import { companyLogoUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
@@ -23,6 +24,38 @@ export function metaDescription(html: string, max = 200): string {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Plain-text, length-capped `<meta name="description">` for a company page.
+ *  Prefers the curated `tagline`, then the imported `company_info.description`,
+ *  appending whatever facts (industries, headcount, HQ) are present; falls back
+ *  to the generic "Open jobs at <name>" template only when the company carries
+ *  none of these — the previous behavior for every company, which made 200k+
+ *  pages near-duplicates of each other. */
+export function companyMetaDescription(company: Company, max = 200): string {
+  const rawLead = company.tagline?.trim() || company.company_info?.description?.trim();
+  // Strip a trailing period so it doesn't collide with the one the sentence below adds.
+  const lead = rawLead?.endsWith('.') ? rawLead.slice(0, -1) : rawLead;
+
+  const facts: string[] = [];
+  if (company.industries?.length) facts.push(company.industries.slice(0, 2).join(' & '));
+  if (company.employee_count) facts.push(`${company.employee_count.toLocaleString('en-US')}+ employees`);
+  if (company.hq_country) facts.push(countryLabel(company.hq_country));
+  const factClause = facts.length > 0 ? facts.join(', ') : undefined;
+
+  let text: string;
+  if (lead && factClause) {
+    text = `${lead} — ${factClause}. Open roles on freehire.`;
+  } else if (lead) {
+    text = `${lead}. Open roles at ${company.name} on freehire.`;
+  } else if (factClause) {
+    text = `${company.name}: ${factClause}. Open roles on freehire.`;
+  } else {
+    text = `Open jobs at ${company.name}, aggregated by freehire.`;
+  }
+
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }

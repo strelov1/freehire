@@ -2,14 +2,14 @@
   import { page } from '$app/state';
   import CompanyView from '$lib/components/CompanyView.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, jsonLdScript, organizationJsonLd } from '$lib/seo';
+  import { breadcrumbJsonLd, companyMetaDescription, jsonLdScript, organizationJsonLd } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
   const canonical = $derived(`${origin}/companies/${data.slug}`);
-  const description = $derived(`Open jobs at ${data.company.name}, aggregated by freehire.`);
+  const description = $derived(companyMetaDescription(data.company));
   const jsonLd = $derived(
     jsonLdScript([
       organizationJsonLd(data.company, origin),
