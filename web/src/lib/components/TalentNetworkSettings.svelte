@@ -9,11 +9,14 @@
   // (no SvelteKit route exists yet) — this only reads/writes the setting via
   // GET/PUT /me/talent-network. The preview URL is built as origin + "/talent-network/" +
   // the public id, following this codebase's convention that a public-facing page path
-  // mirrors its API resource name minus the "/api/v1" prefix (see how
-  // SavedSearchesView.svelte's boardUrl() builds "/b/<slug>" from the "/api/v1/boards/<slug>"
-  // API; internal/handler/talent_network_profile.go registers the API side at
-  // "/api/v1/talent-network/:publicID"). Whichever route the later task actually adds is the
-  // source of truth if this ever needs adjusting.
+  // mirrors its API resource name 1:1 minus the "/api/v1" prefix — e.g. "/api/v1/companies/:slug"
+  // -> "/companies/[slug]" and "/api/v1/jobs/:slug" -> "/jobs/[slug]" (internal/handler/companies.go,
+  // internal/handler/jobs.go, web/src/routes/companies/[slug], web/src/routes/jobs/[slug]).
+  // (Saved-search boards are the one exception to this — "/api/v1/boards/:slug" shortens to
+  // "/b/[slug]" — so that one doesn't support the prediction here.) The API side for this
+  // feature is registered at "/api/v1/talent-network/:publicID"
+  // (internal/handler/talent_network_profile.go); whichever route the later task actually
+  // adds is the source of truth if this ever needs adjusting.
 
   let { onError }: { onError: (message: string | null) => void } = $props();
 
@@ -110,12 +113,11 @@
          which may not reflect the account's real, unknown-because-unloaded state. -->
     <p class="text-sm text-muted-foreground">Couldn't load this setting.</p>
   {:else}
-    <div role="radiogroup" aria-label="Talent Network visibility" class="grid gap-2 sm:grid-cols-3">
+    <div class="grid gap-2 sm:grid-cols-3">
       {#each OPTIONS as opt (opt.id)}
         <button
           type="button"
-          role="radio"
-          aria-checked={opt.id === visibility}
+          aria-pressed={opt.id === visibility}
           disabled={saving}
           onclick={() => select(opt.id)}
           class={[
