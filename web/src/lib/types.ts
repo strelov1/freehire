@@ -778,6 +778,22 @@ export interface TalentNetworkSetting {
   talent_network_public_id: string;
 }
 
+/** The public, unauthenticated Talent Network profile page's payload
+ *  (`GET /talent-network/:publicID`, internal/handler/talent_network_profile.go). Mirrors
+ *  UserProfile's split between facets and CV, but nests the CV under `cv` instead of
+ *  flattening it — `Professional` already has its own `skills`, which would otherwise
+ *  collide with the top-level facet of the same name. `full_name` is present only in
+ *  "public" mode; the backend omits the key entirely in "anonymous" mode rather than
+ *  sending an empty string, so there is nothing to accidentally render. Any current-role
+ *  employer masking in `cv.experience` is applied server-side — this type does not
+ *  distinguish it. */
+export interface TalentNetworkProfile {
+  full_name?: string;
+  specializations: string[];
+  skills: string[];
+  cv: Professional;
+}
+
 /** A notification subscription on a saved search. */
 export interface Subscription {
   id: number;

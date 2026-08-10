@@ -1,0 +1,192 @@
+<script lang="ts">
+  import { Award, Briefcase, FolderKanban, GraduationCap, Languages } from '@lucide/svelte';
+  import Seo from '$lib/components/Seo.svelte';
+  import type { PageData } from './$types';
+
+  let { data }: { data: PageData } = $props();
+  const profile = $derived(data.profile);
+  const cv = $derived(profile.cv);
+
+  const experience = $derived(cv.experience ?? []);
+  const education = $derived(cv.education ?? []);
+  const languages = $derived(cv.languages ?? []);
+  const certifications = $derived(cv.certifications ?? []);
+  const projects = $derived(cv.projects ?? []);
+  // Top-level facets (specializations + canonical skills from the profile), distinct
+  // from cv.skills — the free-text skills the résumé parser found. Only the facets are
+  // shown here, same as ResumeStructuredView never surfaces resume.skills: they're the
+  // curated list, the résumé-parsed one is redundant with it.
+  const skillChips = $derived([...profile.specializations, ...profile.skills]);
+
+  // full_name is present only in "public" mode — the backend omits the key entirely for
+  // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
+  // accidentally render here; no placeholder like "Anonymous Candidate" is needed.
+  const heading = $derived(profile.full_name || 'Talent Network profile');
+
+  const pageTitle = $derived(`${heading} — freehire Talent Network`);
+  const description = $derived(
+    cv.headline || 'A candidate profile shared via freehire’s Talent Network.',
+  );
+
+  // A work/education entry's date range, printed as the CV wrote it ("2021 — Present"),
+  // matching ResumeStructuredView's convention.
+  function dateRange(start?: string, end?: string): string {
+    return [start, end].filter(Boolean).join(' — ');
+  }
+</script>
+
+<Seo title={pageTitle} {description} />
+<svelte:head>
+  <!-- A candidate's private shareable link, not meant for search discovery. -->
+  <meta name="robots" content="noindex" />
+</svelte:head>
+
+<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+    {#if cv.headline}
+      <p class="text-sm text-muted-foreground">{cv.headline}</p>
+    {/if}
+    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+      {#if cv.location}
+        <span>{cv.location}</span>
+      {/if}
+      {#if cv.total_years}
+        <span>{cv.total_years} yrs experience</span>
+      {/if}
+    </div>
+  </div>
+
+  {#if cv.summary}
+    <p class="text-sm leading-relaxed">{cv.summary}</p>
+  {/if}
+
+  {#if skillChips.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Skills
+      </h2>
+      <div class="flex flex-wrap gap-2">
+        {#each skillChips as skill (skill)}
+          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
+            >{skill}</span
+          >
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if experience.length}
+    <section class="flex flex-col gap-3">
+      <h2 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Work history</h2>
+      <ul class="flex flex-col gap-3">
+        {#each experience as job (`${job.title ?? ''}|${job.company ?? ''}|${job.start ?? ''}`)}
+          <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <span class="text-sm font-semibold">{job.title || job.company}</span>
+              {#if dateRange(job.start, job.end)}
+                <span class="text-xs text-muted-foreground tabular-nums"
+                  >{dateRange(job.start, job.end)}</span
+                >
+              {/if}
+            </div>
+            {#if job.title && job.company}
+              <span class="text-sm text-muted-foreground">{job.company}</span>
+            {/if}
+            {#if job.summary}
+              <p class="text-sm leading-relaxed">{job.summary}</p>
+            {/if}
+            {#if job.highlights?.length}
+              <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
+                {#each job.highlights as highlight (highlight)}
+                  <li>{highlight}</li>
+                {/each}
+              </ul>
+            {/if}
+            {#if job.stack?.length}
+              <div class="mt-1 flex flex-wrap gap-1.5">
+                {#each job.stack as tech (tech)}
+                  <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
+                    >{tech}</span
+                  >
+                {/each}
+              </div>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if education.length}
+    <section class="flex flex-col gap-3">
+      <h2 class="flex items-center gap-2 text-sm font-semibold"><GraduationCap class="size-4" />Education</h2>
+      <ul class="flex flex-col gap-2">
+        {#each education as ed (`${ed.degree ?? ''}|${ed.institution ?? ''}|${ed.year ?? ''}`)}
+          <li class="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-card p-4">
+            <div class="flex min-w-0 flex-col">
+              <span class="text-sm font-semibold">{ed.degree || ed.institution}</span>
+              {#if ed.degree && ed.institution}
+                <span class="text-sm text-muted-foreground">{ed.institution}</span>
+              {/if}
+            </div>
+            {#if ed.year}
+              <span class="text-xs text-muted-foreground tabular-nums">{ed.year}</span>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if projects.length}
+    <section class="flex flex-col gap-3">
+      <h2 class="flex items-center gap-2 text-sm font-semibold"><FolderKanban class="size-4" />Projects</h2>
+      <ul class="flex flex-col gap-2">
+        {#each projects as project (project.name ?? project.link ?? '')}
+          <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+            {#if project.link}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a project's own portfolio/repo link, not an internal route -->
+              <a href={project.link} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-primary hover:underline">{project.name || project.link}</a>
+            {:else if project.name}
+              <span class="text-sm font-semibold">{project.name}</span>
+            {/if}
+            {#if project.highlights?.length}
+              <ul class="flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
+                {#each project.highlights as highlight (highlight)}
+                  <li>{highlight}</li>
+                {/each}
+              </ul>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if languages.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="flex items-center gap-2 text-sm font-semibold"><Languages class="size-4" />Languages</h2>
+      <div class="flex flex-wrap gap-2">
+        {#each languages as lang (lang)}
+          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{lang}</span>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if certifications.length}
+    <section class="flex flex-col gap-2">
+      <h2 class="flex items-center gap-2 text-sm font-semibold"><Award class="size-4" />Certifications</h2>
+      <div class="flex flex-wrap gap-2">
+        {#each certifications as cert (cert)}
+          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{cert}</span>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if !experience.length && !education.length && !skillChips.length && !cv.summary}
+    <p class="text-sm text-muted-foreground">This candidate hasn't added CV details yet.</p>
+  {/if}
+</div>

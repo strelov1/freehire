@@ -86,6 +86,7 @@ import type {
   ExperienceBank,
   TalentNetworkSetting,
   TalentNetworkVisibility,
+  TalentNetworkProfile,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -1061,6 +1062,16 @@ export function createApi(
     );
   }
 
+  /** The public, unauthenticated Talent Network profile page for one candidate, keyed by
+   *  their opaque `talent_network_public_id`. No auth: this is the shareable-link
+   *  counterpart to getTalentNetwork above. A hidden ("off") or nonexistent id both
+   *  answer 404 — the caller must not try to tell them apart. */
+  async function getTalentNetworkProfile(publicId: string): Promise<TalentNetworkProfile> {
+    return requestData<TalentNetworkProfile>(
+      `/api/v1/talent-network/${encodeURIComponent(publicId)}`,
+    );
+  }
+
   /** Permanently erase the signed-in account and everything it owns. Irreversible:
    *  there is no restore path on either side. `email` is the confirmation — it must be
    *  the caller's own address, or the server answers 400. A 503 means nothing was
@@ -1828,6 +1839,7 @@ export function createApi(
     deleteProfile,
     getTalentNetwork,
     setTalentNetworkVisibility,
+    getTalentNetworkProfile,
     deleteAccount,
     extractResumeProfile,
     getResume,
