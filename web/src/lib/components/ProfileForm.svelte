@@ -122,6 +122,9 @@
   // The universe of skills (canonical tokens with job counts) for the typeahead, from
   // the facet-distribution endpoint — the same source the filter panel uses.
   let skillDist = $state.raw<FacetOption[]>([]);
+  // See RemoteSearchSelect's `ready` prop: without it, a dictionary fetch slower
+  // than the picker's 250ms debounce leaves the popular first page stuck empty.
+  let skillDistReady = $state(false);
 
   const canSubmit = $derived(specializations.length > 0 && skills.length > 0);
 
@@ -141,7 +144,10 @@
   const searchExcludedSkills = (query: string) => searchSkillsExcept(query, skills);
 
   $effect(() => {
-    void loadSkillDistribution().then((dist) => (skillDist = dist));
+    void loadSkillDistribution().then((dist) => {
+      skillDist = dist;
+      skillDistReady = true;
+    });
   });
 
   // Derive skills + specialization from a résumé PDF. Before a profile exists, both merge
@@ -453,6 +459,7 @@
       onToggle={toggleSkill}
       fallbackLabel={(v) => v}
       clearOnSelect
+      ready={skillDistReady}
     />
   </div>
 
@@ -473,6 +480,7 @@
       onToggle={toggleExcludedSkill}
       fallbackLabel={(v) => v}
       clearOnSelect
+      ready={skillDistReady}
     />
     <span class="text-xs text-muted-foreground">
       Filtered out when you apply your profile to the job filters.

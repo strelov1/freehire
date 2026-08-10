@@ -14,8 +14,15 @@
   // The universe of skills (canonical tokens with job counts) for the typeahead, from the
   // same source ProfileForm's set-up form and the job-search filter panel use.
   let skillDist = $state.raw<FacetOption[]>([]);
+  // Flips true once the dictionary lands — passed to RemoteSearchSelect as `ready` so
+  // its debounced search re-fires if it opens before the fetch resolves (see that
+  // component's `ready` prop for why this is needed, not just a nicety).
+  let skillDistReady = $state(false);
   $effect(() => {
-    void loadSkillDistribution().then((dist) => (skillDist = dist));
+    void loadSkillDistribution().then((dist) => {
+      skillDist = dist;
+      skillDistReady = true;
+    });
   });
 
   function searchSkillsExcept(query: string, avoid: string[]): Promise<FacetOption[]> {
@@ -92,6 +99,7 @@
       onToggle={toggleSkill}
       fallbackLabel={(v) => v}
       clearOnSelect
+      ready={skillDistReady}
     />
   </div>
 
@@ -108,6 +116,7 @@
       onToggle={toggleExcludedSkill}
       fallbackLabel={(v) => v}
       clearOnSelect
+      ready={skillDistReady}
     />
     <span class="text-xs text-muted-foreground">
       Filtered out when you apply your profile to the job filters.

@@ -13,6 +13,13 @@
   // seen, falling back to `fallbackLabel` for a value restored from the URL. A chip
   // is included or excluded; clicking it calls `onToggle` (cycle for excludable
   // facets, plain include toggle otherwise).
+  //
+  // Compact mode (expand=false, the default) renders the picker as a floating panel
+  // anchored to the input — the same pattern as CompanyPicker.svelte — so it always
+  // opens right under the field being typed into, however many chips are already
+  // stacked below it. Expand mode keeps the picker inline instead: it's used only
+  // inside the filter modal's own scroll pane, which already gives it room and
+  // wants it visible without a focus/blur dance.
   let {
     search,
     include,
@@ -22,6 +29,7 @@
     fallbackLabel,
     clearOnSelect = false,
     expand = false,
+    ready = true,
   }: {
     search: (query: string) => Promise<FacetOption[]>;
     include: string[];
@@ -32,13 +40,19 @@
     // When set, the search field is cleared after picking an option (search →
     // pick a chip → search the next), suited to a build-a-set form.
     clearOnSelect?: boolean;
-    // Drop the scroll cap on the results list — for the roomy modal pane.
+    // Drop the floating panel for a roomy inline pane — for the modal's own scroll area.
     expand?: boolean;
+    // False while the candidate list behind `search` (e.g. a facet dictionary) is
+    // still loading. Blocks the debounced search until it flips true, so a load
+    // that outruns the 250ms debounce gets its popular first page fetched once it
+    // lands, instead of the query staying stuck on the empty result it raced into.
+    ready?: boolean;
   } = $props();
 
   let query = $state('');
   let results = $state<FacetOption[]>([]);
   let loading = $state(false);
+  let open = $state(false);
   // value → display label, accumulated from every result we have rendered, so a
   // selected company shows its real name. A reactive SvelteMap so a chip rendered
   // from the URL fallback upgrades to the real name once a later search reveals it
@@ -63,9 +77,15 @@
   }
 
   // Debounce: re-run on every query change, cancelling the pending run. Fires once
-  // on mount with an empty query to show the popular first page.
+  // on mount with an empty query to show the popular first page, and again
+  // whenever `ready` flips true — reading it here is what makes the effect
+  // re-fire once a still-loading dictionary lands.
   $effect(() => {
     const q = query.trim();
+    if (!ready) {
+      results = [];
+      return;
+    }
     const t = setTimeout(() => run(q), 250);
     return () => clearTimeout(t);
   });
@@ -81,11 +101,10 @@
   const labelOf = (value: string) => seen.get(value) ?? fallbackLabel(value);
   // Don't list an already-selected option in the picker — it's shown as a chip.
   const pickable = $derived(results.filter((o) => !selected.includes(o.value)));
+  const emptyMessage = $derived(!ready ? 'Loading…' : loading ? 'Searching…' : query ? 'Nothing found' : 'No results');
 </script>
 
-<div class="flex flex-col gap-2">
-  <Input bind:value={query} {placeholder} class="w-full" />
-
+{#snippet chips()}
   {#if selected.length > 0}
     <div class="flex flex-wrap gap-1.5">
       {#each selected as value (value)}
@@ -102,24 +121,65 @@
       {/each}
     </div>
   {/if}
+{/snippet}
 
-  <div class={expand ? 'flex flex-col gap-0.5' : 'flex max-h-44 flex-col gap-0.5 overflow-y-auto'}>
-    {#each pickable as opt (opt.value)}
-      <button
-        type="button"
-        onclick={() => pick(opt.value)}
-        class="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
-      >
-        <span class="truncate">{opt.label}</span>
-        {#if opt.count !== undefined}
-          <span class="shrink-0 tabular-nums opacity-60">{opt.count.toLocaleString()}</span>
-        {/if}
-      </button>
-    {/each}
-    {#if pickable.length === 0}
-      <span class="px-1 py-1 text-xs text-muted-foreground">
-        {loading ? 'Searching…' : query ? 'Nothing found' : 'No results'}
-      </span>
-    {/if}
-  </div>
+{#snippet optionList()}
+  {#each pickable as opt (opt.value)}
+    <button
+      type="button"
+      role="option"
+      aria-selected="false"
+      onmousedown={(e) => {
+        // mousedown (not click), preventDefault: keeps focus on the input instead
+        // of moving it to the button, so the panel stays open for the next pick.
+        e.preventDefault();
+        pick(opt.value);
+      }}
+      class="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
+    >
+      <span class="truncate">{opt.label}</span>
+      {#if opt.count !== undefined}
+        <span class="shrink-0 tabular-nums opacity-60">{opt.count.toLocaleString()}</span>
+      {/if}
+    </button>
+  {/each}
+  {#if pickable.length === 0}
+    <span class="px-2 py-1 text-xs text-muted-foreground">{emptyMessage}</span>
+  {/if}
+{/snippet}
+
+<div class="flex flex-col gap-2">
+  {#if expand}
+    <Input bind:value={query} {placeholder} class="w-full" />
+    {@render chips()}
+    <div class="flex flex-col gap-0.5">
+      {@render optionList()}
+    </div>
+  {:else}
+    <div class="relative">
+      <Input
+        bind:value={query}
+        {placeholder}
+        class="w-full"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls="remote-search-select-list"
+        onfocus={() => (open = true)}
+        onblur={() => setTimeout(() => (open = false), 120)}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') open = false;
+        }}
+      />
+      {#if open}
+        <div
+          id="remote-search-select-list"
+          role="listbox"
+          class="absolute inset-x-0 top-full z-10 mt-1 flex max-h-60 flex-col gap-0.5 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
+        >
+          {@render optionList()}
+        </div>
+      {/if}
+    </div>
+    {@render chips()}
+  {/if}
 </div>
