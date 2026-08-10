@@ -34,9 +34,10 @@
 ## 5. CI
 
 - [x] 5.1 Added `.github/workflows/extension.yml`, adapted from `freehire-extension/.github/workflows/build.yml` (upgraded to this repo's current action versions — `checkout@v7`/`setup-node@v7`, matching `ci.yml`), with `paths: ['extension/**', 'design-system/**', ...]` on `push`/`pull_request`, plus a `pnpm install` step for `design-system/`'s own deps (the same gotcha task 2.1/4.1 hit locally — mirrors `ci.yml`'s `web` job's "Install design-system dependencies" step almost verbatim).
-- [ ] 5.2 Push the branch and confirm `extension.yml` runs and passes (and that it does NOT trigger on unrelated file changes).
+- [x] 5.3 Added a "Publish GitHub Release" step to `extension.yml` (push-to-main only, idempotent, tagged `extension-v<package.json version>`) so a build survives past the 90-day workflow-artifact expiry — requested after the initial PR was opened.
+- [x] 5.2 Pushed and opened PR #1726. `extension.yml` triggered correctly (confirmed via `gh run list --branch merge-freehire-extension` — only `extension`/`CI`/`govulncheck`/`Performance`/`PR Welcome` ran, consistent with the path filter) and passed in 45s: all steps green (design-system install, npm ci, tests, check, build+zip, artifact upload).
 
 ## 6. Land and retire the old repo
 
-- [ ] 6.1 Open and merge the PR into `main`.
+- [ ] 6.1 Open and merge the PR into `main`. PR #1726 opened: https://github.com/strelov1/freehire/pull/1726 — merge still pending on CI + the manual Chrome check.
 - [ ] 6.2 Confirm with the user, then archive (not delete) `freehire-extension` on GitHub.

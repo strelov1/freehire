@@ -13,6 +13,9 @@ concurrency:
   group: extension-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -67,3 +70,30 @@ jobs:
           # paths unless told otherwise.
           include-hidden-files: true
           if-no-files-found: error
+
+      # A workflow-artifact download expires after 90 days — fine for reviewing
+      # a PR's build, wrong for "give me the build we shipped in June." A push to
+      # main additionally publishes a GitHub Release tagged by the version in
+      # package.json, which does not expire. Skipped on `pull_request` (a PR
+      # build isn't a release) and made idempotent (a re-run of the same commit,
+      # or two commits that don't bump the version, must not fail on a
+      # already-exists tag).
+      - name: Read extension version
+        if: github.event_name == 'push'
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: extension-v${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping."
+          else
+            gh release create "$TAG" .output/*.zip \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "extension v${{ steps.version.outputs.version }}" \
+              --notes "Automated build from commit $GITHUB_SHA."
+          fi

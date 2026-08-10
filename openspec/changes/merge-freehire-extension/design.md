@@ -108,10 +108,21 @@ separate, deliberate change).
 **6. CI as a new, independent workflow file.** `.github/workflows/extension.yml`,
 adapted from the source repo's `build.yml`: same jobs (`npm ci`, `npm test`,
 `npm run check`, `npm run zip`, upload the `chrome-mv3` artifact), gated with
-`paths: ['extension/**']` on both `push` and `pull_request` so it doesn't run
-on every Go/`web/` change. Kept separate from `ci.yml` rather than merged in,
-matching this repo's existing one-file-per-concern layout
-(`ci.yml`/`govulncheck.yml`/`perf.yml`/`pr-welcome.yml`).
+`paths: ['extension/**', 'design-system/**', ...]` on both `push` and
+`pull_request` so it doesn't run on every Go/`web/` change. Kept separate from
+`ci.yml` rather than merged in, matching this repo's existing
+one-file-per-concern layout (`ci.yml`/`govulncheck.yml`/`perf.yml`/`pr-welcome.yml`).
+
+A workflow-run artifact expires after 90 days — fine for reviewing a PR's
+build, wrong for "give me the build we shipped two months ago." So a `push` to
+`main` additionally publishes a **GitHub Release**, tagged
+`extension-v<package.json version>`, with the zip as a release asset — this
+does not expire. Skipped on `pull_request` (a PR build is not a release yet)
+and made idempotent (`gh release view` before `gh release create`, so a re-run
+of the same commit, or a second commit that doesn't bump the version, does not
+fail on an already-existing tag). This means bumping `extension/package.json`'s
+`version` is what produces a new named release — the same discipline
+`docs/chrome-web-store.md` already requires before a store upload.
 
 **7. Archive the old GitHub repo after, not before.** Land the copy, get CI
 green on the new location, then archive (Settings → Archive repository)
