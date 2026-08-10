@@ -43,14 +43,21 @@
 
 ## 4. Public profile page (backend)
 
-- [ ] 4.1 Add an unauthenticated route serving the profile by
+- [x] 4.1 Add an unauthenticated route serving the profile by
       `talent_network_public_id`. `off` and not-found both return 404 with
       the same body shape.
-- [ ] 4.2 Handler test: `public` mode response contains name/photo/experience/
+- [x] 4.2 Handler test: `public` mode response contains name/experience/
       skills, no email/phone/links. `anonymous` mode response contains no
-      name/photo, newest employer masked, older employers shown, no
-      email/phone/links. Malformed/missing opaque id → 404.
-- [ ] 4.3 Handler test: visibility enabled with empty/missing
+      name, current employer masked, older employers shown, no
+      email/phone/links. Malformed/missing opaque id → 404. **Photo deferred**:
+      `resumeextract.Structured` carries no photo field (see visibility.go),
+      and there is no public-photo-serving route yet — `headshot.Store`'s
+      only read path is owner-scoped and cookie-gated (photo.go). The query
+      (task 1) already selects `photo_object_key` for when this is picked
+      up; exposing it publicly is a distinct decision (object storage
+      exposure, caching, content-type) out of this task's scope — flagged
+      for a follow-up rather than silently dropped.
+- [x] 4.3 Handler test: visibility enabled with empty/missing
       `resume_structured` renders 200 with empty sections, not an error.
 
 ## 5. Owner-facing toggle (frontend)

@@ -327,6 +327,10 @@ func Register(app *fiber.App, cfg Config) {
 	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
 	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
 	talentNetworkH := newTalentNetworkHandlers(queries)
+	// The public, unauthenticated counterpart to talentNetworkH above — a separate
+	// handler struct (not a route on talentNetworkH) because it carries no auth
+	// middleware at all (see talent_network_profile.go).
+	talentNetworkProfileH := newTalentNetworkProfileHandlers(queries)
 	// One bank for the whole surface. It is stateless over the shared queries, but the
 	// single value is what keeps the evidence gate from being anyone's to attach later:
 	// the CV editor is constructed with it below, not handed it by the assistant.
@@ -603,6 +607,7 @@ func Register(app *fiber.App, cfg Config) {
 	profileH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
+	talentNetworkProfileH.register(api)
 
 	// CV builder + AI tailoring (see cvHandlers).
 	cvH.register(api, mw)
