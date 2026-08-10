@@ -2111,3 +2111,7 @@
   board: motia
 - company: Virtual Staff 365
   board: virtual-staff-365
+
+# workable board mined from dynamitejobs.com (2026-08-10, live-validated)
+- company: Rythm Health
+  board: rythm

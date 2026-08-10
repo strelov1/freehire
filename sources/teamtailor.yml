@@ -3263,3 +3263,7 @@
 # teamtailor board mined from remote.io (2026-08-09, live-validated)
 - company: Sophie Society
   board: sophiesociety-1744788360.teamtailor.com
+
+# teamtailor board mined from dynamitejobs.com (2026-08-10, live-validated)
+- company: Agorapulse
+  board: career.agorapulse.com
