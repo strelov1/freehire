@@ -165,6 +165,24 @@
           <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/searches')}>search notifications</a> page.</p>
         {/if}
       </div>
+
+      <div class="flex flex-col gap-2 border-t border-border pt-4">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timing</span>
+        <dl class="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <div class="flex gap-1.5">
+            <dt class="shrink-0 font-medium text-foreground">Apply reminder —</dt>
+            <dd>3 days after you save a job you haven't applied to yet.</dd>
+          </div>
+          <div class="flex gap-1.5">
+            <dt class="shrink-0 font-medium text-foreground">Follow-up —</dt>
+            <dd>once an application goes quiet: 21 days after applying, 18 in screening, 15 after a reply, 12 once interviewing, 5 with an offer out.</dd>
+          </div>
+          <div class="flex gap-1.5">
+            <dt class="shrink-0 font-medium text-foreground">Interview prep —</dt>
+            <dd>right when you move a card to Interview.</dd>
+          </div>
+        </dl>
+      </div>
     </div>
   {/if}
 </section>
