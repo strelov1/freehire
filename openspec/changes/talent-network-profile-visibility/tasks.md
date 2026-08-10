@@ -74,7 +74,17 @@
 
 ## 7. Verification
 
-- [ ] 7.1 `go vet -tags=integration ./...` and `go test ./...` pass.
+- [x] 7.1 `go vet -tags=integration ./...` and `go test ./...` pass. Also ran
+      `go build ./...`, plain `go vet ./...`, and the frontend's
+      `pnpm run check` / `lint` / `build` across the whole repo (not just the
+      new files) — all clean, no failures.
 - [ ] 7.2 Manual check: toggle each mode as a test account, load the public
       URL in a logged-out browser, confirm rendered content matches the mode
-      per design.md and specs/talent-network-profile/spec.md.
+      per design.md and specs/talent-network-profile/spec.md. NOT DONE in
+      this session — needs a running app + Postgres (`make up`), a
+      migrated/seeded local DB, and a test account; every task's diff was
+      instead independently verified by its reviewer tracing the actual
+      request/response through the real backend code (field names, query
+      shapes, error paths), not just trusting the implementer's report. A
+      genuine browser click-through is still worth doing before this change
+      is considered fully verified end-to-end.
