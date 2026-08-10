@@ -214,15 +214,22 @@ type Settings struct {
 	ExtensionRedirectAllowlist []string
 }
 
-// OAuthCredentials is one OAuth provider's client id/secret pair.
+// OAuthCredentials is one OAuth provider's credentials. Google/GitHub/LinkedIn
+// use only ClientID/ClientSecret; Apple authenticates with a self-signed JWT
+// instead of a static secret, so it uses ClientID (its Services ID) plus
+// TeamID/KeyID/PrivateKey and leaves ClientSecret empty.
 type OAuthCredentials struct {
 	ClientID     string
 	ClientSecret string
+	TeamID       string
+	KeyID        string
+	PrivateKey   string
 }
 
 // oauthProviders are the providers whose credentials Load reads from the
-// environment (OAUTH_<PROVIDER>_CLIENT_ID / OAUTH_<PROVIDER>_CLIENT_SECRET).
-var oauthProviders = []string{"google", "github", "linkedin"}
+// environment (OAUTH_<PROVIDER>_CLIENT_ID / OAUTH_<PROVIDER>_CLIENT_SECRET,
+// plus OAUTH_APPLE_TEAM_ID / OAUTH_APPLE_KEY_ID / OAUTH_APPLE_PRIVATE_KEY for apple).
+var oauthProviders = []string{"google", "github", "linkedin", "apple"}
 
 // defaultAssistantMaxPrompt is the rune ceiling on one user message when
 // ASSISTANT_MAX_PROMPT is unset or invalid.
@@ -358,6 +365,9 @@ func loadOAuth() map[string]OAuthCredentials {
 		creds[p] = OAuthCredentials{
 			ClientID:     os.Getenv(prefix + "_CLIENT_ID"),
 			ClientSecret: os.Getenv(prefix + "_CLIENT_SECRET"),
+			TeamID:       os.Getenv(prefix + "_TEAM_ID"),
+			KeyID:        os.Getenv(prefix + "_KEY_ID"),
+			PrivateKey:   os.Getenv(prefix + "_PRIVATE_KEY"),
 		}
 	}
 	return creds

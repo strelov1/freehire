@@ -311,6 +311,19 @@ func TestLoad_OAuthCredentialsFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_OAuthAppleCredentialsFromEnv(t *testing.T) {
+	t.Setenv("OAUTH_APPLE_CLIENT_ID", "me.freehire.web")
+	t.Setenv("OAUTH_APPLE_TEAM_ID", "25U9HN34VM")
+	t.Setenv("OAUTH_APPLE_KEY_ID", "ZC7298D2TR")
+	t.Setenv("OAUTH_APPLE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----")
+
+	got := Load().OAuth["apple"]
+	if got.ClientID != "me.freehire.web" || got.TeamID != "25U9HN34VM" ||
+		got.KeyID != "ZC7298D2TR" || got.PrivateKey != "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----" {
+		t.Errorf("OAuth[apple] = %+v, want client id/team id/key id/private key populated", got)
+	}
+}
+
 func TestLoad_OAuthUnsetProviderIsZero(t *testing.T) {
 	t.Setenv("OAUTH_LINKEDIN_CLIENT_ID", "")
 	t.Setenv("OAUTH_LINKEDIN_CLIENT_SECRET", "")
