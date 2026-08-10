@@ -83,3 +83,50 @@ export function getSession(id: string): Promise<SessionTranscript> {
 export function deleteSession(id: string): Promise<void> {
   return request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+/** Thrown when the deployment has no Realtime gateway configured (501). Its own type
+ *  for the same reason TranscriptionUnavailable exists: the answer is to remove the
+ *  voice-mode control, not to report a failure — the feature is absent here. */
+export class VoiceModeUnavailable extends Error {
+  constructor() {
+    super('voice mode is not configured');
+    this.name = 'VoiceModeUnavailable';
+  }
+}
+
+/** A one-call Realtime credential: the ephemeral secret, and which model it was
+ *  minted for. The model rides along because the WebRTC SDP exchange names it on its
+ *  own URL — the browser has no other way to learn which one this deployment runs,
+ *  and hardcoding it here would drift silently from the backend's REALTIME_MODEL. */
+export interface VoiceToken {
+  value: string;
+  model: string;
+}
+
+/** Mint a short-lived Realtime API client secret scoped to one interview session. The
+ *  browser takes this straight to OpenAI over WebRTC — it never transits our backend
+ *  again after this call. */
+export async function mintVoiceToken(sessionId: string): Promise<VoiceToken> {
+  const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/voice-token`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (res.status === 501) throw new VoiceModeUnavailable();
+  if (res.status === 404) throw new SessionNotFound();
+  if (!res.ok) throw new Error(`Could not start voice mode (${res.status}).`);
+  const body = (await res.json()) as { data: VoiceToken };
+  return body.data;
+}
+
+/** Append one completed voice-mode turn to a session's transcript, so it reads the
+ *  same afterward whether the exchange was typed or spoken. */
+export function appendVoiceTurn(
+  sessionId: string,
+  role: 'user' | 'assistant',
+  content: string,
+): Promise<void> {
+  return request<void>(`/sessions/${encodeURIComponent(sessionId)}/voice-turns`, {
+    method: 'POST',
+    body: JSON.stringify({ role, content }),
+  });
+}

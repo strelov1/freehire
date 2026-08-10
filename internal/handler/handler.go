@@ -39,6 +39,7 @@ import (
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/privatejob"
 	"github.com/strelov1/freehire/internal/ratelimit"
+	"github.com/strelov1/freehire/internal/realtime"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
@@ -226,6 +227,10 @@ type Config struct {
 	// Speech transcribes dictated audio for the composer. Nil is the deployment with
 	// no speech gateway: the endpoint answers 501 and the SPA offers no microphone.
 	Speech *speech.Client
+	// Realtime mints voice mode's short-lived OpenAI Realtime API credentials. Nil is
+	// the deployment with no Realtime gateway configured: the mint endpoint answers
+	// 501 and the interview session view offers no voice mode.
+	Realtime *realtime.Client
 	// PIIDetector de-identifies CV text before it reaches the LLM (fit analysis and
 	// structured extraction). Nil disables those CV→LLM paths (fail-closed): they degrade
 	// to no analysis rather than send PII to the model.
@@ -428,6 +433,11 @@ func Register(app *fiber.App, cfg Config) {
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
 		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
+	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
+	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
+	if cfg.Realtime != nil {
+		assistantH.realtime = cfg.Realtime
+	}
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the

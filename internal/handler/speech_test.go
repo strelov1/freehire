@@ -249,7 +249,7 @@ func TestTranscription_ThrottlesOneCallerRatherThanOneAddress(t *testing.T) {
 		t.Fatalf("issue token: %v", err)
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/speech/transcriptions", auth.RequireAuth(iss, testVersions), transcriptionLimiter(2),
+	app.Post("/speech/transcriptions", auth.RequireAuth(iss, testVersions), perCallerLimiter(2),
 		(&speechHandlers{stt: stt}).PostTranscription)
 
 	for attempt := 1; attempt <= 3; attempt++ {

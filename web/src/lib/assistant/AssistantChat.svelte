@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
-  import { AlertTriangle, ArrowDown, MessagesSquare, PanelLeft, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
+  import { AlertTriangle, ArrowDown, MessagesSquare, PanelLeft, Phone, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -9,6 +9,8 @@
     deleteSession,
     SessionNotFound,
   } from '$lib/assistant/api';
+  import VoiceCall from '$lib/assistant/VoiceCall.svelte';
+  import { canUseVoiceCall } from '$lib/assistant/voiceCall';
   import { track } from '$lib/analytics';
   import {
     openRehearsal,
@@ -152,6 +154,21 @@
   // Messages typed while a turn is in flight, drained one by one when it ends.
   let queue = $state<{ id: string; text: string }[]>([]);
   let queueCounter = 0;
+
+  // Voice mode: a hands-free call on an `interview` session, replacing the composer
+  // for its duration. `voiceModeOff` latches once the server reports no Realtime
+  // gateway (501) — same reasoning as Composer's `dictationOff` — so the trigger does
+  // not keep offering a call that can only fail. `voiceSupported` starts false and is
+  // decided after mount, the same reasoning VoiceInput.svelte's `supported` gives:
+  // reading navigator during SSR would disagree with the client on the first paint.
+  let voiceCallOpen = $state(false);
+  let voiceModeOff = $state(false);
+  let voiceSupported = $state(false);
+
+  function closeVoiceCall() {
+    voiceCallOpen = false;
+    if (activeId) void reloadTranscript(activeId);
+  }
 
   function enqueue(text: string) {
     queue = [...queue, { id: `q${++queueCounter}`, text }];
@@ -388,6 +405,10 @@
     if (activeId === id && chat.messages.length > 0) return;
     switching = true;
     cancelTurn();
+    // Navigating away from a session must end its call rather than silently carry it
+    // over to whichever session id lands next — the {#key activeId} on VoiceCall
+    // guards the same correctness issue structurally; this is the deliberate one.
+    voiceCallOpen = false;
     try {
       chat = initChat();
       queue = [];
@@ -490,6 +511,7 @@
     sessions = remaining;
     if (wasActive) {
       cancelTurn();
+      voiceCallOpen = false;
       activeId = null;
       chat = initChat();
       const next = activeAfterDelete(remaining, true, null);
@@ -682,6 +704,10 @@
 
   onMount(() => {
     void boot();
+    voiceSupported = canUseVoiceCall({
+      mediaDevices: navigator.mediaDevices,
+      RTCPeerConnection: typeof RTCPeerConnection === 'undefined' ? undefined : RTCPeerConnection,
+    });
     document.addEventListener('visibilitychange', catchUpOnReturn);
     return () => {
       document.removeEventListener('visibilitychange', catchUpOnReturn);
@@ -958,15 +984,49 @@
         {/if}
       </div>
 
-      <Composer
-        bind:draft
-        {queue}
-        {turnActive}
-        disabled={phase !== 'ready' || switching}
-        onSubmit={submitText}
-        onRemoveQueued={removeQueued}
-        onCancel={cancelTurn}
-      />
+      {#if voiceCallOpen && activeId}
+        <!-- Keyed on activeId: switching sessions while a call is open must destroy
+             this instance (its onDestroy ends the call cleanly) rather than reuse it
+             with a new sessionId prop, which would silently post the OLD call's turns
+             into the NEW session's transcript. -->
+        {#key activeId}
+          <div class="border-t border-border p-3">
+            <div class="mx-auto w-full max-w-3xl">
+              <VoiceCall
+                sessionId={activeId}
+                onClose={closeVoiceCall}
+                onUnavailable={() => {
+                  voiceModeOff = true;
+                  closeVoiceCall();
+                }}
+              />
+            </div>
+          </div>
+        {/key}
+      {:else}
+        <Composer
+          bind:draft
+          {queue}
+          {turnActive}
+          disabled={phase !== 'ready' || switching}
+          onSubmit={submitText}
+          onRemoveQueued={removeQueued}
+          onCancel={cancelTurn}
+        />
+        {#if activePreset === 'interview' && activeId && voiceSupported && !voiceModeOff}
+          <div class="flex justify-center border-t border-border/60 py-2">
+            <button
+              type="button"
+              onclick={() => (voiceCallOpen = true)}
+              disabled={phase !== 'ready' || switching || turnActive}
+              class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Phone class="size-3.5" />
+              Voice mode
+            </button>
+          </div>
+        {/if}
+      {/if}
     </div>
   </div>
 {/if}

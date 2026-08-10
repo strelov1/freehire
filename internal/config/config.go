@@ -117,6 +117,14 @@ type Settings struct {
 	// composer rendering no microphone.
 	STTModel string
 
+	// RealtimeModel is the OpenAI Realtime API model voice mode mints call credentials
+	// against, through the same gateway and key as STTModel above. Same posture as
+	// STTModel: no default, because Realtime audio is billed per minute and a
+	// deployment that never named a model should get no voice mode rather than a bill
+	// for one nobody chose. Empty leaves the mint endpoint answering 501 and the
+	// interview session view offering no voice mode.
+	RealtimeModel string
+
 	// PIIFilterURL is the co-located openai/privacy-filter span-detection endpoint used to
 	// mask PII out of CV text before it reaches the LLM (internal/pii). Optional here, but
 	// the fit-analysis and structured-résumé paths are fail-closed: an empty value disables
@@ -258,6 +266,8 @@ func Load() Settings {
 		AssistantMaxPrompt: envInt("ASSISTANT_MAX_PROMPT", defaultAssistantMaxPrompt),
 
 		STTModel: os.Getenv("STT_MODEL"),
+
+		RealtimeModel: os.Getenv("REALTIME_MODEL"),
 
 		PIIFilterURL: os.Getenv("PII_FILTER_URL"),
 

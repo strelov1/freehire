@@ -129,6 +129,32 @@ The preset carries the discovery, tracking and bank tools plus `interview_contex
 NOT the CV tools, the mail tools or `read_current_page`. It runs on the ordinary step
 ceiling: a rehearsal is a dialogue, not an unattended pass.
 
+**Voice mode** (`handler/assistant_interview_voice.go`) is a hands-free spoken call
+on an `interview` session, over OpenAI's Realtime API via WebRTC — the browser
+connects directly to OpenAI, so audio never transits this process. It exists beside
+the ordinary tool-calling turn loop, not inside it:
+
+- `POST /assistant/sessions/:id/voice-token` mints a short-lived Realtime client
+  secret. Its `instructions` carry a ONE-SHOT rendering of `rehearsalContext`
+  (`voiceInterviewInstructions`) rather than a live `interview_context` tool call —
+  a voice session has no data-channel tool relay, so what the text preset fetches on
+  demand is baked in once, at mint time, and does not change mid-call.
+- **No tool calls in a voice turn.** `experience_add` and every other rehearsal tool
+  are text-only. Nothing said on a call can be written to the candidate's experience
+  bank, regardless of what they confirm out loud — extending this needs a real tool
+  relay (client-side JS answering a Realtime function-call event against our REST
+  API), not a corollary of shipping the call itself.
+- `POST /assistant/sessions/:id/voice-turns` appends one completed exchange through
+  the same `Store.Append` `Runner.persist` uses, so the transcript reads the same
+  whether a turn was typed or spoken, and a candidate can drop into text mid-call
+  without losing what was said out loud. It is NOT how `interview-debrief` learns
+  what happened — that preset never reads another session's transcript (see below) —
+  persistence is for this session's own history view and for mid-session continuity.
+- The credential rides the same `LLM_BASE_URL`/`LLM_API_KEY` gateway as everything
+  else here, gated by its own `REALTIME_MODEL` (no default, same posture as
+  `STTModel` in `internal/config` — unset means the feature is absent, not billed for
+  by accident).
+
 **Interview debrief** is the rehearsal's mirror: the review of an interview that has
 already happened, minted from `POST /assistant/sessions?preset=debrief&job=<slug>`. It
 shares everything with the rehearsal but the prompt — the same binding, the same

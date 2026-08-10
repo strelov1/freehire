@@ -41,10 +41,12 @@ func newSpeechHandlers(stt transcriber) *speechHandlers {
 // worth doing with a stolen session.
 const transcriptionsPerHour = 60
 
-// transcriptionLimiter throttles per authenticated caller rather than per address —
-// an IP key is lifted by any rotating proxy pool, and the cost being defended here is
-// a metered upstream. Mounted AFTER the auth gate so the user id is resolved.
-func transcriptionLimiter(max int) fiber.Handler {
+// perCallerLimiter throttles per authenticated caller rather than per address — an IP
+// key is lifted by any rotating proxy pool, and the cost being defended here is a
+// metered upstream. Mounted AFTER the auth gate so the user id is resolved. Shared
+// with voice mode's token-minting endpoint (assistant_interview_voice.go), which
+// meters a different upstream behind the same per-caller shape.
+func perCallerLimiter(max int) fiber.Handler {
 	return limiter.New(limiter.Config{
 		Max:        max,
 		Expiration: time.Hour,
@@ -62,7 +64,7 @@ func (h *speechHandlers) register(api fiber.Router, mw middleware) {
 	// the composer that posts messages, so a client allowed to send one is allowed to
 	// transcribe for it; a narrower rule here would leave the control dead in the
 	// extension's side panel for no gain.
-	api.Post("/speech/transcriptions", mw.key, transcriptionLimiter(transcriptionsPerHour), h.PostTranscription)
+	api.Post("/speech/transcriptions", mw.key, perCallerLimiter(transcriptionsPerHour), h.PostTranscription)
 }
 
 // maxAudioUpload bounds one recording. At the ~32 kbit/s the browser's opus encoder

@@ -73,6 +73,12 @@ type assistantHandlers struct {
 	// the candidate.
 	stages     applicationReader
 	invitation invitationReader
+
+	// realtime mints voice-mode's short-lived OpenAI Realtime API credentials. Nil in
+	// a deployment with no Realtime gateway configured, following internal/speech's
+	// convention: the mint endpoint answers 501 and the interview session view offers
+	// no voice mode, rather than the composer discovering the absence on first use.
+	realtime realtimeMinter
 }
 
 // assistantModels names the model client the assistant runs on and the resolver that
@@ -146,6 +152,13 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// Resume after a transport/model failure without appending another user message —
 	// re-sending the prompt would duplicate it in the model's context.
 	api.Post("/assistant/sessions/:id/retry", mw.key, h.PostAssistantRetry)
+	// Voice mode: mint one call's credential, then append each completed spoken turn
+	// as it finishes. The audio itself never transits here — see PostAssistantVoiceToken.
+	// The limiter guards call STARTS, the same shape as speech's transcriptionsPerHour;
+	// it is not a substitute for the client-side call-duration cap, which guards one
+	// call's length.
+	api.Post("/assistant/sessions/:id/voice-token", mw.key, perCallerLimiter(voiceTokensPerHour), h.PostAssistantVoiceToken)
+	api.Post("/assistant/sessions/:id/voice-turns", mw.key, h.PostAssistantVoiceTurn)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.
 	api.Post("/assistant/sessions/:id/autopilot", mw.cookie, h.PostAssistantAutopilot)

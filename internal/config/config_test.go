@@ -152,6 +152,25 @@ func TestLoad_STTModelFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_RealtimeModelHasNoDefault(t *testing.T) {
+	t.Setenv("REALTIME_MODEL", "")
+
+	// Same posture as STTModel above: Realtime audio is billed per minute, so a
+	// deployment that never named a model must not find itself paying for one — it
+	// gets no voice mode instead.
+	if s := Load(); s.RealtimeModel != "" {
+		t.Errorf("RealtimeModel = %q, want empty when unset", s.RealtimeModel)
+	}
+}
+
+func TestLoad_RealtimeModelFromEnv(t *testing.T) {
+	t.Setenv("REALTIME_MODEL", "gpt-realtime-2.1")
+
+	if s := Load(); s.RealtimeModel != "gpt-realtime-2.1" {
+		t.Errorf("RealtimeModel = %q, want the env value", s.RealtimeModel)
+	}
+}
+
 func TestLoad_PIIFilterURLFromEnv(t *testing.T) {
 	t.Setenv("PII_FILTER_URL", "http://127.0.0.1:8099/detect")
 

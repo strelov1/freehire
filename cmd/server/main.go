@@ -26,6 +26,7 @@ import (
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/ratelimit"
+	"github.com/strelov1/freehire/internal/realtime"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/speech"
 	"github.com/strelov1/freehire/internal/tokencrypt"
@@ -181,6 +182,13 @@ func main() {
 	// when the gateway is unset, which the composer reads as "no microphone here".
 	speechClient := speech.New(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.STTModel)
 
+	// Voice mode's Realtime credential rides the same gateway and key as the clients
+	// above — the litellm proxy already fronts OpenAI's /v1/realtime/client_secrets
+	// the same way it fronts /audio/transcriptions, so nothing new to configure here
+	// either. Nil when the gateway or REALTIME_MODEL is unset, which the interview
+	// session view reads as "no voice mode here".
+	realtimeClient := realtime.New(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.RealtimeModel)
+
 	// The gateway's administrative API, which mints the per-user credential each
 	// account's model calls are spent under. Nil when unconfigured, and that is an
 	// ordinary deployment rather than a degraded one: every call then goes out on
@@ -240,6 +248,7 @@ func main() {
 		AssistantMaxPrompt:          cfg.AssistantMaxPrompt,
 		LLMKeys:                     llmKeys,
 		Speech:                      speechClient,
+		Realtime:                    realtimeClient,
 		PIIDetector:                 piiDetector,
 
 		TelegramBotToken:      cfg.TelegramBotToken,
