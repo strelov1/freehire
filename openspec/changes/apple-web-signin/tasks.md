@@ -28,5 +28,5 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `go vet -tags=integration ./...` passes
+- [x] 6.1 `go vet -tags=integration ./...` passes
 - [ ] 6.2 Manual end-to-end sign-in against the real Apple Services ID on a deployed environment
