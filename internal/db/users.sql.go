@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -114,6 +115,72 @@ DELETE FROM users WHERE id = $1
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
+}
+
+const getTalentNetworkProfileByPublicID = `-- name: GetTalentNetworkProfileByPublicID :one
+SELECT u.talent_network_visibility,
+       u.resume_structured,
+       u.photo_object_key,
+       p.specializations,
+       p.skills
+FROM users u
+LEFT JOIN user_profiles p ON p.user_id = u.id
+WHERE u.talent_network_public_id = $1
+`
+
+type GetTalentNetworkProfileByPublicIDRow struct {
+	TalentNetworkVisibility string      `json:"talent_network_visibility"`
+	ResumeStructured        []byte      `json:"resume_structured"`
+	PhotoObjectKey          pgtype.Text `json:"photo_object_key"`
+	Specializations         []string    `json:"specializations"`
+	Skills                  []string    `json:"skills"`
+}
+
+// Everything the public Talent Network page needs to render, keyed by the opaque
+// talent_network_public_id (never users.id, which would leak signup order/row count).
+// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
+// use for the owner-facing profile read (internal/handler/me_profile.go), via a LEFT
+// JOIN because a candidate can enable visibility before ever saving a profile (design
+// decision: "Missing/empty CV does not block enabling the toggle").
+//
+// Deliberately does NOT filter on talent_network_visibility: the design mandates an
+// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
+// query — is the one place that decides that, from the visibility value it gets back
+// alongside everything else.
+func (q *Queries) GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error) {
+	row := q.db.QueryRow(ctx, getTalentNetworkProfileByPublicID, talentNetworkPublicID)
+	var i GetTalentNetworkProfileByPublicIDRow
+	err := row.Scan(
+		&i.TalentNetworkVisibility,
+		&i.ResumeStructured,
+		&i.PhotoObjectKey,
+		&i.Specializations,
+		&i.Skills,
+	)
+	return i, err
+}
+
+const getTalentNetworkVisibility = `-- name: GetTalentNetworkVisibility :one
+SELECT talent_network_visibility, talent_network_public_id
+FROM users
+WHERE id = $1
+`
+
+type GetTalentNetworkVisibilityRow struct {
+	TalentNetworkVisibility string    `json:"talent_network_visibility"`
+	TalentNetworkPublicID   uuid.UUID `json:"talent_network_public_id"`
+}
+
+// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
+// talent_network_public_id rides along so the settings page can render the resulting
+// public URL the moment a non-'off' mode is selected, without a second round-trip.
+// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
+// there is no "not set yet" case to special-case.
+func (q *Queries) GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error) {
+	row := q.db.QueryRow(ctx, getTalentNetworkVisibility, id)
+	var i GetTalentNetworkVisibilityRow
+	err := row.Scan(&i.TalentNetworkVisibility, &i.TalentNetworkPublicID)
+	return i, err
 }
 
 const getUserATSAnalysis = `-- name: GetUserATSAnalysis :one
@@ -516,6 +583,26 @@ func (q *Queries) SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, 
 	var token_version int32
 	err := row.Scan(&token_version)
 	return token_version, err
+}
+
+const setTalentNetworkVisibility = `-- name: SetTalentNetworkVisibility :exec
+UPDATE users
+SET talent_network_visibility = $2
+WHERE id = $1
+`
+
+type SetTalentNetworkVisibilityParams struct {
+	ID                      int64  `json:"id"`
+	TalentNetworkVisibility string `json:"talent_network_visibility"`
+}
+
+// Owner-scoped write of the caller's Talent Network visibility. Does not touch
+// talent_network_public_id: the public URL stays stable across mode changes
+// (including a round trip through 'off'), so a candidate who already shared it once
+// never has to reshare a new one.
+func (q *Queries) SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error {
+	_, err := q.db.Exec(ctx, setTalentNetworkVisibility, arg.ID, arg.TalentNetworkVisibility)
+	return err
 }
 
 const setUserATSAnalysis = `-- name: SetUserATSAnalysis :exec

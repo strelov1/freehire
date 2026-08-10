@@ -1113,6 +1113,24 @@ type Querier interface {
 	// same request again: without this read every refresh minted another copy and stranded the
 	// conversation bound to the previous one.
 	GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJobParams) (GetTailoredCVForJobRow, error)
+	// Everything the public Talent Network page needs to render, keyed by the opaque
+	// talent_network_public_id (never users.id, which would leak signup order/row count).
+	// Mirrors the users + user_profiles composition GetProfile/toProfileResponse already
+	// use for the owner-facing profile read (internal/handler/me_profile.go), via a LEFT
+	// JOIN because a candidate can enable visibility before ever saving a profile (design
+	// decision: "Missing/empty CV does not block enabling the toggle").
+	//
+	// Deliberately does NOT filter on talent_network_visibility: the design mandates an
+	// identical 404 for a disabled profile and a nonexistent id, so the caller — not this
+	// query — is the one place that decides that, from the visibility value it gets back
+	// alongside everything else.
+	GetTalentNetworkProfileByPublicID(ctx context.Context, talentNetworkPublicID uuid.UUID) (GetTalentNetworkProfileByPublicIDRow, error)
+	// The caller's own Talent Network opt-in state, for the owner-facing settings toggle.
+	// talent_network_public_id rides along so the settings page can render the resulting
+	// public URL the moment a non-'off' mode is selected, without a second round-trip.
+	// Every row has both — 'off' and a freshly-minted uuid are the column defaults — so
+	// there is no "not set yet" case to special-case.
+	GetTalentNetworkVisibility(ctx context.Context, id int64) (GetTalentNetworkVisibilityRow, error)
 	// The caller's linked Telegram chat (link-status endpoint + delivery resolution).
 	GetTelegramLink(ctx context.Context, userID int64) (TelegramLink, error)
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
@@ -2652,6 +2670,11 @@ type Querier interface {
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
+	// Owner-scoped write of the caller's Talent Network visibility. Does not touch
+	// talent_network_public_id: the public URL stays stable across mode changes
+	// (including a round trip through 'off'), so a candidate who already shared it once
+	// never has to reshare a new one.
+	SetTalentNetworkVisibility(ctx context.Context, arg SetTalentNetworkVisibilityParams) error
 	// Cache the derived CV ATS review for the user (keyed to their stored CV).
 	SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysisParams) error
 	// Record that control of the address was proven. Idempotent — confirming twice is a

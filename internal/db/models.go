@@ -758,6 +758,8 @@ type User struct {
 	ResumeCountries            []string           `json:"resume_countries"`
 	ResumeRegions              []string           `json:"resume_regions"`
 	ResumeCities               []string           `json:"resume_cities"`
+	TalentNetworkVisibility    string             `json:"talent_network_visibility"`
+	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
 }
 
 type UserEmailCode struct {

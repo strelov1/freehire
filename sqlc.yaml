@@ -106,3 +106,9 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
               pointer: true
+          # The Talent Network public profile id follows the same opaque-id rule as
+          # cvs.id/session ids above: it addresses an unauthenticated public route, so
+          # it must be a real UUID type the client treats as an opaque string rather
+          # than a bigint that would leak signup order.
+          - column: "users.talent_network_public_id"
+            go_type: "github.com/google/uuid.UUID"
