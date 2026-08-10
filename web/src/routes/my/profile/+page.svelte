@@ -16,6 +16,7 @@
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
+  import TalentNetworkSettings from '$lib/components/TalentNetworkSettings.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type { ATSResponse, FacetCounts, ResumeStructured, Verdict } from '$lib/types';
@@ -278,6 +279,7 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
+          <TalentNetworkSettings onError={(msg) => (actionError = msg)} />
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and
                off the other tabs, which are readings of the market, not account

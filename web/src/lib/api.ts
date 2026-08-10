@@ -84,6 +84,8 @@ import type {
   CommunityReply,
   ExperienceAtom,
   ExperienceBank,
+  TalentNetworkSetting,
+  TalentNetworkVisibility,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -1038,6 +1040,27 @@ export function createApi(
     await call('/api/v1/me/profile', { method: 'DELETE' });
   }
 
+  // Talent Network: the caller's own opt-in visibility setting (distinct from the public,
+  // unauthenticated profile page at GET /talent-network/:publicID — see
+  // internal/handler/me_talent_network.go and talent_network_profile.go).
+
+  /** The caller's current Talent Network visibility and public id. A user who has never
+   *  touched the setting reads "off". */
+  async function getTalentNetwork(): Promise<TalentNetworkSetting> {
+    return requestData<TalentNetworkSetting>('/api/v1/me/talent-network');
+  }
+
+  /** Update the caller's own Talent Network visibility. Returns the echoed setting rather
+   *  than assuming success, same as saveProfile. */
+  async function setTalentNetworkVisibility(
+    visibility: TalentNetworkVisibility,
+  ): Promise<TalentNetworkSetting> {
+    return requestData<TalentNetworkSetting>(
+      '/api/v1/me/talent-network',
+      jsonBody('PUT', { visibility }),
+    );
+  }
+
   /** Permanently erase the signed-in account and everything it owns. Irreversible:
    *  there is no restore path on either side. `email` is the confirmation — it must be
    *  the caller's own address, or the server answers 400. A 503 means nothing was
@@ -1803,6 +1826,8 @@ export function createApi(
     getProfile,
     saveProfile,
     deleteProfile,
+    getTalentNetwork,
+    setTalentNetworkVisibility,
     deleteAccount,
     extractResumeProfile,
     getResume,
