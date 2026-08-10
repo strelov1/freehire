@@ -160,6 +160,8 @@ func TestVerifyAppleIDToken_Valid(t *testing.T) {
 	idToken := signAppleIDToken(t, key, "the-kid", appleIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "apple-sub-1",
+			Audience:  jwt.ClaimStrings{"me.freehire.web"},
+			Issuer:    "https://appleid.apple.com",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 		},
@@ -167,7 +169,7 @@ func TestVerifyAppleIDToken_Valid(t *testing.T) {
 		EmailVerified: true,
 	})
 
-	claims, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", idToken)
+	claims, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken)
 	if err != nil {
 		t.Fatalf("verifyAppleIDToken: %v", err)
 	}
@@ -191,6 +193,8 @@ func TestVerifyAppleIDToken_EmailVerifiedAsString(t *testing.T) {
 	idToken := signAppleIDToken(t, key, "the-kid", appleIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "apple-sub-2",
+			Audience:  jwt.ClaimStrings{"me.freehire.web"},
+			Issuer:    "https://appleid.apple.com",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 		},
@@ -198,7 +202,7 @@ func TestVerifyAppleIDToken_EmailVerifiedAsString(t *testing.T) {
 		EmailVerified: "true",
 	})
 
-	claims, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", idToken)
+	claims, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken)
 	if err != nil {
 		t.Fatalf("verifyAppleIDToken: %v", err)
 	}
@@ -223,7 +227,7 @@ func TestVerifyAppleIDToken_WrongSigningKeyRejected(t *testing.T) {
 		EmailVerified: true,
 	})
 
-	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", idToken); err == nil {
+	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken); err == nil {
 		t.Error("want error for id_token signed by a key not in the JWKS, got nil")
 	}
 }
@@ -241,8 +245,52 @@ func TestVerifyAppleIDToken_UnknownKidRejected(t *testing.T) {
 		},
 	})
 
-	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", idToken); err == nil {
+	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken); err == nil {
 		t.Error("want error for id_token whose kid is not in the JWKS, got nil")
+	}
+}
+
+func TestVerifyAppleIDToken_WrongAudienceRejected(t *testing.T) {
+	key := testAppleRSAKey(t)
+	srv := stubAppleJWKS(t, "the-kid", key)
+
+	now := time.Now()
+	idToken := signAppleIDToken(t, key, "the-kid", appleIDTokenClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "apple-sub-5",
+			Audience:  jwt.ClaimStrings{"someone-elses-services-id"},
+			Issuer:    "https://appleid.apple.com",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
+		Email:         "user5@example.com",
+		EmailVerified: true,
+	})
+
+	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken); err == nil {
+		t.Error("want error for id_token issued for a different audience, got nil")
+	}
+}
+
+func TestVerifyAppleIDToken_WrongIssuerRejected(t *testing.T) {
+	key := testAppleRSAKey(t)
+	srv := stubAppleJWKS(t, "the-kid", key)
+
+	now := time.Now()
+	idToken := signAppleIDToken(t, key, "the-kid", appleIDTokenClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "apple-sub-6",
+			Audience:  jwt.ClaimStrings{"me.freehire.web"},
+			Issuer:    "https://not-apple.example.com",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
+		Email:         "user6@example.com",
+		EmailVerified: true,
+	})
+
+	if _, err := verifyAppleIDToken(context.Background(), srv.Client(), srv.URL+"/auth/keys", "me.freehire.web", idToken); err == nil {
+		t.Error("want error for id_token issued by a non-Apple issuer, got nil")
 	}
 }
 
@@ -297,6 +345,8 @@ func TestApple_FetchIdentity(t *testing.T) {
 	srv := stubApple(t, key, "the-kid", appleIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "apple-sub-1",
+			Audience:  jwt.ClaimStrings{"me.freehire.web"},
+			Issuer:    "https://appleid.apple.com",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 		},
@@ -319,6 +369,8 @@ func TestApple_FetchIdentityMissingSub(t *testing.T) {
 	now := time.Now()
 	srv := stubApple(t, key, "the-kid", appleIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			Audience:  jwt.ClaimStrings{"me.freehire.web"},
+			Issuer:    "https://appleid.apple.com",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 		},

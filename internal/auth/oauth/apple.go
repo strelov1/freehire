@@ -109,7 +109,7 @@ func (p *appleProvider) FetchIdentity(ctx context.Context, code string) (Identit
 		return Identity{}, fmt.Errorf("apple: token response has no id_token")
 	}
 
-	claims, err := verifyAppleIDToken(ctx, client, p.jwksURL, idToken)
+	claims, err := verifyAppleIDToken(ctx, client, p.jwksURL, p.clientID, idToken)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -150,7 +150,7 @@ func appleClientSecret(teamID, servicesID, keyID, privateKeyPEM string) (string,
 	claims := jwt.RegisteredClaims{
 		Issuer:    teamID,
 		Subject:   servicesID,
-		Audience:  jwt.ClaimStrings{"https://appleid.apple.com"},
+		Audience:  jwt.ClaimStrings{appleIssuer},
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(appleClientSecretTTL)),
 	}
@@ -182,6 +182,8 @@ func (c appleIDTokenClaims) emailVerifiedBool() bool {
 
 // appleJWK is one key from Apple's published JWKS.
 type appleJWK struct {
+	Kty string `json:"kty"`
+	Use string `json:"use"`
 	Kid string `json:"kid"`
 	N   string `json:"n"` // base64url-encoded RSA modulus
 	E   string `json:"e"` // base64url-encoded RSA public exponent
@@ -231,13 +233,17 @@ func fetchAppleJWKS(ctx context.Context, client *http.Client, jwksURL string) ([
 	return body.Keys, nil
 }
 
+// appleIssuer is the only issuer Apple ever signs an id_token as.
+const appleIssuer = "https://appleid.apple.com"
+
 // verifyAppleIDToken parses idToken and verifies its signature against a key
-// fetched from Apple's JWKS matching the token's kid header, before returning
-// its claims. This is the one trust boundary in the Apple provider: every
-// other provider proves identity via a live, authenticated userinfo call, but
-// Apple hands back only this signed token — an unverified signature would let
-// a forged token claim any email.
-func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, idToken string) (appleIDTokenClaims, error) {
+// fetched from Apple's JWKS matching the token's kid header, and that it was
+// issued by Apple for this exact client, before returning its claims. This is
+// the one trust boundary in the Apple provider: every other provider proves
+// identity via a live, authenticated userinfo call, but Apple hands back only
+// this signed token — an unverified signature, audience, or issuer would let
+// a forged or misdirected token claim any email.
+func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, clientID, idToken string) (appleIDTokenClaims, error) {
 	var claims appleIDTokenClaims
 	_, err := jwt.ParseWithClaims(idToken, &claims, func(tok *jwt.Token) (any, error) {
 		kid, _ := tok.Header["kid"].(string)
@@ -246,12 +252,12 @@ func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, idTok
 			return nil, err
 		}
 		for _, k := range keys {
-			if k.Kid == kid {
+			if k.Kid == kid && k.Kty == "RSA" && (k.Use == "" || k.Use == "sig") {
 				return k.applePublicKey()
 			}
 		}
-		return nil, fmt.Errorf("apple: no JWKS key for kid %q", kid)
-	}, jwt.WithValidMethods([]string{"RS256"}))
+		return nil, fmt.Errorf("apple: no matching RSA signing key for kid %q", kid)
+	}, jwt.WithValidMethods([]string{"RS256"}), jwt.WithAudience(clientID), jwt.WithIssuer(appleIssuer))
 	if err != nil {
 		return appleIDTokenClaims{}, fmt.Errorf("apple: verify id_token: %w", err)
 	}

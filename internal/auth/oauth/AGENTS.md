@@ -20,16 +20,23 @@ Provider registry over the same cookie session as password login.
 
 - Google/LinkedIn: OIDC-userinfo implementation (shared)
 - GitHub: reads `/user` + `/user/emails`
+- Apple: no userinfo endpoint and no static client secret — see below
 - `internal/auth/oauth` owns `Provider` interface, registry (`NewRegistry`), state cookie
 - Handlers in `internal/handler/oauth.go`
 
 ## Config
 
 - `OAUTH_<PROVIDER>_CLIENT_ID`/`_CLIENT_SECRET` (GOOGLE/GITHUB/LINKEDIN)
-- Provider enabled only when both are set
+- Apple instead: `OAUTH_APPLE_CLIENT_ID` (its Services ID) + `OAUTH_APPLE_TEAM_ID`/`_KEY_ID`/`_PRIVATE_KEY`; enabled only when all four are set
 - `GET /api/v1/auth/oauth/providers` lists enabled ones (SPA renders buttons from it)
 - Redirect URLs derive from `FRONTEND_ORIGIN` (`<origin>/api/v1/auth/oauth/<p>/callback`)
 - Provider tokens used once to fetch identity, never stored
+
+## Apple's Different Trust Model
+
+- No static client secret: `apple.go` signs a short-lived (5-minute) ES256 JWT fresh for every token exchange, from Team ID + Key ID + the private key — never cached, nothing to rotate on Apple's 6-month schedule
+- No userinfo call: identity comes only from the token exchange's `id_token`. Its signature is verified against Apple's JWKS (`appleid.apple.com/auth/keys`), and its `aud`/`iss` are checked against our client id / Apple's issuer — this is the one place in the package that verifies a token signature itself, since every other provider's userinfo GET is its own trust boundary
+- Requesting the `email` scope forces `response_mode=form_post`, so Apple's callback arrives as a `POST` with a form-encoded body, not the `GET` query string every other provider uses — `internal/handler/oauth.go`'s callback route must accept both
 
 ## Limitations
 
