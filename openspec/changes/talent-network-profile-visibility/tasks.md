@@ -14,7 +14,7 @@
 
 ## 2. Anonymous-mode projection logic
 
-- [ ] 2.1 Write the masking function that takes `resumeextract.Structured`
+- [x] 2.1 Write the masking function that takes `resumeextract.Structured`
       and returns the anonymous-mode view: apply `.Professional()`, then
       replace the company field of every `experience` entry whose `End`
       reads as "not ended" (empty, or one of

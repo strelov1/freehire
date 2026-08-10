@@ -1,5 +1,7 @@
 package resumeextract
 
+import "strings"
+
 // This file holds the Talent Network public-profile projections (see
 // openspec/changes/talent-network-profile-visibility). It is deliberately NOT part of
 // structured.go: cmd/gen-contracts generates TypeScript from structured.go alone, and
@@ -7,23 +9,40 @@ package resumeextract
 // — the handler that serves them (a later task) decides what crosses the wire and gets
 // its own generated type then, rather than this file leaking one prematurely.
 
-// currentEmployerLabel is the generic label anonymous mode substitutes for the newest
+// currentEmployerLabel is the generic label anonymous mode substitutes for a "current"
 // experience entry's employer name. This is the literal wording from design.md's
 // "Anonymous-mode masking is Professional() plus one extra step" decision — not a
 // placeholder to be reworded later.
 const currentEmployerLabel = "Current employer"
 
+// notEndedLabels mirrors internal/experience/import_resume.go's currentEndLabels (line
+// ~16) exactly: the free-form End labels a CV uses for a role that has not ended. Kept
+// as a separate copy rather than imported — internal/experience already imports this
+// package, so the reverse import would be circular. Keep the two maps in sync if the
+// convention ever changes.
+var notEndedLabels = map[string]bool{"": true, "present": true, "current": true, "now": true, "ongoing": true}
+
+// isCurrentEntry reports whether an experience entry's End label reads as "not ended",
+// case-insensitively, per notEndedLabels above.
+func isCurrentEntry(e Experience) bool {
+	return notEndedLabels[strings.ToLower(strings.TrimSpace(e.End))]
+}
+
 // Anonymous is Structured's anonymous-mode projection for the Talent Network public
-// page: Professional() (already contact-free — no name/email/phone/links) with the
-// newest experience entry's employer replaced by the generic label above. Older entries
-// pass through unmodified: the design deliberately scopes the mask to the current role,
-// not the whole work history, since the rest of the history is useful signal for anyone
-// else the candidate shares the link with (see design.md, "Risks / Trade-offs").
+// page: Professional() (already contact-free — no name/email/phone/links) with every
+// "current" experience entry's employer replaced by the generic label above. All other
+// entries pass through unmodified: the design deliberately scopes the mask to the
+// current role(s), not the whole work history, since the rest of the history is useful
+// signal for anyone else the candidate shares the link with (see design.md, "Risks /
+// Trade-offs").
 //
-// Experience is ordered newest-first — the same reverse-chronological convention
-// internal/experience.Store.ListEmployments documents and enforces for the bank, and the
-// order a CV is conventionally written in, which the extraction prompt does not disturb
-// — so the newest entry is index 0.
+// The mask is content-based (the End label), not positional: Structured.Experience's
+// ordering (newest-first vs. oldest-first) is nowhere documented or enforced by the LLM
+// extraction prompt or schema, so "the newest entry" cannot be determined reliably by
+// array position alone (see design.md, "Masking is content-based (the End label), not
+// positional."). If more than one entry reads as current (concurrent roles, or a
+// sloppily-filled CV), every matching entry is masked — there is no reliable signal for
+// picking "the real" one. If zero entries read as current, none are masked.
 func (s Structured) Anonymous() Professional {
 	p := s.Professional()
 	if len(p.Experience) == 0 {
@@ -34,7 +53,11 @@ func (s Structured) Anonymous() Professional {
 	// with s.Experience, and masking must not leak back into the caller's Structured.
 	masked := make([]Experience, len(p.Experience))
 	copy(masked, p.Experience)
-	masked[0].Company = currentEmployerLabel
+	for i := range masked {
+		if isCurrentEntry(masked[i]) {
+			masked[i].Company = currentEmployerLabel
+		}
+	}
 	p.Experience = masked
 
 	return p
@@ -50,10 +73,10 @@ type Public struct {
 }
 
 // Public projects Structured onto the public-mode view: name shown, work history and
-// skills shown unmodified (including the newest employer — unlike Anonymous), contact
-// fields still withheld. Public mode reuses the same contact-stripped base as anonymous
-// mode because the page is unauthenticated and publicly reachable (see design.md,
-// "Public mode still strips contact info").
+// skills shown unmodified (including any current employer — unlike Anonymous, which
+// masks it), contact fields still withheld. Public mode reuses the same contact-stripped
+// base as anonymous mode because the page is unauthenticated and publicly reachable (see
+// design.md, "Public mode still strips contact info").
 func (s Structured) Public() Public {
 	return Public{
 		FullName:     s.FullName,
