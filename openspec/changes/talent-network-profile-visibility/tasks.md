@@ -14,14 +14,16 @@
 
 ## 2. Anonymous-mode projection logic
 
-- [ ] 2.1 Write the masking function that takes `resumeextract.Structured`
+- [x] 2.1 Write the masking function that takes `resumeextract.Structured`
       and returns the anonymous-mode view: apply `.Professional()`, then
       replace the newest `experience` entry's company field with a generic
       label, leaving older entries untouched. Cover: zero, one, and
       multiple-entry experience lists.
-- [ ] 2.2 Write the public-mode projection: `.Professional()` with name and
+- [x] 2.2 Write the public-mode projection: `.Professional()` with name and
       photo retained (i.e. `Professional()` output plus name/photo, still
-      no email/phone/links).
+      no email/phone/links). `Structured` has no photo field — see
+      `internal/resumeextract/visibility.go`; a later task composes a photo
+      in from elsewhere (e.g. `users.photo_object_key`).
 
 ## 3. Owner-facing visibility setting
 
