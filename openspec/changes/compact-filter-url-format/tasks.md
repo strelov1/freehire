@@ -7,10 +7,11 @@
 
 ## 2. Frontend: compact serialization and dual-format parsing
 
-- [ ] 2.1 Add a shared split-and-flatten helper (or inline the same logic) used by both include and exclude parsing in `web/src/lib/facetModel.ts`
-- [ ] 2.2 Update `filtersToParams` to write one comma-joined `p.set(def.param, values.join(','))` per facet with selections, instead of repeated `p.append`
-- [ ] 2.3 Update `filtersFromParams` to decode both comma-joined and repeated-key entries via the shared helper
-- [ ] 2.4 Tests/verification: round-trip a filter set through `filtersToParams` → `filtersFromParams` and confirm the same selections come back; confirm an existing repeated-key URL still parses correctly
+- [x] 2.1 Add a shared split-and-flatten helper (or inline the same logic) used by both include and exclude parsing in `web/src/lib/facetModel.ts`
+- [x] 2.2 Update `filtersToParams` to write one comma-joined `p.set(def.param, values.join(','))` per facet with selections, instead of repeated `p.append`
+- [x] 2.3 Update `filtersFromParams` to decode both comma-joined and repeated-key entries via the shared helper
+- [x] 2.4 Tests/verification: round-trip a filter set through `filtersToParams` → `filtersFromParams` and confirm the same selections come back; confirm an existing repeated-key URL still parses correctly
+- [x] 2.5 (found in review) `URLSearchParams.toString()` percent-encodes commas to `%2C`; added `urlSearchString.ts#toSearchString` and wired it into every place that writes the address bar from a facet query: `UrlSyncedState#write`, `JobsView#openSwipe`, `SwipeDeck#close`, `SavedSearchesView`'s "Open" link
 
 ## 3. Docs
 
