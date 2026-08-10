@@ -46,6 +46,14 @@ export interface JobFilters {
   sort: SortField;
 }
 
+/** Splits every raw query value on comma and flattens the result, dropping
+ *  empty fragments (a stray comma) — so a repeated key (`skills=go&skills=react`)
+ *  and a comma-joined value (`skills=go,react`) resolve to the same values.
+ *  Mirrors the backend's `splitFacetValues` (internal/search/query_filter.go). */
+function splitParamValues(raw: string[]): string[] {
+  return raw.flatMap((v) => v.split(',')).filter((v) => v !== '');
+}
+
 export function emptyFacet(): FacetState {
   return { include: [], exclude: [], matchAll: false };
 }
@@ -69,8 +77,8 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   for (const def of FACETS) {
     const st = f.facets[def.param];
     if (!st) continue;
-    for (const v of st.include) p.append(def.param, v);
-    for (const v of st.exclude) p.append(`${def.param}_exclude`, v);
+    if (st.include.length > 0) p.set(def.param, st.include.join(','));
+    if (st.exclude.length > 0) p.set(`${def.param}_exclude`, st.exclude.join(','));
     // AND-mode is per facet and only meaningful with more than one included value.
     if (st.matchAll && st.include.length > 1) p.set(`${def.param}_mode`, 'and');
   }
@@ -93,9 +101,9 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
     // facet's values are a set — the store's transitions enforce that on user
     // input, so the URL parse must too. A repeated value otherwise reaches a chip
     // list keyed by value, and Svelte throws `each_key_duplicate` on hydration.
-    const exclude = [...new Set(p.getAll(`${def.param}_exclude`))];
+    const exclude = [...new Set(splitParamValues(p.getAll(`${def.param}_exclude`)))];
     const excludeSet = new Set(exclude);
-    const include = [...new Set(p.getAll(def.param))].filter((v) => !excludeSet.has(v));
+    const include = [...new Set(splitParamValues(p.getAll(def.param)))].filter((v) => !excludeSet.has(v));
     const matchAll = p.get(`${def.param}_mode`) === 'and';
     f.facets[def.param] = { include, exclude, matchAll };
   }

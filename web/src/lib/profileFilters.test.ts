@@ -29,10 +29,10 @@ describe('filtersFromProfile', () => {
   it('seeds category from specializations and skills from skills, and nothing else', () => {
     const f = filtersFromProfile(mkProfile(['backend', 'devops'], ['go', 'kubernetes']));
     const p = filtersToParams(f);
-    expect(p.getAll('category')).toEqual(['backend', 'devops']);
-    expect(p.getAll('skills')).toEqual(['go', 'kubernetes']);
+    expect(p.getAll('category')).toEqual(['backend,devops']);
+    expect(p.getAll('skills')).toEqual(['go,kubernetes']);
     // No other facet or field leaks in.
-    expect([...p.keys()].sort()).toEqual(['category', 'category', 'skills', 'skills'].sort());
+    expect([...p.keys()].sort()).toEqual(['category', 'skills']);
   });
 
   it('starts from a clean slate (independent of any prior state)', () => {
@@ -66,15 +66,15 @@ describe('filtersFromProfile', () => {
       relocation: { open: true, regions: ['eu'], cities: ['Berlin'] },
     };
     const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], ['go'], location)));
-    expect(p.getAll('work_mode')).toEqual(['remote', 'onsite']);
+    expect(p.getAll('work_mode')).toEqual(['remote,onsite']);
     // regions = remote ∪ relocation targets.
-    expect(p.getAll('regions')).toEqual(['latam', 'eu']);
+    expect(p.getAll('regions')).toEqual(['latam,eu']);
     // countries = remote ∪ base ∪ relocation; base 'br' dedupes against remote 'br'.
     expect(p.getAll('countries')).toEqual(['br']);
     // cities = base ∪ relocation targets.
-    expect(p.getAll('cities')).toEqual(['Florianópolis', 'Berlin']);
+    expect(p.getAll('cities')).toEqual(['Florianópolis,Berlin']);
     // open to relocation → both relocation-supporting values.
-    expect(p.getAll('relocation')).toEqual(['supported', 'required']);
+    expect(p.getAll('relocation')).toEqual(['supported,required']);
   });
 
   it('seeds no relocation facet when the user is not open to relocating', () => {
@@ -94,7 +94,7 @@ describe('filtersFromProfile', () => {
     const f = filtersFromProfile(mkProfile(['backend'], ['go'], null, ['php', 'wordpress']));
     const p = filtersToParams(f);
     expect(p.getAll('skills')).toEqual(['go']);
-    expect(p.getAll('skills_exclude')).toEqual(['php', 'wordpress']);
+    expect(p.getAll('skills_exclude')).toEqual(['php,wordpress']);
   });
 
   it('keeps a skill wanted when it also appears in excluded_skills (include wins)', () => {

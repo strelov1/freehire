@@ -37,10 +37,10 @@ describe('emptyFacet', () => {
 });
 
 describe('filtersToParams', () => {
-  it('serializes include to the bare param and exclude to <param>_exclude', () => {
-    const p = filtersToParams(withSkills({ include: ['nodejs', 'react'], exclude: ['php'] }));
-    expect(p.getAll('skills')).toEqual(['nodejs', 'react']);
-    expect(p.getAll('skills_exclude')).toEqual(['php']);
+  it('serializes include to one comma-joined bare param and exclude to <param>_exclude', () => {
+    const p = filtersToParams(withSkills({ include: ['nodejs', 'react'], exclude: ['php', 'java'] }));
+    expect(p.getAll('skills')).toEqual(['nodejs,react']);
+    expect(p.getAll('skills_exclude')).toEqual(['php,java']);
   });
 
   it('emits <param>_mode=and only when matchAll and more than one included value', () => {
@@ -76,6 +76,46 @@ describe('filtersFromParams', () => {
     const f = filtersFromParams(new URLSearchParams('skills=go&skills=go'));
     expect(sk(f).include).toEqual(['go']);
   });
+
+  it('splits a comma-joined value into multiple included values', () => {
+    const f = filtersFromParams(new URLSearchParams('skills=go,react'));
+    expect(sk(f).include).toEqual(['go', 'react']);
+  });
+
+  it('splits a comma-joined value in <param>_exclude too', () => {
+    const f = filtersFromParams(new URLSearchParams('skills_exclude=java,cpp'));
+    expect(sk(f).exclude).toEqual(['java', 'cpp']);
+  });
+
+  it('still parses the old repeated-key form (backward compatibility)', () => {
+    const f = filtersFromParams(new URLSearchParams('skills=go&skills=react&skills=aws'));
+    expect(sk(f).include).toEqual(['go', 'react', 'aws']);
+  });
+
+  it('unions a comma-joined entry with a repeated key for the same param', () => {
+    const f = filtersFromParams(new URLSearchParams('skills=go,react&skills=aws'));
+    expect(sk(f).include).toEqual(['go', 'react', 'aws']);
+  });
+
+  it('drops stray/doubled commas without producing an empty value', () => {
+    const f = filtersFromParams(new URLSearchParams('skills=go,,react,'));
+    expect(sk(f).include).toEqual(['go', 'react']);
+  });
+});
+
+describe('filtersToParams / filtersFromParams round-trip', () => {
+  it('round-trips a multi-value facet through the new comma-joined serialization', () => {
+    const f = withSkills({ include: ['go', 'react', 'aws'], exclude: ['java'] });
+    const back = filtersFromParams(filtersToParams(f));
+    expect(sk(back).include).toEqual(['go', 'react', 'aws']);
+    expect(sk(back).exclude).toEqual(['java']);
+  });
+
+  it('round-trips an old-style repeated-key URL to the same filter state as the new form', () => {
+    const oldStyle = filtersFromParams(new URLSearchParams('skills=go&skills=react'));
+    const newStyle = filtersFromParams(new URLSearchParams('skills=go,react'));
+    expect(oldStyle).toEqual(newStyle);
+  });
 });
 
 describe('role facet round-trips through the generic param path', () => {
@@ -85,7 +125,7 @@ describe('role facet round-trips through the generic param path', () => {
     f.facets.role = { include: ['senior_backend', 'lead_frontend'], exclude: ['fractional_cto'], matchAll: true };
 
     const p = filtersToParams(f);
-    expect(p.getAll('role')).toEqual(['senior_backend', 'lead_frontend']);
+    expect(p.getAll('role')).toEqual(['senior_backend,lead_frontend']);
     expect(p.getAll('role_exclude')).toEqual(['fractional_cto']);
     expect(p.get('role_mode')).toBe('and');
 
