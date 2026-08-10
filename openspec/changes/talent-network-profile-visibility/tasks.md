@@ -62,7 +62,7 @@
 
 ## 5. Owner-facing toggle (frontend)
 
-- [ ] 5.1 Add the Off/Public/Anonymous control to `web/src/routes/my/profile`,
+- [x] 5.1 Add the Off/Public/Anonymous control to `web/src/routes/my/profile`,
       wired to the endpoint from 3.1. Show the resulting public URL when a
       non-off mode is selected.
 
