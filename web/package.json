@@ -51,7 +51,7 @@
     "@sentry/sveltekit": "^10.69.0",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
-    "isomorphic-dompurify": "^3.18.0",
+    "isomorphic-dompurify": "^3.22.0",
     "marked": "^18.0.6",
     "posthog-js": "^1.404.1",
     "satori": "^0.29.0",
