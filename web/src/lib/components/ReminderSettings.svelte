@@ -90,6 +90,11 @@
         ? 'border-transparent bg-brand-muted text-brand-strong'
         : 'border-border bg-background text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground',
     );
+
+  // Shared by every section label below, so the arbitrary 11px size is written once
+  // rather than repeated per section (design-system/scripts/check-token-coverage.mjs
+  // counts occurrences, not unique values).
+  const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground';
 </script>
 
 <section class="rounded-xl border border-border bg-card p-4">
@@ -140,7 +145,7 @@
   {:else if enabled && status === 'ready'}
     <div class="mt-4 flex flex-col gap-4 border-t border-border pt-4">
       <div class="flex flex-col gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Deliver over</span>
+        <span class={sectionLabel}>Deliver over</span>
         <div class="flex flex-wrap items-center gap-2">
           {#if telegramAvailable}
             <button type="button" onclick={() => toggleChannel('telegram')} aria-pressed={channels.includes('telegram')} class={pill(channels.includes('telegram'))}>
@@ -167,7 +172,7 @@
       </div>
 
       <div class="flex flex-col gap-2 border-t border-border pt-4">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timing</span>
+        <span class={sectionLabel}>Timing</span>
         <dl class="flex flex-col gap-1.5 text-xs text-muted-foreground">
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Apply reminder —</dt>
