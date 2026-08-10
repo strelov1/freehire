@@ -84,3 +84,33 @@ func TestStateCookie_SetAndClear(t *testing.T) {
 		t.Errorf("clear cookie %q does not clear %s", cleared, StateCookieName)
 	}
 }
+
+// Apple's callback arrives as a cross-site POST (response_mode=form_post) —
+// browsers never attach a SameSite=Lax cookie to a cross-site POST, only to a
+// cross-site top-level GET navigation. A Lax state cookie therefore never
+// reaches the server on Apple's callback, so every Apple sign-in fails with a
+// false "state mismatch". None is required to survive that POST, and None is
+// rejected by browsers unless Secure is also set — so this only applies when
+// the deployment is on HTTPS (secure=true); an insecure dev deployment keeps
+// Lax, where None would be silently dropped instead of helping.
+func TestStateCookie_SameSiteNoneWhenSecure(t *testing.T) {
+	app := fiber.New()
+	app.Get("/set", func(c *fiber.Ctx) error {
+		SetStateCookie(c, "abc", true)
+		return nil
+	})
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/set", nil))
+	if err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	set := resp.Header.Get("Set-Cookie")
+	for _, want := range []string{StateCookieName + "=abc", "HttpOnly", "secure", "SameSite=None"} {
+		if !strings.Contains(set, want) {
+			t.Errorf("set cookie %q missing %q", set, want)
+		}
+	}
+	if strings.Contains(set, "SameSite=Lax") {
+		t.Errorf("set cookie %q still SameSite=Lax when secure=true", set)
+	}
+}

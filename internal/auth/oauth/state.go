@@ -11,19 +11,20 @@ import (
 )
 
 // StateCookieName carries the CSRF state between the start redirect and the
-// provider callback. Lax is enough: the callback is a top-level GET
-// navigation, on which Lax cookies are sent.
+// provider callback. Most providers' callback is a top-level GET navigation,
+// where Lax cookies are sent; Apple's is a cross-site POST, which needs
+// SameSite=None instead — see writeCookie.
 const StateCookieName = "hire_oauth_state"
 
 // ReturnCookieName remembers where to send the browser after a successful
 // sign-in, so signing in from a deep page returns there instead of the home
-// page. It rides the same Lax, short-lived round-trip as the state cookie.
+// page. It rides the same short-lived round-trip as the state cookie.
 const ReturnCookieName = "hire_oauth_return"
 
 // PlatformCookieName remembers that a sign-in was started by the mobile app
 // (`?platform=mobile`), so the callback finishes with a custom-scheme deep link
 // carrying a one-time code instead of setting the session cookie and redirecting
-// to the web frontend. Rides the same Lax, short-lived round-trip.
+// to the web frontend. Rides the same short-lived round-trip.
 const PlatformCookieName = "hire_oauth_platform"
 
 // PlatformMobile is the only recognized platform value; anything else means the
@@ -89,7 +90,21 @@ func ClearPlatformCookie(c *fiber.Ctx, secure bool) {
 // writeCookie is the single place these short-lived sign-in cookies get their
 // attributes, so set and clear can't drift apart (same pattern as the session
 // cookie).
+//
+// SameSite is None (not Lax) when secure, because Apple's callback arrives as
+// a cross-site POST (response_mode=form_post) — browsers only attach a Lax
+// cookie to a cross-site *top-level GET* navigation, never to a cross-site
+// POST, so a Lax state cookie never reaches the server on Apple's callback
+// and every Apple sign-in fails with a false "state mismatch". None is
+// rejected by browsers unless Secure is set, so an insecure (http, dev-only)
+// deployment keeps Lax instead of silently losing the cookie altogether;
+// Google/GitHub/LinkedIn's GET callbacks are unaffected either way, since Lax
+// already covers cross-site top-level GETs and None is a strict superset.
 func writeCookie(c *fiber.Ctx, name, value string, expires time.Time, secure bool) {
+	sameSite := fiber.CookieSameSiteLaxMode
+	if secure {
+		sameSite = fiber.CookieSameSiteNoneMode
+	}
 	c.Cookie(&fiber.Cookie{
 		Name:     name,
 		Value:    value,
@@ -97,7 +112,7 @@ func writeCookie(c *fiber.Ctx, name, value string, expires time.Time, secure boo
 		Expires:  expires,
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: fiber.CookieSameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }
 
