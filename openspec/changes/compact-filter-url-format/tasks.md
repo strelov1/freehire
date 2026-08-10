@@ -20,7 +20,6 @@
 
 ## 4. Verification
 
-- [ ] 4.1 `go build ./...` and `go vet ./...`
-- [ ] 4.2 `go test ./...`
-- [ ] 4.3 Manually load a job-search page, select several skills, confirm the URL uses the compact form, then reload the page from that URL and confirm the same filters are applied
-- [ ] 4.4 Manually load an old-style URL with repeated `skills=` keys and confirm filters still apply correctly
+- [x] 4.1 `go build ./...` and `go vet ./...` — clean; also ran `go vet -tags=integration ./...` per AGENTS.md pre-push convention, clean
+- [x] 4.2 `go test ./...` — all packages pass, no failures
+- [x] 4.3 / 4.4 Skipped live browser verification: the dev Docker stack is occupied by other concurrent worktrees on this machine (port 5432 held, no Redis instance available for the recently-added rate-limit dependency), and standing up an isolated stack was judged not worth the port/resource risk for this change — decided with the user. Covered instead by: `facetModel.test.ts`'s explicit round-trip test (compact serialize → parse) and backward-compat test (old repeated-key URL → same filter state as the new form), plus `urlSearchString.test.ts` verifying the literal-comma address-bar output and that it re-parses correctly — the same mechanics a live browser check would exercise.
