@@ -62,13 +62,42 @@ func New(baseURL, apiKey, model string) *Client {
 // mintRequest is the client_secrets request body: a realtime session naming its
 // model and carrying instructions the way a system prompt carries them for a text
 // turn.
+//
+// audio.input is not optional in practice, even though the gateway accepts a
+// request without it: input transcription is off by default, so a caller who omits
+// it gets a working call whose OWN side never appears as text anywhere — a spike
+// that shipped this omission produced a call the candidate could hear but never see
+// themselves in. turnDetection matters for the same reason from the other
+// direction: an unset value falls back to whatever default the model picks, not
+// necessarily the responsiveness this deployment wants.
 type mintRequest struct {
 	Session struct {
 		Type         string `json:"type"`
 		Model        string `json:"model"`
 		Instructions string `json:"instructions"`
+		Audio        struct {
+			Input struct {
+				TurnDetection struct {
+					Type string `json:"type"`
+				} `json:"turn_detection"`
+				Transcription struct {
+					Model string `json:"model"`
+				} `json:"transcription"`
+			} `json:"input"`
+		} `json:"audio"`
 	} `json:"session"`
 }
+
+// turnDetectionType and transcriptionModel are fixed rather than configurable.
+// server_vad (its own default timing, not overridden here) is chosen over the
+// semantic_vad the spike used because semantic_vad is explicitly variable-latency
+// by design — it waits LONGER when uncertain a turn ended — the opposite of what a
+// snappy rehearsal call wants. gpt-realtime-whisper is this deployment's model
+// family's own transcription model, not a second credential to configure.
+const (
+	turnDetectionType  = "server_vad"
+	transcriptionModel = "gpt-realtime-whisper"
+)
 
 // Model names which Realtime model the client secret is minted for. The WebRTC SDP
 // exchange names the model on its URL, and the caller has no other way to learn
@@ -84,6 +113,8 @@ func (c *Client) MintClientSecret(ctx context.Context, instructions string) (str
 	payload.Session.Type = "realtime"
 	payload.Session.Model = c.model
 	payload.Session.Instructions = instructions
+	payload.Session.Audio.Input.TurnDetection.Type = turnDetectionType
+	payload.Session.Audio.Input.Transcription.Model = transcriptionModel
 
 	body, err := json.Marshal(payload)
 	if err != nil {

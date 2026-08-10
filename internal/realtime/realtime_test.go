@@ -14,12 +14,14 @@ import (
 // captured is what the fake gateway saw, so a test can assert on the request the
 // client built rather than only on what it returned.
 type captured struct {
-	path         string
-	authz        string
-	contentType  string
-	sessionType  string
-	model        string
-	instructions string
+	path            string
+	authz           string
+	contentType     string
+	sessionType     string
+	model           string
+	instructions    string
+	turnDetection   string
+	transcriptModel string
 }
 
 // gateway stands in for the OpenAI-compatible /realtime/client_secrets endpoint. It
@@ -36,6 +38,16 @@ func gateway(t *testing.T, status int, body string) (*httptest.Server, *captured
 				Type         string `json:"type"`
 				Model        string `json:"model"`
 				Instructions string `json:"instructions"`
+				Audio        struct {
+					Input struct {
+						TurnDetection struct {
+							Type string `json:"type"`
+						} `json:"turn_detection"`
+						Transcription struct {
+							Model string `json:"model"`
+						} `json:"transcription"`
+					} `json:"input"`
+				} `json:"audio"`
 			} `json:"session"`
 		}
 		raw, _ := io.ReadAll(r.Body)
@@ -43,6 +55,8 @@ func gateway(t *testing.T, status int, body string) (*httptest.Server, *captured
 		got.sessionType = payload.Session.Type
 		got.model = payload.Session.Model
 		got.instructions = payload.Session.Instructions
+		got.turnDetection = payload.Session.Audio.Input.TurnDetection.Type
+		got.transcriptModel = payload.Session.Audio.Input.Transcription.Model
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -110,6 +124,16 @@ func TestMintClientSecretSendsInstructionsAndReturnsTheValue(t *testing.T) {
 	}
 	if got.instructions != "You are the interviewer." {
 		t.Errorf("session.instructions = %q, want %q", got.instructions, "You are the interviewer.")
+	}
+	// Without these two the caller's own speech is never transcribed at all — the
+	// gateway just silently omits input transcription unless it is asked for — and
+	// end-of-turn detection falls back to whatever default the model picks rather
+	// than the one this deployment chose.
+	if got.turnDetection == "" {
+		t.Error("session.audio.input.turn_detection.type is empty, want it set")
+	}
+	if got.transcriptModel == "" {
+		t.Error("session.audio.input.transcription.model is empty, want it set")
 	}
 }
 
