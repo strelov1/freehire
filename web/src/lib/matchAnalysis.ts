@@ -3,7 +3,7 @@
 // tone, the ATS requirement-status → label + tone, and the SSE stream reducer. The wire
 // shapes come from the Go contract.
 
-import type { MatchAnalysis, MatchRequirement } from './types';
+import type { MatchAnalysis, MatchRequirement, Signal } from './types';
 
 /** A colour tone bucket the component maps to Tailwind classes. */
 export type Tone = 'strong' | 'good' | 'moderate' | 'weak' | 'poor';
@@ -56,6 +56,7 @@ export interface MatchStreamState {
   stages: MatchStage[];
   thinking: string;
   requirements: MatchRequirement[];
+  hiddenSignals: Signal[];
   analysis: MatchAnalysis | null;
   done: boolean;
   error: string | null;
@@ -72,6 +73,7 @@ export function initMatchStream(): MatchStreamState {
     ],
     thinking: '',
     requirements: [],
+    hiddenSignals: [],
     analysis: null,
     done: false,
     error: null,
@@ -100,6 +102,7 @@ export function reduceMatchEvent(prev: MatchStreamState, name: string, data: unk
       // Guard the shape, not just null: a present-but-wrong-typed frame must not
       // replace good data with a value a component would then .filter() and crash on.
       if (Array.isArray(d.requirements)) s.requirements = d.requirements as MatchRequirement[];
+      if (Array.isArray(d.hidden_signals)) s.hiddenSignals = d.hidden_signals as Signal[];
       return s;
     case 'dimensions':
       if (isObject(d.analysis)) s.analysis = d.analysis as MatchAnalysis;

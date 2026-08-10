@@ -98,6 +98,10 @@ const (
 	maxStrengths        = 6
 	maxGaps             = 6
 	maxRequirements     = 30
+
+	maxSignals            = 5
+	maxSignalQuoteRunes   = 200
+	maxSignalInsightRunes = 200
 )
 
 // Dimension is one scored fit dimension on the wire.
@@ -117,11 +121,21 @@ type Requirement struct {
 	EvidenceStrength string `json:"evidence_strength"` // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 
+// Signal is one interpretive read of the job posting's own wording — a verbatim quote plus
+// what it implies about pace, ownership expectations, team stage, or culture. Freeform text
+// bounded by length only (the same tier as Recommendation/comment), not a controlled
+// vocabulary: there is no fixed set of "signal types" to coerce into.
+type Signal struct {
+	Quote   string `json:"quote"`
+	Insight string `json:"insight"`
+}
+
 // Analysis is the full served fit verdict — the single wire contract exported to TS
 // via cmd/gen-contracts.
 type Analysis struct {
 	Dimensions       []Dimension              `json:"dimensions"`
 	RequirementMatch []Requirement            `json:"requirement_match"`
+	HiddenSignals    []Signal                 `json:"hidden_signals"`
 	OverallScore     int                      `json:"overall_score"`
 	Verdict          string                   `json:"verdict"`
 	Strengths        []string                 `json:"strengths"`
@@ -164,10 +178,10 @@ type recruiterVerdict struct {
 	Recommendation      string   `json:"recommendation"`
 }
 
-// buildAnalysis assembles the served Analysis from the (sanitized) requirement match
-// and recruiter verdict: the six dimensions in fixed order, the weighted overall, and
-// the derived verdict label.
-func buildAnalysis(reqs []Requirement, v recruiterVerdict) Analysis {
+// buildAnalysis assembles the served Analysis from the (sanitized) requirement match,
+// recruiter verdict, and hidden signals: the six dimensions in fixed order, the weighted
+// overall, and the derived verdict label.
+func buildAnalysis(reqs []Requirement, v recruiterVerdict, signals []Signal) Analysis {
 	scores := map[string]dimScore{
 		DimTitleAlignment:      v.TitleAlignment,
 		DimExperienceRelevance: v.ExperienceRelevance,
@@ -195,9 +209,13 @@ func buildAnalysis(reqs []Requirement, v recruiterVerdict) Analysis {
 	if gaps == nil {
 		gaps = []string{}
 	}
+	if signals == nil {
+		signals = []Signal{}
+	}
 	return Analysis{
 		Dimensions:       dims,
 		RequirementMatch: reqs,
+		HiddenSignals:    signals,
 		OverallScore:     overall,
 		Verdict:          verdictFor(overall),
 		Strengths:        strengths,
@@ -255,6 +273,28 @@ func sanitizeRequirements(in []Requirement) []Requirement {
 			EvidenceStrength: coerceEvidenceStrength(status, r.EvidenceStrength),
 		})
 		if len(out) >= maxRequirements {
+			break
+		}
+	}
+	return out
+}
+
+// sanitizeSignals drops any signal missing a quote or an insight — an interpretive claim with
+// nothing to ground it is not useful half-formed, so it is dropped rather than coerced — trims
+// and length-bounds what remains, and caps the count.
+func sanitizeSignals(in []Signal) []Signal {
+	out := make([]Signal, 0, len(in))
+	for _, s := range in {
+		quote := strings.TrimSpace(s.Quote)
+		insight := strings.TrimSpace(s.Insight)
+		if quote == "" || insight == "" {
+			continue
+		}
+		out = append(out, Signal{
+			Quote:   llm.TruncateRunes(quote, maxSignalQuoteRunes),
+			Insight: llm.TruncateRunes(insight, maxSignalInsightRunes),
+		})
+		if len(out) >= maxSignals {
 			break
 		}
 	}

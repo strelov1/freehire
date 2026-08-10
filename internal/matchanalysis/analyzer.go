@@ -95,7 +95,8 @@ type Input struct {
 
 // stage1Out is the Extract & Match stage's raw output.
 type stage1Out struct {
-	Requirements []Requirement `json:"requirements"`
+	Requirements  []Requirement `json:"requirements"`
+	HiddenSignals []Signal      `json:"hidden_signals"`
 }
 
 // EventKind tags a streaming Event (see AnalyzeStream).
@@ -105,19 +106,20 @@ const (
 	EventStageStart   EventKind = "stage_start"  // a stage began (Stage set)
 	EventStageDone    EventKind = "stage_done"   // a stage finished (Stage set)
 	EventThinking     EventKind = "thinking"     // a reasoning-token delta (Stage + Thinking)
-	EventRequirements EventKind = "requirements" // Stage-1 result (Requirements)
+	EventRequirements EventKind = "requirements" // Stage-1 result (Requirements + HiddenSignals)
 	EventDimensions   EventKind = "dimensions"   // interim post-Stage-2 analysis (Analysis)
 	EventFinal        EventKind = "final"        // the audited final analysis (Analysis)
 )
 
 // Event is one step of a streaming analysis. Only the fields relevant to Kind are set.
 type Event struct {
-	Kind         EventKind     `json:"kind"`
-	Stage        int           `json:"stage,omitempty"`
-	Label        string        `json:"label,omitempty"`
-	Thinking     string        `json:"thinking,omitempty"`
-	Requirements []Requirement `json:"requirements,omitempty"`
-	Analysis     *Analysis     `json:"analysis,omitempty"`
+	Kind          EventKind     `json:"kind"`
+	Stage         int           `json:"stage,omitempty"`
+	Label         string        `json:"label,omitempty"`
+	Thinking      string        `json:"thinking,omitempty"`
+	Requirements  []Requirement `json:"requirements,omitempty"`
+	HiddenSignals []Signal      `json:"hidden_signals,omitempty"`
+	Analysis      *Analysis     `json:"analysis,omitempty"`
 }
 
 var stageLabels = map[int]string{1: "Extract & Match", 2: "Recruiter verdict", 3: "Adversarial audit"}
@@ -154,7 +156,8 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, fmt.Errorf("matchanalysis: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
-	emit(Event{Kind: EventRequirements, Requirements: reqs})
+	signals := sanitizeSignals(s1.HiddenSignals)
+	emit(Event{Kind: EventRequirements, Requirements: reqs, HiddenSignals: signals})
 	emit(Event{Kind: EventStageDone, Stage: 1, Label: stageLabels[1]})
 
 	// Stage 2 — Recruiter verdict (the human lens).
@@ -164,7 +167,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 		return nil, fmt.Errorf("matchanalysis: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
-	interim := buildAnalysis(reqs, verdict)
+	interim := buildAnalysis(reqs, verdict, signals)
 	emit(Event{Kind: EventDimensions, Analysis: &interim})
 	emit(Event{Kind: EventStageDone, Stage: 2, Label: stageLabels[2]})
 
@@ -192,7 +195,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	}
 	emit(Event{Kind: EventStageDone, Stage: 3, Label: stageLabels[3]})
 
-	analysis := buildAnalysis(reqs, verdict)
+	analysis := buildAnalysis(reqs, verdict, signals)
 	emit(Event{Kind: EventFinal, Analysis: &analysis})
 	return &analysis, nil
 }
@@ -257,7 +260,7 @@ func stage1SystemPrompt() string {
 	b.WriteString("You are an ATS (applicant tracking system) parser. Return ONLY a JSON object.\n\n")
 	b.WriteString("From the job posting, extract the explicit requirements (skills, tools, experience, ")
 	b.WriteString("responsibilities) plus the role-title and seniority signals. Classify each against the ")
-	b.WriteString("candidate's CV. Return exactly one key:\n")
+	b.WriteString("candidate's CV. Return exactly these keys:\n")
 	b.WriteString("- \"requirements\": an array (max 30) of objects, each:\n")
 	b.WriteString("  - \"text\": the requirement, short.\n")
 	b.WriteString("  - \"priority\": \"required\" or \"preferred\".\n")
@@ -272,7 +275,15 @@ func stage1SystemPrompt() string {
 	b.WriteString("tools or methods), or \"keyword\" (the term is present but only a bare mention or ")
 	b.WriteString("duty). Omit it for \"missing-have\"/\"missing-gap\".\n")
 	b.WriteString("Base every judgement only on the CV text. NEVER fabricate a skill the CV does not ")
-	b.WriteString("evidence — a genuine gap is \"missing-gap\", never hidden.\n")
+	b.WriteString("evidence — a genuine gap is \"missing-gap\", never hidden.\n\n")
+	b.WriteString("Also return \"hidden_signals\": an array (max 5) of unstated culture/pace/team-stage ")
+	b.WriteString("signals read from the posting's own wording — not from any explicit requirement. Each ")
+	b.WriteString("object has \"quote\" (a short verbatim excerpt from the job description) and \"insight\" ")
+	b.WriteString("(one line on what that wording implies about pace, ownership expectations, team stage, ")
+	b.WriteString("or culture — e.g. \"comfortable with ambiguity\" implies no one will hand the candidate a ")
+	b.WriteString("spec). Base every signal on wording actually present in the posting; if the posting is ")
+	b.WriteString("short or generic and carries no distinctive wording, return an empty array — never invent ")
+	b.WriteString("a signal to fill it.\n")
 	return b.String()
 }
 

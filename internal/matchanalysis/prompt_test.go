@@ -125,6 +125,17 @@ func TestStage1SystemPrompt_GradesEvidenceStrength(t *testing.T) {
 	}
 }
 
+func TestStage1SystemPrompt_RequestsHiddenSignals(t *testing.T) {
+	// Stage 1 must ask for hidden_signals (quote + insight, max 5) alongside the requirement
+	// table, and must not force one on a generic posting.
+	sp := stage1SystemPrompt()
+	for _, want := range []string{"hidden_signals", "quote", "insight"} {
+		if !strings.Contains(sp, want) {
+			t.Errorf("stage1 system prompt must request hidden signals (missing %q):\n%s", want, sp)
+		}
+	}
+}
+
 func TestWriteRequirements_RendersStrengthForPositiveOnly(t *testing.T) {
 	var b strings.Builder
 	writeRequirements(&b, []Requirement{

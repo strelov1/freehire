@@ -343,6 +343,41 @@ func TestAnalyzeStream_EmitsOrderedEventsAndMatchesSyncFinal(t *testing.T) {
 	}
 }
 
+func TestAnalyzeStream_ThreadsHiddenSignals(t *testing.T) {
+	stage1WithSignals := `{"requirements":[{"text":"Go","priority":"required","status":"covered","evidence":"5y at Acme"}],` +
+		`"hidden_signals":[{"quote":"fast-paced, high ownership","insight":"expect a self-driven pace"},` +
+		`{"quote":"  ","insight":"blank quote, must be dropped"}]}`
+	m := &queuedModel{resp: []string{stage1WithSignals, stage2JSON, stage3JSON}}
+
+	var events []Event
+	final, err := NewAnalyzer(llm.NewWithModel(m)).AnalyzeStream(context.Background(), sampleInput(), func(e Event) {
+		events = append(events, e)
+	})
+	if err != nil {
+		t.Fatalf("AnalyzeStream: %v", err)
+	}
+
+	// The requirements event (Stage 1's output) carries the sanitized signals alongside the
+	// requirement match, at the same point in the stream.
+	var reqEvent Event
+	for _, e := range events {
+		if e.Kind == EventRequirements {
+			reqEvent = e
+		}
+	}
+	if len(reqEvent.HiddenSignals) != 1 {
+		t.Fatalf("requirements event HiddenSignals = %+v, want 1 (blank-quote entry dropped)", reqEvent.HiddenSignals)
+	}
+	if reqEvent.HiddenSignals[0].Quote != "fast-paced, high ownership" {
+		t.Errorf("HiddenSignals[0].Quote = %q, want the sanitized quote", reqEvent.HiddenSignals[0].Quote)
+	}
+
+	// The final served analysis carries the same sanitized signals.
+	if len(final.HiddenSignals) != 1 || final.HiddenSignals[0].Insight != "expect a self-driven pace" {
+		t.Errorf("final.HiddenSignals = %+v, want the sanitized signal to survive to the served analysis", final.HiddenSignals)
+	}
+}
+
 func TestAnalyzeStream_NilClientIsNoOp(t *testing.T) {
 	got, err := NewAnalyzer(nil).AnalyzeStream(context.Background(), sampleInput(), func(Event) {
 		t.Error("no events expected from a nil client")

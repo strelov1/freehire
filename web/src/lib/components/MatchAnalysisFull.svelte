@@ -44,6 +44,7 @@
     if (f?.analysis) {
       s.analysis = f.analysis;
       s.requirements = f.analysis.requirement_match;
+      s.hiddenSignals = f.analysis.hidden_signals;
       s.done = true;
       s.stages = s.stages.map((x) => ({ ...x, state: 'done' as const }));
     }
@@ -81,6 +82,9 @@
   const dimensions = $derived(analysis?.dimensions ?? []);
   const requirements = $derived(
     analysis?.requirement_match?.length ? analysis.requirement_match : stream.requirements,
+  );
+  const hiddenSignals = $derived(
+    analysis?.hidden_signals?.length ? analysis.hidden_signals : stream.hiddenSignals,
   );
   // Coverage tally for the ATS-view header: covered folds in synonym-only matches (both are
   // positive, matching the hero's count), `addit` is the fixable near-miss, `gap` the genuine
@@ -513,6 +517,23 @@
             </div>
           {/if}
         </section>
+
+        <!-- Hidden signals: unstated culture/pace/team-stage reads from the posting's own
+             wording, quoted verbatim alongside the interpretation. Omitted entirely when the
+             posting was too generic to read anything from. -->
+        {#if hiddenSignals.length}
+          <section class="flex flex-col gap-5">
+            <h2 class="{headingClass} text-muted-foreground">Hidden signals</h2>
+            <ul class="flex flex-col gap-3">
+              {#each hiddenSignals as sig, i (i)}
+                <li class="rounded-lg border border-border/60 bg-secondary/30 p-3.5">
+                  <p class="text-sm italic leading-relaxed text-muted-foreground">"{sig.quote}"</p>
+                  <p class="mt-1.5 text-sm font-medium leading-relaxed text-foreground">{sig.insight}</p>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
       </div>
 
       {#if analysis.strengths.length || analysis.gaps.length}

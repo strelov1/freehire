@@ -69,6 +69,29 @@ describe('reduceMatchEvent', () => {
     expect(next).not.toBe(prev);
   });
 
+  it('carries hidden signals from the requirements event', () => {
+    const s = reduceMatchEvent(initMatchStream(), 'requirements', {
+      requirements: [],
+      hidden_signals: [{ quote: 'fast-paced, high ownership', insight: 'expect a self-driven pace' }],
+    });
+    expect(s.hiddenSignals).toHaveLength(1);
+    expect(s.hiddenSignals[0]?.insight).toBe('expect a self-driven pace');
+  });
+
+  it('starts with no hidden signals', () => {
+    expect(initMatchStream().hiddenSignals).toEqual([]);
+  });
+
+  it('ignores a malformed hidden_signals payload (not an array)', () => {
+    const seeded = reduceMatchEvent(initMatchStream(), 'requirements', {
+      requirements: [],
+      hidden_signals: [{ quote: 'fast-paced', insight: 'overtime risk' }],
+    });
+    const next = reduceMatchEvent(seeded, 'requirements', { requirements: [], hidden_signals: { bogus: true } });
+    expect(Array.isArray(next.hiddenSignals)).toBe(true);
+    expect(next.hiddenSignals).toEqual(seeded.hiddenSignals);
+  });
+
   it('ignores a malformed requirements payload (not an array)', () => {
     const seeded = reduceMatchEvent(
       initMatchStream(),

@@ -741,12 +741,23 @@ export interface Requirement {
   evidence_strength: string; // metric|scope|responsibility|keyword for positive statuses; empty for missing-*
 }
 /**
+ * Signal is one interpretive read of the job posting's own wording — a verbatim quote plus
+ * what it implies about pace, ownership expectations, team stage, or culture. Freeform text
+ * bounded by length only (the same tier as Recommendation/comment), not a controlled
+ * vocabulary: there is no fixed set of "signal types" to coerce into.
+ */
+export interface Signal {
+  quote: string;
+  insight: string;
+}
+/**
  * Analysis is the full served fit verdict — the single wire contract exported to TS
  * via cmd/gen-contracts.
  */
 export interface Analysis {
   dimensions: Dimension[];
   requirement_match: Requirement[];
+  hidden_signals: Signal[];
   overall_score: number /* int */;
   verdict: string;
   strengths: string[];

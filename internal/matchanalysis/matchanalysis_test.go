@@ -1,6 +1,9 @@
 package matchanalysis
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestBuildAnalysis_WeightedOverallAndVerdict(t *testing.T) {
 	// A strong, uniform verdict → weighted overall equals the common score, Strong Fit.
@@ -13,7 +16,7 @@ func TestBuildAnalysis_WeightedOverallAndVerdict(t *testing.T) {
 		LocationFit:         dimScore{Score: 80},
 		Recommendation:      "Apply.",
 	}
-	got := buildAnalysis(nil, v)
+	got := buildAnalysis(nil, v, nil)
 	if got.OverallScore != 80 {
 		t.Errorf("OverallScore = %d, want 80 (weights sum to 100)", got.OverallScore)
 	}
@@ -39,7 +42,7 @@ func TestBuildAnalysis_WeightingFavoursTitleAndExperience(t *testing.T) {
 		TitleAlignment:      dimScore{Score: 100},
 		ExperienceRelevance: dimScore{Score: 100},
 	}
-	got := buildAnalysis(nil, v)
+	got := buildAnalysis(nil, v, nil)
 	if got.OverallScore != 45 {
 		t.Errorf("OverallScore = %d, want 45 (Title 20 + Experience 25)", got.OverallScore)
 	}
@@ -112,6 +115,60 @@ func TestSanitizeRequirements_CoercesAndDrops(t *testing.T) {
 	}
 	if got[1].Priority != PriorityPreferred {
 		t.Errorf("req[1].Priority = %q, want coerced to %q", got[1].Priority, PriorityPreferred)
+	}
+}
+
+func TestBuildAnalysis_ThreadsHiddenSignals(t *testing.T) {
+	signals := []Signal{{Quote: "fast-paced", Insight: "expect overtime risk"}}
+	got := buildAnalysis(nil, recruiterVerdict{}, signals)
+	if len(got.HiddenSignals) != 1 || got.HiddenSignals[0].Quote != "fast-paced" {
+		t.Errorf("HiddenSignals = %+v, want the passed-in signal", got.HiddenSignals)
+	}
+}
+
+func TestBuildAnalysis_NilSignalsYieldsEmptyNotNil(t *testing.T) {
+	got := buildAnalysis(nil, recruiterVerdict{}, nil)
+	if got.HiddenSignals == nil {
+		t.Error("HiddenSignals = nil, want an empty (non-nil) slice")
+	}
+}
+
+func TestSanitizeSignals_DropsBlankTruncatesCaps(t *testing.T) {
+	in := []Signal{
+		{Quote: "  \"fast-paced, high ownership\"  ", Insight: "  Expect a self-driven pace.  "},
+		{Quote: "", Insight: "Should be dropped — blank quote"},
+		{Quote: "Some quote", Insight: ""},                                   // blank insight → dropped
+		{Quote: strings.Repeat("q", 250), Insight: strings.Repeat("i", 250)}, // over-length → truncated
+		{Quote: "extra 1", Insight: "extra 1"},
+		{Quote: "extra 2", Insight: "extra 2"},
+		{Quote: "extra 3", Insight: "extra 3"},
+		{Quote: "extra 4", Insight: "extra 4"}, // 8 total in, cap at maxSignals=5
+	}
+	got := sanitizeSignals(in)
+	if len(got) != maxSignals {
+		t.Fatalf("sanitizeSignals len = %d, want %d (blanks dropped, rest capped)", len(got), maxSignals)
+	}
+	if got[0].Quote != `"fast-paced, high ownership"` {
+		t.Errorf("Quote[0] = %q, want trimmed", got[0].Quote)
+	}
+	if got[0].Insight != "Expect a self-driven pace." {
+		t.Errorf("Insight[0] = %q, want trimmed", got[0].Insight)
+	}
+	if n := len([]rune(got[1].Quote)); n != maxSignalQuoteRunes {
+		t.Errorf("Quote[1] rune len = %d, want truncated to %d", n, maxSignalQuoteRunes)
+	}
+	if n := len([]rune(got[1].Insight)); n != maxSignalInsightRunes {
+		t.Errorf("Insight[1] rune len = %d, want truncated to %d", n, maxSignalInsightRunes)
+	}
+}
+
+func TestSanitizeSignals_NilInYieldsEmptyNotNil(t *testing.T) {
+	got := sanitizeSignals(nil)
+	if got == nil {
+		t.Error("sanitizeSignals(nil) = nil, want an empty (non-nil) slice")
+	}
+	if len(got) != 0 {
+		t.Errorf("sanitizeSignals(nil) len = %d, want 0", len(got))
 	}
 }
 

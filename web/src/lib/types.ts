@@ -43,6 +43,7 @@ export type {
   Analysis as MatchAnalysis,
   Dimension as MatchDimension,
   Requirement as MatchRequirement,
+  Signal,
 } from './generated/contracts';
 
 /** The caller's AI-credits balance. Present on GET reads (with a CV); `remaining` is the
