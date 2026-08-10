@@ -3851,3 +3851,7 @@
   board: miniso-us
 - company: nscglobal
   board: nscglobal
+
+# icims board mined from remote.io (2026-08-09, live-validated; vanity host, careers-home product)
+- company: Avalara
+  board: careers.avalara.com

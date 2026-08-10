@@ -14363,3 +14363,7 @@
   board: "yes"
 - company: Zoomget
   board: zoomget
+
+# greenhouse board mined from remote.io (2026-08-09, live-validated)
+- company: Greenplaces
+  board: greenplaces

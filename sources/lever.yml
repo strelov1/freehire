@@ -4461,3 +4461,13 @@
   board: recast-software
 - company: Trans Lifeline
   board: translifeline
+
+# lever boards mined from remote.io (2026-08-09, live-validated)
+- company: Ridezum
+  board: ridezum
+- company: Thinkahead
+  board: thinkahead
+- company: TrueML
+  board: trueml
+- company: VeryGoodSecurity
+  board: verygoodsecurity

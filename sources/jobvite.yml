@@ -274,3 +274,7 @@
   board: ziff-davis
 - company: Ziff Davis
   board: ziffdavis
+
+# jobvite board mined from remote.io (2026-08-09, live-validated)
+- company: ForeScout
+  board: forescout

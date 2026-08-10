@@ -2103,3 +2103,11 @@
 # workable board from the contribution queue (2026-08-07, live-validated)
 - company: HelloGov AI
   board: hellogov
+
+# workable boards mined from remote.io (2026-08-09, live-validated)
+- company: IntellaTriage
+  board: intellatriage
+- company: Motia
+  board: motia
+- company: Virtual Staff 365
+  board: virtual-staff-365
