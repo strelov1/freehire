@@ -37,6 +37,16 @@ rendering a structured CV.
 - Showing raw email/phone anywhere on the public page, in either mode — the
   page is scrapeable by definition, and contact initiation is deferred to a
   future intro-request flow.
+- Serving the candidate's photo on the public page. REVISED during task 4:
+  the only existing photo read path (`internal/handler/photo.go`,
+  `headshot.Store`) is cookie-only, with no key-authenticated or public URL
+  at all — surfacing a photo here means a genuinely new capability (a public
+  image-serving route: object-storage exposure, cache headers, content-type
+  handling), not a wiring change to an existing one. That is real, separable
+  scope, not something to fold into this slice's task list unasked. The page
+  ships without a photo; the underlying query already selects
+  `photo_object_key` so a follow-up change can add it without another
+  migration.
 
 ## Decisions
 

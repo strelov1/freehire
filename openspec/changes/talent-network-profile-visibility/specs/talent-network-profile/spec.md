@@ -33,8 +33,10 @@ setting.
 
 #### Scenario: Visibility public
 - **WHEN** anyone requests the page for a user whose visibility is `public`
-- **THEN** the response is 200 and renders that user's name, photo (if set),
-  work history, and skills
+- **THEN** the response is 200 and renders that user's name, work history,
+  and skills. (No photo in this slice — see design.md's "Non-Goals": the
+  only existing photo-read path is cookie-only, and a public image route is
+  separable follow-up scope, not part of this change.)
 
 #### Scenario: Visibility anonymous
 - **WHEN** anyone requests the page for a user whose visibility is
