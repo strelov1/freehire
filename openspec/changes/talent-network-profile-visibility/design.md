@@ -58,14 +58,34 @@ this feature rather than repurposing an unrelated identifier.
 
 **Anonymous-mode masking is `Professional()` plus one extra step.**
 `resumeextract.Structured.Professional()` already strips name, email, phone,
-and links. This change adds exactly one more transform on top: the newest
-entry in the `experience` slice has its `company` field replaced with a
-generic label (e.g. `"Current employer"`); older entries pass through
-unmodified. Rationale: masking the entire work history was considered and
-rejected as over-broad — the risk being mitigated is specifically the current
-employer recognizing the candidate, not the candidate's career history in
-general, which is useful signal for anyone the candidate does share the link
-with.
+and links. This change adds exactly one more transform on top: every
+`experience` entry whose `End` field reads as "not ended" has its `company`
+field replaced with a generic label (`"Current employer"`); every other
+entry passes through unmodified. Rationale: masking the entire work history
+was considered and rejected as over-broad — the risk being mitigated is
+specifically the current employer recognizing the candidate, not the
+candidate's career history in general, which is useful signal for anyone the
+candidate does share the link with.
+
+**Masking is content-based (the `End` label), not positional.** Originally
+scoped as "mask the newest entry in the slice," this was revised during
+implementation: `Structured.Experience`'s ordering (newest-first vs.
+oldest-first) is nowhere documented or enforced by the LLM extraction prompt
+or schema, so "newest" cannot be determined reliably by array position alone.
+`internal/experience/import_resume.go` already solves an equivalent problem
+(deciding which entries are "current" for the experience bank) by checking
+whether `End` is empty or one of `present`/`current`/`now`/`ongoing`
+(case-insensitive) — that same check, mirrored in `internal/resumeextract`
+(a direct import isn't possible: `internal/experience` imports
+`internal/resumeextract`, not the reverse), is what this change uses instead.
+This is strictly more correct than a positional guess and requires no
+assumption about extraction ordering. If more than one entry reads as
+current (concurrent roles, or a sloppily-filled CV), every matching entry is
+masked, not just one — the alternative (guessing which one is "the real"
+current job) has no reliable signal either. If zero entries read as current,
+none are masked — masking a labeled-as-ended past role because it happened
+to be array-adjacent to nothing would misrepresent the candidate's history
+without protecting anything.
 
 **Public mode still strips contact info.** Even though `public` mode shows
 name and photo, it uses the same contact-stripped base as `anonymous`

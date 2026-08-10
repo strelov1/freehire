@@ -58,20 +58,31 @@ number, or any personal links, regardless of visibility mode.
   personal link belonging to that user
 
 ### Requirement: Anonymous mode masks the current employer
-In `anonymous` visibility, the most recent entry in the candidate's work
-history SHALL have its employer name replaced with a generic label. All
-older work history entries SHALL be shown unmodified.
+In `anonymous` visibility, every work history entry whose end date reads as
+"not ended" (empty, or one of `present`/`current`/`now`/`ongoing`,
+case-insensitive — the same convention `internal/experience` already uses to
+decide this) SHALL have its employer name replaced with a generic label. All
+other work history entries SHALL be shown unmodified. This is a content-based
+rule, not a positional one — array order is not a reliable signal for which
+entry is current.
 
-#### Scenario: Most recent employer is masked
+#### Scenario: Current employer is masked
 - **WHEN** the public page renders for a user whose visibility is
-  `anonymous` and who has two or more work history entries
-- **THEN** the newest entry's employer name is replaced with a generic label
-  and every older entry's employer name is shown as-is
+  `anonymous` and one work history entry's end date reads as "not ended"
+- **THEN** that entry's employer name is replaced with a generic label and
+  every other entry's employer name is shown as-is
 
-#### Scenario: Single work history entry
+#### Scenario: Multiple concurrent entries are all masked
 - **WHEN** the public page renders for a user whose visibility is
-  `anonymous` and who has exactly one work history entry
-- **THEN** that entry's employer name is replaced with a generic label
+  `anonymous` and more than one work history entry's end date reads as
+  "not ended"
+- **THEN** every such entry's employer name is replaced with a generic
+  label
+
+#### Scenario: No entry reads as current
+- **WHEN** the public page renders for a user whose visibility is
+  `anonymous` and no work history entry's end date reads as "not ended"
+- **THEN** no employer name is masked
 
 ### Requirement: Enabling visibility does not require a complete CV
 A user SHALL be able to set their visibility to `public` or `anonymous`

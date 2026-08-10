@@ -14,11 +14,18 @@
 
 ## 2. Anonymous-mode projection logic
 
-- [x] 2.1 Write the masking function that takes `resumeextract.Structured`
+- [ ] 2.1 Write the masking function that takes `resumeextract.Structured`
       and returns the anonymous-mode view: apply `.Professional()`, then
-      replace the newest `experience` entry's company field with a generic
-      label, leaving older entries untouched. Cover: zero, one, and
-      multiple-entry experience lists.
+      replace the company field of every `experience` entry whose `End`
+      reads as "not ended" (empty, or one of
+      `present`/`current`/`now`/`ongoing`, case-insensitive — mirror
+      `internal/experience/import_resume.go`'s `currentEndLabels`, which
+      can't be imported directly due to the package direction) with a
+      generic label. REVISED from "mask the newest entry" during task 2's
+      review: `Structured.Experience` ordering is undocumented/unenforced,
+      so this must be content-based, not positional. Cover: zero entries,
+      no entry current, exactly one current, multiple concurrent current
+      entries.
 - [x] 2.2 Write the public-mode projection: `.Professional()` with name and
       photo retained (i.e. `Professional()` output plus name/photo, still
       no email/phone/links). `Structured` has no photo field — see
