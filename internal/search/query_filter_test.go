@@ -102,6 +102,41 @@ func TestFilterFromValues_Role(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_CommaSeparatedIsORed(t *testing.T) {
+	// A single comma-joined value resolves the same way as repeated keys.
+	got := normalizeGroups(t, FilterFromValues(vals("skills=go,rust")))
+	want := [][]string{{`skills = "go"`, `skills = "rust"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("comma-separated: got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_CommaSeparatedExclude(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("skills_exclude=java,cpp")))
+	want := [][]string{{`skills != "cpp"`}, {`skills != "java"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("comma-separated exclude: got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_CommaAndRepeatedKeyMix(t *testing.T) {
+	// A comma-joined entry and a repeated key for the same param union together.
+	got := normalizeGroups(t, FilterFromValues(vals("skills=go,rust&skills=aws")))
+	want := [][]string{{`skills = "aws"`, `skills = "go"`, `skills = "rust"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("mixed comma+repeated: got %v, want %v", got, want)
+	}
+}
+
+func TestFilterFromValues_StrayCommasIgnored(t *testing.T) {
+	// A leading/trailing/doubled comma must not produce an empty facet value.
+	got := normalizeGroups(t, FilterFromValues(vals("skills=go,,rust,")))
+	want := [][]string{{`skills = "go"`, `skills = "rust"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("stray commas: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_AndMode(t *testing.T) {
 	// skills_mode=and → each value its own AND group (a job must have both).
 	got := normalizeGroups(t, FilterFromValues(vals("skills=go&skills=rust&skills_mode=and")))

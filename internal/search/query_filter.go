@@ -3,6 +3,7 @@ package search
 import (
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -101,7 +102,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	var locationGroup []string
 
 	for param, attr := range StringFacets {
-		included := nonEmpty(v[param])
+		included := splitFacetValues(v[param])
 		switch {
 		case locationFacets[param]:
 			for _, val := range included {
@@ -120,7 +121,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 			groups = append(groups, group)
 		}
 		// Excluded values: each is its own AND group so all are filtered out.
-		for _, val := range nonEmpty(v[param+"_exclude"]) {
+		for _, val := range splitFacetValues(v[param+"_exclude"]) {
 			groups = append(groups, []string{facetNeq(param, attr, val)})
 		}
 	}
@@ -151,6 +152,22 @@ func filterFromValues(v url.Values, now time.Time) any {
 	}
 
 	return Filter(groups...)
+}
+
+// splitFacetValues splits each raw query value on comma and flattens the
+// result, dropping empty fragments (a stray comma, or a bare `?skills=`) — so
+// a repeated key (`skills=go&skills=rust`) and a comma-joined value
+// (`skills=go,rust`) resolve to the same set of facet values.
+func splitFacetValues(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		for _, part := range strings.Split(s, ",") {
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
 }
 
 // nonEmpty drops empty strings so a bare `?seniority=` emits no fragment.
