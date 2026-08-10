@@ -32,6 +32,8 @@
   </picture>
 </a>
 
+<a href="https://trendshift.io/repositories/55060?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-55060" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/55060/daily?language=Go" alt="strelov1%2Ffreehire | Trendshift" width="250" height="55"/></a>
+
 <br>
 
 <img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.4M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
