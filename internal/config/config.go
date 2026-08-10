@@ -217,7 +217,8 @@ type Settings struct {
 // OAuthCredentials is one OAuth provider's credentials. Google/GitHub/LinkedIn
 // use only ClientID/ClientSecret; Apple authenticates with a self-signed JWT
 // instead of a static secret, so it uses ClientID (its Services ID) plus
-// TeamID/KeyID/PrivateKey and leaves ClientSecret empty.
+// TeamID/KeyID/PrivateKey and leaves ClientSecret empty. PrivateKey is the
+// decoded PEM (the OAUTH_APPLE_PRIVATE_KEY env var carries it base64-encoded).
 type OAuthCredentials struct {
 	ClientID     string
 	ClientSecret string
@@ -344,6 +345,21 @@ func decodeKey(s string) []byte {
 	return b
 }
 
+// decodeBase64 decodes a base64-encoded env value, returning "" for an unset
+// or malformed one. Used for OAUTH_APPLE_PRIVATE_KEY: a multi-line PEM does
+// not survive a systemd EnvironmentFile reliably, so it is stored
+// base64-encoded, the same convention as GMAIL_TOKEN_KEY.
+func decodeBase64(s string) string {
+	if s == "" {
+		return ""
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 // splitDomains parses a comma-separated COOKIE_DOMAIN into bare registrable
 // domains, trimming spaces and any leading dot (".freehire.me" -> "freehire.me").
 // Empty entries are dropped, so "" yields nil (host-only cookie, no extra origins).
@@ -367,7 +383,7 @@ func loadOAuth() map[string]OAuthCredentials {
 			ClientSecret: os.Getenv(prefix + "_CLIENT_SECRET"),
 			TeamID:       os.Getenv(prefix + "_TEAM_ID"),
 			KeyID:        os.Getenv(prefix + "_KEY_ID"),
-			PrivateKey:   os.Getenv(prefix + "_PRIVATE_KEY"),
+			PrivateKey:   decodeBase64(os.Getenv(prefix + "_PRIVATE_KEY")),
 		}
 	}
 	return creds

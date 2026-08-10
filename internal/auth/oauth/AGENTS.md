@@ -27,7 +27,7 @@ Provider registry over the same cookie session as password login.
 ## Config
 
 - `OAUTH_<PROVIDER>_CLIENT_ID`/`_CLIENT_SECRET` (GOOGLE/GITHUB/LINKEDIN)
-- Apple instead: `OAUTH_APPLE_CLIENT_ID` (its Services ID) + `OAUTH_APPLE_TEAM_ID`/`_KEY_ID`/`_PRIVATE_KEY`; enabled only when all four are set
+- Apple instead: `OAUTH_APPLE_CLIENT_ID` (its Services ID) + `OAUTH_APPLE_TEAM_ID`/`_KEY_ID`/`_PRIVATE_KEY`; enabled only when all four are set. `_PRIVATE_KEY` is the `.p8` key **base64-encoded** (a multi-line PEM does not survive a systemd `EnvironmentFile` reliably — same convention as `GMAIL_TOKEN_KEY`); `config.loadOAuth` decodes it
 - `GET /api/v1/auth/oauth/providers` lists enabled ones (SPA renders buttons from it)
 - Redirect URLs derive from `FRONTEND_ORIGIN` (`<origin>/api/v1/auth/oauth/<p>/callback`)
 - Provider tokens used once to fetch identity, never stored

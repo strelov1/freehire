@@ -120,6 +120,10 @@ services:
       OAUTH_GITHUB_CLIENT_SECRET: "${OAUTH_GITHUB_CLIENT_SECRET:-}"
       OAUTH_LINKEDIN_CLIENT_ID: "${OAUTH_LINKEDIN_CLIENT_ID:-}"
       OAUTH_LINKEDIN_CLIENT_SECRET: "${OAUTH_LINKEDIN_CLIENT_SECRET:-}"
+      OAUTH_APPLE_CLIENT_ID: "${OAUTH_APPLE_CLIENT_ID:-}"
+      OAUTH_APPLE_TEAM_ID: "${OAUTH_APPLE_TEAM_ID:-}"
+      OAUTH_APPLE_KEY_ID: "${OAUTH_APPLE_KEY_ID:-}"
+      OAUTH_APPLE_PRIVATE_KEY: "${OAUTH_APPLE_PRIVATE_KEY:-}"
       # Search is optional: an empty MEILI_MASTER_KEY disables the search
       # endpoint without affecting the rest of the API.
       MEILI_URL: "http://meilisearch:7700"

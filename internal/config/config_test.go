@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"slices"
 	"strings"
 	"testing"
@@ -312,15 +313,27 @@ func TestLoad_OAuthCredentialsFromEnv(t *testing.T) {
 }
 
 func TestLoad_OAuthAppleCredentialsFromEnv(t *testing.T) {
+	// The private key is a multi-line PEM, which does not survive a systemd
+	// EnvironmentFile reliably — like GMAIL_TOKEN_KEY, it is stored base64-encoded
+	// and decoded on load.
+	const pem = "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----"
 	t.Setenv("OAUTH_APPLE_CLIENT_ID", "me.freehire.web")
 	t.Setenv("OAUTH_APPLE_TEAM_ID", "25U9HN34VM")
 	t.Setenv("OAUTH_APPLE_KEY_ID", "ZC7298D2TR")
-	t.Setenv("OAUTH_APPLE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----")
+	t.Setenv("OAUTH_APPLE_PRIVATE_KEY", base64.StdEncoding.EncodeToString([]byte(pem)))
 
 	got := Load().OAuth["apple"]
 	if got.ClientID != "me.freehire.web" || got.TeamID != "25U9HN34VM" ||
-		got.KeyID != "ZC7298D2TR" || got.PrivateKey != "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----" {
-		t.Errorf("OAuth[apple] = %+v, want client id/team id/key id/private key populated", got)
+		got.KeyID != "ZC7298D2TR" || got.PrivateKey != pem {
+		t.Errorf("OAuth[apple] = %+v, want client id/team id/key id/decoded private key", got)
+	}
+}
+
+func TestLoad_OAuthApplePrivateKeyInvalidBase64IsEmpty(t *testing.T) {
+	t.Setenv("OAUTH_APPLE_PRIVATE_KEY", "not valid base64!!")
+
+	if got := Load().OAuth["apple"].PrivateKey; got != "" {
+		t.Errorf("PrivateKey = %q, want empty for invalid base64", got)
 	}
 }
 
