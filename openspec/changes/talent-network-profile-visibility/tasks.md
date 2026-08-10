@@ -34,11 +34,11 @@
 
 ## 3. Owner-facing visibility setting
 
-- [ ] 3.1 Extend the existing `me_profile` handler (or add a sibling) with an
+- [x] 3.1 Extend the existing `me_profile` handler (or add a sibling) with an
       endpoint to read and update the caller's own
       `talent_network_visibility`. Cookie/key auth only, consistent with the
       rest of `me_profile.go`.
-- [ ] 3.2 Handler test: get defaults to `off` for a user who never set it; set
+- [x] 3.2 Handler test: get defaults to `off` for a user who never set it; set
       to `public`/`anonymous` persists and round-trips.
 
 ## 4. Public profile page (backend)
