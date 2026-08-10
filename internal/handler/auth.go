@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // oauthRegistry resolves OAuth providers by name, building each with a callback
@@ -56,7 +56,7 @@ type authHandlers struct {
 	// and wrong for a redirect target (see requestOrigin).
 	servedHosts []string
 	accounts    *accounts.Service
-	throttler   auth.Throttler
+	throttler   ratelimit.Throttler
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
 	// are nil until withAccountDeletion wires them.
@@ -71,11 +71,7 @@ func (h *authHandlers) withAccountDeletion(eraser accountEraser, emails accountE
 	h.accountEmails = emails
 }
 
-func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
-	var th auth.Throttler
-	if pool != nil {
-		th = auth.NewPGThrottler(pool)
-	}
+func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimit.Throttler, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
 	return &authHandlers{
 		queries:                    queries,
 		issuer:                     issuer,
@@ -87,7 +83,7 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, issuer *auth.Issue
 		extensionRedirectAllowlist: extensionRedirectAllowlist,
 		servedHosts:                servedHosts,
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
-		throttler:                  th,
+		throttler:                  throttler,
 	}
 }
 
@@ -119,19 +115,12 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// client (e.g. the CLI) can resolve its own identity with its key. It stays a
 	// read of the caller's own user — not key management, which is cookie-only.
 	// Throttle credential endpoints against online brute-force / credential stuffing.
-	// Uses PGThrottler if pool is non-nil, falling back to process-local limiter.
-	var loginLimiter, registerLimiter, verifyReqLimiter, verifyConfLimiter, forgotLimiter, resetLimiter fiber.Handler
-	if h.throttler != nil {
-		loginLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "login:" + c.IP() }, 10, time.Minute)
-		registerLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "register:" + c.IP() }, 5, time.Minute)
-		verifyReqLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "verify-req:" + c.IP() }, 5, time.Minute)
-		verifyConfLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "verify-conf:" + c.IP() }, 10, 15*time.Minute)
-		forgotLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "forgot:" + c.IP() }, 3, 5*time.Minute)
-		resetLimiter = auth.ThrottleMiddleware(h.throttler, func(c *fiber.Ctx) string { return "reset:" + c.IP() }, 10, 15*time.Minute)
-	} else {
-		fallback := limiter.New(limiter.Config{Max: 10, Expiration: time.Minute})
-		loginLimiter, registerLimiter, verifyReqLimiter, verifyConfLimiter, forgotLimiter, resetLimiter = fallback, fallback, fallback, fallback, fallback, fallback
-	}
+	loginLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("login"), 10, time.Minute)
+	registerLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("register"), 5, time.Minute)
+	verifyReqLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("verify-req"), 5, time.Minute)
+	verifyConfLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("verify-conf"), 10, 15*time.Minute)
+	forgotLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("forgot"), 3, 5*time.Minute)
+	resetLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("reset"), 10, 15*time.Minute)
 
 	authGroup := api.Group("/auth", noCache)
 	authGroup.Post("/register", registerLimiter, h.Register)

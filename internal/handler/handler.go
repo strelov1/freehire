@@ -9,7 +9,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/accountdelete"
@@ -39,6 +38,7 @@ import (
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/privatejob"
+	"github.com/strelov1/freehire/internal/ratelimit"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
@@ -116,6 +116,10 @@ type middleware struct {
 	// caller-supplied URL, so one user's budget is spent across them rather than
 	// granted once per route.
 	outboundFetch fiber.Handler
+	// throttler backs every other per-route rate limiter built inside a feature
+	// handler's own register method (mail recall, photo upload, JD resolve, match
+	// analysis) — the same shared instance outboundFetch and the auth routes use.
+	throttler ratelimit.Throttler
 }
 
 // pageParams reads and clamps the shared limit/offset pagination query params.
@@ -171,11 +175,16 @@ func listResponseWithHidden(c *fiber.Ctx, data any, total, hidden int64, limit, 
 }
 
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
-// single browser origin allowed cross-origin (FrontendOrigin), the token-issuer
-// settings (JWTSecret/JWTTTL), the HTTPS-only cookie flag (CookieSecure), the
-// enabled OAuth providers, and the optional search client (nil disables search).
+// required rate-limit Throttler, the single browser origin allowed cross-origin
+// (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
+// cookie flag (CookieSecure), the enabled OAuth providers, and the optional
+// search client (nil disables search).
 type Config struct {
-	Pool           *pgxpool.Pool
+	Pool *pgxpool.Pool
+	// Throttler backs every rate-limited route in the API (internal/ratelimit).
+	// Required — there is no degraded/nil mode, unlike the optional dependencies
+	// below.
+	Throttler      ratelimit.Throttler
 	FrontendOrigin string
 	JWTSecret      string
 	JWTTTL         time.Duration
@@ -275,7 +284,7 @@ func Register(app *fiber.App, cfg Config) {
 		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		browserTools: browsertools.New(),
 	}
-	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
+	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
 		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
 	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
 		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
@@ -489,7 +498,7 @@ func Register(app *fiber.App, cfg Config) {
 	// the space is small enough that an unthrottled guesser would find live links and be handed a
 	// candidate's personal URL, one 302 at a time.
 	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
-	tracerLimiter := limiter.New(limiter.Config{Max: 60, Expiration: time.Minute})
+	tracerLimiter := ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("tracer"), 60, time.Minute)
 	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
 	api := app.Group("/api/v1")
@@ -515,7 +524,8 @@ func Register(app *fiber.App, cfg Config) {
 		cookie:         cookieAuth,
 		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
 		moderator:      requireModerator,
-		outboundFetch:  contributionLimiter(),
+		outboundFetch:  contributionLimiter(cfg.Throttler),
+		throttler:      cfg.Throttler,
 	}
 
 	// Job search surfaces first: their literal /jobs/* routes must precede the

@@ -3,15 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/jdresolve"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // jdResolveHandlers serves the entry point that turns an existing job's slug, an
@@ -25,7 +23,7 @@ func newJDResolveHandlers(resolver *jdresolve.Resolver) *jdResolveHandlers {
 }
 
 func (h *jdResolveHandlers) register(api fiber.Router, mw middleware) {
-	api.Post("/me/jd/resolve", mw.cookie, jdURLLimiter(), h.Resolve)
+	api.Post("/me/jd/resolve", mw.cookie, jdURLLimiter(mw.throttler), h.Resolve)
 }
 
 // jdURLLimiterPerHour bounds how many outbound-fetching url requests one user may submit
@@ -37,29 +35,21 @@ func (h *jdResolveHandlers) register(api fiber.Router, mw middleware) {
 // touched the network, and vice versa.
 const jdURLLimiterPerHour = contributionsPerHour
 
-// jdURLLimiter throttles only the url branch: Next reads the already-buffered body (cheap,
+// jdURLLimiter throttles only the url branch: it reads the already-buffered body (cheap,
 // and it does not consume it — c.BodyParser in Resolve reads it again the normal way) and
 // skips rate-limiting entirely when it names no url, so a job_slug or pasted-text request
 // never spends this budget. A body that fails to parse here is not limited either; Resolve's
-// own BodyParser call rejects it as a 400 right after, unmetered.
-func jdURLLimiter() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        jdURLLimiterPerHour,
-		Expiration: time.Hour,
-		Next: func(c *fiber.Ctx) bool {
-			var in jdResolveRequest
-			if err := json.Unmarshal(c.Body(), &in); err != nil {
-				return true
-			}
-			return strings.TrimSpace(in.URL) == ""
-		},
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "user:" + strconv.FormatInt(id, 10)
-			}
-			return "ip:" + c.IP()
-		},
-	})
+// own BodyParser call rejects it as a 400 right after, unmetered. This skip is route-specific
+// and doesn't generalize into ratelimit.Middleware, so it stays a thin wrapper around it.
+func jdURLLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	limitURLBranch := ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("jdresolve"), jdURLLimiterPerHour, time.Hour)
+	return func(c *fiber.Ctx) error {
+		var in jdResolveRequest
+		if err := json.Unmarshal(c.Body(), &in); err != nil || strings.TrimSpace(in.URL) == "" {
+			return c.Next()
+		}
+		return limitURLBranch(c)
+	}
 }
 
 // jdResolveRequest is exactly one of JobSlug/URL/Text. Title/Company are optional hints

@@ -64,6 +64,11 @@ type Settings struct {
 	MeiliURL string
 	MeiliKey string
 
+	// RedisURL backs the shared rate limiter (internal/ratelimit). Unlike Meili,
+	// Redis is a required dependency — there is no optional/disabled mode — so
+	// this only has a localhost default, the same posture as DatabaseURL.
+	RedisURL string
+
 	// LLM backs the optional CV ATS qualitative review and the in-app assistant. Optional
 	// and provider-agnostic: any empty field disables the AI layer — the server builds no
 	// LLM client and the ATS score stays deterministic (enforced at the cmd/server call
@@ -240,6 +245,7 @@ func Load() Settings {
 		MailboxDomain:  os.Getenv("MAILBOX_DOMAIN"),
 		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
 		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:       env("REDIS_URL", "redis://localhost:6379/0"),
 
 		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
 		LLMAdminKey:         os.Getenv("LLM_ADMIN_KEY"),

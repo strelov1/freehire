@@ -5,15 +5,13 @@ import (
 	"errors"
 	"io"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 
-	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/headshot"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // photoHandlers serve the member's headshot: the one image the CV templates that print a
@@ -38,17 +36,8 @@ const photoUploadsPerHour = 12
 // photoUploadLimiter throttles uploads per authenticated user, keyed like the contribution
 // limiter (an IP key is lifted by any rotating proxy pool). Mounted AFTER the auth gate so
 // the user id is resolved.
-func photoUploadLimiter() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        photoUploadsPerHour,
-		Expiration: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "user:" + strconv.FormatInt(id, 10)
-			}
-			return "ip:" + c.IP()
-		},
-	})
+func photoUploadLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("photo"), photoUploadsPerHour, time.Hour)
 }
 
 func (h *photoHandlers) register(api fiber.Router, mw middleware) {
@@ -56,7 +45,7 @@ func (h *photoHandlers) register(api fiber.Router, mw middleware) {
 	// The split mirrors /me/resume, whose read is metadata too: a client needs to know
 	// whether there is a headshot (to choose a control, or to prompt for one in the
 	// template gallery) far more often than it needs the bytes.
-	api.Put("/me/photo", mw.cookie, photoUploadLimiter(), h.PutPhoto)
+	api.Put("/me/photo", mw.cookie, photoUploadLimiter(mw.throttler), h.PutPhoto)
 	api.Get("/me/photo", mw.cookie, h.GetPhoto)
 	api.Get("/me/photo/image", mw.cookie, h.GetPhotoImage)
 	api.Delete("/me/photo", mw.cookie, h.DeletePhoto)

@@ -147,7 +147,7 @@ func recallApp(t *testing.T, pool *pgxpool.Pool, model llms.Model) (*fiber.App, 
 	// API key can press the button, and testing the cookie-only gate would leave the path
 	// that makes rate limiting matter unexercised.
 	app.Post("/api/v1/me/tracking/:slug/mail-recall",
-		auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), mailRecallLimiter(), h.RecallApplicationMail)
+		auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}), mailRecallLimiter(newTestThrottler(t)), h.RecallApplicationMail)
 
 	return app, iss
 }

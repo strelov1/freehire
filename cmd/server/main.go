@@ -25,9 +25,12 @@ import (
 	"github.com/strelov1/freehire/internal/llmkey"
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/pii"
+	"github.com/strelov1/freehire/internal/ratelimit"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/speech"
 	"github.com/strelov1/freehire/internal/tokencrypt"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -57,6 +60,17 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	defer pool.Close()
+
+	// Redis is a required dependency, like Postgres — it backs the shared rate
+	// limiter (internal/ratelimit) with no in-memory fallback mode. A malformed
+	// REDIS_URL is fatal at startup rather than degrading rate limiting silently.
+	redisOpts, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("redis: %v", err)
+	}
+	redisClient := redis.NewClient(redisOpts)
+	defer redisClient.Close()
+	throttler := ratelimit.NewRedisThrottler(redisClient)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "hire",
@@ -205,6 +219,7 @@ func main() {
 
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
+		Throttler:                   throttler,
 		FrontendOrigin:              cfg.FrontendOrigin,
 		JWTSecret:                   cfg.JWTSecret,
 		JWTTTL:                      cfg.JWTTTL,

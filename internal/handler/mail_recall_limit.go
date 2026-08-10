@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 
-	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // mailRecallsPerHour bounds how many mailbox sweeps one caller may run per hour.
@@ -31,15 +29,6 @@ const mailRecallsPerHour = 20
 // caller is already authenticated, and an IP key would be lifted by any rotating proxy
 // pool. It must be mounted AFTER the auth middleware so the id is resolved; a request that
 // somehow arrives unauthenticated falls back to the address, which is stricter, not looser.
-func mailRecallLimiter() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        mailRecallsPerHour,
-		Expiration: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "mailrecall:user:" + strconv.FormatInt(id, 10)
-			}
-			return "mailrecall:ip:" + c.IP()
-		},
-	})
+func mailRecallLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("mailrecall"), mailRecallsPerHour, time.Hour)
 }

@@ -149,7 +149,7 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 	// acts on one application and a keyed client drives it as legitimately as a browser.
 	// The limiter is the whole cost gate — this endpoint spends on the model and debits no
 	// credit — and is mounted after the auth gate so it can key on the caller.
-	api.Post("/me/tracking/:slug/mail-recall", mw.key, mailRecallLimiter(), h.RecallApplicationMail)
+	api.Post("/me/tracking/:slug/mail-recall", mw.key, mailRecallLimiter(mw.throttler), h.RecallApplicationMail)
 	// Import-and-link, for a proposal the sweep found in the mailbox and deliberately did
 	// not store. Unlimited beside its sibling: this one is a person pressing Link on
 	// something they just read, not a model call.

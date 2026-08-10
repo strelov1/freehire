@@ -75,7 +75,7 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware) {
 	// that actually drive the prompt chain share ONE limiter instance, so the budget is per
 	// user and not per route — a limiter per mount would hand the stream, the POST, and each
 	// deprecated alias a fresh allowance of the same user's quota.
-	runLimit := matchAnalysisLimiter()
+	runLimit := matchAnalysisLimiter(mw.throttler)
 	api.Get("/jobs/:slug/match-analysis", mw.key, h.GetMatchAnalysis)
 	api.Post("/jobs/:slug/match-analysis", mw.key, runLimit, h.PostMatchAnalysis)
 	api.Get("/jobs/:slug/match-analysis/stream", mw.key, runLimit, h.StreamMatchAnalysis)

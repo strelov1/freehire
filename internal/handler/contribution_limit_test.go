@@ -21,7 +21,7 @@ func TestContributionLimiter_IsKeyedOnTheUser(t *testing.T) {
 		}
 		c.Locals("auth.userID", id)
 		return c.Next()
-	}, contributionLimiter(), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusCreated) })
+	}, contributionLimiter(newTestThrottler(t)), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusCreated) })
 
 	post := func(user string) int {
 		req := httptest.NewRequest(fiber.MethodPost, "/contrib", nil)

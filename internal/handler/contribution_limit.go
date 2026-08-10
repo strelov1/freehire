@@ -1,13 +1,11 @@
 package handler
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 
-	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // contributionsPerHour bounds how many board links one user may submit per hour. A
@@ -22,15 +20,6 @@ const contributionsPerHour = 20
 // IP key would be lifted by any rotating proxy pool. It must be mounted AFTER the auth
 // middleware so the user id is resolved; a request that somehow arrives unauthenticated
 // falls back to the address, which is stricter, not looser.
-func contributionLimiter() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        contributionsPerHour,
-		Expiration: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "user:" + strconv.FormatInt(id, 10)
-			}
-			return "ip:" + c.IP()
-		},
-	})
+func contributionLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("contribution"), contributionsPerHour, time.Hour)
 }

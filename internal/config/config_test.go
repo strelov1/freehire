@@ -277,6 +277,22 @@ func TestLoad_MeiliURLFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_RedisURLDefaultsWhenUnset(t *testing.T) {
+	t.Setenv("REDIS_URL", "")
+
+	if got := Load().RedisURL; got != "redis://localhost:6379/0" {
+		t.Errorf("RedisURL = %q, want default", got)
+	}
+}
+
+func TestLoad_RedisURLFromEnv(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://redis:6379/0")
+
+	if got := Load().RedisURL; got != "redis://redis:6379/0" {
+		t.Errorf("RedisURL = %q, want env value", got)
+	}
+}
+
 func TestLoad_MeiliKeyFromEnv(t *testing.T) {
 	t.Setenv("MEILI_MASTER_KEY", "master-key")
 

@@ -23,7 +23,7 @@ func TestMatchAnalysisLimiter_IsKeyedOnTheUser(t *testing.T) {
 		}
 		c.Locals("auth.userID", id)
 		return c.Next()
-	}, matchAnalysisLimiter(), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+	}, matchAnalysisLimiter(newTestThrottler(t)), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
 
 	post := func(user string) int {
 		req := httptest.NewRequest(fiber.MethodPost, "/analysis", nil)

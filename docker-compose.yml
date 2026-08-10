@@ -33,6 +33,17 @@ services:
     volumes:
       - meilisearch_data:/meili_data
 
+  # Backs the shared rate limiter (internal/ratelimit). A required dependency, not
+  # an optional one like Meili — no volume, since rate-limit counters are
+  # ephemeral/TTL'd and losing them on restart is a fail-open no-op, not data loss.
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # Local S3-compatible storage for résumé upload (internal/blobstore). Without it
   # `PUT/POST /me/resume` runs with storage disabled (S3_* unset) and callers degrade to
   # the previous per-request extraction — real locally, but no upload persists, so the
@@ -64,6 +75,8 @@ services:
     build: .
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
@@ -111,6 +124,7 @@ services:
       # endpoint without affecting the rest of the API.
       MEILI_URL: "http://meilisearch:7700"
       MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-dev-insecure-meili-key}"
+      REDIS_URL: "redis://redis:6379/0"
     ports:
       - "${HIRE_HOST_PORT:-8080}:8080"
 

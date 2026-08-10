@@ -93,7 +93,7 @@ func TestJDResolveEndpoint(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
-	app.Post("/api/v1/me/jd/resolve", cookieAuth, jdURLLimiter(), h.Resolve)
+	app.Post("/api/v1/me/jd/resolve", cookieAuth, jdURLLimiter(newTestThrottler(t)), h.Resolve)
 
 	post := func(t *testing.T, body map[string]string, withCookie bool) (*http.Response, map[string]any) {
 		t.Helper()
