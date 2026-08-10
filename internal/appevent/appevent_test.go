@@ -44,6 +44,7 @@ func TestOnlyObservedSourcesAreTrustedForDayMath(t *testing.T) {
 		SourceCalendarGoogle: true,
 		SourceUser:           false,
 		SourceAssistant:      false,
+		SourceSystem:         false,
 	}
 	if len(trusted) != len(Sources) {
 		t.Fatalf("the vocabulary has %d sources but this test pins %d — a new source needs a verdict here", len(Sources), len(trusted))

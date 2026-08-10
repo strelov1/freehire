@@ -28,6 +28,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/notify"
 	"github.com/strelov1/freehire/internal/userjob"
@@ -88,6 +91,11 @@ type Store interface {
 	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]db.ListInterviewPrepCandidatesRow, error)
 	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]db.ListJobClosedCandidatesRow, error)
 	RecordNudge(ctx context.Context, arg db.RecordNudgeParams) (int64, error)
+	// TrackJob is jobtracking's own stage-set write (upserts applications.stage and
+	// emits the paired application_events row in one statement, only when the stage
+	// actually moves). MATCH reuses it directly, rather than duplicating the CTE,
+	// to auto-settle an application whose listing closed — see the job-closed loop.
+	TrackJob(ctx context.Context, arg db.TrackJobParams) (db.TrackJobRow, error)
 	ClaimDueNudges(ctx context.Context, arg db.ClaimDueNudgesParams) ([]int64, error)
 	GetNudgeForDelivery(ctx context.Context, id int64) (db.GetNudgeForDeliveryRow, error)
 	MarkNudgeDelivered(ctx context.Context, id int64) (int64, error)
@@ -238,6 +246,21 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 			return fmt.Errorf("record job-closed nudge: %w", err)
 		}
 		stats.Matched += int(affected)
+
+		// Auto-settle the board: a closed listing is not something to leave sitting
+		// on an active stage waiting for the candidate to notice and clear by hand.
+		// Ordered AFTER RecordNudge — TrackJob only writes a stage_set event when the
+		// stage actually moves, so it is naturally idempotent on retry, but running it
+		// first would flip the stage to `expired` before the notification is durably
+		// recorded; a failure between the two would then leave the candidate never
+		// notified and the next pass no longer finding an active stage to re-check.
+		if _, err := r.store.TrackJob(ctx, db.TrackJobParams{
+			UserID: c.UserID, JobID: c.JobID.Int64,
+			Stage:       pgtype.Text{String: "expired", Valid: true},
+			EventSource: appevent.SourceSystem,
+		}); err != nil {
+			return fmt.Errorf("auto-expire job-closed application: %w", err)
+		}
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
 )
 
@@ -18,6 +19,7 @@ type fakeStore struct {
 	interviewPrep []db.ListInterviewPrepCandidatesRow
 	jobClosed     []db.ListJobClosedCandidatesRow
 	recorded      []db.RecordNudgeParams
+	tracked       []db.TrackJobParams
 
 	due []int64
 	row db.GetNudgeForDeliveryRow
@@ -45,6 +47,10 @@ func (s *fakeStore) RecordNudge(_ context.Context, arg db.RecordNudgeParams) (in
 	}
 	s.recorded = append(s.recorded, arg)
 	return 1, nil
+}
+func (s *fakeStore) TrackJob(_ context.Context, arg db.TrackJobParams) (db.TrackJobRow, error) {
+	s.tracked = append(s.tracked, arg)
+	return db.TrackJobRow{}, nil
 }
 func (s *fakeStore) ClaimDueNudges(context.Context, db.ClaimDueNudgesParams) ([]int64, error) {
 	return s.due, nil
@@ -206,6 +212,16 @@ func TestMatch_JobClosed_ActiveApplicationIsRecorded(t *testing.T) {
 	if stats.Matched != 1 {
 		t.Errorf("stats.Matched = %d, want 1", stats.Matched)
 	}
+	if len(store.tracked) != 1 {
+		t.Fatalf("tracked = %d, want 1 (the board auto-settles alongside the nudge)", len(store.tracked))
+	}
+	tracked := store.tracked[0]
+	if tracked.UserID != 5 || tracked.JobID != 6 || tracked.Stage.String != "expired" || !tracked.Stage.Valid {
+		t.Errorf("tracked = %+v, want (5,6,expired)", tracked)
+	}
+	if tracked.EventSource != appevent.SourceSystem {
+		t.Errorf("event source = %q, want %q", tracked.EventSource, appevent.SourceSystem)
+	}
 }
 
 func TestMatch_JobClosed_SettledApplicationIsNotRecorded(t *testing.T) {
@@ -219,6 +235,9 @@ func TestMatch_JobClosed_SettledApplicationIsNotRecorded(t *testing.T) {
 	}
 	if len(store.recorded) != 0 {
 		t.Errorf("recorded = %d, want 0 (a settled application does not care that the listing closed)", len(store.recorded))
+	}
+	if len(store.tracked) != 0 {
+		t.Errorf("tracked = %d, want 0 (nothing to auto-settle on an already-settled application)", len(store.tracked))
 	}
 }
 

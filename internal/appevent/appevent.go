@@ -51,10 +51,15 @@ const (
 	// for day math like the mail sources and for the same reason: the date was set by an
 	// organiser and observed by us, not typed by the candidate when they got round to it.
 	SourceCalendarGoogle = "calendar_google"
+	// SourceSystem is a stage change the platform made on the candidate's behalf, not one
+	// anybody typed or that mail/calendar evidence dated — e.g. internal/nudge auto-expiring
+	// an application whose listing closed. Not trusted for day math: it records when we
+	// noticed, not an employer-side timing fact.
+	SourceSystem = "system"
 )
 
 // Sources is the canonical, ordered source vocabulary.
-var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant, SourceCalendarGoogle}
+var Sources = []string{SourceMailGmail, SourceMailHosted, SourceMailExternal, SourceUser, SourceAssistant, SourceCalendarGoogle, SourceSystem}
 
 // ValidSource reports whether s is a known event source.
 func ValidSource(s string) bool {

@@ -188,7 +188,7 @@
           </div>
           <div class="flex gap-1.5">
             <dt class="shrink-0 font-medium text-foreground">Listing closed —</dt>
-            <dd>right when a job you're still actively tracking closes.</dd>
+            <dd>right when a job you're still actively tracking closes — the card also moves to Expired on your board.</dd>
           </div>
         </dl>
       </div>
