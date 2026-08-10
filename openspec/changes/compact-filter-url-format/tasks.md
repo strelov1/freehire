@@ -1,9 +1,9 @@
 ## 1. Backend: unify facet value parsing
 
-- [ ] 1.1 Add a `splitFacetValues` helper in `internal/search/query_filter.go` that splits each raw value on `,`, flattens, and drops empty entries
-- [ ] 1.2 Apply `splitFacetValues` to every `StringFacets` include-param read in `filterFromValues`
-- [ ] 1.3 Apply `splitFacetValues` to every `StringFacets` `_exclude`-param read in `filterFromValues`
-- [ ] 1.4 Unit tests covering: comma-separated single entry, repeated-key entries, mixed comma+repeated, empty/stray-comma values, and the exclude variant of each
+- [x] 1.1 Add a `splitFacetValues` helper in `internal/search/query_filter.go` that splits each raw value on `,`, flattens, and drops empty entries
+- [x] 1.2 Apply `splitFacetValues` to every `StringFacets` include-param read in `filterFromValues`
+- [x] 1.3 Apply `splitFacetValues` to every `StringFacets` `_exclude`-param read in `filterFromValues`
+- [x] 1.4 Unit tests covering: comma-separated single entry, repeated-key entries, mixed comma+repeated, empty/stray-comma values, and the exclude variant of each
 
 ## 2. Frontend: compact serialization and dual-format parsing
 
