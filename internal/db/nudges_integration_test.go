@@ -66,8 +66,10 @@ func TestListFollowUpCandidates(t *testing.T) {
 		t.Fatalf("upsert settings disabled: %v", err)
 	}
 
-	withinWindow := time.Now().Add(-25 * 24 * time.Hour)
-	outsideWindow := time.Now().Add(-40 * 24 * time.Hour)
+	// Truncated to microsecond precision: timestamptz's own resolution, so the
+	// value read back from Postgres compares equal to the one written.
+	withinWindow := time.Now().Add(-25 * 24 * time.Hour).Truncate(time.Microsecond)
+	outsideWindow := time.Now().Add(-40 * 24 * time.Hour).Truncate(time.Microsecond)
 
 	openJob := insertJob(t, pool, "within-window")
 	insertApplication(t, pool, uidEnabled, openJob, withinWindow, "applied")
@@ -114,8 +116,9 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 		t.Fatalf("upsert settings: %v", err)
 	}
 
-	recent := time.Now().Add(-2 * time.Hour)
-	old := time.Now().Add(-10 * 24 * time.Hour)
+	// Truncated to microsecond precision — see the same note in TestListFollowUpCandidates.
+	recent := time.Now().Add(-2 * time.Hour).Truncate(time.Microsecond)
+	old := time.Now().Add(-10 * 24 * time.Hour).Truncate(time.Microsecond)
 
 	freshJob := insertJob(t, pool, "fresh-interview")
 	insertStageSetEvent(t, pool, uid, freshJob, "interview", recent, false)
