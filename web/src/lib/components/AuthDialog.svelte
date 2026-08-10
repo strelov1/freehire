@@ -44,6 +44,7 @@
     google: 'Google',
     github: 'GitHub',
     linkedin: 'LinkedIn',
+    apple: 'Apple',
   };
 
   // Enabled OAuth providers; an unreachable endpoint just means no provider

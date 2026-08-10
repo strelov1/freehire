@@ -1,8 +1,8 @@
 <script lang="ts">
   // Brand marks (OAuth sign-in buttons, footer links), inlined because icon
   // libraries (lucide) do not ship brand logos. Google keeps its official
-  // colors; GitHub, Telegram, and LinkedIn follow the current text color so they
-  // adapt to the theme (and match the muted footer treatment).
+  // colors; GitHub, Telegram, LinkedIn, and Apple follow the current text color
+  // so they adapt to the theme (and match the muted footer treatment).
   let { provider, class: className = 'size-4' }: { provider: string; class?: string } = $props();
 </script>
 
@@ -41,6 +41,12 @@
   <svg viewBox="0 0 24 24" class={className} fill="currentColor" aria-hidden="true">
     <path
       d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"
+    />
+  </svg>
+{:else if provider === 'apple'}
+  <svg viewBox="0 0 24 24" class={className} fill="currentColor" aria-hidden="true">
+    <path
+      d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.06 2.09-.976 3.935-.976 1.831 0 2.35.976 3.96.947 1.637-.03 2.676-1.483 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.41-.037-.017-3.19-1.226-3.22-4.857-.03-3.034 2.479-4.487 2.59-4.548-1.42-2.088-3.629-2.32-4.406-2.37-2.003-.161-3.686 1.08-4.65 1.08zm3.415-3.06c.84-1.017 1.406-2.435 1.253-3.836-1.213.049-2.68.81-3.549 1.827-.778.9-1.457 2.34-1.278 3.72 1.348.104 2.734-.687 3.574-1.71z"
     />
   </svg>
 {:else if provider === 'discord'}

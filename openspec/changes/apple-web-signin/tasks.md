@@ -24,7 +24,7 @@
 
 ## 5. Web UI
 
-- [ ] 5.1 Add an `apple` entry to the provider→icon/label map the SPA auth dialog uses to render "Continue with <Provider>" buttons
+- [x] 5.1 Add an `apple` entry to the provider→icon/label map the SPA auth dialog uses to render "Continue with <Provider>" buttons
 
 ## 6. Verification
 
