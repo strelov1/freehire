@@ -18,6 +18,24 @@ export const MAX_CALL_MS = 15 * 60 * 1000;
  *  end from a dropped connection. */
 export const END_WARNING_MS = 60 * 1000;
 
+/** Strips a litellm-routing provider prefix (`openai/gpt-realtime-2.1` →
+ *  `gpt-realtime-2.1`) from the model name the backend hands back with the minted
+ *  token.
+ *
+ *  Two different systems read that name for two different reasons, and they
+ *  disagree on its shape. The backend mints the client secret by POSTing to OUR
+ *  litellm proxy, which needs the provider prefix to route the request to the right
+ *  upstream account — that's why `REALTIME_MODEL` is configured as
+ *  `openai/gpt-realtime-2.1` in the first place. But the browser then takes that
+ *  same ephemeral token and negotiates the WebRTC call DIRECTLY against OpenAI's own
+ *  `/v1/realtime/calls`, bypassing our proxy entirely — and OpenAI's real API has no
+ *  concept of a litellm provider prefix; it 401s on a model id it does not
+ *  recognise. This is the one place that mismatch has to be undone. */
+export function openaiModelID(model: string): string {
+  const slash = model.lastIndexOf('/');
+  return slash === -1 ? model : model.slice(slash + 1);
+}
+
 /** The bits of `window` a call needs, as a shape rather than as the global, so the
  *  support check can be exercised for browsers this test run is not. */
 export type VoiceCallEnv = {

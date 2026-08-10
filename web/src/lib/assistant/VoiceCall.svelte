@@ -13,6 +13,7 @@
     initVoiceCallState,
     MAX_CALL_MS,
     END_WARNING_MS,
+    openaiModelID,
     type RealtimeServerEvent,
   } from '$lib/assistant/voiceCall';
 
@@ -106,7 +107,10 @@
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const sdpResp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(token.model)}`, {
+      // token.model is the litellm-routing name (may carry a provider prefix our
+      // proxy needed to mint the secret); this call bypasses the proxy and talks to
+      // OpenAI directly, which needs its own bare model id — see openaiModelID.
+      const sdpResp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(openaiModelID(token.model))}`, {
         method: 'POST',
         body: offer.sdp,
         headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/sdp' },
