@@ -1,0 +1,32 @@
+-- migrate: no-transaction
+--
+-- Enforces uniqueness on users.talent_network_public_id (added by
+-- 0085_talent_network_visibility.sql), which the public Talent Network route
+-- looks up by. Split into its own file, mirroring 0078 (jobs_source_id_idx)
+-- and 0081 (semantic_outbox_claim_idx) for the identical reason: users is
+-- under continuous write traffic on nearly every authenticated request, and
+-- a plain `ADD CONSTRAINT ... UNIQUE` (or plain CREATE UNIQUE INDEX) holds a
+-- SHARE lock blocking writes to users for the whole index build.
+-- CONCURRENTLY takes SHARE UPDATE EXCLUSIVE instead, blocking neither
+-- readers nor writers, at the cost of two table passes — but Postgres
+-- forbids CONCURRENTLY inside a transaction block, and a migration file's
+-- statements sent as one multi-statement query run in an implicit
+-- transaction regardless of the no-transaction marker (that marker only
+-- stops internal/migrate's OWN wrapping BEGIN/COMMIT — it does not change
+-- how Postgres itself batches a multi-statement message). A file mixing this
+-- with 0085's ADD COLUMN/CHECK would therefore fail with "CREATE INDEX
+-- CONCURRENTLY cannot run inside a transaction block" — the exact failure
+-- 0081 already hit and documents. One statement per no-transaction file
+-- sidesteps it.
+--
+-- A unique index alone (no named UNIQUE table constraint) is the same
+-- enforcement mechanism a plain `UNIQUE` column property compiles to, and
+-- matches the existing credit_ledger_reward_ref_uniq precedent (0041) for a
+-- concurrently-built uniqueness guard.
+--
+-- Applied to a fresh volume by initdb after 0085; on an existing prod
+-- volume build it by hand, detached from the SSH session (systemd-run or
+-- nohup) — a CONCURRENTLY build dies with its ssh session and leaves an
+-- INVALID index behind, the same warning 0078/0081 give.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS users_talent_network_public_id_key
+    ON public.users (talent_network_public_id);
