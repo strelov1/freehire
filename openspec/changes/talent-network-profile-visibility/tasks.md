@@ -68,7 +68,7 @@
 
 ## 6. Public profile page (frontend)
 
-- [ ] 6.1 Add the public route rendering the page for `public` and
+- [x] 6.1 Add the public route rendering the page for `public` and
       `anonymous` modes, and a 404 state, consistent with the styling of
       other public routes (`companies/[slug]`, `jobs/[slug]`).
 
