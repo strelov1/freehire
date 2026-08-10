@@ -12,6 +12,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/endpoints"
 
+	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/safehttp"
 )
 
@@ -32,12 +33,12 @@ type oidcProvider struct {
 }
 
 // NewGoogle returns the Google provider ("Sign in with Google" via OIDC).
-func NewGoogle(clientID, clientSecret, redirectURL string) Provider {
+func NewGoogle(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &oidcProvider{
 		name: "google",
 		cfg: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
+			ClientID:     creds.ClientID,
+			ClientSecret: creds.ClientSecret,
 			Endpoint:     endpoints.Google,
 			RedirectURL:  redirectURL,
 			Scopes:       []string{"openid", "email"},
@@ -48,12 +49,12 @@ func NewGoogle(clientID, clientSecret, redirectURL string) Provider {
 
 // NewLinkedIn returns the LinkedIn provider ("Sign In with LinkedIn using
 // OpenID Connect" — the product must be enabled on the LinkedIn app).
-func NewLinkedIn(clientID, clientSecret, redirectURL string) Provider {
+func NewLinkedIn(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &oidcProvider{
 		name: "linkedin",
 		cfg: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
+			ClientID:     creds.ClientID,
+			ClientSecret: creds.ClientSecret,
 			Endpoint:     endpoints.LinkedIn,
 			RedirectURL:  redirectURL,
 			Scopes:       []string{"openid", "email"},

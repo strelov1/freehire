@@ -31,11 +31,16 @@ type Provider interface {
 
 // constructors maps a provider name to its builder. The redirect URL is a build
 // argument, not baked in, so the same registry can serve OAuth on more than one
-// domain (the origin is chosen per request — see Registry.Provider).
-var constructors = map[string]func(clientID, clientSecret, redirectURL string) Provider{
+// domain (the origin is chosen per request — see Registry.Provider). Every
+// constructor takes the full credentials struct, even though Google/GitHub/
+// LinkedIn only read ClientID/ClientSecret from it — Apple needs the rest
+// (TeamID/KeyID/PrivateKey) and authenticates with a self-signed JWT instead of
+// a static ClientSecret.
+var constructors = map[string]func(creds config.OAuthCredentials, redirectURL string) Provider{
 	"google":   NewGoogle,
 	"github":   NewGitHub,
 	"linkedin": NewLinkedIn,
+	"apple":    NewApple,
 }
 
 // Registry holds the credentials of the enabled OAuth providers and builds a
@@ -48,13 +53,26 @@ type Registry struct {
 	creds map[string]config.OAuthCredentials
 }
 
-// NewRegistry keeps only providers with both a client id and secret for a known
+// credentialsComplete reports whether creds has everything the named provider
+// needs to authenticate. Apple has no client secret — it needs TeamID, KeyID,
+// and PrivateKey instead, to mint its own client-secret JWT.
+func credentialsComplete(name string, creds config.OAuthCredentials) bool {
+	if creds.ClientID == "" {
+		return false
+	}
+	if name == "apple" {
+		return creds.TeamID != "" && creds.KeyID != "" && creds.PrivateKey != ""
+	}
+	return creds.ClientSecret != ""
+}
+
+// NewRegistry keeps only providers with complete credentials for a known
 // provider name; unknown names and incomplete credentials are dropped, so an
 // unconfigured provider is simply absent (its routes 404 / the list omits it).
 func NewRegistry(creds map[string]config.OAuthCredentials) *Registry {
 	enabled := make(map[string]config.OAuthCredentials)
 	for name, c := range creds {
-		if _, known := constructors[name]; known && c.ClientID != "" && c.ClientSecret != "" {
+		if _, known := constructors[name]; known && credentialsComplete(name, c) {
 			enabled[name] = c
 		}
 	}
@@ -78,5 +96,5 @@ func (r *Registry) Provider(name, origin string) (Provider, bool) {
 	if !ok {
 		return nil, false
 	}
-	return constructors[name](c.ClientID, c.ClientSecret, origin+"/api/v1/auth/oauth/"+name+"/callback"), true
+	return constructors[name](c, origin+"/api/v1/auth/oauth/"+name+"/callback"), true
 }

@@ -6,17 +6,17 @@
 
 ## 2. Config plumbing
 
-- [ ] 2.1 Add `TeamID`, `KeyID`, `PrivateKey` fields to `config.OAuthCredentials`
-- [ ] 2.2 Load `OAUTH_APPLE_CLIENT_ID` / `OAUTH_APPLE_TEAM_ID` / `OAUTH_APPLE_KEY_ID` / `OAUTH_APPLE_PRIVATE_KEY` in `loadOAuth`, add `apple` to `oauthProviders`
+- [x] 2.1 Add `TeamID`, `KeyID`, `PrivateKey` fields to `config.OAuthCredentials`
+- [x] 2.2 Load `OAUTH_APPLE_CLIENT_ID` / `OAUTH_APPLE_TEAM_ID` / `OAUTH_APPLE_KEY_ID` / `OAUTH_APPLE_PRIVATE_KEY` in `loadOAuth`, add `apple` to `oauthProviders`
 
 ## 3. Apple provider implementation
 
-- [ ] 3.1 `internal/auth/oauth/apple.go`: client-secret JWT minting (ES256, 5-minute lifetime, `iss`/`sub`/`aud`/`kid` per design)
-- [ ] 3.2 `AuthCodeURL`: build Apple's authorize URL with `response_type=code`, `response_mode=form_post`, `scope=email`
-- [ ] 3.3 JWKS fetch + `id_token` signature verification (`golang-jwt/jwt/v5` `Keyfunc` against `https://appleid.apple.com/auth/keys`)
-- [ ] 3.4 `FetchIdentity`: token exchange, verify `id_token`, map `sub`/`email`/`email_verified` to `Identity`
-- [ ] 3.5 Update the `constructors` map signature to `func(config.OAuthCredentials, redirectURL string) Provider`; update Google/GitHub/LinkedIn constructors to the new signature (behavior unchanged); add `apple` entry
-- [ ] 3.6 `NewRegistry`: Apple enabled only when client id, Team ID, Key ID, and private key are all present
+- [x] 3.1 `internal/auth/oauth/apple.go`: client-secret JWT minting (ES256, 5-minute lifetime, `iss`/`sub`/`aud`/`kid` per design)
+- [x] 3.2 `AuthCodeURL`: build Apple's authorize URL with `response_type=code`, `response_mode=form_post`, `scope=email`
+- [x] 3.3 JWKS fetch + `id_token` signature verification (`golang-jwt/jwt/v5` `Keyfunc` against `https://appleid.apple.com/auth/keys`)
+- [x] 3.4 `FetchIdentity`: token exchange, verify `id_token`, map `sub`/`email`/`email_verified` to `Identity`
+- [x] 3.5 Update the `constructors` map signature to `func(config.OAuthCredentials, redirectURL string) Provider`; update Google/GitHub/LinkedIn constructors to the new signature (behavior unchanged); add `apple` entry
+- [x] 3.6 `NewRegistry`: Apple enabled only when client id, Team ID, Key ID, and private key are all present
 
 ## 4. Callback route POST support
 

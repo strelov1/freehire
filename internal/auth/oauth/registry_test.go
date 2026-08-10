@@ -34,6 +34,24 @@ func TestNewRegistry_OnlyCompleteCredentialsEnable(t *testing.T) {
 	}
 }
 
+func TestNewRegistry_AppleRequiresFullCredentialSet(t *testing.T) {
+	reg := NewRegistry(map[string]config.OAuthCredentials{
+		"apple": {ClientID: "me.freehire.web", TeamID: "team", KeyID: "key"}, // missing PrivateKey -> disabled
+	})
+	if names(reg)["apple"] {
+		t.Error("apple enabled; want disabled (missing private key)")
+	}
+}
+
+func TestNewRegistry_AppleEnabledWithFullCredentialSet(t *testing.T) {
+	reg := NewRegistry(map[string]config.OAuthCredentials{
+		"apple": {ClientID: "me.freehire.web", TeamID: "team", KeyID: "key", PrivateKey: "pem"},
+	})
+	if !names(reg)["apple"] {
+		t.Error("apple missing; want enabled")
+	}
+}
+
 func TestNewRegistry_IgnoresUnknownProvider(t *testing.T) {
 	reg := NewRegistry(map[string]config.OAuthCredentials{
 		"myspace": {ClientID: "id", ClientSecret: "secret"},

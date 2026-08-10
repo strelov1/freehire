@@ -9,6 +9,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/endpoints"
 
+	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/safehttp"
 )
 
@@ -21,11 +22,11 @@ type githubProvider struct {
 }
 
 // NewGitHub returns the GitHub provider.
-func NewGitHub(clientID, clientSecret, redirectURL string) Provider {
+func NewGitHub(creds config.OAuthCredentials, redirectURL string) Provider {
 	return &githubProvider{
 		cfg: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
+			ClientID:     creds.ClientID,
+			ClientSecret: creds.ClientSecret,
 			Endpoint:     endpoints.GitHub,
 			RedirectURL:  redirectURL,
 			Scopes:       []string{"read:user", "user:email"},
