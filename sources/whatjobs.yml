@@ -5,12 +5,15 @@
 # sources/hh.yml, whose board is a professional_role. company is a display label only — the real
 # employer comes from each posting.
 #
-# The publisher id is NOT here: it is the account credential and lives in WHATJOBS_PUBLISHER_ID.
-# Without it the provider is not registered and this file fails validation, by design.
+# The publisher id is NOT here: it is the account credential and lives in the "us:" entry of
+# WHATJOBS_PUBLISHER_IDS (a single "code:id,code:id,..." variable shared by every WhatJobs
+# market — see internal/sources/whatjobs.go's whatjobsMarkets). Without a "us:" entry the
+# provider is not registered and this file fails validation, by design.
 #
-# US inventory only. The vendor issues one publisher id per country and this account is the US one;
-# `country`, `locale` and `geo` query parameters are ignored, so another market needs its own
-# account and its own registration.
+# US inventory only. The vendor issues one publisher id per country and this account is the US
+# one; `country`, `locale` and `geo` query parameters are ignored, so another market needs its
+# own account, its own row in whatjobsMarkets, and its own sources/whatjobs-<code>.yml — see
+# sources/whatjobs-br.yml for that shape.
 #
 # Keyword volumes below are CORROBORATED counts measured live on 2026-07-30 — the number of postings
 # that actually name the keyword's terms. Do NOT use the feed's own `total`: it ranks rather than

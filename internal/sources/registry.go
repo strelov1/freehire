@@ -289,16 +289,28 @@ func All(c HTTPClient) map[string]Source {
 	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {
 		registry["adzuna"] = NewAdzuna(c, appID, appKey)
 	}
-	// whatjobs' credential is a publisher id rather than an API key; it is per-country, and this
-	// account serves US inventory. Its requests go through a shared in-flight cap: the feed
-	// rate-limits the pipeline's parallel board crawl (8 of 10 boards 429'd on the first prod
-	// run) though it serves sequential requests fine. On the taxonomy path there is nothing to
-	// wrap.
-	whatjobsID := os.Getenv("WHATJOBS_PUBLISHER_ID")
-	if c == nil {
-		registry["whatjobs"] = NewWhatJobs(nil, whatjobsID)
-	} else if whatjobsID != "" {
-		registry["whatjobs"] = NewWhatJobs(limitedWhatJobsGetter(c), whatjobsID)
+	// whatjobs' credential is a publisher id rather than an API key, and it is per-country — one
+	// account per market, each under its own provider name (whatjobsMarkets). Rather than one
+	// WHATJOBS_<CC>_PUBLISHER_ID variable per market (which would keep growing as markets are
+	// added), every account's id lives in the single WHATJOBS_PUBLISHER_IDS variable, a
+	// comma-separated "code:id" list keyed by whatjobsMarket.code (e.g. "us:7065,br:7076"). All
+	// configured accounts share ONE in-flight cap: the feed rate-limits the pipeline's parallel
+	// board crawl by simultaneity (8 of 10 boards 429'd on the first prod run) though it serves
+	// sequential requests fine, and that trigger reads as edge-wide rather than per-account, so
+	// every provider must contend for the same semaphore rather than each getting its own budget.
+	// On the taxonomy path there is nothing to wrap.
+	whatjobsIDs := parseWhatJobsPublisherIDs(os.Getenv("WHATJOBS_PUBLISHER_IDS"))
+	var wjGetter JSONGetter
+	if c != nil {
+		wjGetter = limitedWhatJobsGetter(c)
+	}
+	for _, m := range whatjobsMarkets {
+		id := whatjobsIDs[m.code]
+		if c == nil {
+			registry[m.provider] = NewWhatJobsMarket(nil, id, m.code)
+		} else if id != "" {
+			registry[m.provider] = NewWhatJobsMarket(wjGetter, id, m.code)
+		}
 	}
 	// taleo and aijobs both need a cookie-persisting session (a searchjobs POST authorized
 	// by a careersection GET's session cookie; a CSRF-protected listing POST authorized by

@@ -7,7 +7,15 @@ import (
 
 // keyedProviders are the adapters whose crawl needs an environment credential. They are the
 // ones the two registries disagree about, so both tests below iterate exactly this set.
-var keyedProviders = []string{"reed", "usajobs", "whatjobs"}
+// keyedProviders lists reed, usajobs and every whatjobs market provider — built from
+// whatjobsMarkets so a new market added there is covered here automatically.
+var keyedProviders = func() []string {
+	out := []string{"reed", "usajobs"}
+	for _, m := range whatjobsMarkets {
+		out = append(out, m.provider)
+	}
+	return out
+}()
 
 // clearCrawlCredentials unsets every keyed adapter's variable for the duration of the test,
 // which is the state of a reindex host, a status-serving API host and a contributor's laptop.
@@ -15,7 +23,7 @@ func clearCrawlCredentials(t *testing.T) {
 	t.Helper()
 	t.Setenv("USAJOBS_API_KEY", "")
 	t.Setenv("REED_API_KEY", "")
-	t.Setenv("WHATJOBS_PUBLISHER_ID", "")
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "")
 }
 
 // The taxonomy registry answers "what kind of source is this provider" — a compile-time fact

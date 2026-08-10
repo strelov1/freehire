@@ -1704,16 +1704,17 @@ the taxonomy registry, and their answers SHALL NOT vary with the environment's c
 
 #### Scenario: The taxonomy registry lists a keyed provider without its credential
 
-- **WHEN** `USAJOBS_API_KEY`, `REED_API_KEY` and `WHATJOBS_PUBLISHER_ID` are all unset and the
+- **WHEN** `USAJOBS_API_KEY`, `REED_API_KEY` and `WHATJOBS_PUBLISHER_IDS` are all unset and the
   registry is assembled without an HTTP client
-- **THEN** the registry contains `usajobs`, `reed` and `whatjobs`, each carrying its markers
+- **THEN** the registry contains `usajobs`, `reed` and every WhatJobs market provider (`whatjobs`,
+  `whatjobs-br`, and the rest of `whatjobsMarkets`), each carrying its markers
 - **AND** the source facet's provider list, the aggregator set and each provider's kind are the
   same as they are in a fully configured environment
 
 #### Scenario: The crawl registry still omits an unconfigured provider
 
-- **WHEN** `WHATJOBS_PUBLISHER_ID` is unset and the registry is assembled with an HTTP client
-- **THEN** the registry has no `whatjobs` entry
+- **WHEN** `WHATJOBS_PUBLISHER_IDS` is unset and the registry is assembled with an HTTP client
+- **THEN** the registry has no `whatjobs` entry (nor any other WhatJobs market provider)
 - **AND** validating a board file that names `whatjobs` fails before any request is made
 
 #### Scenario: An aggregator is suppressed against its ATS twin on any host

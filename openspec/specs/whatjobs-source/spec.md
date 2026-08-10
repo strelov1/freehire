@@ -2,19 +2,29 @@
 
 ## Purpose
 The WhatJobs FeedAPI adapter: freehire publishes for this CPC network, and its feed is read as
-a keyword-sliced aggregator of US inventory. The capability covers the request shape and the
-vendor's documented-but-broken parameters, keyword pagination and its depth ceiling, posting
-identity derived from the tracked click-through URL, and the normalization that discards the
-feed's placeholder fields.
+a keyword-sliced aggregator. The vendor issues one publisher account per country, so the system
+runs one adapter instance per configured market (the US account under the bare provider key
+`whatjobs`, every other market under `whatjobs-<code>` — see `whatjobsMarkets` in
+`internal/sources/whatjobs.go`), each with its own board file and its own credential. The
+capability covers the request shape and the vendor's documented-but-broken parameters, keyword
+pagination and its depth ceiling, posting identity derived from the tracked click-through URL,
+and the normalization that discards the feed's placeholder fields. Everything below applies
+per-market; scenarios use the `whatjobs` (US) market as the concrete example, but the same rules
+govern every other registered market.
 ## Requirements
-### Requirement: The WhatJobs feed is crawled as a keyword-sliced aggregator
+### Requirement: The WhatJobs feed is crawled as a keyword-sliced aggregator, one instance per market
 
 The system SHALL crawl the WhatJobs FeedAPI as a multi-company aggregator whose board is a
-search keyword, registered under the provider key `whatjobs`. Each board entry's `company` is
-a display label only — the employer of record comes from each posting's own `company` field.
-The adapter SHALL be marked an aggregator so the cross-source dedup pass may suppress its copy
-in favour of a first-party ATS posting of the same role. It SHALL NOT be marked boardless (the
-keyword is mandatory) and SHALL NOT be marked full-catalogue (a crawl reaches only a slice).
+search keyword, and SHALL run one adapter instance per configured publisher account, each
+registered under its own provider key (`whatjobs` for the US market, `whatjobs-<code>` for every
+other one — e.g. `whatjobs-br` for Brazil). Each market's provider key is a distinct dedup
+namespace: a posting's native id is unique only within its own account's id space, so two
+markets sharing one provider key could collide on the dedup key `(source, external_id)`. Each
+board entry's `company` is a display label only — the employer of record comes from each
+posting's own `company` field. Every market's adapter SHALL be marked an aggregator so the
+cross-source dedup pass may suppress its copy in favour of a first-party ATS posting of the same
+role. It SHALL NOT be marked boardless (the keyword is mandatory) and SHALL NOT be marked
+full-catalogue (a crawl reaches only a slice).
 
 #### Scenario: Keyword board is crawled
 
@@ -34,32 +44,44 @@ keyword is mandatory) and SHALL NOT be marked full-catalogue (a crawl reaches on
 - **WHEN** a `sources/whatjobs.yml` entry omits `board`
 - **THEN** config validation fails fast and the run does not start
 
-### Requirement: The publisher id is read from the environment only
+### Requirement: Every market's publisher id is read from one shared environment variable
 
-The system SHALL read the WhatJobs publisher id from the `WHATJOBS_PUBLISHER_ID` environment
-variable and MUST NOT accept it from a board file. The crawl registry — the one assembled with
-an HTTP client — SHALL contain `whatjobs` only when that variable is set to a non-empty value,
-so an environment without the credential cannot start a crawl that would 410 every board. The
-taxonomy registry — the one assembled without an HTTP client — SHALL contain `whatjobs`
-regardless, carrying an empty publisher id, so the provider's kind, its place in the aggregator
-set and its source-facet value do not depend on the local environment.
+The system SHALL read every WhatJobs market's publisher id from the single
+`WHATJOBS_PUBLISHER_IDS` environment variable — a comma-separated `code:id` list keyed by each
+market's short code (e.g. `"us:7065,br:7076"`) — rather than one variable per market, and MUST
+NOT accept a publisher id from a board file. This SHALL NOT be one `WHATJOBS_<CC>_PUBLISHER_ID`
+variable per market, since that count grows without bound as markets are added. The crawl
+registry — the one assembled with an HTTP client — SHALL contain a market's provider only when
+its code has a non-empty id in that variable, so an environment missing one market's credential
+cannot start a crawl that would 410 every board for that market alone, while every other
+configured market still registers normally. The taxonomy registry — the one assembled without an
+HTTP client — SHALL contain every market in `whatjobsMarkets` regardless, each carrying an empty
+publisher id, so a provider's kind, its place in the aggregator set and its source-facet value do
+not depend on the local environment.
 
 #### Scenario: Configured environment registers the provider
 
-- **WHEN** `WHATJOBS_PUBLISHER_ID` is set and the crawl registry is assembled
-- **THEN** the registry contains a `whatjobs` adapter carrying that publisher id
+- **WHEN** `WHATJOBS_PUBLISHER_IDS` contains `us:7065` and the crawl registry is assembled
+- **THEN** the registry contains a `whatjobs` adapter carrying publisher id `7065`
 
 #### Scenario: Unconfigured environment omits the provider
 
-- **WHEN** `WHATJOBS_PUBLISHER_ID` is unset or empty and the crawl registry is assembled
+- **WHEN** `WHATJOBS_PUBLISHER_IDS` is unset, empty, or has no `us:` entry, and the crawl registry
+  is assembled
 - **THEN** the registry has no `whatjobs` entry, and a board file naming that provider fails
   validation fast
 
-#### Scenario: The taxonomy registry lists the provider without the credential
+#### Scenario: One market's credential does not gate another's
 
-- **WHEN** `WHATJOBS_PUBLISHER_ID` is unset or empty and the taxonomy registry is assembled
-- **THEN** the registry contains a `whatjobs` adapter with an empty publisher id
-- **AND** `whatjobs` is classified as an aggregator and is a value in the source facet
+- **WHEN** `WHATJOBS_PUBLISHER_IDS` contains `us:7065` but no `br:` entry
+- **THEN** the crawl registry contains `whatjobs` but not `whatjobs-br`
+
+#### Scenario: The taxonomy registry lists every market without any credential
+
+- **WHEN** `WHATJOBS_PUBLISHER_IDS` is unset or empty and the taxonomy registry is assembled
+- **THEN** the registry contains an adapter for every market in `whatjobsMarkets`, each with an
+  empty publisher id
+- **AND** every one of them is classified as an aggregator and is a value in the source facet
 
 ### Requirement: Posting identity is derived from the tracked click-through URL
 
@@ -123,14 +145,16 @@ the job is persisted.
 - **WHEN** a posting's description ends with `#J-18808-Ljbffr`
 - **THEN** the persisted description does not contain that marker
 
-### Requirement: The account's country is stated alongside the posting's city
+### Requirement: Each market's country is stated alongside the posting's city
 
-The system SHALL compose each job's location from the posting's city and the country the publisher
-account serves, because the feed names no country and its cities collide with better-known foreign
-ones (its London is in Ohio, its Vienna in Virginia). The country is a property of the credential —
-the vendor issues one publisher id per country — and not a guess about an individual posting, so it
-does not breach the dict-only rule. A posting with no city SHALL carry the country alone, with no
-dangling separator for the geography tokenizer to read as an empty token.
+The system SHALL compose each job's location from the posting's city and the country ITS market's
+publisher account serves, because the feed names no country and its cities collide with
+better-known foreign ones (its London is in Ohio, its Vienna in Virginia). The country is a
+property of the credential — the vendor issues one publisher id per country, one row per market in
+`whatjobsMarkets` — and not a guess about an individual posting, so it does not breach the
+dict-only rule. Each market states only its OWN country, never another configured market's. A
+posting with no city SHALL carry the country alone, with no dangling separator for the geography
+tokenizer to read as an empty token.
 
 #### Scenario: City is qualified by the account country
 

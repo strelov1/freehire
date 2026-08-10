@@ -25,6 +25,8 @@ import (
 type whatjobs struct {
 	http        JSONGetter
 	publisherID string
+	provider    string
+	country     string
 }
 
 const (
@@ -56,19 +58,74 @@ const (
 	// outlasts that drift, at the cost of a withdrawn posting lingering that long — unavoidable,
 	// since nothing about these postings can be probed.
 	whatjobsSweepGrace = 14 * 24 * time.Hour
-	// whatjobsCountry is the country this publisher account serves. The vendor issues a separate
-	// publisher id per country, so it is a property of the credential rather than of any posting;
-	// an account for another market needs its own adapter registration, not a parsed field.
-	whatjobsCountry = "United States"
 )
 
-// NewWhatJobs builds the WhatJobs adapter over the given HTTP client. The publisher id is the
-// account credential; it is read from the environment by All and never from a board file.
-func NewWhatJobs(c JSONGetter, publisherID string) Source {
-	return whatjobs{http: c, publisherID: publisherID}
+// whatjobsMarket describes one WhatJobs publisher account. The vendor issues a separate
+// publisher id per country, so country (and the provider name it registers under) is a property
+// of the credential, not of any posting — a market that isn't in this table needs a new row here
+// plus its own board file, nothing else. code is the short key its publisher id is read under
+// from WHATJOBS_PUBLISHER_IDS (see registry.go); provider is a distinct dedup namespace per
+// market, since each account has its own id space for the tracked-URL posting id (see
+// whatjobsExternalID) — sharing one provider across markets would let two different countries'
+// postings collide on the dedup key (source, external_id). "us" alone keeps the bare "whatjobs"
+// provider name (no suffix), for backward compatibility with rows already ingested under it.
+type whatjobsMarket struct {
+	code     string
+	provider string
+	country  string
 }
 
-func (whatjobs) Provider() string { return "whatjobs" }
+var whatjobsMarkets = []whatjobsMarket{
+	{"us", "whatjobs", "United States"},
+	{"br", "whatjobs-br", "Brazil"},
+	{"de", "whatjobs-de", "Germany"},
+	{"fr", "whatjobs-fr", "France"},
+	{"ar", "whatjobs-ar", "Argentina"},
+	{"at", "whatjobs-at", "Austria"},
+	{"uk", "whatjobs-uk", "United Kingdom"},
+}
+
+// NewWhatJobs builds the WhatJobs adapter for the default (US) publisher account over the given
+// HTTP client. The publisher id is the account credential; it is read from the environment by
+// All and never from a board file.
+func NewWhatJobs(c JSONGetter, publisherID string) Source {
+	return newWhatJobs(c, publisherID, "us")
+}
+
+// NewWhatJobsMarket builds the WhatJobs adapter for one of the non-default publisher accounts.
+// market must be a code from whatjobsMarkets; All is the only caller that resolves a code read
+// from configuration, so every other caller passes a literal and an unrecognized code is a
+// programmer error.
+func NewWhatJobsMarket(c JSONGetter, publisherID, market string) Source {
+	return newWhatJobs(c, publisherID, market)
+}
+
+// parseWhatJobsPublisherIDs reads WHATJOBS_PUBLISHER_IDS's "code:id,code:id,..." shape into a
+// map keyed by whatjobsMarket.code. A malformed pair (no colon) is skipped rather than failing
+// the whole variable — one typo'd market must not take every other configured account down with
+// it.
+func parseWhatJobsPublisherIDs(raw string) map[string]string {
+	out := make(map[string]string)
+	for _, pair := range strings.Split(raw, ",") {
+		code, id, ok := strings.Cut(strings.TrimSpace(pair), ":")
+		if !ok || code == "" || id == "" {
+			continue
+		}
+		out[code] = id
+	}
+	return out
+}
+
+func newWhatJobs(c JSONGetter, publisherID, market string) Source {
+	for _, m := range whatjobsMarkets {
+		if m.code == market {
+			return whatjobs{http: c, publisherID: publisherID, provider: m.provider, country: m.country}
+		}
+	}
+	panic("sources: unknown whatjobs market " + market)
+}
+
+func (w whatjobs) Provider() string { return w.provider }
 
 // whatjobs lists many employers under one account, so it stays in the source facet and takes each
 // posting's company from the feed. It is deliberately NOT boardless: the keyword board is what
@@ -129,7 +186,7 @@ func (w whatjobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		var usable, corroborated int
 		for _, p := range resp.Data {
-			job, ok := p.toJob()
+			job, ok := p.toJob(w.country)
 			if !ok {
 				continue
 			}
@@ -232,7 +289,7 @@ var whatjobsResellerMark = regexp.MustCompile(`\s*#J-\d+-Ljbffr\s*$`)
 // publisher attribution rides along in its path. PostedAt is left nil on purpose (see
 // whatjobsPosting): freshness then falls back to when freehire first saw the row, which is true,
 // where the feed's own age is not.
-func (p whatjobsPosting) toJob() (Job, bool) {
+func (p whatjobsPosting) toJob(country string) (Job, bool) {
 	id, ok := whatjobsExternalID(p.URL)
 	if !ok {
 		return Job{}, false
@@ -242,7 +299,7 @@ func (p whatjobsPosting) toJob() (Job, bool) {
 		URL:         p.URL,
 		Title:       p.Title,
 		Company:     p.Company,
-		Location:    whatjobsLocation(p.Location),
+		Location:    whatjobsLocation(p.Location, country),
 		Description: sanitizeHTML(whatjobsResellerMark.ReplaceAllString(p.Snippet, "")),
 	}, true
 }
@@ -252,11 +309,11 @@ func (p whatjobsPosting) toJob() (Job, bool) {
 // Virginia), so without this a third of the postings resolve to no country and a few resolve to the
 // wrong one. The country is a fact about the configured publisher account — the id is per-country by
 // the vendor's design — not a guess about an individual posting.
-func whatjobsLocation(city string) string {
+func whatjobsLocation(city, country string) string {
 	if city = strings.TrimSpace(city); city == "" {
-		return whatjobsCountry
+		return country
 	}
-	return city + ", " + whatjobsCountry
+	return city + ", " + country
 }
 
 // pageURL builds one feed request. user_agent is deliberately absent: it is optional, it only

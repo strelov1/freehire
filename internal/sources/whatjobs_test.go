@@ -268,12 +268,119 @@ func TestWhatJobsNeverDatesAPostingFromAge(t *testing.T) {
 func TestWhatJobsPublisherIDGatesTheCrawlRegistry(t *testing.T) {
 	clearCrawlCredentials(t)
 	if _, ok := All(NewClient())["whatjobs"]; ok {
-		t.Error("All(client) should NOT register whatjobs without WHATJOBS_PUBLISHER_ID")
+		t.Error("All(client) should NOT register whatjobs without a us: entry in WHATJOBS_PUBLISHER_IDS")
 	}
 
-	t.Setenv("WHATJOBS_PUBLISHER_ID", "7065")
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:7065")
 	if _, ok := All(NewClient())["whatjobs"]; !ok {
-		t.Error("WHATJOBS_PUBLISHER_ID should be the variable that admits whatjobs to the crawl registry")
+		t.Error("WHATJOBS_PUBLISHER_IDS should be the variable that admits whatjobs to the crawl registry")
+	}
+}
+
+// Every market's credential gates only its own provider — an ingest host configured for one
+// market must not register another it has no id for. whatjobsMarketBoardFiles (defined in this
+// test) doubles as the market list this test iterates.
+func TestWhatJobsMarketPublisherIDGatesItsOwnProviderIndependently(t *testing.T) {
+	clearCrawlCredentials(t)
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:7065")
+	reg := All(NewClient())
+	if _, ok := reg["whatjobs"]; !ok {
+		t.Error("whatjobs should be registered with a us: entry in WHATJOBS_PUBLISHER_IDS")
+	}
+	for _, m := range whatjobsMarkets {
+		if m.code == "us" {
+			continue
+		}
+		if _, ok := reg[m.provider]; ok {
+			t.Errorf("All(client) should NOT register %q without a %s: entry in WHATJOBS_PUBLISHER_IDS", m.provider, m.code)
+		}
+	}
+
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", "us:7065,br:7076")
+	reg = All(NewClient())
+	if _, ok := reg["whatjobs-br"]; !ok {
+		t.Error("a br: entry in WHATJOBS_PUBLISHER_IDS should admit whatjobs-br to the crawl registry")
+	}
+	if _, ok := reg["whatjobs-de"]; ok {
+		t.Error("All(client) should NOT register whatjobs-de: it has no id: entry")
+	}
+}
+
+// Each market is a distinct account with its own id space for the tracked-URL posting id, so
+// each must carry a distinct provider name — sharing one would let two markets' postings
+// collide on the dedup key (source, external_id).
+func TestWhatJobsMarketsHaveDistinctProviders(t *testing.T) {
+	seen := make(map[string]string)
+	for _, m := range whatjobsMarkets {
+		got := NewWhatJobsMarket(nil, "id", m.code).Provider()
+		if got != m.provider {
+			t.Errorf("market %q: Provider() = %q, want %q", m.code, got, m.provider)
+		}
+		if other, dup := seen[got]; dup {
+			t.Errorf("provider %q used by both market %q and %q", got, m.code, other)
+		}
+		seen[got] = m.code
+	}
+}
+
+// Each market's postings must be stated as ITS country, not fall back to another market's — the
+// markets share the same mapping code, so this guards against country becoming a shared
+// package-level value again instead of a per-adapter field.
+func TestWhatJobsMarketsStateTheirOwnCountry(t *testing.T) {
+	for _, m := range whatjobsMarkets {
+		page := `{"data":[{"title":"Backend Developer","company":"Acme","location":"Somewhere",
+		 "snippet":"<p>Body.</p>","url":"https://whatjobs.com/pub_api__cpl__1__999"}]}`
+		fake := (&recordingJSON{}).route("page=1", page)
+
+		jobs, err := NewWhatJobsMarket(fake, "id", m.code).Fetch(context.Background(), CompanyEntry{Board: "backend developer"})
+		if err != nil {
+			t.Fatalf("market %q: Fetch: %v", m.code, err)
+		}
+		if len(jobs) != 1 {
+			t.Fatalf("market %q: got %d jobs, want 1", m.code, len(jobs))
+		}
+		if got := jobs[0].Location; got != "Somewhere, "+m.country {
+			t.Errorf("market %q: Location = %q, want the account's %q country stated", m.code, got, m.country)
+		}
+	}
+}
+
+// whatjobsMarketBoardFiles maps a market code to its board file, mirroring the filename
+// convention (sources/whatjobs.yml for the default "us" market, sources/whatjobs-<code>.yml for
+// every other one).
+func whatjobsMarketBoardFile(code string) string {
+	if code == "us" {
+		return "../../sources/whatjobs.yml"
+	}
+	return "../../sources/whatjobs-" + code + ".yml"
+}
+
+// Every market's board file must load and validate against the real registry, so a malformed
+// entry fails the build rather than a cron run.
+func TestWhatJobsMarketBoardFilesValidate(t *testing.T) {
+	ids := make([]string, len(whatjobsMarkets))
+	for i, m := range whatjobsMarkets {
+		ids[i] = m.code + ":id"
+	}
+	t.Setenv("WHATJOBS_PUBLISHER_IDS", strings.Join(ids, ","))
+	registry := All(nil)
+
+	for _, m := range whatjobsMarkets {
+		cfg, err := LoadConfig(whatjobsMarketBoardFile(m.code))
+		if err != nil {
+			t.Fatalf("market %q: LoadConfig: %v", m.code, err)
+		}
+		if err := cfg.Validate(registry); err != nil {
+			t.Fatalf("market %q: board file fails validation: %v", m.code, err)
+		}
+		if len(cfg.Sources) == 0 {
+			t.Fatalf("market %q: board file lists no keyword slices", m.code)
+		}
+		for _, e := range cfg.Sources {
+			if strings.TrimSpace(e.Board) == "" {
+				t.Errorf("market %q: entry %q has no keyword board", m.code, e.Company)
+			}
+		}
 	}
 }
 
@@ -343,29 +450,6 @@ func TestWhatJobsMixedPageIsNotAnError(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Errorf("got %d jobs, want 1", len(jobs))
-	}
-}
-
-// The board file must load and validate against the real registry, so a malformed entry fails the
-// build rather than a cron run. Validation needs the provider registered, hence the env.
-func TestWhatJobsBoardFileValidates(t *testing.T) {
-	t.Setenv("WHATJOBS_PUBLISHER_ID", "7065")
-
-	cfg, err := LoadConfig("../../sources/whatjobs.yml")
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if err := cfg.Validate(All(nil)); err != nil {
-		t.Fatalf("sources/whatjobs.yml fails validation: %v", err)
-	}
-	if len(cfg.Sources) == 0 {
-		t.Fatal("sources/whatjobs.yml lists no keyword slices")
-	}
-	// Every entry's board is the search keyword — the adapter has nothing to crawl without one.
-	for _, e := range cfg.Sources {
-		if strings.TrimSpace(e.Board) == "" {
-			t.Errorf("entry %q has no keyword board", e.Company)
-		}
 	}
 }
 
