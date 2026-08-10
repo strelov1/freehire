@@ -98,6 +98,9 @@ func TestUKGFetch(t *testing.T) {
 	if j.ExternalID != "id-1" || j.Title != "Backend Engineer" {
 		t.Errorf("job0 id/title = %q/%q", j.ExternalID, j.Title)
 	}
+	if j.Company != "Acme" {
+		t.Errorf("job0 Company = %q, want %q", j.Company, "Acme")
+	}
 	if want := "recruiting.ultipro.com/van5000vcscu/JobBoard/the-guid/OpportunityDetail"; !strings.Contains(j.URL, want) || !strings.Contains(j.URL, "opportunityId=id-1") {
 		t.Errorf("job0 URL = %q", j.URL)
 	}

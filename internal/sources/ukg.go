@@ -99,7 +99,7 @@ func (u ukg) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// The listing already carries title/location/brief description, so every posting yields
 	// a job; the detail fetch only upgrades the brief body to the full one (best-effort).
 	return fetchDetails(opps, defaultDetailWorkers, func(o ukgOpportunity) (Job, bool) {
-		return u.toJob(ctx, host, tenant, guid, o), true
+		return u.toJob(ctx, host, tenant, guid, e, o), true
 	}), nil
 }
 
@@ -131,7 +131,7 @@ func (u ukg) list(ctx context.Context, host, tenant, guid string) ([]ukgOpportun
 
 // toJob maps a listing opportunity to a Job, upgrading the brief description to the full
 // body from the detail page when that fetch succeeds.
-func (u ukg) toJob(ctx context.Context, host, tenant, guid string, o ukgOpportunity) Job {
+func (u ukg) toJob(ctx context.Context, host, tenant, guid string, e CompanyEntry, o ukgOpportunity) Job {
 	url := fmt.Sprintf("https://%s/%s/JobBoard/%s/OpportunityDetail?opportunityId=%s", host, tenant, guid, o.ID)
 	body := o.BriefDescription
 	var employmentType string
@@ -144,6 +144,7 @@ func (u ukg) toJob(ctx context.Context, host, tenant, guid string, o ukgOpportun
 		ExternalID:  o.ID,
 		URL:         url,
 		Title:       o.Title,
+		Company:     e.Company,
 		Location:    location,
 		Description: sanitizeHTML(html.UnescapeString(body)),
 		Remote:      isRemote(location),
