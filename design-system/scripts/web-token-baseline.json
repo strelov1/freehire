@@ -64,7 +64,7 @@
   "web/src/lib/components/RateDonut.svelte": 2,
   "web/src/lib/components/RecruitersView.svelte": 2,
   "web/src/lib/components/ReferralsLandingView.svelte": 14,
-  "web/src/lib/components/ReminderSettings.svelte": 3,
+  "web/src/lib/components/ReminderSettings.svelte": 2,
   "web/src/lib/components/ResumeStructuredView.svelte": 1,
   "web/src/lib/components/SavedSearches.svelte": 1,
   "web/src/lib/components/SavedSearchesView.svelte": 1,
