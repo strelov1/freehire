@@ -25,9 +25,12 @@ Non-obvious:
 
 - `migrations/` — the source for **both** sqlc codegen and Postgres initdb. Never edit an applied migration; add a new file.
 - `sources/` — YAML board files, not Go. One file per ATS provider, plus `custom.yml` and `telegram.yml`.
-- `design-system/` — a separate pnpm package, sibling to `web/`, linked via `link:../design-system`
-  (a symlink, not a copy). **Install it before building `web/`** — pnpm does not install a
-  linked package's own dependencies.
+- `design-system/` — a separate pnpm package, sibling to `web/` and `extension/`, linked via
+  pnpm's `link:../design-system` (`web/`) or npm's `file:../design-system` (`extension/`) — both
+  are symlinks, not copies. **Install it before building either consumer** — neither package
+  manager installs a linked/`file:` package's own dependencies for you.
+- `extension/` — the browser extension (WXT + Svelte side-panel agent client), npm-managed
+  unlike the rest of the JS in this repo. See [extension/AGENTS.md](extension/AGENTS.md).
 - `internal/db/` — **generated**; edit `internal/db/queries/*.sql` and run `make sqlc`.
 - `services/pii-filter` — a standalone service, not a Go package.
 
@@ -78,6 +81,7 @@ Each is self-contained and can be read independently.
 | **Per-user job tracking** (view/apply/save/track, stages, /me/tracking) | [internal/userjob/AGENTS.md](internal/userjob/AGENTS.md) |
 | **Job wire shape** (the single public projection of a job) | [internal/jobview/AGENTS.md](internal/jobview/AGENTS.md) |
 | **Browser tools** (relays tool frames between agent harness and extension) | [internal/browsertools/AGENTS.md](internal/browsertools/AGENTS.md) |
+| **Browser extension** (WXT + Svelte side-panel agent client, the other end of Browser tools) | [extension/AGENTS.md](extension/AGENTS.md) |
 | **Source ingest** (board files, provider registry, validation) | [internal/sources/AGENTS.md](internal/sources/AGENTS.md) |
 | **Pipeline** (Runner, dedup, UpsertJob, board health, search indexing) | [internal/pipeline/AGENTS.md](internal/pipeline/AGENTS.md) |
 | **Link resolution** (outbound job URL → destination's own identity) | [internal/linksource/AGENTS.md](internal/linksource/AGENTS.md) |

@@ -97,6 +97,11 @@ node_modules/
 .vite/
 .svelte-kit/
 
+# extension/ (WXT + Svelte browser extension) generated dirs and release zips
+extension/.wxt/
+extension/.output/
+extension/*.zip
+
 # Compiled cmd/* worker binaries (go build ./cmd/<name>/ writes <name> into the repo root)
 /backfill-company-info
 /backfill-derive

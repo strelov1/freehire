@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "freehire-design-system/theme.css";
+
+@layer base {
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
