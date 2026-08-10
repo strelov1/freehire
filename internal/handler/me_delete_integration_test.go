@@ -144,7 +144,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 		{"gmail email", `INSERT INTO emails (user_id, source, external_id, received_at) VALUES ($1, 'gmail', 'g-msg-1', now())`, []any{leaver}},
 		{"referral offer", `INSERT INTO referral_offers (user_id, company_slug, proof_object_key) VALUES ($1, 'acme', 'referral-proof/leaver/acme.pdf')`, []any{leaver}},
 		{"company vote", `INSERT INTO company_votes (user_id, company_slug, vote) VALUES ($1, 'acme', 1)`, []any{leaver}},
-		{"reminder settings", `INSERT INTO reminder_settings (user_id, enabled) VALUES ($1, true)`, []any{leaver}},
+		{"notification settings", `INSERT INTO notification_settings (user_id, enabled) VALUES ($1, true)`, []any{leaver}},
 		{"persona", `INSERT INTO community_personas (user_id, handle) VALUES ($1, 'quiet-otter')`, []any{leaver}},
 		{"stayer persona", `INSERT INTO community_personas (user_id, handle) VALUES ($1, 'brisk-heron')`, []any{stayer}},
 	}
@@ -206,7 +206,7 @@ func TestDeleteAccountEndToEnd(t *testing.T) {
 			{"emails", "user_id"},
 			{"referral_offers", "user_id"},
 			{"company_votes", "user_id"},
-			{"reminder_settings", "user_id"},
+			{"notification_settings", "user_id"},
 			{"community_personas", "user_id"},
 		} {
 			if n := countRows(t, pool, tbl.table, tbl.column, leaver); n != 0 {
