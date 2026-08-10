@@ -113,7 +113,13 @@ func (h *authHandlers) OAuthCallback(c *fiber.Ctx) error {
 	oauth.ClearReturnCookie(c, h.cookieSecure)
 	oauth.ClearPlatformCookie(c, h.cookieSecure)
 
+	// Apple's callback arrives as a POST with a form-encoded body instead of a
+	// GET query string — response_mode=form_post is mandatory once the email
+	// scope is requested. Every other provider's callback is still a GET.
 	state, code := c.Query("state"), c.Query("code")
+	if c.Method() == fiber.MethodPost {
+		state, code = c.FormValue("state"), c.FormValue("code")
+	}
 	if state == "" || state != cookieState {
 		return h.oauthFail(c, p.Name(), returnTo, mobile, errors.New("state mismatch"))
 	}

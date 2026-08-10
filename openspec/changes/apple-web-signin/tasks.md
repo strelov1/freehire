@@ -20,7 +20,7 @@
 
 ## 4. Callback route POST support
 
-- [ ] 4.1 `internal/handler/oauth.go`: accept `POST /api/v1/auth/oauth/:provider/callback` alongside the existing `GET`, reading `state`/`code` from `c.FormValue` on POST and `c.Query` on GET, sharing the rest of `OAuthCallback`
+- [x] 4.1 `internal/handler/oauth.go`: accept `POST /api/v1/auth/oauth/:provider/callback` alongside the existing `GET`, reading `state`/`code` from `c.FormValue` on POST and `c.Query` on GET, sharing the rest of `OAuthCallback`
 
 ## 5. Web UI
 

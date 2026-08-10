@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ type fakeProvider struct {
 	name     string
 	identity oauth.Identity
 	err      error
+	called   bool
 }
 
 func (f *fakeProvider) Name() string { return f.name }
@@ -28,6 +30,7 @@ func (f *fakeProvider) AuthCodeURL(state string) string {
 	return "https://provider.example/consent?state=" + state
 }
 func (f *fakeProvider) FetchIdentity(ctx context.Context, code string) (oauth.Identity, error) {
+	f.called = true
 	return f.identity, f.err
 }
 
@@ -58,6 +61,7 @@ func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	app.Get("/api/v1/auth/oauth/providers", h.ListOAuthProviders)
 	app.Get("/api/v1/auth/oauth/:provider/start", h.OAuthStart)
 	app.Get("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
+	app.Post("/api/v1/auth/oauth/:provider/callback", h.OAuthCallback)
 	app.Post("/api/v1/auth/oauth/exchange", h.OAuthExchange)
 	return app
 }
@@ -164,6 +168,52 @@ func TestOAuthCallback_MissingStateCookieRedirectsWithError(t *testing.T) {
 	resp := get(t, app, "/api/v1/auth/oauth/google/callback?code=x&state=s")
 	if resp.StatusCode != fiber.StatusFound || resp.Header.Get("Location") != "http://app.example/?auth_error=oauth" {
 		t.Errorf("status/Location = %d %q, want error redirect", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
+
+// postFormOAuth issues a POST with a form-encoded body, as Apple's callback
+// arrives (response_mode=form_post is mandatory once the email scope is
+// requested), unlike every other provider's GET query-string callback.
+func postFormOAuth(t *testing.T, app *fiber.App, path, body string, cookies ...string) *http.Response {
+	t.Helper()
+	req := httptest.NewRequest(fiber.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationForm)
+	for _, c := range cookies {
+		req.Header.Add("Cookie", c)
+	}
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	return resp
+}
+
+// The handler has no seam to fake accounts.Service (it's a concrete struct
+// backed by a real DB — see oauth_integration_test.go for the full round
+// trip), so this proves the POST form body's state/code were correctly
+// parsed by asserting the flow reaches FetchIdentity at all: a fake provider
+// error short-circuits before the handler ever touches h.accounts.
+func TestOAuthCallback_POSTFormBodyReachesProvider(t *testing.T) {
+	provider := &fakeProvider{name: "apple", err: errors.New("boom")}
+	app := oauthApp(map[string]oauth.Provider{"apple": provider})
+	resp := postFormOAuth(t, app, "/api/v1/auth/oauth/apple/callback", "code=x&state=s",
+		oauth.StateCookieName+"=s")
+
+	if resp.StatusCode != fiber.StatusFound {
+		t.Fatalf("status = %d, want 302", resp.StatusCode)
+	}
+	if !provider.called {
+		t.Error("FetchIdentity not called — state/code were not read from the POST form body")
+	}
+}
+
+func TestOAuthCallback_POSTStateMismatchRedirectsWithError(t *testing.T) {
+	app := oauthApp(map[string]oauth.Provider{"apple": &fakeProvider{name: "apple"}})
+	resp := postFormOAuth(t, app, "/api/v1/auth/oauth/apple/callback", "code=x&state=evil",
+		oauth.StateCookieName+"=good")
+
+	if loc := resp.Header.Get("Location"); loc != "http://app.example/?auth_error=oauth" {
+		t.Errorf("Location = %q, want auth_error redirect", loc)
 	}
 }
 

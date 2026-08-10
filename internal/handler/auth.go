@@ -147,6 +147,9 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	authGroup.Get("/oauth/providers", h.ListOAuthProviders)
 	authGroup.Get("/oauth/:provider/start", h.OAuthStart)
 	authGroup.Get("/oauth/:provider/callback", h.OAuthCallback)
+	// Apple's callback arrives as a POST with a form-encoded body (mandatory
+	// once the email scope is requested); every other provider uses the GET above.
+	authGroup.Post("/oauth/:provider/callback", h.OAuthCallback)
 	// Mobile-only: redeem the one-time code from the custom-scheme callback for a
 	// session. Public; the code is the credential.
 	authGroup.Post("/oauth/exchange", h.OAuthExchange)
