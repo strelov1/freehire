@@ -68,6 +68,7 @@ export class Paginator<T> {
   #limit: number;
   // Only set when the caller has a stable identity for T; see `dedupeByKey`.
   #keyOf?: (item: T) => unknown;
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
   #seen = new Set<unknown>();
 
   constructor(fetch: FetchSlice<T>, opts: { limit?: number; keyOf?: (item: T) => unknown } = {}) {
@@ -84,6 +85,7 @@ export class Paginator<T> {
    *  view renders it immediately and only fetches on `loadMore`. Use instead of
    *  `start()` when the route's `load` has already produced page one. */
   seed(slice: Slice<T>) {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
     this.#seen = new Set();
     this.items = this.#dedupe(slice.items);
     this.total = slice.total ?? 0;
@@ -98,6 +100,7 @@ export class Paginator<T> {
   async start() {
     try {
       const slice = await loadWithRetry(() => this.#fetch(this.#limit, 0));
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
       this.#seen = new Set();
       this.items = this.#dedupe(slice.items);
       this.total = slice.total ?? 0;
