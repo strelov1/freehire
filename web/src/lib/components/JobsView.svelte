@@ -30,7 +30,6 @@
   import OnboardingBanner from './onboarding/OnboardingBanner.svelte';
   import OnboardingAlertBanner from './onboarding/OnboardingAlertBanner.svelte';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { toSearchString } from '$lib/urlSearchString';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import { track } from '$lib/analytics';
   import type { Job, FacetCounts } from '$lib/types';
@@ -117,8 +116,10 @@
   // browses via keyword search. Both take the same facet params and return the same
   // Job shape, so only the fetch fn differs. CV sort is standalone-only.
   const makePaginator = () =>
-    new Paginator<Job>((limit, offset) =>
-      cvMode ? api.recommendations(scopedParams(), limit, offset) : api.searchJobs(scopedParams(), limit, offset),
+    new Paginator<Job>(
+      (limit, offset) =>
+        cvMode ? api.recommendations(scopedParams(), limit, offset) : api.searchJobs(scopedParams(), limit, offset),
+      { keyOf: (job) => job.public_slug },
     );
 
   // Seeded with the server-rendered first page (an intentional one-time snapshot
@@ -347,7 +348,7 @@
   // fixed context (e.g. company_slug) and go along too.
   function openSwipe() {
     const params = scopedParams();
-    const qs = toSearchString(params);
+    const qs = params.toString();
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
     goto(resolve('/jobs/swipe') + (qs ? `?${qs}` : ''));
   }

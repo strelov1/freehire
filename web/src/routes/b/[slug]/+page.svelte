@@ -26,8 +26,9 @@
   // page, so rows are in the initial HTML; "load more" fetches client-side. The query can
   // carry repeated keys (multi-value facets), passed through URLSearchParams verbatim.
   const jobs = $derived.by(() => {
-    const p = new Paginator<Job>((limit, offset) =>
-      api.searchJobs(new URLSearchParams(data.board.query), limit, offset),
+    const p = new Paginator<Job>(
+      (limit, offset) => api.searchJobs(new URLSearchParams(data.board.query), limit, offset),
+      { keyOf: (job) => job.public_slug },
     );
     p.seed(data.initial);
     return p;

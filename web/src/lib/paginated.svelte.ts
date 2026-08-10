@@ -32,6 +32,24 @@ export async function loadWithRetry<T>(fetch: () => Promise<T>, maxRetries = 2):
   }
 }
 
+/** Drop items whose key is already in `seen`, adding the rest. Offset-based paging
+ *  re-derives "page 2" as items.length, so a re-ranked or re-ingested result set
+ *  between requests can shift an already-shown item into the next page's window —
+ *  appended again under the same key, which Svelte's keyed `#each` rejects
+ *  (svelte.dev/e/each_key_duplicate). `seen` is mutated in place (carried across
+ *  calls by the caller) so a repeat is caught however many pages back it first
+ *  appeared. Kept as a free function so it's unit-testable without a Svelte runtime. */
+export function dedupeByKey<T>(items: T[], keyOf: (item: T) => unknown, seen: Set<unknown>): T[] {
+  const fresh: T[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fresh.push(item);
+  }
+  return fresh;
+}
+
 export class Paginator<T> {
   // Slices are whole API responses, only ever reassigned (never mutated in
   // place), so `raw` skips the per-item proxy overhead of deep `$state`.
@@ -48,17 +66,26 @@ export class Paginator<T> {
 
   #fetch: FetchSlice<T>;
   #limit: number;
+  // Only set when the caller has a stable identity for T; see `dedupeByKey`.
+  #keyOf?: (item: T) => unknown;
+  #seen = new Set<unknown>();
 
-  constructor(fetch: FetchSlice<T>, limit = 20) {
+  constructor(fetch: FetchSlice<T>, opts: { limit?: number; keyOf?: (item: T) => unknown } = {}) {
     this.#fetch = fetch;
-    this.#limit = limit;
+    this.#limit = opts.limit ?? 20;
+    this.#keyOf = opts.keyOf;
+  }
+
+  #dedupe(slice: T[]): T[] {
+    return this.#keyOf ? dedupeByKey(slice, this.#keyOf, this.#seen) : slice;
   }
 
   /** Seed the first page from data already fetched (e.g. server-rendered) so the
    *  view renders it immediately and only fetches on `loadMore`. Use instead of
    *  `start()` when the route's `load` has already produced page one. */
   seed(slice: Slice<T>) {
-    this.items = slice.items;
+    this.#seen = new Set();
+    this.items = this.#dedupe(slice.items);
     this.total = slice.total ?? 0;
     this.hasMore = slice.hasMore;
     this.status = 'ready';
@@ -71,7 +98,8 @@ export class Paginator<T> {
   async start() {
     try {
       const slice = await loadWithRetry(() => this.#fetch(this.#limit, 0));
-      this.items = slice.items;
+      this.#seen = new Set();
+      this.items = this.#dedupe(slice.items);
       this.total = slice.total ?? 0;
       this.hasMore = slice.hasMore;
       this.status = 'ready';
@@ -87,7 +115,7 @@ export class Paginator<T> {
     this.loadMoreError = false;
     try {
       const slice = await this.#fetch(this.#limit, this.items.length);
-      this.items = [...this.items, ...slice.items];
+      this.items = [...this.items, ...this.#dedupe(slice.items)];
       this.total = slice.total ?? 0;
       this.hasMore = slice.hasMore;
     } catch {

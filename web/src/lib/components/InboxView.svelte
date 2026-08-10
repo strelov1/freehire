@@ -68,7 +68,7 @@
       hidden = page.hidden;
       return page;
     },
-    PAGE_SIZE,
+    { limit: PAGE_SIZE },
   );
 
   let syncing = $state(false);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { loadWithRetry } from './paginated.svelte';
+import { loadWithRetry, dedupeByKey } from './paginated.svelte';
 import { ApiError } from './api';
 
 // The reactive Paginator can't be instantiated here — its `$state` fields need a
@@ -47,5 +47,43 @@ describe('loadWithRetry', () => {
     await assertion;
     expect(fetch).toHaveBeenCalledTimes(3); // initial + 2 retries
     vi.useRealTimers();
+  });
+});
+
+describe('dedupeByKey', () => {
+  it('keeps every item the first time its key is seen', () => {
+    const seen = new Set<unknown>();
+    const result = dedupeByKey([{ id: 'a' }, { id: 'b' }], (i) => i.id, seen);
+    expect(result).toEqual([{ id: 'a' }, { id: 'b' }]);
+    expect(seen).toEqual(new Set(['a', 'b']));
+  });
+
+  it('drops an item whose key was already seen in a prior call', () => {
+    const seen = new Set<unknown>(['a']);
+    const result = dedupeByKey([{ id: 'a' }, { id: 'b' }], (i) => i.id, seen);
+    expect(result).toEqual([{ id: 'b' }]);
+  });
+
+  it('drops a repeat within the same call, keeping the first occurrence', () => {
+    const seen = new Set<unknown>();
+    const result = dedupeByKey([{ id: 'a' }, { id: 'a' }], (i) => i.id, seen);
+    expect(result).toEqual([{ id: 'a' }]);
+  });
+
+  it('models the real bug: a job reshuffled into the next offset window is dropped, not double-keyed', () => {
+    const seen = new Set<unknown>();
+    const page1 = dedupeByKey(
+      [{ public_slug: 'job-1' }, { public_slug: 'job-2' }],
+      (j) => j.public_slug,
+      seen,
+    );
+    // Between requests the ranking shifted job-1 into the next offset window.
+    const page2 = dedupeByKey(
+      [{ public_slug: 'job-1' }, { public_slug: 'job-3' }],
+      (j) => j.public_slug,
+      seen,
+    );
+    expect(page1).toEqual([{ public_slug: 'job-1' }, { public_slug: 'job-2' }]);
+    expect(page2).toEqual([{ public_slug: 'job-3' }]);
   });
 });
