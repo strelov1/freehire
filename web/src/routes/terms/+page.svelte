@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
@@ -51,7 +52,7 @@
         You're responsible for the activity on your account and for keeping your credentials
         secure. You can delete your account at any time from account settings, or from the app —
         see <a
-          href="/delete-account"
+          href={resolve('/delete-account')}
           class="font-medium text-foreground underline-offset-4 hover:underline">Account Deletion</a
         > for how.
       </p>
