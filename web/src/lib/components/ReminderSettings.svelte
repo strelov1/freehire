@@ -6,23 +6,23 @@
   import { cn } from '$lib/ui';
   import ProviderIcon from './ProviderIcon.svelte';
 
-  // The account-level saved-job reminder rule: turn reminders on, set the default
-  // delay applied to new saves, and pick the delivery channels. Reminders are off
-  // until the user enables them here. Changes autosave — there is no Save button.
-  // The UI keeps the rule valid so an invalid payload never reaches the server:
-  // enabling defaults to the email channel, and the last channel can't be removed
-  // while reminders are on (an enabled rule requires at least one channel).
+  // The single account-level notification rule: turn notifications on and pick
+  // the delivery channels. It gates three things at once — the saved-job apply
+  // reminder, the follow-up nudge (an application has gone quiet), and the
+  // interview-prep nudge (a stage moved to interview) — there is no separate
+  // control for any of them, and no per-job override. Changes autosave — there is
+  // no Save button. The UI keeps the rule valid so an invalid payload never
+  // reaches the server: enabling defaults to the email channel, and the last
+  // channel can't be removed while notifications are on (an enabled rule
+  // requires at least one channel).
 
   let enabled = $state(false);
-  let delayDays = $state(3);
   let channels = $state<string[]>([]);
   let telegramAvailable = $state(false);
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let saveError = $state<string | null>(null);
-
-  const presets = [1, 3, 7, 14];
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -34,9 +34,8 @@
   async function load() {
     status = 'loading';
     try {
-      const [settings, tg] = await Promise.all([api.getReminderSettings(), api.telegramStatus()]);
+      const [settings, tg] = await Promise.all([api.getNotificationSettings(), api.telegramStatus()]);
       enabled = settings.enabled;
-      delayDays = settings.default_delay_days;
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       status = 'ready';
@@ -56,7 +55,7 @@
 
   async function doSave() {
     try {
-      await api.updateReminderSettings({ enabled, default_delay_days: delayDays, channels });
+      await api.updateNotificationSettings({ enabled, channels });
       saveState = 'saved';
       clearTimeout(savedTimer);
       savedTimer = setTimeout(() => {
@@ -78,14 +77,9 @@
 
   function toggleChannel(channel: string) {
     const has = channels.includes(channel);
-    // Keep at least one channel while reminders are on — the invariant the server enforces.
+    // Keep at least one channel while notifications are on — the invariant the server enforces.
     if (has && enabled && channels.length === 1) return;
     channels = has ? channels.filter((c) => c !== channel) : [...channels, channel];
-    persist();
-  }
-
-  function setDelay(d: number) {
-    delayDays = d;
     persist();
   }
 
@@ -104,8 +98,10 @@
       <Bell class="size-4.5" aria-hidden="true" />
     </div>
     <div class="min-w-0 flex-1">
-      <h2 class="text-sm font-semibold leading-tight">Reminders</h2>
-      <p class="text-xs text-muted-foreground">Nudge me to come back to a saved job before it goes stale.</p>
+      <h2 class="text-sm font-semibold leading-tight">Notifications</h2>
+      <p class="text-xs text-muted-foreground">
+        Come back to a saved job before it goes stale, follow up when an application goes quiet, and prepare before an interview.
+      </p>
     </div>
 
     <!-- Autosave status, then the on/off toggle. -->
@@ -121,7 +117,7 @@
       type="button"
       role="switch"
       aria-checked={enabled}
-      aria-label="Enable reminders"
+      aria-label="Enable notifications"
       onclick={toggleEnabled}
       disabled={status !== 'ready'}
       class={cn(
@@ -140,20 +136,9 @@
   </div>
 
   {#if status === 'error'}
-    <p class="mt-4 text-xs text-destructive">Couldn't load your reminder settings.</p>
+    <p class="mt-4 text-xs text-destructive">Couldn't load your notification settings.</p>
   {:else if enabled && status === 'ready'}
     <div class="mt-4 flex flex-col gap-4 border-t border-border pt-4">
-      <div class="flex flex-col gap-2">
-        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Remind me after</span>
-        <div class="flex flex-wrap items-center gap-2">
-          {#each presets as d (d)}
-            <button type="button" onclick={() => setDelay(d)} class={pill(delayDays === d)}>
-              {d === 1 ? '1 day' : `${d} days`}
-            </button>
-          {/each}
-        </div>
-      </div>
-
       <div class="flex flex-col gap-2">
         <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Deliver over</span>
         <div class="flex flex-wrap items-center gap-2">
@@ -177,7 +162,7 @@
           </button>
         </div>
         {#if channels.includes('telegram')}
-          <p class="text-xs text-muted-foreground">Telegram reminders need the bot connected on your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/searches')}>notifications</a> page.</p>
+          <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/searches')}>search notifications</a> page.</p>
         {/if}
       </div>
     </div>

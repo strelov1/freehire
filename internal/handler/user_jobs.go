@@ -46,10 +46,6 @@ func (h *trackingHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/jobs/:slug/save", mw.key, h.UnsaveJob)
 	api.Post("/jobs/:slug/dismiss", mw.key, h.DismissJob)
 	api.Delete("/jobs/:slug/dismiss", mw.key, h.UndismissJob)
-	// Per-job reminder controls: reschedule or turn off a saved job's pending
-	// reminder without unsaving it (scheduling itself happens on save).
-	api.Patch("/jobs/:slug/reminder", mw.key, h.RescheduleReminder)
-	api.Delete("/jobs/:slug/reminder", mw.key, h.CancelJobReminder)
 	api.Patch("/jobs/:slug/track", mw.key, h.TrackJob)
 	api.Delete("/jobs/:slug/stage", mw.key, h.ClearStage)
 	api.Delete("/jobs/:slug/track", mw.key, h.Untrack)
@@ -78,23 +74,11 @@ func (h *trackingHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/tracking/pipeline", mw.key, h.TrackingPipeline)
 	api.Get("/me/tracking/swipe", mw.key, h.SwipeDeck)
 
-	// Saved-job reminder default rule (enable, default delay, channels). Cookie-only
-	// (RequireAuth) like subscriptions — it configures a delivery preference.
-	api.Get("/me/reminder-settings", mw.cookie, h.GetReminderSettings)
-	api.Put("/me/reminder-settings", mw.cookie, h.UpdateReminderSettings)
-}
-
-// saveJobRequest is the optional save body carrying a per-job reminder override.
-// Absent (empty body) means "use the account default rule".
-type saveJobRequest struct {
-	Reminder *reminderOverrideRequest `json:"reminder"`
-}
-
-// reminderOverrideRequest is the save-time reminder choice: opt this job out
-// (disabled) or set a custom delay in days; both unset means "keep the default".
-type reminderOverrideRequest struct {
-	Disabled  bool `json:"disabled"`
-	DelayDays int  `json:"delay_days"`
+	// The account-level notification rule (enable, channels) shared by saved-job
+	// reminders and both lifecycle nudges. Cookie-only (RequireAuth) like
+	// subscriptions — it configures a delivery preference.
+	api.Get("/me/notification-settings", mw.cookie, h.GetNotificationSettings)
+	api.Put("/me/notification-settings", mw.cookie, h.UpdateNotificationSettings)
 }
 
 // interactionResponse is the public shape of a user's interaction with a job. It
@@ -239,8 +223,8 @@ func statedApplyDay(c *fiber.Ctx) (*time.Time, error) {
 }
 
 // SaveJob saves (bookmarks) a job for the authenticated user and returns the
-// updated interaction. An optional body may carry a per-job reminder override;
-// otherwise the account default rule decides whether to schedule a reminder.
+// updated interaction. The account's shared notification rule decides whether a
+// reminder is scheduled.
 func (h *trackingHandlers) SaveJob(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -255,23 +239,14 @@ func (h *trackingHandlers) SaveJob(c *fiber.Ctx) error {
 }
 
 // scheduleReminderOnSave applies the reminder decision for a just-saved job. It is
-// a best-effort side effect of the save: any failure (including a malformed override
-// delay) is logged, never surfaced — the save already succeeded and is the primary
-// action, and the worker's fire-time re-check backstops correctness. The UI sends
-// only valid, fixed override delays.
+// a best-effort side effect of the save: a failure is logged, never surfaced — the
+// save already succeeded and is the primary action, and the worker's fire-time
+// re-check backstops correctness.
 func (h *trackingHandlers) scheduleReminderOnSave(c *fiber.Ctx, userID, jobID int64) {
 	if h.reminder == nil {
 		return
 	}
-	var in saveJobRequest
-	// The body is optional (a bare save sends none); a parse failure just means no
-	// override, so the account default applies.
-	_ = c.BodyParser(&in)
-	var ov *reminder.Override
-	if in.Reminder != nil {
-		ov = &reminder.Override{Disabled: in.Reminder.Disabled, DelayDays: in.Reminder.DelayDays}
-	}
-	if err := h.reminder.ScheduleOnSave(c.Context(), userID, jobID, ov); err != nil {
+	if err := h.reminder.ScheduleOnSave(c.Context(), userID, jobID); err != nil {
 		log.Printf("reminder: schedule on save user=%d job=%d: %v", userID, jobID, err)
 	}
 }

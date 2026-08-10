@@ -104,10 +104,15 @@ type Querier interface {
 	// names the meeting by its iCalUID; a deleted one is documented to carry just the
 	// provider's own `id`, which is why that is stored alongside.
 	CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error)
-	// Cancel the pending reminder for one (user, job): the per-job "turn off" control,
-	// and the eager cleanup wired into apply and unsave. Idempotent — no pending row
+	// Cancel the pending reminder for one (user, job): the eager cleanup wired into
+	// apply and unsave (there is no per-job manual control any more — the shared
+	// notification_settings toggle is the only control). Idempotent — no pending row
 	// affects 0 rows and is never an error. Cancelled rows are retained as history.
 	CancelJobReminder(ctx context.Context, arg CancelJobReminderParams) (int64, error)
+	// Lazy cancellation at fire time: the worker's re-check found the triggering
+	// condition no longer holds (a reply arrived, the stage moved on, the job closed,
+	// or notifications were disabled since MATCH) — cancel instead of sending.
+	CancelNudgeAtFire(ctx context.Context, id int64) (int64, error)
 	// Lazy cancellation at fire time: the worker's re-check found the job closed or no
 	// longer saved-but-unapplied, so cancel instead of sending. This is how job closure
 	// cancels reminders without hooking every scattered close path.
@@ -124,6 +129,14 @@ type Querier interface {
 	// jobs_open_role_cluster_idx (migration 0013), with jobs_company_role_fingerprint_idx as the
 	// non-partial fallback.
 	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
+	// Claim a batch of live, unleased captures, freshest posting first, by stamping
+	// claimed_at. Mirrors ClaimApplyFormBatch: FOR UPDATE OF o locks only outbox rows, SKIP
+	// LOCKED lets concurrent workers take disjoint rows, and the lease predicate reclaims
+	// entries whose worker died, so no separate reaper process is needed.
+	//
+	// The claim returns the job's external_id and url because the fetcher needs the posting
+	// id and the exact stored URL to hit the same page the ingest write recorded.
+	ClaimAdzunaDescriptionBatch(ctx context.Context, arg ClaimAdzunaDescriptionBatchParams) ([]ClaimAdzunaDescriptionBatchRow, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimSemanticBatch: FOR UPDATE OF o locks only outbox rows (a bare
 	// FOR UPDATE would also lock jobs, making concurrent claim waves contend), SKIP LOCKED
@@ -144,6 +157,12 @@ type Querier interface {
 	// Join jobs off the claimable CTE (not the UPDATE target o, which Postgres forbids in
 	// FROM) so the platform identity comes back without a second query.
 	ClaimApplyFormBatch(ctx context.Context, arg ClaimApplyFormBatchParams) ([]ClaimApplyFormBatchRow, error)
+	// Lease a batch of pending nudges, oldest first. FOR UPDATE OF n + SKIP LOCKED
+	// lets overlapping worker passes take disjoint rows so a nudge fires at most
+	// once; the lease predicate reclaims rows whose sender died (stale claimed_at).
+	// Delivery happens OUTSIDE this transaction, so no network call is held under a
+	// row lock. Mirrors ClaimDueReminders.
+	ClaimDueNudges(ctx context.Context, arg ClaimDueNudgesParams) ([]int64, error)
 	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
 	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
 	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
@@ -558,6 +577,8 @@ type Querier interface {
 	// Returns the affected row count: 0 means the key does not exist or is not the
 	// caller's (the handler maps that to 404).
 	DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int64, error)
+	// Retire a capture that succeeded (or that will never succeed, e.g. the posting is gone).
+	DeleteAdzunaDescriptionEntry(ctx context.Context, id int64) error
 	// Facet-distribution snapshot (insights_facet_stats), recomputed by
 	// cmd/rollup-facets as an atomic delete-and-reinsert, and the read query the public
 	// /api/v1/stats/facets endpoint serves from it. The source is Meilisearch's facet
@@ -684,6 +705,20 @@ type Querier interface {
 	// independent of a prior view: it inserts the row (viewed_at defaults) or
 	// refreshes dismissed_at in place.
 	DismissJob(ctx context.Context, arg DismissJobParams) (DismissJobRow, error)
+	// Transactional-outbox enqueue for the ingest write path: queue this one job for a full-
+	// description fetch, gated on it not having been hydrated already.
+	//
+	// The gate is a dedicated marker table (adzuna_description_hydrated) rather than a content
+	// check on jobs.description, because once the queue entry is deleted after a successful
+	// capture nothing else distinguishes "already hydrated" from "still carrying the API
+	// snippet" — the row's own content_hash and updated_at move for unrelated reasons too.
+	//
+	// Idempotent via the outbox's UNIQUE (job_id). Run in the same transaction as the job's
+	// UpsertJob so a newly ingested job is queued atomically with its write. The caller is
+	// responsible for only calling this for a job whose stored URL is Adzuna's own hosted
+	// details page — the ad-network tracking redirect answers Access Denied and is never
+	// queued (see adzunadesc.Eligible).
+	EnqueueAdzunaDescriptionCapture(ctx context.Context, jobID int64) (int64, error)
 	// Transactional-outbox enqueue for the ingest write path: queue this one job for a form
 	// capture, gated on it having none.
 	//
@@ -934,6 +969,8 @@ type Querier interface {
 	// the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
 	// are enforced by the caller, which must fail identically for expired and wrong codes.
 	GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (GetEmailCodeRow, error)
+	// The outstanding code for a purpose locked for update inside a transaction.
+	GetEmailCodeForUpdate(ctx context.Context, arg GetEmailCodeForUpdateParams) (GetEmailCodeForUpdateRow, error)
 	// One message's id from the identifier its provider gave it, scoped to the caller.
 	//
 	// The recall sweep proposes messages by PROVIDER id, because a searched message is not ours
@@ -1022,6 +1059,19 @@ type Querier interface {
 	// Recipient resolution for the inbound ingest worker.
 	GetMailboxByAddress(ctx context.Context, address string) (Mailbox, error)
 	GetMailboxByUser(ctx context.Context, userID int64) (Mailbox, error)
+	// The caller's notification rule, shared by saved-job reminders and both
+	// lifecycle nudges. No row -> pgx.ErrNoRows, which the service reads as the
+	// opt-out-by-default state (never configured; see the
+	// centralize-lifecycle-notifications change for why the default is enabled).
+	GetNotificationSettings(ctx context.Context, userID int64) (NotificationSetting, error)
+	// The re-check-before-send context for one nudge: the job display fields, the
+	// user's live notification rule (enabled + channels — re-read live, not
+	// snapshotted, so a change between MATCH and DELIVER takes effect immediately),
+	// live destinations, and the application's CURRENT stage/last-activity/pending-
+	// suggestion so the worker can recompute the triggering condition rather than
+	// trust what MATCH saw. job_open lets the worker cancel a nudge for a job that
+	// has since closed.
+	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
 	// never equals the param, so private sets are unreachable. No row → 404.
@@ -1038,9 +1088,6 @@ type Querier interface {
 	// closed or is no longer saved-but-unapplied, closing the race between a cancel and
 	// the fire.
 	GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error)
-	// The caller's reminder default rule. No row -> pgx.ErrNoRows, which the service
-	// reads as the off-by-default state (feature never configured).
-	GetReminderSettings(ctx context.Context, userID int64) (ReminderSetting, error)
 	// Load a single report by id for the review path, with the reporter's email and the
 	// reported job's slug and title — the decision notice needs them, and joining here spares
 	// the decision path a second round trip. The resolve/dismiss flow guards the status in the
@@ -1515,6 +1562,13 @@ type Querier interface {
 	// top-N per facet without re-sorting. Aggregate only — per-value counts, no
 	// record-level data.
 	ListFacetStats(ctx context.Context) ([]InsightsFacetStat, error)
+	// Active applications, for users with notifications enabled, whose last activity
+	// falls inside the recency window (bounds the scan to an index range rather than
+	// the whole table, and keeps a first deploy from detonating the entire historical
+	// backlog as nudges). Returns the raw ingredients for userjob.SilenceStateFor —
+	// the silence verdict itself is a Go-side decision, not a SQL one, same as every
+	// other silence-state reader in this codebase.
+	ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]ListFollowUpCandidatesRow, error)
 	// Candidate applications for the ghost signal, for a page of jobs at a time.
 	//
 	// This query selects and gates; it does NOT judge. Whether an application is
@@ -1573,6 +1627,11 @@ type Querier interface {
 	// for one facet slice. A daily generate_series fills missing days with zeros; @unit
 	// is a caller-validated date_trunc field (day/week/month).
 	ListInsightsVelocity(ctx context.Context, arg ListInsightsVelocityParams) ([]ListInsightsVelocityRow, error)
+	// stage_set events that moved an application into `interview`, for users with
+	// notifications enabled, bounded to a recency window on occurred_at for the same
+	// first-deploy reason as ListFollowUpCandidates. Retracted events are excluded —
+	// a correction to the wrong employer never happened for nudge purposes either.
+	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]ListInterviewPrepCandidatesRow, error)
 	// Dense activity series over [from, to] at the given granularity. A daily
 	// generate_series builds the gap-free calendar; the LEFT JOIN fills each day's
 	// counts (missing days → 0), and date_trunc(unit, ...) rolls those days up to the
@@ -1847,6 +1906,10 @@ type Querier interface {
 	// snapshot missing the other's user_jobs row, permanently undercounting the target
 	// until the next uncontended vote. Called first in the vote transaction.
 	LockJobForVote(ctx context.Context, id int64) error
+	// Record that this job's description is now the full text, closing the enqueue gate for
+	// good. A re-hydration is a deliberate act (drop the row, which reopens the gate), not
+	// something a crawl does by accident — mirrors apply_forms' own refresh story.
+	MarkAdzunaDescriptionHydrated(ctx context.Context, jobID int64) error
 	// Bulk mark-as-read for the caller, honoring the same optional filters as the
 	// listing, so "mark all read" means "everything currently shown". Only unread,
 	// live rows are touched; returns how many it marked.
@@ -1899,6 +1962,10 @@ type Querier interface {
 	// Stamp notified_at on the jobs that were just delivered for a subscription, so
 	// they leave the pending queue and are never sent again.
 	MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifiedParams) (int64, error)
+	// Terminal success: flip a fired nudge to delivered so it leaves the pending scan
+	// and is never sent again. Guarded on status='pending' for idempotency under a
+	// worker retry that already delivered.
+	MarkNudgeDelivered(ctx context.Context, id int64) (int64, error)
 	// Terminal success: flip a fired reminder to delivered so it leaves the pending
 	// scan and is never sent again. Guarded on status='pending' for idempotency under
 	// a worker retry that already delivered.
@@ -2123,6 +2190,10 @@ type Querier interface {
 	// The IS DISTINCT FROM guard makes re-runs cheap and idempotent, and a closed canon
 	// fails over to the next min(id) on the next run.
 	RecomputeRoleDuplicatesForCompanies(ctx context.Context, companies []string) (int64, error)
+	// Count a failed capture: bump attempts, record the error, and dead-letter (set
+	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally left in
+	// place — its expiry gates the retry to a later run. Mirrors RecordApplyFormFailure.
+	RecordAdzunaDescriptionFailure(ctx context.Context, arg RecordAdzunaDescriptionFailureParams) (RecordAdzunaDescriptionFailureRow, error)
 	// Record that the candidate chased a silent application. Owner-scoped: a foreign or untracked job
 	// matches no row, so the handler 404s and nothing is written. Idempotent by design — a double click
 	// just overwrites the timestamp with a later one rather than erroring.
@@ -2200,6 +2271,15 @@ type Querier interface {
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
 	// crash reaper, mirroring enrichment_outbox.
 	RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error
+	// Record one matched nudge candidate. The unique index on
+	// (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
+	// same unchanged episode is a no-op — so MATCH can freely re-run over the same
+	// candidates every pass without ever double-nudging. Returns the affected row
+	// count (1 = newly recorded, 0 = already known).
+	RecordNudge(ctx context.Context, arg RecordNudgeParams) (int64, error)
+	// Count a failed send: bump attempts, record the error, and dead-letter
+	// (failed_at) once attempts reach the max. Mirrors RecordReminderDeliveryFailure.
+	RecordNudgeDeliveryFailure(ctx context.Context, arg RecordNudgeDeliveryFailureParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
@@ -2336,6 +2416,10 @@ type Querier interface {
 	// so a soft-skipped delivery (e.g. Telegram not yet linked) is retried promptly on
 	// a later pass instead of waiting out the lease.
 	ReleaseMatchClaim(ctx context.Context, arg ReleaseMatchClaimParams) error
+	// Release the lease without counting an attempt, so a soft-skipped send (no
+	// usable destination on any configured channel) is retried promptly on a later
+	// pass instead of waiting out the lease.
+	ReleaseNudgeClaim(ctx context.Context, id int64) error
 	// Release the lease without counting an attempt, so a soft-skipped send (e.g. no
 	// usable destination on any configured channel) is retried promptly on a later pass
 	// instead of waiting out the lease.
@@ -2345,9 +2429,6 @@ type Querier interface {
 	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
-	// Move a saved job's pending reminder to a new deadline without unsaving. No
-	// pending row for the pair -> pgx.ErrNoRows (the handler maps that to 404).
-	RescheduleJobReminder(ctx context.Context, arg RescheduleJobReminderParams) (JobReminder, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -2943,8 +3024,8 @@ type Querier interface {
 	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 	// (closed_at = NULL) since the moderator is re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
-	// Create or replace the caller's default rule in one statement. Returns the stored row.
-	UpsertReminderSettings(ctx context.Context, arg UpsertReminderSettingsParams) (ReminderSetting, error)
+	// Create or replace the caller's notification rule in one statement. Returns the stored row.
+	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error

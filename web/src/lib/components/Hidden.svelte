@@ -49,7 +49,7 @@
       <li>
         <!-- Un-hide lives in the card's footer row (a divided sibling of the link),
              not an overlay, so it never sits on top of the title or blurb on a narrow
-             screen. Mirrors the saved list's reminder chip. -->
+             screen. -->
         <JobRow job={item.job!} dimViewed={false}>
           {#snippet footer()}
             <div class="flex justify-end">

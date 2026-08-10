@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AdzunaDescriptionHydrated struct {
+	JobID      int64              `json:"job_id"`
+	HydratedAt pgtype.Timestamptz `json:"hydrated_at"`
+}
+
+type AdzunaDescriptionOutbox struct {
+	ID        int64              `json:"id"`
+	JobID     int64              `json:"job_id"`
+	Attempts  int32              `json:"attempts"`
+	ClaimedAt pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt  pgtype.Timestamptz `json:"failed_at"`
+	LastError string             `json:"last_error"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type ApiKey struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -65,6 +80,21 @@ type ApplicationInterview struct {
 	Source          string             `json:"source"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ApplicationNudge struct {
+	ID          int64              `json:"id"`
+	UserID      int64              `json:"user_id"`
+	JobID       int64              `json:"job_id"`
+	Kind        string             `json:"kind"`
+	EpisodeKey  pgtype.Timestamptz `json:"episode_key"`
+	Status      string             `json:"status"`
+	ClaimedAt   pgtype.Timestamptz `json:"claimed_at"`
+	Attempts    int32              `json:"attempts"`
+	FailedAt    pgtype.Timestamptz `json:"failed_at"`
+	LastError   string             `json:"last_error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
 }
 
 type ApplyForm struct {
@@ -555,6 +585,13 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type NotificationSetting struct {
+	UserID    int64              `json:"user_id"`
+	Enabled   bool               `json:"enabled"`
+	Channels  []string           `json:"channels"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`
@@ -569,6 +606,12 @@ type PrunedJob struct {
 	CompanySlug string             `json:"company_slug"`
 	Rule        string             `json:"rule"`
 	PrunedAt    pgtype.Timestamptz `json:"pruned_at"`
+}
+
+type RateLimit struct {
+	Key          string             `json:"key"`
+	WindowStart  pgtype.Timestamptz `json:"window_start"`
+	RequestCount int32              `json:"request_count"`
 }
 
 type ReferralOffer struct {
@@ -598,14 +641,6 @@ type ReferralRequest struct {
 	LinkedinUrl     string             `json:"linkedin_url"`
 	CvID            *uuid.UUID         `json:"cv_id"`
 	ID              uuid.UUID          `json:"id"`
-}
-
-type ReminderSetting struct {
-	UserID           int64              `json:"user_id"`
-	Enabled          bool               `json:"enabled"`
-	DefaultDelayDays int32              `json:"default_delay_days"`
-	Channels         []string           `json:"channels"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SavedSearch struct {

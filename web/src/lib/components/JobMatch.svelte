@@ -245,8 +245,8 @@
 {#snippet claimRow(skill: string)}
   <!-- The row expands under the group rather than floating over it: the sidebar column is
        too narrow for an anchored popover, and naming the skill in the row's own text keeps
-       it tied to the chip that opened it. Styled as ReminderChip's disclosure — a bare row
-       of pills, not a panel — so the two inline disclosures in the app read the same.
+       it tied to the chip that opened it. Styled as a bare row of pills, not a panel, so
+       every inline disclosure in the app reads the same.
        It names the skill instead of asking "do you have it?": that question fitted one
        answer, and the row now carries two. -->
   <div class="flex flex-wrap items-center gap-1.5">

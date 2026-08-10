@@ -357,11 +357,6 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        COALESCE(mail.email_count, 0)::bigint AS email_count,
        (a.applied_at IS NOT NULL
         AND COALESCE(mail.suggestion_pending, false))::boolean AS has_pending_suggestion,
-       (SELECT r.fire_at
-          FROM job_reminders r
-         WHERE r.user_id = uj.user_id
-           AND r.job_id = jobs.id
-           AND r.status = 'pending') AS reminder_fire_at,
        a.followed_up_at,
        -- When a CV of the caller's tied to this job was last opened by a countable visitor. Read
        -- from the denormalised stamp on cvs rather than from the click history, which would mean
@@ -448,7 +443,6 @@ type ListUserJobsRow struct {
 	Notes                pgtype.Text        `json:"notes"`
 	EmailCount           int64              `json:"email_count"`
 	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
-	ReminderFireAt       pgtype.Timestamptz `json:"reminder_fire_at"`
 	FollowedUpAt         pgtype.Timestamptz `json:"followed_up_at"`
 	CvOpenedAt           pgtype.Timestamptz `json:"cv_opened_at"`
 	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
@@ -524,7 +518,6 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Notes,
 			&i.EmailCount,
 			&i.HasPendingSuggestion,
-			&i.ReminderFireAt,
 			&i.FollowedUpAt,
 			&i.CvOpenedAt,
 			&i.LastActivityAt,

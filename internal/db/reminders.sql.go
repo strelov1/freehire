@@ -22,8 +22,9 @@ type CancelJobReminderParams struct {
 	JobID  int64 `json:"job_id"`
 }
 
-// Cancel the pending reminder for one (user, job): the per-job "turn off" control,
-// and the eager cleanup wired into apply and unsave. Idempotent — no pending row
+// Cancel the pending reminder for one (user, job): the eager cleanup wired into
+// apply and unsave (there is no per-job manual control any more — the shared
+// notification_settings toggle is the only control). Idempotent — no pending row
 // affects 0 rows and is never an error. Cancelled rows are retained as history.
 func (q *Queries) CancelJobReminder(ctx context.Context, arg CancelJobReminderParams) (int64, error) {
 	result, err := q.db.Exec(ctx, cancelJobReminder, arg.UserID, arg.JobID)
@@ -100,6 +101,26 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 	return items, nil
 }
 
+const getNotificationSettings = `-- name: GetNotificationSettings :one
+SELECT user_id, enabled, channels, updated_at FROM notification_settings WHERE user_id = $1
+`
+
+// The caller's notification rule, shared by saved-job reminders and both
+// lifecycle nudges. No row -> pgx.ErrNoRows, which the service reads as the
+// opt-out-by-default state (never configured; see the
+// centralize-lifecycle-notifications change for why the default is enabled).
+func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (NotificationSetting, error) {
+	row := q.db.QueryRow(ctx, getNotificationSettings, userID)
+	var i NotificationSetting
+	err := row.Scan(
+		&i.UserID,
+		&i.Enabled,
+		&i.Channels,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getReminderForDelivery = `-- name: GetReminderForDelivery :one
 SELECT r.id, r.user_id, r.job_id, r.channels,
        j.title, j.company, j.public_slug, j.url,
@@ -153,25 +174,6 @@ func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetRemi
 		&i.StillActionable,
 		&i.AccountEmail,
 		&i.TelegramChatID,
-	)
-	return i, err
-}
-
-const getReminderSettings = `-- name: GetReminderSettings :one
-SELECT user_id, enabled, default_delay_days, channels, updated_at FROM reminder_settings WHERE user_id = $1
-`
-
-// The caller's reminder default rule. No row -> pgx.ErrNoRows, which the service
-// reads as the off-by-default state (feature never configured).
-func (q *Queries) GetReminderSettings(ctx context.Context, userID int64) (ReminderSetting, error) {
-	row := q.db.QueryRow(ctx, getReminderSettings, userID)
-	var i ReminderSetting
-	err := row.Scan(
-		&i.UserID,
-		&i.Enabled,
-		&i.DefaultDelayDays,
-		&i.Channels,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -232,41 +234,6 @@ func (q *Queries) ReleaseReminderClaim(ctx context.Context, id int64) error {
 	return err
 }
 
-const rescheduleJobReminder = `-- name: RescheduleJobReminder :one
-UPDATE job_reminders
-SET fire_at = $1
-WHERE user_id = $2 AND job_id = $3 AND status = 'pending'
-RETURNING id, user_id, job_id, fire_at, channels, status, claimed_at, attempts, failed_at, last_error, created_at, delivered_at
-`
-
-type RescheduleJobReminderParams struct {
-	FireAt pgtype.Timestamptz `json:"fire_at"`
-	UserID int64              `json:"user_id"`
-	JobID  int64              `json:"job_id"`
-}
-
-// Move a saved job's pending reminder to a new deadline without unsaving. No
-// pending row for the pair -> pgx.ErrNoRows (the handler maps that to 404).
-func (q *Queries) RescheduleJobReminder(ctx context.Context, arg RescheduleJobReminderParams) (JobReminder, error) {
-	row := q.db.QueryRow(ctx, rescheduleJobReminder, arg.FireAt, arg.UserID, arg.JobID)
-	var i JobReminder
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.JobID,
-		&i.FireAt,
-		&i.Channels,
-		&i.Status,
-		&i.ClaimedAt,
-		&i.Attempts,
-		&i.FailedAt,
-		&i.LastError,
-		&i.CreatedAt,
-		&i.DeliveredAt,
-	)
-	return i, err
-}
-
 const upsertJobReminder = `-- name: UpsertJobReminder :one
 INSERT INTO job_reminders (user_id, job_id, fire_at, channels)
 VALUES ($1, $2, $3, $4::text[])
@@ -317,37 +284,29 @@ func (q *Queries) UpsertJobReminder(ctx context.Context, arg UpsertJobReminderPa
 	return i, err
 }
 
-const upsertReminderSettings = `-- name: UpsertReminderSettings :one
-INSERT INTO reminder_settings (user_id, enabled, default_delay_days, channels, updated_at)
-VALUES ($1, $2, $3, $4, now())
+const upsertNotificationSettings = `-- name: UpsertNotificationSettings :one
+INSERT INTO notification_settings (user_id, enabled, channels, updated_at)
+VALUES ($1, $2, $3, now())
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
-      default_delay_days = EXCLUDED.default_delay_days,
       channels           = EXCLUDED.channels,
       updated_at         = now()
-RETURNING user_id, enabled, default_delay_days, channels, updated_at
+RETURNING user_id, enabled, channels, updated_at
 `
 
-type UpsertReminderSettingsParams struct {
-	UserID           int64    `json:"user_id"`
-	Enabled          bool     `json:"enabled"`
-	DefaultDelayDays int32    `json:"default_delay_days"`
-	Channels         []string `json:"channels"`
+type UpsertNotificationSettingsParams struct {
+	UserID   int64    `json:"user_id"`
+	Enabled  bool     `json:"enabled"`
+	Channels []string `json:"channels"`
 }
 
-// Create or replace the caller's default rule in one statement. Returns the stored row.
-func (q *Queries) UpsertReminderSettings(ctx context.Context, arg UpsertReminderSettingsParams) (ReminderSetting, error) {
-	row := q.db.QueryRow(ctx, upsertReminderSettings,
-		arg.UserID,
-		arg.Enabled,
-		arg.DefaultDelayDays,
-		arg.Channels,
-	)
-	var i ReminderSetting
+// Create or replace the caller's notification rule in one statement. Returns the stored row.
+func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error) {
+	row := q.db.QueryRow(ctx, upsertNotificationSettings, arg.UserID, arg.Enabled, arg.Channels)
+	var i NotificationSetting
 	err := row.Scan(
 		&i.UserID,
 		&i.Enabled,
-		&i.DefaultDelayDays,
 		&i.Channels,
 		&i.UpdatedAt,
 	)

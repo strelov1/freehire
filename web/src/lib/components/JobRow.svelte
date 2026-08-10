@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
-  import { Bookmark, Eye, EyeOff, X } from '@lucide/svelte';
+  import { Bookmark, Eye, EyeOff } from '@lucide/svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobMatchBar from './JobMatchBar.svelte';
@@ -37,7 +37,7 @@
   // no blurb). Both default off so the jobs list / company pages are unchanged.
   // `footer` is an optional actions row rendered inside the card, below the link
   // content (a sibling of the <a>, never nested in it — so its interactive controls
-  // don't fight the card's navigation). The saved list passes the reminder chip here.
+  // don't fight the card's navigation). The hidden list passes an un-hide control here.
   //
   // `onHide` is the feed's hook for the "hide this job" gesture: when set (only the
   // browse feed passes it), the card shows a hover-revealed hide control, and after
@@ -150,35 +150,6 @@
   // Guards against a double-click racing two requests for the same job.
   let saving = $state(false);
 
-  // The non-intrusive post-save reminder prompt: after a fresh save (not an
-  // unsave), offer quick "remind me" choices anchored under the bookmark. Ignoring
-  // it leaves the account default in effect; picking a delay schedules that reminder
-  // for this job (an explicit choice works even when reminders are off by default).
-  // Suppressed in the compact (assistant) card, where the corner has no room.
-  let reminderPrompt = $state(false);
-  let reminderBusy = $state(false);
-
-  const REMINDER_CHOICES: { label: string; days: number }[] = [
-    { label: 'Tomorrow', days: 1 },
-    { label: 'In 3 days', days: 3 },
-    { label: 'In a week', days: 7 },
-  ];
-
-  async function setReminder(days: number) {
-    if (reminderBusy) return;
-    reminderBusy = true;
-    try {
-      await api.saveJob(job.public_slug, { delay_days: days });
-      // Picking a delay is the whole gesture — closing the prompt is the
-      // confirmation, so there's no extra "done" step to dismiss.
-      reminderPrompt = false;
-    } catch {
-      // Best-effort: leave the prompt so the user can retry.
-    } finally {
-      reminderBusy = false;
-    }
-  }
-
   // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
   // fills instantly, then confirm with the server and roll back on failure. A
   // signed-out click routes to sign-in instead (no auto-save afterwards). The
@@ -194,12 +165,9 @@
     const wasSaved = saved;
     if (wasSaved) markUnsaved(job.public_slug);
     else markSaved(job.public_slug);
-    // Unsaving closes any open prompt; a fresh save opens it.
-    reminderPrompt = false;
     try {
       if (wasSaved) await api.unsaveJob(job.public_slug);
       else await api.saveJob(job.public_slug);
-      if (!wasSaved && !compact) reminderPrompt = true;
     } catch {
       if (wasSaved) markSaved(job.public_slug);
       else markUnsaved(job.public_slug);
@@ -391,7 +359,7 @@
 {/if}
 
 {#if footer}
-  <!-- Optional in-card actions row (e.g. the saved list's reminder chip, the
+  <!-- Optional in-card actions row (e.g. the hidden list's un-hide control, the
        assistant deck's rationale), divided from the content and rendered outside
        the <a> so its controls stay clickable. Its inline padding tracks the card's
        own, or the row would sit 4px out of line in a compact card. -->
@@ -417,31 +385,6 @@
 >
   <Bookmark class="size-[1.05rem] {saved ? 'fill-current' : ''}" aria-hidden="true" />
 </button>
-
-{#if reminderPrompt && saved}
-  <!-- Post-save reminder prompt: a small popover under the bookmark. Non-modal —
-       dismissing it (or ignoring the card) leaves the account default in effect. -->
-  <div class="absolute right-2.5 top-12 z-10 w-56 rounded-lg border border-border bg-popover p-2.5 shadow-md">
-    <div class="flex items-center justify-between px-1 pb-1.5">
-      <span class="text-xs font-semibold">Remind me to apply?</span>
-      <button type="button" onclick={() => (reminderPrompt = false)} aria-label="Dismiss reminder prompt" class="text-muted-foreground hover:text-foreground">
-        <X class="size-3.5" aria-hidden="true" />
-      </button>
-    </div>
-    <div class="flex flex-wrap gap-1.5">
-      {#each REMINDER_CHOICES as c (c.days)}
-        <button
-          type="button"
-          onclick={() => setReminder(c.days)}
-          disabled={reminderBusy}
-          class="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand disabled:opacity-50"
-        >
-          {c.label}
-        </button>
-      {/each}
-    </div>
-  </div>
-{/if}
 
 <!-- Hide control: only the browse feed passes `onHide`, so this appears there and
      nowhere else. A quiet icon in the card's bottom-right corner, revealed on hover

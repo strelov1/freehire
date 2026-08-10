@@ -4,7 +4,6 @@
   import { Paginator } from '$lib/paginated.svelte';
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
-  import ReminderChip from './ReminderChip.svelte';
   import States from './States.svelte';
 
   const page = new Paginator(async (limit, offset) => {
@@ -29,11 +28,7 @@
          goes with it. The guard satisfies the type rather than a real case. -->
     {#each page.items.filter((i) => i.job) as item (item.id)}
       <li>
-        <JobRow job={item.job!} dimViewed={false}>
-          {#snippet footer()}
-            <ReminderChip slug={item.job!.public_slug} fireAt={item.reminder_fire_at} />
-          {/snippet}
-        </JobRow>
+        <JobRow job={item.job!} dimViewed={false} />
       </li>
     {/each}
   </ul>

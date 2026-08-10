@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/notify"
 	"github.com/strelov1/freehire/internal/pgconv"
 )
 
@@ -21,52 +22,33 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 	return &QueriesRepository{q: q}
 }
 
-// JobIDBySlug resolves a public slug to its internal job id.
-func (r *QueriesRepository) JobIDBySlug(ctx context.Context, slug string) (int64, error) {
-	id, err := r.q.GetJobIDBySlug(ctx, slug)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, ErrJobNotFound
-	}
-	if err != nil {
-		return 0, err
-	}
-	return id, nil
-}
-
-// GetSettings returns the caller's rule. A missing row is the unconfigured default
-// (disabled, DefaultDelayDays, no channels) rather than an error, so an untouched
-// account reads as "reminders off" and the settings UI shows a sensible delay.
+// GetSettings returns the caller's rule. A missing row reads as the
+// opt-out-by-default default (enabled, channel email) rather than an error or a
+// disabled rule — see the centralize-lifecycle-notifications change for why: this
+// changes only what "never configured" means, an explicit stored choice (enabled
+// or disabled) is always returned as stored.
 func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Settings, error) {
-	row, err := r.q.GetReminderSettings(ctx, userID)
+	row, err := r.q.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{Enabled: false, DefaultDelayDays: DefaultDelayDays, Channels: []string{}}, nil
+		return Settings{Enabled: true, Channels: []string{notify.ChannelEmail}}, nil
 	}
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{
-		Enabled:          row.Enabled,
-		DefaultDelayDays: int(row.DefaultDelayDays),
-		Channels:         row.Channels,
-	}, nil
+	return Settings{Enabled: row.Enabled, Channels: row.Channels}, nil
 }
 
 // UpsertSettings creates or replaces the caller's rule.
 func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error) {
-	row, err := r.q.UpsertReminderSettings(ctx, db.UpsertReminderSettingsParams{
-		UserID:           userID,
-		Enabled:          s.Enabled,
-		DefaultDelayDays: int32(s.DefaultDelayDays),
-		Channels:         s.Channels,
+	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
+		UserID:   userID,
+		Enabled:  s.Enabled,
+		Channels: s.Channels,
 	})
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{
-		Enabled:          row.Enabled,
-		DefaultDelayDays: int(row.DefaultDelayDays),
-		Channels:         row.Channels,
-	}, nil
+	return Settings{Enabled: row.Enabled, Channels: row.Channels}, nil
 }
 
 // UpsertReminder schedules or replaces the pending reminder for a (user, job).
@@ -83,19 +65,5 @@ func (r *QueriesRepository) UpsertReminder(ctx context.Context, userID, jobID in
 // CancelReminder cancels the pending reminder for a (user, job), idempotently.
 func (r *QueriesRepository) CancelReminder(ctx context.Context, userID, jobID int64) error {
 	_, err := r.q.CancelJobReminder(ctx, db.CancelJobReminderParams{UserID: userID, JobID: jobID})
-	return err
-}
-
-// RescheduleReminder moves a pending reminder's deadline. No pending row for the
-// pair -> ErrNoReminder.
-func (r *QueriesRepository) RescheduleReminder(ctx context.Context, userID, jobID int64, fireAt time.Time) error {
-	_, err := r.q.RescheduleJobReminder(ctx, db.RescheduleJobReminderParams{
-		FireAt: pgconv.Timestamptz(&fireAt),
-		UserID: userID,
-		JobID:  jobID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNoReminder
-	}
 	return err
 }

@@ -1801,11 +1801,12 @@ ${BASE_URL}/auth/oauth/google/start`,
     ],
   },
   {
-    title: 'Votes, reminders & discussions',
+    title: 'Votes, notifications & discussions',
     intro:
-      'The lighter per-user surfaces: a vote on a job or company, a reminder to ' +
-      'come back to an application, and the public discussion threads. Votes and ' +
-      'reminders take a key; posting to a thread is browser-owned.',
+      'The lighter per-user surfaces: a vote on a job or company, the account-level ' +
+      'notification rule (gates the saved-job apply reminder and both lifecycle nudges), ' +
+      'and the public discussion threads. Votes and notification settings take a key; ' +
+      'posting to a thread is browser-owned.',
     endpoints: [
       {
         method: 'POST',
@@ -1848,44 +1849,25 @@ ${BASE_URL}/auth/oauth/google/start`,
         responseExample: `{ "data": { "score": 41, "my_vote": 0 } }`,
       },
       {
-        method: 'PATCH',
-        path: '/jobs/{slug}/reminder',
-        auth: 'cookie-or-key',
-        summary: 'Set or move the reminder on a saved job.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        body: [{ name: 'fire_at', type: 'string (RFC3339)', required: true, description: 'When to remind you.' }],
-        curl: `curl -X PATCH "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/reminder" \\
-  -H "Authorization: Bearer fhk_…" -H 'Content-Type: application/json' -d '{"fire_at":"2026-08-04T09:00:00Z"}'`,
-        responseExample: `{ "data": { "fire_at": "2026-08-04T09:00:00Z" } }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/jobs/{slug}/reminder',
-        auth: 'cookie-or-key',
-        summary: 'Cancel the reminder.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
-        curl: `curl -X DELETE "${BASE_URL}/jobs/senior-backend-engineer-acme-1a2b/reminder" -H "Authorization: Bearer fhk_…"`,
-      },
-      {
         method: 'GET',
-        path: '/me/reminder-settings',
+        path: '/me/notification-settings',
         auth: 'cookie',
-        summary: 'Your reminder defaults.',
-        curl: `curl "${BASE_URL}/me/reminder-settings" -b cookies.txt`,
-        responseExample: `{ "data": { "enabled": true, "default_days": 7 } }`,
+        summary: 'Your notification rule (gates saved-job reminders and both lifecycle nudges).',
+        curl: `curl "${BASE_URL}/me/notification-settings" -b cookies.txt`,
+        responseExample: `{ "data": { "enabled": true, "channels": ["email"] } }`,
       },
       {
         method: 'PUT',
-        path: '/me/reminder-settings',
+        path: '/me/notification-settings',
         auth: 'cookie',
-        summary: 'Change your reminder defaults.',
+        summary: 'Change your notification rule.',
         body: [
-          { name: 'enabled', type: 'boolean', description: 'Turn reminders on or off.' },
-          { name: 'default_days', type: 'integer', description: 'How long after saving to remind you.' },
+          { name: 'enabled', type: 'boolean', description: 'Turn notifications on or off.' },
+          { name: 'channels', type: 'string[]', description: 'Delivery channels: `email`, `telegram`.' },
         ],
-        curl: `curl -X PUT "${BASE_URL}/me/reminder-settings" -b cookies.txt \\
-  -H 'Content-Type: application/json' -d '{"enabled":true,"default_days":5}'`,
-        responseExample: `{ "data": { "enabled": true, "default_days": 5 } }`,
+        curl: `curl -X PUT "${BASE_URL}/me/notification-settings" -b cookies.txt \\
+  -H 'Content-Type: application/json' -d '{"enabled":true,"channels":["email"]}'`,
+        responseExample: `{ "data": { "enabled": true, "channels": ["email"] } }`,
       },
       {
         method: 'GET',

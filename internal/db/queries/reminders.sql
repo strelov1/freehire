@@ -1,15 +1,16 @@
--- name: GetReminderSettings :one
--- The caller's reminder default rule. No row -> pgx.ErrNoRows, which the service
--- reads as the off-by-default state (feature never configured).
-SELECT * FROM reminder_settings WHERE user_id = $1;
+-- name: GetNotificationSettings :one
+-- The caller's notification rule, shared by saved-job reminders and both
+-- lifecycle nudges. No row -> pgx.ErrNoRows, which the service reads as the
+-- opt-out-by-default state (never configured; see the
+-- centralize-lifecycle-notifications change for why the default is enabled).
+SELECT * FROM notification_settings WHERE user_id = $1;
 
--- name: UpsertReminderSettings :one
--- Create or replace the caller's default rule in one statement. Returns the stored row.
-INSERT INTO reminder_settings (user_id, enabled, default_delay_days, channels, updated_at)
-VALUES (sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(default_delay_days), sqlc.arg(channels), now())
+-- name: UpsertNotificationSettings :one
+-- Create or replace the caller's notification rule in one statement. Returns the stored row.
+INSERT INTO notification_settings (user_id, enabled, channels, updated_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(channels), now())
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
-      default_delay_days = EXCLUDED.default_delay_days,
       channels           = EXCLUDED.channels,
       updated_at         = now()
 RETURNING *;
@@ -31,17 +32,10 @@ DO UPDATE SET fire_at    = EXCLUDED.fire_at,
              last_error = ''
 RETURNING *;
 
--- name: RescheduleJobReminder :one
--- Move a saved job's pending reminder to a new deadline without unsaving. No
--- pending row for the pair -> pgx.ErrNoRows (the handler maps that to 404).
-UPDATE job_reminders
-SET fire_at = sqlc.arg(fire_at)
-WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id) AND status = 'pending'
-RETURNING *;
-
 -- name: CancelJobReminder :execrows
--- Cancel the pending reminder for one (user, job): the per-job "turn off" control,
--- and the eager cleanup wired into apply and unsave. Idempotent — no pending row
+-- Cancel the pending reminder for one (user, job): the eager cleanup wired into
+-- apply and unsave (there is no per-job manual control any more — the shared
+-- notification_settings toggle is the only control). Idempotent — no pending row
 -- affects 0 rows and is never an error. Cancelled rows are retained as history.
 UPDATE job_reminders
 SET status = 'cancelled'

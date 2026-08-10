@@ -79,8 +79,7 @@ import type {
   EngagementStats,
   IngestStatus,
   LocationPreferences,
-  ReminderSettings,
-  ReminderOverride,
+  NotificationSettings,
   CommunityThread,
   CommunityReply,
   ExperienceAtom,
@@ -725,12 +724,11 @@ export function createApi(
     return jobInteraction(slug, 'apply');
   }
 
-  /** Save (bookmark) a job for the current user. An optional reminder override
-   *  sets or opts out of a reminder for this one job; omit it to let the account
-   *  default rule decide. */
-  function saveJob(slug: string, reminder?: ReminderOverride): Promise<UserJob> {
-    const init = reminder ? jsonBody('POST', { reminder }) : { method: 'POST' };
-    return requestData<UserJob>(`/api/v1/jobs/${slug}/save`, init);
+  /** Save (bookmark) a job for the current user. Whether a reminder is scheduled
+   *  is decided entirely by the account's notification settings — there is no
+   *  per-job override. */
+  function saveJob(slug: string): Promise<UserJob> {
+    return requestData<UserJob>(`/api/v1/jobs/${slug}/save`, { method: 'POST' });
   }
 
   /** Set a job's application stage and/or notes (partial update — omit a field to
@@ -891,32 +889,20 @@ export function createApi(
     return requestData<string[]>('/api/v1/me/tracking/saved');
   }
 
-  // --- Saved-job reminders --------------------------------------------------
+  // --- Notification settings -------------------------------------------------
   //
-  // The account default rule (enable, delay, channels) plus per-job reschedule/off
-  // for a saved job's pending reminder. Scheduling itself happens on save (see
-  // saveJob's reminder override). All cookie-only.
+  // One account-level rule (enable, channels) gates saved-job reminders and both
+  // lifecycle nudges (follow-up, interview-prep). Cookie-only.
 
-  /** The caller's reminder default rule (off by default until configured). */
-  async function getReminderSettings(): Promise<ReminderSettings> {
-    return requestData<ReminderSettings>('/api/v1/me/reminder-settings');
+  /** The caller's notification rule (on by default for a never-configured account). */
+  async function getNotificationSettings(): Promise<NotificationSettings> {
+    return requestData<NotificationSettings>('/api/v1/me/notification-settings');
   }
 
-  /** Replace the caller's reminder default rule. An enabled rule needs at least
-   *  one channel and an in-range delay, else the server rejects it (400). */
-  async function updateReminderSettings(settings: ReminderSettings): Promise<ReminderSettings> {
-    return requestData<ReminderSettings>('/api/v1/me/reminder-settings', jsonBody('PUT', settings));
-  }
-
-  /** Move a saved job's pending reminder to a new delay (in days). 404 if the job
-   *  has no pending reminder. */
-  async function rescheduleReminder(slug: string, delayDays: number): Promise<void> {
-    await call(`/api/v1/jobs/${slug}/reminder`, jsonBody('PATCH', { delay_days: delayDays }));
-  }
-
-  /** Turn off a saved job's pending reminder without unsaving it. Idempotent. */
-  async function cancelReminder(slug: string): Promise<void> {
-    await call(`/api/v1/jobs/${slug}/reminder`, { method: 'DELETE' });
+  /** Replace the caller's notification rule. An enabled rule needs at least one
+   *  channel, else the server rejects it (400). */
+  async function updateNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings> {
+    return requestData<NotificationSettings>('/api/v1/me/notification-settings', jsonBody('PUT', settings));
   }
 
   /** The public slugs of every job the current user has hidden (dismissed). The
@@ -1797,10 +1783,8 @@ export function createApi(
     myUsage,
     listViewedSlugs,
     listSavedSlugs,
-    getReminderSettings,
-    updateReminderSettings,
-    rescheduleReminder,
-    cancelReminder,
+    getNotificationSettings,
+    updateNotificationSettings,
     listDismissedSlugs,
     listApiKeys,
     createApiKey,

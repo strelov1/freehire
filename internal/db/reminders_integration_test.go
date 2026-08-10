@@ -18,43 +18,43 @@ import (
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 
-func TestReminderSettings(t *testing.T) {
+func TestNotificationSettings(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
 
-	if _, err := pool.Exec(ctx, "TRUNCATE reminder_settings, users RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "TRUNCATE notification_settings, users RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	uid := insertUser(t, pool, "rules@example.test")
 
-	// No row yet -> ErrNoRows (the repo maps this to the off-by-default state).
-	if _, err := q.GetReminderSettings(ctx, uid); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("GetReminderSettings empty: err = %v, want pgx.ErrNoRows", err)
+	// No row yet -> ErrNoRows (the repo maps this to the opt-out-by-default state).
+	if _, err := q.GetNotificationSettings(ctx, uid); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("GetNotificationSettings empty: err = %v, want pgx.ErrNoRows", err)
 	}
 
-	saved, err := q.UpsertReminderSettings(ctx, UpsertReminderSettingsParams{
-		UserID: uid, Enabled: true, DefaultDelayDays: 3, Channels: []string{"email"},
+	saved, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{
+		UserID: uid, Enabled: true, Channels: []string{"email"},
 	})
 	if err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
-	if !saved.Enabled || saved.DefaultDelayDays != 3 || len(saved.Channels) != 1 {
+	if !saved.Enabled || len(saved.Channels) != 1 {
 		t.Errorf("saved settings = %+v", saved)
 	}
 
 	// Upsert replaces in place (one row per user).
-	if _, err := q.UpsertReminderSettings(ctx, UpsertReminderSettingsParams{
-		UserID: uid, Enabled: false, DefaultDelayDays: 7, Channels: []string{"telegram", "email"},
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{
+		UserID: uid, Enabled: false, Channels: []string{"telegram", "email"},
 	}); err != nil {
 		t.Fatalf("re-upsert settings: %v", err)
 	}
-	got, err := q.GetReminderSettings(ctx, uid)
+	got, err := q.GetNotificationSettings(ctx, uid)
 	if err != nil {
 		t.Fatalf("get settings: %v", err)
 	}
-	if got.Enabled || got.DefaultDelayDays != 7 || len(got.Channels) != 2 {
-		t.Errorf("updated settings = %+v, want disabled/7/2 channels", got)
+	if got.Enabled || len(got.Channels) != 2 {
+		t.Errorf("updated settings = %+v, want disabled/2 channels", got)
 	}
 }
 
@@ -123,18 +123,6 @@ func TestJobReminderLifecycle(t *testing.T) {
 		}
 		if countPending(t, uid, jid) != 0 {
 			t.Error("cancel left a pending row")
-		}
-	})
-
-	t.Run("reschedule reports no row when none is pending", func(t *testing.T) {
-		reset(t)
-		uid := insertUser(t, pool, "resched@example.test")
-		jid := insertJob(t, pool, "resched-job")
-		_, err := q.RescheduleJobReminder(ctx, RescheduleJobReminderParams{
-			FireAt: ts(time.Now().Add(24 * time.Hour)), UserID: uid, JobID: jid,
-		})
-		if !errors.Is(err, pgx.ErrNoRows) {
-			t.Fatalf("reschedule with no pending: err = %v, want pgx.ErrNoRows", err)
 		}
 	})
 
@@ -216,39 +204,6 @@ func TestJobReminderLifecycle(t *testing.T) {
 		}
 		if info.StillActionable {
 			t.Error("still_actionable must be false once the job is applied — the worker cancels-and-skips")
-		}
-	})
-
-	t.Run("ListUserJobs projects the pending reminder fire time", func(t *testing.T) {
-		reset(t)
-		uid := insertUser(t, pool, "list@example.test")
-		jid := insertJob(t, pool, "list-job")
-		if _, err := q.SaveJob(ctx, SaveJobParams{UserID: uid, JobID: jid}); err != nil {
-			t.Fatalf("save: %v", err)
-		}
-		if _, err := q.UpsertJobReminder(ctx, UpsertJobReminderParams{
-			UserID: uid, JobID: jid, FireAt: ts(time.Now().Add(72 * time.Hour)), Channels: []string{"email"},
-		}); err != nil {
-			t.Fatalf("upsert: %v", err)
-		}
-		rows, err := q.ListUserJobs(ctx, ListUserJobsParams{UserID: uid, Filter: "saved", Limit: 10, Offset: 0})
-		if err != nil {
-			t.Fatalf("list saved: %v", err)
-		}
-		if len(rows) != 1 || !rows[0].ReminderFireAt.Valid {
-			t.Fatalf("saved listing must carry a reminder_fire_at, got %d rows (valid=%v)", len(rows), len(rows) == 1 && rows[0].ReminderFireAt.Valid)
-		}
-
-		// After cancel, the projection goes back to null.
-		if _, err := q.CancelJobReminder(ctx, CancelJobReminderParams{UserID: uid, JobID: jid}); err != nil {
-			t.Fatalf("cancel: %v", err)
-		}
-		rows, err = q.ListUserJobs(ctx, ListUserJobsParams{UserID: uid, Filter: "saved", Limit: 10, Offset: 0})
-		if err != nil {
-			t.Fatalf("list saved after cancel: %v", err)
-		}
-		if len(rows) != 1 || rows[0].ReminderFireAt.Valid {
-			t.Errorf("cancelled reminder must project null fire_at, got valid=%v", len(rows) == 1 && rows[0].ReminderFireAt.Valid)
 		}
 	})
 }
