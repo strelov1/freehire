@@ -1,5 +1,8 @@
-## ADDED Requirements
+# api-rate-limiting Specification
 
+## Purpose
+TBD - created by archiving change redis-rate-limiting. Update Purpose after archive.
+## Requirements
 ### Requirement: Shared rate-limit backend
 Every rate-limited HTTP route SHALL enforce its limit through one shared `Throttler`
 backend rather than a per-route, per-process counter.
@@ -48,11 +51,12 @@ client-visible rejection behavior.
   before migrating that route onto the shared backend
 
 ### Requirement: Conditional rate limiting for content-dependent routes
-A route MAY skip rate-limit enforcement based on properties of the individual request (for
-example, an empty payload that triggers no downstream work), independent of the shared
-backend's key/limit/window contract.
+A route SHALL be permitted to skip rate-limit enforcement based on properties of the
+individual request (for example, an empty payload that triggers no downstream work),
+independent of the shared backend's key/limit/window contract.
 
 #### Scenario: Request with no actionable payload is not counted
 - **WHEN** a request to a conditionally-limited route carries no payload that would trigger
   the work the limit exists to bound
 - **THEN** the request is not counted against the caller's limit for that route
+
