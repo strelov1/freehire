@@ -15,6 +15,7 @@ import { untrack } from 'svelte';
 import { browser } from '$app/environment';
 import { page } from '$app/state';
 import { replaceState } from '$app/navigation';
+import { toSearchString } from './urlSearchString';
 
 /** Translates the model to/from URL query params — the only screen-specific part. */
 export interface UrlCodec<T> {
@@ -129,7 +130,7 @@ export class UrlSyncedState<T> {
 
   #write(next: T) {
     this.value = next;
-    const qs = this.#codec.serialize(next).toString();
+    const qs = toSearchString(this.#codec.serialize(next));
     // Shallow routing: updates the URL in place without a navigation or load, so the
     // write is cheap and synchronous. Browser-only (mutations are user events).
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
