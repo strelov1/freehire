@@ -16,7 +16,7 @@
   // from cv.skills — the free-text skills the résumé parser found. Only the facets are
   // shown here, same as ResumeStructuredView never surfaces resume.skills: they're the
   // curated list, the résumé-parsed one is redundant with it.
-  const skillChips = $derived([...profile.specializations, ...profile.skills]);
+  const skillChips = $derived([...(profile.specializations ?? []), ...(profile.skills ?? [])]);
 
   // full_name is present only in "public" mode — the backend omits the key entirely for
   // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
@@ -186,7 +186,7 @@
     </section>
   {/if}
 
-  {#if !experience.length && !education.length && !skillChips.length && !cv.summary}
+  {#if !experience.length && !education.length && !skillChips.length && !cv.summary && !certifications.length && !languages.length && !projects.length}
     <p class="text-sm text-muted-foreground">This candidate hasn't added CV details yet.</p>
   {/if}
 </div>
