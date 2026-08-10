@@ -16,7 +16,13 @@
   // from cv.skills — the free-text skills the résumé parser found. Only the facets are
   // shown here, same as ResumeStructuredView never surfaces resume.skills: they're the
   // curated list, the résumé-parsed one is redundant with it.
-  const skillChips = $derived([...(profile.specializations ?? []), ...(profile.skills ?? [])]);
+  // Deduped: specializations and skills are separate vocabularies that CAN genuinely
+  // overlap (e.g. "devops" exists in both), and the {#each} below keys on the literal
+  // string — a duplicate key throws during Svelte 5 hydration rather than just warning,
+  // silently breaking the whole page's interactivity for that visitor.
+  const skillChips = $derived([
+    ...new Set([...(profile.specializations ?? []), ...(profile.skills ?? [])]),
+  ]);
 
   // full_name is present only in "public" mode — the backend omits the key entirely for
   // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
@@ -80,7 +86,11 @@
     <section class="flex flex-col gap-3">
       <h2 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Work history</h2>
       <ul class="flex flex-col gap-3">
-        {#each experience as job (`${job.title ?? ''}|${job.company ?? ''}|${job.start ?? ''}`)}
+        <!-- Keyed on index, not on job's fields: two entries can legitimately share
+             title|company|start (differing only in summary/location), and a composite
+             string key colliding throws during Svelte 5 hydration. This list is static
+             once loaded and never reorders, so an index key is safe here. -->
+        {#each experience as job, i (i)}
           <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <span class="text-sm font-semibold">{job.title || job.company}</span>
@@ -122,7 +132,9 @@
     <section class="flex flex-col gap-3">
       <h2 class="flex items-center gap-2 text-sm font-semibold"><GraduationCap class="size-4" />Education</h2>
       <ul class="flex flex-col gap-2">
-        {#each education as ed (`${ed.degree ?? ''}|${ed.institution ?? ''}|${ed.year ?? ''}`)}
+        <!-- Same collision risk and same fix as the experience list above: two entries
+             can share degree|institution|year, so key on index instead. -->
+        {#each education as ed, i (i)}
           <li class="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-card p-4">
             <div class="flex min-w-0 flex-col">
               <span class="text-sm font-semibold">{ed.degree || ed.institution}</span>

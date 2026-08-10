@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
 
   try {
     const profile = await client.getTalentNetworkProfile(params.publicId);
-    return { profile, publicId: params.publicId };
+    return { profile };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) error(404, 'Profile not found');
     throw e;

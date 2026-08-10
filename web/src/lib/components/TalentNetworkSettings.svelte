@@ -1,22 +1,22 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ApiError, api } from '$lib/api';
   import type { TalentNetworkVisibility } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  // The Talent Network opt-in: Off (default) / Public / Anonymous, plus a preview of the
-  // resulting shareable URL. The public page itself is a later, separate piece of work
-  // (no SvelteKit route exists yet) — this only reads/writes the setting via
-  // GET/PUT /me/talent-network. The preview URL is built as origin + "/talent-network/" +
-  // the public id, following this codebase's convention that a public-facing page path
-  // mirrors its API resource name 1:1 minus the "/api/v1" prefix — e.g. "/api/v1/companies/:slug"
-  // -> "/companies/[slug]" and "/api/v1/jobs/:slug" -> "/jobs/[slug]" (internal/handler/companies.go,
-  // internal/handler/jobs.go, web/src/routes/companies/[slug], web/src/routes/jobs/[slug]).
-  // (Saved-search boards are the one exception to this — "/api/v1/boards/:slug" shortens to
-  // "/b/[slug]" — so that one doesn't support the prediction here.) The API side for this
-  // feature is registered at "/api/v1/talent-network/:publicID"
-  // (internal/handler/talent_network_profile.go); whichever route the later task actually
-  // adds is the source of truth if this ever needs adjusting.
+  // The Talent Network opt-in: Off (default) / Public / Anonymous, plus a link to the
+  // resulting shareable public page. This component only reads/writes the setting via
+  // GET/PUT /me/talent-network; the public page itself lives at
+  // web/src/routes/talent-network/[publicId] (internal/handler/talent_network_profile.go
+  // serves it). The preview URL is built as origin + "/talent-network/" + the public id,
+  // following this codebase's convention that a public-facing page path mirrors its API
+  // resource name 1:1 minus the "/api/v1" prefix — e.g. "/api/v1/companies/:slug" ->
+  // "/companies/[slug]" and "/api/v1/jobs/:slug" -> "/jobs/[slug]"
+  // (internal/handler/companies.go, internal/handler/jobs.go,
+  // web/src/routes/companies/[slug], web/src/routes/jobs/[slug]). (Saved-search boards
+  // are the one exception to this — "/api/v1/boards/:slug" shortens to "/b/[slug]" — so
+  // that one doesn't support the prediction here.)
 
   let { onError }: { onError: (message: string | null) => void } = $props();
 
@@ -141,11 +141,16 @@
     </p>
 
     {#if visibility !== 'off'}
-      <!-- Not an <a>: the public page itself isn't wired up yet (a separate, later
-           piece of work) — this previews the link a candidate would get without
-           routing anywhere. -->
+      <!-- Opens the actual public page in a new tab, so a candidate who enables
+           visibility can see exactly what a recruiter would see. -->
       <div class="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2">
-        <span class="min-w-0 truncate font-mono text-xs text-foreground">{publicUrl}</span>
+        <a
+          href={resolve('/talent-network/[publicId]', { publicId })}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="min-w-0 truncate font-mono text-xs text-foreground underline-offset-4 hover:underline"
+          >{publicUrl}</a
+        >
         <Button variant="ghost" size="sm" class="ml-auto" onclick={copyLink}>
           {copied ? 'Copied' : 'Copy link'}
         </Button>
