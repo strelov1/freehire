@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { ScanSearch, Trash2 } from '@lucide/svelte';
+  import { Globe, ScanSearch, Trash2, VenetianMask } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
@@ -16,7 +17,6 @@
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
-  import TalentNetworkPanel from '$lib/components/TalentNetworkPanel.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type {
@@ -61,10 +61,10 @@
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
-  // Status-aware Talent Network entry button in the page header. `null` means "not yet
-  // loaded" — the button renders in its "off" (join) state until the fetch resolves,
-  // same fail-safe posture as a load failure below.
-  let talentNetworkPanelOpen = $state(false);
+  // Status-aware Talent Network entry button in the page header — links to
+  // /my/talent-network. `null` means "not yet loaded" — the button renders in its
+  // "off" (join) state until the fetch resolves, same fail-safe posture as a load
+  // failure below.
   let talentNetworkVisibility = $state<TalentNetworkVisibility | null>(null);
 
   // Optimistic CV flag: a résumé upload stores the CV server-side before the next ATS
@@ -251,7 +251,7 @@
     <!-- Off/not-yet-loaded is a filled call-to-action (the opt-in is the interesting
          choice to make); once public or anonymous the button becomes a low-key status
          readout, since Off is the default and the other two are already a
-         deliberate, weighty decision the panel itself re-explains on open.
+         deliberate, weighty decision the /my/talent-network page itself re-explains.
          Beta-gated: hidden entirely for a non-beta account, not just disabled — the
          feature isn't ready for a general audience yet. -->
     {#if currentUser()?.beta_tester}
@@ -260,28 +260,18 @@
           ? 'outline'
           : 'primary'}
         class="shrink-0"
-        aria-haspopup="dialog"
-        onclick={() => (talentNetworkPanelOpen = true)}
+        href={resolve('/my/talent-network')}
       >
         {#if talentNetworkVisibility === 'public'}
-          <span aria-hidden="true">🌐</span> Talent Network: Public
+          <Globe class="size-4" aria-hidden="true" /> Talent Network: Public
         {:else if talentNetworkVisibility === 'anonymous'}
-          <span aria-hidden="true">🕶️</span> Talent Network: Anonymous
+          <VenetianMask class="size-4" aria-hidden="true" /> Talent Network: Anonymous
         {:else}
           Join Talent Network
         {/if}
       </Button>
     {/if}
   </div>
-
-  {#if currentUser()?.beta_tester}
-    <TalentNetworkPanel
-      open={talentNetworkPanelOpen}
-      onClose={() => (talentNetworkPanelOpen = false)}
-      onChange={(setting) => (talentNetworkVisibility = setting)}
-      onError={(msg) => (actionError = msg)}
-    />
-  {/if}
 
   {#if actionError}
     <p class="mb-4 text-sm text-destructive">{actionError}</p>
