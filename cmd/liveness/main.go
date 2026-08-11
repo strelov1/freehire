@@ -29,6 +29,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -106,18 +107,23 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok"}
 // already have closed it were the company_slug scope not in the way.
 const staleCutoff = 48 * time.Hour
 
-// expireDespiteRegistered lists registered ATS providers with the same company_slug/
-// keyword-scope leak as probeDespiteRegistered's members, but with NO evidence a probe
-// could ever read: see whatjobs.go — jobs.url is the ad network's own billing/tracking
-// landing page, not the employer's posting, so it answers the same regardless of whether
-// the underlying posting is still live. Unlike probeDespiteRegistered, this is the same
-// age-based fallback as unsignalledSources (see expiryWindow) — "what cannot be probed is
-// expired instead" — just applied to a source the sweep DOES otherwise close on evidence
-// (whatjobs' own extended sweepGrace), for the tail its crawl budget structurally can
-// never re-reach. Kept as its own list, not folded into unsignalledSources: that list's
-// guard below requires the OPPOSITE membership (must NOT be a registered provider), since
-// for a true unsignalledSource the age guess is the only closer there is.
-var expireDespiteRegistered = []string{"whatjobs"}
+// expireDespiteRegisteredPrefixes lists registered-ATS-provider FAMILIES with the same
+// company_slug/keyword-scope leak as probeDespiteRegistered's members, but with NO
+// evidence a probe could ever read: see whatjobs.go — jobs.url is the ad network's own
+// billing/tracking landing page, not the employer's posting, so it answers the same
+// regardless of whether the underlying posting is still live. Unlike probeDespiteRegistered,
+// this is the same age-based fallback as unsignalledSources (see expiryWindow) — "what
+// cannot be probed is expired instead" — just applied to a source the sweep DOES
+// otherwise close on evidence (whatjobs' own extended sweepGrace), for the tail its crawl
+// budget structurally can never re-reach.
+//
+// A prefix, not a source list: whatjobs runs one CPC account PER COUNTRY
+// (internal/sources/whatjobs.go's whatjobsMarkets — ~50 as of writing), each its own
+// registered provider ("whatjobs" for the bare US market, "whatjobs-<cc>" for every
+// other), all sharing the identical unprobeable-URL shape. Matching by prefix against the
+// live registry (see the derivation in run()) means a newly onboarded market is covered
+// automatically instead of silently falling through an enumerated list.
+var expireDespiteRegisteredPrefixes = []string{"whatjobs"}
 
 func main() {
 	worker.Main(run)
@@ -199,13 +205,10 @@ func run() int {
 		}
 	}
 
-	// Guard: the same drift check as probeDespiteRegistered's above, for the same reason.
-	for _, s := range expireDespiteRegistered {
-		if !slices.Contains(atsProviders, s) {
-			log.Printf("liveness: %q is not a registered ATS provider — refusing to run (expireDespiteRegistered is stale)", s)
-			return 1
-		}
-	}
+	// Derived from the live registry rather than enumerated (see
+	// expireDespiteRegisteredPrefixes) — every whatjobs market this run, no drift guard
+	// needed, since membership follows atsProviders by construction.
+	expireDespiteRegistered := matchingProviders(atsProviders, expireDespiteRegisteredPrefixes)
 
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
@@ -470,4 +473,21 @@ func filterSources(list []string, sourceFilter string) []string {
 		return []string{sourceFilter}
 	}
 	return nil
+}
+
+// matchingProviders returns every entry of providers that equals one of prefixes or has
+// it as a "<prefix>-" prefix — how a provider family sharing one adapter across many
+// per-market registry keys (e.g. whatjobs' one row per country, see
+// expireDespiteRegisteredPrefixes) is matched without enumerating every key.
+func matchingProviders(providers, prefixes []string) []string {
+	var out []string
+	for _, p := range providers {
+		for _, prefix := range prefixes {
+			if p == prefix || strings.HasPrefix(p, prefix+"-") {
+				out = append(out, p)
+				break
+			}
+		}
+	}
+	return out
 }
