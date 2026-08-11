@@ -270,9 +270,15 @@
         if (rec.agent_session_id) {
           resuming = true;
           sessionId = rec.agent_session_id;
+          // Resume with an existing session never hits POST /me/cvs/tailor, which is what
+          // places the vacancy on the Tracking board. Re-run bootstrap for that side effect
+          // only (idempotent: same CV, no second debit). Fire-and-forget so a slow tracking
+          // write cannot block the workspace.
+          void api.tailorCv(slug).catch(() => {});
         } else {
           // A CV created before session binding: the backend mints a tailoring
-          // conversation bound to it and stores it on the CV.
+          // conversation bound to it and stores it on the CV (and places the vacancy
+          // on the board).
           const s = await api.startTailorSession(existing);
           sessionId = s.session_id;
         }

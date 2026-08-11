@@ -28,6 +28,7 @@ import (
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
+	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -39,7 +40,7 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	if _, err := pool.Exec(context.Background(),
-		"TRUNCATE cvs, users, jobs, user_job_analysis, api_keys, assistant_sessions, experience_employments, experience_atoms RESTART IDENTITY CASCADE"); err != nil {
+		"TRUNCATE cvs, users, jobs, user_jobs, applications, user_job_analysis, api_keys, assistant_sessions, experience_employments, experience_atoms RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	iss := auth.NewIssuer("test-secret", time.Hour)
@@ -56,6 +57,8 @@ func newTailorAPI(t *testing.T) (*cvHandlers, *auth.Issuer, *pgxpool.Pool) {
 		matchAnalysisCache: queries,
 		credits:            creditsStore,
 		match:              &matchHandlers{credits: creditsStore},
+		// Same adapter Register wires: bootstrap must place the vacancy on the board.
+		jobs: trackingBoarder{repo: jobtracking.NewQueriesRepository(queries, pool)},
 		// The tailoring bootstrap mints its conversation through the assistant's store,
 		// exactly as Register wires it.
 		assistantSessions: assistant.NewStore(queries),
@@ -212,6 +215,178 @@ func TestTailorCVBootstrap(t *testing.T) {
 		`SELECT count(*) FROM credit_ledger WHERE user_id=$1 AND kind='debit' AND feature='tailor'`, user).Scan(&debits)
 	if debits != 1 {
 		t.Errorf("tailor debit rows = %d, want 1", debits)
+	}
+	assertVacancyOnKanban(t, pool, user, jobID)
+}
+
+// assertVacancyOnKanban checks the tailor bootstrap's tracking side-effect: the vacancy
+// is bookmarked AND staged as applied (so it lands in a Kanban column), without
+// applied_at (preparing a CV is not submitting an application).
+func assertVacancyOnKanban(t *testing.T, pool *pgxpool.Pool, userID, jobID int64) {
+	t.Helper()
+	var saved bool
+	var appliedAt pgtype.Timestamptz
+	var stage pgtype.Text
+	err := pool.QueryRow(context.Background(),
+		`SELECT uj.saved_at IS NOT NULL, a.applied_at, a.stage
+		   FROM user_jobs uj
+		   LEFT JOIN applications a ON a.user_id = uj.user_id AND a.job_id = uj.job_id
+		  WHERE uj.user_id = $1 AND uj.job_id = $2`, userID, jobID).
+		Scan(&saved, &appliedAt, &stage)
+	if err != nil {
+		t.Fatalf("read tracking row: %v", err)
+	}
+	if !saved {
+		t.Errorf("saved_at unset — tailored vacancy should stay bookmarked")
+	}
+	if !stage.Valid || stage.String != "applied" {
+		t.Errorf("stage = %q, want applied — Kanban columns only show staged rows", stage.String)
+	}
+	if appliedAt.Valid {
+		t.Errorf("applied_at = %v, want null — tailor is not an application submit", appliedAt.Time)
+	}
+	rows, err := db.New(pool).ListUserJobs(context.Background(), db.ListUserJobsParams{
+		UserID: userID, Limit: 50, Offset: 0, Filter: "board",
+	})
+	if err != nil {
+		t.Fatalf("ListUserJobs board: %v", err)
+	}
+	found := false
+	for _, r := range rows {
+		if r.ID == jobID {
+			found = true
+			if !r.Stage.Valid || r.Stage.String != "applied" {
+				t.Errorf("board row stage = %q, want applied", r.Stage.String)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Errorf("job %d missing from filter=board listing after tailor", jobID)
+	}
+}
+
+// TestTailorCVBootstrap_HealsMissingSave: an existing tailored CV whose vacancy was
+// never (or no longer) on the board gets staged on the next bootstrap resume.
+func TestTailorCVBootstrap_HealsMissingSave(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	app := buildTailorApp(h, iss)
+	ctx := context.Background()
+
+	user := seedAccount(t, pool, "tailor-heal@example.test", true)
+	tok, _ := iss.Issue(user, testTokenVersion)
+	jobID := seedJobSlug(t, pool, "heal-eng")
+	seedFreshResume(t, pool, user)
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "heal-eng"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("first bootstrap = %d, want 201", resp.StatusCode)
+	}
+	var first struct {
+		Data tailorCVResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&first)
+	resp.Body.Close()
+	assertVacancyOnKanban(t, pool, user, jobID)
+
+	if _, err := pool.Exec(ctx,
+		`UPDATE applications SET stage = NULL WHERE user_id = $1 AND job_id = $2`, user, jobID); err != nil {
+		t.Fatalf("clear stage: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE user_jobs SET saved_at = NULL WHERE user_id = $1 AND job_id = $2`, user, jobID); err != nil {
+		t.Fatalf("clear save: %v", err)
+	}
+
+	resp = doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "heal-eng"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("resume bootstrap = %d, want 201", resp.StatusCode)
+	}
+	var second struct {
+		Data tailorCVResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&second)
+	resp.Body.Close()
+	if second.Data.TailorCVID != first.Data.TailorCVID {
+		t.Fatalf("resume made a new CV (%s vs %s)", second.Data.TailorCVID, first.Data.TailorCVID)
+	}
+	assertVacancyOnKanban(t, pool, user, jobID)
+
+	// An advanced stage must not be pulled back to applied on resume.
+	if _, err := pool.Exec(ctx,
+		`UPDATE applications SET stage = 'interview' WHERE user_id = $1 AND job_id = $2`, user, jobID); err != nil {
+		t.Fatalf("advance stage: %v", err)
+	}
+	resp = doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "heal-eng"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("third bootstrap = %d, want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
+	var stage string
+	if err := pool.QueryRow(ctx,
+		`SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2`, user, jobID).Scan(&stage); err != nil {
+		t.Fatalf("read stage: %v", err)
+	}
+	if stage != "interview" {
+		t.Errorf("stage = %q, want interview — tailor must not overwrite progress", stage)
+	}
+
+	// Clearing the board marks must not delete the tailored CV.
+	if _, err := pool.Exec(ctx,
+		`UPDATE applications SET stage = NULL WHERE user_id = $1 AND job_id = $2`, user, jobID); err != nil {
+		t.Fatalf("clear stage again: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE user_jobs SET saved_at = NULL WHERE user_id = $1 AND job_id = $2`, user, jobID); err != nil {
+		t.Fatalf("clear save again: %v", err)
+	}
+	var cvs int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM cvs WHERE user_id = $1 AND job_id = $2`, user, jobID).Scan(&cvs); err != nil {
+		t.Fatalf("count cvs: %v", err)
+	}
+	if cvs != 1 {
+		t.Errorf("cvs after clear = %d, want 1", cvs)
+	}
+}
+
+type boomBoarder struct{}
+
+func (boomBoarder) EnsureOnBoard(context.Context, int64, int64) error {
+	return errors.New("board boom")
+}
+
+// TestTailorCVBootstrap_SaveFailureStillSucceeds: once the CV and session exist, a
+// tracking write error must not turn the bootstrap into a failure.
+func TestTailorCVBootstrap_SaveFailureStillSucceeds(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	h.jobs = boomBoarder{}
+	app := buildTailorApp(h, iss)
+
+	user := seedAccount(t, pool, "tailor-save-fail@example.test", true)
+	tok, _ := iss.Issue(user, testTokenVersion)
+	jobID := seedJobSlug(t, pool, "fail-eng")
+	seedFreshResume(t, pool, user)
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "fail-eng"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("bootstrap with board failure = %d, want 201", resp.StatusCode)
+	}
+	var got struct {
+		Data tailorCVResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if got.Data.TailorCVID == "" || got.Data.SessionID == "" {
+		t.Fatalf("response = %+v, want CV and session ids despite board failure", got.Data)
+	}
+	var cvs int
+	if err := pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM cvs WHERE user_id = $1 AND job_id = $2`, user, jobID).Scan(&cvs); err != nil {
+		t.Fatalf("count cvs: %v", err)
+	}
+	if cvs != 1 {
+		t.Errorf("cvs = %d, want 1", cvs)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/credits"
@@ -18,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/headshot"
+	"github.com/strelov1/freehire/internal/jobtracking"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/tracerlink"
 )
@@ -67,6 +69,9 @@ type cvHandlers struct {
 	// autosave, the template picker, the CLI's patch, an agent tool, seeding a tailored
 	// copy — commits through it, so no change happens without a revision recording it.
 	editor *cvedit.Editor
+	// jobs puts a vacancy on the Tracking Kanban when the caller starts (or reopens)
+	// tailoring for it. Nil-safe for fixtures that never assert board membership.
+	jobs jobBoarder
 }
 
 // jobReader is the one vacancy read the tailoring context needs.
@@ -74,9 +79,38 @@ type jobReader interface {
 	GetJob(ctx context.Context, id int64) (db.Job, error)
 }
 
+// jobBoarder places a vacancy on the caller's Tracking board. The Kanban only shows
+// staged (or applied) rows — a bare bookmark lives under Activity → Saved — so this is
+// save + stage=applied when no stage exists yet. applied_at stays unset: preparing a CV
+// is not submitting an application, and silence must not start.
+type jobBoarder interface {
+	EnsureOnBoard(ctx context.Context, userID, jobID int64) error
+}
+
+// trackingBoarder adapts jobtracking's repository to jobBoarder.
+type trackingBoarder struct {
+	repo interface {
+		SaveJob(ctx context.Context, userID, jobID int64) (jobtracking.Interaction, error)
+		TrackJob(ctx context.Context, userID, jobID int64, stage, notes *string, source string) (jobtracking.Interaction, error)
+	}
+}
+
+func (s trackingBoarder) EnsureOnBoard(ctx context.Context, userID, jobID int64) error {
+	row, err := s.repo.SaveJob(ctx, userID, jobID)
+	if err != nil {
+		return err
+	}
+	if row.Stage != nil && *row.Stage != "" {
+		return nil
+	}
+	stage := "applied"
+	_, err = s.repo.TrackJob(ctx, userID, jobID, &stage, nil, appevent.SourceUser)
+	return err
+}
+
 // refuseListCap is normally true (Commit refuses over-cap edits). Pass false only when
 // an operator has turned on CV_EDIT_ALLOW_BULLET_TRUNCATION.
-func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate, refuseListCap bool) *cvHandlers {
+func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, assistantSessions *assistant.Store, cvRenderer cv.Renderer, tracerSalt, baseURL string, servedHosts []string, resumeStore *resume.Store, photoStore *headshot.Store, creditsStore *credits.Store, match *matchHandlers, gate cvedit.EvidenceGate, jobs jobBoarder, refuseListCap bool) *cvHandlers {
 	h := &cvHandlers{
 		cvStore:           cvStore,
 		assistantSessions: assistantSessions,
@@ -104,6 +138,7 @@ func newCVHandlers(pool *pgxpool.Pool, queries *db.Queries, cvStore *cv.Store, a
 		credits:            creditsStore,
 		matchAnalysisCache: queries,
 		match:              match,
+		jobs:               jobs,
 		extractPDFText:     resume.ExtractPDFText,
 	}
 	return h
