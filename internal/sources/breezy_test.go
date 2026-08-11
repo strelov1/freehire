@@ -12,9 +12,9 @@ func TestBreezyProvider(t *testing.T) {
 	}
 }
 
-// breezyDetailHTML is a position page carrying the schema.org JobPosting ld+json block
+// jobPostingHTML is a position page carrying the schema.org JobPosting ld+json block
 // Breezy server-renders; the adapter reads only the description from it.
-func breezyDetailHTML(title, desc string) string {
+func jobPostingHTML(title, desc string) string {
 	return `<html><head><script type="application/ld+json">` +
 		`{"@context":"https://schema.org/","@type":"JobPosting","title":"` + title +
 		`","description":"` + desc + `","datePosted":"2025-01-14"}` +
@@ -23,8 +23,8 @@ func breezyDetailHTML(title, desc string) string {
 
 func TestBreezyFetchListsAndFetchesDetail(t *testing.T) {
 	fake := (&routedHTTP{}).
-		route("/p/52-senior-designer", breezyDetailHTML("Senior Designer", "<p>Do the design.</p>")).
-		route("/p/53-remote-engineer", breezyDetailHTML("Remote Engineer", "<p>Work anywhere.</p>")).
+		route("/p/52-senior-designer", jobPostingHTML("Senior Designer", "<p>Do the design.</p>")).
+		route("/p/53-remote-engineer", jobPostingHTML("Remote Engineer", "<p>Work anywhere.</p>")).
 		route("/json", `[
 			{"id": "52", "name": "Senior Designer",
 			 "url": "https://acme.breezy.hr/p/52-senior-designer",
@@ -99,7 +99,7 @@ func TestBreezyFetchSkipsPositionWithoutDescription(t *testing.T) {
 	// description and the posting is dropped (a description-less job is useless to
 	// enrichment).
 	fake := (&routedHTTP{}).
-		route("/p/52-designer", breezyDetailHTML("Designer", "<p>Real work.</p>")).
+		route("/p/52-designer", jobPostingHTML("Designer", "<p>Real work.</p>")).
 		route("/p/53-broken", `<html><head></head><body>no job posting here</body></html>`).
 		route("/json", `[
 			{"id": "52", "name": "Designer", "url": "https://acme.breezy.hr/p/52-designer",

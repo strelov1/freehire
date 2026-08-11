@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,30 @@ func TestCryptocurrencyJobsOnsiteTitleSuffix(t *testing.T) {
 	}
 	if j.Remote || j.WorkMode != "onsite" || j.Location != "New York" {
 		t.Errorf("Remote=%v WorkMode=%q Location=%q, want a non-remote onsite posting in New York", j.Remote, j.WorkMode, j.Location)
+	}
+}
+
+// The feed's <description> is only the opening blurb; the full posting lives on the item's
+// own page as a schema.org JobPosting ld+json block (confirmed live: ~750 vs. ~7000 chars).
+func TestCryptocurrencyJobsFetchUsesDetailDescription(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel>
+<item><title>Senior Platform Engineer at Chronicle</title>
+<link>https://cryptocurrencyjobs.co/engineering/chronicle-senior-platform-engineer/</link>
+<guid>https://cryptocurrencyjobs.co/engineering/chronicle-senior-platform-engineer/</guid>
+<pubDate>Mon, 10 Aug 2026 16:40:02 +0200</pubDate>
+<description>Chronicle is looking to hire a Senior Platform Engineer.</description></item>
+</channel></rss>`
+	fake := (&routedHTTP{}).
+		route("index.xml", feed).
+		route("chronicle-senior-platform-engineer", jobPostingHTML("Senior Platform Engineer", "<p>The full responsibilities and requirements.</p>"))
+	jobs, err := NewCryptocurrencyJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if got := jobs[0].Description; !strings.Contains(got, "full responsibilities and requirements") {
+		t.Errorf("Description = %q, want the detail page's ld+json description, not the feed blurb", got)
 	}
 }

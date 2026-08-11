@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -79,5 +80,30 @@ func TestNoDeskFetchSplitsTitleAndMaps(t *testing.T) {
 	}
 	if j.PostedAt == nil {
 		t.Error("PostedAt nil, want parsed RFC1123Z timestamp")
+	}
+}
+
+// The feed's <description> is only the opening blurb; the full posting lives on the item's
+// own page as a schema.org JobPosting ld+json block (confirmed live: ~700 vs. ~7000 chars).
+func TestNoDeskFetchUsesDetailDescription(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel>
+<item><title>Senior Backend Engineer at Skylight</title>
+<link>https://nodesk.co/remote-jobs/skylight-senior-backend-engineer/</link>
+<guid>https://nodesk.co/remote-jobs/skylight-senior-backend-engineer/</guid>
+<pubDate>Thu, 06 Aug 2026 08:00:00 +0200</pubDate>
+<description>Skylight is looking to hire a Senior Backend Engineer.</description></item>
+</channel></rss>`
+	fake := (&routedHTTP{}).
+		route("index.xml", feed).
+		route("skylight-senior-backend-engineer", jobPostingHTML("Senior Backend Engineer", "<p>The full responsibilities and requirements.</p>"))
+	jobs, err := NewNoDesk(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if got := jobs[0].Description; !strings.Contains(got, "full responsibilities and requirements") {
+		t.Errorf("Description = %q, want the detail page's ld+json description, not the feed blurb", got)
 	}
 }
