@@ -6,8 +6,8 @@
 
 ## 2. Notifier package
 
-- [ ] 2.1 `internal/pushnotify/pushnotify.go`: `Notifier` interface (`Send(ctx, token, title, body string) error`), `ExpoNotifier` implementation posting to `https://exp.host/--/api/v2/push/send`
-- [ ] 2.2 Parse Expo's per-message receipt; on `DeviceNotRegistered` delete the token row (via the store) and return nil (pruned, not a caller-facing error); other error statuses return an error, token untouched
+- [x] 2.1 `internal/pushnotify/pushnotify.go`: `Notifier` interface (`Send(ctx, token, title, body string) error`), `ExpoNotifier` implementation posting to `https://exp.host/--/api/v2/push/send`
+- [x] 2.2 Parse Expo's per-message receipt; on `DeviceNotRegistered` delete the token row (via the store) and return nil (pruned, not a caller-facing error); other error statuses return an error, token untouched
 
 ## 3. Handlers
 
