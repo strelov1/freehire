@@ -41,6 +41,10 @@
       the Settings tab — the panel is now the only entry point. Delete
       `TalentNetworkSettings.svelte` if `TalentNetworkPanel.svelte` fully
       supersedes it (confirm no other importer first).
+- [x] 2.4 ADDED after live verification: gate the button, the panel, and
+      the visibility fetch behind `currentUser()?.beta_tester` — hidden
+      entirely for a non-beta account, not disabled. See design.md's
+      "Entry point is gated behind `users.beta_tester`" decision.
 
 ## 3. Public profile page redesign
 

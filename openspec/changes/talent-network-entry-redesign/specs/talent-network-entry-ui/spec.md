@@ -1,5 +1,23 @@
 ## ADDED Requirements
 
+### Requirement: Entry point gated to beta testers
+The Talent Network entry button, its overlay panel, and the visibility
+fetch that seeds the button's state SHALL be present only for a caller
+whose account has `beta_tester` set; a non-beta caller SHALL see none of
+them.
+
+#### Scenario: Non-beta caller sees no entry point
+- **WHEN** a signed-in caller whose account does not have `beta_tester` set
+  views `my/profile`
+- **THEN** no Talent Network button, panel, or `GET /me/talent-network`
+  request is present
+
+#### Scenario: Beta caller sees the entry point
+- **WHEN** a signed-in caller whose account has `beta_tester` set views
+  `my/profile`
+- **THEN** the status-aware entry button is shown and behaves per the
+  requirements below
+
 ### Requirement: Status-aware entry button
 On `my/profile`, the Talent Network entry point SHALL be a button whose
 appearance reflects the caller's current `talent_network_visibility`.

@@ -33,6 +33,19 @@ presentation-only redesign of both, with zero backend/API/data changes.
 
 ## Decisions
 
+**The entry point is gated behind `users.beta_tester`, hidden entirely for
+a non-beta account.** REVISED after the shipped feature was manually
+tried: the feature isn't ready for a general audience. Hidden, not merely
+disabled — a visible-but-locked control would announce a feature exists
+before it's meant to. `currentUser()?.beta_tester` (already exposed by
+`$lib/auth.svelte`, the same field `AccountNavRail`/`my/+layout` already
+gate other beta surfaces on) guards both the entry button and the
+visibility fetch it would otherwise trigger — a non-beta page load makes
+no `/me/talent-network` call at all. Frontend-only: the backend routes and
+the public profile page are unchanged and still reachable by anyone who
+already has a link — this gate is about discovery, not enforcement, and no
+backend enforcement was asked for.
+
 **Entry point is an overlay panel, not a tab-strip addition.** Mocked
 against adding a "Talent Network" tab to the existing `TabRow` (cheaper —
 reuses tab machinery already on the page). The panel was chosen: opting
