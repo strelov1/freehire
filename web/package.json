@@ -27,7 +27,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/svelte": "^5.0.4",
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.2.0",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
