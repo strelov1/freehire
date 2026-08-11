@@ -36,19 +36,19 @@ describe('buildSparkline', () => {
     for (const p of points) expect(p.y).toBeCloseTo(16); // HEIGHT / 2
   });
 
-  it('places the highest count nearest the top (smallest y) of the frame', () => {
-    const m = buildSparkline([pt('2026-08-03', 10), pt('2026-08-10', 100)]);
-    const parsed = m.points.split(' ').map(parsePoint);
-    const first = parsed[0] ?? { x: 0, y: 0 };
-    const second = parsed[1] ?? { x: 0, y: 0 };
-    expect(second.y).toBeLessThan(first.y);
+  it('clamps the min to the bottom edge and the max to the top edge, inset by the y padding', () => {
+    const m = buildSparkline([pt('2026-07-27', 10), pt('2026-08-03', 100), pt('2026-08-10', 55)]);
+    const points = m.points.split(' ').map(parsePoint);
+    expect(points).toHaveLength(3);
+    expect(points[0]!.y).toBeCloseTo(29); // the min (10) → HEIGHT(32) - PAD_Y(3)
+    expect(points[1]!.y).toBeCloseTo(3); // the max (100) → PAD_Y(3)
   });
 
-  it("the last point's coordinates match the series' final value", () => {
-    const m = buildSparkline([pt('2026-08-03', 10), pt('2026-08-10', 100)]);
-    const points = m.points.split(' ');
-    const last = parsePoint(points.at(-1) ?? '');
-    expect(m.lastX).toBeCloseTo(last.x);
-    expect(m.lastY).toBeCloseTo(last.y);
+  it("the accent dot sits at the last point's own computed x,y, not a default", () => {
+    const m = buildSparkline([pt('2026-07-27', 10), pt('2026-08-03', 100), pt('2026-08-10', 55)]);
+    // width=120 over 3 points → stepX=60, so the 3rd point's x is exactly the frame edge.
+    expect(m.lastX).toBeCloseTo(120);
+    // 55 is the exact midpoint of [10, 100] → its y is the frame midline.
+    expect(m.lastY).toBeCloseTo(16);
   });
 });

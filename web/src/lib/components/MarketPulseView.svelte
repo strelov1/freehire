@@ -31,37 +31,39 @@
 
   // Sign, then magnitude — a true minus sign (not a hyphen), matching CreditsView's
   // fmtDelta. Rounded to the nearest whole percent; a fractional point is noise here.
-  function fmtPct(pct: number): string {
-    const rounded = Math.round(pct);
+  function fmtPct(rounded: number): string {
     return rounded > 0 ? `+${rounded}%` : rounded < 0 ? `−${Math.abs(rounded)}%` : '0%';
   }
 
   // The sparkline's accent dot uses the same up/good, down/bad semantic as the delta
-  // badge below — one place for the sign check both share.
-  function dotClass(pct: number | null): string {
-    if (pct === null || pct === 0) return 'fill-foreground';
-    return pct > 0 ? 'fill-emerald-500' : 'fill-rose-500';
+  // badge below — one place for the sign check both share. Both take the ROUNDED
+  // percent, matching what fmtPct prints — branching on the raw value would let a
+  // sub-0.5% change pick the up/down color+icon while the badge still reads "0%".
+  function dotClass(rounded: number | null): string {
+    if (rounded === null || rounded === 0) return 'fill-foreground';
+    return rounded > 0 ? 'fill-emerald-500' : 'fill-rose-500';
   }
 </script>
 
 {#snippet deltaBadge(pct: number | null)}
-  {#if pct === null}
+  {@const rounded = pct === null ? null : Math.round(pct)}
+  {#if rounded === null}
     <span
       class="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground"
     >
       New
     </span>
-  {:else if pct > 0}
+  {:else if rounded > 0}
     <span
       class="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
     >
-      <TrendingUp class="size-3" />{fmtPct(pct)}
+      <TrendingUp class="size-3" />{fmtPct(rounded)}
     </span>
-  {:else if pct < 0}
+  {:else if rounded < 0}
     <span
       class="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-xs font-medium text-rose-600 dark:text-rose-400"
     >
-      <TrendingDown class="size-3" />{fmtPct(pct)}
+      <TrendingDown class="size-3" />{fmtPct(rounded)}
     </span>
   {:else}
     <span
@@ -100,9 +102,10 @@
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {#each data as skill (skill.skill)}
           {@const model = buildSparkline(skill.series)}
+          {@const rounded = skill.change_pct === null ? null : Math.round(skill.change_pct)}
           <Card class="flex flex-col gap-3 p-4">
             <div class="flex items-start justify-between gap-2">
-              <span class="text-sm font-medium capitalize">{skill.skill}</span>
+              <span class="text-sm font-medium">{skill.skill}</span>
               {@render deltaBadge(skill.change_pct)}
             </div>
             <div class="flex items-baseline gap-1.5">
@@ -125,7 +128,7 @@
                   stroke-linejoin="round"
                 />
               {/if}
-              <circle cx={model.lastX} cy={model.lastY} r="2.5" class={dotClass(skill.change_pct)} />
+              <circle cx={model.lastX} cy={model.lastY} r="2.5" class={dotClass(rounded)} />
             </svg>
           </Card>
         {/each}
