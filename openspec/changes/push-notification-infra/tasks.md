@@ -14,12 +14,12 @@
 
 ## 3. Handlers
 
-- [ ] 3.1 `internal/handler/me_push_tokens.go`: `RegisterPushToken` (`POST /me/push-tokens`), `UnregisterPushToken` (`DELETE /me/push-tokens`), `TestPushToken` (`POST /me/push-tokens/test`) — all under the existing cookie-auth `/me` group
-- [ ] 3.2 Wire the three routes into the route table alongside the other `/me/*` registrations
+- [x] 3.1 `internal/handler/me_push_tokens.go`: `RegisterPushToken` (`POST /me/push-tokens`), `UnregisterPushToken` (`DELETE /me/push-tokens`), `TestPushToken` (`POST /me/push-tokens/test`) — all under the existing cookie-auth `/me` group
+- [x] 3.2 Wire the three routes into the route table alongside the other `/me/*` registrations
 
 ## 4. Verification
 
-- [ ] 4.1 `go vet -tags=integration ./...` passes
+- [x] 4.1 `go vet -tags=integration ./...` passes
 - [ ] 4.2 Manual: register a token via curl with a real session cookie, call the test-send endpoint, confirm a `200` and an Expo API call in logs (a fake/unassigned Expo token will get a documented "not a registered push notification recipient" response from Expo itself — acceptable, proves the round trip)
 
 ## 5. Receipt-polling worker

@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pushnotify"
 	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
@@ -57,6 +58,9 @@ type authHandlers struct {
 	servedHosts []string
 	accounts    *accounts.Service
 	throttler   ratelimit.Throttler
+	// pushNotifier sends test/device push notifications (see me_push_tokens.go).
+	// pushnotify.Notifier in production; a fake in tests.
+	pushNotifier pushnotify.Notifier
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
 	// are nil until withAccountDeletion wires them.
@@ -72,6 +76,7 @@ func (h *authHandlers) withAccountDeletion(eraser accountEraser, emails accountE
 }
 
 func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimit.Throttler, issuer *auth.Issuer, cookieSecure bool, cookieDomains []string, providers oauthRegistry, frontendOrigin string, extensionRedirectAllowlist []string, servedHosts []string) *authHandlers {
+	pushStore := pushnotify.NewQueriesStore(queries)
 	return &authHandlers{
 		queries:                    queries,
 		issuer:                     issuer,
@@ -84,6 +89,7 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimi
 		servedHosts:                servedHosts,
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 		throttler:                  throttler,
+		pushNotifier:               pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore),
 	}
 }
 
@@ -104,6 +110,14 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	meGroup.Post("/api-keys", mw.cookie, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
 	meGroup.Delete("/api-keys/:id", mw.cookie, h.RevokeAPIKey)
+
+	// Push-token registration is cookie-only for the same reason key management
+	// is: a leaked API key must not be able to redirect another device's push
+	// notifications to itself. The self-test send only ever targets the
+	// caller's own registered token(s) — see TestPushToken.
+	meGroup.Post("/push-tokens", mw.cookie, h.RegisterPushToken)
+	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
+	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
 
 	// Account deletion is permanent and cookie-only, for the same reason key
 	// management is: a leaked API key must not be able to destroy the account that
