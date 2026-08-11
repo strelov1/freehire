@@ -19,8 +19,9 @@
   // caller has more than a handful of cards, finding one by scrolling stops
   // scaling — a plain substring filter over the skill name.
   let query = $state('');
+  const trimmedQuery = $derived(query.trim());
   const filtered = $derived(
-    query.trim() ? data.filter((s) => s.skill.toLowerCase().includes(query.trim().toLowerCase())) : data,
+    trimmedQuery ? data.filter((s) => s.skill.toLowerCase().includes(trimmedQuery.toLowerCase())) : data,
   );
 
   $effect(() => {
@@ -120,7 +121,7 @@
 
       {#if filtered.length === 0}
         <p class="py-8 text-center text-sm text-muted-foreground">
-          No skill matches "{query.trim()}".
+          No skill matches "{trimmedQuery}".
         </p>
       {:else}
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
