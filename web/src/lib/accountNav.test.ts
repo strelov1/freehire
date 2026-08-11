@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the fourteen account sections', () => {
-    expect(accountNav).toHaveLength(14);
+  it('lists the fifteen account sections', () => {
+    expect(accountNav).toHaveLength(15);
   });
 
   it('offers a security section for password and session management', () => {

@@ -51,28 +51,28 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 Add `web/src/routes/my/market-pulse/+page.svelte` (+ a `load`
+- [x] 4.1 Add `web/src/routes/my/market-pulse/+page.svelte` (+ a `load`
       or client fetch against `GET /api/v1/me/market-pulse`, matching the
       project's existing data-fetching convention for `/my/*` pages).
-- [ ] 4.2 Render one card per skill: skill name, current `open_count`, an
+- [x] 4.2 Render one card per skill: skill name, current `open_count`, an
       up/down indicator from `change_pct`, and a sparkline over `series`.
       Consult the `dataviz` skill before styling the sparkline/trend
       indicators so they read as one system with the rest of the design
       system.
-- [ ] 4.3 Empty state when `data` is empty: point the user at adding
+- [x] 4.3 Empty state when `data` is empty: point the user at adding
       skills/uploading a CV rather than showing a bare blank page.
-- [ ] 4.4 Add an entry point to the new page from wherever `/my/*` personal
+- [x] 4.4 Add an entry point to the new page from wherever `/my/*` personal
       surfaces are already linked (nav/profile menu) — check current
       `web/src` nav structure for the right spot rather than inventing a new
       pattern.
 
 ## 5. Verification
 
-- [ ] 5.1 `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`,
+- [x] 5.1 `go build ./...`, `go vet ./...`, `go vet -tags=integration ./...`,
       `go test ./...`; run `go test -tags=integration ./...` since this
       change touches worker and handler behavior, not just a signature.
-- [ ] 5.2 `pnpm run lint`, `pnpm run check`, `pnpm test`, `pnpm run build` in
+- [x] 5.2 `pnpm run lint`, `pnpm run check`, `pnpm test`, `pnpm run build` in
       `web/` before pushing.
-- [ ] 5.3 Manual smoke: run the app locally, sign in with a profile that has
+- [x] 5.3 Manual smoke: run the app locally, sign in with a profile that has
       skills, load `/my/market-pulse`, confirm cards render; confirm an
       empty-profile account sees the empty state instead of an error.

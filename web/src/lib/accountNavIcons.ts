@@ -20,6 +20,7 @@ import {
   Handshake,
   Coins,
   ShieldCheck,
+  TrendingUp,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem } from './accountNav';
@@ -32,6 +33,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/tracking': LayoutList,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
+  '/my/market-pulse': TrendingUp,
   '/my/notifications': BellRing,
   '/my/searches': Bell,
   '/my/api-keys': Key,
