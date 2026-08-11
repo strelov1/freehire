@@ -94,9 +94,9 @@ func (it cryptocurrencyjobsItem) toJob() (Job, bool) {
 	title = strings.TrimSpace(title)
 
 	location, remote, workMode := "Remote", true, "remote"
-	if m := cryptocurrencyjobsOnsiteTitle.FindStringSubmatchIndex(title); m != nil {
-		location, remote, workMode = title[m[2]:m[3]], false, "onsite"
-		title = strings.TrimSpace(title[:m[0]])
+	if m := cryptocurrencyjobsOnsiteTitle.FindStringSubmatch(title); m != nil {
+		location, remote, workMode = m[1], false, "onsite"
+		title = strings.TrimSuffix(title, m[0])
 	}
 
 	return Job{
