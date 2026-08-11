@@ -1,0 +1,64 @@
+---
+title: The experience interviewer can see what you selected
+date: 2026-08-08
+summary: Pick achievements on the Experience tab and the assistant now reads them before it says anything — and the chat panel stops squeezing the list it is about.
+type: changelog
+tags:
+  - assistant
+  - profile
+  - ai
+  - job-seekers
+draft: false
+---
+
+Selecting a couple of near-duplicate achievements on the **Experience** tab and asking
+the assistant to sort them out did not work as well as it looked. The conversation opened
+on the right achievements and the agent could not actually see any of them.
+
+### What was going wrong
+
+The opening message named your selected achievements by their internal ids. The assistant
+had one way to look at your bank — a search that works by *meaning*, the same one it uses
+to find evidence for "led a team" or "ran Kubernetes in production". Ids mean nothing to a
+search like that, so it found nothing, and finding nothing is how it learns an achievement
+does not exist.
+
+So it searched again, more broadly, and eventually answered about a different set of
+achievements — ones a text search happened to turn up. Everything it said was about work
+you had done. It just was not about the ones you had picked.
+
+### What it does now
+
+The assistant can read achievements directly. When you select some and open the
+interviewer, it reads those exact ones first — claim, situation, numbers, skills and the
+role each belongs to — and opens by telling you what they say.
+
+That changes what it can be trusted with:
+
+- **Merges are proposed with evidence.** Before suggesting two achievements are the same
+  work, it tells you what both actually say, so you can disagree. It used to be able to
+  ask for a merge it had never examined.
+- **Sharpening an achievement no longer risks the numbers already in it.** Metrics and
+  skills are stored as a set, so an assistant adding one number without having read the
+  rest could replace them. It reads first.
+- **The duplicate clusters we detect are readable.** Your profile summary has always
+  reported groups of near-paraphrases; the assistant can now open one and describe it
+  rather than pointing at it.
+
+### The panel stops competing with the list
+
+The interviewer opens beside your bank rather than sending you to another page. It was
+also sitting *inside* the page's content column, so the conversation and the achievements
+it was about were both cramped into half the space.
+
+The panel is now docked to the edge of the window and the page steps aside for it, with
+the account menu folding to its icon rail while it is open. The result is that your
+achievements are no wider apart than before — on most screens they get slightly more room
+than with the panel closed. Your menu returns to however you had it when you close the
+panel.
+
+On narrower screens there is no arrangement where both are comfortable, so the
+conversation covers the bank and hands it back when you close it, as it did before.
+
+Nothing changed about the conversation itself: same interviewer, same tools, same session
+list, and `/my/assistant` still opens it full-width if you would rather have the room.

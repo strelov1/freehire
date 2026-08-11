@@ -52,6 +52,10 @@ type fakeRepo struct {
 	structMod  map[int64]string
 	structAt   map[int64]pgtype.Timestamptz // simulates users.resume_structured_uploaded_at
 	geo        map[int64]storedGeo          // simulates users.resume_countries/regions/cities
+	contacts   map[int64][]byte
+	extractSt  map[int64]string
+	extractDet map[int64]string
+	extractFor map[int64]pgtype.Timestamptz
 }
 
 // storedGeo mirrors the three derived geography columns. A nil slice stands for SQL NULL
@@ -72,6 +76,10 @@ func newFakeRepo() *fakeRepo {
 		structMod:  map[int64]string{},
 		structAt:   map[int64]pgtype.Timestamptz{},
 		geo:        map[int64]storedGeo{},
+		contacts:   map[int64][]byte{},
+		extractSt:  map[int64]string{},
+		extractDet: map[int64]string{},
+		extractFor: map[int64]pgtype.Timestamptz{},
 	}
 }
 
@@ -80,15 +88,18 @@ func newFakeRepo() *fakeRepo {
 // since-superseded upload time matches no row and is dropped whole — structure AND
 // geography. The fake used to write unconditionally, which meant no Store-level test
 // could ever observe that the two travel together.
-func (r *fakeRepo) SetStructured(_ context.Context, w StructuredWrite) error {
+func (r *fakeRepo) SetStructured(_ context.Context, w StructuredWrite) (bool, error) {
 	if cur, ok := r.uploadedAt[w.UserID]; !ok || !cur.Valid || !cur.Time.Equal(w.UploadedAt) {
-		return nil
+		return false, nil
 	}
 	r.structured[w.UserID] = w.Blob
 	r.structMod[w.UserID] = w.Model
 	r.structAt[w.UserID] = pgtype.Timestamptz{Time: w.UploadedAt, Valid: true}
 	r.geo[w.UserID] = storedGeo{Countries: w.Countries, Regions: w.Regions, Cities: w.Cities}
-	return nil
+	r.extractSt[w.UserID] = ExtractStatusOK
+	r.extractDet[w.UserID] = ""
+	r.extractFor[w.UserID] = pgtype.Timestamptz{Time: w.UploadedAt, Valid: true}
+	return true, nil
 }
 
 func (r *fakeRepo) GetStructured(_ context.Context, userID int64) (db.GetUserResumeStructuredRow, error) {
@@ -97,6 +108,10 @@ func (r *fakeRepo) GetStructured(_ context.Context, userID int64) (db.GetUserRes
 		ResumeStructuredModel:      pgtype.Text{String: r.structMod[userID], Valid: r.structMod[userID] != ""},
 		ResumeStructuredUploadedAt: r.structAt[userID],
 		ResumeUploadedAt:           r.uploadedAt[userID],
+		CandidateContacts:          r.contacts[userID],
+		ResumeExtractStatus:        pgtype.Text{String: r.extractSt[userID], Valid: r.extractSt[userID] != ""},
+		ResumeExtractDetail:        pgtype.Text{String: r.extractDet[userID], Valid: r.extractDet[userID] != ""},
+		ResumeExtractFor:           r.extractFor[userID],
 	}, nil
 }
 
@@ -125,17 +140,54 @@ func (r *fakeRepo) Get(_ context.Context, userID int64) (db.GetUserResumeRow, er
 
 func (r *fakeRepo) Set(_ context.Context, userID int64, key string) error {
 	r.ptr[userID] = key
+	now := time.Now().UTC()
+	r.uploadedAt[userID] = pgtype.Timestamptz{Time: now, Valid: true}
+	r.extractSt[userID] = ExtractStatusPending
+	r.extractDet[userID] = ""
+	r.extractFor[userID] = pgtype.Timestamptz{Time: now, Valid: true}
 	return nil
 }
 
 func (r *fakeRepo) Clear(_ context.Context, userID int64) error {
-	// Mirrors ClearUserResume, which nulls the pointer, the derived structured columns,
-	// and the geography derived from them.
+	// Mirrors ClearUserResume: clears pointer + extract artifacts, keeps candidate contacts.
 	delete(r.ptr, userID)
+	delete(r.uploadedAt, userID)
 	delete(r.structured, userID)
 	delete(r.structMod, userID)
 	delete(r.structAt, userID)
 	delete(r.geo, userID)
+	delete(r.extractSt, userID)
+	delete(r.extractDet, userID)
+	delete(r.extractFor, userID)
+	return nil
+}
+
+func (r *fakeRepo) GetCandidateContacts(_ context.Context, userID int64) ([]byte, error) {
+	return r.contacts[userID], nil
+}
+
+func (r *fakeRepo) SetCandidateContacts(_ context.Context, userID int64, blob []byte) error {
+	r.contacts[userID] = blob
+	return nil
+}
+
+func (r *fakeRepo) SetExtractFailed(_ context.Context, userID int64, detail string, uploadedAt time.Time) error {
+	if cur, ok := r.uploadedAt[userID]; !ok || !cur.Valid || !cur.Time.Equal(uploadedAt) {
+		return nil
+	}
+	r.extractSt[userID] = ExtractStatusFailed
+	r.extractDet[userID] = detail
+	r.extractFor[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
+	return nil
+}
+
+func (r *fakeRepo) SetExtractPending(_ context.Context, userID int64, uploadedAt time.Time) error {
+	if cur, ok := r.uploadedAt[userID]; !ok || !cur.Valid || !cur.Time.Equal(uploadedAt) {
+		return nil
+	}
+	r.extractSt[userID] = ExtractStatusPending
+	r.extractDet[userID] = ""
+	r.extractFor[userID] = pgtype.Timestamptz{Time: uploadedAt, Valid: true}
 	return nil
 }
 
@@ -195,6 +247,35 @@ func TestStore_TextNotStored(t *testing.T) {
 	}
 	if meta.Present {
 		t.Error("Status.Present should be false when nothing is stored")
+	}
+}
+
+func TestStore_TextMissingObjectIsNotStored(t *testing.T) {
+	// Pointer without bytes — e.g. LocalStack volume recreated under a surviving DB.
+	repo := newFakeRepo()
+	repo.ptr[7] = "resumes/7"
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
+	s := New(newFakeBlobs(), repo)
+	if _, err := s.Text(context.Background(), 7); !errors.Is(err, ErrNotStored) {
+		t.Fatalf("Text err = %v, want ErrNotStored", err)
+	}
+}
+
+func TestIsMissingObject(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{errors.New("not found"), true},
+		{errors.New("NoSuchKey"), true},
+		{errors.New("The specified key does not exist."), true},
+		{errors.New("timeout waiting for peer"), false},
+	}
+	for _, tc := range cases {
+		if got := isMissingObject(tc.err); got != tc.want {
+			t.Errorf("isMissingObject(%v) = %v, want %v", tc.err, got, tc.want)
+		}
 	}
 }
 
@@ -264,6 +345,88 @@ func TestStore_StructuredAbsentWhenStale(t *testing.T) {
 
 	if _, ok, err := s.Structured(context.Background(), 7); ok || err != nil {
 		t.Fatalf("Structured after re-upload = (_, %v, %v), want (_, false, nil) — stale is absent", ok, err)
+	}
+}
+
+func TestStore_ProfileReadProvisionalContactsWhenStale(t *testing.T) {
+	repo := newFakeRepo()
+	t1 := time.Date(2026, 7, 11, 10, 0, 0, 0, time.UTC)
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
+	s := New(&fakeBlobs{objs: map[string][]byte{}}, repo)
+	if err := s.SetStructured(context.Background(), 7, resumeextract.Structured{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+44",
+		Links: []string{"https://github.com/ada"}, Summary: "old summary", TotalYears: 11,
+	}, "m", t1); err != nil {
+		t.Fatalf("SetStructured: %v", err)
+	}
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1.Add(time.Hour), Valid: true}
+
+	pr, err := s.ProfileReadForUser(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("ProfileReadForUser: %v", err)
+	}
+	if pr.Current || !pr.Pending {
+		t.Fatalf("flags = current:%v pending:%v, want pending provisional", pr.Current, pr.Pending)
+	}
+	if pr.Structure.FullName != "Ada Lovelace" || pr.Structure.Phone != "+44" || len(pr.Structure.Links) != 1 {
+		t.Errorf("provisional contacts = %+v", pr.Structure)
+	}
+	if pr.Structure.Summary != "" || pr.Structure.TotalYears != 0 {
+		t.Errorf("semantic fields leaked into provisional: %+v", pr.Structure)
+	}
+
+	contacts, ok, err := s.ProvisionalContacts(context.Background(), 7)
+	if err != nil || !ok {
+		t.Fatalf("ProvisionalContacts = ok:%v err:%v, want contacts", ok, err)
+	}
+	if contacts.FullName != "Ada Lovelace" || contacts.Summary != "" {
+		t.Errorf("ProvisionalContacts = %+v", contacts)
+	}
+	if _, sok, err := s.Structured(context.Background(), 7); sok || err != nil {
+		t.Fatalf("Structured while stale = ok:%v err:%v, want ok=false", sok, err)
+	}
+}
+
+func TestStore_ProvisionalContactsAbsentWhenCurrent(t *testing.T) {
+	repo := newFakeRepo()
+	t1 := time.Date(2026, 7, 11, 10, 0, 0, 0, time.UTC)
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
+	s := New(&fakeBlobs{objs: map[string][]byte{}}, repo)
+	if err := s.SetStructured(context.Background(), 7, resumeextract.Structured{
+		FullName: "Ada", Email: "ada@example.com",
+	}, "m", t1); err != nil {
+		t.Fatalf("SetStructured: %v", err)
+	}
+	if _, ok, err := s.ProvisionalContacts(context.Background(), 7); ok || err != nil {
+		t.Fatalf("ProvisionalContacts when current = ok:%v err:%v, want ok=false", ok, err)
+	}
+}
+
+func TestStore_ProvisionalContactsAbsentWhenNoBlob(t *testing.T) {
+	repo := newFakeRepo()
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	s := New(&fakeBlobs{objs: map[string][]byte{}}, repo)
+	if _, ok, err := s.ProvisionalContacts(context.Background(), 7); ok || err != nil {
+		t.Fatalf("ProvisionalContacts with no blob = ok:%v err:%v, want ok=false", ok, err)
+	}
+}
+
+func TestStore_ProfileReadCurrentIsFull(t *testing.T) {
+	repo := newFakeRepo()
+	t1 := time.Date(2026, 7, 11, 10, 0, 0, 0, time.UTC)
+	repo.uploadedAt[7] = pgtype.Timestamptz{Time: t1, Valid: true}
+	s := New(&fakeBlobs{objs: map[string][]byte{}}, repo)
+	if err := s.SetStructured(context.Background(), 7, resumeextract.Structured{
+		FullName: "Ada", Summary: "now", TotalYears: 5,
+	}, "m", t1); err != nil {
+		t.Fatalf("SetStructured: %v", err)
+	}
+	pr, err := s.ProfileReadForUser(context.Background(), 7)
+	if err != nil || !pr.Current || pr.Pending {
+		t.Fatalf("ProfileReadForUser = %+v err=%v, want current", pr, err)
+	}
+	if pr.Structure.Summary != "now" || pr.Structure.TotalYears != 5 {
+		t.Errorf("current structure = %+v", pr.Structure)
 	}
 }
 

@@ -551,6 +551,21 @@ func TestCVEditToolDescriptionNamesTheBulletCeiling(t *testing.T) {
 	}
 }
 
+func TestCVEditToolDescriptionRoutesProjectsAndTemplateHeading(t *testing.T) {
+	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	d := tool.Description
+	if !strings.Contains(d, "projects[i]") {
+		t.Fatalf("cv_edit description must mention projects[i] for portfolio work: %s", d)
+	}
+	if !strings.Contains(d, "experience[i]") {
+		t.Fatalf("cv_edit description must mention experience[i] for job roles: %s", d)
+	}
+	lower := strings.ToLower(d)
+	if !strings.Contains(lower, "heading") || !strings.Contains(lower, "template") {
+		t.Fatalf("cv_edit description must say the template owns the Projects heading: %s", d)
+	}
+}
+
 // cv_edit and tailor_report write two different columns through two different tool calls;
 // nothing ties them together unless cv_edit is told which requirement its batch just closed.
 // requirement/requirement_status is that link — it must land in the SAME call as the edit,

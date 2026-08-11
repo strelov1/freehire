@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -244,8 +245,11 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		}
 	}
 
-	// The cap is reached. Ask once more with no tools offered: the model can only
-	// answer, so the turn always ends in prose rather than another tool request.
+	// The cap is reached. Ask once more with no tools offered so the model can
+	// only answer. Some providers (Haiku on Bedrock) still emit tool calls when
+	// the list is empty — persisting those without running them left a dangling
+	// tool_use the UI showed as a hung turn. Execute any that arrive, then stop
+	// without spending another model round past the ceiling.
 	choice, err := r.model.Chat(ctx, history, nil, stream(emit))
 	if err != nil {
 		if ctx.Err() != nil {
@@ -253,7 +257,14 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 		}
 		return r.fail(emit, err)
 	}
-	r.appendAssistant(ctx, sess.ID, history, choice)
+	history = r.appendAssistant(ctx, sess.ID, history, choice)
+	if len(choice.ToolCalls) > 0 {
+		log.Printf("assistant: max_steps wrap-up returned %d tool call(s); running them before stop", len(choice.ToolCalls))
+		history = r.runToolCalls(ctx, sess, reg, history, choice.ToolCalls, emit)
+	}
+	if strings.TrimSpace(choice.Content) == "" {
+		r.noteStepLimit(ctx, sess.ID, &history, emit)
+	}
 	emitUsage(emit, choice)
 	return end(emit, StopMaxSteps)
 }
@@ -264,6 +275,29 @@ func (r *Runner) runFromHistory(ctx context.Context, sess Session, reg *Registry
 func end(emit func(Event), reason string) error {
 	emit(Event{Kind: EventResult, StopReason: reason})
 	return nil
+}
+
+// noteStepLimit records a short prose line when the max_steps wrap-up produced
+// tool calls (or nothing) and no answer text. Without it the client only sees a
+// silent stop after the last tool chip.
+func (r *Runner) noteStepLimit(ctx context.Context, sessionID uuid.UUID, history *[]llms.MessageContent, emit func(Event)) {
+	const note = "I hit the step limit for this turn before finishing. Send another message and I will continue."
+	emit(Event{Kind: EventAssistantText, Text: note})
+	msg, err := EncodeAssistant(note, nil)
+	if err != nil {
+		log.Printf("assistant: encode step-limit note: %v", err)
+		return
+	}
+	if err := r.persist(ctx, sessionID, msg); err != nil {
+		log.Printf("assistant: persist step-limit note: %v", err)
+		return
+	}
+	decoded, err := msg.Decode()
+	if err != nil {
+		log.Printf("assistant: decode step-limit note: %v", err)
+		return
+	}
+	*history = append(*history, decoded)
 }
 
 // recordPrompt persists the user's message, names the session after it when it is
@@ -298,7 +332,17 @@ func (r *Runner) runToolCalls(ctx context.Context, sess Session, reg *Registry, 
 			continue
 		}
 		name := call.FunctionCall.Name
-		args := json.RawMessage(call.FunctionCall.Arguments)
+		raw := call.FunctionCall.Arguments
+		var args json.RawMessage
+		if looksConcatenated(raw) {
+			// Two complete JSON values with no separator: the model intended a second
+			// call. healToolArguments would keep only the first, silently dropping the
+			// second — pass the raw string through instead so DecodeArgs's own
+			// trailing-content check fails the call loudly (see looksConcatenated).
+			args = json.RawMessage(raw)
+		} else {
+			args = json.RawMessage(healToolArguments(raw))
+		}
 		emit(Event{Kind: EventToolUse, Name: name, Input: validJSON(args)})
 
 		res := reg.Call(ctx, sess.UserID, name, args)

@@ -387,6 +387,7 @@ type ExperienceEmployment struct {
 	Stack       []string           `json:"stack"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Link        string             `json:"link"`
 }
 
 type GhostReport struct {
@@ -855,6 +856,11 @@ type User struct {
 	ResumeCountries            []string           `json:"resume_countries"`
 	ResumeRegions              []string           `json:"resume_regions"`
 	ResumeCities               []string           `json:"resume_cities"`
+	ExperienceRequireContext   bool               `json:"experience_require_context"`
+	CandidateContacts          []byte             `json:"candidate_contacts"`
+	ResumeExtractStatus        pgtype.Text        `json:"resume_extract_status"`
+	ResumeExtractDetail        pgtype.Text        `json:"resume_extract_detail"`
+	ResumeExtractFor           pgtype.Timestamptz `json:"resume_extract_for"`
 	TalentNetworkVisibility    string             `json:"talent_network_visibility"`
 	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
 }

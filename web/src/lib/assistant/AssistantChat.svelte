@@ -24,7 +24,7 @@
   import { bulletCapUserMessage } from '$lib/assistant/bulletCapAlert';
   import { splitPresentingCalls } from '$lib/assistant/deck';
   import { atBottom } from '$lib/assistant/scrolling';
-  import { renderMarkdown } from '$lib/assistant/markdown';
+  import { renderMarkdown } from '$lib/markdown';
   import JobDeck from '$lib/assistant/JobDeck.svelte';
   import SessionRail from '$lib/assistant/SessionRail.svelte';
   import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
@@ -455,7 +455,6 @@
     for (const candidate of sessions) {
       // Sequential on purpose: we want the FIRST one that opens, and opening them in
       // parallel would race several transcripts into the same pane.
-      // eslint-disable-next-line no-await-in-loop
       await openSession(candidate.id);
       if (!notFound) return true;
       notFound = false;

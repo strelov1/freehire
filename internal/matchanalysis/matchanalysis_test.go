@@ -99,6 +99,22 @@ func TestSanitizeVerdict_ClampsAndBounds(t *testing.T) {
 	}
 }
 
+func TestSanitizeVerdict_RecommendationLength(t *testing.T) {
+	under := strings.Repeat("a", maxRecommendRunes)
+	v := recruiterVerdict{Recommendation: under}
+	sanitizeVerdict(&v)
+	if v.Recommendation != under {
+		t.Errorf("in-budget recommendation truncated: got %d runes, want %d", len([]rune(v.Recommendation)), maxRecommendRunes)
+	}
+
+	over := strings.Repeat("b", maxRecommendRunes+50)
+	v = recruiterVerdict{Recommendation: over}
+	sanitizeVerdict(&v)
+	if got := len([]rune(v.Recommendation)); got != maxRecommendRunes {
+		t.Errorf("oversized recommendation = %d runes, want ceiling %d", got, maxRecommendRunes)
+	}
+}
+
 func TestSanitizeRequirements_CoercesAndDrops(t *testing.T) {
 	in := []Requirement{
 		{Text: "  Go  ", Priority: "required", Status: "covered", Evidence: "3y at Acme"},
@@ -189,5 +205,68 @@ func TestSanitizeRequirements_EvidenceStrength(t *testing.T) {
 		if got[i].EvidenceStrength != w {
 			t.Errorf("req[%d] (%s/%s) EvidenceStrength = %q, want %q", i, got[i].Priority, got[i].Status, got[i].EvidenceStrength, w)
 		}
+	}
+}
+
+// TestProductionSanitizeBoundsLocked pins the production defaults. These are the
+// sanitize ceilings that ship when MATCH_ANALYSIS_* is unset — change them only
+// with an intentional product decision, not as drive-by tuning. Env overrides
+// remain available for local experiments.
+func TestProductionSanitizeBoundsLocked(t *testing.T) {
+	want := Bounds{
+		MaxCommentRunes:       240,
+		MaxListItemRunes:      200,
+		MaxRecommendRunes:     1200,
+		MaxReqTextRunes:       200,
+		MaxReqEvidenceRunes:   240,
+		MaxStrengths:          6,
+		MaxGaps:               6,
+		MaxRequirements:       30,
+		MaxSignals:            5,
+		MaxSignalQuoteRunes:   200,
+		MaxSignalInsightRunes: 200,
+	}
+	if got := DefaultBounds(); got != want {
+		t.Fatalf("DefaultBounds() = %+v, want production defaults %+v — do not change without review", got, want)
+	}
+	// Fresh package state (no SetBounds yet in this test) must match the same table.
+	if got := CurrentBounds(); got != want {
+		t.Fatalf("CurrentBounds() = %+v before SetBounds, want production defaults %+v", got, want)
+	}
+}
+
+func TestSetBoundsRejectsNonPositive(t *testing.T) {
+	prev := CurrentBounds()
+	t.Cleanup(func() { SetBounds(prev) })
+
+	b := DefaultBounds()
+	b.MaxRecommendRunes = 0
+	b.MaxSignals = -3
+	b.MaxStrengths = 12
+	SetBounds(b)
+	got := CurrentBounds()
+	if got.MaxRecommendRunes != DefaultMaxRecommendRunes {
+		t.Fatalf("MaxRecommendRunes = %d after 0, want default %d", got.MaxRecommendRunes, DefaultMaxRecommendRunes)
+	}
+	if got.MaxSignals != DefaultMaxSignals {
+		t.Fatalf("MaxSignals = %d after -3, want default %d", got.MaxSignals, DefaultMaxSignals)
+	}
+	if got.MaxStrengths != 12 {
+		t.Fatalf("MaxStrengths = %d, want 12", got.MaxStrengths)
+	}
+}
+
+func TestSetBoundsRaisesRecommendationCeiling(t *testing.T) {
+	prev := CurrentBounds()
+	t.Cleanup(func() { SetBounds(prev) })
+
+	b := DefaultBounds()
+	b.MaxRecommendRunes = 2000
+	SetBounds(b)
+	over := strings.Repeat("r", 1500)
+	v := recruiterVerdict{Recommendation: over}
+	sanitizeVerdict(&v)
+	if got := len([]rune(v.Recommendation)); got != 1500 {
+		t.Fatalf("recommendation rune len = %d, want 1500 under raised ceiling", got)
 	}
 }

@@ -53,7 +53,7 @@ export default {
         // renders model output with {@html}, and model output is untrusted — it reads
         // job descriptions, browsed pages and other attacker-controlled text — so an
         // image it can be talked into writing is a no-click GET carrying whatever the
-        // model held. The sanitizer (lib/assistant/markdown.ts) is the primary control;
+        // model held. The sanitizer (lib/markdown.ts) is the primary control;
         // this pins where an image could go if that ever regresses.
         //
         // The list is exhaustive by inspection, not by habit: the only browser-side

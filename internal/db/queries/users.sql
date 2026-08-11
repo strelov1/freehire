@@ -118,10 +118,17 @@ WHERE id = $1;
 -- name: SetUserResume :exec
 -- Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 -- Owner-scoped by id; the object key is derived from the id, never client input.
--- Also clears any cached ATS review so a new CV is never scored with a stale one.
-UPDATE users
-SET resume_object_key = $2, resume_uploaded_at = now(), resume_ats_analysis = NULL
-WHERE id = $1;
+-- Also clears any cached ATS review so a new CV is never scored with a stale one,
+-- and marks structured extract pending for this upload (background work must catch up).
+UPDATE users u
+SET resume_object_key = $2,
+    resume_uploaded_at = t.ts,
+    resume_ats_analysis = NULL,
+    resume_extract_status = 'pending',
+    resume_extract_detail = NULL,
+    resume_extract_for = t.ts
+FROM (SELECT now() AS ts) t
+WHERE u.id = $1;
 
 -- name: ClearUserResume :exec
 -- Clear the user's résumé pointer (after deleting the object from storage), any
@@ -129,13 +136,15 @@ WHERE id = $1;
 -- derived structured résumé (the structure must not outlive the CV it describes), and
 -- the geography derived from that structure (which must not outlive it either — a
 -- country left behind here would keep answering "where is this candidate" from a CV
--- that no longer exists).
+-- that no longer exists). Candidate contacts are intentionally kept: they are
+-- owner-edited identity, not an extract artifact.
 UPDATE users
 SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = NULL,
     resume_embedding = NULL, resume_embedding_model = NULL,
     resume_structured = NULL, resume_structured_model = NULL,
     resume_structured_uploaded_at = NULL,
-    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL
+    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL,
+    resume_extract_status = NULL, resume_extract_detail = NULL, resume_extract_for = NULL
 WHERE id = $1;
 
 -- name: GetUserPhoto :one
@@ -192,11 +201,13 @@ WHERE id = $1;
 -- the résumé upload time it was derived from), alongside the current résumé upload time
 -- so the caller can tell whether the structure still describes the stored CV (served
 -- only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
-SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at
+-- Also returns candidate contacts and last extract status for Profile / seed composition.
+SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at,
+       candidate_contacts, resume_extract_status, resume_extract_detail, resume_extract_for
 FROM users
 WHERE id = $1;
 
--- name: SetUserResumeStructured :exec
+-- name: SetUserResumeStructured :execrows
 -- Persist the user's derived structured résumé, stamped with the producing LLM model
 -- and the résumé upload time it was derived from (passed in, not now(), so the stamp
 -- matches the CV the background extraction actually read). Never the raw CV text.
@@ -210,10 +221,38 @@ WHERE id = $1;
 -- structure it was derived from. It is deterministic and costs no I/O, so there is
 -- nothing to gain by deferring it — and a separate write would have to duplicate the
 -- guard, which is exactly how invariants drift apart.
+-- On success, extract status is marked ok for this upload stamp.
 UPDATE users
 SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
-    resume_countries = $5, resume_regions = $6, resume_cities = $7
+    resume_countries = $5, resume_regions = $6, resume_cities = $7,
+    resume_extract_status = 'ok', resume_extract_detail = NULL, resume_extract_for = $4
 WHERE id = $1 AND resume_uploaded_at = $4;
+
+-- name: GetUserCandidateContacts :one
+SELECT candidate_contacts
+FROM users
+WHERE id = $1;
+
+-- name: SetUserCandidateContacts :exec
+UPDATE users
+SET candidate_contacts = $2
+WHERE id = $1;
+
+-- name: SetUserResumeExtractFailed :exec
+-- Record that structured extract failed for the current upload. The for-stamp guard
+-- drops the write when a newer upload already superseded this attempt.
+UPDATE users
+SET resume_extract_status = 'failed',
+    resume_extract_detail = $2,
+    resume_extract_for = $3
+WHERE id = $1 AND resume_uploaded_at = $3;
+
+-- name: SetUserResumeExtractPending :exec
+UPDATE users
+SET resume_extract_status = 'pending',
+    resume_extract_detail = NULL,
+    resume_extract_for = $2
+WHERE id = $1 AND resume_uploaded_at = $2;
 
 -- name: GetUserResumeGeography :one
 -- The geography derived from the user's structured résumé, alongside the two stamps the
@@ -335,3 +374,16 @@ SELECT u.talent_network_visibility,
 FROM users u
 LEFT JOIN user_profiles p ON p.user_id = u.id
 WHERE u.talent_network_public_id = $1;
+
+-- name: GetUserExperienceRequireContext :one
+-- Whether interactive atom creates require a non-empty context. Kept off /auth/me on
+-- purpose — only the experience write path and get_profile's bank summary need it.
+SELECT experience_require_context
+FROM users
+WHERE id = $1;
+
+-- name: SetUserExperienceRequireContext :exec
+-- Chat-opt-in (or opt-out) for requiring context on interactive experience creates.
+UPDATE users
+SET experience_require_context = $2
+WHERE id = $1;

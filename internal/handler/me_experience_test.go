@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -277,6 +278,86 @@ func TestAddEmploymentCreatesUnderTheCaller(t *testing.T) {
 	}
 }
 
+func TestAddProjectEmploymentReturnsName(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+		`{"kind":"project","name":"telagon.io","link":"https://telagon.io"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if body.Data["name"] != "telagon.io" {
+		t.Errorf("name = %v, want telagon.io", body.Data["name"])
+	}
+	if _, ok := body.Data["company"]; ok {
+		t.Errorf("project response must not include company, got %v", body.Data["company"])
+	}
+	if body.Data["link"] != "https://telagon.io" {
+		t.Errorf("link = %v, want URL echoed", body.Data["link"])
+	}
+	if len(bank.employments) != 1 || bank.employments[0].Company != "telagon.io" {
+		t.Errorf("stored = %+v, want company column filled from name", bank.employments)
+	}
+}
+
+func TestAddProjectEmploymentAcceptsLegacyCompany(t *testing.T) {
+	app, token, _ := experienceApp(t)
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments",
+		`{"kind":"project","company":"opensched"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", resp.StatusCode)
+	}
+	var body struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if body.Data["name"] != "opensched" {
+		t.Errorf("name = %v, want legacy company returned as name", body.Data["name"])
+	}
+}
+
+func TestListProjectEmploymentEmitsName(t *testing.T) {
+	app, token, bank := experienceApp(t)
+	bank.addEmployment(1, experience.Employment{
+		Kind: experience.KindProject, Company: "telagon.io", Link: "https://telagon.io",
+	})
+
+	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	var body struct {
+		Data struct {
+			Employments []map[string]any `json:"employments"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if len(body.Data.Employments) != 1 {
+		t.Fatalf("employments = %d, want 1", len(body.Data.Employments))
+	}
+	e := body.Data.Employments[0]
+	if e["name"] != "telagon.io" {
+		t.Errorf("name = %v, want telagon.io", e["name"])
+	}
+	if _, ok := e["company"]; ok {
+		t.Errorf("list must not emit company for a project, got %v", e["company"])
+	}
+	if _, ok := e["atoms"]; !ok {
+		t.Error("list entry must still carry atoms alongside the employment wire shape")
+	}
+}
+
 func TestAddEmploymentRefusesOneWithNeitherCompanyNorRole(t *testing.T) {
 	app, token, bank := experienceApp(t)
 
@@ -332,6 +413,158 @@ func TestExperienceRoutesRequireAuth(t *testing.T) {
 	if resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job","company":"x"}`, ""); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("unauthenticated employment create = %d, want 401", resp.StatusCode)
 	}
+}
+
+func TestMergeAtomsUnionsAndRemovesLoser(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	a := bank.add(1, experience.Atom{
+		Claim:  "Built a Chromium plugin with faster-whisper for live and batch",
+		Skills: []string{"python"}, Provenance: experience.ProvenanceAgentInferred,
+	})
+	b := bank.add(1, experience.Atom{
+		Claim:   "Built a Chromium plugin with VAD filtering on faster-whisper",
+		Context: "model profiles", Metrics: []string{"VAD"},
+		Skills: []string{"nlp"}, Provenance: experience.ProvenanceAgentInferred,
+	})
+	bank.reindex()
+
+	body := `{"ids":["` + a.ID.String() + `","` + b.ID.String() + `"]}`
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms/merge", body, token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("merge status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Data struct {
+			ID      uuid.UUID `json:"id"`
+			Context string    `json:"context"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if out.Data.Context == "" {
+		t.Error("kept atom has no context from the richer sibling")
+	}
+
+	list := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	var listed struct {
+		Data struct {
+			Unplaced []struct {
+				ID string `json:"id"`
+			} `json:"unplaced"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(list.Body).Decode(&listed); err != nil {
+		t.Fatalf("list decode: %v", err)
+	}
+	list.Body.Close()
+	if len(listed.Data.Unplaced) != 1 || listed.Data.Unplaced[0].ID != out.Data.ID.String() {
+		t.Errorf("after merge unplaced = %+v, want only the keep", listed.Data.Unplaced)
+	}
+}
+
+func TestMergeAtomsIsCookieOnly(t *testing.T) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	bank := newStubBank()
+	h := newExperienceHandlers(bank)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	cookieReject := func(c *fiber.Ctx) error {
+		return fiber.NewError(fiber.StatusUnauthorized, "cookie only")
+	}
+	keyAccept := auth.RequireAuth(iss, testVersions)
+	h.register(app.Group(""), middleware{cookie: cookieReject, key: keyAccept})
+
+	a := bank.add(1, experience.Atom{Claim: "One", Provenance: experience.ProvenanceManual})
+	b := bank.add(1, experience.Atom{Claim: "Two", Provenance: experience.ProvenanceManual})
+	bank.reindex()
+
+	body := `{"ids":["` + a.ID.String() + `","` + b.ID.String() + `"]}`
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms/merge", body, token)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("merge through key-only path = %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestListExperienceFlagsSoftDuplicatesAndThinAtoms(t *testing.T) {
+	app, token, bank := experienceApp(t)
+
+	bank.add(1, experience.Atom{
+		Claim:      "Built a Chromium plugin with custom audio transcription pipeline using faster-whisper models, with configurable profiles for live and batch processing",
+		Provenance: experience.ProvenanceAgentInferred,
+	})
+	bank.add(1, experience.Atom{
+		Claim:      "Built a Chromium plugin that transcribes audio using faster-whisper models with configurable profiles and VAD-based filtering to reduce hallucination artifacts",
+		Provenance: experience.ProvenanceAgentInferred,
+	})
+	bank.reindex()
+
+	resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", token)
+	var body struct {
+		Data struct {
+			Unplaced []struct {
+				NeedsContext bool   `json:"needs_context"`
+				NeedsMetrics bool   `json:"needs_metrics"`
+				ClusterID    string `json:"cluster_id"`
+			} `json:"unplaced"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if len(body.Data.Unplaced) != 2 {
+		t.Fatalf("unplaced = %d, want 2", len(body.Data.Unplaced))
+	}
+	if body.Data.Unplaced[0].ClusterID == "" || body.Data.Unplaced[0].ClusterID != body.Data.Unplaced[1].ClusterID {
+		t.Errorf("cluster ids = %q / %q, want a shared soft-dup cluster",
+			body.Data.Unplaced[0].ClusterID, body.Data.Unplaced[1].ClusterID)
+	}
+	if !body.Data.Unplaced[0].NeedsContext || !body.Data.Unplaced[0].NeedsMetrics {
+		t.Errorf("thin flags missing on claim-only atom: %+v", body.Data.Unplaced[0])
+	}
+}
+
+type stubRequireContext struct{ on bool }
+
+func (s stubRequireContext) GetUserExperienceRequireContext(context.Context, int64) (bool, error) {
+	return s.on, nil
+}
+
+func TestAddAtomRespectsContextGate(t *testing.T) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	bank := newStubBank()
+	h := newExperienceHandlers(bank).withRequireContext(stubRequireContext{on: true})
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	guard := auth.RequireAuth(iss, testVersions)
+	h.register(app.Group(""), middleware{cookie: guard, key: guard})
+
+	resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+		`{"claim":"Cut latency"}`, token)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("gated empty context = %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(bank.list) != 0 {
+		t.Error("gated create persisted anyway")
+	}
+
+	resp = experienceReq(t, app, http.MethodPost, "/me/experience/atoms",
+		`{"claim":"Cut latency","context":"payments checkout"}`, token)
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("gated with context = %d, want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 // Nothing may be invisible on the page whose purpose is that nothing is invisible. An

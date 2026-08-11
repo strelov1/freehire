@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
@@ -41,6 +43,7 @@ type Repository interface {
 	InsertAtomIfNew(ctx context.Context, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
+	MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error)
 }
 
 // ProfileSkills is the narrow slice of userprofile the bank needs: fold newly banked
@@ -271,6 +274,54 @@ func (s *Store) DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) erro
 	return nil
 }
 
+// MergeAtoms folds two owned atoms into one: the richer keep absorbs the loser's
+// metrics, skills and richer context, then the loser is deleted. One CTE write
+// makes the two halves atomic. Claim text stays on the keep — chat may rewrite it
+// afterward with UpdateAtom if the owner wants a richer sentence.
+func (s *Store) MergeAtoms(ctx context.Context, userID int64, aID, bID uuid.UUID) (Atom, error) {
+	if aID == uuid.Nil || bID == uuid.Nil || aID == bID {
+		return Atom{}, ErrInvalidMerge
+	}
+	rowA, err := s.repo.GetAtom(ctx, aID, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Atom{}, ErrNotFound
+	}
+	if err != nil {
+		return Atom{}, fmt.Errorf("get atom a: %w", err)
+	}
+	rowB, err := s.repo.GetAtom(ctx, bID, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Atom{}, ErrNotFound
+	}
+	if err != nil {
+		return Atom{}, fmt.Errorf("get atom b: %w", err)
+	}
+
+	left := mergeCandidate{Atom: atomFromRow(rowA), CreatedAt: timestamptz(rowA.CreatedAt)}
+	right := mergeCandidate{Atom: atomFromRow(rowB), CreatedAt: timestamptz(rowB.CreatedAt)}
+	if err := validateMergePair(aID, bID, left.Atom, right.Atom); err != nil {
+		return Atom{}, err
+	}
+
+	keep, lose := left, right
+	if !chooseKeep(left, right) {
+		keep, lose = right, left
+	}
+	merged := unionForMerge(keep.Atom, lose.Atom)
+	if err := merged.Validate(); err != nil {
+		return Atom{}, err
+	}
+
+	row, err := s.repo.MergeAtoms(ctx, userID, keep.ID, lose.ID, merged)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Atom{}, ErrNotFound
+	}
+	if err != nil {
+		return Atom{}, fmt.Errorf("merge atoms: %w", err)
+	}
+	return atomFromRow(row), nil
+}
+
 // ownsEmployment refuses an atom pointed at a place its owner does not own — including one
 // that does not exist. The foreign key alone does not cover this: it references
 // experience_employments(id) with no user in it.
@@ -298,7 +349,7 @@ func employmentFromRow(row db.ExperienceEmployment) Employment {
 	return Employment{
 		ID: row.ID, Kind: row.Kind, Company: row.Company, Role: row.Role,
 		Location: row.Location, Start: row.PeriodStart, End: row.PeriodEnd,
-		Current: row.IsCurrent, Summary: row.Summary, Stack: row.Stack,
+		Current: row.IsCurrent, Summary: row.Summary, Link: row.Link, Stack: row.Stack,
 	}
 }
 
@@ -308,4 +359,11 @@ func atomFromRow(row db.ExperienceAtom) Atom {
 		Metrics: row.Metrics, Skills: row.Skills,
 		Provenance: Provenance(row.Provenance), SourceRef: row.SourceRef,
 	}
+}
+
+func timestamptz(ts pgtype.Timestamptz) time.Time {
+	if !ts.Valid {
+		return time.Time{}
+	}
+	return ts.Time
 }

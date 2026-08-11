@@ -58,10 +58,22 @@ jobs:
           fi
 
       - name: Unit tests
-        run: go test ./...
+        run: |
+          mkdir -p coverage
+          go test ./... -coverprofile=coverage/unit.out -covermode=atomic
 
       - name: Integration tests
-        run: go test -tags=integration ./...
+        run: |
+          mkdir -p coverage
+          go test -tags=integration ./... -coverprofile=coverage/integration.out -covermode=atomic
+
+      - name: Upload Go coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage/*.out
+          if-no-files-found: ignore
 
   design-system:
     runs-on: ubuntu-latest
@@ -184,8 +196,16 @@ jobs:
       - name: Type check
         run: pnpm run check
 
-      - name: Unit tests
-        run: pnpm run test
+      - name: Unit tests with coverage
+        run: pnpm run test:coverage
+
+      - name: Upload web coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage
+          if-no-files-found: ignore
 
       - name: Build
         run: pnpm run build

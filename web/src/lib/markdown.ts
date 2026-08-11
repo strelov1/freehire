@@ -1,8 +1,8 @@
-// Rendering the assistant's answers to markup.
+// Rendering untrusted model prose to markup (assistant answers, fit verdict, …).
 //
 // freehire is a PUBLIC app and model output is untrusted, so marked's output is run
 // through DOMPurify before it reaches `{@html}`. `isomorphic-dompurify` is SSR-safe,
-// so the guard holds even though the chat paints client-side only — and it is what
+// so the guard holds even though some surfaces paint client-side only — and it is what
 // lets this module be unit-tested under the node-environment vitest config.
 
 import { Marked } from 'marked';

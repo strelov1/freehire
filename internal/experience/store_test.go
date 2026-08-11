@@ -67,7 +67,8 @@ func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employmen
 	row := db.ExperienceEmployment{
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role,
 		Location: e.Location, PeriodStart: e.Start, PeriodEnd: e.End,
-		IsCurrent: e.Current, Summary: e.Summary, Stack: e.Stack, CreatedAt: stamp(), UpdatedAt: stamp(),
+		IsCurrent: e.Current, Summary: e.Summary, Link: e.Link, Stack: e.Stack,
+		CreatedAt: stamp(), UpdatedAt: stamp(),
 	}
 	f.employments[id] = row
 	f.order = append(f.order, id)
@@ -81,7 +82,7 @@ func (f *fakeRepo) UpdateEmployment(_ context.Context, id uuid.UUID, userID int6
 	}
 	row.Kind, row.Company, row.Role = e.Kind, e.Company, e.Role
 	row.Location, row.PeriodStart, row.PeriodEnd = e.Location, e.Start, e.End
-	row.IsCurrent, row.Summary, row.Stack = e.Current, e.Summary, e.Stack
+	row.IsCurrent, row.Summary, row.Link, row.Stack = e.Current, e.Summary, e.Link, e.Stack
 	f.employments[id] = row
 	return row, nil
 }
@@ -97,6 +98,7 @@ func (f *fakeRepo) FillEmploymentBlanks(_ context.Context, id uuid.UUID, userID 
 	row.PeriodStart = orExisting(row.PeriodStart, e.Start)
 	row.PeriodEnd = orExisting(row.PeriodEnd, e.End)
 	row.Summary = orExisting(row.Summary, e.Summary)
+	row.Link = orExisting(row.Link, e.Link)
 	row.Stack = unionSorted(row.Stack, e.Stack)
 	f.employments[id] = row
 	return row, nil
@@ -183,6 +185,23 @@ func (f *fakeRepo) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) (in
 		return 1, nil
 	}
 	return 0, nil
+}
+
+func (f *fakeRepo) MergeAtoms(_ context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error) {
+	loser, ok := f.atoms[loserID]
+	if !ok || loser.UserID != userID {
+		return db.ExperienceAtom{}, pgx.ErrNoRows
+	}
+	keep, ok := f.atoms[keepID]
+	if !ok || keep.UserID != userID {
+		return db.ExperienceAtom{}, pgx.ErrNoRows
+	}
+	delete(f.atoms, loserID)
+	keep.Context, keep.Metrics, keep.Skills = a.Context, a.Metrics, a.Skills
+	keep.Provenance = string(a.Provenance)
+	keep.UpdatedAt = stamp()
+	f.atoms[keepID] = keep
+	return keep, nil
 }
 
 const (
@@ -476,5 +495,133 @@ func TestStoreAtomCannotAttachToAnotherOwnersEmployment(t *testing.T) {
 		EmploymentID: &ghost, Claim: "Ran the cluster", Provenance: ProvenanceManual,
 	}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("AddAtom with an unknown employment = %v, want ErrNotFound", err)
+	}
+}
+
+// Save-as-project on the Experience UI: create a project employment, then attach an
+// unplaced atom. SeedHistory must then list the claim under projects, not as placeless.
+func TestStorePromoteUnplacedAtomToProject(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	atom, err := s.AddAtom(ctx, owner, Atom{
+		Claim:      "Reverse-engineered game data for a Portuguese localization mod",
+		Provenance: ProvenanceStatedInChat,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom: %v", err)
+	}
+
+	project, err := s.CreateEmployment(ctx, owner, Employment{
+		Kind: KindProject, Company: "My Time at Sandrock", Link: "https://www.nexusmods.com/example",
+	})
+	if err != nil {
+		t.Fatalf("CreateEmployment: %v", err)
+	}
+
+	atom.EmploymentID = &project.ID
+	if _, err := s.UpdateAtom(ctx, atom.ID, owner, atom); err != nil {
+		t.Fatalf("UpdateAtom attach: %v", err)
+	}
+
+	hist, err := s.SeedHistory(ctx, owner)
+	if err != nil {
+		t.Fatalf("SeedHistory: %v", err)
+	}
+	if !hist.HasProjectEmployments || len(hist.Projects) != 1 {
+		t.Fatalf("projects = %+v, want one banked project", hist.Projects)
+	}
+	if hist.Projects[0].Name != "My Time at Sandrock" || hist.Projects[0].Link != "https://www.nexusmods.com/example" {
+		t.Errorf("project identity = %+v", hist.Projects[0])
+	}
+	if len(hist.Projects[0].Highlights) != 1 || !strings.Contains(hist.Projects[0].Highlights[0], "Portuguese") {
+		t.Errorf("project highlights = %q, want the attached claim", hist.Projects[0].Highlights)
+	}
+	for _, e := range hist.Experience {
+		if e.Company == "" && e.Title == "" && len(e.Highlights) > 0 {
+			t.Fatalf("placeless experience still present: %+v", e)
+		}
+	}
+}
+
+func TestStoreMergeAtomsUnionsAndDeletesLoser(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	a, err := s.AddAtom(ctx, owner, Atom{
+		Claim:  "Built a Chromium plugin with faster-whisper for live and batch",
+		Skills: []string{"python"}, Provenance: ProvenanceAgentInferred,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom a: %v", err)
+	}
+	b, err := s.AddAtom(ctx, owner, Atom{
+		Claim:   "Built a Chromium plugin with VAD filtering on faster-whisper",
+		Context: "small/medium/large-v3 model profiles", Metrics: []string{"VAD"},
+		Skills: []string{"nlp"}, Provenance: ProvenanceAgentInferred,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom b: %v", err)
+	}
+
+	kept, err := s.MergeAtoms(ctx, owner, a.ID, b.ID)
+	if err != nil {
+		t.Fatalf("MergeAtoms: %v", err)
+	}
+	if kept.Context == "" || len(kept.Metrics) == 0 {
+		t.Errorf("kept missing richness: context=%q metrics=%q", kept.Context, kept.Metrics)
+	}
+	if ClaimKey(kept.Claim) == "" {
+		t.Error("claim emptied")
+	}
+
+	atoms, err := s.ListAtoms(ctx, owner)
+	if err != nil {
+		t.Fatalf("ListAtoms: %v", err)
+	}
+	if len(atoms) != 1 {
+		t.Fatalf("atoms after merge = %d, want 1", len(atoms))
+	}
+	if atoms[0].ID != kept.ID {
+		t.Errorf("surviving id = %s, want keep %s", atoms[0].ID, kept.ID)
+	}
+}
+
+func TestStoreMergeAtomsNotFoundAndCrossEmployment(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	roleA, err := s.CreateEmployment(ctx, owner, Employment{Kind: KindJob, Company: "A", Role: "SWE"})
+	if err != nil {
+		t.Fatalf("CreateEmployment A: %v", err)
+	}
+	roleB, err := s.CreateEmployment(ctx, owner, Employment{Kind: KindJob, Company: "B", Role: "SWE"})
+	if err != nil {
+		t.Fatalf("CreateEmployment B: %v", err)
+	}
+	a, err := s.AddAtom(ctx, owner, Atom{
+		EmploymentID: &roleA.ID, Claim: "Did the thing at A", Provenance: ProvenanceManual,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom a: %v", err)
+	}
+	b, err := s.AddAtom(ctx, owner, Atom{
+		EmploymentID: &roleB.ID, Claim: "Did the thing at B", Provenance: ProvenanceManual,
+	})
+	if err != nil {
+		t.Fatalf("AddAtom b: %v", err)
+	}
+
+	if _, err := s.MergeAtoms(ctx, owner, a.ID, b.ID); !errors.Is(err, ErrMergeCrossEmployment) {
+		t.Errorf("cross employment = %v, want ErrMergeCrossEmployment", err)
+	}
+	if _, err := s.MergeAtoms(ctx, owner, a.ID, uuid.New()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing = %v, want ErrNotFound", err)
+	}
+	if _, err := s.MergeAtoms(ctx, stranger, a.ID, b.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("not yours = %v, want ErrNotFound", err)
+	}
+	if _, err := s.MergeAtoms(ctx, owner, a.ID, a.ID); !errors.Is(err, ErrInvalidMerge) {
+		t.Errorf("same id = %v, want ErrInvalidMerge", err)
 	}
 }

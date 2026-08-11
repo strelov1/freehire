@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/experience"
 	"github.com/strelov1/freehire/internal/resumeextract"
 	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/userprofile"
@@ -85,7 +86,17 @@ type experienceSummary struct {
 	// warning: a skill here cannot be written onto a CV, however central the vacancy makes it.
 	SkillsWithoutEvidence []string `json:"skills_without_evidence,omitempty"`
 	TotalAchievements     int      `json:"total_achievements"`
+	// SoftDuplicateClusters are id-lists of near-paraphrase achievements (no claim text).
+	SoftDuplicateClusters [][]string `json:"soft_duplicate_clusters,omitempty"`
+	NeedsContextCount     int        `json:"needs_context_count,omitempty"`
+	NeedsMetricsCount     int        `json:"needs_metrics_count,omitempty"`
+	RequireContext        bool       `json:"require_context,omitempty"`
 }
+
+const (
+	softDupClusterCap   = 8
+	softDupClusterIDCap = 6
+)
 
 type employmentSummary struct {
 	ID           uuid.UUID `json:"id"`
@@ -137,6 +148,7 @@ func (h *assistantHandlers) experienceSummary(ctx context.Context, userID int64,
 
 	counts := map[uuid.UUID]int{}
 	evidenced := map[string]bool{}
+	out := &experienceSummary{TotalAchievements: len(atoms)}
 	for _, a := range atoms {
 		if a.EmploymentID != nil {
 			counts[*a.EmploymentID]++
@@ -144,9 +156,27 @@ func (h *assistantHandlers) experienceSummary(ctx context.Context, userID int64,
 		for _, skill := range a.Skills {
 			evidenced[skill] = true
 		}
+		nc, nm := experience.Richness(a)
+		if nc {
+			out.NeedsContextCount++
+		}
+		if nm {
+			out.NeedsMetricsCount++
+		}
 	}
-
-	out := &experienceSummary{TotalAchievements: len(atoms)}
+	for i, cluster := range experience.SoftDuplicateClusters(atoms) {
+		if i >= softDupClusterCap {
+			break
+		}
+		ids := make([]string, 0, softDupClusterIDCap)
+		for j, id := range cluster {
+			if j >= softDupClusterIDCap {
+				break
+			}
+			ids = append(ids, id.String())
+		}
+		out.SoftDuplicateClusters = append(out.SoftDuplicateClusters, ids)
+	}
 	for _, e := range employments {
 		out.Employments = append(out.Employments, employmentSummary{
 			ID: e.ID, Company: e.Company, Role: e.Role, Current: e.Current,
@@ -160,6 +190,11 @@ func (h *assistantHandlers) experienceSummary(ctx context.Context, userID int64,
 	for _, skill := range skilltag.Canonicalize(claimed, skilltag.WithResumeAcronyms()) {
 		if !evidenced[skill] {
 			out.SkillsWithoutEvidence = append(out.SkillsWithoutEvidence, skill)
+		}
+	}
+	if h.queries != nil {
+		if on, err := h.queries.GetUserExperienceRequireContext(ctx, userID); err == nil {
+			out.RequireContext = on
 		}
 	}
 	return out

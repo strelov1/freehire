@@ -13,9 +13,9 @@ import (
 )
 
 const createExperienceEmployment = `-- name: CreateExperienceEmployment :one
-INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, link)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 `
 
 type CreateExperienceEmploymentParams struct {
@@ -29,6 +29,7 @@ type CreateExperienceEmploymentParams struct {
 	IsCurrent   bool     `json:"is_current"`
 	Summary     string   `json:"summary"`
 	Stack       []string `json:"stack"`
+	Link        string   `json:"link"`
 }
 
 func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExperienceEmploymentParams) (ExperienceEmployment, error) {
@@ -43,6 +44,7 @@ func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExpe
 		arg.IsCurrent,
 		arg.Summary,
 		arg.Stack,
+		arg.Link,
 	)
 	var i ExperienceEmployment
 	err := row.Scan(
@@ -59,6 +61,7 @@ func (q *Queries) CreateExperienceEmployment(ctx context.Context, arg CreateExpe
 		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Link,
 	)
 	return i, err
 }
@@ -110,16 +113,17 @@ SET company      = coalesce(nullif(company, ''), $1),
     period_start = coalesce(nullif(period_start, ''), $4),
     period_end   = coalesce(nullif(period_end, ''), $5),
     summary      = coalesce(nullif(summary, ''), $6),
+    link         = coalesce(nullif(link, ''), $7),
     -- The stack is unioned, not filled-if-blank: a CV listing one more technology for a
     -- role is new knowledge, and import must never take a technology away. coalesce
     -- guards the empty case — array_agg over no rows is NULL, and the column is NOT NULL.
     stack        = coalesce(
-                       (SELECT array_agg(DISTINCT s ORDER BY s) FROM unnest(stack || $7::text[]) AS s),
+                       (SELECT array_agg(DISTINCT s ORDER BY s) FROM unnest(stack || $8::text[]) AS s),
                        '{}'::text[]
                    ),
     updated_at   = now()
-WHERE id = $8 AND user_id = $9
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+WHERE id = $9 AND user_id = $10
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 `
 
 type FillExperienceEmploymentBlanksParams struct {
@@ -129,6 +133,7 @@ type FillExperienceEmploymentBlanksParams struct {
 	PeriodStart string    `json:"period_start"`
 	PeriodEnd   string    `json:"period_end"`
 	Summary     string    `json:"summary"`
+	Link        string    `json:"link"`
 	Stack       []string  `json:"stack"`
 	ID          uuid.UUID `json:"id"`
 	UserID      int64     `json:"user_id"`
@@ -146,6 +151,7 @@ func (q *Queries) FillExperienceEmploymentBlanks(ctx context.Context, arg FillEx
 		arg.PeriodStart,
 		arg.PeriodEnd,
 		arg.Summary,
+		arg.Link,
 		arg.Stack,
 		arg.ID,
 		arg.UserID,
@@ -165,12 +171,13 @@ func (q *Queries) FillExperienceEmploymentBlanks(ctx context.Context, arg FillEx
 		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Link,
 	)
 	return i, err
 }
 
 const findExperienceEmployment = `-- name: FindExperienceEmployment :one
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = $1 AND lower(company) = lower($2) AND lower(role) = lower($3)
 ORDER BY created_at, id
@@ -204,6 +211,7 @@ func (q *Queries) FindExperienceEmployment(ctx context.Context, arg FindExperien
 		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Link,
 	)
 	return i, err
 }
@@ -240,7 +248,7 @@ func (q *Queries) GetExperienceAtom(ctx context.Context, arg GetExperienceAtomPa
 }
 
 const getExperienceEmployment = `-- name: GetExperienceEmployment :one
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE id = $1 AND user_id = $2
 `
@@ -269,6 +277,7 @@ func (q *Queries) GetExperienceEmployment(ctx context.Context, arg GetExperience
 		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Link,
 	)
 	return i, err
 }
@@ -426,7 +435,7 @@ func (q *Queries) ListExperienceBackfillTargets(ctx context.Context, userID int6
 }
 
 const listExperienceEmployments = `-- name: ListExperienceEmployments :many
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = $1
 ORDER BY is_current DESC, period_start DESC, id
@@ -457,6 +466,7 @@ func (q *Queries) ListExperienceEmployments(ctx context.Context, userID int64) (
 			&i.Stack,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Link,
 		); err != nil {
 			return nil, err
 		}
@@ -466,6 +476,93 @@ func (q *Queries) ListExperienceEmployments(ctx context.Context, userID int64) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const mergeExperienceAtoms = `-- name: MergeExperienceAtoms :one
+WITH updated AS (
+    UPDATE experience_atoms
+    SET context = $1,
+        metrics = $2,
+        skills = $3,
+        provenance = $4,
+        updated_at = now()
+    WHERE experience_atoms.id = $5 AND experience_atoms.user_id = $6
+      AND EXISTS (
+          SELECT 1 FROM experience_atoms AS loser
+          WHERE loser.id = $7 AND loser.user_id = $6
+      )
+    RETURNING experience_atoms.id, experience_atoms.user_id, experience_atoms.employment_id,
+              experience_atoms.claim, experience_atoms.claim_key, experience_atoms.context,
+              experience_atoms.metrics, experience_atoms.skills, experience_atoms.provenance,
+              experience_atoms.source_ref, experience_atoms.created_at, experience_atoms.updated_at
+),
+deleted AS (
+    DELETE FROM experience_atoms
+    WHERE experience_atoms.id = $7 AND experience_atoms.user_id = $6
+      AND EXISTS (SELECT 1 FROM updated)
+    RETURNING experience_atoms.id
+)
+SELECT id, user_id, employment_id, claim, claim_key, context, metrics, skills, provenance, source_ref, created_at, updated_at FROM updated
+`
+
+type MergeExperienceAtomsParams struct {
+	Context    string    `json:"context"`
+	Metrics    []string  `json:"metrics"`
+	Skills     []string  `json:"skills"`
+	Provenance string    `json:"provenance"`
+	KeepID     uuid.UUID `json:"keep_id"`
+	UserID     int64     `json:"user_id"`
+	LoserID    uuid.UUID `json:"loser_id"`
+}
+
+type MergeExperienceAtomsRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       int64              `json:"user_id"`
+	EmploymentID pgtype.UUID        `json:"employment_id"`
+	Claim        string             `json:"claim"`
+	ClaimKey     string             `json:"claim_key"`
+	Context      string             `json:"context"`
+	Metrics      []string           `json:"metrics"`
+	Skills       []string           `json:"skills"`
+	Provenance   string             `json:"provenance"`
+	SourceRef    string             `json:"source_ref"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Atomically update the keep and delete the loser. The UPDATE is the transaction: the
+// DELETE only lands when the update did, so a keep that vanished between Store.MergeAtoms'
+// ownership check and this call (a concurrent delete/merge) yields no row and deletes
+// nothing, rather than deleting the loser out from under a merge whose other half never
+// landed. The UPDATE itself is gated on the loser still existing, for the same reason in
+// the other direction. Either both sides of the merge happen or neither does. Claim,
+// claim_key, employment_id and source_ref stay on the keep — only richness fields move.
+func (q *Queries) MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error) {
+	row := q.db.QueryRow(ctx, mergeExperienceAtoms,
+		arg.Context,
+		arg.Metrics,
+		arg.Skills,
+		arg.Provenance,
+		arg.KeepID,
+		arg.UserID,
+		arg.LoserID,
+	)
+	var i MergeExperienceAtomsRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.EmploymentID,
+		&i.Claim,
+		&i.ClaimKey,
+		&i.Context,
+		&i.Metrics,
+		&i.Skills,
+		&i.Provenance,
+		&i.SourceRef,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateExperienceAtom = `-- name: UpdateExperienceAtom :one
@@ -523,9 +620,9 @@ func (q *Queries) UpdateExperienceAtom(ctx context.Context, arg UpdateExperience
 const updateExperienceEmployment = `-- name: UpdateExperienceEmployment :one
 UPDATE experience_employments
 SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,
-    is_current = $9, summary = $10, stack = $11, updated_at = now()
+    is_current = $9, summary = $10, stack = $11, link = $12, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 `
 
 type UpdateExperienceEmploymentParams struct {
@@ -540,6 +637,7 @@ type UpdateExperienceEmploymentParams struct {
 	IsCurrent   bool      `json:"is_current"`
 	Summary     string    `json:"summary"`
 	Stack       []string  `json:"stack"`
+	Link        string    `json:"link"`
 }
 
 // A full owner-scoped replacement, used by the profile UI where the user is editing the
@@ -557,6 +655,7 @@ func (q *Queries) UpdateExperienceEmployment(ctx context.Context, arg UpdateExpe
 		arg.IsCurrent,
 		arg.Summary,
 		arg.Stack,
+		arg.Link,
 	)
 	var i ExperienceEmployment
 	err := row.Scan(
@@ -573,6 +672,7 @@ func (q *Queries) UpdateExperienceEmployment(ctx context.Context, arg UpdateExpe
 		&i.Stack,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Link,
 	)
 	return i, err
 }

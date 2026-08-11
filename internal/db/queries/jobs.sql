@@ -1110,6 +1110,21 @@ FROM jobs
 WHERE closed_at IS NULL
   AND source <> ALL(sqlc.arg(ats_providers)::text[]);
 
+-- name: SelectStaleRegisteredCandidates :many
+-- Liveness backstop for a registered provider whose ingest sweep cannot reach every open
+-- job — see job-lifecycle: CloseUnseenJobs scopes closes to the company_slugs a run
+-- actually crawled, so a company that ages out of a recency-budgeted aggregator's crawl
+-- window (himalayas pages only its freshest slice) never re-enters that scope and its
+-- last posting leaks open forever. Unlike SelectOrphanLivenessCandidates (any job whose
+-- source ISN'T swept), this targets specific sources that ARE swept but only jobs the
+-- sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
+-- evidence the sweep is structurally unable to reach them, not a race with it.
+SELECT id, source, url, public_slug, liveness_strikes
+FROM jobs
+WHERE closed_at IS NULL
+  AND source = ANY(sqlc.arg(sources)::text[])
+  AND last_seen_at < sqlc.arg(cutoff);
+
 -- name: MarkLivenessExpired :one
 -- Record one expired probe: increment the strike counter and, in the same write,
 -- close the job (closed_at) once it reaches the threshold the caller owns — the

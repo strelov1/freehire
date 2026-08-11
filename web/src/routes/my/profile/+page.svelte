@@ -7,6 +7,7 @@
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import CandidateContactsEditor from '$lib/components/CandidateContactsEditor.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
@@ -21,6 +22,7 @@
   import { profileStore } from '$lib/profile.svelte';
   import type {
     ATSResponse,
+    CandidateContacts,
     FacetCounts,
     ResumeStructured,
     TalentNetworkVisibility,
@@ -39,10 +41,14 @@
   let verdict = $state<Verdict | null>(null);
   let counts = $state<FacetCounts | null>(null);
   let ats = $state<ATSResponse | null>(null);
-  // The read-only structured résumé parsed from the CV (null when none is current: no
-  // résumé, unconfigured LLM, background extraction not yet landed, or stale). Fetched
-  // independently of the filter-driven reload.
+  // The read-only structured résumé parsed from the CV (null when nothing to show).
+  // structurePending is true while a newer upload's extract has not stamped yet —
+  // contacts may still be provisional from the previous parse.
   let structured = $state<ResumeStructured | null>(null);
+  let structurePending = $state(false);
+  let parseStatus = $state('');
+  let parseDetail = $state('');
+  let contacts = $state<CandidateContacts | null>(null);
   let loadError = $state(false);
   // The tab strip's sections. `as const` ties `tab` to this list, so a section can't be
   // referenced by an id the strip doesn't offer.
@@ -126,9 +132,18 @@
   // Best-effort: any failure (or none current) leaves the section hidden, never an error.
   async function loadStructured() {
     try {
-      structured = (await api.getResume()).structured;
+      const meta = await api.getResume();
+      structured = meta.structured;
+      structurePending = Boolean(meta.structure_pending);
+      parseStatus = meta.parse_status ?? '';
+      parseDetail = meta.parse_detail ?? '';
+      contacts = meta.contacts ?? null;
     } catch {
       structured = null;
+      structurePending = false;
+      parseStatus = '';
+      parseDetail = '';
+      contacts = null;
     }
   }
 
@@ -184,18 +199,23 @@
     if (!filters) return;
     const gen = ++reloadGeneration;
     const params = filtersToParams(filters.applied);
-    try {
-      const [v, c, a] = await Promise.all([
-        api.getProfileVerdict(params),
-        api.facetCounts(params),
-        api.getATSReport(params),
-      ]);
-      if (gen !== reloadGeneration) return; // a newer reload started — discard stale results.
-      [verdict, counts, ats] = [v, c, a];
-      loadError = false;
-    } catch {
-      if (gen === reloadGeneration) loadError = true;
+    // Settled separately: a Meili facet-settings lag (new filterable attr not applied yet)
+    // must not blank coverage + ATS when those endpoints are fine. Facet counts degrade to
+    // empty; the report still loads.
+    const [v, c, a] = await Promise.allSettled([
+      api.getProfileVerdict(params),
+      api.facetCounts(params),
+      api.getATSReport(params),
+    ]);
+    if (gen !== reloadGeneration) return;
+    if (v.status !== 'fulfilled') {
+      loadError = true;
+      return;
     }
+    verdict = v.value;
+    counts = c.status === 'fulfilled' ? c.value : null;
+    ats = a.status === 'fulfilled' ? a.value : null;
+    loadError = false;
   }
 
   // ProfileForm callbacks: a save re-fetches coverage; a CV upload also refreshes the
@@ -351,18 +371,40 @@
         {:else if tab === 'skills'}
           <SkillsView />
         {:else if tab === 'structured'}
-          <!-- Profile: the read-only structured résumé parsed from the CV. Loaded
-               independently of the filter-driven reload, so no verdict gate. -->
-          {#if structured}
-            <ResumeStructuredView resume={structured} />
-          {:else}
-            <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-              <p class="text-sm font-medium">No parsed profile yet</p>
-              <p class="text-sm text-muted-foreground">
-                Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'settings')}>Settings</button> tab and we'll parse it into a structured profile.
-              </p>
-            </div>
-          {/if}
+          <!-- Profile: editable contacts + read-only parse of semantic sections. -->
+          <div class="flex flex-col gap-4">
+            <CandidateContactsEditor
+              {contacts}
+              {parseStatus}
+              {parseDetail}
+              {structurePending}
+              onSaved={() => void loadStructured()}
+            />
+            {#if structured}
+              {#if structurePending}
+                <p class="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                  Semantic sections below (summary, education, …) update when the current CV
+                  parse finishes. Experience comes from your bank.
+                </p>
+              {/if}
+              <ResumeStructuredView resume={structured} />
+            {:else if structurePending}
+              <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+                <p class="text-sm font-medium">Parsing your latest CV…</p>
+                <p class="text-sm text-muted-foreground">
+                  Contacts above are editable now. Summary and other parse fields appear when
+                  extract finishes — use Retry parse if this stays empty.
+                </p>
+              </div>
+            {:else}
+              <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
+                <p class="text-sm font-medium">No parsed profile yet</p>
+                <p class="text-sm text-muted-foreground">
+                  Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'settings')}>Settings</button> tab and we'll parse it into a structured profile.
+                </p>
+              </div>
+            {/if}
+          </div>
         {:else if loadError}
           <States state="error" message="Couldn't load the report." />
         {:else if verdict === null}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -192,6 +193,153 @@ func TestResetCVFromResume_NoSeed409(t *testing.T) {
 	if resp.StatusCode != fiber.StatusConflict {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("status = %d body = %s, want 409", resp.StatusCode, body)
+	}
+}
+
+// Banked experience without a current structured résumé is not a usable seed — reset must
+// refuse rather than blank the tailored header.
+func TestResetCVFromResume_BankOnlySeed409(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "bankonly@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = now(),
+		 resume_structured = NULL, resume_structured_uploaded_at = NULL WHERE id = $1`,
+		userID); err != nil {
+		t.Fatalf("seed upload without structure: %v", err)
+	}
+	seedBankedCareer(t, h.queries, userID)
+
+	jobID := seedJobSlug(t, pool, "bankonly-"+uuid.NewString()[:8])
+	header := cv.Header{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+351 900 000 000",
+		Location: "Lisbon, PT", Links: []string{"github.com/ada"},
+	}
+	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "T", cv.DefaultTemplateID, cv.Document{
+		Header: header, Summary: "keep me",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s, want 409", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	got, err := h.cvStore.Get(ctx, tailored.ID, userID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Document.Header.FullName != header.FullName || got.Document.Header.Email != header.Email ||
+		got.Document.Header.Phone != header.Phone || got.Document.Header.Location != header.Location ||
+		got.Document.Summary != "keep me" {
+		t.Fatalf("tailored wiped: header=%+v summary=%q", got.Document.Header, got.Document.Summary)
+	}
+}
+
+// A candidate who only set independent contact fields (no résumé ever uploaded, no bank
+// rows) is identity-only. StructureForSeed/seedable both treat FullName alone as "usable"
+// for first-time bootstrap, but Reset destructively replaces an EXISTING CV's whole body —
+// identity alone must not be enough to wipe hand-written content.
+func TestResetCVFromResume_IdentityOnlySeed409(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "identityonly@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+
+	contacts, _ := json.Marshal(map[string]string{
+		"full_name": "Ada Lovelace",
+		"email":     "ada@example.com",
+	})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET candidate_contacts = $2 WHERE id = $1`,
+		userID, contacts); err != nil {
+		t.Fatalf("seed candidate contacts: %v", err)
+	}
+
+	jobID := seedJobSlug(t, pool, "identityonly-"+uuid.NewString()[:8])
+	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "T", cv.DefaultTemplateID, cv.Document{
+		Header:     cv.Header{FullName: "Hand-typed Name"},
+		Summary:    "Hand-written summary I typed myself",
+		Experience: []cv.ExperienceItem{{Company: "Real Job I Had"}},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s, want 409", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	got, err := h.cvStore.Get(ctx, tailored.ID, userID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Document.Header.FullName != "Hand-typed Name" ||
+		got.Document.Summary != "Hand-written summary I typed myself" ||
+		len(got.Document.Experience) != 1 {
+		t.Fatalf("tailored wiped: header=%+v summary=%q experience=%+v",
+			got.Document.Header, got.Document.Summary, got.Document.Experience)
+	}
+}
+
+func TestResetCVFromResume_ProvisionalContactsPlusBankSucceeds(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "prov-reset@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+
+	oldAt := time.Now().Add(-2 * time.Hour).Truncate(time.Microsecond)
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Summary: "stale",
+	})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2,
+		 resume_structured = $3, resume_structured_uploaded_at = $2 WHERE id = $1`,
+		userID, oldAt, blob); err != nil {
+		t.Fatalf("seed structure: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET resume_uploaded_at = $2 WHERE id = $1`,
+		userID, oldAt.Add(time.Hour)); err != nil {
+		t.Fatalf("stale upload: %v", err)
+	}
+	seedBankedCareer(t, h.queries, userID)
+
+	jobID := seedJobSlug(t, pool, "prov-reset-"+uuid.NewString()[:8])
+	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "T", cv.DefaultTemplateID, cv.Document{
+		Header: cv.Header{}, Summary: "old",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s, want 200", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	got, err := h.cvStore.Get(ctx, tailored.ID, userID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Document.Header.FullName != "Ada Lovelace" || got.Document.Header.Email != "ada@example.com" {
+		t.Fatalf("header = %+v, want provisional contacts", got.Document.Header)
+	}
+	if got.Document.Summary != "" {
+		t.Fatalf("summary = %q, want empty (provisional seed has no semantics)", got.Document.Summary)
+	}
+	if len(got.Document.Experience) == 0 {
+		t.Fatal("want banked experience on reset")
 	}
 }
 

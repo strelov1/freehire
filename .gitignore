@@ -132,3 +132,10 @@ extension/*.zip
 /server
 /tg-extract
 /tg-ingest
+
+# Local-only compose overrides (per-machine service wiring; never shared).
+/docker-compose.override.yml
+
+# Go / Vitest coverage profiles and HTML (make cover, pnpm test:coverage).
+/coverage/
+/web/coverage/

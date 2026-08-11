@@ -87,9 +87,10 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 		return Structured{}, fmt.Errorf("resumeextract: parse: %w", err)
 	}
 	// Contact fields come from deterministic detection, NOT the model — it only ever saw the
-	// redacted CV, so it cannot (and must not) supply them.
+	// redacted CV, so it cannot (and must not) supply them. Location is included: the
+	// candidate's residence is typically an ADDRESS span masked before the model runs.
 	c := red.Contacts()
-	s.FullName, s.Email, s.Phone, s.Links = c.FullName, c.Email, c.Phone, c.Links
+	s.FullName, s.Email, s.Phone, s.Location, s.Links = c.FullName, c.Email, c.Phone, c.Location, c.Links
 	s.Sanitize()
 	return s, nil
 }
@@ -105,17 +106,16 @@ const maxCVRunes = 12000
 const systemPrompt = `You extract a structured résumé from raw CV text and return ONLY a JSON object.
 Rules:
 - Extract ONLY facts stated in the CV. Never invent or infer a field that is not present — return null for it.
-- The CV has been de-identified: contact details are handled separately and appear as [REDACTED_...]
-  placeholders. Never copy a placeholder into any field.
-- location is the CANDIDATE's own location. An employer's office in a job entry is that job's location,
-  not the candidate's; return null when the CV does not state where the person is.
-- Fields: headline (current role/title line), location, summary (1-3 sentences),
+- The CV has been de-identified: contact details (name, email, phone, residence, links) are handled
+  separately and appear as [REDACTED_...] placeholders. Never copy a placeholder into any field.
+- Fields: headline (current role/title line), summary (1-3 sentences),
   total_years (years of professional experience as a plain number written as a string, e.g. "6";
     best estimate; "0" if unclear),
   experience (array of {title, company, location, start, end, summary, highlights, stack}; keep dates as
     written, e.g. "2021-03" or "Present"; summary is the one-line company/role context; highlights is the
     array of achievement bullet points for that role, each a full sentence copied faithfully from the CV;
-    stack is the array of technologies listed for that role, e.g. from a "Stack:" line),
+    stack is the array of technologies listed for that role, e.g. from a "Stack:" line;
+    location here is the employer's office for that role, not the candidate's residence),
   education (array of {degree, institution, year}), languages (array of strings),
   skills (array of strings — technologies/tools stated in the CV, properly cased, e.g. "Go", "PostgreSQL", "Kafka"),
   certifications (array of strings — professional certifications/licenses the CV states the person holds, e.g. "AWS Certified Solutions Architect", "CISSP", "PMP"),

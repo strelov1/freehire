@@ -38,9 +38,45 @@ export type AssistantEntry = {
 const PROFILE_KICKOFF =
   'Walk through my experience with me — start with whatever is thinnest, and help me fill in the achievements that are missing.';
 
+/** Server-minted atom ids only — never treat free text in `atoms` as kickoff prose. */
+// Built from a fragment so the source never contains `-[…]` (token-coverage false positive).
+const HEX = '[0-9a-f]';
+const ATOM_ID_RE = new RegExp(
+  `^${HEX}{8}-${HEX}{4}-${HEX}{4}-${HEX}{4}-${HEX}{12}$`,
+  'i',
+);
+
+/**
+ * The opening message for the experience interview, optionally aimed at specific
+ * achievements.
+ *
+ * Two surfaces reach the interviewer — the Experience tab's in-place panel and this
+ * module's URL entry — and they must ask the same thing, so the text lives here once
+ * rather than at each call site. Ids are filtered here too: the panel's come from
+ * rendered rows and the URL's from a query string, and one rule for both means the
+ * query can never smuggle prose in as an id.
+ *
+ * It asks the agent to read the achievements before saying anything about them, and
+ * deliberately does not say which tool does that — this message is recorded as the
+ * candidate's own, and naming our internals in their voice is both odd to read and a
+ * second place the tool could be renamed. The interviewer's prompt owns the how.
+ */
+export function profileKickoff(ids: readonly string[]): string {
+  const named = ids.filter((id) => ATOM_ID_RE.test(id));
+  const unique = [...new Set(named)];
+  if (unique.length === 0) return PROFILE_KICKOFF;
+  const list = unique.map((id) => `\`${id}\``).join(', ');
+  return (
+    `${PROFILE_KICKOFF}\n\n` +
+    `Start with these achievements: ${list} — they look related or thin. ` +
+    `Read them first, tell me what they actually say, then ask whether to merge them or what to add.`
+  );
+}
+
 export function entryFromQuery(params: URLSearchParams): AssistantEntry {
-  if (params.get('preset') === 'profile') return { preset: 'profile', kickoff: PROFILE_KICKOFF };
-  return { preset: 'chat' };
+  if (params.get('preset') !== 'profile') return { preset: 'chat' };
+  const ids = (params.get('atoms') ?? '').split(',').map((part) => part.trim());
+  return { preset: 'profile', kickoff: profileKickoff(ids) };
 }
 
 /**

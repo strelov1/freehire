@@ -22,7 +22,17 @@ func (f fakeSeeder) Structured(context.Context, int64) (resumeextract.Structured
 func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 	s := NewStore(newFakeRepo())
 	ctx := context.Background()
-	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{FullName: "Ada", Summary: "Eng", Skills: []string{"Go"}}}
+	// Full contact block + skills: both must survive the first-time tailor seed path.
+	// Contacts used to go missing when only FullName was asserted.
+	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Phone:    "+44 000",
+		Location: "London, UK",
+		Links:    []string{"github.com/ada"},
+		Summary:  "Eng",
+		Skills:   []string{"Go", "PostgreSQL"},
+	}}
 
 	base, tailored, created, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder)
 	if err != nil {
@@ -38,8 +48,15 @@ func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get base: %v", err)
 	}
-	if brec.Document.Header.FullName != "Ada" {
-		t.Errorf("base not seeded from résumé: %+v", brec.Document.Header)
+	wantHeader := Header{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+44 000",
+		Location: "London, UK", Links: []string{"github.com/ada"},
+	}
+	if !reflect.DeepEqual(brec.Document.Header, wantHeader) {
+		t.Errorf("base header = %+v, want full contact block from résumé", brec.Document.Header)
+	}
+	if len(brec.Document.Skills) != 1 || !reflect.DeepEqual(brec.Document.Skills[0].Items, []string{"Go", "PostgreSQL"}) {
+		t.Errorf("base skills = %+v, want Go/PostgreSQL from résumé", brec.Document.Skills)
 	}
 	trec, err := s.Get(ctx, tailored.ID, 7)
 	if err != nil {
@@ -47,6 +64,9 @@ func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 	}
 	if !reflect.DeepEqual(trec.Document, brec.Document) {
 		t.Errorf("tailored doc != base doc")
+	}
+	if !reflect.DeepEqual(trec.Document.Header, wantHeader) {
+		t.Errorf("tailored header = %+v, want same contacts as base", trec.Document.Header)
 	}
 }
 

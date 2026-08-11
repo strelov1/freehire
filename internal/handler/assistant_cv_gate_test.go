@@ -114,6 +114,49 @@ func (b *stubBank) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) err
 	return nil
 }
 
+func (b *stubBank) MergeAtoms(_ context.Context, userID int64, aID, bID uuid.UUID) (experience.Atom, error) {
+	a, err := b.GetAtom(context.Background(), aID, userID)
+	if err != nil {
+		return experience.Atom{}, err
+	}
+	other, err := b.GetAtom(context.Background(), bID, userID)
+	if err != nil {
+		return experience.Atom{}, err
+	}
+	if aID == bID {
+		return experience.Atom{}, experience.ErrInvalidMerge
+	}
+	sameBucket := (a.EmploymentID == nil && other.EmploymentID == nil) ||
+		(a.EmploymentID != nil && other.EmploymentID != nil && *a.EmploymentID == *other.EmploymentID)
+	if !sameBucket {
+		return experience.Atom{}, experience.ErrMergeCrossEmployment
+	}
+	// Prefer the richer side as keep — mirrors Store keep-selection enough for HTTP tests.
+	richness := func(a experience.Atom) int {
+		n := len(a.Metrics) + len(a.Skills)
+		if strings.TrimSpace(a.Context) != "" {
+			n++
+		}
+		return n
+	}
+	keep, lose := a, other
+	if richness(other) > richness(a) {
+		keep, lose = other, a
+	}
+	if strings.TrimSpace(keep.Context) == "" {
+		keep.Context = lose.Context
+	}
+	keep.Metrics = append(append([]string{}, keep.Metrics...), lose.Metrics...)
+	keep.Skills = append(append([]string{}, keep.Skills...), lose.Skills...)
+	if !keep.Provenance.Publishable() && lose.Provenance.Publishable() {
+		keep.Provenance = lose.Provenance
+	}
+	delete(b.atoms, lose.ID)
+	b.atoms[keep.ID] = keep
+	b.reindex()
+	return keep, nil
+}
+
 // reindex rebuilds the owner-filtered list the read paths walk.
 func (b *stubBank) reindex() {
 	b.list = b.list[:0]
@@ -275,5 +318,8 @@ func TestProfileToolReportsShapeNotContents(t *testing.T) {
 	// list and the tailoring agent's warning.
 	if len(summary.SkillsWithoutEvidence) != 1 || summary.SkillsWithoutEvidence[0] != "kubernetes" {
 		t.Errorf("skills without evidence = %q, want [kubernetes]", summary.SkillsWithoutEvidence)
+	}
+	if summary.NeedsContextCount != 200 {
+		t.Errorf("needs_context_count = %d, want 200 for claim-only atoms", summary.NeedsContextCount)
 	}
 }

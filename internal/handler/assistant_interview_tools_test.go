@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,32 @@ import (
 	"github.com/strelov1/freehire/internal/inbox"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
+
+// A prompt that names a tool the preset does not register produces an agent describing a
+// capability it cannot reach. That is not hypothetical here: the interviewer was told to
+// resolve achievement ids with a tool that retrieves by meaning, and duly reported that the
+// candidate's own achievements did not exist.
+func TestProfilePresetRegistersEveryBankToolItsPromptNames(t *testing.T) {
+	names := presetAPI().registry(
+		assistant.Session{UserID: 3, Preset: assistant.PresetProfile}, uuid.New()).Names()
+
+	prompt := assistant.SystemPrompt(assistant.PresetProfile)
+	// Only the bank's own tools: the prompt backticks plenty of field names too
+	// (`metrics`, `said`, `soft_duplicate_clusters`), and those are not tools.
+	named := regexp.MustCompile("`(experience_[a-z_]+)`").FindAllStringSubmatch(prompt, -1)
+	if len(named) == 0 {
+		t.Fatal("the profile prompt names no bank tool at all; the interviewer's whole job is the bank")
+	}
+	for _, match := range named {
+		if !slices.Contains(names, match[1]) {
+			t.Errorf("the prompt tells the agent to call %q, which this preset does not register: %v", match[1], names)
+		}
+	}
+	// The read is the one the prompt cannot do its job without.
+	if !slices.Contains(names, "experience_get") {
+		t.Errorf("the profile preset does not register experience_get: %v", names)
+	}
+}
 
 // The rehearsal's tool set is chosen by exclusion as much as by inclusion. It edits no
 // CV, so the CV tools would be a call that changes the wrong document; it reads no

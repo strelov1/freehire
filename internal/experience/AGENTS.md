@@ -46,6 +46,12 @@ requirement ──► Retrieve ──► scored, ranked, top-N ──► the age
 bank + structure ──► Professional ──► matchanalysis · /me/profile · cv.Seed
 ```
 
+**Project wire.** Storage keeps one place-label column (`Company`) for both kinds.
+JSON is kind-aware (`employment_json.go`): jobs emit `company`, projects emit
+`name` and `link` and omit `company`. Inbound project JSON accepts `name`, with
+legacy `company` as a fallback into the same stored field. Clients must not
+assume projects expose `company`.
+
 **File split.** `experience.go` holds the wire shape, `Sanitize`, `Validate` and
 `ClaimKey`, so `cmd/gen-contracts` can emit the TS types from that file alone.
 `store.go` is the owner-scoped domain surface over a narrow `Repository`; `repository.go`
@@ -84,12 +90,14 @@ The ATS report deliberately reads the **file's** structure and not the bank: it 
 document, and banked evidence would have it praise a CV for experience the CV never states.
 
 ## Limitations
-- **Paraphrase duplicates.** A claim stated in chat and later re-uploaded in a CV is
-  matched only if the normalized text agrees. Two near-identical atoms are accepted as a
-  smaller harm than a lost one; similarity dedup is deferred until real volumes exist.
+- **Paraphrase duplicates.** Exact `ClaimKey` still only collapses identical normalised
+  claims. Near-paraphrases are flagged as soft-duplicate clusters (token Jaccard on the
+  claim) and the owner can merge a pair via `Store.MergeAtoms` / the Experience tab /
+  `experience_merge`. Import never merges. Soft-dup is a hint, not a silent write.
+- **Dangling CV citations after merge.** The keep id is stable; the loser is deleted. A
+  CV that already cites the loser stays a printable snapshot; a later agent `cv_edit`
+  that re-cites the deleted id fails the evidence gate. Citations are not rewritten.
 - **No semantic retrieval.** A linear pass is right for tens-to-hundreds of atoms;
   `internal/embed` is the open seam if that changes.
 - **No STAR depth.** Atoms are CV-bullet grade. Interview-prep depth would be a layer over
   the same employments, not nullable fields added speculatively now.
-- **No UI yet.** Stage 4 of the change adds the profile-page surface for reviewing and
-  deleting what the agent recorded; until it lands, deletion is only reachable through SQL.

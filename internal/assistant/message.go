@@ -44,8 +44,10 @@ type assistantContent struct {
 }
 
 // toolCall is a stored tool invocation. Arguments stay a string because that is
-// what the model emitted and what must be replayed verbatim — re-encoding parsed
-// JSON would change the bytes the model saw.
+// what the model emitted — but they must be valid JSON for Bedrock/LiteLLM to
+// accept on replay. healToolArguments repairs trailer junk (Haiku has appended
+// XML like </invoke>) without re-encoding a parse tree when the bytes are already
+// legal.
 type toolCall struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -65,7 +67,9 @@ func EncodeUser(text string) (Message, error) {
 }
 
 // EncodeAssistant builds the stored message for one model turn: its text and the
-// tool calls it requested. Either may be empty.
+// tool calls it requested. Either may be empty. Arguments are healed so a later
+// retry can replay them to Bedrock — a single Haiku turn that appended </invoke>
+// after valid JSON otherwise poisons the session forever.
 func EncodeAssistant(text string, calls []llms.ToolCall) (Message, error) {
 	c := assistantContent{Text: text}
 	for _, call := range calls {
@@ -75,7 +79,7 @@ func EncodeAssistant(text string, calls []llms.ToolCall) (Message, error) {
 		c.ToolCalls = append(c.ToolCalls, toolCall{
 			ID:        call.ID,
 			Name:      call.FunctionCall.Name,
-			Arguments: call.FunctionCall.Arguments,
+			Arguments: healToolArguments(call.FunctionCall.Arguments),
 		})
 	}
 	return encode(RoleAssistant, c)
@@ -121,7 +125,7 @@ func (m Message) Decode() (llms.MessageContent, error) {
 			out.Parts = append(out.Parts, llms.ToolCall{
 				ID:           call.ID,
 				Type:         "function",
-				FunctionCall: &llms.FunctionCall{Name: call.Name, Arguments: call.Arguments},
+				FunctionCall: &llms.FunctionCall{Name: call.Name, Arguments: healToolArguments(call.Arguments)},
 			})
 		}
 		return out, nil
@@ -186,4 +190,66 @@ func UserSaid(transcript []Message, quote string) bool {
 // that survived a line wrap still matches what the user typed.
 func collapseSpace(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+}
+
+// firstJSONValue decodes the first complete JSON value in s, skipping any leading
+// non-JSON text up to the first "{" or "[", and returns it along with whatever
+// text still follows. ok is false when no valid JSON value could be decoded.
+func firstJSONValue(s string) (value, rest string, ok bool) {
+	start := strings.IndexAny(s, "{[")
+	if start < 0 {
+		return "", "", false
+	}
+	body := s[start:]
+	dec := json.NewDecoder(strings.NewReader(body))
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return "", "", false
+	}
+	return string(raw), body[dec.InputOffset():], true
+}
+
+// healToolArguments returns args unchanged when they are already one JSON value.
+// Otherwise it carves out the first object/array (Haiku has been seen appending
+// "\n</invoke>" and similar XML trailer after a complete object) or falls back
+// to "{}" so Bedrock's converter never sees illegal tool-call arguments.
+//
+// This is a storage/replay concern only — it always keeps the first value, even when
+// what follows is itself a second, complete JSON value (the model concatenated two
+// calls) rather than trailer junk. That trade-off is fine for what gets persisted and
+// replayed to the model on a later turn, but it must never be what decides what a tool
+// actually EXECUTES with: see looksConcatenated, which runToolCalls checks first so a
+// concatenated call fails loudly via DecodeArgs instead of silently running truncated.
+func healToolArguments(args string) string {
+	s := strings.TrimSpace(args)
+	if s == "" {
+		return "{}"
+	}
+	if json.Valid([]byte(s)) {
+		return s
+	}
+	value, _, ok := firstJSONValue(s)
+	if !ok {
+		return "{}"
+	}
+	return value
+}
+
+// looksConcatenated reports whether args is more than one complete JSON value run
+// together with no separator — e.g. two full tool-call payloads — as opposed to a
+// single value followed by non-JSON trailer junk. The two must be told apart:
+// healToolArguments keeps only the first value either way (see above), but a genuine
+// concatenation means the model intended a SECOND call the caller must not silently
+// drop by executing just the first.
+func looksConcatenated(args string) bool {
+	s := strings.TrimSpace(args)
+	if s == "" || json.Valid([]byte(s)) {
+		return false
+	}
+	_, rest, ok := firstJSONValue(s)
+	if !ok {
+		return false
+	}
+	rest = strings.TrimSpace(rest)
+	return rest != "" && json.Valid([]byte(rest))
 }

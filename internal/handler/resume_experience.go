@@ -13,7 +13,8 @@ import (
 // else belongs behind this seam.
 type experienceBank interface {
 	Import(ctx context.Context, userID int64, entries []experience.ImportEntry, sourceRef string) (experience.ImportResult, error)
-	WorkHistory(ctx context.Context, userID int64) ([]resumeextract.Experience, error)
+	// SeedHistory keeps jobs and projects apart for the Profile / CV-seed shape.
+	SeedHistory(ctx context.Context, userID int64) (experience.SeedHistory, error)
 }
 
 // importExperience banks the work history of a freshly-extracted résumé. Best-effort in

@@ -90,6 +90,62 @@ func TestTailorPromptStatesTheBulletCeilingRule(t *testing.T) {
 	}
 }
 
+// Agents kept inventing a PROJECTS heading field and parking portfolio work under experience.
+// Templates already emit section titles from non-empty arrays; the prompt must say so.
+func TestTailorPromptOwnsSectionHeadingsAndProjectsPlacement(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+	lower := strings.ToLower(p)
+	if !strings.Contains(lower, "section headings") || !strings.Contains(lower, "template") {
+		t.Error("the tailor prompt must say section headings are template-owned")
+	}
+	if !strings.Contains(lower, "do not invent") {
+		t.Error("the tailor prompt must forbid inventing heading/title/section fields")
+	}
+	if !strings.Contains(p, "`projects[]`") || !strings.Contains(p, "projects[i]") {
+		t.Error("the tailor prompt must name projects[] / projects[i] for portfolio placement")
+	}
+	if !strings.Contains(p, "`experience[]`") {
+		t.Error("the tailor prompt must contrast projects placement with experience[]")
+	}
+}
+
+// Three surfaces hand the interviewer an achievement id — the opening message of a
+// selection, get_profile's soft_duplicate_clusters, and the id a merge returns — and this
+// prompt used to tell it to SEARCH them. Search retrieves by meaning and drops what scores
+// zero, so a UUID matched nothing, which the search tool documents as "the bank holds
+// nothing on that point". The agent concluded that four achievements the candidate was
+// looking at did not exist, and answered about a different set instead.
+func TestProfilePromptReadsIdsRatherThanSearchingThem(t *testing.T) {
+	p := SystemPrompt(PresetProfile)
+
+	if !strings.Contains(p, "experience_get") {
+		t.Fatal("the profile prompt never names experience_get, so nothing turns an id into the achievement it names")
+	}
+	if strings.Contains(p, "(search them") {
+		t.Error("the prompt still tells the agent to search achievement ids; that is the failure this replaces")
+	}
+	// Knowing the tool exists is not enough — it has to know which of the two takes an id.
+	if !strings.Contains(p, "CANNOT find an achievement by its id") {
+		t.Error("the prompt does not say experience_search cannot resolve an id, so the agent may still try")
+	}
+}
+
+// Merging is decided entirely server-side, so an agent that never read the pair can still
+// merge it — and cannot make the one judgement a merge needs: whether the two are the same
+// work. Updating is narrower and just as destructive, because metrics and skills are set as
+// whole lists rather than appended to.
+func TestProfilePromptReadsBeforeMergingOrUpdating(t *testing.T) {
+	p := SystemPrompt(PresetProfile)
+	lower := strings.ToLower(p)
+
+	if !strings.Contains(lower, "never merge or update an achievement you have not read") {
+		t.Error("the profile prompt does not require reading an achievement before merging or updating it")
+	}
+	if !strings.Contains(lower, "replaced whole") {
+		t.Error("the prompt does not warn that metrics and skills are replaced whole, so a blind update erases recorded numbers")
+	}
+}
+
 func TestAnUnknownPresetFallsBackToTheChatPrompt(t *testing.T) {
 	if SystemPrompt("wizard") != SystemPrompt(PresetChat) {
 		t.Error("an unknown preset must still get a prompt; a session with none would answer unguided")

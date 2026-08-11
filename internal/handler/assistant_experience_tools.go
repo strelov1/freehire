@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/experience"
 )
 
@@ -24,12 +26,22 @@ type experienceBankTools interface {
 	GetAtom(ctx context.Context, id uuid.UUID, userID int64) (experience.Atom, error)
 	AddAtom(ctx context.Context, userID int64, a experience.Atom) (experience.Atom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a experience.Atom) (experience.Atom, error)
+	MergeAtoms(ctx context.Context, userID int64, a, b uuid.UUID) (experience.Atom, error)
 }
 
 // experienceSearchLimit caps what one search puts into the transcript. A tool result is
 // replayed into the model's context on every later turn, so an unbounded bank read would
 // consume the window a few searches in.
 const experienceSearchLimit = 8
+
+// experienceReadLimit caps one read-by-id for the same reason, and the overflow is
+// REPORTED rather than dropped: the ids were named deliberately, so losing some of them
+// silently would leave the model believing it had seen the whole set.
+//
+// Deliberately its own constant rather than a number shared with the frontend that builds
+// the opening message. Two constants across the stack drift; a tool that says what it did
+// not read cannot.
+const experienceReadLimit = 8
 
 // assistantExperienceTools are registered under EVERY preset. The moment a candidate
 // articulates their experience is not scheduled: a chat about the market surfaces "I
@@ -38,9 +50,12 @@ const experienceSearchLimit = 8
 func (h *assistantHandlers) assistantExperienceTools(sessionID uuid.UUID) []assistant.Tool {
 	return []assistant.Tool{
 		h.experienceSearchTool(),
+		h.experienceGetTool(),
 		h.experienceEmploymentsTool(),
 		h.experienceAddTool(sessionID),
 		h.experienceUpdateTool(),
+		h.experienceMergeTool(),
+		h.experienceSetRequireContextTool(),
 	}
 }
 
@@ -84,6 +99,127 @@ func (h *assistantHandlers) experienceSearchTool() assistant.Tool {
 				return nil, err
 			}
 			return searchResult(matches), nil
+		},
+	}
+}
+
+// experienceGetTool reads named achievements, which is the half of the bank the agent
+// could not see.
+//
+// Every other id-bearing surface leads here: the opening message that names a selection,
+// get_profile's soft_duplicate_clusters (ids with no claim text, so the transcript stays
+// small), and the id a merge hands back. Without this, an id could only be guessed at
+// through experience_search — which retrieves by MEANING and drops what scores zero, so a
+// UUID matched nothing and the agent was told the achievement did not exist.
+func (h *assistantHandlers) experienceGetTool() assistant.Tool {
+	return assistant.Tool{
+		Name: "experience_get",
+		Description: "Read specific achievements by id — their full claim, situation, metrics, skills and " +
+			"the role each belongs to. Use this whenever you hold an id rather than a topic: ids named in the " +
+			"candidate's opening message, a cluster from get_profile's soft_duplicate_clusters, or the id a " +
+			"merge returned. experience_search finds achievements by MEANING and cannot find one by id. " +
+			"ALWAYS read an achievement before proposing to merge it or writing an update over it.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"ids": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "The achievement ids to read.",
+					"minItems":    1,
+				},
+			},
+			"required":             []string{"ids"},
+			"additionalProperties": false,
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				IDs []string `json:"ids"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			// Answer in the order asked, minus repeats: these ids usually arrive as a
+			// selection or a duplicate cluster, and a reply that follows the question is
+			// the one the agent can act on.
+			wanted := make([]string, 0, len(in.IDs))
+			seen := make(map[string]bool, len(in.IDs))
+			for _, raw := range in.IDs {
+				id := strings.TrimSpace(raw)
+				if id == "" || seen[id] {
+					continue
+				}
+				seen[id] = true
+				wanted = append(wanted, id)
+			}
+			if len(wanted) == 0 {
+				return nil, errors.New("give at least one achievement id, from the opening message, " +
+					"get_profile's soft_duplicate_clusters, or experience_search")
+			}
+			var unread []string
+			if len(wanted) > experienceReadLimit {
+				unread = wanted[experienceReadLimit:]
+				wanted = wanted[:experienceReadLimit]
+			}
+
+			// One owner-scoped pass rather than a lookup per id: it is the read Retrieve
+			// already makes, and it means ownership is a property of the query instead of
+			// a check that could be forgotten.
+			atoms, err := h.experience.ListAtoms(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			byID := make(map[uuid.UUID]experience.Atom, len(atoms))
+			for _, a := range atoms {
+				byID[a.ID] = a
+			}
+			employments, err := h.experience.ListEmployments(ctx, userID)
+			if err != nil {
+				return nil, err
+			}
+			roles := make(map[uuid.UUID]experience.Employment, len(employments))
+			for _, e := range employments {
+				roles[e.ID] = e
+			}
+
+			found := make([]map[string]any, 0, len(wanted))
+			var unresolved []string
+			for _, want := range wanted {
+				id, err := uuid.Parse(want)
+				if err != nil {
+					unresolved = append(unresolved, want)
+					continue
+				}
+				atom, ok := byID[id]
+				if !ok {
+					// Someone else's achievement is reported exactly as a deleted one:
+					// this tool is not an existence oracle for other people's rows.
+					unresolved = append(unresolved, want)
+					continue
+				}
+				match := experience.Match{Atom: atom}
+				if atom.EmploymentID != nil {
+					if role, ok := roles[*atom.EmploymentID]; ok {
+						match.Employment = &role
+					}
+				}
+				found = append(found, atomEntry(match))
+			}
+
+			out := map[string]any{"achievements": found}
+			// A partial answer beats a refusal, and naming what failed is what lets the
+			// agent correct itself inside the same turn rather than spending another.
+			if len(unresolved) > 0 {
+				out["unresolved"] = unresolved
+				out["unresolved_note"] = "These are not achievements on this candidate's bank — they may have " +
+					"been merged away or deleted. Do not ask about them; find what you need with experience_search."
+			}
+			if len(unread) > 0 {
+				out["unread"] = unread
+				out["unread_note"] = "Not read, because one call reads at most " +
+					strconv.Itoa(experienceReadLimit) + ". Call experience_get again with these."
+			}
+			return out, nil
 		},
 	}
 }
@@ -172,6 +308,9 @@ func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Too
 				return nil, err
 			}
 
+			if err := h.checkExperienceContextRequired(ctx, userID, in.Context); err != nil {
+				return nil, err
+			}
 			atom := experience.Atom{
 				EmploymentID: employmentID,
 				Claim:        in.Claim,
@@ -265,6 +404,117 @@ func (h *assistantHandlers) experienceUpdateTool() assistant.Tool {
 	}
 }
 
+// experienceMergeTool folds two near-duplicate achievements into one. The owner
+// confirms the pair in chat; the service chooses the richer keep.
+func (h *assistantHandlers) experienceMergeTool() assistant.Tool {
+	return assistant.Tool{
+		Name: "experience_merge",
+		Description: "Merge TWO achievements that are the same work into one richer atom. " +
+			"Ask the candidate first. The system keeps the richer id, unions metrics and skills, " +
+			"keeps the better context, and deletes the other. Both must be unplaced or share a role. " +
+			"Returns the kept atom and the deleted id.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"ids": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Exactly two atom ids from experience_search or get_profile's soft_duplicate_clusters.",
+					"minItems":    2,
+					"maxItems":    2,
+				},
+			},
+			"required":             []string{"ids"},
+			"additionalProperties": false,
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				IDs []string `json:"ids"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			if len(in.IDs) != 2 {
+				return nil, experience.ErrInvalidMerge
+			}
+			a, err := uuid.Parse(strings.TrimSpace(in.IDs[0]))
+			if err != nil {
+				return nil, errors.New("ids must be atom ids from experience_search")
+			}
+			b, err := uuid.Parse(strings.TrimSpace(in.IDs[1]))
+			if err != nil {
+				return nil, errors.New("ids must be atom ids from experience_search")
+			}
+			kept, err := h.experience.MergeAtoms(ctx, userID, a, b)
+			if err != nil {
+				return nil, err
+			}
+			deleted := a
+			if kept.ID == a {
+				deleted = b
+			}
+			return map[string]any{
+				"kept":       addResult(kept),
+				"deleted_id": deleted,
+			}, nil
+		},
+	}
+}
+
+// experienceSetRequireContextTool flips the per-user opt-in that requires situation
+// context on interactive creates. Call only after the candidate agrees.
+func (h *assistantHandlers) experienceSetRequireContextTool() assistant.Tool {
+	return assistant.Tool{
+		Name: "experience_set_require_context",
+		Description: "Turn on or off the candidate's preference that new achievements must " +
+			"include a short situation paragraph (context). Default is off. Call ONLY after " +
+			"they agree. Import and edits are never gated by this.",
+		Schema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"enabled": map[string]any{
+					"type":        "boolean",
+					"description": "true to require context on new interactive creates; false to clear the preference.",
+				},
+			},
+			"required":             []string{"enabled"},
+			"additionalProperties": false,
+		},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			if h.queries == nil {
+				return nil, errors.New("cannot change this preference in this deployment")
+			}
+			if err := h.queries.SetUserExperienceRequireContext(ctx, db.SetUserExperienceRequireContextParams{
+				ID: userID, ExperienceRequireContext: in.Enabled,
+			}); err != nil {
+				return nil, err
+			}
+			return map[string]any{"require_context": in.Enabled}, nil
+		},
+	}
+}
+
+// checkExperienceContextRequired mirrors the HTTP create gate for experience_add.
+func (h *assistantHandlers) checkExperienceContextRequired(ctx context.Context, userID int64, contextText string) error {
+	if strings.TrimSpace(contextText) != "" || h.queries == nil {
+		return nil
+	}
+	on, err := h.queries.GetUserExperienceRequireContext(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if on {
+		return experience.ErrContextRequired
+	}
+	return nil
+}
+
 // provenanceFor decides how an atom entered the bank, and it is the one place the honest
 // wall is actually enforced on the write side.
 //
@@ -338,30 +588,43 @@ func (h *assistantHandlers) resolveEmployment(ctx context.Context, userID int64,
 	return nil, errors.New(b.String())
 }
 
-// searchResult shapes matches for the model: the claim it can reframe, the place it
-// happened, and whether it may be written into a CV as it stands.
+// atomEntry is one achievement as the model sees it: the claim it can reframe, the place
+// it happened, and whether it may be written into a CV as it stands.
+//
+// Shared by every tool that returns an achievement, and that is the point. An achievement
+// found by search and the same achievement read by id must not arrive carrying different
+// fields, or the model ends up treating them as two kinds of thing.
+func atomEntry(m experience.Match) map[string]any {
+	entry := map[string]any{
+		"id":           m.Atom.ID,
+		"claim":        m.Atom.Claim,
+		"skills":       m.Atom.Skills,
+		"confirmed":    m.Atom.Provenance.Publishable(),
+		"can_write_cv": m.Atom.Provenance.Publishable(),
+	}
+	if m.Atom.Context != "" {
+		entry["context"] = m.Atom.Context
+	}
+	if len(m.Atom.Metrics) > 0 {
+		entry["metrics"] = m.Atom.Metrics
+	}
+	if m.Employment != nil {
+		entry["role"] = m.Employment.Role
+		if m.Employment.Kind == experience.KindProject {
+			entry["name"] = m.Employment.Company
+		} else {
+			entry["company"] = m.Employment.Company
+		}
+		entry["period"] = strings.TrimSpace(m.Employment.Start + " – " + m.Employment.End)
+	}
+	return entry
+}
+
+// searchResult shapes matches for the model.
 func searchResult(matches []experience.Match) map[string]any {
 	out := make([]map[string]any, 0, len(matches))
 	for _, m := range matches {
-		entry := map[string]any{
-			"id":           m.Atom.ID,
-			"claim":        m.Atom.Claim,
-			"skills":       m.Atom.Skills,
-			"confirmed":    m.Atom.Provenance.Publishable(),
-			"can_write_cv": m.Atom.Provenance.Publishable(),
-		}
-		if m.Atom.Context != "" {
-			entry["context"] = m.Atom.Context
-		}
-		if len(m.Atom.Metrics) > 0 {
-			entry["metrics"] = m.Atom.Metrics
-		}
-		if m.Employment != nil {
-			entry["role"] = m.Employment.Role
-			entry["company"] = m.Employment.Company
-			entry["period"] = strings.TrimSpace(m.Employment.Start + " – " + m.Employment.End)
-		}
-		out = append(out, entry)
+		out = append(out, atomEntry(m))
 	}
 	return map[string]any{"evidence": out}
 }

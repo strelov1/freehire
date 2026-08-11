@@ -9,6 +9,7 @@
   let { resume }: { resume: ResumeStructured } = $props();
 
   const experience = $derived(resume.experience ?? []);
+  const projects = $derived(resume.projects ?? []);
   const education = $derived(resume.education ?? []);
   const languages = $derived(resume.languages ?? []);
   const links = $derived(resume.links ?? []);
@@ -17,6 +18,16 @@
   // or just the one bound that exists. Empty when the CV stated no dates.
   function dateRange(start?: string, end?: string): string {
     return [start, end].filter(Boolean).join(' — ');
+  }
+
+  /** Placeless bank evidence: publishable claims with no company/title (chat achievements). */
+  function isPlaceless(job: { title?: string; company?: string }): boolean {
+    return !job.title?.trim() && !job.company?.trim();
+  }
+
+  function experienceHeading(job: { title?: string; company?: string }): string {
+    if (isPlaceless(job)) return 'Not tied to a role';
+    return job.title || job.company || 'Experience';
   }
 </script>
 
@@ -53,19 +64,54 @@
     <section class="flex flex-col gap-3">
       <h3 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Experience</h3>
       <ul class="flex flex-col gap-3">
-        {#each experience as job (`${job.title ?? ''}|${job.company ?? ''}|${job.start ?? ''}`)}
+        {#each experience as job, i (`${job.title ?? ''}|${job.company ?? ''}|${job.start ?? ''}|${i}`)}
+          {#if job.title || job.company || job.summary || (job.highlights?.length ?? 0) > 0}
+            <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <span class="text-sm font-semibold">{experienceHeading(job)}</span>
+                {#if dateRange(job.start, job.end)}
+                  <span class="text-xs text-muted-foreground tabular-nums">{dateRange(job.start, job.end)}</span>
+                {/if}
+              </div>
+              {#if job.title && job.company}
+                <span class="text-sm text-muted-foreground">{job.company}</span>
+              {/if}
+              {#if job.summary}
+                <p class="text-sm leading-relaxed">{job.summary}</p>
+              {/if}
+              {#if job.highlights?.length}
+                <ul class="mt-1 list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                  {#each job.highlights as bullet (bullet)}
+                    <li>{bullet}</li>
+                  {/each}
+                </ul>
+              {/if}
+            </li>
+          {/if}
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if projects.length}
+    <section class="flex flex-col gap-3">
+      <h3 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Projects</h3>
+      <ul class="flex flex-col gap-3">
+        {#each projects as project (`${project.name ?? ''}|${project.link ?? ''}`)}
           <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <span class="text-sm font-semibold">{job.title || job.company}</span>
-              {#if dateRange(job.start, job.end)}
-                <span class="text-xs text-muted-foreground tabular-nums">{dateRange(job.start, job.end)}</span>
+              <span class="text-sm font-semibold">{project.name || 'Project'}</span>
+              {#if project.link}
+                <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external project URL -->
+                <a href={project.link} target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline break-all">{project.link}</a>
               {/if}
             </div>
-            {#if job.title && job.company}
-              <span class="text-sm text-muted-foreground">{job.company}</span>
-            {/if}
-            {#if job.summary}
-              <p class="text-sm leading-relaxed">{job.summary}</p>
+            {#if project.highlights?.length}
+              <ul class="mt-1 list-disc space-y-1 pl-5 text-sm leading-relaxed">
+                {#each project.highlights as bullet (bullet)}
+                  <li>{bullet}</li>
+                {/each}
+              </ul>
             {/if}
           </li>
         {/each}

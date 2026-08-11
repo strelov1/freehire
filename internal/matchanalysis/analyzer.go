@@ -311,8 +311,10 @@ func stage2SystemPrompt() string {
 	b.WriteString("scores low. Honour any NOTE about remote reach in the input. If the candidate stated no ")
 	b.WriteString("preferences, judge on the job alone and do not penalise.\n")
 	b.WriteString("Each of the six is an object {\"score\": int 0-100, \"comment\": string}.\n")
-	b.WriteString("Also return \"strengths\" (array, max 6), \"gaps\" (array, max 6), and a single ")
-	b.WriteString("\"recommendation\" string. Do NOT return an overall score — it is computed separately.\n")
+	b.WriteString("Also return \"strengths\" (array, max 6), \"gaps\" (array, max 6), and a ")
+	b.WriteString("\"recommendation\" string: two or three short prose paragraphs of hiring judgement ")
+	b.WriteString("(no headings, no lists). Do not recap per-requirement statuses or evidence strengths ")
+	b.WriteString("— those are already on the page. Do NOT return an overall score — it is computed separately.\n")
 	return b.String()
 }
 
@@ -330,7 +332,10 @@ func stage3SystemPrompt() string {
 	b.WriteString("sustain a high skills_coverage score. ")
 	b.WriteString("Keep what is well-supported. Return the corrected verdict with the same keys ")
 	b.WriteString("(title_alignment, experience_relevance, seniority_fit, skills_coverage, ")
-	b.WriteString("company_context, location_fit, strengths, gaps, recommendation). Do NOT fabricate anything.\n")
+	b.WriteString("company_context, location_fit, strengths, gaps, recommendation). ")
+	b.WriteString("The recommendation remains two or three short prose paragraphs of hiring judgement ")
+	b.WriteString("(no headings, no lists); do not recap per-requirement statuses or evidence strengths. ")
+	b.WriteString("Do NOT fabricate anything.\n")
 	return b.String()
 }
 

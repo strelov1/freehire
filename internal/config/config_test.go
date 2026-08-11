@@ -135,6 +135,49 @@ func TestLoad_MaxBulletsFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoad_MatchAnalysisDefaults(t *testing.T) {
+	for _, key := range []string{
+		"MATCH_ANALYSIS_MAX_COMMENT_RUNES",
+		"MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES",
+		"MATCH_ANALYSIS_MAX_RECOMMEND_RUNES",
+		"MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES",
+		"MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES",
+		"MATCH_ANALYSIS_MAX_STRENGTHS",
+		"MATCH_ANALYSIS_MAX_GAPS",
+		"MATCH_ANALYSIS_MAX_REQUIREMENTS",
+		"MATCH_ANALYSIS_MAX_SIGNALS",
+		"MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES",
+		"MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES",
+	} {
+		t.Setenv(key, "")
+	}
+	s := Load()
+	want := MatchAnalysisSettings{
+		MaxCommentRunes: 240, MaxListItemRunes: 200, MaxRecommendRunes: 1200,
+		MaxReqTextRunes: 200, MaxReqEvidenceRunes: 240,
+		MaxStrengths: 6, MaxGaps: 6, MaxRequirements: 30,
+		MaxSignals: 5, MaxSignalQuoteRunes: 200, MaxSignalInsightRunes: 200,
+	}
+	if s.MatchAnalysis != want {
+		t.Fatalf("MatchAnalysis = %+v, want %+v", s.MatchAnalysis, want)
+	}
+}
+
+func TestLoad_MatchAnalysisFromEnv(t *testing.T) {
+	t.Setenv("MATCH_ANALYSIS_MAX_RECOMMEND_RUNES", "800")
+	t.Setenv("MATCH_ANALYSIS_MAX_SIGNALS", "9")
+	s := Load()
+	if s.MatchAnalysis.MaxRecommendRunes != 800 {
+		t.Fatalf("MaxRecommendRunes = %d, want 800", s.MatchAnalysis.MaxRecommendRunes)
+	}
+	if s.MatchAnalysis.MaxSignals != 9 {
+		t.Fatalf("MaxSignals = %d, want 9", s.MatchAnalysis.MaxSignals)
+	}
+	if s.MatchAnalysis.MaxCommentRunes != 240 {
+		t.Fatalf("MaxCommentRunes = %d, want untouched default 240", s.MatchAnalysis.MaxCommentRunes)
+	}
+}
+
 func TestLoad_STTModelHasNoDefault(t *testing.T) {
 	t.Setenv("STT_MODEL", "")
 

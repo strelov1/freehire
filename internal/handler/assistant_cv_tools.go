@@ -310,9 +310,11 @@ type evidencedRequirement struct {
 }
 
 type requirementEvidence struct {
-	ID         string `json:"id"`
-	Claim      string `json:"claim"`
-	CanWriteCV bool   `json:"can_write_cv"`
+	ID           string `json:"id"`
+	Claim        string `json:"claim"`
+	CanWriteCV   bool   `json:"can_write_cv"`
+	NeedsContext bool   `json:"needs_context,omitempty"`
+	NeedsMetrics bool   `json:"needs_metrics,omitempty"`
 }
 
 // agentTailorContext is the tailoring context as the AGENT reads it — deliberately narrower
@@ -370,10 +372,13 @@ func (h *assistantHandlers) evidenceFor(ctx context.Context, userID int64, reqs 
 				log.Printf("assistant: bank retrieval for %q: %v", r.Text, err)
 			}
 			for _, m := range matches {
+				nc, nm := experience.Richness(m.Atom)
 				found = append(found, requirementEvidence{
-					ID:         m.Atom.ID.String(),
-					Claim:      m.Atom.Claim,
-					CanWriteCV: m.Atom.Provenance.Publishable(),
+					ID:           m.Atom.ID.String(),
+					Claim:        m.Atom.Claim,
+					CanWriteCV:   m.Atom.Provenance.Publishable(),
+					NeedsContext: nc,
+					NeedsMetrics: nm,
 				})
 			}
 		}
@@ -462,7 +467,10 @@ func (h *assistantHandlers) cvEditTool(cvID uuid.UUID, batchID uuid.UUID) assist
 		Name: "cv_edit",
 		Description: "Edit the CV. Send every edit that belongs together in one call — they land as one " +
 			"entry in the candidate's history and cost one round instead of several. Address things by " +
-			"their path from cv_get. Each experience (and project) holds at most " + fmt.Sprintf("%d", cv.MaxBullets) +
+			"their path from cv_get. Job roles use `experience[i].…`; portfolio and side-project entries " +
+			"use `projects[i].…` (name, link, bullets) — the template prints the Projects heading when " +
+			"that array is non-empty, so do not invent a heading field. Each experience (and project) " +
+			"holds at most " + fmt.Sprintf("%d", cv.MaxBullets) +
 			" bullets; when full, " +
 			"`set` an existing index or `remove` one before inserting — an insert past the cap is refused " +
 			"and no existing bullet is deleted. Anything that states what the candidate did (a bullet, a " +

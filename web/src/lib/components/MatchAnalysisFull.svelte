@@ -14,6 +14,7 @@
     type Tone,
   } from '$lib/matchAnalysis';
   import type { Job, MatchAnalysisResponse } from '$lib/types';
+  import { renderMarkdown } from '$lib/markdown';
   import { Button } from '$lib/ui';
 
   // The full AI fit report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab (seeded,
@@ -207,7 +208,20 @@
         /* best-effort: an unconfigured/failing fit endpoint leaves the empty state */
       }
     }
-    if (isAuthenticated() && coldStart && (fit?.has_cv ?? true) && !blockedNew && autoRun) start();
+    // Read the cache fields directly rather than via $derived: onMount is not a reactive
+    // context, and a stale derived read here would leave a cold Job Match tab never
+    // opening its stream (stages stuck on "pending" forever).
+    const hasAnalysis = !!fit?.analysis;
+    const outOfCredits = !hasAnalysis && !!fit?.credits && fit.credits.remaining <= 0;
+    if (
+      isAuthenticated() &&
+      !hasAnalysis &&
+      (fit?.has_cv ?? true) &&
+      !outOfCredits &&
+      autoRun
+    ) {
+      start();
+    }
   });
   onDestroy(() => {
     destroyed = true;
@@ -278,7 +292,14 @@
     {#snippet verdictCard()}
       <section class="relative rounded-2xl border border-border bg-secondary/40 p-6 sm:p-8">
         <span class="{headingClass} text-muted-foreground">The verdict</span>
-        <p class="mt-2 border-l-2 border-foreground/20 pl-4 text-lg font-medium leading-relaxed">{analysis?.recommendation}</p>
+        <div
+          class="verdict-prose mt-2 border-l-2 border-foreground/20 pl-4 font-medium leading-relaxed {stacked
+            ? 'text-base'
+            : 'text-lg'}"
+        >
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- DOMPurify-sanitized markdown -->
+          {@html renderMarkdown(analysis?.recommendation ?? '')}
+        </div>
       </section>
     {/snippet}
 
@@ -349,8 +370,10 @@
       </div>
     {/if}
 
-    <!-- Streaming: stage stepper + thinking -->
-    {#if !blockedNew && (streaming || (!analysis && !stream.error))}
+    <!-- Streaming: stage stepper + thinking. Idle cold starts used to render the same
+         pending stepper with nothing driving it (tailor sets autoRun=false), which looked
+         like Extract & Match / Recruiter verdict were hung. Show an explicit Run when idle. -->
+    {#if !blockedNew && (streaming || recovering)}
       <section class="rounded-2xl border border-border bg-card p-6 sm:px-8">
         <!-- Stage stepper: evenly-spaced nodes over a single connecting rail. -->
         <div class="relative flex">
@@ -391,6 +414,15 @@
           </div>
         {/if}
       </section>
+    {:else if !blockedNew && !analysis && !stream.error}
+      <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center">
+        <p class="text-sm text-muted-foreground">
+          Run the three-stage fit analysis — Extract &amp; Match, Recruiter verdict, then Adversarial audit.
+        </p>
+        <Button variant="primary" size="sm" onclick={start} disabled={streaming || recovering}>
+          <RefreshCw class="size-3.5" /> Run analysis
+        </Button>
+      </div>
     {/if}
 
     {#if stream.error && !analysis}
@@ -585,6 +617,10 @@
       opacity: 0;
       transform: translateY(8px);
     }
+  }
+  /* Multi-paragraph verdict: marked emits <p>s; keep breaks without collapsing. */
+  .verdict-prose :global(p + p) {
+    margin-top: 0.75em;
   }
   /* Meters and the gauge arc sweep in. */
   .fit-meter {

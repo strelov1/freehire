@@ -5,3 +5,4 @@ build
 dev-dist
 .env
 .env.local
+coverage

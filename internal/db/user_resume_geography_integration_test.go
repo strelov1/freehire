@@ -197,7 +197,7 @@ func TestSetUserResumeStructuredWritesGeographyInTheSameStatement(t *testing.T) 
 	at := time.Now().UTC().Truncate(time.Second)
 	id := seedUserWithCV(t, q, "geo-together@example.test", at, time.Time{}, "")
 
-	if err := q.SetUserResumeStructured(ctx, SetUserResumeStructuredParams{
+	if rows, err := q.SetUserResumeStructured(ctx, SetUserResumeStructuredParams{
 		ID:                         id,
 		ResumeStructured:           []byte(`{"location":"Kraków, Poland"}`),
 		ResumeStructuredModel:      pgtype.Text{String: "model-x", Valid: true},
@@ -207,6 +207,8 @@ func TestSetUserResumeStructuredWritesGeographyInTheSameStatement(t *testing.T) 
 		ResumeCities:               []string{"Kraków"},
 	}); err != nil {
 		t.Fatalf("SetUserResumeStructured: %v", err)
+	} else if rows != 1 {
+		t.Fatalf("rows affected = %d, want 1", rows)
 	}
 
 	got, err := q.GetUserResumeGeography(ctx, id)

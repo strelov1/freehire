@@ -1,6 +1,7 @@
 package cv
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/resumeextract"
@@ -15,6 +16,7 @@ func TestSeedMapsStructured(t *testing.T) {
 		Phone:    "+44 000",
 		Summary:  "Ten years of systems work.",
 		Links:    []string{"github.com/ada"},
+		Skills:   []string{"Go", "PostgreSQL"},
 		Experience: []resumeextract.Experience{
 			{Title: "Senior Engineer", Company: "Analytical Engines", Location: "London", Start: "2018", End: "Present",
 				Summary: "Pioneering computing company.", Highlights: []string{"Built the difference engine."}, Stack: []string{"Assembly"}},
@@ -23,18 +25,28 @@ func TestSeedMapsStructured(t *testing.T) {
 			{Degree: "BSc Mathematics", Institution: "Cambridge", Year: "1835"},
 		},
 		Languages: []string{"English", "French"},
+		Projects: []resumeextract.Project{
+			{Name: "opensched", Link: "opensched.dev", Highlights: []string{"A tiny cron scheduler."}},
+		},
+		Certifications: []string{"AWS Certified Solutions Architect", "CKA"},
 	}
 
 	doc := Seed(s)
 
-	if doc.Header.FullName != "Ada Lovelace" || doc.Header.Email != "ada@example.com" {
-		t.Errorf("header not seeded: %+v", doc.Header)
+	// Contact header must land in full — same guarantee as skills: present on the structure
+	// means present on the seeded Document. A missing field here is a silent blank CV top.
+	wantHeader := Header{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Phone:    "+44 000",
+		Location: "London, UK",
+		Links:    []string{"github.com/ada"},
 	}
-	if doc.Header.Location != "London, UK" {
-		t.Errorf("header location not seeded: %+v", doc.Header)
+	if !reflect.DeepEqual(doc.Header, wantHeader) {
+		t.Errorf("header = %+v, want %+v", doc.Header, wantHeader)
 	}
-	if len(doc.Header.Links) != 1 || doc.Header.Links[0] != "github.com/ada" {
-		t.Errorf("links not seeded: %+v", doc.Header.Links)
+	if len(doc.Skills) != 1 || !reflect.DeepEqual(doc.Skills[0].Items, []string{"Go", "PostgreSQL"}) {
+		t.Errorf("skills = %+v, want a single group with Go/PostgreSQL", doc.Skills)
 	}
 	// Summary prefers the extracted summary (falls back to the headline when absent).
 	if doc.Summary != "Ten years of systems work." {
@@ -61,6 +73,40 @@ func TestSeedMapsStructured(t *testing.T) {
 	}
 	if len(doc.Languages) != 2 || doc.Languages[0].Name != "English" {
 		t.Errorf("languages not seeded: %+v", doc.Languages)
+	}
+	if len(doc.Projects) != 1 || doc.Projects[0].Name != "opensched" || doc.Projects[0].Link != "opensched.dev" {
+		t.Errorf("projects not seeded: %+v", doc.Projects)
+	}
+	if len(doc.Certifications) != 2 || doc.Certifications[0].Name != "AWS Certified Solutions Architect" ||
+		doc.Certifications[1].Name != "CKA" {
+		t.Errorf("certifications not seeded: %+v", doc.Certifications)
+	}
+}
+
+// TestSeedMapsEveryContactField is the tripwire for "contacts always land like skills":
+// every Header field has a Structured counterpart that Seed must copy. Naming fields in the
+// assertion would miss a newly added contact identifier the same way a blacklist would.
+func TestSeedMapsEveryContactField(t *testing.T) {
+	s := resumeextract.Structured{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Phone:    "+44 000",
+		Location: "London, UK",
+		Links:    []string{"github.com/ada", "linkedin.com/in/ada"},
+	}
+	doc := Seed(s)
+
+	hv := reflect.ValueOf(doc.Header)
+	ht := hv.Type()
+	for i := range hv.NumField() {
+		f := hv.Field(i)
+		name := ht.Field(i).Name
+		if f.IsZero() {
+			t.Errorf("Header.%s is empty after Seed — contact fields must always be copied from Structured when present", name)
+		}
+	}
+	if len(doc.Header.Links) != 2 {
+		t.Errorf("links = %v, want both Structured links", doc.Header.Links)
 	}
 }
 

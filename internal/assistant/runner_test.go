@@ -210,6 +210,50 @@ func TestStepCapForcesAFinalAnswerWithoutTools(t *testing.T) {
 	}
 }
 
+func TestMaxStepsWrapUpRunsToolCallsProvidersStillEmit(t *testing.T) {
+	// Haiku on Bedrock has returned tool calls on the no-tools wrap-up call. Persisting
+	// them without running left a dangling tool_use the UI showed as a hung turn.
+	m := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("echo", `{"text":"1"}`),
+		callReply("echo", `{"text":"2"}`),
+		callReply("echo", `{"text":"3"}`),
+		callReply("echo", `{"text":"orphan"}`),
+	}}
+	q := &fakeQueries{}
+	r := NewRunner(m, NewStore(q), RunnerConfig{MaxSteps: 3, HistoryLimit: 50})
+
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "go")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res := lastResult(t, events); res.StopReason != StopMaxSteps {
+		t.Errorf("stop reason = %q, want %q", res.StopReason, StopMaxSteps)
+	}
+	var toolResults int
+	var sawNote bool
+	for _, e := range events {
+		if e.Kind == EventToolResult {
+			toolResults++
+		}
+		if e.Kind == EventAssistantText && strings.Contains(e.Text, "step limit") {
+			sawNote = true
+		}
+	}
+	if toolResults != 4 {
+		t.Errorf("tool results = %d, want 4 — the wrap-up call must still be executed", toolResults)
+	}
+	if !sawNote {
+		t.Error("expected a step-limit note when the wrap-up had no prose")
+	}
+	roles := make([]string, 0, len(q.messages))
+	for _, msg := range q.messages {
+		roles = append(roles, msg.Role)
+	}
+	if roles[len(roles)-1] != RoleAssistant {
+		t.Errorf("transcript ends with %v, want a closing assistant note (not a dangling tool_use)", roles[len(roles)-3:])
+	}
+}
+
 // A turn may raise its own ceiling: an unattended run walks a dozen requirements where a
 // question needs two rounds. The runner's configured default stands for every turn that names
 // none, so raising it for one workflow cannot quietly raise it for the chat.
@@ -282,6 +326,44 @@ func TestAMalformedToolCallIsCorrectableInTheSameTurn(t *testing.T) {
 	}
 	if !strings.Contains(firstResult.Result, "txt") {
 		t.Errorf("result = %s, want the decode error naming the offending field", firstResult.Result)
+	}
+	if res := lastResult(t, events); res.IsError {
+		t.Errorf("the turn should still end cleanly after the model corrected itself: %+v", res)
+	}
+}
+
+// A provider that concatenates two complete JSON payloads for one tool call (the same
+// malformation class healToolArguments exists to patch around, but a SECOND full value
+// rather than trailer junk) must not have the call silently execute with only the first
+// payload — that would run the model's edit half-applied while reporting success.
+// Regression for a bug where healToolArguments' "keep the first value" storage/replay
+// fallback was also feeding tool EXECUTION, so DecodeArgs' own trailing-content guard
+// never got to see the raw string.
+func TestAConcatenatedToolCallFailsInsteadOfRunningTruncated(t *testing.T) {
+	m := &scriptedModel{replies: []*llms.ContentChoice{
+		callReply("echo", `{"text":"first"}{"text":"second"}`),
+		callReply("echo", `{"text":"fixed"}`),
+		textReply("Done."),
+	}}
+	q := &fakeQueries{}
+	r := testRunner(m, q)
+
+	events, err := collect(t, r, Session{ID: sessionID, UserID: 3}, NewRegistry(echoTool()), "go")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var firstResult Event
+	for _, e := range events {
+		if e.Kind == EventToolResult {
+			firstResult = e
+			break
+		}
+	}
+	if !firstResult.IsError {
+		t.Fatalf("first tool result = %+v, want it marked as failed rather than run on the first half", firstResult)
+	}
+	if strings.Contains(firstResult.Result, "echoed") {
+		t.Fatalf("result = %s, want no echoed payload — the call must not have executed", firstResult.Result)
 	}
 	if res := lastResult(t, events); res.IsError {
 		t.Errorf("the turn should still end cleanly after the model corrected itself: %+v", res)

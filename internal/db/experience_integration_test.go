@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -237,6 +238,34 @@ func TestExperienceFillBlanksNeverOverwrites(t *testing.T) {
 	if filled.Summary == "" {
 		t.Error("summary is still blank, want it filled from the CV")
 	}
+
+	// Link follows the same fill-if-blank rule as location (portfolio URL on projects).
+	withLink, err := q.FillExperienceEmploymentBlanks(ctx, FillExperienceEmploymentBlanksParams{
+		ID: created.ID, UserID: alice,
+		Company: "RingCentral", Role: "Staff Engineer",
+		Location: "USA, Remote", PeriodStart: "2023-09", PeriodEnd: "Present",
+		Summary: "Global SaaS leader in business communications",
+		Stack:   []string{"go"}, Link: "https://example.test/role",
+	})
+	if err != nil {
+		t.Fatalf("FillExperienceEmploymentBlanks link: %v", err)
+	}
+	if withLink.Link != "https://example.test/role" {
+		t.Errorf("link = %q, want blank filled", withLink.Link)
+	}
+	kept, err := q.FillExperienceEmploymentBlanks(ctx, FillExperienceEmploymentBlanksParams{
+		ID: created.ID, UserID: alice,
+		Company: "RingCentral", Role: "Staff Engineer",
+		Location: "USA, Remote", PeriodStart: "2023-09", PeriodEnd: "Present",
+		Summary: "Global SaaS leader in business communications",
+		Stack:   []string{"go"}, Link: "https://other.example",
+	})
+	if err != nil {
+		t.Fatalf("FillExperienceEmploymentBlanks preserve link: %v", err)
+	}
+	if kept.Link != "https://example.test/role" {
+		t.Errorf("link = %q, want existing value preserved", kept.Link)
+	}
 	if filled.IsCurrent {
 		t.Error("is_current became true — a CV reading \"Present\" must not resurrect an ended role")
 	}
@@ -351,6 +380,99 @@ func TestExperienceBackfillTargetsCarryOnlyCurrentStructures(t *testing.T) {
 	}
 	if len(one) != 1 || one[0].ID != fresh {
 		t.Errorf("single-user query returned %d rows, want just user %d", len(one), fresh)
+	}
+}
+
+// MergeExperienceAtoms must delete the loser and update the keep in one statement, so a
+// crash cannot leave both a richer keep and the loser behind.
+func TestMergeExperienceAtomsIsAtomic(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	alice := seedExperienceUser(t, pool, "merge-alice@example.test")
+
+	keep, err := q.InsertExperienceAtomIfNew(ctx, InsertExperienceAtomIfNewParams{
+		UserID: alice, Claim: "Built a plugin for live and batch", ClaimKey: "built a plugin for live and batch",
+		Provenance: "agent_inferred", Metrics: []string{}, Skills: []string{"python"},
+	})
+	if err != nil {
+		t.Fatalf("insert keep: %v", err)
+	}
+	loser, err := q.InsertExperienceAtomIfNew(ctx, InsertExperienceAtomIfNewParams{
+		UserID: alice, Claim: "Built a plugin with VAD filtering", ClaimKey: "built a plugin with vad filtering",
+		Context: "model profiles", Provenance: "agent_inferred",
+		Metrics: []string{"VAD"}, Skills: []string{"nlp"},
+	})
+	if err != nil {
+		t.Fatalf("insert loser: %v", err)
+	}
+
+	merged, err := q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
+		Context: "model profiles", Metrics: []string{"VAD"}, Skills: []string{"python", "nlp"},
+		Provenance: "agent_inferred", KeepID: keep.ID, UserID: alice, LoserID: loser.ID,
+	})
+	if err != nil {
+		t.Fatalf("MergeExperienceAtoms: %v", err)
+	}
+	if uuid.UUID(merged.ID.Bytes) != keep.ID {
+		t.Fatalf("kept id = %s, want %s", uuid.UUID(merged.ID.Bytes), keep.ID)
+	}
+	if merged.Context != "model profiles" || len(merged.Metrics) != 1 {
+		t.Errorf("merged richness: context=%q metrics=%q", merged.Context, merged.Metrics)
+	}
+	if merged.ClaimKey != keep.ClaimKey {
+		t.Errorf("claim_key changed: %q → %q", keep.ClaimKey, merged.ClaimKey)
+	}
+
+	atoms, err := q.ListExperienceAtoms(ctx, alice)
+	if err != nil {
+		t.Fatalf("ListExperienceAtoms: %v", err)
+	}
+	if len(atoms) != 1 {
+		t.Fatalf("atoms = %d, want 1", len(atoms))
+	}
+
+	_, err = q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
+		Context: "x", Metrics: []string{}, Skills: []string{}, Provenance: "manual",
+		KeepID: keep.ID, UserID: alice, LoserID: loser.ID,
+	})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("second merge with gone loser = %v, want pgx.ErrNoRows", err)
+	}
+}
+
+// A keep id that does not exist (wrong id, wrong owner, or deleted between
+// Store.MergeAtoms' ownership check and this call) must leave the loser untouched — the
+// merge is all-or-nothing. Regression for a bug where the DELETE ran unconditionally
+// regardless of whether the paired UPDATE matched anything.
+func TestMergeExperienceAtomsLeavesLoserWhenKeepIsGone(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	alice := seedExperienceUser(t, pool, "merge-keepgone@example.test")
+
+	loser, err := q.InsertExperienceAtomIfNew(ctx, InsertExperienceAtomIfNewParams{
+		UserID: alice, Claim: "Untouched claim", ClaimKey: "untouched claim",
+		Provenance: "agent_inferred", Metrics: []string{}, Skills: []string{},
+	})
+	if err != nil {
+		t.Fatalf("insert loser: %v", err)
+	}
+
+	_, err = q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
+		Context: "x", Metrics: []string{}, Skills: []string{}, Provenance: "manual",
+		KeepID: uuid.New(), UserID: alice, LoserID: loser.ID,
+	})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("merge with nonexistent keep = %v, want pgx.ErrNoRows", err)
+	}
+
+	atoms, err := q.ListExperienceAtoms(ctx, alice)
+	if err != nil {
+		t.Fatalf("ListExperienceAtoms: %v", err)
+	}
+	if len(atoms) != 1 || atoms[0].ID != loser.ID {
+		t.Fatalf("atoms = %+v, want the loser still present — a failed merge must delete nothing", atoms)
 	}
 }
 

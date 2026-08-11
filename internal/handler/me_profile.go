@@ -14,14 +14,18 @@ import (
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
-// structuredResumeReader is the slice of the résumé store the profile read needs
-// (*resume.Store satisfies it), kept narrow so the handler is unit-testable without a
-// database. The bool reports whether a structure current with the stored CV exists.
+// structuredResumeReader is the slice of the résumé store profile and CV seed need
+// (*resume.Store satisfies it), kept narrow so handlers are unit-testable without a
+// database. Structured reports a parse current with the stored CV; ProvisionalContacts
+// returns identity-only fields from a superseded blob while that stamp is pending.
 type structuredResumeReader interface {
 	Structured(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
+	ProvisionalContacts(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 	// Geography is where the CV says the candidate IS, under the same freshness rule as
 	// Structured — a geography derived from a superseded CV reads as absent.
 	Geography(ctx context.Context, userID int64) (resume.Geography, bool, error)
+	CandidateContacts(ctx context.Context, userID int64) (resume.Contacts, error)
+	StructureForSeed(ctx context.Context, userID int64) (resumeextract.Structured, bool, error)
 }
 
 // profileHandlers serves the single-per-user profile (a specialization + skills set).

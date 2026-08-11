@@ -129,6 +129,29 @@ func TestContactsFromDetectedSpans(t *testing.T) {
 	}
 }
 
+func TestContacts_LocationFromAddressSpan(t *testing.T) {
+	cv := "Ivan Petrov\nLisbon, PT\nivan@petrov.io"
+	det := spansDetector{spans: []Span{
+		{Start: 0, End: 11, Kind: KindName},
+		{Start: 12, End: 22, Kind: KindAddress}, // "Lisbon, PT"
+	}}
+	c := mustBuild(t, cv, Contacts{}, det).Contacts()
+	if c.Location != "Lisbon, PT" {
+		t.Errorf("Location = %q, want the ADDRESS span", c.Location)
+	}
+	if c.FullName != "Ivan Petrov" || c.Email != "ivan@petrov.io" {
+		t.Errorf("other contacts drifted: %+v", c)
+	}
+}
+
+func TestContacts_NoAddressSpanLeavesLocationEmpty(t *testing.T) {
+	cv := "Ivan Petrov ivan@petrov.io"
+	c := mustBuild(t, cv, Contacts{}, nameDetector{names: []string{"Ivan Petrov"}}).Contacts()
+	if c.Location != "" {
+		t.Errorf("Location = %q, want empty when no ADDRESS span", c.Location)
+	}
+}
+
 func TestWordBoundaryAvoidsOverRedaction(t *testing.T) {
 	text := "Mark shipped the benchmark on Mark's branch"
 	r := mustBuild(t, text, Contacts{}, nameDetector{names: []string{"Mark"}})

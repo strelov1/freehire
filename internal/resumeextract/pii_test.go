@@ -86,6 +86,55 @@ func TestExtract_ContactsFromDetectionAndRedactedPrompt(t *testing.T) {
 	}
 }
 
+// addressSpanDetector reports a NAME span and an ADDRESS span for configured substrings.
+type addressSpanDetector struct{ name, address string }
+
+func (d addressSpanDetector) Detect(_ context.Context, text string) ([]pii.Span, error) {
+	var spans []pii.Span
+	if i := strings.Index(text, d.name); i >= 0 {
+		spans = append(spans, pii.Span{Start: i, End: i + len(d.name), Kind: pii.KindName})
+	}
+	if i := strings.Index(text, d.address); i >= 0 {
+		spans = append(spans, pii.Span{Start: i, End: i + len(d.address), Kind: pii.KindAddress})
+	}
+	return spans, nil
+}
+
+func TestExtract_LocationFromAddressDetection(t *testing.T) {
+	cv := "Ivan Petrov\nLisbon, PT\nivan@petrov.io\nSenior Go Engineer at Acme."
+	// Model invents a wrong location — detection must win.
+	m := &recordingModel{resp: `{"summary":"Senior Go engineer.","location":"Singapore (Remote)","experience":[{"title":"Senior Go Engineer","company":"Acme"}]}`}
+	e := NewExtractor(llm.NewWithModel(m), addressSpanDetector{name: "Ivan Petrov", address: "Lisbon, PT"})
+
+	got, err := e.Extract(context.Background(), cv)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if strings.Contains(m.prompt, "Lisbon, PT") || strings.Contains(m.prompt, "Ivan Petrov") {
+		t.Errorf("prompt leaked residence/name:\n%s", m.prompt)
+	}
+	if got.Location != "Lisbon, PT" {
+		t.Errorf("Location = %q, want detected residence (not model %q)", got.Location, "Singapore (Remote)")
+	}
+	if got.FullName != "Ivan Petrov" || got.Email != "ivan@petrov.io" {
+		t.Errorf("contacts = %q/%q, want detected values", got.FullName, got.Email)
+	}
+}
+
+func TestExtract_NoAddressSpanLeavesLocationEmpty(t *testing.T) {
+	cv := "Ivan Petrov ivan@petrov.io\nSenior Go Engineer at Acme."
+	m := &recordingModel{resp: `{"summary":"Senior Go engineer.","location":"Berlin","experience":[{"title":"Senior Go Engineer","company":"Acme"}]}`}
+	e := NewExtractor(llm.NewWithModel(m), nameSpanDetector{names: []string{"Ivan Petrov"}})
+
+	got, err := e.Extract(context.Background(), cv)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if got.Location != "" {
+		t.Errorf("Location = %q, want empty when detection found no ADDRESS (model value must not win)", got.Location)
+	}
+}
+
 func TestExtract_FailClosedWhenDetectorErrors(t *testing.T) {
 	m := &recordingModel{resp: `{}`}
 	_, err := NewExtractor(llm.NewWithModel(m), failDetector{}).Extract(context.Background(), "Ivan Petrov cv")

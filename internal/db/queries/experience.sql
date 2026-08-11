@@ -1,7 +1,7 @@
 -- name: ListExperienceEmployments :many
 -- The caller's places of work, current roles first and most recent within that. Owner-scoped
 -- by construction — another user's employments can never appear.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = $1
 ORDER BY is_current DESC, period_start DESC, id;
@@ -9,7 +9,7 @@ ORDER BY is_current DESC, period_start DESC, id;
 -- name: GetExperienceEmployment :one
 -- One employment owned by the caller. A foreign or missing id returns no row, which the
 -- handler maps to 404 — so a probe cannot tell the two apart.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE id = $1 AND user_id = $2;
 
@@ -18,25 +18,25 @@ WHERE id = $1 AND user_id = $2;
 -- insensitively because a CV, a chat and a form will each capitalise them differently.
 -- There is no unique constraint behind this on purpose (a second stint at the same employer
 -- in the same role is a real career shape), so the oldest match wins and stays stable.
-SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at
+SELECT id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link
 FROM experience_employments
 WHERE user_id = @user_id AND lower(company) = lower(@company) AND lower(role) = lower(@role)
 ORDER BY created_at, id
 LIMIT 1;
 
 -- name: CreateExperienceEmployment :one
-INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
+INSERT INTO experience_employments (user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, link)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
 
 -- name: UpdateExperienceEmployment :one
 -- A full owner-scoped replacement, used by the profile UI where the user is editing the
 -- fields directly and means what they typed — including blanking one.
 UPDATE experience_employments
 SET kind = $3, company = $4, role = $5, location = $6, period_start = $7, period_end = $8,
-    is_current = $9, summary = $10, stack = $11, updated_at = now()
+    is_current = $9, summary = $10, stack = $11, link = $12, updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
 
 -- name: FillExperienceEmploymentBlanks :one
 -- Import's write: fill only the fields the bank has nothing for, and never overwrite a value
@@ -50,6 +50,7 @@ SET company      = coalesce(nullif(company, ''), @company),
     period_start = coalesce(nullif(period_start, ''), @period_start),
     period_end   = coalesce(nullif(period_end, ''), @period_end),
     summary      = coalesce(nullif(summary, ''), @summary),
+    link         = coalesce(nullif(link, ''), @link),
     -- The stack is unioned, not filled-if-blank: a CV listing one more technology for a
     -- role is new knowledge, and import must never take a technology away. coalesce
     -- guards the empty case — array_agg over no rows is NULL, and the column is NOT NULL.
@@ -59,7 +60,7 @@ SET company      = coalesce(nullif(company, ''), @company),
                    ),
     updated_at   = now()
 WHERE id = @id AND user_id = @user_id
-RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at;
+RETURNING id, user_id, kind, company, role, location, period_start, period_end, is_current, summary, stack, created_at, updated_at, link;
 
 -- name: DeleteExperienceEmployment :execrows
 -- Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are
@@ -116,6 +117,39 @@ RETURNING id, user_id, employment_id, claim, claim_key, context, metrics, skills
 -- The only path that removes an atom, and it belongs to the user. Import never deletes.
 DELETE FROM experience_atoms
 WHERE id = $1 AND user_id = $2;
+
+-- name: MergeExperienceAtoms :one
+-- Atomically update the keep and delete the loser. The UPDATE is the transaction: the
+-- DELETE only lands when the update did, so a keep that vanished between Store.MergeAtoms'
+-- ownership check and this call (a concurrent delete/merge) yields no row and deletes
+-- nothing, rather than deleting the loser out from under a merge whose other half never
+-- landed. The UPDATE itself is gated on the loser still existing, for the same reason in
+-- the other direction. Either both sides of the merge happen or neither does. Claim,
+-- claim_key, employment_id and source_ref stay on the keep — only richness fields move.
+WITH updated AS (
+    UPDATE experience_atoms
+    SET context = @context,
+        metrics = @metrics,
+        skills = @skills,
+        provenance = @provenance,
+        updated_at = now()
+    WHERE experience_atoms.id = @keep_id AND experience_atoms.user_id = @user_id
+      AND EXISTS (
+          SELECT 1 FROM experience_atoms AS loser
+          WHERE loser.id = @loser_id AND loser.user_id = @user_id
+      )
+    RETURNING experience_atoms.id, experience_atoms.user_id, experience_atoms.employment_id,
+              experience_atoms.claim, experience_atoms.claim_key, experience_atoms.context,
+              experience_atoms.metrics, experience_atoms.skills, experience_atoms.provenance,
+              experience_atoms.source_ref, experience_atoms.created_at, experience_atoms.updated_at
+),
+deleted AS (
+    DELETE FROM experience_atoms
+    WHERE experience_atoms.id = @loser_id AND experience_atoms.user_id = @user_id
+      AND EXISTS (SELECT 1 FROM updated)
+    RETURNING experience_atoms.id
+)
+SELECT * FROM updated;
 
 -- name: ListExperienceBackfillTargets :many
 -- Every user with a stored CV, carrying their structured résumé ONLY when its stamp still

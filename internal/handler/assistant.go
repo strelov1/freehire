@@ -467,7 +467,7 @@ func (h *assistantHandlers) PostAssistantMessage(c *fiber.Ctx) error {
 	if len([]rune(prompt)) > h.maxPrompt {
 		return fiber.NewError(fiber.StatusBadRequest, "message is too long")
 	}
-	return h.streamTurn(c, sess, prompt, assistant.TurnConfig{})
+	return h.streamTurn(c, sess, prompt, turnBounds(sess, ""))
 }
 
 // PostAssistantRetry resumes a session after a model/transport failure without recording
@@ -489,12 +489,7 @@ func (h *assistantHandlers) PostAssistantRetry(c *fiber.Ctx) error {
 	if lastUserText(transcript) == "" {
 		return fiber.NewError(fiber.StatusConflict, "nothing to retry — send a message first")
 	}
-	turn := assistant.TurnConfig{}
-	// A failed unattended run already spent under the raised ceiling; keep it so a retry
-	// is not cut short at the ordinary chat bound.
-	if sess.Preset == assistant.PresetTailor && lastUserText(transcript) == autopilotBrief {
-		turn.MaxSteps = autopilotMaxSteps
-	}
+	turn := turnBounds(sess, lastUserText(transcript))
 	return h.streamContinue(c, sess, turn)
 }
 
@@ -740,6 +735,25 @@ func (h *assistantHandlers) PostAssistantOpening(c *fiber.Ctx) error {
 // dozen or two requirements. The ordinary ceiling is written for a question and would cut
 // such a run off halfway through the list.
 const autopilotMaxSteps = 30
+
+// tailorMaxSteps bounds an interactive tailoring turn. Evidence lookups plus per-skill
+// edits burn rounds fast — the chat default of eight left a Salesforce edit dangling after
+// WordPress and Mailchimp. Sixteen covers a short "bank then edit" pass; autopilot keeps
+// its own higher ceiling.
+const tailorMaxSteps = 16
+
+// turnBounds picks the step ceiling for a session. Chat and the other presets keep the
+// runner default; interactive tailor and a resumed autopilot raise theirs server-side so
+// a client cannot.
+func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
+	if sess.Preset != assistant.PresetTailor {
+		return assistant.TurnConfig{}
+	}
+	if lastUser == autopilotBrief {
+		return assistant.TurnConfig{MaxSteps: autopilotMaxSteps}
+	}
+	return assistant.TurnConfig{MaxSteps: tailorMaxSteps}
+}
 
 // autopilotBrief opens an unattended run. It is deliberately short: the method — walk every
 // requirement, search the bank, edit what the evidence supports, ask nothing until the end —

@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/handler"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/llmkey"
+	"github.com/strelov1/freehire/internal/matchanalysis"
 	"github.com/strelov1/freehire/internal/observability"
 	"github.com/strelov1/freehire/internal/pii"
 	"github.com/strelov1/freehire/internal/ratelimit"
@@ -38,6 +39,19 @@ import (
 func main() {
 	cfg := config.Load()
 	cv.SetMaxBullets(cfg.CVMaxBullets)
+	matchanalysis.SetBounds(matchanalysis.Bounds{
+		MaxCommentRunes:       cfg.MatchAnalysis.MaxCommentRunes,
+		MaxListItemRunes:      cfg.MatchAnalysis.MaxListItemRunes,
+		MaxRecommendRunes:     cfg.MatchAnalysis.MaxRecommendRunes,
+		MaxReqTextRunes:       cfg.MatchAnalysis.MaxReqTextRunes,
+		MaxReqEvidenceRunes:   cfg.MatchAnalysis.MaxReqEvidenceRunes,
+		MaxStrengths:          cfg.MatchAnalysis.MaxStrengths,
+		MaxGaps:               cfg.MatchAnalysis.MaxGaps,
+		MaxRequirements:       cfg.MatchAnalysis.MaxRequirements,
+		MaxSignals:            cfg.MatchAnalysis.MaxSignals,
+		MaxSignalQuoteRunes:   cfg.MatchAnalysis.MaxSignalQuoteRunes,
+		MaxSignalInsightRunes: cfg.MatchAnalysis.MaxSignalInsightRunes,
+	})
 
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)

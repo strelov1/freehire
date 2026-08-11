@@ -88,21 +88,113 @@ const (
 	thresholdWeak     = 30
 )
 
-// Output bounds for untrusted model text (mirrors atscheck's caps).
+// Default sanitize caps for untrusted model text. Override at process start via
+// SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+// yields a non-positive value falls back to the matching default so a bound can
+// never be erased.
 const (
-	maxCommentRunes     = 240
-	maxListItemRunes    = 200
-	maxRecommendRunes   = 400
-	maxReqTextRunes     = 200
-	maxReqEvidenceRunes = 240
-	maxStrengths        = 6
-	maxGaps             = 6
-	maxRequirements     = 30
-
-	maxSignals            = 5
-	maxSignalQuoteRunes   = 200
-	maxSignalInsightRunes = 200
+	DefaultMaxCommentRunes       = 240  // per-dimension Comment
+	DefaultMaxListItemRunes      = 200  // each Strengths / Gaps bullet
+	DefaultMaxRecommendRunes     = 1200 // free-text Recommendation: two or three short prose paragraphs
+	DefaultMaxReqTextRunes       = 200  // Requirement.Text
+	DefaultMaxReqEvidenceRunes   = 240  // Requirement.Evidence
+	DefaultMaxStrengths          = 6    // Strengths list length
+	DefaultMaxGaps               = 6    // Gaps list length
+	DefaultMaxRequirements       = 30   // RequirementMatch list length
+	DefaultMaxSignals            = 5    // HiddenSignals list length
+	DefaultMaxSignalQuoteRunes   = 200  // Signal.Quote
+	DefaultMaxSignalInsightRunes = 200  // Signal.Insight
 )
+
+// Live sanitize caps — start at the defaults above; SetBounds may raise or lower them.
+var (
+	maxCommentRunes       = DefaultMaxCommentRunes
+	maxListItemRunes      = DefaultMaxListItemRunes
+	maxRecommendRunes     = DefaultMaxRecommendRunes
+	maxReqTextRunes       = DefaultMaxReqTextRunes
+	maxReqEvidenceRunes   = DefaultMaxReqEvidenceRunes
+	maxStrengths          = DefaultMaxStrengths
+	maxGaps               = DefaultMaxGaps
+	maxRequirements       = DefaultMaxRequirements
+	maxSignals            = DefaultMaxSignals
+	maxSignalQuoteRunes   = DefaultMaxSignalQuoteRunes
+	maxSignalInsightRunes = DefaultMaxSignalInsightRunes
+)
+
+// Bounds is the tunable sanitize ceiling for fit-analysis model output. Every field
+// is a positive count (runes for text, items for lists). Zero / negative values are
+// rejected by SetBounds and replaced with that field's Default*.
+type Bounds struct {
+	MaxCommentRunes       int
+	MaxListItemRunes      int
+	MaxRecommendRunes     int
+	MaxReqTextRunes       int
+	MaxReqEvidenceRunes   int
+	MaxStrengths          int
+	MaxGaps               int
+	MaxRequirements       int
+	MaxSignals            int
+	MaxSignalQuoteRunes   int
+	MaxSignalInsightRunes int
+}
+
+// DefaultBounds returns the hard-coded sanitize ceilings (the values historically
+// baked into this package).
+func DefaultBounds() Bounds {
+	return Bounds{
+		MaxCommentRunes:       DefaultMaxCommentRunes,
+		MaxListItemRunes:      DefaultMaxListItemRunes,
+		MaxRecommendRunes:     DefaultMaxRecommendRunes,
+		MaxReqTextRunes:       DefaultMaxReqTextRunes,
+		MaxReqEvidenceRunes:   DefaultMaxReqEvidenceRunes,
+		MaxStrengths:          DefaultMaxStrengths,
+		MaxGaps:               DefaultMaxGaps,
+		MaxRequirements:       DefaultMaxRequirements,
+		MaxSignals:            DefaultMaxSignals,
+		MaxSignalQuoteRunes:   DefaultMaxSignalQuoteRunes,
+		MaxSignalInsightRunes: DefaultMaxSignalInsightRunes,
+	}
+}
+
+// SetBounds replaces the package sanitize caps. Any field below 1 falls back to
+// that field's Default* — a typo must not erase a ceiling.
+func SetBounds(b Bounds) {
+	maxCommentRunes = boundOrDefault(b.MaxCommentRunes, DefaultMaxCommentRunes)
+	maxListItemRunes = boundOrDefault(b.MaxListItemRunes, DefaultMaxListItemRunes)
+	maxRecommendRunes = boundOrDefault(b.MaxRecommendRunes, DefaultMaxRecommendRunes)
+	maxReqTextRunes = boundOrDefault(b.MaxReqTextRunes, DefaultMaxReqTextRunes)
+	maxReqEvidenceRunes = boundOrDefault(b.MaxReqEvidenceRunes, DefaultMaxReqEvidenceRunes)
+	maxStrengths = boundOrDefault(b.MaxStrengths, DefaultMaxStrengths)
+	maxGaps = boundOrDefault(b.MaxGaps, DefaultMaxGaps)
+	maxRequirements = boundOrDefault(b.MaxRequirements, DefaultMaxRequirements)
+	maxSignals = boundOrDefault(b.MaxSignals, DefaultMaxSignals)
+	maxSignalQuoteRunes = boundOrDefault(b.MaxSignalQuoteRunes, DefaultMaxSignalQuoteRunes)
+	maxSignalInsightRunes = boundOrDefault(b.MaxSignalInsightRunes, DefaultMaxSignalInsightRunes)
+}
+
+// CurrentBounds returns a snapshot of the live sanitize caps.
+func CurrentBounds() Bounds {
+	return Bounds{
+		MaxCommentRunes:       maxCommentRunes,
+		MaxListItemRunes:      maxListItemRunes,
+		MaxRecommendRunes:     maxRecommendRunes,
+		MaxReqTextRunes:       maxReqTextRunes,
+		MaxReqEvidenceRunes:   maxReqEvidenceRunes,
+		MaxStrengths:          maxStrengths,
+		MaxGaps:               maxGaps,
+		MaxRequirements:       maxRequirements,
+		MaxSignals:            maxSignals,
+		MaxSignalQuoteRunes:   maxSignalQuoteRunes,
+		MaxSignalInsightRunes: maxSignalInsightRunes,
+	}
+}
+
+func boundOrDefault(n, def int) int {
+	if n < 1 {
+		return def
+	}
+	return n
+}
 
 // Dimension is one scored fit dimension on the wire.
 type Dimension struct {

@@ -49,6 +49,7 @@ func EntriesFromResume(st resumeextract.Structured) []ImportEntry {
 			Employment: Employment{
 				Kind:    KindProject,
 				Company: project.Name,
+				Link:    project.Link,
 			},
 			Claims: project.Highlights,
 		})

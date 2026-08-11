@@ -2,11 +2,11 @@
 
 ## Purpose
 
-How untrusted model output reaches the DOM. The assistant reads job descriptions, browsed
-pages, and other text an attacker controls end to end, so anything the model writes may be
-an attacker's words in the model's mouth. Two layers keep that from becoming a request the
-viewer never asked to make: the sanitizer the chat applies to the model's markdown, and the
-CSP image allowlist behind it.
+How untrusted model output reaches the DOM. Surfaces that render model prose — the assistant
+chat and the fit-analysis verdict — read job descriptions, browsed pages, and other text an
+attacker controls end to end, so anything the model writes may be an attacker's words in the
+model's mouth. Two layers keep that from becoming a request the viewer never asked to make:
+the sanitizer applied to model markdown before `{@html}`, and the CSP image allowlist behind it.
 ## Requirements
 ### Requirement: Assistant model output renders as inert markup
 

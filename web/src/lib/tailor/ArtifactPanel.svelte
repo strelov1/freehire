@@ -249,7 +249,8 @@
         <div class="mb-3 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
           <h3 class="text-sm font-semibold text-foreground">Fit analysis</h3>
           <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
-            Refreshed automatically after every autopilot run. Recompute it below any time.
+            Refreshed automatically after every autopilot run. You can also run or recompute it
+            here any time.
           </p>
         </div>
         <!-- Keyed on whether an analysis is present: MatchAnalysisFull seeds its internal state

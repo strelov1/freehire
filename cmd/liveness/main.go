@@ -3,7 +3,9 @@
 // the ATS provider registry (manual/resolve-url imports and the like), whose closed_at
 // would otherwise stay NULL forever — and closes a job once two consecutive probes
 // report it dead. (Registered board providers, including aggregators like habr_career
-// and geekjob, are swept by cmd/ingest and excluded here — see excluded below.)
+// and geekjob, are swept by cmd/ingest and excluded here — see excluded below. A few
+// registered providers whose sweep has a structural blind spot are added back in a
+// restricted form — see probeDespiteRegistered.)
 //
 // It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
@@ -15,6 +17,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"slices"
 	"sync"
@@ -68,11 +71,35 @@ var unsignalledSources = []string{"telegram"}
 // bulk of postings still inside a normal hiring cycle.
 const expiryWindow = 45 * 24 * time.Hour
 
+// probeDespiteRegistered lists registered ATS providers whose ingest sweep still can't
+// close every open job — see job-lifecycle's company_slug-scope leak. himalayas pages
+// only its freshest slice per run (himalayasMaxPages), so a company that ages out of
+// that recency window never re-enters CloseUnseenJobs' crawled-slug scope and its last
+// posting stays open forever, even though the job still has a real per-posting URL a
+// probe can judge (unlike unsignalledSources, which have none). These sources are NOT
+// removed from atsProviders — the sweep still owns their normal closes — they are only
+// ADDED BACK as liveness candidates, restricted to jobs already past the sweep's own
+// staleness window (see staleCutoff), so the probe only ever picks up what the sweep
+// structurally cannot reach rather than racing it.
+var probeDespiteRegistered = []string{"himalayas"}
+
+// staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window): a
+// probeDespiteRegistered job only becomes a liveness candidate once the sweep would
+// already have closed it were the company_slug scope not in the way.
+const staleCutoff = 48 * time.Hour
+
 func main() {
 	worker.Main(run)
 }
 
 func run() int {
+	// sourceFilter restricts a manual run to one source (e.g. `-source=himalayas`) —
+	// cron never sets it, so the default run probes every eligible source as before.
+	// Meant for debugging a single adapter's close behaviour on prod without probing
+	// (or age-expiring) the rest of the catalogue in the same run.
+	sourceFilter := flag.String("source", "", "restrict this run to one source, for debugging (empty = every eligible source)")
+	flag.Parse()
+
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -130,6 +157,17 @@ func run() int {
 		}
 	}
 
+	// Guard: the inverse of the check above — probeDespiteRegistered exists to add
+	// candidates BACK for sources the exclusion above just removed, so an entry that
+	// falls out of the registry (renamed/retired adapter) would silently become a
+	// no-op rather than an error. Refuse to run so the drift gets noticed.
+	for _, s := range probeDespiteRegistered {
+		if !slices.Contains(atsProviders, s) {
+			log.Printf("liveness: %q is not a registered ATS provider — refusing to run (probeDespiteRegistered is stale)", s)
+			return 1
+		}
+	}
+
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
 	excluded := append(atsProviders, unsignalledSources...)
@@ -139,12 +177,44 @@ func run() int {
 		log.Printf("select candidates: %v", err)
 		return 1
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources)", len(candidates), len(atsProviders), len(unsignalledSources))
+	if *sourceFilter != "" {
+		// SelectOrphanLivenessCandidates has no source allowlist of its own (it is
+		// "everything not a registered provider"), so -source is applied here rather
+		// than pushed into the query.
+		candidates = slices.DeleteFunc(candidates, func(c db.SelectOrphanLivenessCandidatesRow) bool {
+			return c.Source != *sourceFilter
+		})
+	}
+	orphanCount := len(candidates)
+
+	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's
+	// own staleness window (see staleCutoff) — the sweep's scope leak, not a race
+	// with a run still inside its normal grace period.
+	staleCandidates, err := queries.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
+		Sources: filterSources(probeDespiteRegistered, *sourceFilter),
+		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-staleCutoff), Valid: true},
+	})
+	if err != nil {
+		log.Printf("select stale registered candidates: %v", err)
+		return 1
+	}
+	for _, c := range staleCandidates {
+		candidates = append(candidates, db.SelectOrphanLivenessCandidatesRow(c))
+	}
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources",
+		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered))
+	if *sourceFilter != "" {
+		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
+	}
 
 	// The other half of the same decision: what the probe cannot judge, age judges.
 	// Run before probing so a run that dies partway through the probe still expires.
+	// filterSources means a -source run that targets neither unsignalledSources member
+	// expires nothing this run, rather than age-closing telegram jobs on a debug probe
+	// of an unrelated source.
+	sourcesToExpire := filterSources(unsignalledSources, *sourceFilter)
 	expired, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
-		Sources: unsignalledSources,
+		Sources: sourcesToExpire,
 		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
 	})
 	if err != nil {
@@ -154,7 +224,7 @@ func run() int {
 		log.Printf("liveness: expire stale unsignalled jobs: %v", err)
 	} else {
 		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
-			expired, int(expiryWindow.Hours()/24), len(unsignalledSources))
+			expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
 	}
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
@@ -228,4 +298,17 @@ func providerKeys(registry map[string]sources.Source) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// filterSources narrows a source list to sourceFilter for a debug run (-source=X);
+// an empty sourceFilter returns list unchanged, and a filter absent from list returns
+// nil rather than list, so a run scoped to a source outside this list touches none of it.
+func filterSources(list []string, sourceFilter string) []string {
+	if sourceFilter == "" {
+		return list
+	}
+	if slices.Contains(list, sourceFilter) {
+		return []string{sourceFilter}
+	}
+	return nil
 }

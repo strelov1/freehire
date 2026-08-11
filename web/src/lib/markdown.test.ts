@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { renderMarkdown } from './markdown';
 
-// Model output is untrusted: the assistant reads job descriptions, browsed pages and
-// other text an attacker controls end to end, so anything it writes may be an
+// Model output is untrusted: surfaces that render it read job descriptions, browsed pages and
+// other text an attacker controls end to end, so anything the model writes may be an
 // attacker's words in the model's mouth. Nothing it emits may cause the browser to
 // issue a request — a rendered image is a GET the viewer never asked to make, and it
 // carries whatever the model was holding.

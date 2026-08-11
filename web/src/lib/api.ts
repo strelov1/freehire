@@ -74,6 +74,7 @@ import type {
   ResumeProfile,
   PhotoMeta,
   ResumeMeta,
+  CandidateContacts,
   ActivityGranularity,
   ActivityPoint,
   UserGrowthPoint,
@@ -88,6 +89,7 @@ import type {
   TalentNetworkSetting,
   TalentNetworkVisibility,
   TalentNetworkProfile,
+  ExperienceEmployment,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -1040,6 +1042,14 @@ export function createApi(
     });
   }
 
+  /** Fold two achievements into one richer keep. Cookie-only — merge deletes the other. */
+  async function mergeExperienceAtoms(ids: [string, string]): Promise<ExperienceAtom> {
+    return requestData<ExperienceAtom>(
+      '/api/v1/me/experience/atoms/merge',
+      jsonBody('POST', { ids }),
+    );
+  }
+
   /** Remove one achievement. This is the only path that takes evidence out of the bank. */
   async function deleteExperienceAtom(id: string): Promise<void> {
     await call(`/api/v1/me/experience/atoms/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -1048,6 +1058,27 @@ export function createApi(
   /** Remove a role, and with it the achievements that were evidence of it. */
   async function deleteExperienceEmployment(id: string): Promise<void> {
     await call(`/api/v1/me/experience/employments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  /** Create a job or project employment in the bank. */
+  async function createExperienceEmployment(
+    body: Partial<ExperienceEmployment> & { kind: 'job' | 'project' },
+  ): Promise<ExperienceEmployment> {
+    return requestData<ExperienceEmployment>(
+      '/api/v1/me/experience/employments',
+      jsonBody('POST', body),
+    );
+  }
+
+  /** Update employment metadata (name/company, link, dates). Cookie-only. */
+  async function updateExperienceEmployment(
+    id: string,
+    body: Partial<ExperienceEmployment>,
+  ): Promise<ExperienceEmployment> {
+    return requestData<ExperienceEmployment>(
+      `/api/v1/me/experience/employments/${encodeURIComponent(id)}`,
+      jsonBody('PUT', body),
+    );
   }
 
   // The single per-user profile: a specialization + skills set (cookie-only on the server).
@@ -1163,6 +1194,23 @@ export function createApi(
    *  résumé is a normal state the profile renders). */
   async function getResume(): Promise<ResumeMeta> {
     return requestData<ResumeMeta>('/api/v1/me/resume');
+  }
+
+  /** Replace candidate-owned contacts without re-uploading a CV. */
+  async function putResumeContacts(contacts: CandidateContacts): Promise<CandidateContacts> {
+    return requestData<CandidateContacts>('/api/v1/me/resume/contacts', jsonBody('PUT', contacts));
+  }
+
+  /** Overwrite owned contacts from the current structured extract. */
+  async function replaceResumeContactsFromCV(): Promise<CandidateContacts> {
+    return requestData<CandidateContacts>('/api/v1/me/resume/contacts/replace-from-cv', {
+      method: 'POST',
+    });
+  }
+
+  /** Re-run structured parse for the stored CV (no re-upload). */
+  async function retryResumeParse(): Promise<{ parse_status: string }> {
+    return requestData<{ parse_status: string }>('/api/v1/me/resume/parse', { method: 'POST' });
   }
 
   /** The market-coverage verdict for the caller's profile: how many open vacancies the
@@ -1878,8 +1926,11 @@ export function createApi(
     getBoard,
     getExperience,
     updateExperienceAtom,
+    mergeExperienceAtoms,
     deleteExperienceAtom,
     deleteExperienceEmployment,
+    createExperienceEmployment,
+    updateExperienceEmployment,
     getProfile,
     saveProfile,
     deleteProfile,
@@ -1889,6 +1940,9 @@ export function createApi(
     deleteAccount,
     extractResumeProfile,
     getResume,
+    putResumeContacts,
+    replaceResumeContactsFromCV,
+    retryResumeParse,
     getProfileVerdict,
     getATSReport,
     runATSReview,

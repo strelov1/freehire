@@ -172,6 +172,11 @@ type Settings struct {
 	// package default so a typo cannot erase the ceiling.
 	CVMaxBullets int
 
+	// MatchAnalysis holds sanitize caps for the fit-analysis LLM output
+	// (internal/matchanalysis). Override any field via MATCH_ANALYSIS_*; values
+	// below 1 fall back to that field's package default at SetBounds time.
+	MatchAnalysis MatchAnalysisSettings
+
 	// TracerLinkSalt keys the visitor hash of a click on a traced CV link. Empty disables the
 	// feature's consent toggle outright: without a salt there is no way to tell one visitor from
 	// another that is not reversible by walking the address space, and a hash that only looks
@@ -246,6 +251,34 @@ type OAuthCredentials struct {
 	PrivateKey   string
 }
 
+// MatchAnalysisSettings holds the sanitize ceilings for fit-analysis model output.
+// Defaults match internal/matchanalysis.DefaultBounds(); cmd/server applies them via
+// matchanalysis.SetBounds at boot. Restart required after any change.
+type MatchAnalysisSettings struct {
+	// MaxCommentRunes caps each dimension's Comment (default 240).
+	MaxCommentRunes int
+	// MaxListItemRunes caps each Strengths / Gaps bullet (default 200).
+	MaxListItemRunes int
+	// MaxRecommendRunes caps the free-text Recommendation (default 1200).
+	MaxRecommendRunes int
+	// MaxReqTextRunes caps Requirement.Text (default 200).
+	MaxReqTextRunes int
+	// MaxReqEvidenceRunes caps Requirement.Evidence (default 240).
+	MaxReqEvidenceRunes int
+	// MaxStrengths caps the Strengths list length (default 6).
+	MaxStrengths int
+	// MaxGaps caps the Gaps list length (default 6).
+	MaxGaps int
+	// MaxRequirements caps the RequirementMatch list length (default 30).
+	MaxRequirements int
+	// MaxSignals caps the HiddenSignals list length (default 5).
+	MaxSignals int
+	// MaxSignalQuoteRunes caps Signal.Quote (default 200).
+	MaxSignalQuoteRunes int
+	// MaxSignalInsightRunes caps Signal.Insight (default 200).
+	MaxSignalInsightRunes int
+}
+
 // oauthProviders are the providers whose credentials Load reads from the
 // environment (OAUTH_<PROVIDER>_CLIENT_ID / OAUTH_<PROVIDER>_CLIENT_SECRET,
 // plus OAUTH_APPLE_TEAM_ID / OAUTH_APPLE_KEY_ID / OAUTH_APPLE_PRIVATE_KEY for apple).
@@ -304,6 +337,20 @@ func Load() Settings {
 		TypstBin:                    resolveTypstBin(env("TYPST_BIN", "typst")),
 		CVEditAllowBulletTruncation: envBool("CV_EDIT_ALLOW_BULLET_TRUNCATION", false),
 		CVMaxBullets:                envInt("CV_MAX_BULLETS", 20),
+
+		MatchAnalysis: MatchAnalysisSettings{
+			MaxCommentRunes:       envInt("MATCH_ANALYSIS_MAX_COMMENT_RUNES", 240),
+			MaxListItemRunes:      envInt("MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES", 200),
+			MaxRecommendRunes:     envInt("MATCH_ANALYSIS_MAX_RECOMMEND_RUNES", 1200),
+			MaxReqTextRunes:       envInt("MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES", 200),
+			MaxReqEvidenceRunes:   envInt("MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES", 240),
+			MaxStrengths:          envInt("MATCH_ANALYSIS_MAX_STRENGTHS", 6),
+			MaxGaps:               envInt("MATCH_ANALYSIS_MAX_GAPS", 6),
+			MaxRequirements:       envInt("MATCH_ANALYSIS_MAX_REQUIREMENTS", 30),
+			MaxSignals:            envInt("MATCH_ANALYSIS_MAX_SIGNALS", 5),
+			MaxSignalQuoteRunes:   envInt("MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES", 200),
+			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 200),
+		},
 
 		SentryDSN:         os.Getenv("SENTRY_DSN"),
 		SentryEnvironment: env("SENTRY_ENVIRONMENT", "development"),

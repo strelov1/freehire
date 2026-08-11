@@ -101,6 +101,25 @@ func TestStage2SystemPrompt_RemoteLocationRule(t *testing.T) {
 	}
 }
 
+func TestStage2And3SystemPrompt_RecommendationBudget(t *testing.T) {
+	// Both stages rewrite recommendation; each must state the same length/shape contract so
+	// the model's target and the sanitizer ceiling describe the same thing.
+	for name, sp := range map[string]string{
+		"stage2": stage2SystemPrompt(),
+		"stage3": stage3SystemPrompt(),
+	} {
+		for _, want := range []string{
+			"two or three short prose paragraphs",
+			"no headings, no lists",
+			"do not recap per-requirement",
+		} {
+			if !strings.Contains(strings.ToLower(sp), strings.ToLower(want)) {
+				t.Errorf("%s system prompt must state the recommendation budget (missing %q):\n%s", name, want, sp)
+			}
+		}
+	}
+}
+
 func TestStage3SystemPrompt_SynonymOnlyRequiredDiscipline(t *testing.T) {
 	// The skeptic must not let thin evidence on a required requirement prop up
 	// skills_coverage — an adjacent-exposure "synonym-only" match, or a "covered" match

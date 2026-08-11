@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/resume"
@@ -27,10 +28,16 @@ type fakeBank struct {
 	sourceRef string
 	err       error
 	history   []resumeextract.Experience
+	projects  []resumeextract.Project
 }
 
-func (f *fakeBank) WorkHistory(context.Context, int64) ([]resumeextract.Experience, error) {
-	return f.history, nil
+func (f *fakeBank) SeedHistory(context.Context, int64) (experience.SeedHistory, error) {
+	return experience.SeedHistory{
+		Experience:            f.history,
+		Projects:              f.projects,
+		HasJobEmployments:     len(f.history) > 0,
+		HasProjectEmployments: len(f.projects) > 0,
+	}, nil
 }
 
 func (f *fakeBank) Import(_ context.Context, _ int64, entries []experience.ImportEntry, sourceRef string) (experience.ImportResult, error) {
@@ -128,7 +135,8 @@ func TestGetResumeServesBankedExperienceThroughAStaleWindow(t *testing.T) {
 
 	var body struct {
 		Data struct {
-			Structured *resumeextract.Structured `json:"structured"`
+			Structured       *resumeextract.Structured `json:"structured"`
+			StructurePending bool                      `json:"structure_pending"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
@@ -139,5 +147,206 @@ func TestGetResumeServesBankedExperienceThroughAStaleWindow(t *testing.T) {
 	}
 	if len(body.Data.Structured.Experience) != 1 || body.Data.Structured.Experience[0].Company != "RingCentral" {
 		t.Errorf("experience = %+v, want the banked role", body.Data.Structured.Experience)
+	}
+	if !body.Data.StructurePending {
+		t.Error("structure_pending = false, want true while the stamp is absent")
+	}
+}
+
+func TestGetResumeProvisionalContactsThroughAStaleWindow(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Phone: "+351 900",
+		Links: []string{"https://github.com/ada"}, Summary: "should not appear",
+	})
+	// structAt behind resumeUploadedAt → stale; blob still has contacts.
+	repo := &fakeResumeRepo{
+		key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt.Add(-time.Hour), Valid: true},
+	}
+	store := resume.New(newFakeResumeBlobs(), repo)
+	bank := &fakeBank{history: []resumeextract.Experience{{Company: "RingCentral", Title: "SWE"}}}
+	app, token := resumeAppWithBank(t, store, bank)
+
+	req := httptest.NewRequest(http.MethodGet, "/me/resume", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Data resumeMetaResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.Data.StructurePending {
+		t.Fatal("structure_pending = false, want true")
+	}
+	st := body.Data.Structured
+	if st == nil {
+		t.Fatal("structured is null")
+	}
+	if st.FullName != "Ada Lovelace" || st.Phone != "+351 900" || len(st.Links) != 1 {
+		t.Errorf("contacts = %+v, want provisional identity", st)
+	}
+	if st.Summary != "" {
+		t.Errorf("summary = %q, want empty while pending", st.Summary)
+	}
+	if len(st.Experience) != 1 || st.Experience[0].Company != "RingCentral" {
+		t.Errorf("experience = %+v, want banked role", st.Experience)
+	}
+}
+
+func TestGetResumeOwnedContactsOverlayCurrentExtract(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "From Blob", Email: "blob@example.com", Summary: "Staff engineer",
+	})
+	owned, _ := json.Marshal(resume.Contacts{FullName: "Ada Lovelace", Email: "ada@example.com"})
+	repo := &fakeResumeRepo{
+		key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true},
+		contacts: owned,
+	}
+	store := resume.New(newFakeResumeBlobs(), repo)
+	app, token := resumeAppWithBank(t, store, &fakeBank{})
+
+	req := httptest.NewRequest(http.MethodGet, "/me/resume", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Data resumeMetaResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	st := body.Data.Structured
+	if st == nil {
+		t.Fatal("structured is null")
+	}
+	if st.FullName != "Ada Lovelace" || st.Email != "ada@example.com" {
+		t.Errorf("contacts = %+v, want owned block", st)
+	}
+	if st.Summary != "Staff engineer" {
+		t.Errorf("summary = %q, want current extract body kept", st.Summary)
+	}
+	if body.Data.Contacts == nil || body.Data.Contacts.FullName != "Ada Lovelace" {
+		t.Errorf("contacts field = %+v", body.Data.Contacts)
+	}
+}
+
+func TestGetResumeCurrentStructureKeepsSemanticSections(t *testing.T) {
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace", Summary: "Staff engineer", TotalYears: 11,
+		Education: []resumeextract.Education{{Degree: "BSc"}},
+	})
+	repo := &fakeResumeRepo{
+		key: "resumes/1", set: true, structured: blob, structModel: "m",
+		structAt: pgtype.Timestamptz{Time: resumeUploadedAt, Valid: true},
+	}
+	store := resume.New(newFakeResumeBlobs(), repo)
+	app, token := resumeAppWithBank(t, store, &fakeBank{})
+
+	req := httptest.NewRequest(http.MethodGet, "/me/resume", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Data resumeMetaResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Data.StructurePending {
+		t.Fatal("structure_pending = true, want false for a current stamp")
+	}
+	st := body.Data.Structured
+	if st == nil || st.Summary != "Staff engineer" || st.TotalYears != 11 || len(st.Education) != 1 {
+		t.Fatalf("current structured = %+v", st)
+	}
+}
+
+func TestGetResumeServesBankProjects(t *testing.T) {
+	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{set: true})
+	bank := &fakeBank{
+		history: []resumeextract.Experience{
+			{Company: "RingCentral", Title: "SWE", Highlights: []string{"Shipped X"}},
+		},
+		projects: []resumeextract.Project{
+			{Name: "opensched", Link: "https://opensched.dev", Highlights: []string{"1.4M channels"}},
+		},
+	}
+	app, token := resumeAppWithBank(t, store, bank)
+
+	req := httptest.NewRequest(http.MethodGet, "/me/resume", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Data resumeMetaResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	st := body.Data.Structured
+	if st == nil {
+		t.Fatal("structured is null")
+	}
+	if len(st.Experience) != 1 || st.Experience[0].Company != "RingCentral" {
+		t.Errorf("experience = %+v, want the banked job", st.Experience)
+	}
+	if len(st.Projects) != 1 || st.Projects[0].Name != "opensched" || st.Projects[0].Link != "https://opensched.dev" {
+		t.Errorf("projects = %+v, want banked opensched with link", st.Projects)
+	}
+}
+
+func TestGetResumeServesPlacelessHighlights(t *testing.T) {
+	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{set: true})
+	bank := &fakeBank{
+		history: []resumeextract.Experience{
+			{Company: "RingCentral", Title: "SWE"},
+			{Highlights: []string{"Built a Portuguese localization mod"}},
+		},
+	}
+	app, token := resumeAppWithBank(t, store, bank)
+
+	req := httptest.NewRequest(http.MethodGet, "/me/resume", nil)
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Data resumeMetaResponse `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	st := body.Data.Structured
+	if st == nil || len(st.Experience) != 2 {
+		t.Fatalf("experience = %+v, want job + placeless", st)
+	}
+	last := st.Experience[1]
+	if last.Company != "" || last.Title != "" {
+		t.Errorf("placeless place = company=%q title=%q, want empty", last.Company, last.Title)
+	}
+	if len(last.Highlights) != 1 || last.Highlights[0] != "Built a Portuguese localization mod" {
+		t.Errorf("placeless highlights = %q", last.Highlights)
 	}
 }

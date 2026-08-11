@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"strings"
@@ -98,6 +99,9 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	// unconfigured — the SPA then falls back to per-request upload on the verdict page.
 	api.Put("/me/resume", mw.cookie, h.PutResume)
 	api.Get("/me/resume", mw.cookie, h.GetResume)
+	api.Put("/me/resume/contacts", mw.cookie, h.PutResumeContacts)
+	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
+	api.Post("/me/resume/parse", mw.cookie, h.RetryResumeParse)
 	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
 
 	// Recommendations: similar-open-jobs ranked against the caller's stored résumé.
@@ -257,14 +261,18 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 
 // resumeMetaResponse is the wire shape for résumé status: whether storage is enabled at
 // all, whether the caller has a résumé stored, and when it was uploaded (RFC3339, nil
-// when absent). Structured carries the read-only structured résumé for the profile view,
-// null when the caller has none current (no résumé, unconfigured LLM, not yet extracted,
-// or stale relative to the current CV).
+// when absent). Structured carries the read-only structured résumé for the profile view
+// (banked experience + current or provisional contacts). StructurePending is true when a
+// résumé is present but its structured stamp does not match the upload yet.
 type resumeMetaResponse struct {
-	Enabled    bool                      `json:"enabled"`
-	Present    bool                      `json:"present"`
-	UploadedAt *string                   `json:"uploaded_at"`
-	Structured *resumeextract.Structured `json:"structured"`
+	Enabled          bool                      `json:"enabled"`
+	Present          bool                      `json:"present"`
+	UploadedAt       *string                   `json:"uploaded_at"`
+	Structured       *resumeextract.Structured `json:"structured"`
+	StructurePending bool                      `json:"structure_pending"`
+	ParseStatus      string                    `json:"parse_status,omitempty"`
+	ParseDetail      string                    `json:"parse_detail,omitempty"`
+	Contacts         *resume.Contacts          `json:"contacts,omitempty"`
 }
 
 func newResumeMeta(enabled bool, m resume.Meta) resumeMetaResponse {
@@ -355,33 +363,39 @@ func (h *resumeHandlers) deriveResumeArtifacts(userID int64, text string, upload
 // swallowed, so the upload and the deterministic extractors are untouched. Runs on its
 // own timeout context (the request's is gone once the upload responded).
 func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
-	if !h.structuredExtractor.Enabled() || uploadedAt == nil {
+	if h.structuredExtractor == nil || !h.structuredExtractor.Enabled() {
+		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM or PII detector unset)", userID)
+		if uploadedAt != nil {
+			_ = h.resume.MarkExtractFailed(context.Background(), userID, "extractor unavailable", *uploadedAt)
+		}
+		return
+	}
+	if uploadedAt == nil {
+		log.Printf("resume structured: user %d: skipped — missing upload stamp", userID)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), resumeExtractLLMTimeout+30*time.Second)
 	defer cancel()
-	// This runs after the upload has responded, on its own context — so the credential
-	// is resolved here rather than carried from a request that is already over.
 	extractor := h.structuredExtractor.As(h.llm.bind(ctx, userID, tagCVExtract))
 	st, err := extractor.Extract(ctx, text)
 	if err != nil {
 		log.Printf("resume structured: user %d: %v", userID, err)
+		_ = h.resume.MarkExtractFailed(ctx, userID, "extract failed", *uploadedAt)
 		return
 	}
 	if err := h.resume.SetStructured(ctx, userID, st, extractor.ModelID(), *uploadedAt); err != nil {
 		log.Printf("resume structured persist: user %d: %v", userID, err)
+		_ = h.resume.MarkExtractFailed(ctx, userID, "persist failed", *uploadedAt)
+		return
 	}
-	// The bank is fed from the SAME extraction, inside the same guard: an unconfigured
-	// LLM or a failed extract has already returned above, so there is no path where the
-	// bank sees a CV the structured résumé did not. Unlike the structure, the import is
-	// additive and unstamped — a slow extraction for an already-replaced CV adds atoms
-	// that are still true, so it is not gated on the upload time matching.
 	h.importExperience(ctx, userID, st, uploadedAt.UTC().Format(time.RFC3339))
 }
 
 // GetResume reports whether the caller has a stored résumé (and when). Always 200:
 // unconfigured storage or no résumé is a normal state the SPA renders (it decides between
 // "re-run coherence" and a single upload prompt). Cookie-only.
+// Identity composition follows internal/resume/AGENTS.md: owned contacts as a block,
+// current structure for semantic sections, provisional contacts while pending.
 func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -395,33 +409,140 @@ func (h *resumeHandlers) GetResume(c *fiber.Ctx) error {
 		return err
 	}
 	resp := newResumeMeta(true, meta)
-	// Attach the parsed résumé, with its WORK HISTORY taken from the experience bank
-	// rather than from the stored structure. The rest of the structure — contacts,
-	// education, languages, the years estimate — still comes from the file, and is still
-	// governed by its staleness rule; the bank is not, so a pending extraction costs
-	// those sections and no longer hides the career the user has confirmed.
-	//
-	// This read is cookie-only, which is why it is the one surface that carries contacts.
-	var st resumeextract.Structured
-	var haveStructure bool
-	if stored, ok, err := h.resume.Structured(c.Context(), userID); err != nil {
-		log.Printf("resume structured read: user %d: %v", userID, err)
-	} else if ok {
-		st, haveStructure = stored, true
+
+	row, err := h.resume.StructuredRow(c.Context(), userID)
+	if err != nil {
+		log.Printf("resume structured row: user %d: %v", userID, err)
+	} else {
+		es := resume.ResolveExtractStatus(row)
+		resp.ParseStatus = es.Status
+		resp.ParseDetail = es.Detail
+		resp.StructurePending = es.Status == resume.ExtractStatusPending || es.Status == resume.ExtractStatusFailed
 	}
-	st.Experience = nil
-	if h.bank != nil {
-		history, err := h.bank.WorkHistory(c.Context(), userID)
-		if err != nil {
-			log.Printf("resume work history: user %d: %v", userID, err)
-		} else {
-			st.Experience = history
+
+	if owned, err := h.resume.CandidateContacts(c.Context(), userID); err != nil {
+		log.Printf("resume contacts: user %d: %v", userID, err)
+	} else if !owned.Empty() {
+		contacts := owned
+		resp.Contacts = &contacts
+	}
+
+	var st resumeextract.Structured
+	if pr, err := h.resume.ProfileReadForUser(c.Context(), userID); err != nil {
+		log.Printf("resume structured read: user %d: %v", userID, err)
+	} else {
+		if pr.Pending {
+			resp.StructurePending = true
+		}
+		// pr.Structure already carries only identity fields when !pr.Current (see
+		// ProfileReadForUser / provisionalContacts) — nothing further to strip here.
+		st = pr.Structure
+		st.Experience = nil
+		// Prefer owned contacts on the composed structured view for Profile.
+		if resp.Contacts != nil {
+			st.FullName = resp.Contacts.FullName
+			st.Email = resp.Contacts.Email
+			st.Phone = resp.Contacts.Phone
+			st.Location = resp.Contacts.Location
+			st.Links = append([]string(nil), resp.Contacts.Links...)
 		}
 	}
-	if haveStructure || len(st.Experience) > 0 {
+	if h.bank != nil {
+		history, err := h.bank.SeedHistory(c.Context(), userID)
+		if err != nil {
+			log.Printf("resume seed history: user %d: %v", userID, err)
+		} else {
+			st.Experience = history.Experience
+			st.Projects = history.Projects
+		}
+	}
+	if resumeStructureWorthServing(st) {
 		resp.Structured = &st
 	}
 	return c.JSON(fiber.Map{"data": resp})
+}
+
+// PutResumeContacts replaces candidate-owned contacts without a CV upload.
+func (h *resumeHandlers) PutResumeContacts(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in resume.Contacts
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid contacts body")
+	}
+	out, err := h.resume.SetCandidateContacts(c.Context(), userID, in)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": out})
+}
+
+// ReplaceResumeContactsFromCV overwrites owned contacts from the current structured résumé.
+func (h *resumeHandlers) ReplaceResumeContactsFromCV(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	st, ok, err := h.resume.Structured(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fiber.NewError(fiber.StatusConflict, "no current structured résumé to copy contacts from")
+	}
+	out, err := h.resume.ReplaceContactsFromStructured(c.Context(), userID, st)
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": out})
+}
+
+// RetryResumeParse re-runs structured extraction for the stored CV without re-uploading.
+func (h *resumeHandlers) RetryResumeParse(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	if !h.resume.Enabled() {
+		return fiber.NewError(fiber.StatusNotImplemented, "résumé storage is not available")
+	}
+	uploadedAt, err := h.resume.UploadedAt(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	if uploadedAt == nil {
+		return fiber.NewError(fiber.StatusConflict, "upload a résumé before retrying parse")
+	}
+	text, err := h.resume.Text(c.Context(), userID)
+	if errors.Is(err, resume.ErrNotStored) {
+		return fiber.NewError(fiber.StatusConflict, "stored résumé file is missing — upload it again")
+	}
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(text) == "" {
+		return fiber.NewError(fiber.StatusConflict, "stored résumé has no extractable text")
+	}
+	if err := h.resume.MarkExtractPending(c.Context(), userID, *uploadedAt); err != nil {
+		return err
+	}
+	go h.extractStructuredResume(userID, text, uploadedAt)
+	return c.JSON(fiber.Map{"data": fiber.Map{"parse_status": resume.ExtractStatusPending}})
+}
+
+// resumeStructureWorthServing reports whether the composed structure has anything the
+// profile tab should render (contacts and/or banked experience / semantic sections).
+func resumeStructureWorthServing(st resumeextract.Structured) bool {
+	if st.FullName != "" || st.Email != "" || st.Phone != "" || st.Location != "" || len(st.Links) > 0 {
+		return true
+	}
+	if len(st.Experience) > 0 || len(st.Education) > 0 || len(st.Skills) > 0 ||
+		len(st.Languages) > 0 || len(st.Projects) > 0 || len(st.Certifications) > 0 {
+		return true
+	}
+	return st.Summary != "" || st.Headline != "" || st.TotalYears > 0
 }
 
 // DeleteResume removes the caller's stored résumé (object + pointer). 501 when storage is

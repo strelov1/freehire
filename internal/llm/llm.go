@@ -13,6 +13,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -361,14 +362,45 @@ func intFrom(v any) (int, bool) {
 	return 0, false
 }
 
-// StripJSONFence trims surrounding whitespace and a leading/trailing markdown
-// code fence (```json … ```) some models add even in JSON mode.
+// StripJSONFence recovers a single JSON value from model output that wrapped it
+// in a markdown fence, left an extra trailing tick, or added a short preamble.
+// Haiku in particular returns ```json … ``` plus occasional trailer backticks
+// that the old prefix/suffix trim left behind as "invalid character '`' after
+// top-level value".
 func StripJSONFence(raw string) string {
 	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		if nl := strings.IndexByte(s, '\n'); nl >= 0 {
+			s = s[nl+1:]
+		} else {
+			s = strings.TrimPrefix(s, "```")
+		}
+		s = strings.TrimSpace(s)
+	}
+	if i := strings.LastIndex(s, "\n```"); i >= 0 {
+		s = strings.TrimSpace(s[:i])
+	} else {
+		s = strings.TrimSpace(strings.TrimSuffix(s, "```"))
+	}
+	if cut := firstJSONValue(s); cut != "" {
+		return cut
+	}
+	return s
+}
+
+// firstJSONValue returns the first top-level JSON object or array in s, ignoring
+// any trailing junk a model left after it. Empty when none decodes.
+func firstJSONValue(s string) string {
+	start := strings.IndexAny(s, "{[")
+	if start < 0 {
+		return ""
+	}
+	dec := json.NewDecoder(strings.NewReader(s[start:]))
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 // TruncateRunes returns s clamped to at most limit runes, never splitting a rune.

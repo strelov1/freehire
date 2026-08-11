@@ -190,6 +190,45 @@ func TestImportNeverOverwritesAUserEdit(t *testing.T) {
 	}
 }
 
+func TestImportFillsEmptyProjectLinkAndPreservesExisting(t *testing.T) {
+	s, _ := newStore()
+	ctx := context.Background()
+
+	created, err := s.CreateEmployment(ctx, owner, Employment{
+		Kind: KindProject, Company: "telagon.io",
+	})
+	if err != nil {
+		t.Fatalf("CreateEmployment: %v", err)
+	}
+
+	if _, err := s.Import(ctx, owner, []ImportEntry{{
+		Employment: Employment{Kind: KindProject, Company: "telagon.io", Link: "https://telagon.io"},
+		Claims:     []string{"1.4M+ channels indexed"},
+	}}, "stamp"); err != nil {
+		t.Fatalf("Import fill: %v", err)
+	}
+	got, err := s.GetEmployment(ctx, created.ID, owner)
+	if err != nil {
+		t.Fatalf("GetEmployment: %v", err)
+	}
+	if got.Link != "https://telagon.io" {
+		t.Errorf("link = %q, want blank filled from the CV", got.Link)
+	}
+
+	if _, err := s.Import(ctx, owner, []ImportEntry{{
+		Employment: Employment{Kind: KindProject, Company: "telagon.io", Link: "https://other.example"},
+	}}, "stamp2"); err != nil {
+		t.Fatalf("Import preserve: %v", err)
+	}
+	got, err = s.GetEmployment(ctx, created.ID, owner)
+	if err != nil {
+		t.Fatalf("GetEmployment after re-import: %v", err)
+	}
+	if got.Link != "https://telagon.io" {
+		t.Errorf("link = %q, want the earlier value preserved", got.Link)
+	}
+}
+
 // A CV row that names no company and no role names no PLACE — but its bullets are still
 // achievements. They are banked standing alone rather than discarded: the bias of this
 // domain is that evidence is never lost because its context was unparseable. Nor may such

@@ -103,6 +103,28 @@ services:
       LLM_BASE_URL: "${LLM_BASE_URL:-}"
       LLM_API_KEY: "${LLM_API_KEY:-}"
       LLM_MODEL: "${LLM_MODEL:-}"
+      # Optional: the assistant's own model, chosen for tool calling rather than
+      # cheap one-shot extraction. Falls back to LLM_MODEL.
+      ASSISTANT_MODEL: "${ASSISTANT_MODEL:-}"
+      # Bullets allowed per experience or project. Unset (or below 1) means 20.
+      # The agent reads the live value into its cv_edit tool description, so
+      # raising this needs no prompt change.
+      CV_MAX_BULLETS: "${CV_MAX_BULLETS:-}"
+      # Fit-analysis sanitize ceilings for untrusted model output (see .env.example).
+      # Empty/unset falls back to internal/matchanalysis's own DefaultBounds — these
+      # were documented in .env.example but never reached the container, so setting
+      # them in .env silently had no effect.
+      MATCH_ANALYSIS_MAX_COMMENT_RUNES: "${MATCH_ANALYSIS_MAX_COMMENT_RUNES:-}"
+      MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES: "${MATCH_ANALYSIS_MAX_LIST_ITEM_RUNES:-}"
+      MATCH_ANALYSIS_MAX_RECOMMEND_RUNES: "${MATCH_ANALYSIS_MAX_RECOMMEND_RUNES:-}"
+      MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES: "${MATCH_ANALYSIS_MAX_REQ_TEXT_RUNES:-}"
+      MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES: "${MATCH_ANALYSIS_MAX_REQ_EVIDENCE_RUNES:-}"
+      MATCH_ANALYSIS_MAX_STRENGTHS: "${MATCH_ANALYSIS_MAX_STRENGTHS:-}"
+      MATCH_ANALYSIS_MAX_GAPS: "${MATCH_ANALYSIS_MAX_GAPS:-}"
+      MATCH_ANALYSIS_MAX_REQUIREMENTS: "${MATCH_ANALYSIS_MAX_REQUIREMENTS:-}"
+      MATCH_ANALYSIS_MAX_SIGNALS: "${MATCH_ANALYSIS_MAX_SIGNALS:-}"
+      MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES: "${MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES:-}"
+      MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES: "${MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES:-}"
       LANGFUSE_BASE_URL: "${LANGFUSE_BASE_URL:-}"
       LANGFUSE_PUBLIC_KEY: "${LANGFUSE_PUBLIC_KEY:-}"
       LANGFUSE_SECRET_KEY: "${LANGFUSE_SECRET_KEY:-}"

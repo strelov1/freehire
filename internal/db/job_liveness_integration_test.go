@@ -9,6 +9,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // orphanParams builds an UpsertJob for a non-board source (no ingest sweep ever
@@ -163,5 +164,62 @@ func TestSelectOrphanLivenessCandidatesExcludesBoardAndClosed(t *testing.T) {
 	}
 	if len(cands) != 1 || cands[0].ID != orphan.ID {
 		t.Fatalf("candidates must be exactly the open orphan job, got %d rows", len(cands))
+	}
+}
+
+// himalayasParams builds an UpsertJob for himalayas, a registered but recency-budgeted
+// aggregator whose ingest sweep can age a company out of its crawled-slug scope (see
+// job-lifecycle) — the population SelectStaleRegisteredCandidates backstops.
+func himalayasParams(externalID, title string) UpsertJobParams {
+	p := ingestParams(externalID, title)
+	p.Source = "himalayas"
+	return p
+}
+
+func TestSelectStaleRegisteredCandidatesOnlyPastCutoff(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	stale, err := ingestUpsert(ctx, q, himalayasParams("hm:1", "Stale"))
+	if err != nil {
+		t.Fatalf("upsert stale: %v", err)
+	}
+	ageJob(t, pool, stale.ID, 72*time.Hour)
+
+	// A fresh (recently seen) himalayas job must not be a candidate — only the sweep's
+	// own 48h staleness window makes a job eligible for this backstop.
+	if _, err := ingestUpsert(ctx, q, himalayasParams("hm:2", "Fresh")); err != nil {
+		t.Fatalf("upsert fresh: %v", err)
+	}
+
+	// A stale job from a DIFFERENT source must not leak in — the sweep for other
+	// providers is not the scope leak this candidate set exists to backstop.
+	otherSource, err := ingestUpsert(ctx, q, ingestParams("gh:1", "OtherSource"))
+	if err != nil {
+		t.Fatalf("upsert other source: %v", err)
+	}
+	ageJob(t, pool, otherSource.ID, 72*time.Hour)
+
+	// A stale but already-closed himalayas job must not be re-probed.
+	closedStale, err := ingestUpsert(ctx, q, himalayasParams("hm:3", "ClosedStale"))
+	if err != nil {
+		t.Fatalf("upsert closed stale: %v", err)
+	}
+	ageJob(t, pool, closedStale.ID, 72*time.Hour)
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", closedStale.ID); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+
+	cands, err := q.SelectStaleRegisteredCandidates(ctx, SelectStaleRegisteredCandidatesParams{
+		Sources: []string{"himalayas"},
+		Cutoff:  pgTimestamptz(time.Now().Add(-48 * time.Hour)),
+	})
+	if err != nil {
+		t.Fatalf("select stale registered candidates: %v", err)
+	}
+	if len(cands) != 1 || cands[0].ID != stale.ID {
+		t.Fatalf("candidates must be exactly the stale open himalayas job, got %d rows", len(cands))
 	}
 }

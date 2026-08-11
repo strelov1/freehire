@@ -56,6 +56,9 @@ func TestImportEntriesFromStructured(t *testing.T) {
 	if project.Employment.Company != "telagon.io" {
 		t.Errorf("project = %+v, want the project named as its place", project.Employment)
 	}
+	if project.Employment.Link != "https://telagon.io" {
+		t.Errorf("project link = %q, want the portfolio URL retained", project.Employment.Link)
+	}
 }
 
 // A CV states "Present" rather than a flag, so the current role is derived from the end

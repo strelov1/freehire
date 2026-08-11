@@ -34,7 +34,7 @@ func (r queriesRepository) CreateEmployment(ctx context.Context, userID int64, e
 	return r.q.CreateExperienceEmployment(ctx, db.CreateExperienceEmploymentParams{
 		UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role, Location: e.Location,
 		PeriodStart: e.Start, PeriodEnd: e.End, IsCurrent: e.Current, Summary: e.Summary,
-		Stack: e.Stack,
+		Stack: e.Stack, Link: e.Link,
 	})
 }
 
@@ -42,7 +42,7 @@ func (r queriesRepository) UpdateEmployment(ctx context.Context, id uuid.UUID, u
 	return r.q.UpdateExperienceEmployment(ctx, db.UpdateExperienceEmploymentParams{
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role, Location: e.Location,
 		PeriodStart: e.Start, PeriodEnd: e.End, IsCurrent: e.Current, Summary: e.Summary,
-		Stack: e.Stack,
+		Stack: e.Stack, Link: e.Link,
 	})
 }
 
@@ -51,7 +51,7 @@ func (r queriesRepository) UpdateEmployment(ctx context.Context, id uuid.UUID, u
 func (r queriesRepository) FillEmploymentBlanks(ctx context.Context, id uuid.UUID, userID int64, e Employment) (db.ExperienceEmployment, error) {
 	return r.q.FillExperienceEmploymentBlanks(ctx, db.FillExperienceEmploymentBlanksParams{
 		ID: id, UserID: userID, Company: e.Company, Role: e.Role, Location: e.Location,
-		PeriodStart: e.Start, PeriodEnd: e.End, Summary: e.Summary, Stack: e.Stack,
+		PeriodStart: e.Start, PeriodEnd: e.End, Summary: e.Summary, Stack: e.Stack, Link: e.Link,
 	})
 }
 
@@ -84,4 +84,36 @@ func (r queriesRepository) UpdateAtom(ctx context.Context, id uuid.UUID, userID 
 
 func (r queriesRepository) DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) (int64, error) {
 	return r.q.DeleteExperienceAtom(ctx, db.DeleteExperienceAtomParams{ID: id, UserID: userID})
+}
+
+func (r queriesRepository) MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error) {
+	row, err := r.q.MergeExperienceAtoms(ctx, db.MergeExperienceAtomsParams{
+		Context: a.Context, Metrics: a.Metrics, Skills: a.Skills,
+		Provenance: string(a.Provenance), KeepID: keepID, UserID: userID, LoserID: loserID,
+	})
+	if err != nil {
+		return db.ExperienceAtom{}, err
+	}
+	// The query's final SELECT reads through a CTE alias rather than the experience_atoms
+	// table directly, so sqlc cannot trace its columns back to the sqlc.yaml uuid.UUID
+	// overrides and generates raw pgtype.UUID fields instead of the ExperienceAtom model.
+	// Same data; converted here rather than changing the Repository/Store contract.
+	atom := db.ExperienceAtom{
+		ID:         uuid.UUID(row.ID.Bytes),
+		UserID:     row.UserID,
+		Claim:      row.Claim,
+		ClaimKey:   row.ClaimKey,
+		Context:    row.Context,
+		Metrics:    row.Metrics,
+		Skills:     row.Skills,
+		Provenance: row.Provenance,
+		SourceRef:  row.SourceRef,
+		CreatedAt:  row.CreatedAt,
+		UpdatedAt:  row.UpdatedAt,
+	}
+	if row.EmploymentID.Valid {
+		id := uuid.UUID(row.EmploymentID.Bytes)
+		atom.EmploymentID = &id
+	}
+	return atom, nil
 }

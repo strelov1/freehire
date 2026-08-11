@@ -54,6 +54,32 @@ func (s *Store) WorkHistory(ctx context.Context, userID int64) ([]resumeextract.
 	return experienceFromBank(employments, atoms), nil
 }
 
+// SeedHistory is the bank projection CV seed needs: jobs and projects kept apart, with
+// flags so the seeder knows whether to fall back to the structured résumé. The two flags
+// are independent — a bank holding only project-kind rows must not be read as "has job
+// history" (or the seeder would blank real roles the structure still has), and vice versa.
+type SeedHistory struct {
+	Experience            []resumeextract.Experience
+	Projects              []resumeextract.Project
+	HasJobEmployments     bool
+	HasProjectEmployments bool
+}
+
+// SeedHistory renders employments for CV seed: job-kind rows become work history, project-
+// kind rows become portfolio projects (name, link, publishable highlights). Fit analysis
+// keeps using WorkHistory, which still flattens every place into experience-shaped rows.
+func (s *Store) SeedHistory(ctx context.Context, userID int64) (SeedHistory, error) {
+	employments, err := s.ListEmployments(ctx, userID)
+	if err != nil {
+		return SeedHistory{}, err
+	}
+	atoms, err := s.ListAtoms(ctx, userID)
+	if err != nil {
+		return SeedHistory{}, err
+	}
+	return seedHistoryFromBank(employments, atoms), nil
+}
+
 // experienceFromBank renders the bank as work-history entries, in the order the store
 // returned the employments (current roles first, most recent within that).
 //
@@ -61,33 +87,13 @@ func (s *Store) WorkHistory(ctx context.Context, userID int64) ([]resumeextract.
 // candidate stands behind, and this projection feeds both the model that scores their fit
 // and the CV seeded from it.
 func experienceFromBank(employments []Employment, atoms []Atom) []resumeextract.Experience {
-	highlights := make(map[uuid.UUID][]string, len(employments))
-	var placeless []string
-	for _, atom := range atoms {
-		if !atom.Provenance.Publishable() {
-			continue
-		}
-		if atom.EmploymentID == nil {
-			placeless = append(placeless, atom.Claim)
-			continue
-		}
-		highlights[*atom.EmploymentID] = append(highlights[*atom.EmploymentID], atom.Claim)
-	}
+	highlights, placeless := publishableHighlights(atoms)
 
 	out := make([]resumeextract.Experience, 0, len(employments)+1)
 	for _, e := range employments {
 		// A role with no evidence under it is still career history: job titles matter to
 		// the fit chain before their bullets do.
-		out = append(out, resumeextract.Experience{
-			Title:      e.Role,
-			Company:    e.Company,
-			Location:   e.Location,
-			Start:      e.Start,
-			End:        e.End,
-			Summary:    e.Summary,
-			Highlights: highlights[e.ID],
-			Stack:      e.Stack,
-		})
+		out = append(out, experienceRow(e, highlights[e.ID]))
 	}
 
 	// Evidence with no place is still evidence — often the most valuable kind, since it is
@@ -103,4 +109,65 @@ func experienceFromBank(employments []Employment, atoms []Atom) []resumeextract.
 		out = append(out, resumeextract.Experience{Highlights: placeless})
 	}
 	return out
+}
+
+func seedHistoryFromBank(employments []Employment, atoms []Atom) SeedHistory {
+	highlights, placeless := publishableHighlights(atoms)
+	var out SeedHistory
+	for _, e := range employments {
+		hs := highlights[e.ID]
+		if e.Kind == KindProject {
+			out.HasProjectEmployments = true
+			name := e.Company
+			if name == "" {
+				name = e.Role
+			}
+			out.Projects = append(out.Projects, resumeextract.Project{
+				Name:       name,
+				Link:       e.Link,
+				Highlights: hs,
+			})
+			continue
+		}
+		out.Experience = append(out.Experience, experienceRow(e, hs))
+	}
+	if len(placeless) > 0 {
+		out.Experience = append(out.Experience, resumeextract.Experience{Highlights: placeless})
+	}
+	// Job-kind rows and placeless evidence both land in Experience; a bank that only ever
+	// held project-kind rows leaves it empty, and the seeder must fall back to the
+	// structure rather than reading "the bank was touched at all" as "the bank owns roles".
+	out.HasJobEmployments = len(out.Experience) > 0
+	return out
+}
+
+// experienceRow renders one dated employment (job or, when flattened for WorkHistory,
+// project) as a résumé work-history entry, its highlights already resolved by the caller.
+func experienceRow(e Employment, highlights []string) resumeextract.Experience {
+	return resumeextract.Experience{
+		Title:      e.Role,
+		Company:    e.Company,
+		Location:   e.Location,
+		Start:      e.Start,
+		End:        e.End,
+		Summary:    e.Summary,
+		Highlights: highlights,
+		Stack:      e.Stack,
+	}
+}
+
+func publishableHighlights(atoms []Atom) (map[uuid.UUID][]string, []string) {
+	highlights := make(map[uuid.UUID][]string)
+	var placeless []string
+	for _, atom := range atoms {
+		if !atom.Provenance.Publishable() {
+			continue
+		}
+		if atom.EmploymentID == nil {
+			placeless = append(placeless, atom.Claim)
+			continue
+		}
+		highlights[*atom.EmploymentID] = append(highlights[*atom.EmploymentID], atom.Claim)
+	}
+	return highlights, placeless
 }

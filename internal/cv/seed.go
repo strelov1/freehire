@@ -67,5 +67,9 @@ func Seed(s resumeextract.Structured) Document {
 		})
 	}
 
+	for _, name := range s.Certifications {
+		doc.Certifications = append(doc.Certifications, Certification{Name: name})
+	}
+
 	return doc
 }

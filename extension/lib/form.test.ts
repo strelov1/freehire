@@ -9,6 +9,11 @@ import {
   scopeToApplication,
 } from './form';
 
+function must<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('expected a defined value');
+  return value;
+}
+
 function reset() {
   document.body.replaceChildren();
 }
@@ -547,14 +552,14 @@ describe('extractForm grouping', () => {
   it('reaches a plain field standing behind a group', () => {
     // The group sits *before* the plain field and collapses three controls into
     // one question, so anything addressing by position has to survive that.
-    const [germany] = checkboxGroup('Countries', ['Germany', 'Poland', 'Spain']);
+    const germany = must(checkboxGroup('Countries', ['Germany', 'Poland', 'Spain'])[0]);
     const email = labeledInput('em', 'Email', { type: 'email' });
 
     const emailField = extractForm(document).find((f) => f.label === 'Email')!;
     fillByLabel(document, [{ label: emailField.label, value: 'ilya@example.com' }]);
 
     expect(email.value).toBe('ilya@example.com');
-    expect(germany!.checked).toBe(false);
+    expect(germany.checked).toBe(false);
   });
 });
 
@@ -562,32 +567,37 @@ describe('fillByLabel on a group', () => {
   beforeEach(reset);
 
   it('ticks the control for the chosen option, reporting the outcome for the question', () => {
-    const [germany, poland] = checkboxGroup('Which countries?', ['Germany', 'Poland', 'Spain']);
+    const countries = checkboxGroup('Which countries?', ['Germany', 'Poland', 'Spain']);
+    const germany = must(countries[0]);
+    const poland = must(countries[1]);
 
     const outcomes = fillByLabel(document, [{ label: 'Which countries?', value: 'Poland' }]);
 
-    expect(poland!.checked).toBe(true);
-    expect(germany!.checked).toBe(false);
+    expect(poland.checked).toBe(true);
+    expect(germany.checked).toBe(false);
     expect(outcomes).toEqual([{ label: 'Which countries?', status: 'filled' }]);
   });
 
   it('accepts back the joined value it reported, ticking every named option', () => {
-    const [germany, poland, spain] = checkboxGroup('Which countries?', ['Germany', 'Poland', 'Spain']);
+    const countries = checkboxGroup('Which countries?', ['Germany', 'Poland', 'Spain']);
+    const germany = must(countries[0]);
+    const poland = must(countries[1]);
+    const spain = must(countries[2]);
 
     const outcomes = fillByLabel(document, [{ label: 'Which countries?', value: 'Germany, Spain' }]);
 
-    expect([germany!.checked, poland!.checked, spain!.checked]).toEqual([true, false, true]);
+    expect([germany.checked, poland.checked, spain.checked]).toEqual([true, false, true]);
     expect(outcomes).toEqual([{ label: 'Which countries?', status: 'filled' }]);
   });
 
   it("prefers an option's own comma to a list separator", () => {
     // Splitting first would look for "Korea" and "Republic of", find neither,
     // and refuse a question the group does in fact offer.
-    const [korea] = checkboxGroup('Which countries?', ['Korea, Republic of', 'Japan']);
+    const korea = must(checkboxGroup('Which countries?', ['Korea, Republic of', 'Japan'])[0]);
 
     fillByLabel(document, [{ label: 'Which countries?', value: 'Korea, Republic of' }]);
 
-    expect(korea!.checked).toBe(true);
+    expect(korea.checked).toBe(true);
   });
 
   it('round-trips a value whose options contain commas of their own', () => {

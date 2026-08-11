@@ -331,6 +331,18 @@ func (h *cvHandlers) GetCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
+	// Owner cookie sessions: fill empty header contacts from résumé identity
+	// (owned / current / provisional — see healRecordHeader). API-key reads stay
+	// redacted and never trigger a heal write. List and PDF do not heal.
+	if !auth.ViaAPIKey(c) && rec.IsTailored {
+		healed, herr := h.healRecordHeader(c.Context(), userID, rec)
+		if herr != nil {
+			log.Printf("cv: healing tailored header %s: %v", id, herr)
+		} else {
+			rec = healed
+		}
+		h.healBaseHeaderIfNeeded(c.Context(), userID)
+	}
 	return c.JSON(fiber.Map{"data": recordResponse(rec)})
 }
 

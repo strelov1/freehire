@@ -287,10 +287,16 @@ func TestTrimTruncateRunes(t *testing.T) {
 
 func TestStripJSONFence(t *testing.T) {
 	cases := map[string]string{
-		"```json\n{\"a\":1}\n```": `{"a":1}`,
-		"```\n{\"a\":1}\n```":     `{"a":1}`,
-		`{"a":1}`:                 `{"a":1}`,
-		"  {\"a\":1}  ":           `{"a":1}`,
+		"```json\n{\"a\":1}\n```":        `{"a":1}`,
+		"```\n{\"a\":1}\n```":            `{"a":1}`,
+		"```JSON\n{\"a\":1}\n```":        `{"a":1}`,
+		"``` json\n{\"a\":1}\n```":       `{"a":1}`,
+		`{"a":1}`:                        `{"a":1}`,
+		"  {\"a\":1}  ":                  `{"a":1}`,
+		"```json\n{\"a\":1}\n```\n`":     `{"a":1}`,
+		"```json\n{\"a\":1}\n````":       `{"a":1}`,
+		"```json\n{\"a\":1}\n```\nDone.": `{"a":1}`,
+		"Here:\n```json\n{\"a\":1}\n```": `{"a":1}`,
 	}
 	for in, want := range cases {
 		if got := StripJSONFence(in); got != want {

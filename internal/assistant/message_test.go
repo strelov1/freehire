@@ -63,6 +63,56 @@ func TestAssistantMessageWithToolCallsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestHealToolArgumentsStripsHaikuXMLTrailer(t *testing.T) {
+	// Haiku has appended Anthropic XML close-tags after a complete JSON object.
+	// Bedrock rejects the next turn unless replay sees legal JSON arguments.
+	poisoned := `{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"x","evidence_id":"9ce2fcf5-467b-498b-9c12-737c08cf4697"}],"note":"n","requirement":"r","requirement_status":"closed_bank"}` +
+		"\n</invoke>\": \"\"}"
+	want := `{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"x","evidence_id":"9ce2fcf5-467b-498b-9c12-737c08cf4697"}],"note":"n","requirement":"r","requirement_status":"closed_bank"}`
+	if got := healToolArguments(poisoned); got != want {
+		t.Fatalf("healToolArguments = %q, want %q", got, want)
+	}
+
+	stored, err := EncodeAssistant("", []llms.ToolCall{{
+		ID: "tooluse_x", Type: "function",
+		FunctionCall: &llms.FunctionCall{Name: "cv_edit", Arguments: poisoned},
+	}})
+	if err != nil {
+		t.Fatalf("EncodeAssistant: %v", err)
+	}
+	got, err := stored.Decode()
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	calls := toolCallParts(got)
+	if len(calls) != 1 || calls[0].FunctionCall.Arguments != want {
+		t.Fatalf("replayed arguments = %+v, want healed JSON", calls)
+	}
+}
+
+func TestLooksConcatenatedDetectsTwoJSONValues(t *testing.T) {
+	if !looksConcatenated(`{"ops":[1]}{"ops":[2]}`) {
+		t.Error("want true for two complete JSON objects with no separator")
+	}
+	if !looksConcatenated(`{"a":1} {"b":2}`) {
+		t.Error("want true even with whitespace between the two values")
+	}
+}
+
+func TestLooksConcatenatedFalseForTrailerJunkAndValidJSON(t *testing.T) {
+	// The Haiku XML-trailer case healToolArguments patches — not a second value.
+	poisoned := `{"ops":[1]}` + "\n</invoke>\": \"\"}"
+	if looksConcatenated(poisoned) {
+		t.Error("want false: trailing non-JSON junk is trailer noise, not a second call")
+	}
+	if looksConcatenated(`{"ops":[1]}`) {
+		t.Error("want false for already-valid single JSON")
+	}
+	if looksConcatenated("") {
+		t.Error("want false for empty args")
+	}
+}
+
 func TestAssistantMessageWithoutTextOmitsTheTextPart(t *testing.T) {
 	// A pure tool-call turn has no prose. Sending an empty text part back to the
 	// model is a malformed message for some providers, so it must not be emitted.

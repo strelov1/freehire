@@ -21,9 +21,12 @@ built from the same services the HTTP handlers use.
 - **A turn is bounded two ways**: tool-calling rounds and the LLM client's per-call
   timeout. Zero/negative bounds fall back to defaults rather than meaning
   "unbounded" — an unbounded loop on a metered gateway is a runaway bill. The round
-  ceiling is `RunnerConfig.MaxSteps` unless the turn names its own through
-  `TurnConfig`; that value is always chosen server-side, because a ceiling a client
-  can raise is not a ceiling.
+  ceiling is `RunnerConfig.MaxSteps` (default 8) unless the turn names its own through
+  `TurnConfig`; interactive tailor uses 16 and autopilot 30. That value is always
+  chosen server-side, because a ceiling a client can raise is not a ceiling. The
+  max-steps wrap-up call offers no tools; if a provider still emits tool calls
+  (Haiku on Bedrock has), they are executed before the turn stops so the transcript
+  never ends on a dangling `tool_use`.
 - **A turn outlives its reader, and stops only when asked.** A failed SSE write means
   this reader is not listening — a phone freezing a backgrounded tab, a slept laptop
   — and nothing more; the turn runs to its own end and its transcript is stored
@@ -118,6 +121,15 @@ Three decisions carry it:
   untrusted in the payload itself. Registering the seven inbox tools to retrieve one
   predictable fact would be paid for on every turn — and `inbox.Service.InterviewInvitation`
   keeps the read inside the package whose rule it is, so `read_at` stays untouched.
+- **Search finds by meaning; only `experience_get` finds by id.** `experience_search` scores
+  a query against the owner's atoms and drops zero-scoring matches, so an id passed as a
+  query matches nothing — and an empty search result means "no such evidence". Three
+  surfaces hand the agent ids (an opening message naming a selection, `get_profile`'s
+  `soft_duplicate_clusters`, the id a merge returns), and before the read tool existed the
+  interviewer reported the candidate's own achievements as non-existent and answered about
+  a different set. `experience_get` resolves ids in one owner-scoped pass, reports
+  unresolvable ones instead of failing, and caps a call while naming what it did not read.
+  A foreign id reads exactly like a deleted one.
 - **The bank gate is a prompt rule, deliberately.** `experience_add` takes `said` as a
   string and stamps `stated_in_chat` whoever composed it, so the service cannot tell the
   candidate's words from the model's paraphrase. The prompt requires their explicit

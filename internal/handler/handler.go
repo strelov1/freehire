@@ -355,7 +355,7 @@ func Register(app *fiber.App, cfg Config) {
 	// SetProfileSkills folds every atom this bank ever writes into the owner's search
 	// profile, so a skill proven in the bank reaches job filters without a manual step.
 	bank := experience.NewStore(experience.NewQueriesRepository(queries)).SetProfileSkills(profileSvc)
-	experienceH := newExperienceHandlers(bank)
+	experienceH := newExperienceHandlers(bank).withRequireContext(queries)
 	// Nil-safe: NewAnalyzer(nil) is a no-op analyzer, so the ATS report works whether
 	// or not the LLM is configured.
 	atsAnalyzer := atscheck.NewAnalyzer(cfg.LLM)

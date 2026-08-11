@@ -64,6 +64,9 @@ func (b *bankStub) AddAtom(_ context.Context, _ int64, a experience.Atom) (exper
 func (b *bankStub) UpdateAtom(_ context.Context, _ uuid.UUID, _ int64, a experience.Atom) (experience.Atom, error) {
 	return a, nil
 }
+func (b *bankStub) MergeAtoms(context.Context, int64, uuid.UUID, uuid.UUID) (experience.Atom, error) {
+	return experience.Atom{}, experience.ErrNotFound
+}
 
 const twoRequirementAnalysis = `{
 	"requirement_match": [

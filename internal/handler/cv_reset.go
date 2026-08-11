@@ -7,6 +7,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
+	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
 // ResetCVFromResume rebuilds a tailored CV's content from the current résumé seed
@@ -39,7 +40,11 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !ok || !hasSeedBody(st) {
+		// ok alone (from StructureForSeed/seedable) is satisfied by identity fields
+		// alone — candidate-owned contacts with no résumé ever uploaded and no bank
+		// rows. This is a destructive whole-document replace of an EXISTING CV, unlike
+		// first-time tailor bootstrap: identity alone is not reason enough to wipe it.
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before resetting from it")
 	}
 	seeded := cv.Seed(st)
@@ -103,6 +108,7 @@ func (h *cvHandlers) reseedBaseFromSeed(c *fiber.Ctx, userID int64, seeded cv.Do
 // reseedBaseIfStaleVsUpload refreshes the base from bankedSeeder when it predates the
 // caller's current résumé upload. No-op when there is no base, no upload stamp, the base
 // was edited at/after the upload, or the seed is unusable.
+// Current structure: full reseed. Pending extract: header heal only (see AGENTS.md).
 func (h *cvHandlers) reseedBaseIfStaleVsUpload(c *fiber.Ctx, userID int64) error {
 	if h.resume == nil {
 		return nil
@@ -122,5 +128,30 @@ func (h *cvHandlers) reseedBaseIfStaleVsUpload(c *fiber.Ctx, userID int64) error
 	if err != nil || !usable {
 		return err
 	}
+	// A current structure refreshes the whole base from the seed. Provisional-only
+	// identity (pending extract) only heals the header — a full Seed would blank
+	// summary/education the candidate already has on the base. Same for a seed that
+	// is technically current/usable but carries identity alone: not enough reason to
+	// wipe an existing base's body.
+	if _, current, cerr := h.resume.Structured(c.Context(), userID); cerr != nil {
+		return cerr
+	} else if !current {
+		_, err := h.healRecordHeader(c.Context(), userID, base)
+		return err
+	}
+	if !hasSeedBody(st) {
+		_, err := h.healRecordHeader(c.Context(), userID, base)
+		return err
+	}
 	return h.reseedBaseFromSeed(c, userID, cv.Seed(st))
+}
+
+// hasSeedBody reports whether a composed seed carries body content — experience,
+// education, skills, and so on — rather than identity alone. seedable() (cv_seed.go)
+// treats FullName alone as enough reason to seed a brand-new, empty CV; a destructive
+// whole-document replace of an EXISTING CV needs a higher bar.
+func hasSeedBody(st resumeextract.Structured) bool {
+	return len(st.Experience) > 0 || len(st.Education) > 0 || len(st.Skills) > 0 ||
+		len(st.Languages) > 0 || len(st.Projects) > 0 || len(st.Certifications) > 0 ||
+		st.Summary != "" || st.Headline != ""
 }

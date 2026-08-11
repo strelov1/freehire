@@ -47,7 +47,8 @@ SET resume_object_key = NULL, resume_uploaded_at = NULL, resume_ats_analysis = N
     resume_embedding = NULL, resume_embedding_model = NULL,
     resume_structured = NULL, resume_structured_model = NULL,
     resume_structured_uploaded_at = NULL,
-    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL
+    resume_countries = NULL, resume_regions = NULL, resume_cities = NULL,
+    resume_extract_status = NULL, resume_extract_detail = NULL, resume_extract_for = NULL
 WHERE id = $1
 `
 
@@ -56,7 +57,8 @@ WHERE id = $1
 // derived structured résumé (the structure must not outlive the CV it describes), and
 // the geography derived from that structure (which must not outlive it either — a
 // country left behind here would keep answering "where is this candidate" from a CV
-// that no longer exists).
+// that no longer exists). Candidate contacts are intentionally kept: they are
+// owner-edited identity, not an extract artifact.
 func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, clearUserResume, id)
 	return err
@@ -270,6 +272,34 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 	return i, err
 }
 
+const getUserCandidateContacts = `-- name: GetUserCandidateContacts :one
+SELECT candidate_contacts
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserCandidateContacts(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getUserCandidateContacts, id)
+	var candidate_contacts []byte
+	err := row.Scan(&candidate_contacts)
+	return candidate_contacts, err
+}
+
+const getUserExperienceRequireContext = `-- name: GetUserExperienceRequireContext :one
+SELECT experience_require_context
+FROM users
+WHERE id = $1
+`
+
+// Whether interactive atom creates require a non-empty context. Kept off /auth/me on
+// purpose — only the experience write path and get_profile's bank summary need it.
+func (q *Queries) GetUserExperienceRequireContext(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, getUserExperienceRequireContext, id)
+	var experience_require_context bool
+	err := row.Scan(&experience_require_context)
+	return experience_require_context, err
+}
+
 const getUserPasswordHash = `-- name: GetUserPasswordHash :one
 SELECT password_hash
 FROM users
@@ -382,7 +412,8 @@ func (q *Queries) GetUserResumeGeography(ctx context.Context, id int64) (GetUser
 }
 
 const getUserResumeStructured = `-- name: GetUserResumeStructured :one
-SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at
+SELECT resume_structured, resume_structured_model, resume_structured_uploaded_at, resume_uploaded_at,
+       candidate_contacts, resume_extract_status, resume_extract_detail, resume_extract_for
 FROM users
 WHERE id = $1
 `
@@ -392,12 +423,17 @@ type GetUserResumeStructuredRow struct {
 	ResumeStructuredModel      pgtype.Text        `json:"resume_structured_model"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	ResumeUploadedAt           pgtype.Timestamptz `json:"resume_uploaded_at"`
+	CandidateContacts          []byte             `json:"candidate_contacts"`
+	ResumeExtractStatus        pgtype.Text        `json:"resume_extract_status"`
+	ResumeExtractDetail        pgtype.Text        `json:"resume_extract_detail"`
+	ResumeExtractFor           pgtype.Timestamptz `json:"resume_extract_for"`
 }
 
 // The user's derived structured résumé plus its provenance stamps (the LLM model and
 // the résumé upload time it was derived from), alongside the current résumé upload time
 // so the caller can tell whether the structure still describes the stored CV (served
 // only when resume_structured_uploaded_at equals resume_uploaded_at). NULLs when none.
+// Also returns candidate contacts and last extract status for Profile / seed composition.
 func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUserResumeStructuredRow, error) {
 	row := q.db.QueryRow(ctx, getUserResumeStructured, id)
 	var i GetUserResumeStructuredRow
@@ -406,6 +442,10 @@ func (q *Queries) GetUserResumeStructured(ctx context.Context, id int64) (GetUse
 		&i.ResumeStructuredModel,
 		&i.ResumeStructuredUploadedAt,
 		&i.ResumeUploadedAt,
+		&i.CandidateContacts,
+		&i.ResumeExtractStatus,
+		&i.ResumeExtractDetail,
+		&i.ResumeExtractFor,
 	)
 	return i, err
 }
@@ -622,6 +662,22 @@ func (q *Queries) SetUserATSAnalysis(ctx context.Context, arg SetUserATSAnalysis
 	return err
 }
 
+const setUserCandidateContacts = `-- name: SetUserCandidateContacts :exec
+UPDATE users
+SET candidate_contacts = $2
+WHERE id = $1
+`
+
+type SetUserCandidateContactsParams struct {
+	ID                int64  `json:"id"`
+	CandidateContacts []byte `json:"candidate_contacts"`
+}
+
+func (q *Queries) SetUserCandidateContacts(ctx context.Context, arg SetUserCandidateContactsParams) error {
+	_, err := q.db.Exec(ctx, setUserCandidateContacts, arg.ID, arg.CandidateContacts)
+	return err
+}
+
 const setUserEmailVerified = `-- name: SetUserEmailVerified :exec
 UPDATE users
 SET email_verified = true
@@ -632,6 +688,23 @@ WHERE id = $1
 // no-op rather than an error, so a double-submitted code does not fail the request.
 func (q *Queries) SetUserEmailVerified(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, setUserEmailVerified, id)
+	return err
+}
+
+const setUserExperienceRequireContext = `-- name: SetUserExperienceRequireContext :exec
+UPDATE users
+SET experience_require_context = $2
+WHERE id = $1
+`
+
+type SetUserExperienceRequireContextParams struct {
+	ID                       int64 `json:"id"`
+	ExperienceRequireContext bool  `json:"experience_require_context"`
+}
+
+// Chat-opt-in (or opt-out) for requiring context on interactive experience creates.
+func (q *Queries) SetUserExperienceRequireContext(ctx context.Context, arg SetUserExperienceRequireContextParams) error {
+	_, err := q.db.Exec(ctx, setUserExperienceRequireContext, arg.ID, arg.ExperienceRequireContext)
 	return err
 }
 
@@ -677,9 +750,15 @@ func (q *Queries) SetUserPhoto(ctx context.Context, arg SetUserPhotoParams) erro
 }
 
 const setUserResume = `-- name: SetUserResume :exec
-UPDATE users
-SET resume_object_key = $2, resume_uploaded_at = now(), resume_ats_analysis = NULL
-WHERE id = $1
+UPDATE users u
+SET resume_object_key = $2,
+    resume_uploaded_at = t.ts,
+    resume_ats_analysis = NULL,
+    resume_extract_status = 'pending',
+    resume_extract_detail = NULL,
+    resume_extract_for = t.ts
+FROM (SELECT now() AS ts) t
+WHERE u.id = $1
 `
 
 type SetUserResumeParams struct {
@@ -689,7 +768,8 @@ type SetUserResumeParams struct {
 
 // Record (or replace) the user's stored-résumé pointer, stamping the upload time.
 // Owner-scoped by id; the object key is derived from the id, never client input.
-// Also clears any cached ATS review so a new CV is never scored with a stale one.
+// Also clears any cached ATS review so a new CV is never scored with a stale one,
+// and marks structured extract pending for this upload (background work must catch up).
 func (q *Queries) SetUserResume(ctx context.Context, arg SetUserResumeParams) error {
 	_, err := q.db.Exec(ctx, setUserResume, arg.ID, arg.ResumeObjectKey)
 	return err
@@ -711,6 +791,45 @@ type SetUserResumeEmbeddingParams struct {
 // that produced it (so a model change can mark the vector stale). Never the raw CV text.
 func (q *Queries) SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error {
 	_, err := q.db.Exec(ctx, setUserResumeEmbedding, arg.ID, arg.ResumeEmbedding, arg.ResumeEmbeddingModel)
+	return err
+}
+
+const setUserResumeExtractFailed = `-- name: SetUserResumeExtractFailed :exec
+UPDATE users
+SET resume_extract_status = 'failed',
+    resume_extract_detail = $2,
+    resume_extract_for = $3
+WHERE id = $1 AND resume_uploaded_at = $3
+`
+
+type SetUserResumeExtractFailedParams struct {
+	ID                  int64              `json:"id"`
+	ResumeExtractDetail pgtype.Text        `json:"resume_extract_detail"`
+	ResumeExtractFor    pgtype.Timestamptz `json:"resume_extract_for"`
+}
+
+// Record that structured extract failed for the current upload. The for-stamp guard
+// drops the write when a newer upload already superseded this attempt.
+func (q *Queries) SetUserResumeExtractFailed(ctx context.Context, arg SetUserResumeExtractFailedParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeExtractFailed, arg.ID, arg.ResumeExtractDetail, arg.ResumeExtractFor)
+	return err
+}
+
+const setUserResumeExtractPending = `-- name: SetUserResumeExtractPending :exec
+UPDATE users
+SET resume_extract_status = 'pending',
+    resume_extract_detail = NULL,
+    resume_extract_for = $2
+WHERE id = $1 AND resume_uploaded_at = $2
+`
+
+type SetUserResumeExtractPendingParams struct {
+	ID               int64              `json:"id"`
+	ResumeExtractFor pgtype.Timestamptz `json:"resume_extract_for"`
+}
+
+func (q *Queries) SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error {
+	_, err := q.db.Exec(ctx, setUserResumeExtractPending, arg.ID, arg.ResumeExtractFor)
 	return err
 }
 
@@ -743,10 +862,11 @@ func (q *Queries) SetUserResumeGeography(ctx context.Context, arg SetUserResumeG
 	return err
 }
 
-const setUserResumeStructured = `-- name: SetUserResumeStructured :exec
+const setUserResumeStructured = `-- name: SetUserResumeStructured :execrows
 UPDATE users
 SET resume_structured = $2, resume_structured_model = $3, resume_structured_uploaded_at = $4,
-    resume_countries = $5, resume_regions = $6, resume_cities = $7
+    resume_countries = $5, resume_regions = $6, resume_cities = $7,
+    resume_extract_status = 'ok', resume_extract_detail = NULL, resume_extract_for = $4
 WHERE id = $1 AND resume_uploaded_at = $4
 `
 
@@ -773,8 +893,9 @@ type SetUserResumeStructuredParams struct {
 // structure it was derived from. It is deterministic and costs no I/O, so there is
 // nothing to gain by deferring it — and a separate write would have to duplicate the
 // guard, which is exactly how invariants drift apart.
-func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error {
-	_, err := q.db.Exec(ctx, setUserResumeStructured,
+// On success, extract status is marked ok for this upload stamp.
+func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserResumeStructured,
 		arg.ID,
 		arg.ResumeStructured,
 		arg.ResumeStructuredModel,
@@ -783,7 +904,10 @@ func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResume
 		arg.ResumeRegions,
 		arg.ResumeCities,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const userEmail = `-- name: UserEmail :one

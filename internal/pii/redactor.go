@@ -17,6 +17,7 @@ type Contacts struct {
 	FullName string
 	Email    string
 	Phone    string
+	Location string
 	Links    []string
 }
 
@@ -28,8 +29,8 @@ type Redactor struct {
 }
 
 // Contacts returns the contact values recovered from the detected spans (first name/email/
-// phone, all links). It lets a caller — e.g. resumeextract — fill contact fields from
-// deterministic detection instead of the LLM, which only ever sees the redacted CV.
+// phone/location, all links). It lets a caller — e.g. resumeextract — fill contact fields
+// from deterministic detection instead of the LLM, which only ever sees the redacted CV.
 func (r *Redactor) Contacts() Contacts {
 	if r == nil {
 		return Contacts{}
@@ -92,6 +93,7 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 	add(known.FullName, KindName)
 	add(known.Email, KindEmail)
 	add(known.Phone, KindPhone)
+	add(known.Location, KindAddress)
 	for _, l := range known.Links {
 		add(l, KindLink)
 	}
@@ -130,11 +132,11 @@ func Build(ctx context.Context, text string, known Contacts, d Detector) (*Redac
 // (a name, an address), so word-boundary matching is worth attempting to avoid over-redaction.
 var wordyKind = map[string]bool{KindName: true, KindAddress: true}
 
-// fillContact records a detected value into c: the first plausible name/email/phone wins,
-// and each distinct clean link is collected. Called only for detected spans, so c reflects
-// the CV, not known input. It is defensive because the model mis-tags handles/slugs as a
-// person and its URL spans sometimes swallow neighbouring text — the redactor still masks
-// every span, but only well-formed values become the caller's stored contact fields.
+// fillContact records a detected value into c: the first plausible name/email/phone/location
+// wins, and each distinct clean link is collected. Called only for detected spans, so c
+// reflects the CV, not known input. It is defensive because the model mis-tags handles/slugs
+// as a person and its URL spans sometimes swallow neighbouring text — the redactor still
+// masks every span, but only well-formed values become the caller's stored contact fields.
 func fillContact(c *Contacts, kind, v string) {
 	switch kind {
 	case KindName:
@@ -148,6 +150,11 @@ func fillContact(c *Contacts, kind, v string) {
 	case KindPhone:
 		if c.Phone == "" {
 			c.Phone = v
+		}
+	case KindAddress:
+		// Residence text is messy ("Lisbon, PT"); accept the first non-empty ADDRESS span.
+		if c.Location == "" && strings.TrimSpace(v) != "" {
+			c.Location = strings.TrimSpace(v)
 		}
 	case KindLink:
 		if isCleanLink(v) && !containsString(c.Links, v) {

@@ -89,6 +89,14 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err != nil {
 		return mapCVError(err)
 	}
+	// Existing vacancy-bound copies (and a base left empty before provisional contacts
+	// were usable) heal empty header fields on bootstrap the same way GetCV does.
+	if trec, gerr := h.cvStore.Get(c.Context(), tailored.ID, userID); gerr == nil {
+		if _, herr := h.healRecordHeader(c.Context(), userID, trec); herr != nil {
+			log.Printf("cv: healing tailored header on tailor %s: %v", tailored.ID, herr)
+		}
+	}
+	h.healBaseHeaderIfNeeded(c.Context(), userID)
 	// Open the copy's history with where it came from, so the feed starts at the beginning
 	// rather than mid-story with the first edit. Best-effort and idempotency-aware: Tailor
 	// returns the EXISTING copy on a reload, and a second milestone would be a second
