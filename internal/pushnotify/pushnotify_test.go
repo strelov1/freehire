@@ -3,6 +3,7 @@ package pushnotify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -98,8 +99,9 @@ func TestExpoNotifier_Send_DeviceNotRegisteredPrunesTokenAtSendTime(t *testing.T
 	n := newTestNotifier(pruner, queuer, &fakeTicketStore{})
 	n.apiURL = srv.URL
 
-	if err := n.Send(context.Background(), "ExponentPushToken[dead]", "Hello", "World"); err != nil {
-		t.Fatalf("Send: %v, want nil — a dead token is pruned, not a caller-facing error", err)
+	err := n.Send(context.Background(), "ExponentPushToken[dead]", "Hello", "World")
+	if !errors.Is(err, ErrTokenPruned) {
+		t.Fatalf("Send err = %v, want ErrTokenPruned — a caller (e.g. a self-test endpoint) must be able to tell a prune apart from a real delivery", err)
 	}
 	if len(pruner.pruned) != 1 || pruner.pruned[0] != "ExponentPushToken[dead]" {
 		t.Errorf("pruned = %v, want [ExponentPushToken[dead]]", pruner.pruned)

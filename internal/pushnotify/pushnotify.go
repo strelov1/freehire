@@ -19,11 +19,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// ErrTokenPruned is returned by Send when the token turned out to be dead
+// and was removed instead of anything being delivered. A caller that only
+// checks err != nil would treat this the same as a real failure, which is
+// wrong for something like a self-test push endpoint — "your push arrived"
+// and "the token you just registered was already dead" are different
+// outcomes a caller may need to tell apart. Check with errors.Is.
+var ErrTokenPruned = errors.New("pushnotify: token pruned, not delivered")
 
 // defaultExpoPushURL and defaultExpoReceiptsURL are Expo's two endpoints.
 const (
@@ -154,7 +163,7 @@ func (n *ExpoNotifier) Send(ctx context.Context, token, title, body string) erro
 		if err := n.pruner.PruneDeadPushToken(ctx, token); err != nil {
 			return fmt.Errorf("pushnotify: prune dead token: %w", err)
 		}
-		return nil
+		return ErrTokenPruned
 	}
 	return fmt.Errorf("pushnotify: expo: %s (%s)", ticket.Message, ticket.Details.Error)
 }
