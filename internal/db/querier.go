@@ -2683,6 +2683,8 @@ type Querier interface {
 	// source ISN'T swept), this targets specific sources that ARE swept but only jobs the
 	// sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
 	// evidence the sweep is structurally unable to reach them, not a race with it.
+	// external_id rides along for sources verified by a per-posting API keyed on it rather
+	// than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with.
