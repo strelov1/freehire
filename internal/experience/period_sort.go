@@ -33,9 +33,12 @@ func sortKeyForEmployment(start, end string, current bool) periodSortKey {
 	return periodKeyUnknown
 }
 
+// isPresentLabel reports whether s is a CV's way of spelling "this hasn't ended" — the
+// only place this vocabulary is defined, so import_resume.go's Current derivation and this
+// file's own period parsing can never drift apart on which spellings count.
 func isPresentLabel(s string) bool {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "present", "current", "now", "today":
+	case "present", "current", "now", "ongoing", "today":
 		return true
 	default:
 		return false

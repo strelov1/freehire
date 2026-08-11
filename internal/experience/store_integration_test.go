@@ -11,8 +11,10 @@ package experience
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/db"
@@ -112,5 +114,61 @@ func TestStoreAddAtom_LeavesNoProfileBehindForAUserWithNone(t *testing.T) {
 
 	if _, ok := profileSkills(t, pool, userID); ok {
 		t.Error("a profile row was created as a side effect of banking an atom — it must not be")
+	}
+}
+
+// MergeExperienceAtoms' optimistic lock, proven only against real Postgres — mirroring
+// the store_test.go note that a fake cannot prove the guarantees SQL itself carries. A
+// write landing directly against the keep row, in the gap between where
+// Store.MergeAtoms would have read it and where it writes, must make the merge a no-op:
+// neither clobbering the concurrent edit nor deleting the loser out from under it.
+func TestQueriesRepositoryMergeAtoms_RefusesAStaleUpdatedAt(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	ctx := context.Background()
+
+	userID := insertExperienceIntegrationUser(t, pool, "merge-race@example.test")
+	repo := NewQueriesRepository(queries)
+
+	// InsertAtomIfNew is the Repository's raw write — Sanitize is Store's job, and skipping
+	// it (nil Metrics/Skills) would trip the NOT NULL columns, so it's done by hand here.
+	keepAtom := Atom{Claim: "Cut latency", Provenance: ProvenanceManual}
+	keepAtom.Sanitize()
+	keep, err := repo.InsertAtomIfNew(ctx, userID, keepAtom, ClaimKey(keepAtom.Claim))
+	if err != nil {
+		t.Fatalf("insert keep: %v", err)
+	}
+	loseAtom := Atom{Claim: "Cut latency further", Provenance: ProvenanceManual}
+	loseAtom.Sanitize()
+	lose, err := repo.InsertAtomIfNew(ctx, userID, loseAtom, ClaimKey(loseAtom.Claim))
+	if err != nil {
+		t.Fatalf("insert lose: %v", err)
+	}
+	staleKeepUpdatedAt := keep.UpdatedAt.Time
+
+	// A write lands directly against Postgres — standing in for a concurrent request —
+	// after Store.MergeAtoms would have already read keep and before its own write.
+	if _, err := pool.Exec(ctx,
+		`UPDATE experience_atoms SET context = 'raced in from another request', updated_at = now() WHERE id = $1`,
+		keep.ID); err != nil {
+		t.Fatalf("simulate concurrent edit: %v", err)
+	}
+
+	merged := Atom{Context: "merged context", Provenance: ProvenanceManual}
+	merged.Sanitize()
+	_, err = repo.MergeAtoms(ctx, userID, keep.ID, lose.ID, staleKeepUpdatedAt, lose.UpdatedAt.Time, merged)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("MergeAtoms with a stale keep updated_at = %v, want pgx.ErrNoRows", err)
+	}
+
+	after, err := repo.GetAtom(ctx, keep.ID, userID)
+	if err != nil {
+		t.Fatalf("GetAtom keep: %v", err)
+	}
+	if after.Context != "raced in from another request" {
+		t.Errorf("keep context = %q, want the concurrent edit preserved, not overwritten by the aborted merge", after.Context)
+	}
+	if _, err := repo.GetAtom(ctx, lose.ID, userID); err != nil {
+		t.Errorf("GetAtom lose: %v, want the loser to survive an aborted merge", err)
 	}
 }

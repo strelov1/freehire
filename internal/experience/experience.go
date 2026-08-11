@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/skilltag"
 )
 
@@ -211,7 +210,18 @@ func ClaimKey(claim string) string {
 // clip trims s and truncates to at most max runes on a rune boundary, trimming again so
 // a mid-word cut never leaves a trailing space.
 func clip(s string, max int) string {
-	return strings.TrimSpace(llm.TruncateRunes(strings.TrimSpace(s), max))
+	return strings.TrimSpace(truncateRunes(strings.TrimSpace(s), max))
+}
+
+// truncateRunes clamps s to at most max runes. Local rather than reused from internal/llm
+// so this file stays free of any server-only dependency — cmd/gen-contracts generates the
+// TypeScript wire types from this file alone (see the package-level comment on Employment).
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // limit returns at most n elements of s (nil-safe, preserves order).

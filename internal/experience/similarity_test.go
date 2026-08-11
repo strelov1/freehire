@@ -6,43 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestRichness(t *testing.T) {
-	tests := []struct {
-		name                 string
-		atom                 Atom
-		wantContext, wantMet bool
-	}{
-		{
-			name:        "claim only",
-			atom:        Atom{Claim: "Built a plugin"},
-			wantContext: true, wantMet: true,
-		},
-		{
-			name:        "digit in claim is not thin on metrics",
-			atom:        Atom{Claim: "Cut checkout latency by 40%"},
-			wantContext: true, wantMet: false,
-		},
-		{
-			name:        "metrics array covers numbers",
-			atom:        Atom{Claim: "Cut latency", Metrics: []string{"20s -> 1s"}},
-			wantContext: true, wantMet: false,
-		},
-		{
-			name:        "context present",
-			atom:        Atom{Claim: "Built a plugin", Context: "Chromium extension"},
-			wantContext: false, wantMet: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotC, gotM := Richness(tt.atom)
-			if gotC != tt.wantContext || gotM != tt.wantMet {
-				t.Errorf("Richness = (%v, %v), want (%v, %v)", gotC, gotM, tt.wantContext, tt.wantMet)
-			}
-		})
-	}
-}
-
 func TestSoftDuplicateClustersPluginPair(t *testing.T) {
 	a := uuid.New()
 	b := uuid.New()

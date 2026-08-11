@@ -388,7 +388,8 @@ func experienceError(err error) error {
 		errors.Is(err, experience.ErrMergeCrossEmployment),
 		errors.Is(err, experience.ErrContextRequired):
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
-	case errors.Is(err, experience.ErrAlreadyBanked):
+	case errors.Is(err, experience.ErrAlreadyBanked),
+		errors.Is(err, experience.ErrMergeConflict):
 		return fiber.NewError(fiber.StatusConflict, err.Error())
 	default:
 		return err

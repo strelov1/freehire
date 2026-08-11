@@ -27,8 +27,8 @@ type employmentWire struct {
 	Stack    []string  `json:"stack,omitempty"`
 }
 
-// ToWire returns the kind-aware JSON projection of e.
-func (e Employment) ToWire() employmentWire {
+// toWire returns the kind-aware JSON projection of e.
+func (e Employment) toWire() employmentWire {
 	w := employmentWire{
 		ID: e.ID, Kind: e.Kind, Role: e.Role, Location: e.Location,
 		Start: e.Start, End: e.End, Current: e.Current, Summary: e.Summary,
@@ -44,7 +44,7 @@ func (e Employment) ToWire() employmentWire {
 
 // MarshalJSON emits company for jobs and name for projects.
 func (e Employment) MarshalJSON() ([]byte, error) {
-	return json.Marshal(e.ToWire())
+	return json.Marshal(e.toWire())
 }
 
 // UnmarshalJSON accepts kind-aware input: projects prefer `name`, with legacy

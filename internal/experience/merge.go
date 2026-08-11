@@ -2,6 +2,7 @@ package experience
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -22,13 +23,19 @@ var (
 	// owner has opted into requiring situation paragraphs. Checked in the
 	// handler/tool, not in Store.AddAtom — import must stay ungated.
 	ErrContextRequired = errors.New("experience: context is required for new achievements — add a short situation paragraph, or ask the interviewer to turn the requirement off")
+	// ErrMergeConflict is one of the two atoms changing between Store.MergeAtoms reading it
+	// and the write landing — another edit, another merge, a delete. The row is never
+	// silently overwritten from a stale snapshot; the caller reloads and retries instead.
+	ErrMergeConflict = errors.New("experience: one of these atoms changed since they were loaded — fetch them again and retry the merge")
 )
 
-// mergeCandidate is one side of a merge, carrying the created_at used for
-// keep-selection ties. The domain Atom does not expose CreatedAt on the wire.
+// mergeCandidate is one side of a merge, carrying the created_at (keep-selection ties) and
+// updated_at (the optimistic-lock token for the eventual write) the domain Atom does not
+// expose on the wire.
 type mergeCandidate struct {
 	Atom
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // chooseKeep returns which of a, b to keep (true → a) by richness score, then
@@ -53,6 +60,18 @@ func richnessScore(a Atom) int {
 		score++
 	}
 	return score
+}
+
+// digitRE matches any Unicode digit — a claim that already carries a number is
+// not thin on metrics even when the metrics array is empty.
+var digitRE = regexp.MustCompile(`\d`)
+
+// Richness reports whether an atom is thin on situation or numbers. Derived on
+// read; never persisted.
+func Richness(a Atom) (needsContext, needsMetrics bool) {
+	needsContext = strings.TrimSpace(a.Context) == ""
+	needsMetrics = len(a.Metrics) == 0 && !digitRE.MatchString(a.Claim)
+	return needsContext, needsMetrics
 }
 
 // unionForMerge builds the kept atom's post-merge fields. Claim, employment,

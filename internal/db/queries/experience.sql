@@ -126,6 +126,13 @@ WHERE id = $1 AND user_id = $2;
 -- landed. The UPDATE itself is gated on the loser still existing, for the same reason in
 -- the other direction. Either both sides of the merge happen or neither does. Claim,
 -- claim_key, employment_id and source_ref stay on the keep — only richness fields move.
+--
+-- Both rows are additionally gated on updated_at still matching what Store.MergeAtoms read
+-- when it chose keep/lose and computed @context/@metrics/@skills: that computation happens
+-- in Go, outside any transaction, so a write landing in the gap (an edit, another merge)
+-- must not be silently clobbered by an UPDATE built from a stale snapshot. A mismatch here
+-- yields no row exactly like a concurrent delete already did, and the caller reports both
+-- the same way — reload and retry — rather than pretending a still-present row vanished.
 WITH updated AS (
     UPDATE experience_atoms
     SET context = @context,
@@ -134,9 +141,11 @@ WITH updated AS (
         provenance = @provenance,
         updated_at = now()
     WHERE experience_atoms.id = @keep_id AND experience_atoms.user_id = @user_id
+      AND experience_atoms.updated_at = @keep_updated_at
       AND EXISTS (
           SELECT 1 FROM experience_atoms AS loser
           WHERE loser.id = @loser_id AND loser.user_id = @user_id
+            AND loser.updated_at = @loser_updated_at
       )
     RETURNING experience_atoms.id, experience_atoms.user_id, experience_atoms.employment_id,
               experience_atoms.claim, experience_atoms.claim_key, experience_atoms.context,

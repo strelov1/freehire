@@ -43,7 +43,9 @@ type Repository interface {
 	InsertAtomIfNew(ctx context.Context, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	UpdateAtom(ctx context.Context, id uuid.UUID, userID int64, a Atom, claimKey string) (db.ExperienceAtom, error)
 	DeleteAtom(ctx context.Context, id uuid.UUID, userID int64) (int64, error)
-	MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error)
+	// MergeAtoms writes only when both rows' updated_at still match what the caller read —
+	// see Store.MergeAtoms and the query's own comment for why.
+	MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, keepUpdatedAt, loserUpdatedAt time.Time, a Atom) (db.ExperienceAtom, error)
 }
 
 // ProfileSkills is the narrow slice of userprofile the bank needs: fold newly banked
@@ -227,6 +229,14 @@ func (s *Store) AddAtom(ctx context.Context, userID int64, a Atom) (Atom, error)
 	if err := s.ownsEmployment(ctx, userID, a.EmploymentID); err != nil {
 		return Atom{}, err
 	}
+	return s.insertAtom(ctx, userID, a)
+}
+
+// insertAtom writes a sanitized, validated, ownership-checked atom. Split out of AddAtom so
+// Import — which reconciles the employment once per entry and already knows the resulting
+// id is the caller's own — can bank every claim under it without AddAtom's ownsEmployment
+// re-verifying the same id on every single bullet.
+func (s *Store) insertAtom(ctx context.Context, userID int64, a Atom) (Atom, error) {
 	row, err := s.repo.InsertAtomIfNew(ctx, userID, a, ClaimKey(a.Claim))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Atom{}, ErrAlreadyBanked
@@ -297,8 +307,8 @@ func (s *Store) MergeAtoms(ctx context.Context, userID int64, aID, bID uuid.UUID
 		return Atom{}, fmt.Errorf("get atom b: %w", err)
 	}
 
-	left := mergeCandidate{Atom: atomFromRow(rowA), CreatedAt: timestamptz(rowA.CreatedAt)}
-	right := mergeCandidate{Atom: atomFromRow(rowB), CreatedAt: timestamptz(rowB.CreatedAt)}
+	left := mergeCandidate{Atom: atomFromRow(rowA), CreatedAt: timestamptz(rowA.CreatedAt), UpdatedAt: timestamptz(rowA.UpdatedAt)}
+	right := mergeCandidate{Atom: atomFromRow(rowB), CreatedAt: timestamptz(rowB.CreatedAt), UpdatedAt: timestamptz(rowB.UpdatedAt)}
 	if err := validateMergePair(aID, bID, left.Atom, right.Atom); err != nil {
 		return Atom{}, err
 	}
@@ -312,9 +322,13 @@ func (s *Store) MergeAtoms(ctx context.Context, userID int64, aID, bID uuid.UUID
 		return Atom{}, err
 	}
 
-	row, err := s.repo.MergeAtoms(ctx, userID, keep.ID, lose.ID, merged)
+	// keep.UpdatedAt/lose.UpdatedAt pin the write to the exact rows just read: the choice of
+	// keep/lose and the union above happen here in Go, not inside the write's transaction,
+	// so a write landing in that gap must not be silently overwritten by an update computed
+	// from a now-stale snapshot (see the query's own comment).
+	row, err := s.repo.MergeAtoms(ctx, userID, keep.ID, lose.ID, keep.UpdatedAt, lose.UpdatedAt, merged)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Atom{}, ErrNotFound
+		return Atom{}, ErrMergeConflict
 	}
 	if err != nil {
 		return Atom{}, fmt.Errorf("merge atoms: %w", err)

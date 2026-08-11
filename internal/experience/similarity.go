@@ -1,9 +1,7 @@
 package experience
 
 import (
-	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/google/uuid"
 )
@@ -14,18 +12,6 @@ import (
 // while distinct claims that differ in numbers (~0.33) or share mostly stopwords (~0.25)
 // do not. Merge still requires an explicit owner confirm.
 const softDupThreshold = 0.40
-
-// digitRE matches any Unicode digit — a claim that already carries a number is
-// not thin on metrics even when the metrics array is empty.
-var digitRE = regexp.MustCompile(`\d`)
-
-// Richness reports whether an atom is thin on situation or numbers. Derived on
-// read; never persisted.
-func Richness(a Atom) (needsContext, needsMetrics bool) {
-	needsContext = strings.TrimSpace(a.Context) == ""
-	needsMetrics = len(a.Metrics) == 0 && !digitRE.MatchString(a.Claim)
-	return needsContext, needsMetrics
-}
 
 // SoftDuplicateClusters groups an owner's atoms into near-paraphrase clusters
 // within one employment bucket (each employment_id, plus one bucket for

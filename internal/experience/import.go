@@ -58,13 +58,22 @@ func (s *Store) Import(ctx context.Context, userID int64, entries []ImportEntry,
 				Provenance: ProvenanceCVImport,
 				SourceRef:  sourceRef,
 			}
-			switch _, err := s.AddAtom(ctx, userID, atom); {
+			atom.Sanitize()
+			if err := atom.Validate(); err != nil {
+				if errors.Is(err, ErrEmptyClaim) {
+					// A blank bullet is noise in the parse, not a reason to fail the upload.
+					continue
+				}
+				return result, err
+			}
+			// employmentID was just created or found (and, either way, owner-scoped) by
+			// reconcileEmployment above — insertAtom skips the ownsEmployment re-check
+			// AddAtom would otherwise repeat on every single bullet.
+			switch _, err := s.insertAtom(ctx, userID, atom); {
 			case err == nil:
 				result.AtomsCreated++
 			case errors.Is(err, ErrAlreadyBanked):
 				result.AtomsSkipped++
-			case errors.Is(err, ErrEmptyClaim):
-				// A blank bullet is noise in the parse, not a reason to fail the upload.
 			default:
 				return result, err
 			}

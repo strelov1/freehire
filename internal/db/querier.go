@@ -2067,6 +2067,13 @@ type Querier interface {
 	// landed. The UPDATE itself is gated on the loser still existing, for the same reason in
 	// the other direction. Either both sides of the merge happen or neither does. Claim,
 	// claim_key, employment_id and source_ref stay on the keep — only richness fields move.
+	//
+	// Both rows are additionally gated on updated_at still matching what Store.MergeAtoms read
+	// when it chose keep/lose and computed @context/@metrics/@skills: that computation happens
+	// in Go, outside any transaction, so a write landing in the gap (an edit, another merge)
+	// must not be silently clobbered by an UPDATE built from a stale snapshot. A mismatch here
+	// yields no row exactly like a concurrent delete already did, and the caller reports both
+	// the same way — reload and retry — rather than pretending a still-present row vanished.
 	MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error)
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.

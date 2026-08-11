@@ -266,6 +266,23 @@ func TestImportBanksClaimsWhoseRoleIsUnnamed(t *testing.T) {
 	}
 }
 
+// Import proves ownership of an entry's employment once, in reconcileEmployment — it must
+// not re-verify that same id per claim the way AddAtom does for an untrusted caller.
+// GetEmployment is only ever called by ownsEmployment, so a zero count here is proof the
+// per-bullet re-check is gone.
+func TestImportDoesNotReverifyEmploymentOwnershipPerClaim(t *testing.T) {
+	s, repo := newStore()
+	ctx := context.Background()
+
+	entry := ringCentral() // one employment, two claims
+	if _, err := s.Import(ctx, owner, []ImportEntry{entry}, "stamp"); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if repo.getEmploymentCalls != 0 {
+		t.Errorf("GetEmployment called %d times during import, want 0", repo.getEmploymentCalls)
+	}
+}
+
 func contains(haystack []string, needle string) bool {
 	for _, v := range haystack {
 		if v == needle {

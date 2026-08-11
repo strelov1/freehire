@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,9 @@ type fakeRepo struct {
 	employments map[uuid.UUID]db.ExperienceEmployment
 	atoms       map[uuid.UUID]db.ExperienceAtom
 	order       []uuid.UUID // insertion order, so listing is deterministic
+
+	getEmploymentCalls int   // counts GetEmployment invocations, i.e. ownsEmployment checks
+	clock              int64 // monotonic tick behind stamp(), so rows get distinguishable timestamps
 }
 
 func newFakeRepo() *fakeRepo {
@@ -32,7 +36,13 @@ func newFakeRepo() *fakeRepo {
 	}
 }
 
-func stamp() pgtype.Timestamptz { return pgtype.Timestamptz{Valid: true} }
+// stamp mirrors `now()`, except monotonically ticked rather than wall-clock: two rows
+// created in the same test must get comparably-ordered, distinguishable timestamps —
+// real Postgres does that for free, but pgtype.Timestamptz{Valid: true} alone does not.
+func (f *fakeRepo) stamp() pgtype.Timestamptz {
+	f.clock++
+	return pgtype.Timestamptz{Time: time.Unix(f.clock, 0), Valid: true}
+}
 
 func (f *fakeRepo) ListEmployments(_ context.Context, userID int64) ([]db.ExperienceEmployment, error) {
 	var out []db.ExperienceEmployment
@@ -45,6 +55,7 @@ func (f *fakeRepo) ListEmployments(_ context.Context, userID int64) ([]db.Experi
 }
 
 func (f *fakeRepo) GetEmployment(_ context.Context, id uuid.UUID, userID int64) (db.ExperienceEmployment, error) {
+	f.getEmploymentCalls++
 	if e, ok := f.employments[id]; ok && e.UserID == userID {
 		return e, nil
 	}
@@ -68,7 +79,7 @@ func (f *fakeRepo) CreateEmployment(_ context.Context, userID int64, e Employmen
 		ID: id, UserID: userID, Kind: e.Kind, Company: e.Company, Role: e.Role,
 		Location: e.Location, PeriodStart: e.Start, PeriodEnd: e.End,
 		IsCurrent: e.Current, Summary: e.Summary, Link: e.Link, Stack: e.Stack,
-		CreatedAt: stamp(), UpdatedAt: stamp(),
+		CreatedAt: f.stamp(), UpdatedAt: f.stamp(),
 	}
 	f.employments[id] = row
 	f.order = append(f.order, id)
@@ -160,7 +171,7 @@ func (f *fakeRepo) InsertAtomIfNew(_ context.Context, userID int64, a Atom, clai
 	row := db.ExperienceAtom{
 		ID: id, UserID: userID, EmploymentID: a.EmploymentID, Claim: a.Claim, ClaimKey: claimKey,
 		Context: a.Context, Metrics: a.Metrics, Skills: a.Skills,
-		Provenance: string(a.Provenance), SourceRef: a.SourceRef, CreatedAt: stamp(), UpdatedAt: stamp(),
+		Provenance: string(a.Provenance), SourceRef: a.SourceRef, CreatedAt: f.stamp(), UpdatedAt: f.stamp(),
 	}
 	f.atoms[id] = row
 	f.order = append(f.order, id)
@@ -175,6 +186,7 @@ func (f *fakeRepo) UpdateAtom(_ context.Context, id uuid.UUID, userID int64, a A
 	row.EmploymentID, row.Claim, row.ClaimKey = a.EmploymentID, a.Claim, claimKey
 	row.Context, row.Metrics, row.Skills = a.Context, a.Metrics, a.Skills
 	row.Provenance = string(a.Provenance)
+	row.UpdatedAt = f.stamp()
 	f.atoms[id] = row
 	return row, nil
 }
@@ -187,19 +199,19 @@ func (f *fakeRepo) DeleteAtom(_ context.Context, id uuid.UUID, userID int64) (in
 	return 0, nil
 }
 
-func (f *fakeRepo) MergeAtoms(_ context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error) {
+func (f *fakeRepo) MergeAtoms(_ context.Context, userID int64, keepID, loserID uuid.UUID, keepUpdatedAt, loserUpdatedAt time.Time, a Atom) (db.ExperienceAtom, error) {
 	loser, ok := f.atoms[loserID]
-	if !ok || loser.UserID != userID {
+	if !ok || loser.UserID != userID || !loser.UpdatedAt.Time.Equal(loserUpdatedAt) {
 		return db.ExperienceAtom{}, pgx.ErrNoRows
 	}
 	keep, ok := f.atoms[keepID]
-	if !ok || keep.UserID != userID {
+	if !ok || keep.UserID != userID || !keep.UpdatedAt.Time.Equal(keepUpdatedAt) {
 		return db.ExperienceAtom{}, pgx.ErrNoRows
 	}
 	delete(f.atoms, loserID)
 	keep.Context, keep.Metrics, keep.Skills = a.Context, a.Metrics, a.Skills
 	keep.Provenance = string(a.Provenance)
-	keep.UpdatedAt = stamp()
+	keep.UpdatedAt = f.stamp()
 	f.atoms[keepID] = keep
 	return keep, nil
 }
@@ -584,6 +596,63 @@ func TestStoreMergeAtomsUnionsAndDeletesLoser(t *testing.T) {
 	}
 	if atoms[0].ID != kept.ID {
 		t.Errorf("surviving id = %s, want keep %s", atoms[0].ID, kept.ID)
+	}
+}
+
+// raceInjectingRepo wraps fakeRepo and, the moment Store.MergeAtoms' GetAtom(trigger)
+// returns, simulates a write landing in the exact gap MergeAtoms cannot close on its own:
+// keep/lose selection and the merged-fields union happen in Go, between the two reads and
+// the eventual write, with no transaction holding the rows still. victim is mutated to
+// stand in for that concurrent write.
+type raceInjectingRepo struct {
+	*fakeRepo
+	trigger uuid.UUID
+	victim  uuid.UUID
+}
+
+func (r *raceInjectingRepo) GetAtom(ctx context.Context, id uuid.UUID, userID int64) (db.ExperienceAtom, error) {
+	row, err := r.fakeRepo.GetAtom(ctx, id, userID)
+	if id == r.trigger {
+		v := r.fakeRepo.atoms[r.victim]
+		v.Context = "raced in from another request"
+		v.UpdatedAt = r.fakeRepo.stamp()
+		r.fakeRepo.atoms[r.victim] = v
+	}
+	return row, err
+}
+
+// The race the review flagged: a write landing between Store.MergeAtoms' reads and its
+// write must not be silently discarded by an update computed from the now-stale snapshot.
+func TestStoreMergeAtomsRejectsAConcurrentWriteInTheReadWriteGap(t *testing.T) {
+	s, repo := newStore()
+	ctx := context.Background()
+
+	a, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the thing", Provenance: ProvenanceManual})
+	if err != nil {
+		t.Fatalf("AddAtom a: %v", err)
+	}
+	b, err := s.AddAtom(ctx, owner, Atom{Claim: "Did the other thing", Provenance: ProvenanceManual})
+	if err != nil {
+		t.Fatalf("AddAtom b: %v", err)
+	}
+
+	racy := NewStore(&raceInjectingRepo{fakeRepo: repo, trigger: b.ID, victim: a.ID})
+	if _, err := racy.MergeAtoms(ctx, owner, a.ID, b.ID); !errors.Is(err, ErrMergeConflict) {
+		t.Fatalf("MergeAtoms racing a concurrent edit = %v, want ErrMergeConflict", err)
+	}
+
+	// The concurrent edit must survive untouched — not overwritten by a merge built from
+	// the snapshot read just before it landed.
+	got, err := s.GetAtom(ctx, a.ID, owner)
+	if err != nil {
+		t.Fatalf("GetAtom a: %v", err)
+	}
+	if got.Context != "raced in from another request" {
+		t.Errorf("context = %q, want the concurrent edit preserved, not clobbered by the aborted merge", got.Context)
+	}
+	// The would-be loser must survive too — an aborted merge deletes nothing.
+	if _, err := s.GetAtom(ctx, b.ID, owner); err != nil {
+		t.Errorf("GetAtom b: %v, want the loser to survive an aborted merge", err)
 	}
 }
 

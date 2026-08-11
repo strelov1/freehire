@@ -487,9 +487,11 @@ WITH updated AS (
         provenance = $4,
         updated_at = now()
     WHERE experience_atoms.id = $5 AND experience_atoms.user_id = $6
+      AND experience_atoms.updated_at = $7
       AND EXISTS (
           SELECT 1 FROM experience_atoms AS loser
-          WHERE loser.id = $7 AND loser.user_id = $6
+          WHERE loser.id = $8 AND loser.user_id = $6
+            AND loser.updated_at = $9
       )
     RETURNING experience_atoms.id, experience_atoms.user_id, experience_atoms.employment_id,
               experience_atoms.claim, experience_atoms.claim_key, experience_atoms.context,
@@ -498,7 +500,7 @@ WITH updated AS (
 ),
 deleted AS (
     DELETE FROM experience_atoms
-    WHERE experience_atoms.id = $7 AND experience_atoms.user_id = $6
+    WHERE experience_atoms.id = $8 AND experience_atoms.user_id = $6
       AND EXISTS (SELECT 1 FROM updated)
     RETURNING experience_atoms.id
 )
@@ -506,13 +508,15 @@ SELECT id, user_id, employment_id, claim, claim_key, context, metrics, skills, p
 `
 
 type MergeExperienceAtomsParams struct {
-	Context    string    `json:"context"`
-	Metrics    []string  `json:"metrics"`
-	Skills     []string  `json:"skills"`
-	Provenance string    `json:"provenance"`
-	KeepID     uuid.UUID `json:"keep_id"`
-	UserID     int64     `json:"user_id"`
-	LoserID    uuid.UUID `json:"loser_id"`
+	Context        string             `json:"context"`
+	Metrics        []string           `json:"metrics"`
+	Skills         []string           `json:"skills"`
+	Provenance     string             `json:"provenance"`
+	KeepID         uuid.UUID          `json:"keep_id"`
+	UserID         int64              `json:"user_id"`
+	KeepUpdatedAt  pgtype.Timestamptz `json:"keep_updated_at"`
+	LoserID        uuid.UUID          `json:"loser_id"`
+	LoserUpdatedAt pgtype.Timestamptz `json:"loser_updated_at"`
 }
 
 type MergeExperienceAtomsRow struct {
@@ -537,6 +541,13 @@ type MergeExperienceAtomsRow struct {
 // landed. The UPDATE itself is gated on the loser still existing, for the same reason in
 // the other direction. Either both sides of the merge happen or neither does. Claim,
 // claim_key, employment_id and source_ref stay on the keep — only richness fields move.
+//
+// Both rows are additionally gated on updated_at still matching what Store.MergeAtoms read
+// when it chose keep/lose and computed @context/@metrics/@skills: that computation happens
+// in Go, outside any transaction, so a write landing in the gap (an edit, another merge)
+// must not be silently clobbered by an UPDATE built from a stale snapshot. A mismatch here
+// yields no row exactly like a concurrent delete already did, and the caller reports both
+// the same way — reload and retry — rather than pretending a still-present row vanished.
 func (q *Queries) MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error) {
 	row := q.db.QueryRow(ctx, mergeExperienceAtoms,
 		arg.Context,
@@ -545,7 +556,9 @@ func (q *Queries) MergeExperienceAtoms(ctx context.Context, arg MergeExperienceA
 		arg.Provenance,
 		arg.KeepID,
 		arg.UserID,
+		arg.KeepUpdatedAt,
 		arg.LoserID,
+		arg.LoserUpdatedAt,
 	)
 	var i MergeExperienceAtomsRow
 	err := row.Scan(

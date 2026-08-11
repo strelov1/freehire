@@ -2,8 +2,10 @@ package experience
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
@@ -86,10 +88,12 @@ func (r queriesRepository) DeleteAtom(ctx context.Context, id uuid.UUID, userID 
 	return r.q.DeleteExperienceAtom(ctx, db.DeleteExperienceAtomParams{ID: id, UserID: userID})
 }
 
-func (r queriesRepository) MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, a Atom) (db.ExperienceAtom, error) {
+func (r queriesRepository) MergeAtoms(ctx context.Context, userID int64, keepID, loserID uuid.UUID, keepUpdatedAt, loserUpdatedAt time.Time, a Atom) (db.ExperienceAtom, error) {
 	row, err := r.q.MergeExperienceAtoms(ctx, db.MergeExperienceAtomsParams{
 		Context: a.Context, Metrics: a.Metrics, Skills: a.Skills,
 		Provenance: string(a.Provenance), KeepID: keepID, UserID: userID, LoserID: loserID,
+		KeepUpdatedAt:  pgtype.Timestamptz{Time: keepUpdatedAt, Valid: true},
+		LoserUpdatedAt: pgtype.Timestamptz{Time: loserUpdatedAt, Valid: true},
 	})
 	if err != nil {
 		return db.ExperienceAtom{}, err
