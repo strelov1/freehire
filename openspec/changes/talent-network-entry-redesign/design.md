@@ -46,30 +46,39 @@ the public profile page are unchanged and still reachable by anyone who
 already has a link — this gate is about discovery, not enforcement, and no
 backend enforcement was asked for.
 
-**Entry point is an overlay panel, not a tab-strip addition.** Mocked
-against adding a "Talent Network" tab to the existing `TabRow` (cheaper —
-reuses tab machinery already on the page). The panel was chosen: opting
-into a public profile is a deliberate, weighty decision, and a dedicated
-overlay communicates that better than one more row among six settings tabs.
+**Entry point is a dedicated page (`/my/talent-network`), not an overlay or
+a tab-strip addition.** Originally built as an overlay panel (mocked
+against a `TabRow` tab and chosen over it — opting into a public profile
+is a deliberate, weighty decision, and a dedicated surface communicates
+that better than a settings-tab row). REVISED after live review: the panel
+was itself replaced with a plain route. The entry button now links to it
+directly rather than opening anything in place — simpler, gets its own
+URL/back-button/reload behavior for free, and avoids the extra
+component-in-component nesting an overlay needs.
 
 **The entry button reflects current status, not a static label.** `off` →
 solid green "Join Talent Network" CTA. `public`/`anonymous` → an outlined
-status pill with the mode's icon (e.g. "🌐 Talent Network: Public"), still
-clickable, opens the same panel. Chosen over an always-static label because
-the header becomes a real status indicator — worth three visual states
-(a small, closed set) for that.
+status pill with the mode's icon (e.g. "Talent Network: Public"), still
+clickable, links to the settings page. Chosen over an always-static label
+because the header becomes a real status indicator — worth three visual
+states (a small, closed set) for that.
 
-**The panel's public-link card is pinned at the top, before the mode
-picker, and is always visible — including when `off`.** Mocked against a
-version where the link only appears after picking a mode. The
-always-visible version lets a candidate find their link without first
-having to recall their current mode; when `off`, the card still shows what
-the URL *would be* (same UUID either way — the setting change only affects
-whether the route resolves, not the identifier).
+**No public-link-and-copy card.** Originally designed as a card pinned
+above the mode picker, always visible (including when `off`), showing the
+raw URL plus "Copy link"/"View" actions. REVISED after live review: cut
+entirely as unnecessary — a browser's own address bar already covers
+copying, so the only thing worth keeping is a way to open the page. That
+surfaces instead as a single "View your public page" button in the page's
+own header (top-right, solid/primary styling — visible only once
+`public`/`anonymous` is selected, since there's nothing to view from
+`off`), not a persistent card.
 
-**Each mode option carries an icon**: 🚫 Off, 🌐 Public, 🕶️ Anonymous —
-paired with the short description text already shipped, purely a
-scanability aid with no behavioral change.
+**Each mode option carries a real icon component, not an emoji.**
+`EyeOff` (Off), `Globe` (Public), `VenetianMask` (Anonymous) from
+`@lucide/svelte` — REVISED from the original emoji-based mockup after live
+review found emoji render inconsistently and read as less deliberate than
+the rest of this codebase's icon usage (every other icon in this feature,
+and the app generally, is already a Lucide component).
 
 **Public page becomes header-block + single-column.** Header: avatar-or-
 initials circle, name (omitted in anonymous mode — existing rule, unchanged

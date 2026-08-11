@@ -1,15 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Entry point gated to beta testers
-The Talent Network entry button, its overlay panel, and the visibility
-fetch that seeds the button's state SHALL be present only for a caller
-whose account has `beta_tester` set; a non-beta caller SHALL see none of
-them.
+The Talent Network entry button and the visibility fetch that seeds the
+button's state SHALL be present only for a caller whose account has
+`beta_tester` set; a non-beta caller SHALL see none of them.
 
 #### Scenario: Non-beta caller sees no entry point
 - **WHEN** a signed-in caller whose account does not have `beta_tester` set
   views `my/profile`
-- **THEN** no Talent Network button, panel, or `GET /me/talent-network`
+- **THEN** no Talent Network button and no `GET /me/talent-network`
   request is present
 
 #### Scenario: Beta caller sees the entry point
@@ -30,48 +29,49 @@ appearance reflects the caller's current `talent_network_visibility`.
 #### Scenario: Visibility public or anonymous
 - **WHEN** the caller's current visibility is `public` or `anonymous`
 - **THEN** the button renders as an outlined status pill showing the
-  current mode's icon and name (e.g. "🌐 Talent Network: Public")
+  current mode's icon and name (e.g. "Talent Network: Public")
 
-#### Scenario: Button always opens the same panel
+#### Scenario: Button always links to the same settings page
 - **WHEN** the button is clicked, in any visibility state
-- **THEN** the same overlay panel opens
+- **THEN** the caller is taken to `/my/talent-network`
 
-### Requirement: Overlay panel entry point
-Clicking the entry button SHALL open an overlay panel on top of the
-current page content, rather than navigating to a new route or switching
-to a tab in the existing settings tab strip.
+### Requirement: Dedicated settings page entry point
+The Talent Network entry button SHALL navigate to a dedicated page at
+`/my/talent-network`, rather than opening an overlay or switching to a tab
+in the existing settings tab strip.
 
-#### Scenario: Panel opens over the current tab
-- **WHEN** the caller clicks the entry button while any Settings-tab-strip
-  tab is active
-- **THEN** the panel opens as an overlay and the underlying tab remains
-  the active tab underneath it
+#### Scenario: Button navigates to the settings page
+- **WHEN** the caller clicks the entry button on `my/profile`
+- **THEN** the browser navigates to `/my/talent-network`
 
-### Requirement: Public-link card always visible in the panel
-The panel SHALL display a card showing the caller's public profile link,
-positioned above the visibility mode picker, and this card SHALL be
-visible and its link actionable regardless of the caller's current
-visibility setting — including `off`.
+### Requirement: View-public-page button, shown only when there is something to view
+The settings page SHALL show a "View your public page" button in its
+header, styled as a primary call-to-action, only when the caller's
+current visibility is `public` or `anonymous` — not when `off`, since no
+public page resolves in that state. It SHALL NOT display the raw public
+URL as text, and SHALL NOT offer a copy-to-clipboard action.
 
-#### Scenario: Link card visible when off
-- **WHEN** the panel is open and the caller's visibility is `off`
-- **THEN** the public-link card is shown with the caller's
-  `talent_network_public_id`-derived URL, and a "View" action is present
+#### Scenario: Button hidden when off
+- **WHEN** the settings page renders and the caller's visibility is `off`
+- **THEN** no "View your public page" button is shown
 
-#### Scenario: Link card visible when public or anonymous
-- **WHEN** the panel is open and the caller's visibility is `public` or
-  `anonymous`
-- **THEN** the public-link card is shown identically, unchanged in
-  position or content shape from the `off` case
+#### Scenario: Button shown when public or anonymous
+- **WHEN** the settings page renders and the caller's visibility is
+  `public` or `anonymous`
+- **THEN** a "View your public page" button is shown in the page header,
+  opening the public page in a new tab; no raw URL text or copy action is
+  present anywhere on the page
 
 ### Requirement: Icon-bearing mode picker
-The panel's Off/Public/Anonymous picker SHALL display a distinct icon
-alongside each option: 🚫 for Off, 🌐 for Public, 🕶️ for Anonymous.
+The settings page's Off/Public/Anonymous picker SHALL display a distinct
+icon component alongside each option — `EyeOff` for Off, `Globe` for
+Public, `VenetianMask` for Anonymous (all from `@lucide/svelte`) — not an
+emoji character.
 
 #### Scenario: All three icons present
-- **WHEN** the panel's mode picker renders
-- **THEN** each of the three options shows its designated icon next to its
-  label and description
+- **WHEN** the settings page's mode picker renders
+- **THEN** each of the three options shows its designated icon component
+  next to its label and description
 
 ### Requirement: Public profile page header-and-single-column layout
 The public profile page SHALL render as a header block (avatar-or-initials,
