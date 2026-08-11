@@ -416,7 +416,8 @@ func Register(app *fiber.App, cfg Config) {
 	// to erase there, which must not stop a member from leaving.
 	// The gateway credential is the third external system erasure spans, after object
 	// storage and Google. It is attached below, once the resolver exists.
-	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant)
+	accountDeletion := accountdelete.New(accountdelete.NewQueriesRepository(queries), cfg.Blob, inboxH.revokeGmailGrant).
+		WithAppleGrants(authH.mobileAuth.ReleaseAppleGrantsForDeletion)
 	authH.withAccountDeletion(accountDeletion, queries)
 	// Assign only when configured: a nil *search.Client wrapped in the searcher
 	// interface would be a non-nil interface and defeat the nil check.

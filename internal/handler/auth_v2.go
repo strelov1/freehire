@@ -25,6 +25,34 @@ type oauthV2Registry interface {
 
 const oauthV2StateCookieName = "hire_oauth_v2_state"
 
+// errOAuthV2StateMismatch and errOAuthV2MissingCode are named so oauthV2Fail
+// can tell an ordinary CSRF-state check or a malformed provider callback (both
+// routine, not worth a Sentry report) apart from a genuine infra failure.
+var (
+	errOAuthV2StateMismatch = errors.New("oauth v2: state mismatch")
+	errOAuthV2MissingCode   = errors.New("oauth v2: missing code")
+)
+
+// isExpectedAttemptFailure reports whether err is one of the mobileauth
+// validation sentinels — caller sent a malformed or stale attempt — rather
+// than an unexpected infra failure that should reach Sentry via RenderError.
+func isExpectedAttemptFailure(err error) bool {
+	return errors.Is(err, mobileauth.ErrInvalid) ||
+		errors.Is(err, mobileauth.ErrVerifier) ||
+		errors.Is(err, mobileauth.ErrSession)
+}
+
+// isExpectedOAuthV2Failure extends isExpectedAttemptFailure with the other
+// routine causes oauthV2Fail sees: reauth identity mismatch, an account with
+// no verified email, and the two local checks in OAuthCallbackV2 itself.
+func isExpectedOAuthV2Failure(err error) bool {
+	return isExpectedAttemptFailure(err) ||
+		errors.Is(err, mobileauth.ErrIdentity) ||
+		errors.Is(err, accounts.ErrNoVerifiedEmail) ||
+		errors.Is(err, errOAuthV2StateMismatch) ||
+		errors.Is(err, errOAuthV2MissingCode)
+}
+
 func (h *authHandlers) currentSessionHash(c *fiber.Ctx) ([]byte, error) {
 	raw := c.Cookies(auth.CookieName)
 	if raw == "" {
@@ -160,7 +188,10 @@ func (h *authHandlers) OAuthStartV2(c *fiber.Ctx) error {
 	}
 	_, state, err := h.mobileAuth.CreateBrowserAttempt(c.Context(), provider, platform, target, purpose, c.Query("code_challenge"), binding)
 	if err != nil {
-		return authError(400, "invalid_oauth_attempt", "invalid OAuth attempt")
+		if isExpectedAttemptFailure(err) {
+			return authError(400, "invalid_oauth_attempt", "invalid OAuth attempt")
+		}
+		return err
 	}
 	oauth.SetStateCookieNamed(c, oauthV2StateCookieName, state, h.cookieSecure)
 	return c.Redirect(p.AuthCodeURL(state), fiber.StatusFound)
@@ -194,14 +225,14 @@ func (h *authHandlers) OAuthCallbackV2(c *fiber.Ctx) error {
 	cookieState := c.Cookies(oauthV2StateCookieName)
 	oauth.ClearStateCookieNamed(c, oauthV2StateCookieName, h.cookieSecure)
 	if state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(cookieState)) != 1 {
-		return h.oauthV2Fail(c, "", errors.New("state mismatch"))
+		return h.oauthV2Fail(c, "", errOAuthV2StateMismatch)
 	}
 	attempt, err := h.mobileAuth.ConsumeBrowserAttempt(c.Context(), state, provider)
 	if err != nil {
 		return h.oauthV2Fail(c, "", err)
 	}
 	if code == "" {
-		return h.oauthV2Fail(c, attempt.CallbackTarget, errors.New("missing code"))
+		return h.oauthV2Fail(c, attempt.CallbackTarget, errOAuthV2MissingCode)
 	}
 	identity, err := p.FetchIdentity(c.Context(), code)
 	if err != nil {
@@ -235,6 +266,14 @@ func (h *authHandlers) oauthV2Fail(c *fiber.Ctx, target string, cause error) err
 	if errors.Is(cause, mobileauth.ErrIdentity) {
 		code = "reauth_identity_mismatch"
 	}
+	// This leg always redirects rather than returning through RenderError, so
+	// it has to open its own Sentry gate: a routine cause (bad state, expired
+	// attempt, provider rejected the code) stays silent, anything else — a DB
+	// error out of the store, the OAuth provider itself being down — is a
+	// genuine fault and must not vanish behind a generic "sign-in failed".
+	if !isExpectedOAuthV2Failure(cause) {
+		reportUnexpected(c, cause)
+	}
 	base := h.mobileCallbacks[target]
 	if base == "" {
 		return authError(401, code, "sign-in failed")
@@ -265,7 +304,10 @@ func (h *authHandlers) OAuthExchangeV2(c *fiber.Ctx) error {
 	}
 	ex, err := h.mobileAuth.ConsumeCode(c.Context(), in.Code, in.Verifier)
 	if err != nil {
-		return authError(401, "invalid_exchange_code", "invalid or expired code")
+		if errors.Is(err, mobileauth.ErrInvalid) || errors.Is(err, mobileauth.ErrVerifier) || errors.Is(err, mobileauth.ErrIdentity) {
+			return authError(401, "invalid_exchange_code", "invalid or expired code")
+		}
+		return err
 	}
 	if ex.Purpose == "reauth" {
 		current, currentErr := requireUserID(c)
@@ -307,7 +349,10 @@ func (h *authHandlers) AppleAttemptV2(c *fiber.Ctx) error {
 	}
 	a, err := h.mobileAuth.CreateAppleAttempt(c.Context(), in.NonceChallenge, in.Purpose, h.appleNative.ClientIDs(), binding)
 	if err != nil {
-		return authError(400, "invalid_apple_attempt", "invalid Apple attempt")
+		if isExpectedAttemptFailure(err) {
+			return authError(400, "invalid_apple_attempt", "invalid Apple attempt")
+		}
+		return err
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"attempt_id": a.ID, "expires_at": a.ExpiresAt}})
 }
@@ -331,7 +376,10 @@ func (h *authHandlers) AppleExchangeV2(c *fiber.Ctx) error {
 	}
 	attempt, err := h.mobileAuth.ConsumeAppleAttempt(c.Context(), id)
 	if err != nil {
-		return authError(401, "invalid_apple_attempt", "invalid or expired Apple attempt")
+		if errors.Is(err, mobileauth.ErrInvalid) {
+			return authError(401, "invalid_apple_attempt", "invalid or expired Apple attempt")
+		}
+		return err
 	}
 	if mobileauth.ValidateVerifier(in.RawNonce) != nil || subtle.ConstantTimeCompare([]byte(mobileauth.Challenge(in.RawNonce)), []byte(attempt.NonceChallenge)) != 1 {
 		return authError(401, "invalid_apple_nonce", "Apple nonce mismatch")

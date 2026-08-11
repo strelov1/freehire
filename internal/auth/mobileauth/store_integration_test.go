@@ -232,6 +232,60 @@ func TestConcurrentAppleFinalizeAndUnlinkPreserveQueuedGrant(t *testing.T) {
 	}
 }
 
+// A user who signed in with native Apple leaves an apple_grants row that
+// references users with ON DELETE RESTRICT. Account deletion must be able to
+// clear it — by queuing a revocation job carrying its own encrypted copy of
+// the token and dropping the row — rather than have Postgres reject the
+// DELETE FROM users underneath it.
+func TestReleaseAppleGrantsForDeletionUnblocksUserDelete(t *testing.T) {
+	ctx, userID, store := seedAuthUser(t, true)
+	const subject, clientID = "apple-deletion-subject", "me.freehire.mobile"
+	if _, err := store.pool.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id) VALUES('apple',$1,$2)`, subject, userID); err != nil {
+		t.Fatal(err)
+	}
+	ring, err := apple.NewKeyRing("v1", map[string][]byte{"v1": bytes.Repeat([]byte{6}, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistAppleGrant(t, ctx, store, ring, userID, subject, clientID, "refresh-token")
+
+	if err = store.ReleaseAppleGrantsForDeletion(ctx, userID); err != nil {
+		t.Fatalf("ReleaseAppleGrantsForDeletion: %v", err)
+	}
+
+	var grants int
+	if err = store.pool.QueryRow(ctx, `SELECT count(*) FROM apple_grants WHERE user_id=$1`, userID).Scan(&grants); err != nil {
+		t.Fatal(err)
+	}
+	if grants != 0 {
+		t.Fatalf("apple_grants rows left = %d, want 0", grants)
+	}
+	var jobs int
+	if err = store.pool.QueryRow(ctx, `SELECT count(*) FROM apple_revocation_jobs WHERE source_user_id=$1 AND reason='account_deletion' AND status='pending'`, userID).Scan(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if jobs != 1 {
+		t.Fatalf("account_deletion revocation jobs = %d, want 1", jobs)
+	}
+
+	if _, err = store.pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, userID); err != nil {
+		t.Fatalf("DELETE FROM users still blocked after releasing apple grants: %v", err)
+	}
+}
+
+// Calling it again after everything is already released — the retry path an
+// account-deletion request takes if a prior attempt failed downstream — must
+// not error just because there is nothing left to do.
+func TestReleaseAppleGrantsForDeletionIsIdempotent(t *testing.T) {
+	ctx, userID, store := seedAuthUser(t, true)
+	if err := store.ReleaseAppleGrantsForDeletion(ctx, userID); err != nil {
+		t.Fatalf("ReleaseAppleGrantsForDeletion on a user with no grants: %v", err)
+	}
+	if err := store.ReleaseAppleGrantsForDeletion(ctx, userID); err != nil {
+		t.Fatalf("ReleaseAppleGrantsForDeletion called twice: %v", err)
+	}
+}
+
 func TestCleanupPreservesAttemptWithLiveExchangeCode(t *testing.T) {
 	ctx, userID, store := seedAuthUser(t, true)
 	verifier := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"

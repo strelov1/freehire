@@ -194,6 +194,66 @@ func (s *Store) ActivateAppleCompensation(ctx context.Context, jobID uuid.UUID) 
 
 func proofDigest(raw string) []byte { sum := sha256.Sum256([]byte(raw)); return sum[:] }
 
+// ReleaseAppleGrantsForDeletion queues Apple revocation for every grant the
+// account holds and clears the apple_grants rows, freeing the FK
+// (ON DELETE RESTRICT) that would otherwise block deleting the user. The
+// ciphertext is carried into the revocation job before the grant row is
+// dropped, so the background worker can still revoke it with Apple even
+// though the account — and the grant's own row — are already gone.
+// Idempotent: a retried account deletion finds no grants left and no-ops.
+func (s *Store) ReleaseAppleGrantsForDeletion(ctx context.Context, userID int64) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = s.releaseAppleGrantsForDeletionOnce(ctx, userID)
+		if !pgerr.IsSerializationFailure(err) {
+			return err
+		}
+	}
+	return err
+}
+
+func (s *Store) releaseAppleGrantsForDeletionOnce(ctx context.Context, userID int64) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	type appleGrant struct {
+		id                       uuid.UUID
+		subject, clientID, keyID string
+		ciphertext, nonce        []byte
+	}
+	rows, err := tx.Query(ctx, `SELECT id,provider_user_id,client_id,refresh_token_ciphertext,refresh_token_nonce,encryption_key_id FROM apple_grants WHERE user_id=$1 AND provider='apple' FOR UPDATE`, userID)
+	if err != nil {
+		return err
+	}
+	var grants []appleGrant
+	for rows.Next() {
+		var g appleGrant
+		if err = rows.Scan(&g.id, &g.subject, &g.clientID, &g.ciphertext, &g.nonce, &g.keyID); err != nil {
+			rows.Close()
+			return err
+		}
+		grants = append(grants, g)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, g := range grants {
+		idempotency := "account_deletion:apple:" + g.id.String()
+		if _, err = tx.Exec(ctx, `INSERT INTO apple_revocation_jobs(idempotency_key,reason,source_user_id,source_provider,source_provider_user_id,token_aad_row_id,client_id,token_ciphertext,token_nonce,encryption_key_id) VALUES($1,'account_deletion',$2,'apple',$3,$4,$5,$6,$7,$8) ON CONFLICT(idempotency_key) DO NOTHING`, idempotency, userID, g.subject, g.id, g.clientID, g.ciphertext, g.nonce, g.keyID); err != nil {
+			return err
+		}
+	}
+	if len(grants) > 0 {
+		if _, err = tx.Exec(ctx, `DELETE FROM apple_grants WHERE user_id=$1 AND provider='apple'`, userID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 // UnlinkIdentity locks every sign-in method, consumes recent-auth, and either
 // removes a grantless identity or durably queues Apple revocation in one serializable transaction.
 func (s *Store) UnlinkIdentity(ctx context.Context, userID int64, tokenVersion int32, sessionHash []byte, provider, recentProof string) (pending bool, err error) {

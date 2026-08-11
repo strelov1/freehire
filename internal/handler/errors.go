@@ -74,6 +74,16 @@ func RenderError(c *fiber.Ctx, err error) error {
 	return c.Status(status).JSON(fiber.Map{"error": msg})
 }
 
+// reportUnexpected sends err to Sentry as a genuine fault. It exists for call
+// sites that build their own response — a redirect, typically — instead of
+// returning through RenderError, but still want the same "only real faults
+// reach the error inbox" gate RenderError applies to everything else.
+func reportUnexpected(c *fiber.Ctx, err error) {
+	if hub := sentryfiber.GetHubFromContext(c); hub != nil {
+		hub.CaptureException(err)
+	}
+}
+
 // classify maps an error to its HTTP status and message and reports whether it is
 // an unexpected fault worth sending to Sentry. Only the fall-through 500 is
 // unexpected; a *fiber.Error, the 404-mapped DB errors, a client disconnect, and

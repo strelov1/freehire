@@ -191,3 +191,49 @@ func TestDelete_KeyReadFailureAborts(t *testing.T) {
 		t.Error("rows were deleted without knowing the object keys")
 	}
 }
+
+// Apple grants reference users with ON DELETE RESTRICT, so releasing them runs
+// before the row delete, and — unlike the best-effort Gmail/gateway steps —
+// its failure must abort deletion rather than let DeleteUser hit the FK.
+func TestDelete_ReleasesAppleGrantsBeforeTheRow(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{calls: &calls}
+	svc := New(repo, nil, nil).WithAppleGrants(func(context.Context, int64) error {
+		calls = append(calls, "release-apple-grants")
+		return nil
+	})
+
+	if err := svc.Delete(context.Background(), 7); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	released, deleted := -1, -1
+	for i, c := range calls {
+		switch c {
+		case "release-apple-grants":
+			released = i
+		case "delete-rows":
+			deleted = i
+		}
+	}
+	if released < 0 {
+		t.Fatalf("calls = %v, want apple grants released", calls)
+	}
+	if deleted < 0 || released > deleted {
+		t.Errorf("calls = %v, want apple grants released before the row is erased", calls)
+	}
+}
+
+func TestDelete_AppleGrantsFailureBlocksDeletion(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{calls: &calls}
+	svc := New(repo, nil, nil).WithAppleGrants(func(context.Context, int64) error {
+		return errors.New("still has an active apple grant")
+	})
+
+	if err := svc.Delete(context.Background(), 7); err == nil {
+		t.Fatal("Delete succeeded despite a failed apple grant release")
+	}
+	if repo.deleteSeen {
+		t.Error("rows were deleted despite the FK still being blocked")
+	}
+}

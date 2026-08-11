@@ -134,8 +134,10 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 
 	// Account deletion is permanent and cookie-only, for the same reason key
 	// management is: a leaked API key must not be able to destroy the account that
-	// issued it. The body confirms the caller's own email address.
-	meGroup.Delete("", mw.cookie, h.DeleteAccount)
+	// issued it. The body confirms the caller's own email address. It requires
+	// recent auth for the same reason password change does: a hijacked session
+	// must not be able to take the one action that can't be undone.
+	meGroup.Delete("", mw.cookie, recent, h.DeleteAccount)
 
 	// Auth: register/login/logout are public (logout just clears the cookie).
 	// me is guarded and accepts a session cookie OR an API key, so a non-browser

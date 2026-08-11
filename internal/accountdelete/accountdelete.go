@@ -42,6 +42,12 @@ type Repository interface {
 // Gmail OAuth token, revoked at Google. It is nil when the feature is unconfigured.
 type RevokeFunc func(ctx context.Context, userID int64) error
 
+// AppleGrantsFunc releases the account's Apple Sign In grants. Unlike RevokeFunc
+// above, it is not best-effort: the apple_grants row references users with
+// ON DELETE RESTRICT, so a failure here must stop deletion rather than let
+// DeleteUser fail underneath it with a raw FK violation.
+type AppleGrantsFunc func(ctx context.Context, userID int64) error
+
 // Service erases accounts. blobs is nil when object storage is unconfigured and
 // revoke is nil when Gmail is; either way there is simply nothing to erase there,
 // which must not stop a member from leaving.
@@ -53,6 +59,10 @@ type Service struct {
 	// erasing it — the gateway's spend record hangs off that key. Nil when the
 	// deployment does not attribute spend, which is simply nothing to do there.
 	blockKey RevokeFunc
+	// appleGrants releases the account's Apple Sign In grants. Nil only in tests
+	// that don't wire it; production always does, since apple_grants exists
+	// regardless of whether AUTH_V2_ENABLED is on.
+	appleGrants AppleGrantsFunc
 }
 
 // New builds the service. Pass a nil store and/or a nil revoker for a deployment
@@ -101,6 +111,14 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 			log.Printf("accountdelete: block gateway credential for user %d: %v", userID, err)
 		}
 	}
+	// Apple grants block the row itself (ON DELETE RESTRICT), so releasing them
+	// happens last and, unlike the best-effort steps above, a failure here stops
+	// deletion instead of surfacing as a raw FK violation out of DeleteUser.
+	if s.appleGrants != nil {
+		if err := s.appleGrants(ctx, userID); err != nil {
+			return fmt.Errorf("accountdelete: release apple grants: %w", err)
+		}
+	}
 	return s.repo.DeleteUser(ctx, userID)
 }
 
@@ -110,6 +128,13 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 // positional argument would stop saying which is which.
 func (s *Service) WithGatewayKeys(block RevokeFunc) *Service {
 	s.blockKey = block
+	return s
+}
+
+// WithAppleGrants attaches the releaser for the account's Apple Sign In grants.
+// Separate from the constructor for the same reason WithGatewayKeys is.
+func (s *Service) WithAppleGrants(release AppleGrantsFunc) *Service {
+	s.appleGrants = release
 	return s
 }
 
