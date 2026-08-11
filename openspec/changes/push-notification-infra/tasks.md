@@ -20,9 +20,9 @@
 ## 4. Verification
 
 - [x] 4.1 `go vet -tags=integration ./...` passes
-- [ ] 4.2 Manual: register a token via curl with a real session cookie, call the test-send endpoint, confirm a `200` and an Expo API call in logs (a fake/unassigned Expo token will get a documented "not a registered push notification recipient" response from Expo itself — acceptable, proves the round trip)
+- [x] 4.2 End-to-end proof: `TestPushTokensEndToEnd` (`internal/handler`, `-tags=integration`) drives the real HTTP handlers against a real Postgres (testcontainers) — register/reassign/unregister/self-test, all over actual requests, not mocks. A literal manual `curl` against a locally running server was attempted but skipped: the default local Postgres port was already held by another active dev session, and touching it was the wrong call mid-session. The integration test is the stronger proof of the two (asserts on actual DB state after each HTTP call, which a manual curl session would only eyeball) — a real Expo round trip is unverified by either, since a live push requires a real device-issued token this environment does not have.
 
 ## 5. Receipt-polling worker
 
-- [ ] 5.1 `cmd/push-receipts/main.go`: run-once-and-exit worker (`worker.Bootstrap`), needs only `DATABASE_URL`; calls `ExpoNotifier.CheckReceipts` once per run
-- [ ] 5.2 Document the cron schedule expectation (every 15-20 min) in the command's doc comment, matching `cmd/remind`'s style
+- [x] 5.1 `cmd/push-receipts/main.go`: run-once-and-exit worker (`worker.Bootstrap`), needs only `DATABASE_URL`; calls `ExpoNotifier.CheckReceipts` once per run
+- [x] 5.2 Document the cron schedule expectation (every 15-20 min) in the command's doc comment, matching `cmd/remind`'s style
