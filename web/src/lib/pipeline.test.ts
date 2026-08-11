@@ -14,7 +14,13 @@ const stats = (stages: Record<string, number>): PipelineStats => ({
 // what this change exists to remove.
 describe('PIPELINE_BANDS', () => {
   it('follows the generated groups in order', () => {
-    expect(PIPELINE_BANDS.map((b) => b.id)).toEqual(['applied', 'interview', 'offer', 'closed']);
+    expect(PIPELINE_BANDS.map((b) => b.id)).toEqual([
+      'preparing',
+      'applied',
+      'interview',
+      'offer',
+      'closed',
+    ]);
   });
 
   it('places every stage in exactly one band', () => {

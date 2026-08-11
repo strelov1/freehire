@@ -23,6 +23,7 @@ export interface PipelineBand {
 // `rejected` bucket carried: the band holds accepted offers too, and painting a settled group
 // as a failure editorialises a number the reader is trying to read.
 const BAND_COLORS: Record<string, string> = {
+  preparing: '#fde68a',
   applied: '#cbd5e1',
   interview: '#93c5fd',
   offer: '#86efac',

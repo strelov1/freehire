@@ -53,13 +53,42 @@
 
 ## 4. Frontend
 
-- [ ] 4.1 Regenerate frontend contracts (`cmd/gen-contracts`) so `STAGE_GROUPS` / `PIPELINE_BANDS`
-      pick up the new `preparing` group and label.
-- [ ] 4.2 Update `PipelineFunnel.svelte`'s doc comment ("one Applications source fanning into the
-      four groups") to reflect five groups.
-- [ ] 4.3 Run the app locally, open the Tracking board, and visually verify: the Preparing column
-      renders correctly positioned ahead of Applied, and the pipeline funnel's five bands don't
-      break the existing SVG geometry (ribbon widths/labels at the new band count).
+- [x] 4.1 Regenerated frontend contracts, but by hand-editing `generated/contracts.ts`'s three
+      `preparing`-related lines rather than running `go run ./cmd/gen-contracts` verbatim: a full
+      regen pulled in unrelated drift (new sources, role aliases, a matchanalysis `Bounds` type
+      from other already-merged PRs this branch's `main` base predates) that isn't this task's to
+      carry. The three lines match exactly what a full regen produces for `STAGE_VALUES`,
+      `STAGE_LABELS`, and `STAGE_GROUPS`.
+- [x] 4.1a (found running `pnpm run check`, not planned) `JobBoard.svelte` failed to compile:
+      two `Record<BoardColumnId, BoardItem[]>` object literals (`emptyColumns()`, the `shown`
+      search-filter branch) were missing the new `preparing` key — exactly the type error
+      `tracking-stage-vocabulary`'s own spec exists to force. Fixed both.
+- [x] 4.1b (found by inspection, not planned) `persistMove`'s `switch (to)` in `JobBoard.svelte`
+      had no `case 'preparing'`: dragging a card into the new column would have updated local
+      state optimistically and then silently done nothing on the backend (no `default` case to
+      catch it, so `pnpm run check` couldn't see this one — a switch gap, not a type gap). Added
+      the case.
+- [x] 4.1c (found by inspection, not planned) `pipeline.ts`'s `BAND_COLORS` had no entry for
+      `preparing`, so it fell back to the same colour as `applied` (`?? '#cbd5e1'`) — two adjacent
+      Sankey bands would have rendered indistinguishable. Added a distinct colour (`#fde68a`).
+- [x] 4.1d (found running `pnpm test`, not planned) Three vitest suites pin the generated
+      group/stage order as a literal array (`board.test.ts`'s `BOARD_COLUMNS`,
+      `pipeline.test.ts`'s `PIPELINE_BANDS`, `stages.test.ts`'s `groupedStages`) — the same
+      deliberate-pin pattern as Go's `TestStagesOrder`. Updated all three to lead with
+      `'preparing'`.
+- [x] 4.2 Updated `PipelineFunnel.svelte`'s doc comment ("one Applications source fanning into
+      the four groups") to name five groups and note the count is whatever `STAGE_GROUPS`
+      currently holds, not a fixed number.
+- [ ] 4.3 NOT DONE as originally scoped. No `preparing` row exists anywhere yet — its only
+      producer (`EnsureOnBoard`, task 3) is deferred behind PR #1754 — so there is no real card
+      to open the Tracking board and look at; seeding one would mean faking data the app cannot
+      yet produce itself. What IS verified: `pnpm run check` (0 errors) proves no card can render
+      in an unhandled state; the vitest suite (916 passed, including "every band gets a real
+      colour") proves the funnel math and the colour table are complete for 5 bands; reading
+      `PipelineFunnel.svelte`'s geometry code (task group 4 investigation) confirms the SVG height
+      and ribbon layout are computed from `visible.length`, not a hard-coded band count. A real
+      pixel-level look, per this repo's own "test the UI in a browser" convention, still needs
+      task 3 done first.
 
 ## 5. Backfill migration
 

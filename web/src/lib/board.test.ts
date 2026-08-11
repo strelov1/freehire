@@ -27,7 +27,13 @@ function pruned(companySlug: string, title: string): MyJob {
 
 describe('BOARD_COLUMNS', () => {
   it('has no Saved column — only the active application states', () => {
-    expect(BOARD_COLUMNS.map((c) => c.id)).toEqual(['applied', 'interview', 'offer', 'closed']);
+    expect(BOARD_COLUMNS.map((c) => c.id)).toEqual([
+      'preparing',
+      'applied',
+      'interview',
+      'offer',
+      'closed',
+    ]);
   });
 });
 

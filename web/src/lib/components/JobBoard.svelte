@@ -40,7 +40,7 @@
   let openedInitial = false;
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
-    return { applied: [], interview: [], offer: [], closed: [] };
+    return { preparing: [], applied: [], interview: [], offer: [], closed: [] };
   }
 
   // Per-column arrays are the source of truth once loaded; svelte-dnd-action
@@ -134,6 +134,7 @@
   const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
     searching
       ? {
+          preparing: columns.preparing.filter((i) => matchesQuery(i, query)),
           applied: columns.applied.filter((i) => matchesQuery(i, query)),
           interview: columns.interview.filter((i) => matchesQuery(i, query)),
           offer: columns.offer.filter((i) => matchesQuery(i, query)),
@@ -172,6 +173,10 @@
   async function persistMove(item: BoardItem, to: BoardColumnId) {
     try {
       switch (to) {
+        case 'preparing':
+          item.stage = 'preparing';
+          await api.trackApplication(item.id, { stage: 'preparing' });
+          break;
         case 'applied':
           item.stage = 'applied';
           await api.trackApplication(item.id, { stage: 'applied' });

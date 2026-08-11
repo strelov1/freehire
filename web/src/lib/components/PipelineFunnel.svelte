@@ -3,8 +3,10 @@
   import { humanizeStage } from '$lib/stages';
   import type { PipelineStats } from '$lib/types';
 
-  // A single-level Sankey snapshot: one Applications source fanning into the four
-  // groups, ribbon and node heights proportional to each count. Hand-built SVG — no
+  // A single-level Sankey snapshot: one Applications source fanning into the pipeline
+  // groups (five today: Preparing, Applied, Interview, Offer, Closed — derived from
+  // STAGE_GROUPS, so this count is whatever the vocabulary currently has), ribbon and
+  // node heights proportional to each count. Hand-built SVG — no
   // charting dependency. The parent guarantees applications > 0 (the empty state is
   // handled there); we guard anyway.
   //

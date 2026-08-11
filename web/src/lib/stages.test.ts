@@ -42,7 +42,13 @@ describe('groupedStages', () => {
   });
 
   it('keeps the generated pipeline order', () => {
-    expect(groupedStages().map((g) => g.id)).toEqual(['applied', 'interview', 'offer', 'closed']);
+    expect(groupedStages().map((g) => g.id)).toEqual([
+      'preparing',
+      'applied',
+      'interview',
+      'offer',
+      'closed',
+    ]);
   });
 
   it('labels each option from the generated table', () => {
