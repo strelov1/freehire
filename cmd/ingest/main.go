@@ -197,39 +197,18 @@ func run() int {
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
 		bySource := sweepBySource(runStats[provider], fullCatalog[provider])
 		companySlugs := crawled.slugs(provider)
-		var closed int64
-		var err error
-		if bySource {
-			closed, err = queries.CloseUnseenJobsBySource(ctx, db.CloseUnseenJobsBySourceParams{
-				Source: provider,
-				Cutoff: cutoff,
-			})
-		} else {
-			closed, err = queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
-				Source:       provider,
-				Cutoff:       cutoff,
-				CompanySlugs: companySlugs,
-			})
-		}
+
+		closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, bySource)
 		if err != nil {
-			// The bulk UPDATE is one statement: a single row it can't write (e.g. the
-			// 2026-08-11 incident, a heap/index-corrupted jobs_pkey value) aborts the
-			// whole thing, silently leaving every closeable row in the provider open.
-			// Retry row by row so one bad id can be skipped without blocking the rest.
-			log.Printf("close stale jobs (%s): bulk close failed (%v), falling back to row-by-row", provider, err)
-			var skipped int
-			closed, skipped, err = sweepRowByRow(ctx, queries, provider, cutoff, companySlugs, bySource)
-			if err != nil {
-				// Count and continue: one provider's sweep failure must not skip the rest,
-				// but the run still exits non-zero.
-				failed++
-				log.Printf("close stale jobs (%s): row-by-row fallback failed: %v", provider, err)
-				continue
-			}
-			if skipped > 0 {
-				failed++
-				log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
-			}
+			// Count and continue: one provider's sweep failure must not skip the rest,
+			// but the run still exits non-zero.
+			failed++
+			log.Printf("close stale jobs (%s): %v", provider, err)
+			continue
+		}
+		if skipped > 0 {
+			failed++
+			log.Printf("close stale jobs (%s): closed %d, skipped %d unclosable row(s) — see preceding lines for their ids", provider, closed, skipped)
 		}
 		log.Printf("closed %d stale %s jobs (unseen for %s)", closed, provider, window)
 	}
@@ -275,6 +254,34 @@ func sweepWindowFor(grace map[string]time.Duration, provider string) time.Durati
 		return w
 	}
 	return staleAfter
+}
+
+// sweepProvider closes one provider's unseen jobs: the bulk UPDATE (CloseUnseenJobs or
+// CloseUnseenJobsBySource) is the fast path, and on error it falls back to sweepRowByRow
+// so a single row Postgres can't write doesn't block the rest of the provider — see
+// sweepRowByRow for why that happens. skipped is always 0 unless the fallback ran.
+func sweepProvider(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs []string, bySource bool) (closed int64, skipped int, err error) {
+	if bySource {
+		closed, err = queries.CloseUnseenJobsBySource(ctx, db.CloseUnseenJobsBySourceParams{
+			Source: provider,
+			Cutoff: cutoff,
+		})
+	} else {
+		closed, err = queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
+			Source:       provider,
+			Cutoff:       cutoff,
+			CompanySlugs: companySlugs,
+		})
+	}
+	if err == nil {
+		return closed, 0, nil
+	}
+	log.Printf("close stale jobs (%s): bulk close failed (%v), falling back to row-by-row", provider, err)
+	closed, skipped, err = sweepRowByRow(ctx, queries, provider, cutoff, companySlugs, bySource)
+	if err != nil {
+		return 0, 0, fmt.Errorf("row-by-row fallback failed: %w", err)
+	}
+	return closed, skipped, nil
 }
 
 // sweepRowByRow is the bulk sweep's fallback when the single-statement UPDATE fails: it
