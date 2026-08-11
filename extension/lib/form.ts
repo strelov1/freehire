@@ -37,8 +37,13 @@ export function collectFillable(doc: Document): Fillable[] {
 export interface Question {
   /** The question's own text: a control's label, or the group's legend. */
   label: string;
-  /** One control, or the group's controls in document order. */
-  controls: Fillable[];
+  /**
+   * One control, or the group's controls in document order. Never empty —
+   * every construction site starts it from a single control — encoded as a
+   * non-empty tuple so `controls[0]` and single-element destructuring stay
+   * typed as `Fillable`, not `Fillable | undefined`.
+   */
+  controls: [Fillable, ...Fillable[]];
 }
 
 /** The ordered list of questions — the index space for observe + act. */

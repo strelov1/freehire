@@ -26,8 +26,8 @@ describe('the assistant API', () => {
     await createSession('tok-123');
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].init.headers).toMatchObject({ Authorization: 'Bearer tok-123' });
-    expect(calls[0].init.credentials).toBeUndefined();
+    expect(calls[0]!.init.headers).toMatchObject({ Authorization: 'Bearer tok-123' });
+    expect(calls[0]!.init.credentials).toBeUndefined();
   });
 
   // The panel's agent is the one with eyes; a chat session would have no page tool.
@@ -36,8 +36,8 @@ describe('the assistant API', () => {
 
     await createSession('tok-123');
 
-    expect(calls[0].url).toContain('preset=browse');
-    expect(calls[0].init.method).toBe('POST');
+    expect(calls[0]!.url).toContain('preset=browse');
+    expect(calls[0]!.init.method).toBe('POST');
   });
 
   it('reaches hire by absolute origin, since an extension page has none of its own', async () => {
@@ -45,7 +45,7 @@ describe('the assistant API', () => {
 
     await createSession('tok-123');
 
-    expect(calls[0].url).toMatch(/^https?:\/\/.+\/api\/v1\/assistant\/sessions/);
+    expect(calls[0]!.url).toMatch(/^https?:\/\/.+\/api\/v1\/assistant\/sessions/);
   });
 
   // A conversation deleted from the web is a dead id the panel holds. It has to be
@@ -69,6 +69,6 @@ describe('the assistant API', () => {
     const calls = stubFetch({ status: 204 });
 
     await expect(deleteSession('s1', 'tok')).resolves.toBeUndefined();
-    expect(calls[0].init.method).toBe('DELETE');
+    expect(calls[0]!.init.method).toBe('DELETE');
   });
 });

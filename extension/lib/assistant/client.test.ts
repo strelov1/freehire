@@ -53,8 +53,8 @@ describe('sendTurn', () => {
 
     await sendTurn('s1', 'hello there', 'tok-9', () => {}).done;
 
-    expect(calls[0].init.headers).toMatchObject({ Authorization: 'Bearer tok-9' });
-    expect(JSON.parse(calls[0].init.body as string)).toEqual({ text: 'hello there' });
+    expect(calls[0]!.init.headers).toMatchObject({ Authorization: 'Bearer tok-9' });
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ text: 'hello there' });
   });
 
   // Stopping is something the user chose. It has to arrive as a terminal event, or

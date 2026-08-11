@@ -143,7 +143,8 @@ function findWidget(doc: Document, label: string): { widget: Element | null; sta
     .map((q) => q.controls[0])
     .filter(isComboWidget);
 
-  if (widgets.length === 1) return { widget: widgets[0], status: 'not_found' };
+  // Guarded by the length check above: index 0 exists.
+  if (widgets.length === 1) return { widget: widgets[0]!, status: 'not_found' };
   return { widget: null, status: widgets.length > 1 ? 'ambiguous' : 'not_found' };
 }
 

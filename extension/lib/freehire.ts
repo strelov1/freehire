@@ -20,7 +20,7 @@ export function freehireSlugFromUrl(rawUrl: string): string | null {
   }
   if (!JOB_HOSTS.includes(u.hostname)) return null;
   const m = u.pathname.match(/^\/jobs\/([^/]+)\/?$/);
-  return m ? m[1] : null;
+  return m ? (m[1] ?? null) : null;
 }
 
 /** freehire's company-logo proxy URL for a company name (404s → placeholder).
