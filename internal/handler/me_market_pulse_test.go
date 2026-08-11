@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -107,6 +108,24 @@ func doMarketPulse(t *testing.T, app *fiber.App, token string) *http.Response {
 	return resp
 }
 
+// marketPulseBody is the wire shape this test file decodes responses into, to confirm
+// the actual JSON on the wire (not just status code and mock call args).
+type marketPulseBody struct {
+	Data []skillPulse `json:"data"`
+	Meta struct {
+		WeekStart string `json:"week_start"`
+	} `json:"meta"`
+}
+
+func decodeMarketPulse(t *testing.T, resp *http.Response) marketPulseBody {
+	t.Helper()
+	var body marketPulseBody
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	return body
+}
+
 func TestMarketPulseWithProfileSkills(t *testing.T) {
 	repo := &fakeProfileRepo{getRet: userprofile.Profile{Skills: []string{"go", "rust"}}}
 	history := &fakeSkillHistoryReader{rows: []db.InsightsSkillHistory{
@@ -122,6 +141,13 @@ func TestMarketPulseWithProfileSkills(t *testing.T) {
 	if got := history.gotSkills; len(got) != 2 || got[0] != "go" || got[1] != "rust" {
 		t.Errorf("history queried with %v, want [go rust] (the profile's own skills)", got)
 	}
+	body := decodeMarketPulse(t, resp)
+	if len(body.Data) != 1 || body.Data[0].Skill != "go" {
+		t.Fatalf("data = %+v, want one entry for go (rust has no history, omitted)", body.Data)
+	}
+	if body.Meta.WeekStart == "" {
+		t.Errorf("meta.week_start is empty, want the resolved current week")
+	}
 }
 
 func TestMarketPulseEmptyProfileReturnsEmptyData(t *testing.T) {
@@ -135,6 +161,13 @@ func TestMarketPulseEmptyProfileReturnsEmptyData(t *testing.T) {
 	}
 	if history.gotSkills != nil {
 		t.Errorf("history reader called with an empty profile; should not be reached")
+	}
+	body := decodeMarketPulse(t, resp)
+	if body.Data == nil || len(body.Data) != 0 {
+		t.Errorf("data = %v, want a non-null empty array", body.Data)
+	}
+	if body.Meta.WeekStart == "" {
+		t.Errorf("meta.week_start is empty, want the resolved current week even for an empty profile")
 	}
 }
 
