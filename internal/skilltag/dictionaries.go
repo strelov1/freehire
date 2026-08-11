@@ -1081,6 +1081,13 @@ var professionalPhraseAliases = []phraseAlias{
 	{"program management", "program-management"},
 	{"strategic planning", "strategic-planning"},
 	{"stakeholder management", "stakeholder-management"},
+	// agile/PM certifications — spelled-out forms are unambiguous strong matches;
+	// the acronym forms (CSM/PSM/PMP/SAFe) collide with other meanings in general
+	// job text and resolve only via categoryScopedAcronyms below.
+	{"certified scrummaster", "certified-scrummaster"}, {"certified scrum master", "certified-scrummaster"},
+	{"professional scrum master", "professional-scrum-master"},
+	{"project management professional", "pmp"},
+	{"scaled agile framework", "safe-agile"},
 	// sales
 	{"account executive", "account-executive"},
 	{"business development", "business-development"},
@@ -1232,4 +1239,16 @@ type categoryScopedAcronym struct {
 // "retrieval augmented generation" phrase).
 var categoryScopedAcronyms = map[string]categoryScopedAcronym{
 	"RAG": {canonical: "rag", allowedCategories: map[string]bool{"ai_engineering": true, "ml_ai": true}},
+	// Each collides with another meaning in general job text — CSM with Customer
+	// Success Manager, PSM/PMP are short enough to be noise, bare SAFe is the common
+	// English word — but within a posting already classified project_management the
+	// collision is negligible and the acronym is the dominant real-world spelling.
+	"CSM": {canonical: "certified-scrummaster", allowedCategories: map[string]bool{"project_management": true}},
+	"PSM": {canonical: "professional-scrum-master", allowedCategories: map[string]bool{"project_management": true}},
+	"PMP": {canonical: "pmp", allowedCategories: map[string]bool{"project_management": true}},
+	// "SAFe" is the framework's own stylization and the dominant real-world spelling;
+	// the case-sensitive acronym pass matches this exact form. "SAFE" (all-caps) is
+	// also listed: ATS feeds that render whole titles in caps would otherwise miss it.
+	"SAFe": {canonical: "safe-agile", allowedCategories: map[string]bool{"project_management": true}},
+	"SAFE": {canonical: "safe-agile", allowedCategories: map[string]bool{"project_management": true}},
 }

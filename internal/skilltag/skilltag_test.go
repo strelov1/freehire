@@ -200,6 +200,59 @@ func TestParse_CategoryScopedAcronyms(t *testing.T) {
 	}
 }
 
+// Agile/PM certification acronyms (role-taxonomy-alias-gaps): CSM, PSM, PMP and
+// SAFe each collide with another meaning in general job text (Customer Success
+// Manager, common English word, other short-string noise), so they resolve only
+// on job text already categorized project_management — the same category-scoped
+// shape as RAG. The spelled-out phrase forms are unambiguous and resolve
+// regardless of category.
+func TestParse_AgilePMCertificationAcronyms(t *testing.T) {
+	has := func(hay []string, needle string) bool {
+		for _, h := range hay {
+			if h == needle {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		text      string
+		canonical string
+	}{
+		{"CSM certification required", "certified-scrummaster"},
+		{"PSM I certified", "professional-scrum-master"},
+		{"PMP holders preferred", "pmp"},
+		{"SAFe experience a plus", "safe-agile"},
+		{"SAFE experience a plus", "safe-agile"}, // ATS all-caps title rendering
+	}
+	for _, c := range cases {
+		if got := Parse(c.text, WithAcronymCategory("project_management")); !has(got, c.canonical) {
+			t.Errorf("Parse(%q, project_management) = %v, want %s", c.text, got, c.canonical)
+		}
+		if got := Parse(c.text, WithAcronymCategory("backend")); has(got, c.canonical) {
+			t.Errorf("Parse(%q, backend) = %v, must not emit %s", c.text, got, c.canonical)
+		}
+		if got := Parse(c.text); has(got, c.canonical) {
+			t.Errorf("Parse(%q, no category) = %v, must not emit %s", c.text, got, c.canonical)
+		}
+	}
+
+	// Spelled-out phrase forms are unambiguous strong matches, no category needed.
+	phraseCases := []struct{ text, canonical string }{
+		{"Certified ScrumMaster (CSM)", "certified-scrummaster"},
+		{"Certified Scrum Master (CSM)", "certified-scrummaster"},
+		{"Holds a Professional Scrum Master certification", "professional-scrum-master"},
+		{"Project Management Professional preferred", "pmp"},
+		{"Scaled Agile Framework experience", "safe-agile"},
+	}
+	for _, c := range phraseCases {
+		if got := Parse(c.text); !has(got, c.canonical) {
+			t.Errorf("Parse(%q) = %v, want %s", c.text, got, c.canonical)
+		}
+	}
+}
+
 // New tech/methodology vocabulary (skills-vocab-gaps): each resolves from a
 // realistic description; bare "rest" never tags (only "REST API"/"RESTful").
 func TestParse_NewTechVocab(t *testing.T) {

@@ -348,6 +348,66 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 	}
 }
 
+// TestParse_AliasGapFill covers title phrasing for IT sub-roles that already have a
+// home category (project_management, security, devops, data_engineering,
+// data_analytics) but whose common surface forms the dictionary never learned —
+// found by sampling live prod titles. No new category values are involved.
+func TestParse_AliasGapFill(t *testing.T) {
+	cases := []struct{ title, wantCategory string }{
+		// agile/PM
+		{"Agile Coach", "project_management"},
+		{"Senior Agile Coach", "project_management"},
+		{"Release Train Engineer", "project_management"},
+		{"Agile Transformation Lead", "project_management"},
+		{"Agile Transformation Manager", "project_management"}, // guard: manager-> fall-through
+		{"SAFe Scrum Master", "project_management"},
+		{"SAFe Practitioner", "project_management"},
+		{"Scaled Agile Framework Coach", "project_management"},
+
+		// security — narrower technical niches
+		{"IAM Engineer", "security"},
+		{"Identity and Access Management Analyst", "security"}, // guard: analyst-> fall-through
+		{"GRC Analyst", "security"},
+		{"Vulnerability Management Engineer", "security"},
+		{"Vulnerability Analyst", "security"}, // guard: analyst-> fall-through
+		{"Incident Response Engineer", "security"},
+		{"Red Team Operator", "security"},
+		{"Red Teamer", "security"},
+		{"Blue Team Analyst", "security"},
+		{"Penetration Tester", "security"},
+		{"Penetration Testing Engineer", "security"},
+		{"Pentester", "security"},
+		{"Pentest Engineer", "security"},
+		{"Threat Intelligence Analyst", "security"},
+		{"Threat Intel Lead", "security"},
+		{"CISO", "security"},
+		{"Chief Information Security Officer", "security"},
+		{"DevSecOps Engineer", "security"}, // guard: stays security, not devops
+
+		// data/devops
+		{"Data Platform Engineer", "data_engineering"},
+		{"Data Governance Lead", "data_engineering"},
+		{"Data Governance Manager", "data_engineering"}, // guard: manager-> fall-through
+		{"Data Steward", "data_engineering"},
+		{"MLOps Engineer", "devops"}, // guard: stays devops, not ml_ai/data_engineering
+		{"ML Ops Engineer", "devops"},
+		{"Analytics Engineer", "data_analytics"},
+		{"Senior Analytics Engineer", "data_analytics"},
+		{"Platform Engineering Team Leader", "devops"}, // gerund form, not just "platform engineer"
+
+		// precision — word-traps deliberately excluded, existing behavior unchanged
+		{"Safe Driving Instructor", ""},       // bare "safe" must not resolve
+		{"Customs Compliance Specialist", ""}, // bare "compliance" must not resolve to security
+		{"Platform Engineer", "devops"},       // pre-existing alias unaffected
+		{"Data Analyst", "data_analytics"},    // plain analyst role unaffected
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.wantCategory)
+		}
+	}
+}
+
 // TestParse_DesignSplit covers the split of the design craft: engineering
 // draughting (mechanical, electrical, civil, chip) resolves to engineering_design,
 // while `design` keeps meaning product, visual and experience design. The bare

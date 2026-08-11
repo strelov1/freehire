@@ -121,6 +121,11 @@ var categoryTable = []aliasEntry{
 	{"data engineering", "data_engineering"},
 	{"дата-инженер", "data_engineering"},
 	{"инженер данных", "data_engineering"},
+	// Platform/governance/stewardship work on the data estate itself, distinct from
+	// the analytics-facing "analytics engineer" below and from generic "devops".
+	{"data platform", "data_engineering"},
+	{"data governance", "data_engineering"},
+	{"data steward", "data_engineering"},
 	{"data scientist", "data_science"},
 	{"data science", "data_science"},
 	// "data scien" fires only on a title truncated mid-word ("Senior Data Scien…"),
@@ -130,6 +135,9 @@ var categoryTable = []aliasEntry{
 	{"дата-сайентист", "data_science"},
 	{"data analyst", "data_analytics"},
 	{"data analytics", "data_analytics"},
+	// dbt-era title: builds governed, tested data models for analysts/BI to consume —
+	// analytics-facing output, unlike the raw pipeline work in data_engineering above.
+	{"analytics engineer", "data_analytics"},
 	{"аналитик данных", "data_analytics"},
 	{"data аналитик", "data_analytics"},
 	// BI is reporting/dashboards/metrics — the analytics side, so it routes here
@@ -178,10 +186,18 @@ var categoryTable = []aliasEntry{
 	{"devops", "devops"},
 	{"девопс", "devops"},
 	{"platform engineer", "devops"},
+	// The discipline/team-noun form: "Platform Engineering Team Leader" carries no
+	// "platform engineer" substring, so it needs its own entry.
+	{"platform engineering", "devops"},
 	{"infrastructure engineer", "devops"},
 	{"cloud engineer", "devops"},
 	{"system administrator", "devops"},
 	{"sysadmin", "devops"},
+	// MLOps is DevOps practice specialized to ML artifacts (CI/CD, deployment,
+	// monitoring for models) — the operational lifecycle, not the modeling itself,
+	// which stays in ml_ai/ai_engineering above.
+	{"mlops", "devops"},
+	{"ml ops", "devops"},
 	{"sre", "sre"},
 	{"site reliability", "sre"},
 	{"network engineer", "network_engineering"},
@@ -205,6 +221,12 @@ var categoryTable = []aliasEntry{
 	{"мобильный", "mobile"},
 	{"мобильная", "mobile"},
 	{"мобильных", "mobile"},
+	// Penetration-testing titles must precede the QA block's bare "tester" fall-through
+	// right below — it would otherwise claim "Penetration Tester" for qa.
+	{"penetration tester", "security"},
+	{"penetration testing", "security"},
+	{"pentester", "security"},
+	{"pentest", "security"},
 	{"qa", "qa"},
 	{"quality assurance", "qa"},
 	{"tester", "qa"},
@@ -221,6 +243,27 @@ var categoryTable = []aliasEntry{
 	{"безопасность", "security"},
 	{"безопасности", "security"},
 	{"кибербезопасность", "security"},
+	// Narrower technical niches within security. Deliberately no bare "compliance" —
+	// sampled live titles are dominated by non-IT banking/legal/customs compliance
+	// (that population already routes to `legal` via "compliance officer/manager/
+	// analyst" above); a bare entry here would be a GTM-style word-trap.
+	{"iam", "security"},
+	{"identity and access management", "security"},
+	{"grc", "security"},
+	{"vulnerability management", "security"},
+	{"vulnerability analyst", "security"},
+	{"incident response", "security"},
+	{"red team", "security"},
+	{"red teamer", "security"},
+	{"blue team", "security"},
+	{"threat intelligence", "security"},
+	{"threat intel", "security"},
+	// "chief information security officer" needs no entry of its own: the bare
+	// "security" alias above already catches it as a whole word.
+	{"ciso", "security"},
+	// DevSecOps stays security, not devops: the security responsibility (SAST/DAST,
+	// container/IaC scanning, policy-as-code) is why the title exists, not incidental.
+	{"devsecops", "security"},
 	{"embedded", "embedded"},
 	{"firmware", "embedded"},
 	{"встраиваемые", "embedded"},
@@ -373,6 +416,16 @@ var categoryTable = []aliasEntry{
 	{"project administrator", "project_management"},
 	{"scrum master", "project_management"},
 	{"scrum-master", "project_management"},
+	{"agile coach", "project_management"},
+	{"release train engineer", "project_management"},
+	{"agile transformation lead", "project_management"},
+	{"agile transformation manager", "project_management"},
+	// Only qualified SAFe phrases resolve — bare "safe" is a common English word
+	// (e.g. "Safe Driving Instructor"), a false-positive risk not worth taking.
+	// "SAFe Scrum Master" needs no entry of its own: it already contains "scrum
+	// master" above.
+	{"scaled agile framework", "project_management"},
+	{"safe practitioner", "project_management"},
 	{"проджект", "project_management"},
 	{"проект-менеджер", "project_management"},
 	{"скрам-мастер", "project_management"},
