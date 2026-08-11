@@ -131,11 +131,11 @@ func TestRecognize(t *testing.T) {
 		// takes the first recognized ATS URL in a page, recorded it as the employer's board.
 		{"teamtailor platform app host not a tenant", "https://app.teamtailor.com/companies/1/jobs", "", "", "", false},
 		{"teamtailor platform dashboard host not a tenant", "https://dashboard.teamtailor.com/", "", "", "", false},
-			// tt.teamtailor.com is the vendor's own "powered by Teamtailor" tracking/short-link
-			// host, carried on the footer of every tenant career site — not a tenant, same as
-			// app/dashboard above. Found via a contribution whose page linked it, misread as the
-			// employer's own board (2026-08-11).
-			{"teamtailor platform tt shortlink host not a tenant", "https://tt.teamtailor.com/", "", "", "", false},
+		// tt.teamtailor.com is the vendor's own "powered by Teamtailor" tracking/short-link
+		// host, carried on the footer of every tenant career site — not a tenant, same as
+		// app/dashboard above. Found via a contribution whose page linked it, misread as the
+		// employer's own board (2026-08-11).
+		{"teamtailor platform tt shortlink host not a tenant", "https://tt.teamtailor.com/", "", "", "", false},
 		// The same platform-host guard applies to subdomain mode, not just host mode: Recruitee's
 		// own employer app lives at app.recruitee.com and BambooHR's own support center at
 		// help.bamboohr.com — both real, public vendor hosts, neither a tenant named "app" or
