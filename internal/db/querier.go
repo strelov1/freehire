@@ -2661,6 +2661,15 @@ type Querier interface {
 	// ATS provider set from the sources registry; <> ALL excludes them, so a new adapter
 	// never silently becomes a probe target. Closed jobs are skipped (already not open).
 	SelectOrphanLivenessCandidates(ctx context.Context, atsProviders []string) ([]SelectOrphanLivenessCandidatesRow, error)
+	// Liveness backstop for a registered provider whose ingest sweep cannot reach every open
+	// job — see job-lifecycle: CloseUnseenJobs scopes closes to the company_slugs a run
+	// actually crawled, so a company that ages out of a recency-budgeted aggregator's crawl
+	// window (himalayas pages only its freshest slice) never re-enters that scope and its
+	// last posting leaks open forever. Unlike SelectOrphanLivenessCandidates (any job whose
+	// source ISN'T swept), this targets specific sources that ARE swept but only jobs the
+	// sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
+	// evidence the sweep is structurally unable to reach them, not a race with it.
+	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error

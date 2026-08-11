@@ -2402,6 +2402,61 @@ func (q *Queries) SelectOrphanLivenessCandidates(ctx context.Context, atsProvide
 	return items, nil
 }
 
+const selectStaleRegisteredCandidates = `-- name: SelectStaleRegisteredCandidates :many
+SELECT id, source, url, public_slug, liveness_strikes
+FROM jobs
+WHERE closed_at IS NULL
+  AND source = ANY($1::text[])
+  AND last_seen_at < $2
+`
+
+type SelectStaleRegisteredCandidatesParams struct {
+	Sources []string           `json:"sources"`
+	Cutoff  pgtype.Timestamptz `json:"cutoff"`
+}
+
+type SelectStaleRegisteredCandidatesRow struct {
+	ID              int64  `json:"id"`
+	Source          string `json:"source"`
+	URL             string `json:"url"`
+	PublicSlug      string `json:"public_slug"`
+	LivenessStrikes int32  `json:"liveness_strikes"`
+}
+
+// Liveness backstop for a registered provider whose ingest sweep cannot reach every open
+// job — see job-lifecycle: CloseUnseenJobs scopes closes to the company_slugs a run
+// actually crawled, so a company that ages out of a recency-budgeted aggregator's crawl
+// window (himalayas pages only its freshest slice) never re-enters that scope and its
+// last posting leaks open forever. Unlike SelectOrphanLivenessCandidates (any job whose
+// source ISN'T swept), this targets specific sources that ARE swept but only jobs the
+// sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
+// evidence the sweep is structurally unable to reach them, not a race with it.
+func (q *Queries) SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, selectStaleRegisteredCandidates, arg.Sources, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SelectStaleRegisteredCandidatesRow{}
+	for rows.Next() {
+		var i SelectStaleRegisteredCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.URL,
+			&i.PublicSlug,
+			&i.LivenessStrikes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setJobEnrichment = `-- name: SetJobEnrichment :exec
 UPDATE jobs
 SET enrichment         = CASE
