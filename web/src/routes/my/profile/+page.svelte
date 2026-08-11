@@ -3,7 +3,7 @@
   import { ScanSearch, Trash2 } from '@lucide/svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
@@ -144,11 +144,12 @@
     }
   }
 
-  // (Re)load once the session resolves.
+  // (Re)load once the session resolves. Talent Network is beta-gated: skip its fetch
+  // entirely for a non-beta account, same as the button being hidden for one.
   $effect(() => {
     if (isAuthenticated()) {
       void load();
-      void loadTalentNetwork();
+      if (currentUser()?.beta_tester) void loadTalentNetwork();
     }
   });
 
@@ -250,31 +251,37 @@
     <!-- Off/not-yet-loaded is a filled call-to-action (the opt-in is the interesting
          choice to make); once public or anonymous the button becomes a low-key status
          readout, since Off is the default and the other two are already a
-         deliberate, weighty decision the panel itself re-explains on open. -->
-    <Button
-      variant={talentNetworkVisibility === 'public' || talentNetworkVisibility === 'anonymous'
-        ? 'outline'
-        : 'primary'}
-      class="shrink-0"
-      aria-haspopup="dialog"
-      onclick={() => (talentNetworkPanelOpen = true)}
-    >
-      {#if talentNetworkVisibility === 'public'}
-        <span aria-hidden="true">🌐</span> Talent Network: Public
-      {:else if talentNetworkVisibility === 'anonymous'}
-        <span aria-hidden="true">🕶️</span> Talent Network: Anonymous
-      {:else}
-        Join Talent Network
-      {/if}
-    </Button>
+         deliberate, weighty decision the panel itself re-explains on open.
+         Beta-gated: hidden entirely for a non-beta account, not just disabled — the
+         feature isn't ready for a general audience yet. -->
+    {#if currentUser()?.beta_tester}
+      <Button
+        variant={talentNetworkVisibility === 'public' || talentNetworkVisibility === 'anonymous'
+          ? 'outline'
+          : 'primary'}
+        class="shrink-0"
+        aria-haspopup="dialog"
+        onclick={() => (talentNetworkPanelOpen = true)}
+      >
+        {#if talentNetworkVisibility === 'public'}
+          <span aria-hidden="true">🌐</span> Talent Network: Public
+        {:else if talentNetworkVisibility === 'anonymous'}
+          <span aria-hidden="true">🕶️</span> Talent Network: Anonymous
+        {:else}
+          Join Talent Network
+        {/if}
+      </Button>
+    {/if}
   </div>
 
-  <TalentNetworkPanel
-    open={talentNetworkPanelOpen}
-    onClose={() => (talentNetworkPanelOpen = false)}
-    onChange={(setting) => (talentNetworkVisibility = setting)}
-    onError={(msg) => (actionError = msg)}
-  />
+  {#if currentUser()?.beta_tester}
+    <TalentNetworkPanel
+      open={talentNetworkPanelOpen}
+      onClose={() => (talentNetworkPanelOpen = false)}
+      onChange={(setting) => (talentNetworkVisibility = setting)}
+      onError={(msg) => (actionError = msg)}
+    />
+  {/if}
 
   {#if actionError}
     <p class="mb-4 text-sm text-destructive">{actionError}</p>
