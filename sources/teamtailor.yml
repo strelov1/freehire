@@ -3267,3 +3267,11 @@
 # teamtailor board mined from dynamitejobs.com (2026-08-10, live-validated)
 - company: Agorapulse
   board: career.agorapulse.com
+
+# link contributions, validated live 2026-08-11
+- company: Kleos
+  board: careers.kleos.io
+- company: Paystack
+  board: careers.paystack.com
+- company: Nextlane
+  board: nextlane.teamtailor.com

@@ -2115,3 +2115,7 @@
 # workable board mined from dynamitejobs.com (2026-08-10, live-validated)
 - company: Rythm Health
   board: rythm
+
+# link contribution, validated live 2026-08-11
+- company: Lago
+  board: lago-1
