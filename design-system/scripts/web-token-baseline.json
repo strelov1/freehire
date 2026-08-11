@@ -77,7 +77,7 @@
   "web/src/lib/components/VoteControl.svelte": 4,
   "web/src/lib/docs/format.ts": 25,
   "web/src/lib/emailStatus.ts": 15,
-  "web/src/lib/pipeline.ts": 5,
+  "web/src/lib/pipeline.ts": 6,
   "web/src/lib/server/og/blog.ts": 4,
   "web/src/lib/server/og/brand.ts": 4,
   "web/src/lib/server/og/card.ts": 3,
