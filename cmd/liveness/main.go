@@ -11,7 +11,9 @@
 // page (Cloudflare), so its candidates are checked against the site's own sitemap
 // instead (see himalayas.go); echojobs' stored URL is the employer's own ATS link, not
 // echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
-// API instead (see echojobs.go).)
+// API instead (see echojobs.go). A source with the same leak but NO evidence a probe
+// could ever read — see expireDespiteRegistered — falls back to the same age-based
+// guess as unsignalledSources instead of a verdict.)
 //
 // It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
@@ -104,6 +106,19 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok"}
 // already have closed it were the company_slug scope not in the way.
 const staleCutoff = 48 * time.Hour
 
+// expireDespiteRegistered lists registered ATS providers with the same company_slug/
+// keyword-scope leak as probeDespiteRegistered's members, but with NO evidence a probe
+// could ever read: see whatjobs.go — jobs.url is the ad network's own billing/tracking
+// landing page, not the employer's posting, so it answers the same regardless of whether
+// the underlying posting is still live. Unlike probeDespiteRegistered, this is the same
+// age-based fallback as unsignalledSources (see expiryWindow) — "what cannot be probed is
+// expired instead" — just applied to a source the sweep DOES otherwise close on evidence
+// (whatjobs' own extended sweepGrace), for the tail its crawl budget structurally can
+// never re-reach. Kept as its own list, not folded into unsignalledSources: that list's
+// guard below requires the OPPOSITE membership (must NOT be a registered provider), since
+// for a true unsignalledSource the age guess is the only closer there is.
+var expireDespiteRegistered = []string{"whatjobs"}
+
 func main() {
 	worker.Main(run)
 }
@@ -184,6 +199,14 @@ func run() int {
 		}
 	}
 
+	// Guard: the same drift check as probeDespiteRegistered's above, for the same reason.
+	for _, s := range expireDespiteRegistered {
+		if !slices.Contains(atsProviders, s) {
+			log.Printf("liveness: %q is not a registered ATS provider — refusing to run (expireDespiteRegistered is stale)", s)
+			return 1
+		}
+	}
+
 	// Appended AFTER the guard above so the empty-ATS-registry safeguard still keys
 	// off atsProviders alone. See unsignalledSources for why these are excluded.
 	excluded := append(atsProviders, unsignalledSources...)
@@ -259,6 +282,21 @@ func run() int {
 	} else {
 		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d unsignalled sources",
 			expired, int(expiryWindow.Hours()/24), len(sourcesToExpire))
+	}
+
+	// expireDespiteRegistered's same age-based fallback, for the registered providers
+	// that need it (whatjobs today) — same query, same window, just a different source
+	// list and the reciprocal guard already checked above.
+	sourcesToExpireDespiteRegistered := filterSources(expireDespiteRegistered, *sourceFilter)
+	expiredRegistered, err := queries.CloseStaleUnsignalledJobs(ctx, db.CloseStaleUnsignalledJobsParams{
+		Sources: sourcesToExpireDespiteRegistered,
+		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-expiryWindow), Valid: true},
+	})
+	if err != nil {
+		log.Printf("liveness: expire stale expireDespiteRegistered jobs: %v", err)
+	} else {
+		log.Printf("liveness: expired %d jobs posted more than %d days ago from %d expireDespiteRegistered sources",
+			expiredRegistered, int(expiryWindow.Hours()/24), len(sourcesToExpireDespiteRegistered))
 	}
 
 	// Probe targets are orphan-job URLs that originated from attacker-influenced
