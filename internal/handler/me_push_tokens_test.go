@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"bytes"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -14,14 +16,14 @@ import (
 // on a handler with no DB. The cookie-gate cases below reject before any
 // query runs, so the nil queries is never dereferenced. The DB/Expo-backed
 // paths are covered by the integration tests.
-func pushTokensApp() *fiber.App {
+func pushTokensApp() (*fiber.App, *auth.Issuer) {
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	h := &authHandlers{}
-	app := fiber.New()
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.RegisterPushToken)
 	app.Delete("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.UnregisterPushToken)
 	app.Post("/api/v1/me/push-tokens/test", auth.RequireAuth(iss, testVersions), h.TestPushToken)
-	return app
+	return app, iss
 }
 
 // Push-token management is cookie-only: a request with an API key (or
@@ -29,7 +31,7 @@ func pushTokensApp() *fiber.App {
 // key management, since these endpoints let a caller redirect notifications
 // to a device.
 func TestPushTokensManagement_IsCookieOnly(t *testing.T) {
-	app := pushTokensApp()
+	app, _ := pushTokensApp()
 	cases := []struct {
 		name, method, path string
 		bearer             bool
@@ -51,6 +53,41 @@ func TestPushTokensManagement_IsCookieOnly(t *testing.T) {
 			}
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401 (push-token management must be cookie-only)", resp.StatusCode)
+			}
+		})
+	}
+}
+
+// RegisterPushToken must reject a missing/invalid platform or an empty token
+// before ever reaching the database — proven here by a nil h.queries: a test
+// that reached the DB call would panic instead of returning 400.
+func TestRegisterPushToken_ValidationRejectsBeforeAnyDBCall(t *testing.T) {
+	app, iss := pushTokensApp()
+	cookie, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue cookie: %v", err)
+	}
+
+	cases := []struct {
+		name, body string
+	}{
+		{"missing platform", `{"token":"ExponentPushToken[x]"}`},
+		{"invalid platform", `{"token":"ExponentPushToken[x]","platform":"windows"}`},
+		{"empty token", `{"token":"","platform":"ios"}`},
+		{"whitespace-only token", `{"token":"   ","platform":"ios"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/push-tokens", bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("Test: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusBadRequest {
+				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 		})
 	}
