@@ -60,8 +60,8 @@
 
 ## 4. Verification
 
-- [ ] 4.1 `pnpm run check`, `pnpm run lint`, `pnpm run build` all pass.
-- [ ] 4.2 Manual check (this repo has no component-level test runner):
+- [x] 4.1 `pnpm run check`, `pnpm run lint`, `pnpm run build` all pass.
+- [x] 4.2 Manual check (this repo has no component-level test runner):
       button shows correct state in all three visibility modes; panel's
       link card is visible and correct when `off`; all three mode-picker
       icons render; public page renders correctly for `public` and
