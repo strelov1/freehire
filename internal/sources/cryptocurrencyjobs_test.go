@@ -80,3 +80,32 @@ func TestCryptocurrencyJobsFetchSplitsTitleAndMaps(t *testing.T) {
 		t.Error("PostedAt nil, want parsed RFC1123Z timestamp")
 	}
 }
+
+// The board is not all-remote: a "(<City> only)" title suffix marks a posting restricted to
+// one office (confirmed live for "Product Designer (New York only)" at Loopscale, whose page
+// states the role requires working from their NYC office) with no "remote" wording anywhere
+// in the feed, unlike a geo-eligibility-restricted remote posting.
+func TestCryptocurrencyJobsOnsiteTitleSuffix(t *testing.T) {
+	feed := `<?xml version="1.0" encoding="utf-8"?><rss version="2.0"><channel>
+<item><title>Product Designer (New York only) at Loopscale</title>
+<link>https://cryptocurrencyjobs.co/design/loopscale-product-designer-new-york-only/</link>
+<guid>https://cryptocurrencyjobs.co/design/loopscale-product-designer-new-york-only/</guid>
+<pubDate>Wed, 05 Aug 2026 08:00:00 +0200</pubDate>
+<description>Loopscale is looking to hire a Product Designer to join their team. This is a full-time position.</description></item>
+</channel></rss>`
+	fake := (&routedHTTP{}).route("index.xml", feed)
+	jobs, err := NewCryptocurrencyJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	j := jobs[0]
+	if j.Title != "Product Designer" {
+		t.Errorf("Title = %q, want the (New York only) suffix stripped", j.Title)
+	}
+	if j.Remote || j.WorkMode != "onsite" || j.Location != "New York" {
+		t.Errorf("Remote=%v WorkMode=%q Location=%q, want a non-remote onsite posting in New York", j.Remote, j.WorkMode, j.Location)
+	}
+}

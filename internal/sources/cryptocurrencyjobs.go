@@ -4,16 +4,26 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	xhtml "golang.org/x/net/html"
 )
 
-// cryptocurrencyjobs adapts cryptocurrencyjobs.co, a Web3/crypto-niche remote-jobs board.
-// Boardless (one public RSS feed, no per-tenant board) and multi-company, so it stays in the
-// source facet and takes each posting's company from the feed. All-remote board, so every
-// posting is remote. The feed carries every posting's body inline (no detail call).
+// cryptocurrencyjobs adapts cryptocurrencyjobs.co, a Web3/crypto-niche jobs board. Boardless
+// (one public RSS feed, no per-tenant board) and multi-company, so it stays in the source
+// facet and takes each posting's company from the feed. The feed carries every posting's body
+// inline (no detail call).
+//
+// The board is mostly but not entirely remote: a posting the board restricts to one office
+// (confirmed live, e.g. "Product Designer (New York only)" at Loopscale, whose page reads
+// "This role requires working full-time from our New York City office") gets that city
+// appended to its title in parens as "(<City> only)", with no "remote" wording anywhere in
+// the feed's truncated description — unlike a geo-eligibility-restricted remote posting,
+// which this board phrases as e.g. "100% remote ... anywhere in Europe" rather than a title
+// suffix. cryptocurrencyjobsOnsiteTitle strips that suffix and treats it as an onsite
+// location instead of defaulting every posting to remote.
 //
 // Fetched via GetText rather than GetXML and decoded leniently (Strict=false), same as the
 // nodesk adapter: this board runs the same underlying feed generator (identical "Role at
@@ -26,6 +36,10 @@ type cryptocurrencyjobs struct {
 }
 
 const cryptocurrencyjobsFeedURL = "https://cryptocurrencyjobs.co/index.xml"
+
+// cryptocurrencyjobsOnsiteTitle matches the board's "(<City> only)" title suffix that marks a
+// posting restricted to one office, e.g. "Product Designer (New York only)" -> "New York".
+var cryptocurrencyjobsOnsiteTitle = regexp.MustCompile(`\s*\(([^()]+?)\s+only\)\s*$`)
 
 // NewCryptocurrencyJobs builds the Cryptocurrency Jobs adapter over the given HTTP client.
 func NewCryptocurrencyJobs(c TextGetter) Source { return cryptocurrencyjobs{http: c} }
@@ -77,15 +91,23 @@ func (it cryptocurrencyjobsItem) toJob() (Job, bool) {
 	if it.GUID == "" || !ok || company == "" {
 		return Job{}, false
 	}
+	title = strings.TrimSpace(title)
+
+	location, remote, workMode := "Remote", true, "remote"
+	if m := cryptocurrencyjobsOnsiteTitle.FindStringSubmatchIndex(title); m != nil {
+		location, remote, workMode = title[m[2]:m[3]], false, "onsite"
+		title = strings.TrimSpace(title[:m[0]])
+	}
+
 	return Job{
 		ExternalID:  it.GUID,
 		URL:         it.Link,
-		Title:       xhtml.UnescapeString(strings.TrimSpace(title)),
+		Title:       xhtml.UnescapeString(title),
 		Company:     xhtml.UnescapeString(strings.TrimSpace(company)),
-		Location:    "Remote",
+		Location:    location,
 		Description: sanitizeHTML(xhtml.UnescapeString(it.Description)),
-		Remote:      true,
-		WorkMode:    "remote",
+		Remote:      remote,
+		WorkMode:    workMode,
 		PostedAt:    parseLayout(time.RFC1123Z, it.PubDate),
 	}, true
 }
