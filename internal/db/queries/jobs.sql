@@ -1119,7 +1119,9 @@ WHERE closed_at IS NULL
 -- source ISN'T swept), this targets specific sources that ARE swept but only jobs the
 -- sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
 -- evidence the sweep is structurally unable to reach them, not a race with it.
-SELECT id, source, url, public_slug, liveness_strikes
+-- external_id rides along for sources verified by a per-posting API keyed on it rather
+-- than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
+SELECT id, source, url, external_id, public_slug, liveness_strikes
 FROM jobs
 WHERE closed_at IS NULL
   AND source = ANY(sqlc.arg(sources)::text[])

@@ -6,9 +6,12 @@
 // and geekjob, are swept by cmd/ingest and excluded here — see excluded below. A few
 // registered providers whose sweep has a structural blind spot are added back in a
 // restricted form — see probeDespiteRegistered — verified by whatever evidence that
-// specific source actually offers, not necessarily a plain-HTTP probe of its own page:
-// himalayas.app 403s a bot-looking GET to any job page (Cloudflare), so its candidates
-// are instead checked against the site's own sitemap — see himalayas.go.)
+// specific source actually offers: jobicy and remoteok candidates go through the same
+// plain-GET probe as everything else; himalayas.app 403s a bot-looking GET to any job
+// page (Cloudflare), so its candidates are checked against the site's own sitemap
+// instead (see himalayas.go); echojobs' stored URL is the employer's own ATS link, not
+// echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
+// API instead (see echojobs.go).)
 //
 // It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
@@ -76,18 +79,25 @@ var unsignalledSources = []string{"telegram"}
 const expiryWindow = 45 * 24 * time.Hour
 
 // probeDespiteRegistered lists registered ATS providers whose ingest sweep still can't
-// close every open job — see job-lifecycle's company_slug-scope leak. himalayas pages
-// only its freshest slice per run (himalayasMaxPages), so a company that ages out of
-// that recency window never re-enters CloseUnseenJobs' crawled-slug scope and its last
+// close every open job — see job-lifecycle's company_slug-scope leak: each is a
+// boardless, recency-ordered aggregator with a fixed crawl budget (page count, offset
+// cap, or freshness window) smaller than its live catalogue, so a company whose postings
+// age below that budget never re-enters CloseUnseenJobs' crawled-slug scope and its last
 // posting stays open forever. These sources are NOT removed from atsProviders — the
 // sweep still owns their normal closes — they are only ADDED BACK as liveness
 // candidates, restricted to jobs already past the sweep's own staleness window (see
 // staleCutoff), so this only ever picks up what the sweep structurally cannot reach
-// rather than racing it. Each member needs its own way to actually get evidence (a
-// plain GET of the job page is not guaranteed to work — himalayas's is Cloudflare-
-// blocked, so its candidates are verified against the site's sitemap instead; see
-// himalayas.go), which is also why this list is not expected to grow casually.
-var probeDespiteRegistered = []string{"himalayas"}
+// rather than racing it.
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok"}
+
+// probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
+// plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
+// normal HTTP status/body, unlike himalayas (Cloudflare-blocked; see himalayas.go) or
+// echojobs (the stored URL is the employer's own ATS link, not a page this adapter's own
+// site serves; see echojobs.go). Each probeDespiteRegistered member needs its own such
+// evidence path decided on a case-by-case basis — there is no generic per-source plugin
+// here by design, since a GET probe is not guaranteed to work for any given source.
+var probeDespiteRegisteredGET = []string{"jobicy", "remoteok"}
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window): a
 // probeDespiteRegistered job only becomes a liveness candidate once the sweep would
@@ -193,10 +203,11 @@ func run() int {
 	}
 	orphanCount := len(candidates)
 
-	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's
-	// own staleness window (see staleCutoff) — the sweep's scope leak, not a race
-	// with a run still inside its normal grace period. Verified separately below
-	// (sitemap membership, not a GET probe) — see applyHimalayasVerdicts.
+	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's own
+	// staleness window (see staleCutoff) — the sweep's scope leak, not a race with a run
+	// still inside its normal grace period. Split by source below into whichever
+	// evidence path that source actually has (see probeDespiteRegisteredGET and the
+	// per-source apply* functions).
 	staleCandidates, err := queries.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
 		Sources: filterSources(probeDespiteRegistered, *sourceFilter),
 		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-staleCutoff), Valid: true},
@@ -205,8 +216,27 @@ func run() int {
 		log.Printf("select stale registered candidates: %v", err)
 		return 1
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources",
-		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered))
+	var getProbeStale, himalayasStale, echojobsStale []db.SelectStaleRegisteredCandidatesRow
+	for _, c := range staleCandidates {
+		switch {
+		case slices.Contains(probeDespiteRegisteredGET, c.Source):
+			getProbeStale = append(getProbeStale, c)
+		case c.Source == "himalayas":
+			himalayasStale = append(himalayasStale, c)
+		case c.Source == "echojobs":
+			echojobsStale = append(echojobsStale, c)
+		default:
+			// Unreachable in practice — every probeDespiteRegistered member is one of
+			// the three branches above — but a candidate silently going unverified
+			// (rather than erroring loudly) is exactly the class of bug this worker
+			// exists to avoid, so a future member added to probeDespiteRegistered
+			// without wiring its evidence path here fails visibly instead.
+			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.Source, c.PublicSlug)
+		}
+	}
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs)",
+		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered),
+		len(getProbeStale), len(himalayasStale), len(echojobsStale))
 	if *sourceFilter != "" {
 		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
 	}
@@ -244,62 +274,83 @@ func run() int {
 		go func(c db.SelectOrphanLivenessCandidatesRow) {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			status, finalURL, body, ferr := liveness.Fetch(ctx, client, c.URL)
-			if ferr != nil {
-				// A probe that could not reach the page is Uncertain (status 0), so
-				// applyVerdict takes no action — a fetch failure never advances or
-				// clears a strike, and is not counted as a worker failure.
-				log.Printf("liveness: probe %s failed: %v", c.PublicSlug, ferr)
-			}
-			verdict, reason := liveness.Classify(status, finalURL, body)
-			applyVerdict(ctx, queries, c, verdict, reason, &probed, &closed, &struck, &failed)
+			probeAndApply(ctx, client, queries, c.ID, c.PublicSlug, c.Source, c.URL, c.LivenessStrikes, &probed, &closed, &struck, &failed)
 		}(c)
 	}
 	wg.Wait()
 
-	// probeDespiteRegistered's own evidence source (sitemap membership for himalayas
-	// today — see himalayas.go), applied with the same strike/close/reset semantics as
-	// the GET probe above via applyVerdict, just fed a different verdict.
-	applyHimalayasVerdicts(ctx, client, queries, staleCandidates, sem, &probed, &closed, &struck, &failed)
+	// probeDespiteRegisteredGET candidates (jobicy, remoteok today): same plain-GET
+	// probe as the orphan loop above, just a different candidate source.
+	for _, c := range getProbeStale {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(c db.SelectStaleRegisteredCandidatesRow) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			probeAndApply(ctx, client, queries, c.ID, c.PublicSlug, c.Source, c.URL, c.LivenessStrikes, &probed, &closed, &struck, &failed)
+		}(c)
+	}
+	wg.Wait()
+
+	// probeDespiteRegistered's own dedicated evidence sources — see the package doc and
+	// probeDespiteRegisteredGET for why these two can't share the GET-probe loop above.
+	applyHimalayasVerdicts(ctx, client, queries, himalayasStale, sem, &probed, &closed, &struck, &failed)
+	applyEchoJobsVerdicts(ctx, client, queries, echojobsStale, sem, &probed, &closed, &struck, &failed)
 
 	log.Printf("liveness done: probed=%d closed=%d struck=%d failed=%d", probed, closed, struck, failed)
 	return worker.ExitCode(int(failed), 0)
 }
 
+// probeAndApply GETs url, classifies the response via liveness.Classify, and applies the
+// resulting verdict — the plain-HTTP-probe path shared by every orphan candidate and the
+// probeDespiteRegisteredGET subset of registered-provider candidates.
+func probeAndApply(ctx context.Context, client *http.Client, queries *db.Queries, id int64, publicSlug, source, url string, livenessStrikes int32, probed, closed, struck, failed *int64) {
+	status, finalURL, body, ferr := liveness.Fetch(ctx, client, url)
+	if ferr != nil {
+		// A probe that could not reach the page is Uncertain (status 0), so
+		// applyVerdict takes no action — a fetch failure never advances or clears a
+		// strike, and is not counted as a worker failure.
+		log.Printf("liveness: probe %s failed: %v", publicSlug, ferr)
+	}
+	verdict, reason := liveness.Classify(status, finalURL, body)
+	applyVerdict(ctx, queries, id, publicSlug, source, livenessStrikes, verdict, reason, probed, closed, struck, failed)
+}
+
 // applyVerdict applies a liveness verdict to one candidate: advances/closes on Expired,
-// clears strikes on Live, and leaves Uncertain untouched. Shared by the GET-probe loop
-// (verdict from liveness.Classify) and applyHimalayasVerdicts (verdict from sitemap
-// membership) so the close/strike/reset semantics live in exactly one place.
-func applyVerdict(ctx context.Context, queries *db.Queries, c db.SelectOrphanLivenessCandidatesRow, verdict liveness.Verdict, reason string, probed, closed, struck, failed *int64) {
+// clears strikes on Live, and leaves Uncertain untouched. Shared by every evidence path
+// in this worker (plain-GET probe, himalayas sitemap membership, echojobs detail API) so
+// the close/strike/reset semantics live in exactly one place. Takes the candidate's
+// fields directly rather than a query row type, since its callers draw from more than
+// one sqlc row shape (SelectOrphanLivenessCandidatesRow, SelectStaleRegisteredCandidatesRow).
+func applyVerdict(ctx context.Context, queries *db.Queries, id int64, publicSlug, source string, livenessStrikes int32, verdict liveness.Verdict, reason string, probed, closed, struck, failed *int64) {
 	atomic.AddInt64(probed, 1)
 	switch verdict {
 	case liveness.Expired:
 		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
-			ID:        c.ID,
+			ID:        id,
 			Threshold: closeThreshold,
 		})
 		if err != nil {
 			// The verdict was reached but the DB update did not apply — a real
 			// failure the exit code must surface, not a silent log-and-continue.
 			atomic.AddInt64(failed, 1)
-			log.Printf("liveness: mark expired %s: %v", c.PublicSlug, err)
+			log.Printf("liveness: mark expired %s: %v", publicSlug, err)
 			return
 		}
 		if res.ClosedAt.Valid {
 			atomic.AddInt64(closed, 1)
-			log.Printf("liveness: closed %s (%s, %s)", c.PublicSlug, c.Source, reason)
+			log.Printf("liveness: closed %s (%s, %s)", publicSlug, source, reason)
 		} else {
 			atomic.AddInt64(struck, 1)
-			log.Printf("liveness: strike %d/%d %s (%s)", res.LivenessStrikes, closeThreshold, c.PublicSlug, reason)
+			log.Printf("liveness: strike %d/%d %s (%s)", res.LivenessStrikes, closeThreshold, publicSlug, reason)
 		}
 	case liveness.Live:
 		// Clear any accumulated strikes. Skip the write when there is nothing to
 		// clear so a healthy catalogue does not issue an UPDATE per open job.
-		if c.LivenessStrikes != 0 {
-			if err := queries.ResetLivenessStrikes(ctx, c.ID); err != nil {
+		if livenessStrikes != 0 {
+			if err := queries.ResetLivenessStrikes(ctx, id); err != nil {
 				atomic.AddInt64(failed, 1)
-				log.Printf("liveness: reset %s: %v", c.PublicSlug, err)
+				log.Printf("liveness: reset %s: %v", publicSlug, err)
 			}
 		}
 	case liveness.Uncertain:
@@ -307,13 +358,13 @@ func applyVerdict(ctx context.Context, queries *db.Queries, c db.SelectOrphanLiv
 	}
 }
 
-// applyHimalayasVerdicts verifies every probeDespiteRegistered candidate (today: only
-// himalayas) against the site's own sitemap of what is currently live — a plain GET of
-// the job page itself is Cloudflare-blocked (see himalayas.go), so this is the source's
-// only available evidence. A sitemap fetch failure counts as one worker failure and
-// skips every candidate this run: under-closing (leaving them open another run) is the
-// only acceptable outcome of not being able to verify, matching the bias everywhere
-// else in this worker.
+// applyHimalayasVerdicts verifies every himalayas probeDespiteRegistered candidate
+// against the site's own sitemap of what is currently live — a plain GET of the job page
+// itself is Cloudflare-blocked (see himalayas.go), so this is the source's only available
+// evidence. A sitemap fetch failure counts as one worker failure and skips every
+// candidate this run: under-closing (leaving them open another run) is the only
+// acceptable outcome of not being able to verify, matching the bias everywhere else in
+// this worker.
 func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *db.Queries, candidates []db.SelectStaleRegisteredCandidatesRow, sem chan struct{}, probed, closed, struck, failed *int64) {
 	if len(candidates) == 0 {
 		return
@@ -336,7 +387,25 @@ func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *d
 			if _, ok := liveURLs[c.URL]; !ok {
 				verdict, reason = liveness.Expired, "absent_from_sitemap"
 			}
-			applyVerdict(ctx, queries, db.SelectOrphanLivenessCandidatesRow(c), verdict, reason, probed, closed, struck, failed)
+			applyVerdict(ctx, queries, c.ID, c.PublicSlug, c.Source, c.LivenessStrikes, verdict, reason, probed, closed, struck, failed)
+		}(c)
+	}
+	wg.Wait()
+}
+
+// applyEchoJobsVerdicts verifies every echojobs probeDespiteRegistered candidate against
+// echojobs.io's own per-posting detail API — see echojobs.go for why the stored jobs.url
+// (the employer's own ATS link, not an echojobs.io page) is not what gets probed.
+func applyEchoJobsVerdicts(ctx context.Context, client *http.Client, queries *db.Queries, candidates []db.SelectStaleRegisteredCandidatesRow, sem chan struct{}, probed, closed, struck, failed *int64) {
+	var wg sync.WaitGroup
+	for _, c := range candidates {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(c db.SelectStaleRegisteredCandidatesRow) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			verdict, reason := checkEchoJobsLive(ctx, client, c.ExternalID)
+			applyVerdict(ctx, queries, c.ID, c.PublicSlug, c.Source, c.LivenessStrikes, verdict, reason, probed, closed, struck, failed)
 		}(c)
 	}
 	wg.Wait()
