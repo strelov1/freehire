@@ -602,8 +602,6 @@
   board: make-rain
 - company: Rapt studio
   board: RaptStudio
-- company: realworld one
-  board: rw1
 - company: Redhorse Corp
   board: redhorsecorp
 - company: redoxengine
@@ -694,8 +692,6 @@
   board: sonatype
 - company: Spotify
   board: spotify
-- company: Spruce Systems
-  board: sprucesystems
 - company: sprymethods
   board: sprymethods
 - company: Spyke Games
@@ -716,8 +712,6 @@
   board: sunsrce
 - company: Sunwater Capital
   board: sunwatercapital
-- company: Super.com
-  board: super-com
 - company: SuperAnnotate
   board: superannotate
 - company: supermove
@@ -806,8 +800,6 @@
   board: vivenu
 - company: Voltus
   board: voltus
-- company: Voodoo
-  board: voodoo
 - company: Waabi
   board: waabi
 - company: Wade Trim
@@ -818,8 +810,6 @@
   board: waveapps
 - company: WebFX
   board: webfx
-- company: Weights & Biases
-  board: wandb
 - company: WeRide
   board: weride
 - company: whoop
@@ -954,8 +944,6 @@
   board: agicap
 - company: agile-defense
   board: agile-defense
-- company: agilesearch
-  board: agilesearch
 - company: agiloft
   board: agiloft
 - company: agtonomy
@@ -1128,8 +1116,6 @@
   board: base-flowa
 - company: baselane
   board: baselane
-- company: battlecreekchurch
-  board: battlecreekchurch
 - company: beautybarrage
   board: beautybarrage
 - company: beaverprocess
@@ -1420,8 +1406,6 @@
   board: concurrency
 - company: confluera
   board: confluera
-- company: connectly
-  board: connectly
 - company: contentsquare
   board: contentsquare
 - company: continuumglobal
@@ -1540,8 +1524,6 @@
   board: diamondfoundry
 - company: didomi
   board: didomi
-- company: digimarc
-  board: digimarc
 - company: digital-matter
   board: digital-matter
 - company: digitalmediamanagement
@@ -2184,8 +2166,6 @@
   board: lightedge
 - company: lightship
   board: lightship
-- company: limberhealth
-  board: limberhealth
 - company: lindblad-expeditions
   board: lindblad-expeditions
 - company: lirvanalabs
@@ -2446,8 +2426,6 @@
   board: noodle
 - company: novaspace
   board: novaspace
-- company: novatalent
-  board: novatalent
 - company: novir
   board: novir
 - company: novosfiber
@@ -3008,8 +2986,6 @@
   board: soraschools
 - company: source
   board: source
-- company: spaceback
-  board: spaceback
 - company: spawglass
   board: spawglass
 - company: spear
@@ -3056,8 +3032,6 @@
   board: storiogroup
 - company: strongcompute
   board: strongcompute
-- company: stuart
-  board: stuart
 - company: studypoint
   board: studypoint
 - company: sugarcrm
@@ -3260,8 +3234,6 @@
   board: ttecdigital
 - company: ttxinc
   board: ttxinc
-- company: tunnl-data
-  board: tunnl-data
 - company: turvo
   board: turvo
 - company: tutorintelligence
@@ -3505,7 +3477,7 @@
 - company: zurichinstruments
   board: zurichinstruments
 - company: zurigroup
-  board: zurigroup
+  board: bwfzuri
 - company: assist-world
   board: assist-world
 - company: get-vocal-pbc
@@ -3671,8 +3643,6 @@
   board: kixie
 - company: krypton
   board: krypton
-- company: launchcg
-  board: launchcg
 - company: leadershipconnect
   board: leadershipconnect
 - company: lgt-cpa
@@ -3717,8 +3687,6 @@
   board: okanagan
 - company: optimussbr
   board: optimussbr
-- company: options-it
-  board: options-it
 - company: pacificquest
   board: pacificquest
 - company: picktrace
@@ -3765,8 +3733,6 @@
   board: teecom
 - company: tenna
   board: tenna
-- company: teoco
-  board: teoco
 - company: thefreeosk
   board: thefreeosk
 - company: topdesk
@@ -3799,8 +3765,6 @@
   board: hypersonica-prod
 - company: polleverywhere
   board: polleverywhere
-- company: 11855760-canada-inc
-  board: 11855760-canada-inc
 - company: Bosta
   board: Bosta
 - company: Flex
