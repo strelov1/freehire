@@ -44,7 +44,7 @@
 
 ## 3. Public profile page redesign
 
-- [ ] 3.1 Restyle `web/src/routes/talent-network/[publicId]/+page.svelte`:
+- [x] 3.1 Restyle `web/src/routes/talent-network/[publicId]/+page.svelte`:
       header block (avatar-or-initials circle — initials from name when
       present, a generic icon when absent in anonymous mode; headline;
       location; one-line summary; skill chips inline) followed by a
@@ -52,7 +52,7 @@
       title, company, date range, description) then education. No new
       data — every field is already returned by the existing endpoint;
       this task is template/CSS only.
-- [ ] 3.2 Confirm existing behavior is preserved through the restyle: name
+- [x] 3.2 Confirm existing behavior is preserved through the restyle: name
       omitted in anonymous mode, masked-employer label rendering, empty-CV
       graceful rendering (existing empty-state message), 404 page
       unaffected (out of scope for this task — it's a separate SvelteKit
