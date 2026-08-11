@@ -101,14 +101,14 @@ func TestPushTokenQueries(t *testing.T) {
 		}
 	})
 
-	t.Run("DeletePushTokenByValue removes regardless of owner", func(t *testing.T) {
+	t.Run("PruneDeadPushToken removes regardless of owner", func(t *testing.T) {
 		if _, err := q.UpsertPushToken(ctx, UpsertPushTokenParams{
 			UserID: alice, Token: "ExponentPushToken[bbb]", Platform: "android",
 		}); err != nil {
 			t.Fatalf("UpsertPushToken: %v", err)
 		}
-		if err := q.DeletePushTokenByValue(ctx, "ExponentPushToken[bbb]"); err != nil {
-			t.Fatalf("DeletePushTokenByValue: %v", err)
+		if err := q.PruneDeadPushToken(ctx, "ExponentPushToken[bbb]"); err != nil {
+			t.Fatalf("PruneDeadPushToken: %v", err)
 		}
 		tokens, err := q.ListPushTokensForUser(ctx, alice)
 		if err != nil {

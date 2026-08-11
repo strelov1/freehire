@@ -20,8 +20,10 @@ SELECT * FROM user_push_tokens WHERE user_id = $1;
 -- cannot unregister another's device.
 DELETE FROM user_push_tokens WHERE user_id = sqlc.arg(user_id) AND token = sqlc.arg(token);
 
--- name: DeletePushTokenByValue :exec
--- Prunes a token the Expo Push API reported as permanently undeliverable
+-- name: PruneDeadPushToken :exec
+-- Removes a token the Expo Push API reported as permanently undeliverable
 -- (DeviceNotRegistered). No owner check: the token is dead regardless of
--- who currently holds it.
+-- who currently holds it. This is the notifier's internal cleanup path, not
+-- a caller-facing "delete a token" request — that goes through
+-- DeletePushToken's owner check instead.
 DELETE FROM user_push_tokens WHERE token = $1;

@@ -663,10 +663,6 @@ type Querier interface {
 	// Explicit unregistration (sign-out), scoped to the caller so one account
 	// cannot unregister another's device.
 	DeletePushToken(ctx context.Context, arg DeletePushTokenParams) (int64, error)
-	// Prunes a token the Expo Push API reported as permanently undeliverable
-	// (DeviceNotRegistered). No owner check: the token is dead regardless of
-	// who currently holds it.
-	DeletePushTokenByValue(ctx context.Context, token string) error
 	// Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
 	// guard scopes it to the caller — a non-owner or absent id deletes zero rows, which the
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
@@ -2084,6 +2080,12 @@ type Querier interface {
 	// company hires for, so "has any skill" answers a different question than the caller
 	// is asking.
 	PruneCandidates(ctx context.Context, arg PruneCandidatesParams) ([]PruneCandidatesRow, error)
+	// Removes a token the Expo Push API reported as permanently undeliverable
+	// (DeviceNotRegistered). No owner check: the token is dead regardless of
+	// who currently holds it. This is the notifier's internal cleanup path, not
+	// a caller-facing "delete a token" request — that goes through
+	// DeletePushToken's owner check instead.
+	PruneDeadPushToken(ctx context.Context, token string) error
 	// Permanently remove a batch of jobs and record what was removed, in ONE statement.
 	// Splitting the two would let the archive drift from the deletion, and the archive is
 	// the only way to answer, after an irreversible removal, whether something was taken

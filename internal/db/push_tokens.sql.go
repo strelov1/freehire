@@ -28,18 +28,6 @@ func (q *Queries) DeletePushToken(ctx context.Context, arg DeletePushTokenParams
 	return result.RowsAffected(), nil
 }
 
-const deletePushTokenByValue = `-- name: DeletePushTokenByValue :exec
-DELETE FROM user_push_tokens WHERE token = $1
-`
-
-// Prunes a token the Expo Push API reported as permanently undeliverable
-// (DeviceNotRegistered). No owner check: the token is dead regardless of
-// who currently holds it.
-func (q *Queries) DeletePushTokenByValue(ctx context.Context, token string) error {
-	_, err := q.db.Exec(ctx, deletePushTokenByValue, token)
-	return err
-}
-
 const listPushTokensForUser = `-- name: ListPushTokensForUser :many
 SELECT id, user_id, token, platform, created_at, last_seen_at FROM user_push_tokens WHERE user_id = $1
 `
@@ -70,6 +58,20 @@ func (q *Queries) ListPushTokensForUser(ctx context.Context, userID int64) ([]Us
 		return nil, err
 	}
 	return items, nil
+}
+
+const pruneDeadPushToken = `-- name: PruneDeadPushToken :exec
+DELETE FROM user_push_tokens WHERE token = $1
+`
+
+// Removes a token the Expo Push API reported as permanently undeliverable
+// (DeviceNotRegistered). No owner check: the token is dead regardless of
+// who currently holds it. This is the notifier's internal cleanup path, not
+// a caller-facing "delete a token" request — that goes through
+// DeletePushToken's owner check instead.
+func (q *Queries) PruneDeadPushToken(ctx context.Context, token string) error {
+	_, err := q.db.Exec(ctx, pruneDeadPushToken, token)
+	return err
 }
 
 const upsertPushToken = `-- name: UpsertPushToken :one
