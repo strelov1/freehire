@@ -41,23 +41,50 @@ their account is deleted.
 ### Requirement: Send a push notification via the Expo Push API
 
 The system SHALL send a push message (title, body) to a given token through
-the Expo Push API, and SHALL delete a token the API reports as permanently
-undeliverable (`DeviceNotRegistered`) rather than retrying it.
+the Expo Push API. Expo's immediate response is a per-message ticket, not a
+final delivery outcome; a ticket already reporting `DeviceNotRegistered`
+SHALL delete that token's row immediately, and any other successfully-sent
+ticket SHALL be queued for a later receipt check (see the receipt-polling
+requirement below) rather than assumed delivered.
 
 #### Scenario: Successful send
 
 - **WHEN** the notifier sends to a valid, currently-registered Expo push token
-- **THEN** the Expo Push API is called with that token, title, and body, and the notifier reports success
+- **THEN** the Expo Push API is called with that token, title, and body, the notifier reports success, and the returned ticket id is queued for a later receipt check
 
-#### Scenario: Permanently dead token is pruned
+#### Scenario: Token already known dead is pruned at send time
 
-- **WHEN** the Expo Push API reports a token as `DeviceNotRegistered`
-- **THEN** the system deletes that token's row and does not retry sending to it
+- **WHEN** the Expo Push API's send response reports a token as `DeviceNotRegistered`
+- **THEN** the system deletes that token's row immediately and does not retry sending to it
 
 #### Scenario: Other send failures are surfaced, token kept
 
-- **WHEN** the Expo Push API reports a failure other than `DeviceNotRegistered` (e.g. a transient error)
+- **WHEN** the Expo Push API reports a send failure other than `DeviceNotRegistered` (e.g. a transient error)
 - **THEN** the notifier returns an error and the token row is left in place
+
+### Requirement: Poll Expo receipts to prune tokens that die after sending
+
+The system SHALL periodically check the delivery receipt for each
+successfully-sent ticket, once it is old enough for Expo to have an answer,
+and SHALL delete a token whose receipt reports `DeviceNotRegistered` — this
+is what catches a token going dead for the first time (freshly uninstalled
+app, freshly revoked permission), which is not visible in the immediate send
+response.
+
+#### Scenario: A freshly-dead token is pruned on receipt check
+
+- **WHEN** a queued ticket's receipt reports `DeviceNotRegistered`
+- **THEN** the system deletes that token's row and removes the ticket from the queue
+
+#### Scenario: A delivered ticket is cleared without side effects
+
+- **WHEN** a queued ticket's receipt reports success
+- **THEN** the system removes the ticket from the queue and leaves the token row in place
+
+#### Scenario: A ticket not yet old enough is left for a later pass
+
+- **WHEN** a receipt check runs and some queued tickets are younger than the minimum wait
+- **THEN** the system only checks tickets old enough to have an answer, leaving the rest queued
 
 ### Requirement: Self-test push endpoint
 

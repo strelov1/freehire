@@ -26,6 +26,12 @@ live.
   through the Expo Push API (`https://exp.host/--/api/v2/push/send`). No
   APNs/FCM credentials — Expo's relay handles both platforms from one token
   format, keyed to the app's own Expo project.
+- Expo's send response is a ticket, not a final delivery outcome — a token
+  that just went dead (fresh uninstall/permission revoke) is only
+  discoverable later via Expo's `getReceipts` endpoint. New
+  `push_ticket_outbox` table queues sent ticket ids; `cmd/push-receipts`
+  (a new cron worker) polls them after Expo's recommended wait and prunes
+  any token whose receipt comes back `DeviceNotRegistered`.
 - `POST /api/v1/me/push-tokens/test` — sends one push to the caller's own
   registered token(s), so the infrastructure is verifiable end-to-end (device
   → token → backend → Expo → device) without needing a real notification
@@ -46,8 +52,10 @@ live.
 
 ## Impact
 
-- `migrations/0085_user_push_tokens.sql` (new table), `internal/db/queries/` +
-  `make sqlc` (new queries).
+- `migrations/0085_user_push_tokens.sql`, `migrations/0086_push_ticket_outbox.sql`
+  (new tables), `internal/db/queries/` + `make sqlc` (new queries).
+- `cmd/push-receipts`: new run-once-and-exit cron worker, needs `DATABASE_URL`
+  only (Expo's API needs no credentials).
 - `internal/pushnotify/`: new package, `Notifier` interface + Expo Push API
   client.
 - `internal/handler/me_push_tokens.go`: new handler (register/unregister/test

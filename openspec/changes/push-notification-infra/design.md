@@ -27,8 +27,9 @@ APNs `.p8` key or Firebase service account needed on freehire's side.
 - A `Notifier` that reliably sends one push through the Expo Push API.
 - A way to prove the whole path works end-to-end (device → token → backend →
   Expo → device) without needing a real notification-worthy event.
-- Stale tokens (uninstalled app, revoked permission) don't accumulate forever
-  — Expo's own receipt tells us this, so the send path prunes them.
+- Stale tokens (uninstalled app, revoked permission) don't accumulate
+  forever — checked via Expo's two-stage ticket→receipt flow (see Decision
+  2), not assumed answerable from the immediate send response alone.
 
 **Non-Goals:**
 - Wiring push into `notify`/`reminder`/`nudge` as a delivery channel (a
@@ -58,18 +59,47 @@ pushes after signing out, which is both a privacy leak and simply wrong
 (only whoever is currently signed in on that install should get pushes to
 it).
 
-### 2. The Notifier prunes tokens Expo reports as dead
+### 2. Two-stage dead-token cleanup: the send ticket, then a polled receipt
 
-Expo's push send response is a per-message receipt array; a token can come
-back `status: "error"` with `details.error` in
-(`DeviceNotRegistered`, `InvalidCredentials`, ...). `DeviceNotRegistered`
-specifically means the OS itself revoked the token (app uninstalled,
-permission pulled) — Expo will never successfully deliver to it again, so
-the `Notifier` deletes that row on that specific error rather than leaving a
-permanently-dead token to retry forever. Other error kinds are surfaced as an
-error and the token is left alone (they may be transient).
+Expo's push API has two stages, not one — `POST /send`'s immediate response
+is a **ticket** per message, not a final delivery outcome. A ticket can
+already read `status: "error"`, `details.error: "DeviceNotRegistered"` at
+send time, but only for a token Expo's own cache already knew was dead from
+an earlier attempt. A token that just went dead for the first time (app
+freshly uninstalled, permission freshly revoked) is invisible at ticket
+time — Expo only learns it from APNs/FCM after actually attempting delivery,
+and that answer is retrieved later via `POST /getReceipts`, keyed by the
+ticket ids from the send call. Treating the ticket response as if it were
+already the final word — an earlier draft of this design did exactly that —
+would prune only previously-known-bad tokens and leave every freshly-dead
+one to accumulate forever, silently missing the goal this decision exists to
+satisfy.
 
-### 3. The test-send endpoint only ever targets the caller's own token(s)
+So `Send` does two things on an `ok` ticket: nothing changes about the
+immediate return (still success), but the ticket id is enqueued (via a
+`TicketQueuer` seam, `EnqueuePushTicket`) into `push_ticket_outbox` for a
+later receipt check. A separate `ExpoNotifier.CheckReceipts` pass — run by
+`cmd/push-receipts` on a schedule — claims a batch of tickets old enough for
+Expo to have an answer (Expo's own guidance: wait at least ~15 minutes),
+calls `POST /getReceipts`, and only *there* does the `DeviceNotRegistered`
+prune actually happen for the general case. A ticket that already read
+`DeviceNotRegistered` at send time is pruned immediately too (no reason to
+wait on a ticket that already told us), matching the original decision — the
+new step adds the case that was missing, it does not replace the old one.
+
+### 3. `CheckReceipts` is a stateless best-effort pass, not a retry queue
+
+`push_ticket_outbox` rows are deleted once their receipt is checked,
+regardless of the outcome (`ok`, `DeviceNotRegistered`-and-pruned, or any
+other error). There is no retry-if-the-batch-fails bookkeeping like
+`notify`'s claim/lease/dead-letter machinery — if `CheckReceipts` itself
+errors mid-batch (e.g. Expo unreachable), the unclaimed rows simply remain
+due and get picked up by the next scheduled run. This matches the rest of
+this change's stated posture (see Risks/Trade-offs): retry semantics belong
+to whichever engine eventually adopts push as a delivery channel, not to
+this bare infrastructure layer.
+
+### 4. The test-send endpoint only ever targets the caller's own token(s)
 
 `POST /me/push-tokens/test` takes no destination parameter — it looks up the
 authenticated caller's own registered token(s) and sends to those. There is
@@ -78,7 +108,7 @@ a spam/harassment vector disguised as a diagnostic endpoint. Verifying the
 path for a *different* user's device (support debugging) is out of scope
 here — this endpoint is "does my own push work," not an admin tool.
 
-### 4. No platform-specific payload branching
+### 5. No platform-specific payload branching
 
 The Expo Push API accepts one message shape (`to`, `title`, `body`, plus
 optional `data`/`sound`/etc.) regardless of whether the destination token is
@@ -110,6 +140,10 @@ message is sent.
 
 ## Migration Plan
 
-New table (`migrations/0085_user_push_tokens.sql`), additive only — no
-existing table or endpoint changes. No backfill needed (empty on creation).
-Rollback is dropping the table; nothing else depends on it yet.
+Two new tables (`migrations/0085_user_push_tokens.sql`,
+`migrations/0086_push_ticket_outbox.sql`), additive only — no existing table
+or endpoint changes. No backfill needed (both empty on creation). Rollback is
+dropping the tables; nothing else depends on them yet. `cmd/push-receipts`
+needs a cron schedule on deploy (e.g. every 15-20 minutes) — an unscheduled
+worker just means the outbox grows unchecked, not a hard failure, since
+nothing else reads it.
