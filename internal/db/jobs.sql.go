@@ -2766,6 +2766,40 @@ func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySo
 	return items, nil
 }
 
+const updateJobCompany = `-- name: UpdateJobCompany :execrows
+UPDATE jobs
+SET company      = $1,
+    company_slug = $2,
+    content_hash = $3,
+    updated_at   = now()
+WHERE id = $4
+`
+
+type UpdateJobCompanyParams struct {
+	Company     string      `json:"company"`
+	CompanySlug string      `json:"company_slug"`
+	ContentHash pgtype.Text `json:"content_hash"`
+	ID          int64       `json:"id"`
+}
+
+// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+// picks the row back up.
+func (q *Queries) UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateJobCompany,
+		arg.Company,
+		arg.CompanySlug,
+		arg.ContentHash,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateJobDerived = `-- name: UpdateJobDerived :exec
 UPDATE jobs
 SET countries = COALESCE($1::text[], '{}'),

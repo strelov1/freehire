@@ -46,6 +46,19 @@ SET description  = sqlc.arg(description),
     updated_at   = now()
 WHERE id = sqlc.arg(id);
 
+-- name: UpdateJobCompany :execrows
+-- Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+-- ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+-- sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+-- company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+-- picks the row back up.
+UPDATE jobs
+SET company      = sqlc.arg(company),
+    company_slug = sqlc.arg(company_slug),
+    content_hash = sqlc.arg(content_hash),
+    updated_at   = now()
+WHERE id = sqlc.arg(id);
+
 -- name: ListJobsUpdatedAfter :many
 -- Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
 -- rows changed at or after the cutoff. Every write path (UpsertJob, the close

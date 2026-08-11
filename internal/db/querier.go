@@ -2975,6 +2975,12 @@ type Querier interface {
 	// A full owner-scoped replacement, used by the profile UI where the user is editing the
 	// fields directly and means what they typed — including blanking one.
 	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
+	// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+	// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+	// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+	// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+	// picks the row back up.
+	UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error)
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
