@@ -85,11 +85,27 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
      an inner max-width keeps the content readable within the content column. -->
 <div class="flex max-w-2xl flex-col gap-4">
-  <div class="flex flex-col gap-1">
-    <h1 class="text-lg font-semibold tracking-tight">Talent Network</h1>
-    <p class="text-sm text-muted-foreground">
-      Get discovered without applying anywhere: publish a read-only profile page you control.
-    </p>
+  <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex flex-col gap-1">
+      <h1 class="text-lg font-semibold tracking-tight">Talent Network</h1>
+      <p class="text-sm text-muted-foreground">
+        Get discovered without applying anywhere: publish a read-only profile page you control.
+      </p>
+    </div>
+    {#if status === 'ready' && visibility !== 'off'}
+      <!-- Opens the actual public page in a new tab, so a candidate can see exactly
+           what a recruiter would see. No raw URL shown and no copy action here — a
+           visitor can copy it from the browser's own address bar once there. -->
+      <Button
+        variant="primary"
+        class="shrink-0"
+        href={resolve('/talent-network/[publicId]', { publicId })}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        View your public page
+      </Button>
+    {/if}
   </div>
 
   {#if status === 'loading'}
@@ -131,20 +147,5 @@
       Once you share this link, anyone who has it may have already seen or saved your
       profile — switching back to Off removes the live page but can't undo that.
     </p>
-
-    {#if visibility !== 'off'}
-      <!-- Opens the actual public page in a new tab, so a candidate can see exactly
-           what a recruiter would see. No raw URL shown and no copy action here — a
-           visitor can copy it from the browser's own address bar once there. -->
-      <Button
-        variant="ghost"
-        class="self-start"
-        href={resolve('/talent-network/[publicId]', { publicId })}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        View your public page
-      </Button>
-    {/if}
   {/if}
 </div>
