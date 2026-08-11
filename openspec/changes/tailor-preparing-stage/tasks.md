@@ -13,6 +13,9 @@
       all pass. `TestStagesOrder`'s pinned literal list needed a deliberate update (new stage,
       new order) — not a weakened invariant, the same kind of one-line diff the test exists to
       force on any vocabulary change.
+- [x] 1.5 (found in code review, not planned) Updated `internal/userjob/AGENTS.md` — the
+      controlled-vocabulary list, the "four groups" line, and the silence-threshold provenance
+      paragraph all named stale counts/lists that this task orphaned.
 
 ## 2. Auto-promotion on a real apply signal
 
