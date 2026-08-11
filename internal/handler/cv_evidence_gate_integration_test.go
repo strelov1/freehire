@@ -55,6 +55,7 @@ func newCVAPIWithoutAssistant(t *testing.T) (*cvHandlers, *auth.Issuer, *fiber.A
 		creditsStore,
 		&matchHandlers{credits: creditsStore},
 		bankGate{bank: bank},
+		nil, // tracking save unused — this fixture never bootstraps tailor
 		true,
 	)
 

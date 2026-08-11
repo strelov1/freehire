@@ -1,0 +1,124 @@
+// Command backfill-himalayas-companyname repairs jobs.company for himalayas rows ingested
+// while the adapter stored Himalayas' companyName sentinel verbatim (see
+// sources.HimalayasCompanyNameSentinel — Himalayas' own feed renders companyName as the
+// literal string "name" for a subset of postings, an unresolved template field on their end).
+//
+// The adapter now falls back to the feed's companySlug field, but that only reaches new or
+// re-crawled rows: himalayas is boardless with a per-run page budget far short of its full
+// catalogue (recency-ordered, so old rows fall out of the crawled window and are never
+// revisited by a normal ingest). This backfill instead recovers the company slug from each
+// row's own stored url, which Himalayas' canonical job page always carries at
+// /companies/<slug>/jobs/... — the same signal, just read back from the DB instead of the
+// live feed (companySlug itself isn't stored anywhere).
+//
+// It pages every source='himalayas' row, and for each one still carrying the sentinel,
+// extracts the slug and rewrites company/company_slug plus a refreshed content_hash. A row
+// whose url doesn't match the expected shape is counted (unresolved) and left alone rather
+// than aborting the run. Idempotent: a second run finds no sentinel rows left to fix.
+package main
+
+import (
+	"context"
+	"log"
+	"regexp"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/jobhash"
+	"github.com/strelov1/freehire/internal/normalize"
+	"github.com/strelov1/freehire/internal/sources"
+	"github.com/strelov1/freehire/internal/worker"
+)
+
+// backfillBatchSize bounds how many rows are read per keyset page.
+const backfillBatchSize = 500
+
+// companySlugPath pulls the company slug out of a canonical Himalayas job URL
+// (https://himalayas.app/companies/<slug>/jobs/...), same pattern the adapter's live fallback
+// no longer needs (it reads companySlug straight off the feed) but a stored row only has url.
+var companySlugPath = regexp.MustCompile(`himalayas\.app/companies/([^/]+)/jobs/`)
+
+// jobStore is the slice of the data layer the backfill needs. *db.Queries satisfies it; the
+// test uses a fake.
+type jobStore interface {
+	ListJobsBySourceAfter(ctx context.Context, arg db.ListJobsBySourceAfterParams) ([]db.Job, error)
+	UpdateJobCompany(ctx context.Context, arg db.UpdateJobCompanyParams) (int64, error)
+}
+
+func main() {
+	worker.Main(run)
+}
+
+func run() int {
+	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	if err != nil {
+		log.Printf("database: %v", err)
+		return 1
+	}
+	defer cleanup()
+
+	total, updated, unresolved, err := backfillAll(ctx, db.New(pool))
+	if err != nil {
+		log.Printf("backfill-himalayas-companyname: %v", err)
+		return 1
+	}
+	log.Printf("backfill-himalayas-companyname done: scanned=%d updated=%d unresolved=%d", total, updated, unresolved)
+	return 0
+}
+
+// backfillAll pages every himalayas row and rewrites company/company_slug on rows still
+// carrying HimalayasCompanyNameSentinel. It pages by keyset (id > last seen) so concurrent
+// writes cannot skip or repeat rows. A sentinel row whose url yields no slug is counted
+// (unresolved) and skipped, never aborting the run.
+func backfillAll(ctx context.Context, store jobStore) (total, updated, unresolved int, err error) {
+	var afterID int64
+	for {
+		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
+			Source:    "himalayas",
+			AfterID:   afterID,
+			BatchSize: backfillBatchSize,
+		})
+		if err != nil {
+			return total, updated, unresolved, err
+		}
+		if len(jobs) == 0 {
+			break
+		}
+		afterID = jobs[len(jobs)-1].ID
+
+		for _, j := range jobs {
+			total++
+			if j.Company != sources.HimalayasCompanyNameSentinel {
+				continue
+			}
+			m := companySlugPath.FindStringSubmatch(j.URL)
+			if m == nil {
+				unresolved++
+				continue
+			}
+			company := m[1]
+			companySlug := normalize.Slug(company)
+
+			row := j
+			row.Company = company
+			row.CompanySlug = companySlug
+			hash := jobhash.OfRow(row, j.Description)
+
+			if _, err := store.UpdateJobCompany(ctx, db.UpdateJobCompanyParams{
+				ID:          j.ID,
+				Company:     company,
+				CompanySlug: companySlug,
+				ContentHash: pgtype.Text{String: hash, Valid: true},
+			}); err != nil {
+				return total, updated, unresolved, err
+			}
+			updated++
+		}
+
+		if len(jobs) < backfillBatchSize {
+			break
+		}
+	}
+	return total, updated, unresolved, nil
+}

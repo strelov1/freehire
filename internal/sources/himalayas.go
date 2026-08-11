@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // himalayas adapts himalayas.app, a remote-jobs aggregator. Boardless (one public API, no
@@ -31,6 +32,11 @@ const (
 	himalayasListURL  = "https://himalayas.app/jobs/api?limit=%d&offset=%d"
 )
 
+// HimalayasCompanyNameSentinel is the literal value Himalayas' feed sends as companyName for
+// a subset of postings, instead of the real company — see toJob. Exported for
+// cmd/backfill-himalayas-companyname, which repairs rows ingested before this was handled.
+const HimalayasCompanyNameSentinel = "name"
+
 // NewHimalayas builds the Himalayas adapter over the given HTTP client.
 func NewHimalayas(c JSONGetter) Source { return himalayas{http: c} }
 
@@ -51,6 +57,7 @@ type himalayasResponse struct {
 type himalayasPosting struct {
 	Title                string   `json:"title"`
 	CompanyName          string   `json:"companyName"`
+	CompanySlug          string   `json:"companySlug"`
 	ApplicationLink      string   `json:"applicationLink"`
 	GUID                 string   `json:"guid"`
 	LocationRestrictions []string `json:"locationRestrictions"`
@@ -92,15 +99,26 @@ func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no
 // guid to key on, or no company which would break the slug). Himalayas lists only remote jobs.
+//
+// Himalayas' own feed renders companyName as the literal string "name" for a chunk of
+// postings (~20% in a sample crawl) — a template field left unresolved on their end.
+// companySlug, a separate field carrying the same company, is unaffected, so a posting
+// caught by this falls back to it (e.g. "talentcross") rather than being dropped or showing
+// the literal "name" as the employer. That slug is the same shape internal/companyname
+// already resolves for other slug-only boards; Himalayas has no resolver registered there yet.
 func (p himalayasPosting) toJob() (Job, bool) {
-	if p.GUID == "" || p.CompanyName == "" {
+	company := p.CompanyName
+	if strings.EqualFold(strings.TrimSpace(company), HimalayasCompanyNameSentinel) {
+		company = p.CompanySlug
+	}
+	if p.GUID == "" || company == "" {
 		return Job{}, false
 	}
 	return Job{
 		ExternalID:  p.GUID,
 		URL:         p.ApplicationLink,
 		Title:       p.Title,
-		Company:     p.CompanyName,
+		Company:     company,
 		Location:    joinNonEmpty(p.LocationRestrictions...),
 		Description: StripHimalayasSelfPromo(sanitizeHTML(p.Description)),
 		Remote:      true,

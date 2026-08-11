@@ -128,6 +128,16 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if _, err := h.credits.Debit(c.Context(), userID, credits.FeatureTailor, tailored.ID.String()); err != nil {
 		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
+	// Place the vacancy on the Tracking Kanban. A bare bookmark is not enough — the
+	// board columns only show staged/applied rows; saved-only lives under Activity →
+	// Saved. Stage is set to applied without applied_at (preparing ≠ submitted). Runs on
+	// create and resume; never overwrites an existing stage. Best-effort: the CV and
+	// session already exist.
+	if h.jobs != nil {
+		if err := h.jobs.EnsureOnBoard(c.Context(), userID, job.ID); err != nil {
+			log.Printf("cv: placing vacancy on board after tailor user=%d job=%d: %v", userID, job.ID, err)
+		}
+	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorCVResponse{
 		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
 		ColdStartRunning: justCreated,
@@ -196,6 +206,13 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 	sessionID, err := h.startTailoringSession(c.Context(), userID, rec.ID, rec.JobID)
 	if err != nil {
 		return err
+	}
+	// Same board placement as TailorCV: this path is how a ?cv= resume mints a missing
+	// session, and without it the vacancy would stay off the Kanban.
+	if h.jobs != nil {
+		if err := h.jobs.EnsureOnBoard(c.Context(), userID, rec.JobID); err != nil {
+			log.Printf("cv: placing vacancy on board after tailor session user=%d job=%d: %v", userID, rec.JobID, err)
+		}
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": tailorSessionResponse{
 		TailorCVID: rec.ID.String(), BaseCVID: base.ID.String(), SessionID: sessionID,

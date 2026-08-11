@@ -85,6 +85,41 @@ func TestHimalayasFetchPaginatesAndMaps(t *testing.T) {
 	}
 }
 
+func TestHimalayasCompanyNameSentinelFallsBackToCompanySlug(t *testing.T) {
+	// Himalayas' feed renders companyName as the literal "name" for some postings (an
+	// unresolved template field on their end). companySlug, a separate JSON field, stays
+	// correct even then, so toJob recovers the company from it instead of storing the
+	// literal sentinel. Confirmed live: guid also carries a stray leading ":" on these rows
+	// (a second, correlated glitch), which is exactly why companySlug — not guid parsing —
+	// is the fallback.
+	p := himalayasPosting{
+		Title:       "Channel Sales Manager (East)",
+		CompanyName: HimalayasCompanyNameSentinel,
+		CompanySlug: "freshworks",
+		GUID:        ":https://himalayas.app/companies/freshworks/jobs/channel-sales-manager-east-9054304068",
+	}
+	j, ok := p.toJob()
+	if !ok {
+		t.Fatal("toJob() ok = false, want true (companySlug yields a recoverable company)")
+	}
+	if j.Company != "freshworks" {
+		t.Errorf("Company = %q, want %q (recovered from companySlug)", j.Company, "freshworks")
+	}
+}
+
+func TestHimalayasCompanyNameSentinelDropsWhenCompanySlugAlsoMissing(t *testing.T) {
+	// When companySlug is empty too, there is nothing usable to fall back to — drop the
+	// posting rather than store the literal "name" as the company.
+	p := himalayasPosting{
+		Title:       "Operations Manager",
+		CompanyName: HimalayasCompanyNameSentinel,
+		GUID:        "https://himalayas.app/companies/somewhere/jobs/operations-manager",
+	}
+	if _, ok := p.toJob(); ok {
+		t.Error("toJob() ok = true, want false (no companySlug to recover the company from)")
+	}
+}
+
 func TestHimalayasReturnsPartialOnPageError(t *testing.T) {
 	// Himalayas rate-limits (429) mid-crawl. A page failure after we have already collected
 	// jobs must return the partial result, not discard everything: the first page succeeds,
