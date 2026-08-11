@@ -163,6 +163,11 @@ type Querier interface {
 	// Delivery happens OUTSIDE this transaction, so no network call is held under a
 	// row lock. Mirrors ClaimDueReminders.
 	ClaimDueNudges(ctx context.Context, arg ClaimDueNudgesParams) ([]int64, error)
+	// Tickets old enough for Expo to have an answer, oldest first. Read-only
+	// (this queue has no lease/claim bookkeeping — see DeletePushTickets):
+	// cmd/push-receipts is a run-once-and-exit cron worker, not a long-running
+	// pool of overlapping consumers, so a plain scan is enough.
+	ClaimDuePushTickets(ctx context.Context, arg ClaimDuePushTicketsParams) ([]PushTicketOutbox, error)
 	// Lease a batch of due, pending reminders by stamping claimed_at, earliest deadline
 	// first. FOR UPDATE OF r + SKIP LOCKED lets overlapping worker passes take disjoint
 	// rows so a reminder fires at most once; the lease predicate reclaims rows whose
@@ -660,6 +665,11 @@ type Querier interface {
 	// by the company-info backfill are preserved: they intentionally have no job, so
 	// the NOT is_reference guard keeps the backfill directory from being swept away.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
+	// Removes tickets once their receipt has been checked, regardless of outcome
+	// (delivered, pruned-as-dead, or any other terminal receipt status) — this
+	// queue has no retry bookkeeping of its own; an unprocessed batch (e.g. Expo
+	// unreachable) simply stays queued for the next scheduled run.
+	DeletePushTickets(ctx context.Context, ids []int64) error
 	// Explicit unregistration (sign-out), scoped to the caller so one account
 	// cannot unregister another's device.
 	DeletePushToken(ctx context.Context, arg DeletePushTokenParams) (int64, error)
@@ -803,6 +813,9 @@ type Querier interface {
 	// COALESCE(posted_at, created_at) onto the outbox row so ClaimSemanticBatch can sort by
 	// it without joining jobs on every claim (see that query's doc comment).
 	EnqueuePendingSemanticJobs(ctx context.Context, targetModel string) (int64, error)
+	// Queues a successfully-sent Expo ticket for a later receipt check — the
+	// send response itself does not say whether the push was actually delivered.
+	EnqueuePushTicket(ctx context.Context, arg EnqueuePushTicketParams) error
 	// Queue a job for the live facet index. Called by cmd/ingest inside the same
 	// transaction as the job's upsert, only when the write inserted or changed indexed
 	// content (mirrors the gate the old inline SubmitJobs push used). ON CONFLICT keeps

@@ -608,6 +608,13 @@ type PrunedJob struct {
 	PrunedAt    pgtype.Timestamptz `json:"pruned_at"`
 }
 
+type PushTicketOutbox struct {
+	ID        int64              `json:"id"`
+	Token     string             `json:"token"`
+	TicketID  string             `json:"ticket_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type ReferralOffer struct {
 	UserID         int64              `json:"user_id"`
 	CompanySlug    string             `json:"company_slug"`
