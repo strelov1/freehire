@@ -16,10 +16,16 @@
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
-  import TalentNetworkSettings from '$lib/components/TalentNetworkSettings.svelte';
+  import TalentNetworkPanel from '$lib/components/TalentNetworkPanel.svelte';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
-  import type { ATSResponse, FacetCounts, ResumeStructured, Verdict } from '$lib/types';
+  import type {
+    ATSResponse,
+    FacetCounts,
+    ResumeStructured,
+    TalentNetworkVisibility,
+    Verdict,
+  } from '$lib/types';
   import { Button } from '$lib/ui';
 
   const profile = $derived(profileStore.profile);
@@ -54,6 +60,12 @@
   );
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
+
+  // Status-aware Talent Network entry button in the page header. `null` means "not yet
+  // loaded" — the button renders in its "off" (join) state until the fetch resolves,
+  // same fail-safe posture as a load failure below.
+  let talentNetworkPanelOpen = $state(false);
+  let talentNetworkVisibility = $state<TalentNetworkVisibility | null>(null);
 
   // Optimistic CV flag: a résumé upload stores the CV server-side before the next ATS
   // fetch resolves (and before any profile exists during set-up), so reflect it at once.
@@ -120,9 +132,24 @@
     }
   }
 
+  // Seeds the header button's display only — never blocking, and no error surfaced here.
+  // A failure defaults the button to its "off" (join) state; the panel's own fetch (on
+  // open) is the informative path if the setting genuinely can't be read.
+  async function loadTalentNetwork() {
+    try {
+      const setting = await api.getTalentNetwork();
+      talentNetworkVisibility = setting.talent_network_visibility;
+    } catch {
+      talentNetworkVisibility = 'off';
+    }
+  }
+
   // (Re)load once the session resolves.
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) {
+      void load();
+      void loadTalentNetwork();
+    }
   });
 
   // Build the filter only on the profile null↔exists transition, never on a plain edit —
@@ -213,12 +240,40 @@
   <States state="error" message="Couldn't load your profile." />
 {:else}
   <!-- Header -->
-  <div class="mb-6 flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
-    <p class="text-sm text-muted-foreground">
-      Your CV, skills and role — measured against live market demand.
-    </p>
+  <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="flex flex-col gap-1">
+      <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
+      <p class="text-sm text-muted-foreground">
+        Your CV, skills and role — measured against live market demand.
+      </p>
+    </div>
+    <!-- Off/not-yet-loaded is a filled call-to-action (the opt-in is the interesting
+         choice to make); once public or anonymous the button becomes a low-key status
+         readout, since Off is the default and the other two are already a
+         deliberate, weighty decision the panel itself re-explains on open. -->
+    <Button
+      variant={talentNetworkVisibility === 'public' || talentNetworkVisibility === 'anonymous'
+        ? 'outline'
+        : 'primary'}
+      class="shrink-0"
+      onclick={() => (talentNetworkPanelOpen = true)}
+    >
+      {#if talentNetworkVisibility === 'public'}
+        🌐 Talent Network: Public
+      {:else if talentNetworkVisibility === 'anonymous'}
+        🕶️ Talent Network: Anonymous
+      {:else}
+        Join Talent Network
+      {/if}
+    </Button>
   </div>
+
+  <TalentNetworkPanel
+    open={talentNetworkPanelOpen}
+    onClose={() => (talentNetworkPanelOpen = false)}
+    onChange={(setting) => (talentNetworkVisibility = setting)}
+    onError={(msg) => (actionError = msg)}
+  />
 
   {#if actionError}
     <p class="mb-4 text-sm text-destructive">{actionError}</p>
@@ -279,7 +334,6 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <TalentNetworkSettings onError={(msg) => (actionError = msg)} />
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and
                off the other tabs, which are readings of the market, not account

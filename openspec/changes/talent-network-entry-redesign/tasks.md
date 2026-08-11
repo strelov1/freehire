@@ -25,19 +25,19 @@
 
 ## 2. Status-aware entry button
 
-- [ ] 2.1 On `web/src/routes/my/profile/+page.svelte`, add a button near
+- [x] 2.1 On `web/src/routes/my/profile/+page.svelte`, add a button near
       the top of the page (next to the page heading) that opens
       `TalentNetworkPanel`. Fetch the current visibility (reuse
       `getTalentNetwork`) on page load to decide the button's initial
       appearance — check whether the page already loads a value it can
       reuse, or add a lightweight fetch alongside the existing ones.
-- [ ] 2.2 Button rendering: `off` → solid filled CTA, "Join Talent
+- [x] 2.2 Button rendering: `off` → solid filled CTA, "Join Talent
       Network". `public`/`anonymous` → outlined pill with the mode's icon
       + "Talent Network: <Mode>". Update the button's own displayed state
       when the panel closes with a changed value (the panel's echoed PUT
       response is the source of truth — thread it back up via a callback
       prop, don't re-fetch).
-- [ ] 2.3 Remove the old inline `TalentNetworkSettings.svelte` render from
+- [x] 2.3 Remove the old inline `TalentNetworkSettings.svelte` render from
       the Settings tab — the panel is now the only entry point. Delete
       `TalentNetworkSettings.svelte` if `TalentNetworkPanel.svelte` fully
       supersedes it (confirm no other importer first).

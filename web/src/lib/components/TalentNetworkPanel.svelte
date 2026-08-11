@@ -8,11 +8,11 @@
   import { focusTrap } from '$lib/actions/focusTrap';
 
   // The overlay entry point for the Talent Network opt-in: Off (default) / Public /
-  // Anonymous, plus the resulting shareable public page. Supersedes the inline
-  // TalentNetworkSettings.svelte (deleted once its caller is switched over) — same
-  // GET/PUT /me/talent-network contract, now presented as a dedicated panel rather than
-  // a buried settings-tab section, because opting into a public profile is a deliberate,
-  // weighty decision. The preview URL is built as origin + "/talent-network/" + the
+  // Anonymous, plus the resulting shareable public page. Supersedes the now-deleted
+  // inline settings-tab version — same GET/PUT /me/talent-network contract, now presented
+  // as a dedicated panel rather than a buried settings-tab section, because opting into
+  // a public profile is a deliberate, weighty decision. The preview URL is built as
+  // origin + "/talent-network/" + the
   // public id, following this codebase's convention that a public-facing page path
   // mirrors its API resource name 1:1 minus the "/api/v1" prefix — e.g.
   // "/api/v1/companies/:slug" -> "/companies/[slug]" and "/api/v1/jobs/:slug" ->
