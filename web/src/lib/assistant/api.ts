@@ -94,18 +94,22 @@ export class VoiceModeUnavailable extends Error {
   }
 }
 
-/** A one-call Realtime credential: the ephemeral secret, and which model it was
- *  minted for. The model rides along because the WebRTC SDP exchange names it on its
- *  own URL — the browser has no other way to learn which one this deployment runs,
- *  and hardcoding it here would drift silently from the backend's REALTIME_MODEL. */
+/** A one-call Realtime credential. `value` is NOT a raw OpenAI ephemeral key — it is
+ *  our gateway's own wrapped token (a real upstream key encrypted inside it), and it
+ *  only means anything redeemed at `calls_url`, that SAME gateway's own
+ *  /realtime/calls. Sent to api.openai.com directly, OpenAI reads it as a malformed
+ *  API key and 401s. `model` rides along for the same reason `calls_url` does — the
+ *  browser has no way to learn either fact on its own, and hardcoding either would
+ *  drift silently from the backend's REALTIME_MODEL/LLM_BASE_URL. */
 export interface VoiceToken {
   value: string;
   model: string;
+  calls_url: string;
 }
 
 /** Mint a short-lived Realtime API client secret scoped to one interview session. The
- *  browser takes this straight to OpenAI over WebRTC — it never transits our backend
- *  again after this call. */
+ *  browser takes this to the gateway's own `callsUrl` to negotiate the WebRTC call —
+ *  never to OpenAI directly, see VoiceToken's doc. */
 export async function mintVoiceToken(sessionId: string): Promise<VoiceToken> {
   const res = await fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/voice-token`, {
     method: 'POST',

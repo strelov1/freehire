@@ -17,6 +17,7 @@ import (
 type realtimeMinter interface {
 	MintClientSecret(ctx context.Context, instructions string) (string, error)
 	Model() string
+	CallsURL() string
 }
 
 // voiceTokensPerHour bounds how many calls one caller may start per hour. A mint is
@@ -27,10 +28,10 @@ type realtimeMinter interface {
 // and far below anything worth doing with a stolen session.
 const voiceTokensPerHour = 20
 
-// PostAssistantVoiceToken mints a short-lived OpenAI Realtime API client secret for a
+// PostAssistantVoiceToken mints a short-lived Realtime API client secret for a
 // hands-free voice call on an existing `interview` session. The audio itself never
-// reaches this server: the browser takes the returned secret straight to the
-// Realtime API over WebRTC.
+// reaches this server: the browser takes the returned secret to the gateway's own
+// /realtime/calls (see CallsURL) to negotiate the WebRTC call directly.
 func (h *assistantHandlers) PostAssistantVoiceToken(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {
@@ -58,10 +59,16 @@ func (h *assistantHandlers) PostAssistantVoiceToken(c *fiber.Ctx) error {
 		// could not read. The caller did nothing wrong and has no remedy.
 		return fiber.NewError(fiber.StatusBadGateway, "could not start voice mode")
 	}
-	// The browser's WebRTC SDP exchange names the model on its own URL, and it has no
-	// other way to learn which one this deployment runs — the value must come from
-	// here, not from a name hardcoded in the frontend that could drift from REALTIME_MODEL.
-	return c.JSON(fiber.Map{"data": fiber.Map{"value": value, "model": h.realtime.Model()}})
+	// model: the WebRTC SDP exchange names the model on its own URL, and the browser
+	// has no other way to learn which one this deployment runs.
+	// calls_url: the minted value is NOT a raw OpenAI ephemeral key — it is this
+	// gateway's own wrapped token, redeemable only at the SAME gateway's
+	// /realtime/calls (see realtime.Client.CallsURL's doc). Hardcoding
+	// api.openai.com in the frontend sends that wrapped value to an endpoint that
+	// cannot read it and rejects it as a malformed API key.
+	return c.JSON(fiber.Map{"data": fiber.Map{
+		"value": value, "model": h.realtime.Model(), "calls_url": h.realtime.CallsURL(),
+	}})
 }
 
 // assistantVoiceTurnRequest is one completed exchange from a voice-mode call: the

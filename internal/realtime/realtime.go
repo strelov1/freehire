@@ -107,6 +107,17 @@ func (c *Client) Model() string {
 	return c.model
 }
 
+// CallsURL is where the browser POSTs its WebRTC SDP offer — at THIS gateway, never
+// at api.openai.com directly. The value MintClientSecret returns is not a raw OpenAI
+// ephemeral key: it is this gateway's own wrapped token (a real upstream key
+// encrypted inside it, alongside routing metadata), redeemable only at this
+// gateway's matching /realtime/calls, which decrypts it and forwards to OpenAI on
+// the caller's behalf. Sent to OpenAI directly, it looks like a malformed API key,
+// because it is not one.
+func (c *Client) CallsURL() string {
+	return c.baseURL + "/realtime/calls"
+}
+
 // MintClientSecret returns a short-lived credential scoped to one Realtime session.
 func (c *Client) MintClientSecret(ctx context.Context, instructions string) (string, error) {
 	var payload mintRequest

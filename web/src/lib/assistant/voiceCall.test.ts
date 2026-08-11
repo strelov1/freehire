@@ -1,21 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyRealtimeEvent, canUseVoiceCall, initVoiceCallState, openaiModelID } from './voiceCall';
-
-describe('openaiModelID', () => {
-  it('strips a litellm provider prefix', () => {
-    expect(openaiModelID('openai/gpt-realtime-2.1')).toBe('gpt-realtime-2.1');
-  });
-
-  it('leaves a bare model id alone', () => {
-    // A deployment whose REALTIME_MODEL never needed a routing prefix (e.g. talking
-    // to OpenAI directly, no litellm in front) must not be mangled.
-    expect(openaiModelID('gpt-realtime-2.1')).toBe('gpt-realtime-2.1');
-  });
-
-  it('takes the LAST segment, for a routing alias with more than one slash', () => {
-    expect(openaiModelID('privateclaw/openai/gpt-realtime-2.1')).toBe('gpt-realtime-2.1');
-  });
-});
+import { applyRealtimeEvent, canUseVoiceCall, initVoiceCallState } from './voiceCall';
 
 describe('canUseVoiceCall', () => {
   it('is true only when both APIs are present', () => {

@@ -36,7 +36,8 @@ func (s *realtimeStub) MintClientSecret(_ context.Context, instructions string) 
 	return s.value, s.err
 }
 
-func (s *realtimeStub) Model() string { return "gpt-realtime-2.1" }
+func (s *realtimeStub) Model() string    { return "gpt-realtime-2.1" }
+func (s *realtimeStub) CallsURL() string { return "https://gw.example/v1/realtime/calls" }
 
 func TestPostAssistantVoiceTokenReportsUnconfigured(t *testing.T) {
 	pool := startPostgres(t)
@@ -106,8 +107,9 @@ func TestPostAssistantVoiceTokenMintsAScopedSecret(t *testing.T) {
 	}
 	var got struct {
 		Data struct {
-			Value string `json:"value"`
-			Model string `json:"model"`
+			Value    string `json:"value"`
+			Model    string `json:"model"`
+			CallsURL string `json:"calls_url"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
@@ -121,6 +123,11 @@ func TestPostAssistantVoiceTokenMintsAScopedSecret(t *testing.T) {
 	// REALTIME_MODEL.
 	if got.Data.Model != "gpt-realtime-2.1" {
 		t.Errorf("model = %q, want gpt-realtime-2.1", got.Data.Model)
+	}
+	// The minted value is our gateway's own wrapped token, not a raw OpenAI ephemeral
+	// key — the browser must redeem it at OUR gateway, never at api.openai.com.
+	if got.Data.CallsURL != "https://gw.example/v1/realtime/calls" {
+		t.Errorf("calls_url = %q, want https://gw.example/v1/realtime/calls", got.Data.CallsURL)
 	}
 	if stub.calls != 1 {
 		t.Fatalf("MintClientSecret called %d times, want 1", stub.calls)

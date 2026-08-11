@@ -13,7 +13,6 @@
     initVoiceCallState,
     MAX_CALL_MS,
     END_WARNING_MS,
-    openaiModelID,
     type RealtimeServerEvent,
   } from '$lib/assistant/voiceCall';
 
@@ -107,10 +106,10 @@
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // token.model is the litellm-routing name (may carry a provider prefix our
-      // proxy needed to mint the secret); this call bypasses the proxy and talks to
-      // OpenAI directly, which needs its own bare model id — see openaiModelID.
-      const sdpResp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(openaiModelID(token.model))}`, {
+      // token.value is our own gateway's wrapped token, not a raw OpenAI ephemeral
+      // key — it is only redeemable at that SAME gateway's calls_url, never at
+      // api.openai.com directly (see VoiceToken's doc in api.ts).
+      const sdpResp = await fetch(`${token.calls_url}?model=${encodeURIComponent(token.model)}`, {
         method: 'POST',
         body: offer.sdp,
         headers: { Authorization: `Bearer ${token.value}`, 'Content-Type': 'application/sdp' },

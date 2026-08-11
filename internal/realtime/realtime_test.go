@@ -96,6 +96,25 @@ func TestModelReturnsWhatTheClientWasConfiguredWith(t *testing.T) {
 	}
 }
 
+// The value MintClientSecret returns is NOT a raw OpenAI ephemeral key — it is our
+// gateway's own wrapped token (a real OpenAI key encrypted inside it, plus routing
+// metadata), meant to be redeemed at the SAME gateway's own /realtime/calls, not sent
+// to api.openai.com directly. A browser that skips this and calls OpenAI itself gets
+// "Incorrect API key provided" — the wrapped value simply is not one.
+func TestCallsURLPointsAtOurOwnGatewayNotOpenAI(t *testing.T) {
+	c := New("https://gw.example/v1", "sk-test", "gpt-realtime-2.1")
+	if got := c.CallsURL(); got != "https://gw.example/v1/realtime/calls" {
+		t.Errorf("CallsURL() = %q, want https://gw.example/v1/realtime/calls", got)
+	}
+}
+
+func TestCallsURLJoinsTheBaseURLWithoutDoublingTheSlash(t *testing.T) {
+	c := New("https://gw.example/v1/", "sk-test", "gpt-realtime-2.1")
+	if got := c.CallsURL(); got != "https://gw.example/v1/realtime/calls" {
+		t.Errorf("CallsURL() = %q, want https://gw.example/v1/realtime/calls", got)
+	}
+}
+
 func TestMintClientSecretSendsInstructionsAndReturnsTheValue(t *testing.T) {
 	srv, got := gateway(t, http.StatusOK, `{"value":"ek_abc123","expires_at":1234}`)
 	c := New(srv.URL+"/v1", "sk-test", "gpt-realtime-2.1")
