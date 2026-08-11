@@ -126,6 +126,37 @@ ORDER BY
 LIMIT sqlc.arg('lim')::int;
 
 -- ---------------------------------------------------------------------------
+-- Skill demand history (the personal GET /me/market-pulse read)
+-- ---------------------------------------------------------------------------
+
+-- name: SnapshotInsightsSkillHistory :execrows
+-- Appends this ISO week's global (category='', country='') skill open-counts
+-- to the history table, reading the rollup this same transaction just
+-- rebuilt rather than re-aggregating jobs. ON CONFLICT DO NOTHING is what
+-- makes this safe to call on every intra-day rollup-stats run: only the
+-- first run of a given week actually inserts, every later run this week is
+-- a no-op.
+INSERT INTO insights_skill_history (skill, week_start, open_count)
+SELECT skill, sqlc.arg('week_start')::date, open_count
+FROM insights_skill_stats
+WHERE category = '' AND country = ''
+ON CONFLICT (skill, week_start) DO NOTHING;
+
+-- name: PruneInsightsSkillHistory :execrows
+-- Drops snapshot rows older than the retention window (~26 weeks), keeping
+-- the table bounded.
+DELETE FROM insights_skill_history
+WHERE week_start < sqlc.arg('cutoff')::date;
+
+-- name: ListInsightsSkillHistory :many
+-- All retained weekly snapshots for a set of skills (a caller's own profile
+-- skills), newest first per skill.
+SELECT skill, week_start, open_count
+FROM insights_skill_history
+WHERE skill = ANY(sqlc.arg('skills')::text[])
+ORDER BY skill, week_start DESC;
+
+-- ---------------------------------------------------------------------------
 -- Salary bands
 -- ---------------------------------------------------------------------------
 

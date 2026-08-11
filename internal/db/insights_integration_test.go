@@ -257,7 +257,98 @@ func TestInsightsSkillRollupScoping(t *testing.T) {
 	}
 }
 
+// TestInsightsSkillHistorySnapshotIdempotentAndPruned exercises the three queries
+// GET /me/market-pulse's data depends on: the snapshot insert is idempotent within
+// a week (the "no separate weekly scheduler" decision relies on this), the read
+// returns what was snapshotted, and pruning removes only rows past the cutoff.
+func TestInsightsSkillHistorySnapshotIdempotentAndPruned(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	seedInsightsJob(t, ctx, q, pool, "h1", insightSeed{createdAgo: 5, skills: []string{"go"}})
+	seedInsightsJob(t, ctx, q, pool, "h2", insightSeed{createdAgo: 5, skills: []string{"go", "rust"}})
+
+	if err := q.DeleteAllInsightsSkillStats(ctx); err != nil {
+		t.Fatalf("delete skills: %v", err)
+	}
+	if _, err := q.RebuildInsightsSkillStatsGlobal(ctx, windowStart()); err != nil {
+		t.Fatalf("rebuild skills global: %v", err)
+	}
+
+	thisWeek := pgtype.Date{Time: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), Valid: true}
+
+	n, err := q.SnapshotInsightsSkillHistory(ctx, thisWeek)
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if n != 2 { // go, rust
+		t.Errorf("first snapshot rows = %d, want 2", n)
+	}
+
+	// Same week again: the intra-day rollup-stats cadence calls this several times a
+	// week; only the first run within a week should insert.
+	n, err = q.SnapshotInsightsSkillHistory(ctx, thisWeek)
+	if err != nil {
+		t.Fatalf("snapshot again: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("second snapshot rows = %d, want 0 (idempotent)", n)
+	}
+
+	rows, err := q.ListInsightsSkillHistory(ctx, []string{"go", "rust"})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("history rows = %d, want 2", len(rows))
+	}
+	if got := findSkillHistory(t, rows, "go"); got.OpenCount != 2 {
+		t.Errorf("go open_count = %d, want 2", got.OpenCount)
+	}
+	if got := findSkillHistory(t, rows, "rust"); got.OpenCount != 1 {
+		t.Errorf("rust open_count = %d, want 1", got.OpenCount)
+	}
+
+	// Plant a row well past the retention window directly (SnapshotInsightsSkillHistory
+	// only ever writes the current week), then confirm prune drops it and nothing else.
+	oldWeek := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO insights_skill_history (skill, week_start, open_count) VALUES ('go', $1, 1)`,
+		oldWeek); err != nil {
+		t.Fatalf("seed old row: %v", err)
+	}
+
+	cutoff := pgtype.Date{Time: time.Now().UTC().AddDate(0, 0, -182), Valid: true} // ~26 weeks
+	pruned, err := q.PruneInsightsSkillHistory(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if pruned != 1 {
+		t.Errorf("pruned rows = %d, want 1", pruned)
+	}
+
+	rows, err = q.ListInsightsSkillHistory(ctx, []string{"go"})
+	if err != nil {
+		t.Fatalf("list after prune: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Errorf("rows after prune = %d, want 1 (only this week's row survives)", len(rows))
+	}
+}
+
 // --- helpers ---
+
+func findSkillHistory(t *testing.T, rows []InsightsSkillHistory, skill string) InsightsSkillHistory {
+	t.Helper()
+	for _, r := range rows {
+		if r.Skill == skill {
+			return r
+		}
+	}
+	t.Fatalf("skill %s not found in %d history rows", skill, len(rows))
+	return InsightsSkillHistory{}
+}
 
 func rebuildRoles(t *testing.T, ctx context.Context, q *Queries, prev pgtype.Timestamptz) {
 	t.Helper()

@@ -324,6 +324,10 @@ func Register(app *fiber.App, cfg Config) {
 	// The profile read serves the structured résumé beside the profile, so it needs the
 	// résumé store — hence constructed after it.
 	profileH := newProfileHandlers(profileSvc, resumeStore, newCandidateProfiler(queries))
+	// Personal skill-demand trend: the caller's own profile skills joined against the
+	// weekly insights_skill_history snapshots cmd/rollup-stats writes (see
+	// me_market_pulse.go). Reuses profileSvc rather than a second userprofile.Service.
+	marketPulseH := newMarketPulseHandlers(profileSvc, queries)
 	// The Talent Network visibility toggle is a distinct singleton on `users`, not part
 	// of the user_profiles-backed profileHandlers above (see me_talent_network.go).
 	talentNetworkH := newTalentNetworkHandlers(queries)
@@ -605,6 +609,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
+	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)
 	talentNetworkProfileH.register(api)

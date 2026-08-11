@@ -419,6 +419,12 @@ type InsightsSalaryStat struct {
 	P75        int32  `json:"p75"`
 }
 
+type InsightsSkillHistory struct {
+	Skill     string      `json:"skill"`
+	WeekStart pgtype.Date `json:"week_start"`
+	OpenCount int32       `json:"open_count"`
+}
+
 type InsightsSkillStat struct {
 	Skill         string `json:"skill"`
 	Category      string `json:"category"`

@@ -1653,6 +1653,9 @@ type Querier interface {
 	// seniorities are the per-grade bands. Bands below the sample floor are already
 	// absent from the rollup.
 	ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error)
+	// All retained weekly snapshots for a set of skills (a caller's own profile
+	// skills), newest first per skill.
+	ListInsightsSkillHistory(ctx context.Context, skills []string) ([]InsightsSkillHistory, error)
 	// Ranked skills within one (category, country) scope; scoping is one-dimensional
 	// (either category or country carries a value, the other is ''), matching what the
 	// rollup materializes.
@@ -2099,6 +2102,9 @@ type Querier interface {
 	// a caller-facing "delete a token" request — that goes through
 	// DeletePushToken's owner check instead.
 	PruneDeadPushToken(ctx context.Context, token string) error
+	// Drops snapshot rows older than the retention window (~26 weeks), keeping
+	// the table bounded.
+	PruneInsightsSkillHistory(ctx context.Context, cutoff pgtype.Date) (int64, error)
 	// Permanently remove a batch of jobs and record what was removed, in ONE statement.
 	// Splitting the two would let the archive drift from the deletion, and the archive is
 	// the only way to answer, after an irreversible removal, whether something was taken
@@ -2738,6 +2744,16 @@ type Querier interface {
 	// nothing to gain by deferring it — and a separate write would have to duplicate the
 	// guard, which is exactly how invariants drift apart.
 	SetUserResumeStructured(ctx context.Context, arg SetUserResumeStructuredParams) error
+	// ---------------------------------------------------------------------------
+	// Skill demand history (the personal GET /me/market-pulse read)
+	// ---------------------------------------------------------------------------
+	// Appends this ISO week's global (category='', country='') skill open-counts
+	// to the history table, reading the rollup this same transaction just
+	// rebuilt rather than re-aggregating jobs. ON CONFLICT DO NOTHING is what
+	// makes this safe to call on every intra-day rollup-stats run: only the
+	// first run of a given week actually inserts, every later run this week is
+	// a no-op.
+	SnapshotInsightsSkillHistory(ctx context.Context, weekStart pgtype.Date) (int64, error)
 	// Soft-delete one message (hidden from the listing, retained for restore),
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
 	// caller's message (→ 404).

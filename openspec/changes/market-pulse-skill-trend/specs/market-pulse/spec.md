@@ -26,24 +26,31 @@ rather than a separate aggregation over the `jobs` table.
 ### Requirement: Personal skill-demand trend is readable by the signed-in user
 
 The system SHALL expose an authenticated `GET /api/v1/me/market-pulse`
-endpoint that returns, for each skill in the caller's own profile, the most
-recent open-job count, the percent change since the earliest retained
-snapshot, and the full retained weekly series for that skill. No other
-user's data SHALL be readable through this endpoint. The response SHALL use
-the standard list envelope `{"data": [...], "meta": {...}}`.
+endpoint that returns, for each skill in the caller's own profile that has at
+least one retained snapshot, the most recent open-job count, the percent
+change since the earliest retained snapshot, and the full retained weekly
+series for that skill. A profile skill with no retained snapshot yet SHALL be
+omitted from the result rather than reported with a fabricated count. No
+other user's data SHALL be readable through this endpoint. The response
+SHALL use the standard list envelope `{"data": [...], "meta": {...}}`.
 
 #### Scenario: A profile with skills returns their trends
-- **WHEN** a signed-in user with one or more profile skills requests
-  `GET /api/v1/me/market-pulse`
+- **WHEN** a signed-in user with one or more profile skills, each with at
+  least one retained snapshot, requests `GET /api/v1/me/market-pulse`
 - **THEN** the response is `200` with one `data` entry per profile skill,
   each carrying the skill name, the latest open-job count, a percent-change
   figure, and a series of `{week_start, open_count}` points
 
-#### Scenario: A skill with no accumulated history yet
-- **WHEN** the caller has a profile skill for which fewer than two weekly
-  snapshots have been recorded
-- **THEN** that skill still appears in `data` with whatever series points
-  exist and a `null` (not a fabricated) percent-change figure
+#### Scenario: A skill with exactly one snapshot has no percent change yet
+- **WHEN** the caller has a profile skill for which exactly one weekly
+  snapshot has been recorded
+- **THEN** that skill appears in `data` with a one-point series and a `null`
+  (not a fabricated) percent-change figure
+
+#### Scenario: A skill with zero snapshots is omitted
+- **WHEN** the caller has a profile skill for which no snapshot has ever been
+  recorded (it has never appeared in an open job)
+- **THEN** that skill does not appear in `data` at all
 
 #### Scenario: An empty profile returns an empty result, not an error
 - **WHEN** a signed-in user with no skills in their profile requests the
