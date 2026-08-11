@@ -946,6 +946,36 @@ WHERE closed_at IS NULL
   AND last_seen_at < sqlc.arg(cutoff)
   AND company_slug = ANY(sqlc.arg(company_slugs)::text[]);
 
+-- name: UnseenJobIDs :many
+-- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
+-- (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
+-- fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
+-- one duplicated jobs_pkey value blocked greenhouse's sweep on every run) — so ids are
+-- fetched separately and closed one at a time, letting one bad id be skipped without
+-- blocking the rest.
+SELECT id FROM jobs
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND last_seen_at < sqlc.arg(cutoff)
+  AND company_slug = ANY(sqlc.arg(company_slugs)::text[]);
+
+-- name: UnseenJobIDsBySource :many
+-- Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
+SELECT id FROM jobs
+WHERE closed_at IS NULL
+  AND source = sqlc.arg(source)
+  AND last_seen_at < sqlc.arg(cutoff);
+
+-- name: CloseUnseenJobByID :execrows
+-- Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
+-- as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
+-- entry) can be caught and skipped by the caller without losing the rest of the batch.
+UPDATE jobs
+SET closed_at     = now(),
+    closed_reason = 'unseen',
+    updated_at    = now()
+WHERE id = sqlc.arg(id) AND closed_at IS NULL;
+
 -- name: CloseUnseenJobsBySource :execrows
 -- Post-ingest sweep for a fullCatalog source (see job-lifecycle spec): close every open job of
 -- ONE source not seen since the cutoff, WITHOUT the crawled-company scope. A fullCatalog adapter

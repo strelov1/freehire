@@ -322,6 +322,10 @@ type Querier interface {
 	// under-closing is the correct bias when there is no evidence to appeal to. Idempotent via
 	// WHERE closed_at IS NULL: a cron worker runs this repeatedly and closes each row once.
 	CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleUnsignalledJobsParams) (int64, error)
+	// Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
+	// as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
+	// entry) can be caught and skipped by the caller without losing the rest of the batch.
+	CloseUnseenJobByID(ctx context.Context, id int64) (int64, error)
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 	// by source because ingest runs per provider (a greenhouse run must not close jobs
@@ -2873,6 +2877,15 @@ type Querier interface {
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
 	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UnsaveJobRow, error)
+	// Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
+	// (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
+	// fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
+	// one duplicated jobs_pkey value blocked greenhouse's sweep on every run) — so ids are
+	// fetched separately and closed one at a time, letting one bad id be skipped without
+	// blocking the rest.
+	UnseenJobIDs(ctx context.Context, arg UnseenJobIDsParams) ([]int64, error)
+	// Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
+	UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySourceParams) ([]int64, error)
 	// Take an application off the board outright, naming the application itself.
 	//
 	// Deletes the record, matching UntrackJob: this is the candidate saying it is not a

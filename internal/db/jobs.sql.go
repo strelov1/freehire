@@ -151,6 +151,25 @@ func (q *Queries) CloseStaleUnsignalledJobs(ctx context.Context, arg CloseStaleU
 	return result.RowsAffected(), nil
 }
 
+const closeUnseenJobByID = `-- name: CloseUnseenJobByID :execrows
+UPDATE jobs
+SET closed_at     = now(),
+    closed_reason = 'unseen',
+    updated_at    = now()
+WHERE id = $1 AND closed_at IS NULL
+`
+
+// Row-by-row sweep fallback (see UnseenJobIDs): closes with the same 'unseen' reason
+// as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
+// entry) can be caught and skipped by the caller without losing the rest of the batch.
+func (q *Queries) CloseUnseenJobByID(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, closeUnseenJobByID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const closeUnseenJobs = `-- name: CloseUnseenJobs :execrows
 UPDATE jobs
 SET closed_at     = now(),
@@ -2613,6 +2632,79 @@ func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (string, err
 	var company_slug string
 	err := row.Scan(&company_slug)
 	return company_slug, err
+}
+
+const unseenJobIDs = `-- name: UnseenJobIDs :many
+SELECT id FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND last_seen_at < $2
+  AND company_slug = ANY($3::text[])
+`
+
+type UnseenJobIDsParams struct {
+	Source       string             `json:"source"`
+	Cutoff       pgtype.Timestamptz `json:"cutoff"`
+	CompanySlugs []string           `json:"company_slugs"`
+}
+
+// Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
+// (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
+// fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
+// one duplicated jobs_pkey value blocked greenhouse's sweep on every run) — so ids are
+// fetched separately and closed one at a time, letting one bad id be skipped without
+// blocking the rest.
+func (q *Queries) UnseenJobIDs(ctx context.Context, arg UnseenJobIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, unseenJobIDs, arg.Source, arg.Cutoff, arg.CompanySlugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const unseenJobIDsBySource = `-- name: UnseenJobIDsBySource :many
+SELECT id FROM jobs
+WHERE closed_at IS NULL
+  AND source = $1
+  AND last_seen_at < $2
+`
+
+type UnseenJobIDsBySourceParams struct {
+	Source string             `json:"source"`
+	Cutoff pgtype.Timestamptz `json:"cutoff"`
+}
+
+// Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
+func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySourceParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, unseenJobIDsBySource, arg.Source, arg.Cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateJobDerived = `-- name: UpdateJobDerived :exec
