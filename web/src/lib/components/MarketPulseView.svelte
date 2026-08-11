@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TrendingUp, TrendingDown, Minus } from '@lucide/svelte';
+  import { TrendingUp, TrendingDown, Minus, Search } from '@lucide/svelte';
   import { api, type SkillPulse } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { buildSparkline } from '$lib/skillPulseSparkline';
@@ -14,6 +14,14 @@
   // history yet" — both read the same way here: point at the profile, not an error.
   let data = $state<SkillPulse[]>([]);
   let status = $state<'loading' | 'error' | 'ready'>('loading');
+
+  // A profile can hold up to 200 skills (see userprofile.maxSkills), so once a
+  // caller has more than a handful of cards, finding one by scrolling stops
+  // scaling — a plain substring filter over the skill name.
+  let query = $state('');
+  const filtered = $derived(
+    query.trim() ? data.filter((s) => s.skill.toLowerCase().includes(query.trim().toLowerCase())) : data,
+  );
 
   $effect(() => {
     if (!isAuthenticated()) return;
@@ -99,40 +107,57 @@
         <Button variant="primary" href={resolve('/my/profile')}>Go to profile</Button>
       </div>
     {:else}
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {#each data as skill (skill.skill)}
-          {@const model = buildSparkline(skill.series)}
-          {@const rounded = skill.change_pct === null ? null : Math.round(skill.change_pct)}
-          <Card class="flex flex-col gap-3 p-4">
-            <div class="flex items-start justify-between gap-2">
-              <span class="text-sm font-medium">{skill.skill}</span>
-              {@render deltaBadge(skill.change_pct)}
-            </div>
-            <div class="flex items-baseline gap-1.5">
-              <span class="text-2xl font-semibold tabular-nums">{skill.open_count}</span>
-              <span class="text-xs text-muted-foreground">open roles</span>
-            </div>
-            <svg
-              viewBox="0 0 {model.width} {model.height}"
-              class="h-8 w-full"
-              role="img"
-              aria-label="{skill.skill} demand over the retained history"
-            >
-              {#if model.points}
-                <polyline
-                  points={model.points}
-                  fill="none"
-                  class="stroke-muted-foreground/50"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              {/if}
-              <circle cx={model.lastX} cy={model.lastY} r="2.5" class={dotClass(rounded)} />
-            </svg>
-          </Card>
-        {/each}
+      <div class="relative max-w-xs">
+        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="search"
+          placeholder="Find a skill…"
+          bind:value={query}
+          aria-label="Filter skills"
+          class="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-ring/40"
+        />
       </div>
+
+      {#if filtered.length === 0}
+        <p class="py-8 text-center text-sm text-muted-foreground">
+          No skill matches "{query.trim()}".
+        </p>
+      {:else}
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {#each filtered as skill (skill.skill)}
+            {@const model = buildSparkline(skill.series)}
+            {@const rounded = skill.change_pct === null ? null : Math.round(skill.change_pct)}
+            <Card class="flex flex-col gap-3 p-4">
+              <div class="flex items-start justify-between gap-2">
+                <span class="text-sm font-medium">{skill.skill}</span>
+                {@render deltaBadge(skill.change_pct)}
+              </div>
+              <div class="flex items-baseline gap-1.5">
+                <span class="text-2xl font-semibold tabular-nums">{skill.open_count}</span>
+                <span class="text-xs text-muted-foreground">open roles</span>
+              </div>
+              <svg
+                viewBox="0 0 {model.width} {model.height}"
+                class="h-8 w-full"
+                role="img"
+                aria-label="{skill.skill} demand over the retained history"
+              >
+                {#if model.points}
+                  <polyline
+                    points={model.points}
+                    fill="none"
+                    class="stroke-muted-foreground/50"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                {/if}
+                <circle cx={model.lastX} cy={model.lastY} r="2.5" class={dotClass(rounded)} />
+              </svg>
+            </Card>
+          {/each}
+        </div>
+      {/if}
     {/if}
   </div>
 {/if}

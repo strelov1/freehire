@@ -66,6 +66,23 @@ describe('visibleAccountNav', () => {
     expect(hrefs).toContain('/my/assistant');
     expect(hrefs).toHaveLength(accountNav.length);
   });
+
+  it('hides Market Pulse from a plain, non-beta user', () => {
+    expect(visibleAccountNav(false, false).map((i) => i.href)).not.toContain('/my/market-pulse');
+  });
+
+  it('shows Market Pulse to a beta tester, moderator or not', () => {
+    for (const [mod, beta] of [
+      [false, true],
+      [true, true],
+    ] as const) {
+      expect(visibleAccountNav(mod, beta).map((i) => i.href)).toContain('/my/market-pulse');
+    }
+  });
+
+  it('hides Market Pulse from a moderator who is not a beta tester', () => {
+    expect(visibleAccountNav(true, false).map((i) => i.href)).not.toContain('/my/market-pulse');
+  });
 });
 
 describe('isSectionActive', () => {

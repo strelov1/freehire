@@ -76,3 +76,13 @@
 - [x] 5.3 Manual smoke: run the app locally, sign in with a profile that has
       skills, load `/my/market-pulse`, confirm cards render; confirm an
       empty-profile account sees the empty state instead of an error.
+
+## 6. Post-demo follow-ups (requested live, not in the original plan)
+
+- [x] 6.1 Gate the "Market Pulse" nav entry to beta testers
+      (`users.beta_tester`) while the history is thin post-launch —
+      `accountNav.ts`'s `betaOnly`/`beta` fields (UI-only, matches the
+      existing gating convention; the endpoint itself stays open).
+- [x] 6.2 Add a client-side skill-name filter above the card grid
+      (`MarketPulseView.svelte`) for profiles with many skills — plain
+      substring match, no backend change.
