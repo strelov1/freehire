@@ -5,7 +5,10 @@
 // report it dead. (Registered board providers, including aggregators like habr_career
 // and geekjob, are swept by cmd/ingest and excluded here — see excluded below. A few
 // registered providers whose sweep has a structural blind spot are added back in a
-// restricted form — see probeDespiteRegistered.)
+// restricted form — see probeDespiteRegistered — verified by whatever evidence that
+// specific source actually offers, not necessarily a plain-HTTP probe of its own page:
+// himalayas.app 403s a bot-looking GET to any job page (Cloudflare), so its candidates
+// are instead checked against the site's own sitemap — see himalayas.go.)
 //
 // It is a run-once-and-exit worker (cron-scheduled beside ingest/enrich): select
 // candidates, probe each over plain HTTP, classify, apply the strike/close/reset
@@ -19,6 +22,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net/http"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -75,12 +79,14 @@ const expiryWindow = 45 * 24 * time.Hour
 // close every open job — see job-lifecycle's company_slug-scope leak. himalayas pages
 // only its freshest slice per run (himalayasMaxPages), so a company that ages out of
 // that recency window never re-enters CloseUnseenJobs' crawled-slug scope and its last
-// posting stays open forever, even though the job still has a real per-posting URL a
-// probe can judge (unlike unsignalledSources, which have none). These sources are NOT
-// removed from atsProviders — the sweep still owns their normal closes — they are only
-// ADDED BACK as liveness candidates, restricted to jobs already past the sweep's own
-// staleness window (see staleCutoff), so the probe only ever picks up what the sweep
-// structurally cannot reach rather than racing it.
+// posting stays open forever. These sources are NOT removed from atsProviders — the
+// sweep still owns their normal closes — they are only ADDED BACK as liveness
+// candidates, restricted to jobs already past the sweep's own staleness window (see
+// staleCutoff), so this only ever picks up what the sweep structurally cannot reach
+// rather than racing it. Each member needs its own way to actually get evidence (a
+// plain GET of the job page is not guaranteed to work — himalayas's is Cloudflare-
+// blocked, so its candidates are verified against the site's sitemap instead; see
+// himalayas.go), which is also why this list is not expected to grow casually.
 var probeDespiteRegistered = []string{"himalayas"}
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window): a
@@ -189,7 +195,8 @@ func run() int {
 
 	// probeDespiteRegistered candidates: restricted to jobs already past the sweep's
 	// own staleness window (see staleCutoff) — the sweep's scope leak, not a race
-	// with a run still inside its normal grace period.
+	// with a run still inside its normal grace period. Verified separately below
+	// (sitemap membership, not a GET probe) — see applyHimalayasVerdicts.
 	staleCandidates, err := queries.SelectStaleRegisteredCandidates(ctx, db.SelectStaleRegisteredCandidatesParams{
 		Sources: filterSources(probeDespiteRegistered, *sourceFilter),
 		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-staleCutoff), Valid: true},
@@ -197,9 +204,6 @@ func run() int {
 	if err != nil {
 		log.Printf("select stale registered candidates: %v", err)
 		return 1
-	}
-	for _, c := range staleCandidates {
-		candidates = append(candidates, db.SelectOrphanLivenessCandidatesRow(c))
 	}
 	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources",
 		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered))
@@ -231,8 +235,8 @@ func run() int {
 	// sources (telegram posts), so the probe must refuse internal/metadata targets.
 	client := safehttp.NewClient(probeTimeout)
 	var probed, closed, struck, failed int64
-
 	sem := make(chan struct{}, concurrency)
+
 	var wg sync.WaitGroup
 	for _, c := range candidates {
 		wg.Add(1)
@@ -240,54 +244,102 @@ func run() int {
 		go func(c db.SelectOrphanLivenessCandidatesRow) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			atomic.AddInt64(&probed, 1)
 
 			status, finalURL, body, ferr := liveness.Fetch(ctx, client, c.URL)
 			if ferr != nil {
-				// A probe that could not reach the page is Uncertain (status 0), so the
-				// switch below takes no action — a fetch failure never advances or
+				// A probe that could not reach the page is Uncertain (status 0), so
+				// applyVerdict takes no action — a fetch failure never advances or
 				// clears a strike, and is not counted as a worker failure.
 				log.Printf("liveness: probe %s failed: %v", c.PublicSlug, ferr)
 			}
-
-			switch verdict, reason := liveness.Classify(status, finalURL, body); verdict {
-			case liveness.Expired:
-				res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
-					ID:        c.ID,
-					Threshold: closeThreshold,
-				})
-				if err != nil {
-					// The verdict was reached but the DB update did not apply — a real
-					// failure the exit code must surface, not a silent log-and-continue.
-					atomic.AddInt64(&failed, 1)
-					log.Printf("liveness: mark expired %s: %v", c.PublicSlug, err)
-					return
-				}
-				if res.ClosedAt.Valid {
-					atomic.AddInt64(&closed, 1)
-					log.Printf("liveness: closed %s (%s, %s)", c.PublicSlug, c.Source, reason)
-				} else {
-					atomic.AddInt64(&struck, 1)
-					log.Printf("liveness: strike %d/%d %s (%s)", res.LivenessStrikes, closeThreshold, c.PublicSlug, reason)
-				}
-			case liveness.Live:
-				// Clear any accumulated strikes. Skip the write when there is nothing to
-				// clear so a healthy catalogue does not issue an UPDATE per open job.
-				if c.LivenessStrikes != 0 {
-					if err := queries.ResetLivenessStrikes(ctx, c.ID); err != nil {
-						atomic.AddInt64(&failed, 1)
-						log.Printf("liveness: reset %s: %v", c.PublicSlug, err)
-					}
-				}
-			case liveness.Uncertain:
-				// No signal either way — leave the strike count untouched.
-			}
+			verdict, reason := liveness.Classify(status, finalURL, body)
+			applyVerdict(ctx, queries, c, verdict, reason, &probed, &closed, &struck, &failed)
 		}(c)
 	}
 	wg.Wait()
 
+	// probeDespiteRegistered's own evidence source (sitemap membership for himalayas
+	// today — see himalayas.go), applied with the same strike/close/reset semantics as
+	// the GET probe above via applyVerdict, just fed a different verdict.
+	applyHimalayasVerdicts(ctx, client, queries, staleCandidates, sem, &probed, &closed, &struck, &failed)
+
 	log.Printf("liveness done: probed=%d closed=%d struck=%d failed=%d", probed, closed, struck, failed)
 	return worker.ExitCode(int(failed), 0)
+}
+
+// applyVerdict applies a liveness verdict to one candidate: advances/closes on Expired,
+// clears strikes on Live, and leaves Uncertain untouched. Shared by the GET-probe loop
+// (verdict from liveness.Classify) and applyHimalayasVerdicts (verdict from sitemap
+// membership) so the close/strike/reset semantics live in exactly one place.
+func applyVerdict(ctx context.Context, queries *db.Queries, c db.SelectOrphanLivenessCandidatesRow, verdict liveness.Verdict, reason string, probed, closed, struck, failed *int64) {
+	atomic.AddInt64(probed, 1)
+	switch verdict {
+	case liveness.Expired:
+		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
+			ID:        c.ID,
+			Threshold: closeThreshold,
+		})
+		if err != nil {
+			// The verdict was reached but the DB update did not apply — a real
+			// failure the exit code must surface, not a silent log-and-continue.
+			atomic.AddInt64(failed, 1)
+			log.Printf("liveness: mark expired %s: %v", c.PublicSlug, err)
+			return
+		}
+		if res.ClosedAt.Valid {
+			atomic.AddInt64(closed, 1)
+			log.Printf("liveness: closed %s (%s, %s)", c.PublicSlug, c.Source, reason)
+		} else {
+			atomic.AddInt64(struck, 1)
+			log.Printf("liveness: strike %d/%d %s (%s)", res.LivenessStrikes, closeThreshold, c.PublicSlug, reason)
+		}
+	case liveness.Live:
+		// Clear any accumulated strikes. Skip the write when there is nothing to
+		// clear so a healthy catalogue does not issue an UPDATE per open job.
+		if c.LivenessStrikes != 0 {
+			if err := queries.ResetLivenessStrikes(ctx, c.ID); err != nil {
+				atomic.AddInt64(failed, 1)
+				log.Printf("liveness: reset %s: %v", c.PublicSlug, err)
+			}
+		}
+	case liveness.Uncertain:
+		// No signal either way — leave the strike count untouched.
+	}
+}
+
+// applyHimalayasVerdicts verifies every probeDespiteRegistered candidate (today: only
+// himalayas) against the site's own sitemap of what is currently live — a plain GET of
+// the job page itself is Cloudflare-blocked (see himalayas.go), so this is the source's
+// only available evidence. A sitemap fetch failure counts as one worker failure and
+// skips every candidate this run: under-closing (leaving them open another run) is the
+// only acceptable outcome of not being able to verify, matching the bias everywhere
+// else in this worker.
+func applyHimalayasVerdicts(ctx context.Context, client *http.Client, queries *db.Queries, candidates []db.SelectStaleRegisteredCandidatesRow, sem chan struct{}, probed, closed, struck, failed *int64) {
+	if len(candidates) == 0 {
+		return
+	}
+	liveURLs, err := fetchHimalayasLiveJobURLs(ctx, client)
+	if err != nil {
+		atomic.AddInt64(failed, 1)
+		log.Printf("liveness: himalayas sitemap fetch failed, skipping %d stale registered candidates: %v", len(candidates), err)
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, c := range candidates {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(c db.SelectStaleRegisteredCandidatesRow) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			verdict, reason := liveness.Live, ""
+			if _, ok := liveURLs[c.URL]; !ok {
+				verdict, reason = liveness.Expired, "absent_from_sitemap"
+			}
+			applyVerdict(ctx, queries, db.SelectOrphanLivenessCandidatesRow(c), verdict, reason, probed, closed, struck, failed)
+		}(c)
+	}
+	wg.Wait()
 }
 
 // providerKeys returns the registered ATS provider keys — the sources the ingest

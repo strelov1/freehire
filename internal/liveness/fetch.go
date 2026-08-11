@@ -6,8 +6,8 @@ import (
 	"net/http"
 )
 
-// userAgent identifies the probe to employer sites, matching the ingest client.
-const userAgent = "freehire/0.1 (+https://freehire.me)"
+// UserAgent identifies the probe to employer sites, matching the ingest client.
+const UserAgent = "freehire/0.1 (+https://freehire.me)"
 
 // maxBody caps how much of a response we read: enough to find an expired phrase or
 // judge content length, without buffering a pathologically large page.
@@ -23,7 +23,7 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (status int,
 	if err != nil {
 		return 0, rawURL, "", err
 	}
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
 	resp, err := client.Do(req)
