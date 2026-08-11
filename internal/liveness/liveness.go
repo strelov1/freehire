@@ -48,6 +48,10 @@ var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	`no longer accepting applications`,
 	`this (position|role|job) (is )?no longer`,
 	`this job (listing )?is closed`,
+	// remoteok's own closed-posting banner: "This job post is closed and the position is
+	// probably filled." — the extra "post" between "job" and "is closed" is why the more
+	// general pattern above doesn't already cover it.
+	`this job post is closed`,
 	`job (listing )?not found`,
 	`the page you are looking for doesn.t exist`,
 	`applications?\s+(?:(?:have|are|is)\s+)?closed`,

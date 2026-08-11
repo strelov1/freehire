@@ -2403,7 +2403,7 @@ func (q *Queries) SelectOrphanLivenessCandidates(ctx context.Context, atsProvide
 }
 
 const selectStaleRegisteredCandidates = `-- name: SelectStaleRegisteredCandidates :many
-SELECT id, source, url, public_slug, liveness_strikes
+SELECT id, source, url, external_id, public_slug, liveness_strikes
 FROM jobs
 WHERE closed_at IS NULL
   AND source = ANY($1::text[])
@@ -2419,6 +2419,7 @@ type SelectStaleRegisteredCandidatesRow struct {
 	ID              int64  `json:"id"`
 	Source          string `json:"source"`
 	URL             string `json:"url"`
+	ExternalID      string `json:"external_id"`
 	PublicSlug      string `json:"public_slug"`
 	LivenessStrikes int32  `json:"liveness_strikes"`
 }
@@ -2431,6 +2432,8 @@ type SelectStaleRegisteredCandidatesRow struct {
 // source ISN'T swept), this targets specific sources that ARE swept but only jobs the
 // sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
 // evidence the sweep is structurally unable to reach them, not a race with it.
+// external_id rides along for sources verified by a per-posting API keyed on it rather
+// than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
 func (q *Queries) SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, selectStaleRegisteredCandidates, arg.Sources, arg.Cutoff)
 	if err != nil {
@@ -2444,6 +2447,7 @@ func (q *Queries) SelectStaleRegisteredCandidates(ctx context.Context, arg Selec
 			&i.ID,
 			&i.Source,
 			&i.URL,
+			&i.ExternalID,
 			&i.PublicSlug,
 			&i.LivenessStrikes,
 		); err != nil {
@@ -2760,6 +2764,40 @@ func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySo
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateJobCompany = `-- name: UpdateJobCompany :execrows
+UPDATE jobs
+SET company      = $1,
+    company_slug = $2,
+    content_hash = $3,
+    updated_at   = now()
+WHERE id = $4
+`
+
+type UpdateJobCompanyParams struct {
+	Company     string      `json:"company"`
+	CompanySlug string      `json:"company_slug"`
+	ContentHash pgtype.Text `json:"content_hash"`
+	ID          int64       `json:"id"`
+}
+
+// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+// picks the row back up.
+func (q *Queries) UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateJobCompany,
+		arg.Company,
+		arg.CompanySlug,
+		arg.ContentHash,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateJobDerived = `-- name: UpdateJobDerived :exec

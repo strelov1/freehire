@@ -61,6 +61,14 @@ func TestClassify(t *testing.T) {
 			wantReason:  "expired_body",
 		},
 		{
+			name:        "remoteok closed-posting banner",
+			status:      200,
+			finalURL:    "https://remoteok.com/remote-jobs/123",
+			body:        "This job post is closed and the position is probably filled. Please do not apply.",
+			wantVerdict: Expired,
+			wantReason:  "expired_body",
+		},
+		{
 			name:        "german closed pattern",
 			status:      200,
 			finalURL:    "https://boards.example.com/jobs/123",

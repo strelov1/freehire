@@ -3234,8 +3234,6 @@
   board: tripscout
 - company: true-environmental
   board: true-environmental
-- company: trueml
-  board: trueml
 - company: trueplatform
   board: trueplatform
 - company: truetandem
@@ -4463,11 +4461,5 @@
   board: translifeline
 
 # lever boards mined from remote.io (2026-08-09, live-validated)
-- company: Ridezum
-  board: ridezum
-- company: Thinkahead
-  board: thinkahead
 - company: TrueML
   board: trueml
-- company: VeryGoodSecurity
-  board: verygoodsecurity

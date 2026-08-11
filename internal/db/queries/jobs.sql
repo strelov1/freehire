@@ -46,6 +46,19 @@ SET description  = sqlc.arg(description),
     updated_at   = now()
 WHERE id = sqlc.arg(id);
 
+-- name: UpdateJobCompany :execrows
+-- Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+-- ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+-- sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+-- company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+-- picks the row back up.
+UPDATE jobs
+SET company      = sqlc.arg(company),
+    company_slug = sqlc.arg(company_slug),
+    content_hash = sqlc.arg(content_hash),
+    updated_at   = now()
+WHERE id = sqlc.arg(id);
+
 -- name: ListJobsUpdatedAfter :many
 -- Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
 -- rows changed at or after the cutoff. Every write path (UpsertJob, the close
@@ -1119,7 +1132,9 @@ WHERE closed_at IS NULL
 -- source ISN'T swept), this targets specific sources that ARE swept but only jobs the
 -- sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
 -- evidence the sweep is structurally unable to reach them, not a race with it.
-SELECT id, source, url, public_slug, liveness_strikes
+-- external_id rides along for sources verified by a per-posting API keyed on it rather
+-- than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
+SELECT id, source, url, external_id, public_slug, liveness_strikes
 FROM jobs
 WHERE closed_at IS NULL
   AND source = ANY(sqlc.arg(sources)::text[])

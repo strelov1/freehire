@@ -2683,6 +2683,8 @@ type Querier interface {
 	// source ISN'T swept), this targets specific sources that ARE swept but only jobs the
 	// sweep already should have closed by its own 48h window (cmd/ingest's staleAfter) —
 	// evidence the sweep is structurally unable to reach them, not a race with it.
+	// external_id rides along for sources verified by a per-posting API keyed on it rather
+	// than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with.
@@ -2973,6 +2975,12 @@ type Querier interface {
 	// A full owner-scoped replacement, used by the profile UI where the user is editing the
 	// fields directly and means what they typed — including blanking one.
 	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
+	// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
+	// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
+	// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
+	// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
+	// picks the row back up.
+	UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error)
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
