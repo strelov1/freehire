@@ -63,6 +63,12 @@
   // two PUTs (same guard TemplateGallery uses for its own exclusive-choice picker).
   let saving = $state(false);
   let copied = $state(false);
+  // The panel's own error surface for the save/copy paths: the panel is a `fixed
+  // inset-0` overlay with aria-modal="true", so the parent page's onError banner
+  // renders visually behind the backdrop and is hidden from assistive tech entirely
+  // while this is open. onError is still called too, so the parent keeps a record for
+  // after the panel closes; this is what's actually visible while it's open.
+  let localError = $state<string | null>(null);
 
   // Loads fresh each time the panel opens (the component stays mounted between opens,
   // unlike a route-level dialog) — mirrors the mount-driven fetch the settings-tab
@@ -72,6 +78,7 @@
     if (!open) return;
     let cancelled = false;
     status = 'loading';
+    localError = null;
     void (async () => {
       try {
         const setting = await api.getTalentNetwork();
@@ -98,6 +105,7 @@
     if (next === visibility || saving) return;
     const previous = visibility;
     saving = true;
+    localError = null;
     onError(null);
     try {
       // Trust the echoed value, not the click — a rejected PUT (e.g. a bad value some
@@ -108,9 +116,10 @@
       onChange(visibility, publicId);
     } catch (e) {
       visibility = previous;
-      onError(
-        e instanceof ApiError ? e.message : 'Could not update your Talent Network setting.',
-      );
+      const message =
+        e instanceof ApiError ? e.message : 'Could not update your Talent Network setting.';
+      localError = message;
+      onError(message);
     } finally {
       saving = false;
     }
@@ -120,10 +129,12 @@
     try {
       await navigator.clipboard.writeText(publicUrl);
       copied = true;
+      localError = null;
       setTimeout(() => {
         copied = false;
       }, 1500);
     } catch {
+      localError = 'Could not copy the link.';
       onError('Could not copy the link.');
     }
   }
@@ -180,6 +191,9 @@
           <p class="text-sm text-muted-foreground">Couldn't load this setting.</p>
         {:else}
           <div class="flex flex-col gap-4">
+            {#if localError}
+              <p class="text-sm text-destructive">{localError}</p>
+            {/if}
             <!-- Always rendered, even when visibility is "off" — the public id doesn't
                  change with the setting, only whether the route resolves, so a candidate
                  can find their link without first having to recall their current mode. -->
