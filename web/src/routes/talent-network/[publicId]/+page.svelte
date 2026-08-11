@@ -69,7 +69,7 @@
 
   {#if skillChips.length}
     <section class="flex flex-col gap-2">
-      <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
         Skills
       </h2>
       <div class="flex flex-wrap gap-2">
