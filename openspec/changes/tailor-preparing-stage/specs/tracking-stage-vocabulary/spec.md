@@ -17,8 +17,12 @@ The groups SHALL be, in pipeline order: `preparing` (stage `preparing`), `applie
 would otherwise return — the same failure `TestEveryStageIsRankedOrTerminal` exists to catch
 for any stage silently missing from both `activeRank` and `terminalStages`.
 
-`preparing` SHALL NOT appear in `silenceThresholds`: it never accrues silence, because nothing
-has been submitted for the employer to go quiet on.
+`preparing` SHALL carry an entry in `silenceThresholds` — `TestSilenceThresholdsCoverExactlyTheActiveStages`
+requires one for every ranked stage — but the threshold is unreachable in practice: a
+`preparing` row never carries `applied_at`, and `jobtracking.TrackedJob.Silence()` (a different
+package) reports no silence state at all for any row with `applied_at` unset, before it ever
+consults the threshold. The vocabulary-level entry exists for the invariant's sake, not because
+the value is ever read for this stage.
 
 #### Scenario: Every stage belongs to exactly one group
 
@@ -43,10 +47,12 @@ has been submitted for the employer to go quiet on.
 - **WHEN** the groups are enumerated in pipeline order
 - **THEN** `preparing` appears before `applied`, and its rank (`0`) is below `applied`'s (`1`)
 
-#### Scenario: Preparing never accrues silence
+#### Scenario: Preparing's silence threshold is unreachable, not absent
 
 - **WHEN** `SilenceThresholdDays` is asked whether stage `preparing` accrues silence
-- **THEN** it reports that it does not, the same way a terminal stage does
+- **THEN** it reports a threshold (the invariant every ranked stage carries one), but no
+  `preparing` row can ever reach it: `jobtracking.TrackedJob.Silence()` returns no state for any
+  row with `applied_at` unset, which is guaranteed for `preparing`
 
 ### Requirement: The vocabulary reaches the frontend by generation, not by retyping
 

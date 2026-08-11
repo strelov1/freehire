@@ -27,6 +27,7 @@ type Group struct {
 // next to one that holds most of the history. The card keeps its own stage label, so the precise
 // outcome stays legible inside the coarse column.
 var Groups = []Group{
+	{ID: "preparing", Label: "Preparing", Stages: []string{"preparing"}},
 	{ID: "applied", Label: "Applied", Stages: []string{"applied", "screening", "responded"}},
 	{ID: "interview", Label: "Interview", Stages: []string{"interview"}},
 	{ID: "offer", Label: "Offer", Stages: []string{"offer"}},
@@ -41,6 +42,7 @@ var Groups = []Group{
 // in web/src/lib/stages.ts, where the in-app assistant — which calls the tracking service
 // directly and never passes through Fiber — could not see it.
 var stageLabels = map[string]string{
+	"preparing": "Preparing",
 	"applied":   "Applied",
 	"screening": "Screening",
 	"responded": "Responded",

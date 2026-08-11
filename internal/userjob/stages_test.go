@@ -3,7 +3,7 @@ package userjob
 import "testing"
 
 func TestStagesOrder(t *testing.T) {
-	want := []string{"applied", "screening", "responded", "interview", "offer", "accepted", "rejected", "withdrawn", "expired"}
+	want := []string{"preparing", "applied", "screening", "responded", "interview", "offer", "accepted", "rejected", "withdrawn", "expired"}
 	if len(Stages) != len(want) {
 		t.Fatalf("len(Stages) = %d, want %d", len(Stages), len(want))
 	}

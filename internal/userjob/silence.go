@@ -33,6 +33,12 @@ const (
 //	              the sample has reached this stage; the single message ever
 //	              classified an offer is genuine but from a job search three
 //	              years earlier and informs nothing.
+//	preparing 21  never reached in practice — TrackedJob.Silence() short-circuits
+//	              on AppliedAt == nil, which is guaranteed for `preparing` (see
+//	              cv-tailoring's board placement). Present only because
+//	              TestSilenceThresholdsCoverExactlyTheActiveStages requires every
+//	              ranked stage to carry one; copies `applied`'s value as the
+//	              nearest meaningful anchor rather than inventing a new one.
 //
 // The interpolated pair steps evenly by three days between 21 and 12 rather than
 // taking distinct-looking values, so the shape of the ladder shows at a glance
@@ -44,6 +50,7 @@ const (
 // consumed entirely by a weekend. Going below five needs business-day
 // arithmetic — its own calendar, holidays and employer time zone.
 var silenceThresholds = map[string]int{
+	"preparing": 21,
 	"applied":   21,
 	"screening": 18,
 	"responded": 15,

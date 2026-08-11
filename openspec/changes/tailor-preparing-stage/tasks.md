@@ -1,11 +1,18 @@
 ## 1. Stage vocabulary (`internal/userjob`)
 
-- [ ] 1.1 Add `"preparing"` to `Stages` in `stages.go`, first in pipeline order.
-- [ ] 1.2 Add `{ID: "preparing", Label: "Preparing", Stages: []string{"preparing"}}` as the
+- [x] 1.1 Add `"preparing"` to `Stages` in `stages.go`, first in pipeline order.
+- [x] 1.2 Add `{ID: "preparing", Label: "Preparing", Stages: []string{"preparing"}}` as the
       first entry of `Groups` in `groups.go`; add `"preparing": "Preparing"` to `stageLabels`.
-- [ ] 1.3 Add `"preparing": 0` to `activeRank` in `pipeline.go` (below `applied`'s `1`).
-- [ ] 1.4 Run the existing `TestEveryStageBelongsToExactlyOneGroup` and
-      `TestEveryStageIsRankedOrTerminal` and confirm they pass unmodified with the new stage.
+- [x] 1.3 Add `"preparing": 0` to `activeRank` in `pipeline.go` (below `applied`'s `1`).
+- [x] 1.3a (found running the suite, not planned) Add `"preparing": 21` to
+      `silenceThresholds` in `silence.go` — `TestSilenceThresholdsCoverExactlyTheActiveStages`
+      requires every ranked stage to have a threshold entry; see design.md Decision 1's
+      "Revised during implementation" note for why the value is inert in practice.
+- [x] 1.4 Ran the existing `TestEveryStageBelongsToExactlyOneGroup`,
+      `TestEveryStageIsRankedOrTerminal`, and `TestSilenceThresholdsCoverExactlyTheActiveStages` —
+      all pass. `TestStagesOrder`'s pinned literal list needed a deliberate update (new stage,
+      new order) — not a weakened invariant, the same kind of one-line diff the test exists to
+      force on any vocabulary change.
 
 ## 2. Auto-promotion on a real apply signal
 

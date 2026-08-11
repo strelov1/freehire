@@ -55,11 +55,18 @@ catch a stage present in `Stages` but silently unranked (the exact historical
 bug `pipeline.go`'s own doc comment names) — `preparing` needs a *real* entry,
 not an accidental default that happens to match.
 
-`silence.go` needs no change: `SilenceThresholdDays` returns `(0, false)` for
-any key absent from `silenceThresholds` (same path terminal stages take), and
-`TrackedJob.Silence()` separately short-circuits to `nil` whenever
-`AppliedAt == nil` — guaranteed for every `preparing` row. Two independent
-reasons the silence timer cannot start; neither requires new code.
+**Revised during implementation:** `silence.go` DOES need one line.
+`TestSilenceThresholdsCoverExactlyTheActiveStages` requires every stage in
+`activeRank` to also have a `silenceThresholds` entry (and vice versa) — an
+invariant this design missed by reasoning about `SilenceThresholdDays` in
+isolation rather than running the existing suite first. `preparing` gets
+`silenceThresholds["preparing"] = 21`, copying `applied`'s value as the
+nearest anchor rather than inventing a new one. The value is never actually
+read for a `preparing` row: `jobtracking.TrackedJob.Silence()` short-circuits
+to `nil` whenever `AppliedAt == nil`, which is guaranteed for every
+`preparing` row, before it ever reaches the threshold table. The entry exists
+to satisfy the vocabulary-completeness invariant, not because the number
+matters.
 
 **Alternatives considered:** a card-level badge derived from `applied_at`
 nullness (rejected — collides with the manual-drag case, see Context); a

@@ -12,9 +12,10 @@ package userjob
 // any forward signal advanced the application backward out of it. TestEveryStageIsRankedOrTerminal
 // is what now fails instead.
 //
-// The keys are the same five that silenceThresholds keys on, which is not a coincidence: both
-// answer "is this application still in flight", and a test binds them.
+// The keys are the same six that silenceThresholds keys on — a test binds them — though
+// `preparing`'s threshold is unreachable in practice; see silenceThresholds' own comment.
 var activeRank = map[string]int{
+	"preparing": 0,
 	"applied":   1,
 	"screening": 2,
 	"responded": 3,

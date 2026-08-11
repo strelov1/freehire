@@ -6,7 +6,7 @@ package userjob
 // and the single source of truth: the track endpoint validates against it and the
 // generated frontend list is emitted from it.
 var Stages = []string{
-	"applied", "screening", "responded", "interview",
+	"preparing", "applied", "screening", "responded", "interview",
 	"offer", "accepted", "rejected", "withdrawn", "expired",
 }
 
