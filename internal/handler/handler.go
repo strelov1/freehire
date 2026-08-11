@@ -16,7 +16,10 @@ import (
 	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/atscheck"
 	"github.com/strelov1/freehire/internal/auth"
+	appleauth "github.com/strelov1/freehire/internal/auth/apple"
+	"github.com/strelov1/freehire/internal/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
+	"github.com/strelov1/freehire/internal/auth/recentauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/browsertools"
@@ -185,14 +188,19 @@ type Config struct {
 	// Throttler backs every rate-limited route in the API (internal/ratelimit).
 	// Required — there is no degraded/nil mode, unlike the optional dependencies
 	// below.
-	Throttler      ratelimit.Throttler
-	FrontendOrigin string
-	JWTSecret      string
-	JWTTTL         time.Duration
-	CookieSecure   bool
-	CookieDomains  []string
-	OAuthRegistry  *oauth.Registry
-	Search         *search.Client
+	Throttler           ratelimit.Throttler
+	FrontendOrigin      string
+	JWTSecret           string
+	JWTTTL              time.Duration
+	CookieSecure        bool
+	CookieDomains       []string
+	OAuthRegistry       *oauth.Registry
+	AuthV2Enabled       bool
+	MobileAuthCallbacks map[string]string
+	RecentAuthTTL       time.Duration
+	AppleNative         *appleauth.Client
+	AppleGrantKeys      *appleauth.KeyRing
+	Search              *search.Client
 	// Blob backs résumé storage (internal/blobstore). Nil disables storage: résumé
 	// upload only extracts skills in-request (no regression).
 	Blob blobstore.Store
@@ -291,6 +299,12 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
 		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
+	authH.authV2Enabled = cfg.AuthV2Enabled
+	authH.mobileCallbacks = cfg.MobileAuthCallbacks
+	authH.mobileAuth = mobileauth.NewStore(cfg.Pool)
+	authH.recentAuth = recentauth.NewStore(cfg.Pool, cfg.RecentAuthTTL)
+	authH.appleNative = cfg.AppleNative
+	authH.appleGrantKeys = cfg.AppleGrantKeys
 	if needsExplicitServedHosts(cfg.ServedHosts, cfg.CookieDomains) {
 		log.Printf("oauth: COOKIE_DOMAIN is set (%v) but SERVED_HOSTS is not — "+
 			"the redirect origin falls back to %s for every other host, which breaks "+
@@ -602,6 +616,7 @@ func Register(app *fiber.App, cfg Config) {
 
 	// API-key management and the auth surface (see authHandlers).
 	authH.register(api, mw)
+	authH.registerV2(app.Group("/api/v2"), mw)
 
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)

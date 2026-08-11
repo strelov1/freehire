@@ -1,8 +1,12 @@
 package auth
 
 import (
+	"errors"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestIssuer_IssueParseRoundTrip(t *testing.T) {
@@ -19,6 +23,55 @@ func TestIssuer_IssueParseRoundTrip(t *testing.T) {
 	}
 	if got != 42 {
 		t.Errorf("Parse returned user id %d, want 42", got)
+	}
+}
+
+func TestIssuer_IssuesDistinctSessionTokens(t *testing.T) {
+	iss := NewIssuer("test-secret", time.Hour)
+	first, err := iss.Issue(42, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := iss.Issue(42, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("two sessions received the same token")
+	}
+	firstFingerprint, err := iss.SessionFingerprint(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondFingerprint, err := iss.SessionFingerprint(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(firstFingerprint) == string(secondFingerprint) {
+		t.Fatal("two sessions received the same fingerprint")
+	}
+}
+
+func TestIssuer_LegacySessionCannotBindRecentAuth(t *testing.T) {
+	iss := NewIssuer("test-secret", time.Hour)
+	now := time.Now()
+	legacy := sessionClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.FormatInt(42, 10),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
+		TokenVersion: func() *int32 { v := int32(1); return &v }(),
+	}
+	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, legacy).SignedString(iss.secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = iss.Parse(raw); err != nil {
+		t.Fatalf("legacy session lost rollout compatibility: %v", err)
+	}
+	if _, err = iss.SessionFingerprint(raw); !errors.Is(err, ErrNoSessionID) {
+		t.Fatalf("legacy session fingerprint err=%v", err)
 	}
 }
 

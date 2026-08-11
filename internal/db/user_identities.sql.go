@@ -29,6 +29,34 @@ func (q *Queries) CreateUserIdentity(ctx context.Context, arg CreateUserIdentity
 	return err
 }
 
+const getActiveUserByIdentity = `-- name: GetActiveUserByIdentity :one
+SELECT u.id, u.email, u.created_at
+FROM user_identities ui
+JOIN users u ON u.id = ui.user_id
+WHERE ui.provider = $1 AND ui.provider_user_id = $2
+  AND ui.status = 'active'
+`
+
+type GetActiveUserByIdentityParams struct {
+	Provider       string `json:"provider"`
+	ProviderUserID string `json:"provider_user_id"`
+}
+
+type GetActiveUserByIdentityRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Authentication accepts only active identities. A pending Apple revocation
+// must not sign the user back in and silently cancel an unlink request.
+func (q *Queries) GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error) {
+	row := q.db.QueryRow(ctx, getActiveUserByIdentity, arg.Provider, arg.ProviderUserID)
+	var i GetActiveUserByIdentityRow
+	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	return i, err
+}
+
 const getUserByIdentity = `-- name: GetUserByIdentity :one
 SELECT u.id, u.email, u.created_at
 FROM user_identities ui

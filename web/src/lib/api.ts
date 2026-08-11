@@ -44,6 +44,7 @@ import type {
   VoteResult,
   ApiKey,
   CreatedApiKey,
+  ConnectedIdentities,
   SavedSearch,
   Board,
   UserProfile,
@@ -695,6 +696,24 @@ export function createApi(
   /** Change a known password. Other sessions are revoked; this one is re-issued. */
   async function changePassword(currentPassword: string, password: string): Promise<void> {
     await call('/api/v1/me/password', jsonBody('POST', { current_password: currentPassword, password }));
+  }
+
+  async function reauthenticatePassword(password: string): Promise<string> {
+    const result = await requestData<{ recent_auth_expires_at: string }>(
+      '/api/v2/auth/reauth/password', jsonBody('POST', { password }),
+    );
+    return result.recent_auth_expires_at;
+  }
+
+  async function exchangeOAuthReauthentication(code: string, codeVerifier: string): Promise<string> {
+    const result = await requestData<{ recent_auth_expires_at: string }>(
+      '/api/v2/auth/oauth/exchange', jsonBody('POST', { code, code_verifier: codeVerifier }),
+    );
+    return result.recent_auth_expires_at;
+  }
+
+  function connectedIdentities(): Promise<ConnectedIdentities> {
+    return requestData<ConnectedIdentities>('/api/v2/auth/identities');
   }
 
   /** Sign out everywhere: revokes every session for the account, including this one. */
@@ -1787,6 +1806,9 @@ export function createApi(
     forgotPassword,
     resetPassword,
     changePassword,
+    reauthenticatePassword,
+    exchangeOAuthReauthentication,
+    connectedIdentities,
     logoutEverywhere,
     oauthProviders,
     logout,

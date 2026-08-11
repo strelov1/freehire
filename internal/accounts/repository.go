@@ -42,7 +42,9 @@ func (r *QueriesRepository) WithTx(tx pgx.Tx) Repository {
 // UserIDByIdentity returns the local user id for an external identity, or
 // ErrIdentityNotFound when no identity row matches.
 func (r *QueriesRepository) UserIDByIdentity(ctx context.Context, provider, providerUserID string) (int64, error) {
-	row, err := r.q.GetUserByIdentity(ctx, db.GetUserByIdentityParams{
+	// Status is part of authentication, not display metadata: an Apple identity
+	// awaiting provider revocation must not sign in and silently undo unlink.
+	row, err := r.q.GetActiveUserByIdentity(ctx, db.GetActiveUserByIdentityParams{
 		Provider:       provider,
 		ProviderUserID: providerUserID,
 	})

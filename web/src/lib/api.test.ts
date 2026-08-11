@@ -53,3 +53,19 @@ describe('createApi request timeout', () => {
     expect(seen.init?.body).toContain('a@b.co');
   });
 });
+
+describe('recent authentication adapters', () => {
+  it('sends password reauthentication to the v2 cookie endpoint', async () => {
+    let seenURL = '';
+    let seenInit: RequestInit | undefined;
+    const fetcher = ((url: string, init?: RequestInit) => {
+      seenURL = url; seenInit = init;
+      return Promise.resolve(new Response('{"data":{"recent_auth_expires_at":"2026-08-11T00:00:00Z"}}',{status:200}));
+    }) as unknown as typeof fetch;
+    const expires = await createApi(fetcher).reauthenticatePassword('correct horse');
+    expect(seenURL).toBe('/api/v2/auth/reauth/password');
+    expect(seenInit?.method).toBe('POST');
+    expect(seenInit?.body).toContain('correct horse');
+    expect(expires).toBe('2026-08-11T00:00:00Z');
+  });
+});

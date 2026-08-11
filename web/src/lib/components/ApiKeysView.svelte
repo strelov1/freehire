@@ -1,8 +1,9 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { api } from '$lib/api';
+  import { api, ApiError } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import { beginProviderReauthentication } from '$lib/recentAuth';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
@@ -19,6 +20,11 @@
   let expiryDays = $state(0);
   let creating = $state(false);
   let formError = $state<string | null>(null);
+  let confirmationPassword = $state('');
+  let recentAuthRequired = $state(false);
+  const user = $derived(currentUser());
+  const hasPassword = $derived(user?.has_password ?? false);
+  const identitiesData = new AsyncData<string[]>([]);
 
   // The plaintext token of the just-created key — shown here exactly once, then
   // dismissed. It is never persisted client-side and never fetched again.
@@ -40,6 +46,15 @@
   $effect(() => {
     if (isAuthenticated()) void keysData.run(() => api.listApiKeys());
   });
+  $effect(() => {
+    if (isAuthenticated() && !hasPassword && recentAuthRequired) {
+      void identitiesData.run(async () =>
+        (await api.connectedIdentities()).identities
+          .filter((i) => i.status === 'active')
+          .map((i) => i.provider),
+      );
+    }
+  });
   const status = $derived(keysData.status);
   const keys = $derived(keysData.value);
 
@@ -51,6 +66,13 @@
     formError = null;
     copied = false;
     try {
+      if (hasPassword) {
+        if (!confirmationPassword) {
+          formError = 'Enter your password to confirm this security change.';
+          return;
+        }
+        await api.reauthenticatePassword(confirmationPassword);
+      }
       const expiresAt =
         expiryDays > 0 ? new Date(Date.now() + expiryDays * 86_400_000).toISOString() : undefined;
       const created = await api.createApiKey(trimmed, expiresAt);
@@ -58,8 +80,16 @@
       keysData.value = [created, ...keysData.value];
       name = '';
       expiryDays = 0;
-    } catch {
-      formError = 'Could not create the key. Please try again.';
+      confirmationPassword = '';
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 428) {
+        formError = 'Confirm your identity before creating a key.';
+        recentAuthRequired = true;
+      } else if (error instanceof ApiError && error.status === 401 && hasPassword) {
+        formError = 'That password is not right.';
+      } else {
+        formError = 'Could not create the key. Please try again.';
+      }
     } finally {
       creating = false;
     }
@@ -80,11 +110,26 @@
       return;
     }
     try {
+      if (hasPassword) {
+        if (!confirmationPassword) {
+          formError = 'Enter your password to confirm this security change.';
+          return;
+        }
+        await api.reauthenticatePassword(confirmationPassword);
+      }
       await api.revokeApiKey(key.id);
       keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
-    } catch {
-      formError = 'Could not revoke the key. Please try again.';
+      confirmationPassword = '';
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 428) {
+        formError = 'Confirm your identity before revoking a key.';
+        recentAuthRequired = true;
+      } else if (error instanceof ApiError && error.status === 401 && hasPassword) {
+        formError = 'That password is not right.';
+      } else {
+        formError = 'Could not revoke the key. Please try again.';
+      }
     }
   }
 
@@ -156,10 +201,44 @@
           {/each}
         </select>
       </label>
+      {#if hasPassword}
+        <label class="flex flex-col gap-1">
+          <span class="text-sm font-medium">Confirm password</span>
+          <Input
+            type="password"
+            bind:value={confirmationPassword}
+            autocomplete="current-password"
+            class="w-full"
+          />
+        </label>
+      {/if}
       <Button variant="primary" type="submit" disabled={!name.trim() || creating}>
         {creating ? 'Creating…' : 'Create key'}
       </Button>
     </form>
+
+    {#if !hasPassword && recentAuthRequired}
+      <div class="rounded-lg border border-border p-4">
+        <p class="mb-3 text-sm text-muted-foreground">
+          Confirm your identity with a connected provider before creating or revoking a key.
+        </p>
+        {#if identitiesData.status === 'loading'}
+          <p class="text-sm text-muted-foreground">Loading connected providers…</p>
+        {:else if identitiesData.status === 'error'}
+          <p class="text-sm text-destructive">Could not load connected providers.</p>
+        {:else}
+          <div class="flex flex-wrap gap-2">
+            {#each identitiesData.value as provider (provider)}
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={() => beginProviderReauthentication(provider, '/my/api-keys')}
+              >Confirm with {provider}</Button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     {#if formError}
       <p class="text-sm text-destructive">{formError}</p>

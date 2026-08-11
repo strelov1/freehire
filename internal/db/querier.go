@@ -913,6 +913,9 @@ type Querier interface {
 	// duplicate that logic in a second language and let the two drift apart; titles are cheap to
 	// ship, descriptions are not.
 	FuzzyDedupCandidateTitlesForCompany(ctx context.Context, company string) ([]FuzzyDedupCandidateTitlesForCompanyRow, error)
+	// Authentication accepts only active identities. A pending Apple revocation
+	// must not sign the user back in and silently cancel an unlink request.
+	GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error)
 	// Read one job's captured form for display. The only read path over this store, and it
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.

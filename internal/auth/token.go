@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,6 +37,11 @@ type sessionClaims struct {
 // "revoked by the release" apart from "forged".
 var ErrNoTokenVersion = errors.New("auth: token carries no version claim")
 
+// ErrNoSessionID reports a valid legacy session minted before per-session JTIs
+// were introduced. Such a token may remain usable for ordinary requests during
+// rollout, but it cannot safely bind a recent-auth proof until it is rotated.
+var ErrNoSessionID = errors.New("auth: token carries no session id")
+
 // NewIssuer returns an Issuer signing with secret and stamping each token to
 // expire after ttl.
 func NewIssuer(secret string, ttl time.Duration) *Issuer {
@@ -47,10 +55,15 @@ func (i *Issuer) TTL() time.Duration { return i.ttl }
 // Issue returns a signed token for userID stamped with the account's current
 // tokenVersion, expiring after the Issuer's TTL.
 func (i *Issuer) Issue(userID int64, tokenVersion int32) (string, error) {
+	sessionIDBytes := make([]byte, 16)
+	if _, err := rand.Read(sessionIDBytes); err != nil {
+		return "", fmt.Errorf("generate session id: %w", err)
+	}
 	now := time.Now()
 	claims := sessionClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.FormatInt(userID, 10),
+			ID:        base64.RawURLEncoding.EncodeToString(sessionIDBytes),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(i.ttl)),
 		},
@@ -59,11 +72,26 @@ func (i *Issuer) Issue(userID int64, tokenVersion int32) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.secret)
 }
 
-// Parse verifies a token's signature and expiry and returns its subject user id
-// and version claim. It rejects any token not signed with HMAC (guarding against
-// algorithm confusion), any whose subject is not a valid id, and any carrying no
-// version claim.
-func (i *Issuer) Parse(token string) (int64, int32, error) {
+func fingerprint(token string) []byte {
+	sum := sha256.Sum256([]byte(token))
+	return sum[:]
+}
+
+// SessionFingerprint verifies token and returns a one-way binding for an exact,
+// JTI-stamped session. Legacy no-JTI sessions must be rotated before this method
+// will authorize a recent-auth proof.
+func (i *Issuer) SessionFingerprint(token string) ([]byte, error) {
+	claims, err := i.parseClaims(token)
+	if err != nil {
+		return nil, err
+	}
+	if claims.ID == "" {
+		return nil, ErrNoSessionID
+	}
+	return fingerprint(token), nil
+}
+
+func (i *Issuer) parseClaims(token string) (*sessionClaims, error) {
 	claims := &sessionClaims{}
 	if _, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -71,6 +99,18 @@ func (i *Issuer) Parse(token string) (int64, int32, error) {
 		}
 		return i.secret, nil
 	}); err != nil {
+		return nil, err
+	}
+	return claims, nil
+}
+
+// Parse verifies a token's signature and expiry and returns its subject user id
+// and version claim. It rejects any token not signed with HMAC (guarding against
+// algorithm confusion), any whose subject is not a valid id, and any carrying no
+// version claim.
+func (i *Issuer) Parse(token string) (int64, int32, error) {
+	claims, err := i.parseClaims(token)
+	if err != nil {
 		return 0, 0, err
 	}
 

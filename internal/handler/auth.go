@@ -11,7 +11,10 @@ import (
 
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
+	appleauth "github.com/strelov1/freehire/internal/auth/apple"
+	"github.com/strelov1/freehire/internal/auth/mobileauth"
 	"github.com/strelov1/freehire/internal/auth/oauth"
+	"github.com/strelov1/freehire/internal/auth/recentauth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pushnotify"
 	"github.com/strelov1/freehire/internal/ratelimit"
@@ -55,9 +58,15 @@ type authHandlers struct {
 	// honoured as an OAuth redirect origin; anything else falls back to frontendOrigin.
 	// It is deliberately NOT cookieDomains: a suffix match is right for cookie scope
 	// and wrong for a redirect target (see requestOrigin).
-	servedHosts []string
-	accounts    *accounts.Service
-	throttler   ratelimit.Throttler
+	servedHosts     []string
+	accounts        *accounts.Service
+	throttler       ratelimit.Throttler
+	authV2Enabled   bool
+	mobileCallbacks map[string]string
+	mobileAuth      *mobileauth.Store
+	recentAuth      *recentauth.Store
+	appleNative     *appleauth.Client
+	appleGrantKeys  *appleauth.KeyRing
 	// pushNotifier sends test/device push notifications (see me_push_tokens.go).
 	// pushnotify.Notifier in production; a fake in tests.
 	pushNotifier pushnotify.Notifier
@@ -106,10 +115,14 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// Changing the password is cookie-only for the same reason: a leaked credential
 	// must not be able to change the credential it would outlive.
 	meGroup := api.Group("/me", noCache)
-	meGroup.Post("/password", mw.cookie, h.ChangePassword)
-	meGroup.Post("/api-keys", mw.cookie, h.CreateAPIKey)
+	recent := func(c *fiber.Ctx) error { return c.Next() }
+	if h.authV2Enabled {
+		recent = h.requireRecentAuth
+	}
+	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
+	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
-	meGroup.Delete("/api-keys/:id", mw.cookie, h.RevokeAPIKey)
+	meGroup.Delete("/api-keys/:id", mw.cookie, recent, h.RevokeAPIKey)
 
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push
@@ -175,6 +188,28 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// fragment. Both refuse any redirect outside the configured allowlist.
 	authGroup.Get("/extension/connect", mw.cookie, h.ExtensionConnect)
 	authGroup.Post("/extension/connect", mw.cookie, h.ExtensionConnectSubmit)
+}
+
+func (h *authHandlers) requireRecentAuth(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	version, err := h.queries.GetUserTokenVersion(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	sessionHash, fingerprintErr := h.currentSessionHash(c)
+	if fingerprintErr != nil {
+		return authError(428, "recent_auth_required", "recent authentication required")
+	}
+	if err := h.recentAuth.Validate(c.Context(), c.Cookies(recentauth.CookieName), userID, version, sessionHash); err != nil {
+		if errors.Is(err, recentauth.ErrRequired) {
+			return authError(428, "recent_auth_required", "recent authentication required")
+		}
+		return err
+	}
+	return c.Next()
 }
 
 // userResponse is the public shape of a user. It deliberately omits
@@ -279,7 +314,16 @@ func (h *authHandlers) Login(c *fiber.Ctx) error {
 // Logout clears the auth cookie. It is public and idempotent: clearing an
 // absent or already-expired cookie is a no-op.
 func (h *authHandlers) Logout(c *fiber.Ctx) error {
-	auth.ClearTokenCookie(c, h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
+	var revokeErr error
+	if h.recentAuth != nil {
+		revokeErr = h.recentAuth.Revoke(c.Context(), c.Cookies(recentauth.CookieName))
+	}
+	domain := auth.CookieDomainForHost(c.Hostname(), h.cookieDomains)
+	auth.ClearTokenCookie(c, h.cookieSecure, domain)
+	recentauth.ClearCookie(c, h.cookieSecure, domain)
+	if revokeErr != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
+	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -295,7 +339,9 @@ func (h *authHandlers) LogoutAll(c *fiber.Ctx) error {
 	if _, err := h.queries.BumpUserTokenVersion(c.Context(), userID); err != nil {
 		return err
 	}
-	auth.ClearTokenCookie(c, h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
+	domain := auth.CookieDomainForHost(c.Hostname(), h.cookieDomains)
+	auth.ClearTokenCookie(c, h.cookieSecure, domain)
+	recentauth.ClearCookie(c, h.cookieSecure, domain)
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -314,12 +360,17 @@ func (h *authHandlers) setSession(c *fiber.Ctx, userID int64) error {
 // the counter (password change, sign-out-everywhere) pass the value they got back, so the
 // caller's replacement cookie cannot race the bump they themselves performed.
 func (h *authHandlers) setSessionAt(c *fiber.Ctx, userID int64, version int32) error {
+	_, err := h.issueSessionAt(c, userID, version)
+	return err
+}
+
+func (h *authHandlers) issueSessionAt(c *fiber.Ctx, userID int64, version int32) (string, error) {
 	token, err := h.issuer.Issue(userID, version)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
+		return "", fiber.NewError(fiber.StatusInternalServerError, "failed to start session")
 	}
 	auth.SetTokenCookie(c, token, h.issuer.TTL(), h.cookieSecure, auth.CookieDomainForHost(c.Hostname(), h.cookieDomains))
-	return nil
+	return token, nil
 }
 
 // Me returns the authenticated user. It runs behind auth.RequireAuthOrKey (a

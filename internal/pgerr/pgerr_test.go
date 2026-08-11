@@ -13,14 +13,15 @@ import (
 
 func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
 	tests := []struct {
-		name              string
-		err               error
-		unique, fk, corpt bool
+		name                      string
+		err                       error
+		unique, fk, serial, corpt bool
 	}{
 		{name: "nil"},
 		{name: "plain error", err: errors.New("boom")},
 		{name: "unique violation", err: &pgconn.PgError{Code: "23505"}, unique: true},
 		{name: "foreign key violation", err: &pgconn.PgError{Code: "23503"}, fk: true},
+		{name: "serialization failure", err: &pgconn.PgError{Code: "40001"}, serial: true},
 		{name: "data corrupted", err: &pgconn.PgError{Code: "XX001"}, corpt: true},
 		// Wrapping is the case that matters in practice: a repository returns
 		// fmt.Errorf("read batch: %w", err) and the caller still has to classify it.
@@ -35,6 +36,9 @@ func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
 			}
 			if got := IsForeignKeyViolation(tt.err); got != tt.fk {
 				t.Errorf("IsForeignKeyViolation = %v, want %v", got, tt.fk)
+			}
+			if got := IsSerializationFailure(tt.err); got != tt.serial {
+				t.Errorf("IsSerializationFailure = %v, want %v", got, tt.serial)
 			}
 			if got := IsDataCorrupted(tt.err); got != tt.corpt {
 				t.Errorf("IsDataCorrupted = %v, want %v", got, tt.corpt)

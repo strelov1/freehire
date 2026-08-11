@@ -38,6 +38,43 @@ type ApiKey struct {
 	Scope       string             `json:"scope"`
 }
 
+type AppleGrant struct {
+	ID                     pgtype.UUID        `json:"id"`
+	UserID                 int64              `json:"user_id"`
+	Provider               string             `json:"provider"`
+	ProviderUserID         string             `json:"provider_user_id"`
+	ClientID               string             `json:"client_id"`
+	RefreshTokenCiphertext []byte             `json:"refresh_token_ciphertext"`
+	RefreshTokenNonce      []byte             `json:"refresh_token_nonce"`
+	EncryptionKeyID        string             `json:"encryption_key_id"`
+	AadVersion             int16              `json:"aad_version"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	RevocationRequestedAt  pgtype.Timestamptz `json:"revocation_requested_at"`
+}
+
+type AppleRevocationJob struct {
+	ID                   pgtype.UUID        `json:"id"`
+	IdempotencyKey       string             `json:"idempotency_key"`
+	Reason               string             `json:"reason"`
+	SourceUserID         pgtype.Int8        `json:"source_user_id"`
+	SourceProvider       pgtype.Text        `json:"source_provider"`
+	SourceProviderUserID pgtype.Text        `json:"source_provider_user_id"`
+	TokenAadRowID        pgtype.UUID        `json:"token_aad_row_id"`
+	ClientID             string             `json:"client_id"`
+	TokenCiphertext      []byte             `json:"token_ciphertext"`
+	TokenNonce           []byte             `json:"token_nonce"`
+	EncryptionKeyID      pgtype.Text        `json:"encryption_key_id"`
+	AadVersion           int16              `json:"aad_version"`
+	Status               string             `json:"status"`
+	Attempts             int32              `json:"attempts"`
+	NextAttemptAt        pgtype.Timestamptz `json:"next_attempt_at"`
+	LastErrorClass       pgtype.Text        `json:"last_error_class"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+}
+
 type Application struct {
 	ID           int64              `json:"id"`
 	UserID       int64              `json:"user_id"`
@@ -592,6 +629,42 @@ type NotificationSetting struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type OauthAuthAttempt struct {
+	ID                   pgtype.UUID        `json:"id"`
+	StateHash            []byte             `json:"state_hash"`
+	Provider             string             `json:"provider"`
+	ProtocolVersion      int16              `json:"protocol_version"`
+	Platform             string             `json:"platform"`
+	CallbackTarget       string             `json:"callback_target"`
+	Purpose              string             `json:"purpose"`
+	CodeChallenge        pgtype.Text        `json:"code_challenge"`
+	CodeChallengeMethod  pgtype.Text        `json:"code_challenge_method"`
+	NonceChallenge       pgtype.Text        `json:"nonce_challenge"`
+	AllowedAudiences     []string           `json:"allowed_audiences"`
+	ExpectedUserID       pgtype.Int8        `json:"expected_user_id"`
+	ExpectedTokenVersion pgtype.Int4        `json:"expected_token_version"`
+	ExpectedSessionHash  []byte             `json:"expected_session_hash"`
+	FailureCount         int32              `json:"failure_count"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
+}
+
+type OauthExchangeCode struct {
+	CodeHash             []byte             `json:"code_hash"`
+	UserID               int64              `json:"user_id"`
+	SourceAttemptID      pgtype.UUID        `json:"source_attempt_id"`
+	CodeChallenge        string             `json:"code_challenge"`
+	CodeChallengeMethod  string             `json:"code_challenge_method"`
+	Purpose              string             `json:"purpose"`
+	ExpectedUserID       pgtype.Int8        `json:"expected_user_id"`
+	ExpectedTokenVersion pgtype.Int4        `json:"expected_token_version"`
+	ExpectedSessionHash  []byte             `json:"expected_session_hash"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
+}
+
 type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`
@@ -613,6 +686,17 @@ type PushTicketOutbox struct {
 	Token     string             `json:"token"`
 	TicketID  string             `json:"ticket_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type RecentAuthProof struct {
+	ProofHash    []byte             `json:"proof_hash"`
+	UserID       int64              `json:"user_id"`
+	TokenVersion int32              `json:"token_version"`
+	SessionHash  []byte             `json:"session_hash"`
+	PurposeClass string             `json:"purpose_class"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	ConsumedAt   pgtype.Timestamptz `json:"consumed_at"`
 }
 
 type ReferralOffer struct {
@@ -779,10 +863,12 @@ type UserEmailCode struct {
 }
 
 type UserIdentity struct {
-	Provider       string             `json:"provider"`
-	ProviderUserID string             `json:"provider_user_id"`
-	UserID         int64              `json:"user_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Provider        string             `json:"provider"`
+	ProviderUserID  string             `json:"provider_user_id"`
+	UserID          int64              `json:"user_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Status          string             `json:"status"`
+	StatusChangedAt pgtype.Timestamptz `json:"status_changed_at"`
 }
 
 type UserJob struct {

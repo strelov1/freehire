@@ -98,3 +98,14 @@ func (r *Registry) Provider(name, origin string) (Provider, bool) {
 	}
 	return constructors[name](c, origin+"/api/v1/auth/oauth/"+name+"/callback"), true
 }
+
+// ProviderV2 builds a browser provider for the verifier-bound native flow.
+// Apple is used here only by the same-origin web recent-auth adapter; native
+// clients use their SDK plus the dedicated nonce-bound exchange endpoint.
+func (r *Registry) ProviderV2(name, origin string) (Provider, bool) {
+	c, ok := r.creds[name]
+	if !ok {
+		return nil, false
+	}
+	return constructors[name](c, origin+"/api/v2/auth/oauth/"+name+"/callback"), true
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	appleauth "github.com/strelov1/freehire/internal/auth/apple"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/config"
@@ -208,6 +209,19 @@ func main() {
 	// auth. Redirect URLs are built per request from the request origin, so one
 	// deployment can complete the flow on more than one served domain.
 	oauthRegistry := oauth.NewRegistry(cfg.OAuth)
+	var appleNative *appleauth.Client
+	var appleGrantKeys *appleauth.KeyRing
+	if cfg.AppleNativeClientID != "" {
+		appleCreds := cfg.OAuth["apple"]
+		appleNative, err = appleauth.New(appleauth.Config{TeamID: appleCreds.TeamID, KeyID: appleCreds.KeyID, PrivateKeyPEM: appleCreds.PrivateKey, ClientIDs: []string{cfg.AppleNativeClientID}})
+		if err != nil {
+			log.Fatalf("native Apple: %v", err)
+		}
+		appleGrantKeys, err = appleauth.NewKeyRing(cfg.AppleGrantActiveKeyID, cfg.AppleGrantKeys)
+		if err != nil {
+			log.Fatalf("native Apple grant encryption: %v", err)
+		}
+	}
 
 	// Connect-Gmail inbox: enabled only when the Google OAuth client and the
 	// token-encryption key are configured. Both nil disables the feature.
@@ -234,6 +248,11 @@ func main() {
 		CookieSecure:                cfg.CookieSecure,
 		CookieDomains:               cfg.CookieDomains,
 		OAuthRegistry:               oauthRegistry,
+		AuthV2Enabled:               cfg.AuthV2Enabled,
+		MobileAuthCallbacks:         cfg.MobileAuthCallbacks,
+		RecentAuthTTL:               cfg.RecentAuthTTL,
+		AppleNative:                 appleNative,
+		AppleGrantKeys:              appleGrantKeys,
 		GmailConnector:              gmailConnector,
 		GmailCipher:                 gmailCipher,
 		MailboxDomain:               cfg.MailboxDomain,

@@ -41,6 +41,7 @@
     }
     saving = true;
     try {
+      await api.reauthenticatePassword(currentPassword);
       await api.changePassword(currentPassword, password);
       changed = true;
       currentPassword = password = confirmation = '';

@@ -247,6 +247,9 @@ func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, clien
 	var claims appleIDTokenClaims
 	_, err := jwt.ParseWithClaims(idToken, &claims, func(tok *jwt.Token) (any, error) {
 		kid, _ := tok.Header["kid"].(string)
+		if kid == "" {
+			return nil, fmt.Errorf("apple: id_token has no kid")
+		}
 		keys, err := fetchAppleJWKS(ctx, client, jwksURL)
 		if err != nil {
 			return nil, err
@@ -257,9 +260,12 @@ func verifyAppleIDToken(ctx context.Context, client *http.Client, jwksURL, clien
 			}
 		}
 		return nil, fmt.Errorf("apple: no matching RSA signing key for kid %q", kid)
-	}, jwt.WithValidMethods([]string{"RS256"}), jwt.WithAudience(clientID), jwt.WithIssuer(appleIssuer))
+	}, jwt.WithValidMethods([]string{"RS256"}), jwt.WithAudience(clientID), jwt.WithIssuer(appleIssuer), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithLeeway(30*time.Second))
 	if err != nil {
 		return appleIDTokenClaims{}, fmt.Errorf("apple: verify id_token: %w", err)
+	}
+	if claims.Subject == "" {
+		return appleIDTokenClaims{}, fmt.Errorf("apple: id_token has no sub")
 	}
 	return claims, nil
 }

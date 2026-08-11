@@ -12,8 +12,9 @@ import (
 
 // SQLSTATE codes the app branches on.
 const (
-	codeUniqueViolation     = "23505"
-	codeForeignKeyViolation = "23503"
+	codeUniqueViolation      = "23505"
+	codeForeignKeyViolation  = "23503"
+	codeSerializationFailure = "40001"
 	// codeDataCorrupted is XX001 (data_corrupted): a row cannot be read because its
 	// on-disk storage is damaged — most visibly a "missing chunk number N for toast
 	// value ..." on a broken TOAST pointer.
@@ -32,6 +33,14 @@ func IsUniqueViolation(err error) bool {
 func IsForeignKeyViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeForeignKeyViolation
+}
+
+// IsSerializationFailure reports whether a serializable transaction must be
+// retried because PostgreSQL detected a concurrent-update anomaly (SQLSTATE
+// 40001).
+func IsSerializationFailure(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == codeSerializationFailure
 }
 
 // IsDataCorrupted reports whether err is (or wraps) a Postgres data-corruption error

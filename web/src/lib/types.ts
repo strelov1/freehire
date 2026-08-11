@@ -675,6 +675,18 @@ export interface CreatedApiKey extends ApiKey {
   token: string;
 }
 
+export interface ConnectedIdentity {
+  provider: string;
+  linked_at: string;
+  status: 'active' | 'revocation_pending';
+  can_unlink: boolean;
+}
+
+export interface ConnectedIdentities {
+  has_password: boolean;
+  identities: ConnectedIdentity[];
+}
+
 /** A user's saved search: a named snapshot of the job-search filter state. `query`
  *  is the canonical search query string (the same the filter URL serializes), so
  *  applying it reproduces the exact filters. An empty `query` is the "show all" view.

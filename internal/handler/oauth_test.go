@@ -49,6 +49,10 @@ func (r fakeRegistry) Provider(name, _ string) (oauth.Provider, bool) {
 	p, ok := r[name]
 	return p, ok
 }
+func (r fakeRegistry) ProviderV2(name, _ string) (oauth.Provider, bool) {
+	p, ok := r[name]
+	return p, ok
+}
 
 func oauthApp(providers map[string]oauth.Provider) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

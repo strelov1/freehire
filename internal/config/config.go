@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -44,6 +45,16 @@ type Settings struct {
 	// incomplete credentials is simply disabled (enforced where the provider
 	// registry is built, not here), and the server starts either way.
 	OAuth map[string]OAuthCredentials
+
+	// AuthV2 enables verifier-bound native OAuth endpoints. Browser-provider v2
+	// can run without Apple; native Apple is advertised only when its separate
+	// bundle client id and refresh-grant encryption key ring are complete.
+	AuthV2Enabled         bool
+	MobileAuthCallbacks   map[string]string
+	AppleNativeClientID   string
+	AppleGrantActiveKeyID string
+	AppleGrantKeys        map[string][]byte
+	RecentAuthTTL         time.Duration
 
 	// GmailTokenKey is the 32-byte AES key (from GMAIL_TOKEN_KEY, base64) that
 	// encrypts stored Gmail refresh tokens. Empty/invalid = the Connect-Gmail
@@ -247,21 +258,27 @@ const defaultAssistantMaxPrompt = 8000
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	s := Settings{
-		Env:            env("ENV", "development"),
-		LLM:            LoadLLM(),
-		Port:           env("PORT", "8080"),
-		DatabaseURL:    env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
-		FrontendOrigin: env("FRONTEND_ORIGIN", "http://localhost:5173"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		JWTTTL:         envDuration("JWT_TTL", 30*24*time.Hour),
-		CookieSecure:   envBool("COOKIE_SECURE", false),
-		CookieDomains:  splitDomains(os.Getenv("COOKIE_DOMAIN")),
-		OAuth:          loadOAuth(),
-		GmailTokenKey:  decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
-		MailboxDomain:  os.Getenv("MAILBOX_DOMAIN"),
-		MeiliURL:       env("MEILI_URL", "http://localhost:7700"),
-		MeiliKey:       os.Getenv("MEILI_MASTER_KEY"),
-		RedisURL:       env("REDIS_URL", "redis://localhost:6379/0"),
+		Env:                   env("ENV", "development"),
+		LLM:                   LoadLLM(),
+		Port:                  env("PORT", "8080"),
+		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
+		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		JWTSecret:             os.Getenv("JWT_SECRET"),
+		JWTTTL:                envDuration("JWT_TTL", 30*24*time.Hour),
+		CookieSecure:          envBool("COOKIE_SECURE", false),
+		CookieDomains:         splitDomains(os.Getenv("COOKIE_DOMAIN")),
+		OAuth:                 loadOAuth(),
+		AuthV2Enabled:         envBool("AUTH_V2_ENABLED", false),
+		MobileAuthCallbacks:   parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
+		AppleNativeClientID:   strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
+		AppleGrantActiveKeyID: strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
+		AppleGrantKeys:        parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
+		RecentAuthTTL:         envDuration("RECENT_AUTH_TTL", 10*time.Minute),
+		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
+		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
+		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
 
 		LLMAdminURL:         os.Getenv("LLM_ADMIN_URL"),
 		LLMAdminKey:         os.Getenv("LLM_ADMIN_KEY"),
@@ -327,7 +344,82 @@ func (s Settings) Validate() error {
 	if len(s.JWTSecret) < 32 {
 		return errors.New("JWT_SECRET is required and must be at least 32 bytes")
 	}
+	if s.RecentAuthTTL != 0 && (s.RecentAuthTTL < time.Minute || s.RecentAuthTTL > time.Hour) {
+		return errors.New("RECENT_AUTH_TTL must be between 1m and 1h")
+	}
+	appleWeb := s.OAuth["apple"]
+	appleFields := []bool{s.AppleNativeClientID != "", s.AppleGrantActiveKeyID != "", len(s.AppleGrantKeys) != 0}
+	partialApple := (appleFields[0] || appleFields[1] || appleFields[2]) && !(appleFields[0] && appleFields[1] && appleFields[2])
+	if partialApple {
+		return errors.New("native Apple requires APPLE_NATIVE_CLIENT_ID, APPLE_GRANT_ACTIVE_KEY_ID, and APPLE_GRANT_KEYS")
+	}
+	if appleFields[0] {
+		if appleWeb.TeamID == "" || appleWeb.KeyID == "" || appleWeb.PrivateKey == "" {
+			return errors.New("native Apple requires OAUTH_APPLE_TEAM_ID, OAUTH_APPLE_KEY_ID, and OAUTH_APPLE_PRIVATE_KEY")
+		}
+		if len(s.AppleGrantKeys[s.AppleGrantActiveKeyID]) != 32 {
+			return errors.New("APPLE_GRANT_ACTIVE_KEY_ID must identify a 32-byte key in APPLE_GRANT_KEYS")
+		}
+	}
+	if s.AuthV2Enabled && len(s.MobileAuthCallbacks) == 0 {
+		return errors.New("MOBILE_AUTH_CALLBACKS is required when AUTH_V2_ENABLED=true")
+	}
+	if s.AuthV2Enabled && s.MobileAuthCallbacks["web"] == "" {
+		return errors.New("MOBILE_AUTH_CALLBACKS must include web when AUTH_V2_ENABLED=true")
+	}
+	for name, raw := range s.MobileAuthCallbacks {
+		u, err := url.Parse(raw)
+		validName := name == "ios" || name == "android" || name == "web"
+		if err != nil || !validName || !u.IsAbs() || u.Host == "" || u.User != nil || u.Fragment != "" {
+			return errors.New("MOBILE_AUTH_CALLBACKS must contain valid ios, android, or web URLs")
+		}
+		if s.Env == "production" && u.Scheme != "https" {
+			return errors.New("MOBILE_AUTH_CALLBACKS must use HTTPS in production")
+		}
+	}
+	if raw := s.MobileAuthCallbacks["web"]; raw != "" {
+		callback, callbackErr := url.Parse(raw)
+		frontend, frontendErr := url.Parse(s.FrontendOrigin)
+		if callbackErr != nil || frontendErr != nil || callback.Scheme != frontend.Scheme || callback.Host != frontend.Host || callback.Path != "/my/reauth" {
+			return errors.New("MOBILE_AUTH_CALLBACKS web must be FRONTEND_ORIGIN/my/reauth")
+		}
+	}
 	return nil
+}
+
+func parseNamedValues(raw string) map[string]string {
+	out := map[string]string{}
+	for _, part := range strings.Split(raw, ",") {
+		name, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if ok && strings.TrimSpace(name) != "" && strings.TrimSpace(value) != "" {
+			out[strings.TrimSpace(name)] = strings.TrimSpace(value)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func parseKeyRing(raw string) map[string][]byte {
+	out := map[string][]byte{}
+	for _, part := range strings.Split(raw, ",") {
+		id, encoded, ok := strings.Cut(strings.TrimSpace(part), ":")
+		if !ok || strings.TrimSpace(id) == "" {
+			continue
+		}
+		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+		if err != nil {
+			key = nil
+		}
+		// Preserve malformed named entries so NewKeyRing fails startup instead of
+		// silently dropping an old decrypt-only key still referenced by grants.
+		out[strings.TrimSpace(id)] = key
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // splitCSV parses a comma-separated env value into trimmed, non-empty entries.

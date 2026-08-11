@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/base64"
 	"slices"
 	"strings"
@@ -353,6 +354,60 @@ func TestLoad_OAuthApplePrivateKeyInvalidBase64IsEmpty(t *testing.T) {
 
 	if got := Load().OAuth["apple"].PrivateKey; got != "" {
 		t.Errorf("PrivateKey = %q, want empty for invalid base64", got)
+	}
+}
+
+func TestLoad_NativeAppleAndAuthV2(t *testing.T) {
+	key := bytes.Repeat([]byte{7}, 32)
+	t.Setenv("AUTH_V2_ENABLED", "true")
+	t.Setenv("MOBILE_AUTH_CALLBACKS", "web=https://freehire.me/my/reauth,ios=https://freehire.me/auth/callback")
+	t.Setenv("APPLE_NATIVE_CLIENT_ID", "me.freehire.mobile")
+	t.Setenv("APPLE_GRANT_ACTIVE_KEY_ID", "v2")
+	t.Setenv("APPLE_GRANT_KEYS", "v1:"+base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))+",v2:"+base64.StdEncoding.EncodeToString(key))
+	s := Load()
+	if !s.AuthV2Enabled || s.MobileAuthCallbacks["ios"] != "https://freehire.me/auth/callback" {
+		t.Fatalf("v2 config not loaded: %+v", s.MobileAuthCallbacks)
+	}
+	if s.AppleNativeClientID != "me.freehire.mobile" || s.AppleGrantActiveKeyID != "v2" || !bytes.Equal(s.AppleGrantKeys["v2"], key) {
+		t.Fatal("native Apple config not loaded")
+	}
+}
+
+func TestSettingsValidateRejectsUnsafeProductionV2Callbacks(t *testing.T) {
+	base := Settings{Env: "production", CookieSecure: true, JWTSecret: strings.Repeat("x", 32),
+		FrontendOrigin: "https://freehire.me", AuthV2Enabled: true,
+		MobileAuthCallbacks: map[string]string{"web": "https://freehire.me/my/reauth"}}
+	for name, callback := range map[string]string{
+		"unknown target": "https://freehire.me/callback",
+		"insecure":       "http://freehire.me/callback",
+		"userinfo":       "https://user@freehire.me/callback",
+		"fragment":       "https://freehire.me/callback#token",
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := base
+			s.MobileAuthCallbacks = map[string]string{"web": "https://freehire.me/my/reauth", "unknown": callback}
+			if name != "unknown target" {
+				s.MobileAuthCallbacks = map[string]string{"web": callback}
+			}
+			if err := s.Validate(); err == nil {
+				t.Fatal("unsafe callback accepted")
+			}
+		})
+	}
+}
+
+func TestSettingsValidateRequiresSameOriginWebReauthCallback(t *testing.T) {
+	s := Settings{JWTSecret: strings.Repeat("x", 32), FrontendOrigin: "https://freehire.me", CookieSecure: true,
+		AuthV2Enabled: true, MobileAuthCallbacks: map[string]string{"web": "https://auth.freehire.me/my/reauth"}}
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "FRONTEND_ORIGIN") {
+		t.Fatalf("Validate()=%v", err)
+	}
+}
+
+func TestSettingsValidateRejectsPartialNativeApple(t *testing.T) {
+	s := Settings{JWTSecret: strings.Repeat("x", 32), AppleNativeClientID: "me.freehire.mobile"}
+	if err := s.Validate(); err == nil || !strings.Contains(err.Error(), "APPLE_GRANT") {
+		t.Fatalf("Validate()=%v", err)
 	}
 }
 
