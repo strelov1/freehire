@@ -234,7 +234,7 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
       >
       board. <code class="font-mono text-foreground">stage</code> takes a controlled value:
       <span class="font-mono text-foreground"
-        >applied → screening → responded → interview → offer → accepted</span
+        >preparing → applied → screening → responded → interview → offer → accepted</span
       >, plus <span class="font-mono text-foreground">rejected</span> /
       <span class="font-mono text-foreground">withdrawn</span>.
     </p>

@@ -79,6 +79,11 @@
 - [x] 4.2 Updated `PipelineFunnel.svelte`'s doc comment ("one Applications source fanning into
       the four groups") to name five groups and note the count is whatever `STAGE_GROUPS`
       currently holds, not a fixed number.
+- [x] 4.2a (found in code review, not planned) Two hand-typed vocabulary lists outside
+      generation's reach — `web/src/lib/docs/api-spec.ts`'s `PATCH /jobs/{slug}/track`
+      description and `CliView.svelte`'s CLI help text — both named the stage list without
+      `preparing`. Neither is caught by `pnpm run check` (plain strings, not typed against
+      `Stage`). Added it to both.
 - [ ] 4.3 NOT DONE as originally scoped. No `preparing` row exists anywhere yet — its only
       producer (`EnsureOnBoard`, task 3) is deferred behind PR #1754 — so there is no real card
       to open the Tracking board and look at; seeding one would mean faking data the app cannot

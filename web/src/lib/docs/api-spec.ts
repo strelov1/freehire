@@ -803,7 +803,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         summary: 'Set the application stage and/or notes.',
         description:
           'A null field is left unchanged. `stage` is a controlled vocabulary: ' +
-          '`applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, ' +
+          '`preparing`, `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, ' +
           '`rejected`, `withdrawn`, `expired` (an unknown value is a 400). `expired` is the ' +
           'outcome for an application nobody answered; nothing sets it for you.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
