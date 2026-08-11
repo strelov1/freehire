@@ -96,14 +96,23 @@
       pixel-level look, per this repo's own "test the UI in a browser" convention, still needs
       task 3 done first.
 
-## 5. Backfill migration
+## 5. Backfill
 
-- [ ] 5.1 Add a new migration file with the one-time backfill:
-      `UPDATE applications SET stage='preparing' WHERE stage='applied' AND applied_at IS NULL
-      AND EXISTS (a tailored cv for that user/job)` (see design.md Decision 4 for the exact
-      query and rationale).
-- [ ] 5.2 Verify the migration is a no-op against a database that never ran the old
-      (`stage='applied'`-on-tailor) code path.
+- [x] 5.1 REVISED: not a migration file. `migrations/` is schema (DDL); this repo's own
+      convention for one-time data corrections is a dedicated `cmd/backfill-*` worker (see
+      `cmd/backfill-resume-geo` for the template this follows: `worker.Main`/`worker.Bootstrap`,
+      a `--dry-run` flag, idempotent). Added `cmd/backfill-preparing-stage`, backed by two new
+      sqlc queries in `internal/db/queries/applications.sql`: `BackfillPreparingStage` (the
+      correction, in a CTE that also writes a `stage_set` ledger event per row with
+      `source='system'` — every stage change elsewhere in this codebase is ledgered, and a
+      silent correction would be the one exception) and `CountPreparingBackfillCandidates`
+      (the read-only `--dry-run` counterpart, kept in lockstep with the same WHERE clause).
+- [x] 5.2 Integration test `internal/db/preparing_backfill_integration_test.go`
+      (`TestBackfillPreparingStage`) covers: a tailored+applied+undated row IS corrected (and
+      gets its ledger event); a manually-dragged+applied+undated row with no tailored CV is
+      NOT touched (proves the EXISTS join, not just the WHERE, is load-bearing); an
+      advanced-stage row with a tailored CV is NOT touched (proves the WHERE clause protects
+      progress regardless of the join); a second run is a no-op (idempotency).
 
 ## 6. Verification
 

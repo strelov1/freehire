@@ -26,9 +26,10 @@ produces, rather than overloading an existing one.
   `appevent.SourceSystem` (a platform-automatic action) instead of
   `appevent.SourceUser`, correcting a misattribution — matches how
   `internal/nudge` already tags its own automatic stage change.
-- One-time backfill migration for `applications` rows already written by the
-  shipped PR #1754 shape (`stage='applied'`, `applied_at IS NULL`, a
-  tailored CV exists for that vacancy) to `preparing`.
+- One-time backfill (`cmd/backfill-preparing-stage`, not a schema migration)
+  for `applications` rows already written by the shipped PR #1754 shape
+  (`stage='applied'`, `applied_at IS NULL`, a tailored CV exists for that
+  vacancy) to `preparing`.
 - Frontend contracts regenerated so the board and pipeline funnel pick up
   the new group without a hand-written second copy.
 
@@ -60,7 +61,9 @@ produces, rather than overloading an existing one.
 - `internal/userjob/{stages,groups,pipeline}.go` — vocabulary changes.
 - `internal/db/queries/user_jobs.sql` (`MarkJobApplied`) + regenerated sqlc.
 - `internal/handler/cv.go` (`trackingBoarder.EnsureOnBoard`).
-- A new migration for the one-time backfill.
+- A new `cmd/backfill-preparing-stage` worker for the one-time correction (this
+  repo's own convention for a data-only backfill; no schema change, no
+  `migrations/*.sql` file).
 - `cmd/gen-contracts` output consumed by `web/src/lib/generated/contracts`,
   and `web/src/lib/components/PipelineFunnel.svelte`'s stale "four groups"
   doc comment.

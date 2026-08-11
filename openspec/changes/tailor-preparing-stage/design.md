@@ -107,7 +107,7 @@ candidate's behalf, not one anybody typed" — exactly this case, and the same
 tag `internal/nudge` already uses for its own automatic stage change. The
 "never overwrite an existing stage" guard is unchanged.
 
-### 4. Backfill by evidence, not by ledger source alone
+### 4. Backfill by evidence, not by ledger source alone — as a `cmd/backfill-*` worker, not a migration
 
 ```sql
 UPDATE applications a
@@ -127,6 +127,18 @@ than a manual undated drag. Rejected: backfilling from
 ships still carry the (wrong) `SourceUser` tag, so the ledger cannot
 distinguish them retroactively; the `cvs` join is required regardless and is
 sufficient by itself.
+
+**Revised during implementation:** this ships as `cmd/backfill-preparing-stage`
+(a `worker.Main`/`worker.Bootstrap` one-shot, `--dry-run` flag, following the
+`cmd/backfill-resume-geo` template), not a `migrations/*.sql` file. `migrations/`
+in this repo is schema (DDL) that both sqlc and Postgres initdb read; a one-time
+data correction with no schema change has its own established convention here —
+several `cmd/backfill-*` workers already exist for exactly this shape of task,
+each with its own doc comment, dry-run mode, and idempotency, none of them a
+migration. The SQL above also gained an `application_events` write (a `stage_set`
+event per corrected row, `source='system'`) that this section originally missed:
+every other stage change in this codebase is ledgered, and a silent correction
+would have been the one silent exception.
 
 ## Risks / Trade-offs
 
@@ -148,9 +160,10 @@ sufficient by itself.
    sqlc), and the `EnsureOnBoard` change in one deploy — they are only
    mutually consistent together.
 2. Regenerate frontend contracts (`cmd/gen-contracts`).
-3. Ship the backfill migration in the same release, in either order relative
-   to the code deploy — its `WHERE` clause matches only the shape the *old*
-   `EnsureOnBoard` wrote, never anything the new code produces.
+3. Run `cmd/backfill-preparing-stage` once, in either order relative to the
+   code deploy — its `WHERE` clause matches only the shape the *old*
+   `EnsureOnBoard` wrote, never anything the new code produces. `--dry-run`
+   first to see the count before writing.
 4. Verify: a fresh tailor bootstrap lands in Preparing; a real apply signal
    on that vacancy moves it to Applied; an `interview`-staged vacancy is
    untouched by a tailor reopen.
