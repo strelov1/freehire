@@ -35,7 +35,19 @@
 
   // Apply the persisted theme and start tracking the OS preference once mounted.
   // A no-FOUC inline script in app.html already set the class before paint.
-  onMount(() => initTheme());
+  onMount(() => {
+    initTheme();
+    registerPwaServiceWorker();
+  });
+
+  // `injectRegister: null` in vite.config.ts (the CSP has no 'unsafe-inline'
+  // script-src, so an auto-injected inline registration script would be blocked)
+  // — register from this real module import instead. In dev, `devOptions` is
+  // left disabled in vite.config.ts, so this resolves to a no-op there.
+  async function registerPwaServiceWorker() {
+    const { registerSW } = await import('virtual:pwa-register');
+    registerSW({ immediate: true });
+  }
 
   // Drop every per-user store the moment the session ends. logout() re-resolves via
   // invalidateAll() — a soft client navigation, so these module-singleton stores

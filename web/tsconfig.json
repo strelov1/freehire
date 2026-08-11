@@ -12,7 +12,11 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+    // Ambient module declarations for `virtual:pwa-register` (imported dynamically
+    // in +layout.svelte) — vite-plugin-pwa ships these per-entrypoint rather than
+    // globally, so the entry must be named explicitly.
+    "types": ["vite-plugin-pwa/client"]
   }
   // Path aliases ($lib) and includes are provided by SvelteKit's generated
   // ./.svelte-kit/tsconfig.json (run `svelte-kit sync` to (re)generate it).
