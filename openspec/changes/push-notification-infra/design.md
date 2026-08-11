@@ -91,7 +91,12 @@ new step adds the case that was missing, it does not replace the old one.
 
 `push_ticket_outbox` rows are deleted once their receipt is checked,
 regardless of the outcome (`ok`, `DeviceNotRegistered`-and-pruned, or any
-other error). There is no retry-if-the-batch-fails bookkeeping like
+other error) — except a ticket id `getReceipts` simply has no entry for
+(Expo hasn't got an answer yet despite the age threshold, or no longer
+recognizes the id), which is left queued rather than deleted: that is not a
+checked-and-resolved outcome, and deleting it would silently give up the
+only detection window this decision exists to provide. There is no
+retry-if-the-batch-fails bookkeeping like
 `notify`'s claim/lease/dead-letter machinery — if `CheckReceipts` itself
 errors mid-batch (e.g. Expo unreachable), the unclaimed rows simply remain
 due and get picked up by the next scheduled run. This matches the rest of

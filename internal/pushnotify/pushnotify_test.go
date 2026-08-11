@@ -197,3 +197,33 @@ func TestExpoNotifier_CheckReceipts_NothingDueIsANoOp(t *testing.T) {
 		t.Error("getReceipts was called with nothing due")
 	}
 }
+
+// A ticket Expo doesn't answer for (absent from the getReceipts response —
+// no answer ready yet, or an id Expo no longer recognizes) must not be
+// treated as "checked, resolved": deleting it from the outbox would give up
+// its only detection window for going dead. Left queued, the next scheduled
+// pass claims it again — matching the design's no-retry-bookkeeping posture
+// (the row simply stays due), not a special retry path.
+func TestExpoNotifier_CheckReceipts_TicketAbsentFromResponseIsLeftQueued(t *testing.T) {
+	srv := stubExpoReceipts(t, map[string]map[string]any{
+		"ticket-answered": {"status": "ok"},
+		// ticket-no-answer deliberately has no entry.
+	})
+	pruner := &fakePruner{}
+	store := &fakeTicketStore{due: []Ticket{
+		{ID: 1, Token: "ExponentPushToken[answered]", TicketID: "ticket-answered"},
+		{ID: 2, Token: "ExponentPushToken[no-answer]", TicketID: "ticket-no-answer"},
+	}}
+	n := newTestNotifier(pruner, &fakeQueuer{}, store)
+	n.receiptsURL = srv.URL
+
+	if err := n.CheckReceipts(context.Background()); err != nil {
+		t.Fatalf("CheckReceipts: %v", err)
+	}
+	if len(pruner.pruned) != 0 {
+		t.Errorf("pruned = %v, want none", pruner.pruned)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != 1 {
+		t.Errorf("deleted ticket ids = %v, want [1] — only the answered ticket", store.deleted)
+	}
+}

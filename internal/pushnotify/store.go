@@ -18,6 +18,12 @@ func NewQueriesStore(q *db.Queries) *QueriesStore {
 	return &QueriesStore{q: q}
 }
 
+var (
+	_ TokenPruner  = (*QueriesStore)(nil)
+	_ TicketQueuer = (*QueriesStore)(nil)
+	_ TicketStore  = (*QueriesStore)(nil)
+)
+
 func (s *QueriesStore) PruneDeadPushToken(ctx context.Context, token string) error {
 	return s.q.PruneDeadPushToken(ctx, token)
 }

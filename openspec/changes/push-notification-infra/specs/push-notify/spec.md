@@ -86,6 +86,11 @@ response.
 - **WHEN** a receipt check runs and some queued tickets are younger than the minimum wait
 - **THEN** the system only checks tickets old enough to have an answer, leaving the rest queued
 
+#### Scenario: A ticket absent from the receipt response is left queued
+
+- **WHEN** a queued ticket's id has no entry in the Expo receipt response (no answer yet, or an id Expo no longer recognizes)
+- **THEN** the system leaves that ticket queued rather than treating it as checked
+
 ### Requirement: Self-test push endpoint
 
 The system SHALL let a signed-in user trigger a test push to their own

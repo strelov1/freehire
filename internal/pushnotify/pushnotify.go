@@ -189,7 +189,16 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 
 	processed := make([]int64, 0, len(due))
 	for _, t := range due {
-		if r, ok := receipts[t.TicketID]; ok && r.Details.Error == deviceNotRegistered {
+		r, ok := receipts[t.TicketID]
+		if !ok {
+			// No answer yet (or Expo no longer recognizes the id) — this is
+			// not "checked, resolved", so the ticket stays queued rather
+			// than losing its only detection window. The next scheduled
+			// pass claims it again; no special retry bookkeeping needed
+			// since it's already past the minimum age.
+			continue
+		}
+		if r.Details.Error == deviceNotRegistered {
 			if err := n.pruner.PruneDeadPushToken(ctx, t.Token); err != nil {
 				return fmt.Errorf("pushnotify: prune dead token: %w", err)
 			}
