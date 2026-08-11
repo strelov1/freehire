@@ -240,7 +240,7 @@
   <States state="error" message="Couldn't load your profile." />
 {:else}
   <!-- Header -->
-  <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+  <div class="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="flex flex-col gap-1">
       <h1 class="text-2xl font-semibold tracking-tight">Profile</h1>
       <p class="text-sm text-muted-foreground">
