@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Award, Briefcase, FolderKanban, GraduationCap, Languages } from '@lucide/svelte';
+  import { Award, Briefcase, FolderKanban, GraduationCap, Languages, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import type { PageData } from './$types';
 
@@ -29,6 +29,18 @@
   // accidentally render here; no placeholder like "Anonymous Candidate" is needed.
   const heading = $derived(profile.full_name || 'Talent Network profile');
 
+  // Avatar initials, derived only when full_name is present (public mode) — anonymous
+  // mode never reaches this because the template falls back to the generic icon.
+  const initials = $derived(
+    (profile.full_name ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join(''),
+  );
+
   const pageTitle = $derived(`${heading} — freehire Talent Network`);
   const description = $derived(
     cv.headline || 'A candidate profile shared via freehire’s Talent Network.',
@@ -48,30 +60,38 @@
 </svelte:head>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
-  <div class="flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
-    {#if cv.headline}
-      <p class="text-sm text-muted-foreground">{cv.headline}</p>
-    {/if}
-    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-      {#if cv.location}
-        <span>{cv.location}</span>
-      {/if}
-      {#if cv.total_years}
-        <span>{cv.total_years} yrs experience</span>
-      {/if}
+  <div class="flex flex-col gap-4">
+    <div class="flex items-start gap-4">
+      <div
+        class="flex size-14 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-muted-foreground"
+      >
+        {#if profile.full_name}
+          {initials}
+        {:else}
+          <User class="size-6" />
+        {/if}
+      </div>
+      <div class="flex min-w-0 flex-col gap-1">
+        <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+        {#if cv.headline}
+          <p class="text-sm text-muted-foreground">{cv.headline}</p>
+        {/if}
+        <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          {#if cv.location}
+            <span>{cv.location}</span>
+          {/if}
+          {#if cv.total_years}
+            <span>{cv.total_years} yrs experience</span>
+          {/if}
+        </div>
+      </div>
     </div>
-  </div>
 
-  {#if cv.summary}
-    <p class="text-sm leading-relaxed">{cv.summary}</p>
-  {/if}
+    {#if cv.summary}
+      <p class="text-sm leading-relaxed">{cv.summary}</p>
+    {/if}
 
-  {#if skillChips.length}
-    <section class="flex flex-col gap-2">
-      <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Skills
-      </h2>
+    {#if skillChips.length}
       <div class="flex flex-wrap gap-2">
         {#each skillChips as skill (skill)}
           <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
@@ -79,8 +99,10 @@
           >
         {/each}
       </div>
-    </section>
-  {/if}
+    {/if}
+  </div>
+
+  <hr class="border-border" />
 
   {#if experience.length}
     <section class="flex flex-col gap-3">
@@ -91,37 +113,40 @@
              string key colliding throws during Svelte 5 hydration. This list is static
              once loaded and never reorders, so an index key is safe here. -->
         {#each experience as job, i (i)}
-          <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <span class="text-sm font-semibold">{job.title || job.company}</span>
-              {#if dateRange(job.start, job.end)}
-                <span class="text-xs text-muted-foreground tabular-nums"
-                  >{dateRange(job.start, job.end)}</span
-                >
+          <li class="flex gap-3 rounded-xl border border-border bg-card p-4">
+            <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <span class="text-sm font-semibold">{job.title || job.company}</span>
+                {#if dateRange(job.start, job.end)}
+                  <span class="text-xs text-muted-foreground tabular-nums"
+                    >{dateRange(job.start, job.end)}</span
+                  >
+                {/if}
+              </div>
+              {#if job.title && job.company}
+                <span class="text-sm text-muted-foreground">{job.company}</span>
+              {/if}
+              {#if job.summary}
+                <p class="text-sm leading-relaxed">{job.summary}</p>
+              {/if}
+              {#if job.highlights?.length}
+                <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
+                  {#each job.highlights as highlight (highlight)}
+                    <li>{highlight}</li>
+                  {/each}
+                </ul>
+              {/if}
+              {#if job.stack?.length}
+                <div class="mt-1 flex flex-wrap gap-1.5">
+                  {#each job.stack as tech (tech)}
+                    <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
+                      >{tech}</span
+                    >
+                  {/each}
+                </div>
               {/if}
             </div>
-            {#if job.title && job.company}
-              <span class="text-sm text-muted-foreground">{job.company}</span>
-            {/if}
-            {#if job.summary}
-              <p class="text-sm leading-relaxed">{job.summary}</p>
-            {/if}
-            {#if job.highlights?.length}
-              <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
-                {#each job.highlights as highlight (highlight)}
-                  <li>{highlight}</li>
-                {/each}
-              </ul>
-            {/if}
-            {#if job.stack?.length}
-              <div class="mt-1 flex flex-wrap gap-1.5">
-                {#each job.stack as tech (tech)}
-                  <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
-                    >{tech}</span
-                  >
-                {/each}
-              </div>
-            {/if}
           </li>
         {/each}
       </ul>
