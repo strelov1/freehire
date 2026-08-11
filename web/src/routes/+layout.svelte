@@ -35,7 +35,34 @@
 
   // Apply the persisted theme and start tracking the OS preference once mounted.
   // A no-FOUC inline script in app.html already set the class before paint.
-  onMount(() => initTheme());
+  onMount(() => {
+    initTheme();
+    registerPwaServiceWorker();
+  });
+
+  // `injectRegister: null` in vite.config.ts (the CSP has no 'unsafe-inline'
+  // script-src, so an auto-injected inline registration script would be blocked)
+  // — register from this real module import instead. In dev, `devOptions` is
+  // left disabled in vite.config.ts, so this resolves to a no-op there.
+  //
+  // `registerType: 'autoUpdate'` skips the browser's own update prompt, and
+  // vite-plugin-pwa's default behaviour for that mode is to force
+  // `window.location.reload()` on every open tab the instant a new build
+  // activates — including a tab mid-edit in the CV editor, an application
+  // form, or an assistant chat. `onNeedReload` replaces that unconditional
+  // reload with a confirmation, so a new deploy never silently drops unsaved
+  // work.
+  async function registerPwaServiceWorker() {
+    const { registerSW } = await import('virtual:pwa-register');
+    registerSW({
+      immediate: true,
+      onNeedReload() {
+        if (confirm('A new version of freehire is available. Reload now?')) {
+          window.location.reload();
+        }
+      },
+    });
+  }
 
   // Drop every per-user store the moment the session ends. logout() re-resolves via
   // invalidateAll() — a soft client navigation, so these module-singleton stores

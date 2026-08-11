@@ -352,6 +352,9 @@ func subdomainLabel(host, apex string) string {
 var platformLabels = map[string]bool{
 	"app": true, "dashboard": true, "admin": true, "api": true,
 	"support": true, "help": true, "blog": true, "docs": true,
+	// tt.teamtailor.com is Teamtailor's own "powered by" tracking/short-link host, linked from
+	// every tenant career site's footer — not a tenant.
+	"tt": true,
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's.

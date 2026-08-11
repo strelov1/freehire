@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "og:smoke": "node scripts/og-smoke.mjs",
     "og:gen": "node scripts/gen-og.mjs",
+    "pwa:icons": "node scripts/gen-pwa-icons.mjs",
     "gen:api-docs": "node scripts/gen-api-docs.mjs",
     "gen:api-docs:smoke": "node scripts/gen-api-docs-smoke.mjs",
     "lint": "oxlint && eslint .",
@@ -29,6 +30,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^26.2.0",
+    "@vite-pwa/sveltekit": "^1.1.0",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
@@ -46,6 +48,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
     "vite": "^8.1.4",
+    "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.9"
   },
   "dependencies": {
@@ -60,6 +63,7 @@
     "satori-html": "^0.3.2",
     "shiki": "^4.4.2",
     "svelte-dnd-action": "^0.9.78",
+    "workbox-window": "^7.4.1",
     "freehire-design-system": "link:../design-system"
   }
 }

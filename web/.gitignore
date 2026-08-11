@@ -2,6 +2,7 @@ node_modules
 dist
 .svelte-kit
 build
+dev-dist
 .env
 .env.local
 coverage
