@@ -92,7 +92,7 @@
     {/if}
 
     {#if skillChips.length}
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2" aria-label="Skills">
         {#each skillChips as skill (skill)}
           <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
             >{skill}</span

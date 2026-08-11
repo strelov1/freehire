@@ -256,12 +256,13 @@
         ? 'outline'
         : 'primary'}
       class="shrink-0"
+      aria-haspopup="dialog"
       onclick={() => (talentNetworkPanelOpen = true)}
     >
       {#if talentNetworkVisibility === 'public'}
-        🌐 Talent Network: Public
+        <span aria-hidden="true">🌐</span> Talent Network: Public
       {:else if talentNetworkVisibility === 'anonymous'}
-        🕶️ Talent Network: Anonymous
+        <span aria-hidden="true">🕶️</span> Talent Network: Anonymous
       {:else}
         Join Talent Network
       {/if}
