@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/isoweek"
 	"github.com/strelov1/freehire/internal/userprofile"
 )
 
@@ -65,7 +66,7 @@ func (h *marketPulseHandlers) GetMarketPulse(c *fiber.Ctx) error {
 	if err != nil && !errors.Is(err, userprofile.ErrNotFound) {
 		return err
 	}
-	meta := fiber.Map{"week_start": isoWeekStart(time.Now().UTC()).Format("2006-01-02")}
+	meta := fiber.Map{"week_start": isoweek.Start(time.Now().UTC()).Format("2006-01-02")}
 	if len(profile.Skills) == 0 {
 		return c.JSON(fiber.Map{"data": []skillPulse{}, "meta": meta})
 	}
@@ -76,20 +77,6 @@ func (h *marketPulseHandlers) GetMarketPulse(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"data": buildSkillPulses(profile.Skills, rows), "meta": meta})
-}
-
-// isoWeekStart returns the Monday (ISO 8601 week start) of t's week, at midnight UTC —
-// the same "current week" cmd/rollup-stats resolves when it snapshots. Duplicated
-// rather than shared: it's a five-line pure function with exactly two call sites in
-// different binaries (a cron worker's package main and this handler package), not
-// enough to justify a shared package.
-func isoWeekStart(t time.Time) time.Time {
-	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
-	weekday := int(day.Weekday())
-	if weekday == 0 { // Sunday
-		weekday = 7
-	}
-	return day.AddDate(0, 0, -(weekday - 1))
 }
 
 // buildSkillPulses groups the caller's skill-history rows by skill (preserving the

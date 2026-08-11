@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/isoweek"
 	"github.com/strelov1/freehire/internal/worker"
 )
 
@@ -132,7 +133,7 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 	// above), so it is written, not cleared, reading the global skill bucket this
 	// same transaction just rebuilt. ON CONFLICT DO NOTHING in the query makes this
 	// safe to call every intra-day run: only the first run of an ISO week inserts.
-	weekStart := pgtype.Date{Time: isoWeekStart(time.Now().UTC()), Valid: true}
+	weekStart := pgtype.Date{Time: isoweek.Start(time.Now().UTC()), Valid: true}
 	if _, err := q.SnapshotInsightsSkillHistory(ctx, weekStart); err != nil {
 		return err
 	}
@@ -158,14 +159,4 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 		return err
 	}
 	return nil
-}
-
-// isoWeekStart returns the Monday (ISO 8601 week start) of t's week, at midnight UTC.
-func isoWeekStart(t time.Time) time.Time {
-	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
-	weekday := int(day.Weekday())
-	if weekday == 0 { // Sunday
-		weekday = 7
-	}
-	return day.AddDate(0, 0, -(weekday - 1))
 }

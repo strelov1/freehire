@@ -1,11 +1,11 @@
-package main
+package isoweek
 
 import (
 	"testing"
 	"time"
 )
 
-func TestIsoWeekStart(t *testing.T) {
+func TestStart(t *testing.T) {
 	cases := []struct {
 		name string
 		in   time.Time
@@ -29,8 +29,8 @@ func TestIsoWeekStart(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isoWeekStart(tc.in); !got.Equal(tc.want) {
-				t.Errorf("isoWeekStart(%v) = %v, want %v", tc.in, got, tc.want)
+			if got := Start(tc.in); !got.Equal(tc.want) {
+				t.Errorf("Start(%v) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}

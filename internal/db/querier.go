@@ -76,6 +76,16 @@ type Querier interface {
 	// the vocabulary stays in Go where a pin test guards it. Mail from an unrecognised store
 	// is skipped rather than defaulted: an unknown provenance must not read as observed.
 	BackfillEmployerReplyEvents(ctx context.Context, arg BackfillEmployerReplyEventsParams) (BackfillEmployerReplyEventsRow, error)
+	// Retroactively snapshots one past ISO week, computing each skill's open-job
+	// count "as of" @as_of (that week's Monday, midnight UTC) directly from
+	// jobs.created_at/closed_at — the same open_at(D) formula
+	// RebuildInsightsSkillStatsGlobal already trusts for its 30-day-back
+	// comparison, just evaluated at an arbitrary past instant instead of "now -
+	// 30d". A skill absent from the GROUP BY output was open in zero jobs as of
+	// that date, so it correctly contributes no row. ON CONFLICT DO NOTHING is
+	// what makes this safe to run over a week the live weekly writer already
+	// recorded: the real snapshot is never overwritten by a backfilled one.
+	BackfillInsightsSkillHistoryWeek(ctx context.Context, arg BackfillInsightsSkillHistoryWeekParams) (int64, error)
 	// Find the ashby board already carrying a job with this Ashby job id — for company careers
 	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
 	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
