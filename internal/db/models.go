@@ -806,3 +806,12 @@ type UserProfile struct {
 	LocationPreferences json.RawMessage    `json:"location_preferences"`
 	ExcludedSkills      []string           `json:"excluded_skills"`
 }
+
+type UserPushToken struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Token      string             `json:"token"`
+	Platform   string             `json:"platform"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+}

@@ -660,6 +660,13 @@ type Querier interface {
 	// by the company-info backfill are preserved: they intentionally have no job, so
 	// the NOT is_reference guard keeps the backfill directory from being swept away.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
+	// Explicit unregistration (sign-out), scoped to the caller so one account
+	// cannot unregister another's device.
+	DeletePushToken(ctx context.Context, arg DeletePushTokenParams) (int64, error)
+	// Prunes a token the Expo Push API reported as permanently undeliverable
+	// (DeviceNotRegistered). No owner check: the token is dead regardless of
+	// who currently holds it.
+	DeletePushTokenByValue(ctx context.Context, token string) error
 	// Withdraw ("stop being a referrer"): the owner deletes their own offer. The user_id
 	// guard scopes it to the caller — a non-owner or absent id deletes zero rows, which the
 	// repository maps to ErrOfferNotFound. Hard delete frees the UNIQUE (user_id,
@@ -1766,6 +1773,8 @@ type Querier interface {
 	// guard — far above any plausible backlog; a queue that deep needs bulk triage,
 	// not a longer page.
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// The caller's own registered devices, for a test send or a future delivery.
+	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
 	// company the catalogue no longer knows — the UI falls back to the slug).
@@ -3055,6 +3064,11 @@ type Querier interface {
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
 	// Create or replace the caller's notification rule in one statement. Returns the stored row.
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
+	// Register (or refresh) a device's push token. A token identifies one device
+	// install, not one user, so the conflict target is the token itself: if it
+	// already belongs to a different account, this reassigns it to the caller
+	// rather than duplicating or leaving it with the previous owner.
+	UpsertPushToken(ctx context.Context, arg UpsertPushTokenParams) (UserPushToken, error)
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error
