@@ -38,18 +38,19 @@
 
 ## 3. Tailor bootstrap sets `preparing`, correct event source
 
-- [ ] 3.1 In `internal/handler/cv.go`, change `trackingBoarder.EnsureOnBoard` to set
+- [x] 3.1 In `internal/handler/cv.go`, changed `trackingBoarder.EnsureOnBoard` to set
       `stage := "preparing"` instead of `"applied"`.
-- [ ] 3.2 In the same method, change the `TrackJob` call's event source from
+- [x] 3.2 In the same method, changed the `TrackJob` call's event source from
       `appevent.SourceUser` to `appevent.SourceSystem`.
-- [ ] 3.3 Update `cv_tailor_integration_test.go`'s `assertVacancyOnKanban` (and any other
-      assertion keyed on `stage == "applied"` for the tailor-bootstrap path) to expect
-      `"preparing"` instead.
-- [ ] 3.4 Add/extend an integration test asserting the `stage_set` ledger event written by
-      `EnsureOnBoard` carries `source = "system"`.
-- [ ] 3.5 Confirm the existing "an advanced stage survives a tailor reopen" test still holds
-      (it should require no logic change, only stage-literal updates if it asserted `"applied"`
-      anywhere incidentally).
+- [x] 3.3 Updated `cv_tailor_integration_test.go`'s `assertVacancyOnKanban` to expect
+      `"preparing"` in both the direct row read and the `filter=board` listing.
+- [x] 3.4 Extended `assertVacancyOnKanban` itself (called by both `TestTailorCVBootstrap` and
+      `TestTailorCVBootstrap_HealsMissingSave`) with a query against `application_events` for
+      the vacancy's most recent `stage_set` event, asserting `source = 'system'`. RED confirmed
+      first (`source = "user"`, `stage = "applied"`) before the `cv.go` fix, GREEN after.
+- [x] 3.5 `TestTailorCVBootstrap_HealsMissingSave`'s "an advanced stage survives a tailor
+      reopen" assertion needed no change — it already keyed on `"interview"`, not `"applied"`.
+      Confirmed still green.
 
 ## 4. Frontend
 

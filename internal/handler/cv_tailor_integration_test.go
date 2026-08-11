@@ -223,8 +223,9 @@ func TestTailorCVBootstrap(t *testing.T) {
 }
 
 // assertVacancyOnKanban checks the tailor bootstrap's tracking side-effect: the vacancy
-// is bookmarked AND staged as applied (so it lands in a Kanban column), without
-// applied_at (preparing a CV is not submitting an application).
+// is bookmarked AND staged as preparing (so it lands in the Preparing Kanban column),
+// without applied_at (preparing a CV is not submitting an application), and the ledger
+// event that set the stage is attributed to the platform, not the candidate.
 func assertVacancyOnKanban(t *testing.T, pool *pgxpool.Pool, userID, jobID int64) {
 	t.Helper()
 	var saved bool
@@ -242,8 +243,8 @@ func assertVacancyOnKanban(t *testing.T, pool *pgxpool.Pool, userID, jobID int64
 	if !saved {
 		t.Errorf("saved_at unset — tailored vacancy should stay bookmarked")
 	}
-	if !stage.Valid || stage.String != "applied" {
-		t.Errorf("stage = %q, want applied — Kanban columns only show staged rows", stage.String)
+	if !stage.Valid || stage.String != "preparing" {
+		t.Errorf("stage = %q, want preparing — the Kanban's own column, not applied", stage.String)
 	}
 	if appliedAt.Valid {
 		t.Errorf("applied_at = %v, want null — tailor is not an application submit", appliedAt.Time)
@@ -258,14 +259,25 @@ func assertVacancyOnKanban(t *testing.T, pool *pgxpool.Pool, userID, jobID int64
 	for _, r := range rows {
 		if r.ID == jobID {
 			found = true
-			if !r.Stage.Valid || r.Stage.String != "applied" {
-				t.Errorf("board row stage = %q, want applied", r.Stage.String)
+			if !r.Stage.Valid || r.Stage.String != "preparing" {
+				t.Errorf("board row stage = %q, want preparing", r.Stage.String)
 			}
 			break
 		}
 	}
 	if !found {
 		t.Errorf("job %d missing from filter=board listing after tailor", jobID)
+	}
+
+	var source string
+	if err := pool.QueryRow(context.Background(),
+		`SELECT source FROM application_events
+		  WHERE user_id = $1 AND job_id = $2 AND kind = 'stage_set'
+		  ORDER BY id DESC LIMIT 1`, userID, jobID).Scan(&source); err != nil {
+		t.Fatalf("read stage_set event source: %v", err)
+	}
+	if source != "system" {
+		t.Errorf("stage_set event source = %q, want system — the platform placed this, not the candidate", source)
 	}
 }
 

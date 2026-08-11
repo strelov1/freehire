@@ -129,10 +129,11 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 		log.Printf("credits: tailor debit user=%d cv=%d: %v", userID, tailored.ID, err)
 	}
 	// Place the vacancy on the Tracking Kanban. A bare bookmark is not enough — the
-	// board columns only show staged/applied rows; saved-only lives under Activity →
-	// Saved. Stage is set to applied without applied_at (preparing ≠ submitted). Runs on
-	// create and resume; never overwrites an existing stage. Best-effort: the CV and
-	// session already exist.
+	// board columns only show staged rows; saved-only lives under Activity → Saved.
+	// Stage is set to preparing without applied_at (preparing ≠ submitted); it has its
+	// own column and auto-promotes to applied on a real apply signal. Runs on create
+	// and resume; never overwrites an existing stage. Best-effort: the CV and session
+	// already exist.
 	if h.jobs != nil {
 		if err := h.jobs.EnsureOnBoard(c.Context(), userID, job.ID); err != nil {
 			log.Printf("cv: placing vacancy on board after tailor user=%d job=%d: %v", userID, job.ID, err)

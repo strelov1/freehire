@@ -81,8 +81,12 @@ type jobReader interface {
 
 // jobBoarder places a vacancy on the caller's Tracking board. The Kanban only shows
 // staged (or applied) rows — a bare bookmark lives under Activity → Saved — so this is
-// save + stage=applied when no stage exists yet. applied_at stays unset: preparing a CV
-// is not submitting an application, and silence must not start.
+// save + stage=preparing when no stage exists yet. applied_at stays unset: preparing a
+// CV is not submitting an application, and silence must not start. preparing has its
+// own Kanban column and auto-promotes to applied the moment a real apply signal fires
+// (see MarkJobApplied) — it is never mistaken for a submitted application, only for a
+// candidate's own manual, undated "Applied" drag, the ambiguity this stage exists to
+// resolve (see internal/userjob/AGENTS.md).
 type jobBoarder interface {
 	EnsureOnBoard(ctx context.Context, userID, jobID int64) error
 }
@@ -103,8 +107,8 @@ func (s trackingBoarder) EnsureOnBoard(ctx context.Context, userID, jobID int64)
 	if row.Stage != nil && *row.Stage != "" {
 		return nil
 	}
-	stage := "applied"
-	_, err = s.repo.TrackJob(ctx, userID, jobID, &stage, nil, appevent.SourceUser)
+	stage := "preparing"
+	_, err = s.repo.TrackJob(ctx, userID, jobID, &stage, nil, appevent.SourceSystem)
 	return err
 }
 
