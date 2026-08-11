@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -410,6 +411,7 @@ func TestMergeExperienceAtomsIsAtomic(t *testing.T) {
 	merged, err := q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
 		Context: "model profiles", Metrics: []string{"VAD"}, Skills: []string{"python", "nlp"},
 		Provenance: "agent_inferred", KeepID: keep.ID, UserID: alice, LoserID: loser.ID,
+		KeepUpdatedAt: keep.UpdatedAt, LoserUpdatedAt: loser.UpdatedAt,
 	})
 	if err != nil {
 		t.Fatalf("MergeExperienceAtoms: %v", err)
@@ -435,6 +437,7 @@ func TestMergeExperienceAtomsIsAtomic(t *testing.T) {
 	_, err = q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
 		Context: "x", Metrics: []string{}, Skills: []string{}, Provenance: "manual",
 		KeepID: keep.ID, UserID: alice, LoserID: loser.ID,
+		KeepUpdatedAt: merged.UpdatedAt, LoserUpdatedAt: loser.UpdatedAt,
 	})
 	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("second merge with gone loser = %v, want pgx.ErrNoRows", err)
@@ -462,6 +465,7 @@ func TestMergeExperienceAtomsLeavesLoserWhenKeepIsGone(t *testing.T) {
 	_, err = q.MergeExperienceAtoms(ctx, MergeExperienceAtomsParams{
 		Context: "x", Metrics: []string{}, Skills: []string{}, Provenance: "manual",
 		KeepID: uuid.New(), UserID: alice, LoserID: loser.ID,
+		KeepUpdatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}, LoserUpdatedAt: loser.UpdatedAt,
 	})
 	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("merge with nonexistent keep = %v, want pgx.ErrNoRows", err)
