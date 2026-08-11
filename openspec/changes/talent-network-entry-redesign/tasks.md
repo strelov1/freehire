@@ -1,22 +1,22 @@
 ## 1. Overlay panel component
 
-- [ ] 1.1 Create a new component (e.g. `web/src/lib/components/TalentNetworkPanel.svelte`)
+- [x] 1.1 Create a new component (e.g. `web/src/lib/components/TalentNetworkPanel.svelte`)
       hosting the current settings logic. Follow the existing overlay
       pattern already used in this codebase — read
       `web/src/lib/components/FollowUpDialog.svelte` for the exact shape:
       a full-screen backdrop `<button>` (click-to-close) plus a
       `role="dialog"` panel, not a new design-system primitive.
-- [ ] 1.2 Move the GET/PUT `/me/talent-network` fetch logic and state
+- [x] 1.2 Move the GET/PUT `/me/talent-network` fetch logic and state
       (currently in `TalentNetworkSettings.svelte`) into this new
       component. Keep using `getTalentNetwork`/`setTalentNetworkVisibility`
       from `web/src/lib/api.ts` — no API-layer changes.
-- [ ] 1.3 Panel layout, top to bottom: (a) a public-link card — always
+- [x] 1.3 Panel layout, top to bottom: (a) a public-link card — always
       rendered, even when visibility is `off`, showing the profile URL
       (built the same way the current settings component already builds
       it) and a "View" link/action; (b) the Off/Public/Anonymous picker,
       each option now showing an icon (🚫 / 🌐 / 🕶️) beside its existing
       label + description text.
-- [ ] 1.4 Preserve existing behavior carried over from
+- [x] 1.4 Preserve existing behavior carried over from
       `TalentNetworkSettings.svelte`: echoed-value updates from the PUT
       response (no optimistic assumption), the trade-off copy near the
       picker, and error surfacing through the parent's existing
