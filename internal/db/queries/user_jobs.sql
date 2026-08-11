@@ -23,8 +23,11 @@ SELECT t.user_id, t.job_id, t.viewed_at, a.applied_at, t.saved_at,
 -- name: MarkJobApplied :one
 -- Mark a job as applied for a user. Idempotent and independent of a prior view:
 -- it inserts the row (viewed_at defaults) or updates applied_at in place, and
--- seeds stage='applied' only when the stage is unset (an advanced stage survives
--- a re-apply, via COALESCE). When (and only when) applied_at transitions from
+-- seeds stage='applied' when the stage is unset OR still 'preparing' — CV
+-- tailoring's board placement (internal/handler/cv.go's EnsureOnBoard) sets
+-- 'preparing' with no applied_at, and a real apply signal is exactly the event
+-- that should promote it. Any other existing stage survives a re-apply
+-- unchanged. When (and only when) applied_at transitions from
 -- unset to set, bump the job's materialized applied_count in the same statement;
 -- `prior` sees the pre-upsert applied_at, so a re-apply never re-bumps.
 -- MUST run inside a transaction that took LockJobForApply first: `prior` reads
@@ -66,7 +69,10 @@ WITH prior AS (
                   THEN COALESCE(applications.applied_at, sqlc.narg(at)::timestamptz)
               ELSE now()
           END,
-          stage = COALESCE(applications.stage, 'applied')
+          stage = CASE
+              WHEN applications.stage IS NULL OR applications.stage = 'preparing' THEN 'applied'
+              ELSE applications.stage
+          END
     RETURNING *
 ), bump AS (
     UPDATE jobs SET applied_count = applied_count + 1

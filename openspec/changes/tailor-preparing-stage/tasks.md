@@ -19,15 +19,22 @@
 
 ## 2. Auto-promotion on a real apply signal
 
-- [ ] 2.1 In `internal/db/queries/user_jobs.sql`, change `MarkJobApplied`'s upsert `stage` clause
+- [x] 2.1 In `internal/db/queries/user_jobs.sql`, change `MarkJobApplied`'s upsert `stage` clause
       from `COALESCE(applications.stage, 'applied')` to the `CASE` that also promotes an
       existing `'preparing'` stage to `'applied'`, leaving any other existing stage untouched.
-- [ ] 2.2 Regenerate sqlc (`make sqlc`) and confirm the generated code compiles.
-- [ ] 2.3 Integration test: an application at stage `preparing` is promoted to `applied` by
-      `MarkApplied` (and separately by `MarkAppliedAt` / `MarkAppliedOn`), with `applied_at` set
-      exactly as it is for a job with no prior stage.
-- [ ] 2.4 Integration test: an application already at `interview` (or any stage ranked at or
-      above `applied`) is left unchanged by a `MarkApplied` call.
+- [x] 2.2 Regenerated sqlc (`make sqlc`); `go build ./...` clean.
+- [x] 2.3 Integration test added in `internal/db/user_jobs_stage_integration_test.go`
+      (`TestTrackJobAndStageSeeding/MarkApplied_promotes_a_preparing_stage_to_applied`):
+      `preparing` promotes to `applied` with `applied_at` set. Exercised via `q.MarkJobApplied`
+      directly rather than once per `MarkApplied`/`MarkAppliedAt`/`MarkAppliedOn` — all three
+      share this exact statement (`internal/jobtracking/repository.go`'s `markApplied` helper),
+      differing only in the `at` timestamp they pass, so one test at the SQL layer covers the
+      promotion logic for all three; the existing `TestMarkAppliedAt_PassesTheDateThrough` /
+      `TestMarkAppliedOn_*` suites (unrelated to this change, still green) confirm the date
+      handling per variant is unaffected.
+- [x] 2.4 Integration test already added alongside 2.3
+      (`.../MarkApplied_does_not_regress_a_stage_beyond_applied`): an application already at
+      `interview` (a stage ranked above `applied`) is left unchanged by a `MarkApplied` call.
 
 ## 3. Tailor bootstrap sets `preparing`, correct event source
 

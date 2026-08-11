@@ -164,4 +164,44 @@ func TestTrackJobAndStageSeeding(t *testing.T) {
 			t.Errorf("re-apply clobbered stage to %q, want offer", row.Stage.String)
 		}
 	})
+
+	t.Run("MarkApplied promotes a preparing stage to applied", func(t *testing.T) {
+		jid3 := insertJob(t, pool, "track-3")
+
+		// CV tailoring's board placement sets stage='preparing' with no applied_at.
+		if _, err := q.TrackJob(ctx, TrackJobParams{
+			UserID: uid, JobID: jid3, Stage: pgtype.Text{String: "preparing", Valid: true},
+		}); err != nil {
+			t.Fatalf("TrackJob(preparing): %v", err)
+		}
+
+		row, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: uid, JobID: jid3})
+		if err != nil {
+			t.Fatalf("MarkJobApplied: %v", err)
+		}
+		if row.Stage.String != "applied" {
+			t.Errorf("stage = %q, want applied — a real apply signal must promote out of preparing", row.Stage.String)
+		}
+		if !row.AppliedAt.Valid {
+			t.Error("applied_at unset — a real apply signal must date it exactly as it would with no prior stage")
+		}
+	})
+
+	t.Run("MarkApplied does not regress a stage beyond applied", func(t *testing.T) {
+		jid4 := insertJob(t, pool, "track-4")
+
+		if _, err := q.TrackJob(ctx, TrackJobParams{
+			UserID: uid, JobID: jid4, Stage: pgtype.Text{String: "interview", Valid: true},
+		}); err != nil {
+			t.Fatalf("TrackJob(interview): %v", err)
+		}
+
+		row, err := q.MarkJobApplied(ctx, MarkJobAppliedParams{UserID: uid, JobID: jid4})
+		if err != nil {
+			t.Fatalf("MarkJobApplied: %v", err)
+		}
+		if row.Stage.String != "interview" {
+			t.Errorf("stage = %q, want interview left untouched", row.Stage.String)
+		}
+	})
 }
