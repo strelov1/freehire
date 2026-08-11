@@ -48,10 +48,23 @@ export default defineConfig({
     // NetworkFirst TTL. `injectRegister: null` because svelte.config.js's CSP
     // has no 'unsafe-inline' script-src — the SW is registered from a real
     // module import in +layout.svelte instead of an auto-injected inline script.
+    //
+    // `workbox.navigateFallback: null` makes that "no navigations" claim true.
+    // Left unset, @vite-pwa/sveltekit defaults it to '/' (SvelteKitPWA's
+    // configureSvelteKitOptions), which registers a NavigationRoute backed by
+    // createHandlerBoundToURL('/') — and since adapter-node/full SSR never
+    // precaches '/', that handler throws `non-precached-url` the moment the SW
+    // tries to route a navigation. Harmless today only because the throw is
+    // swallowed; if this app ever starts prerendering '/', the same route would
+    // start serving one visitor's cached (session-personalized) shell to the
+    // next. Disable it outright rather than rely on it staying broken.
     SvelteKitPWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
       injectRegister: null,
+      workbox: {
+        navigateFallback: null,
+      },
       manifest: {
         // Name/description echo the WebSite JSON-LD copy in src/lib/seo.ts
         // (SITE_DESCRIPTION) — same product description, not re-derived from it,

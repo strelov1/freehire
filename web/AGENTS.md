@@ -29,6 +29,15 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`),
   overridable via `PUBLIC_POSTHOG_HOST`. Injected by `freehire-ops`, never committed, unset
   in dev.
+- The PWA service worker (`web/vite.config.ts`, `SvelteKitPWA`) precaches only the built app
+  shell — no runtime-caching entry for `/api/*` or navigations, since every job listing,
+  filter result and `/me/*` response is personalized or live. `workbox.navigateFallback` is
+  explicitly `null`: left unset it defaults to `'/'`, and since this app is full SSR with no
+  prerendered `/`, that would route every navigation through a handler bound to a URL that was
+  never precached — on a shared device that's a session-personalized shell served to the next
+  visitor. `registerType: 'autoUpdate'` reloads open tabs on a new deploy; `onNeedReload` in
+  `+layout.svelte` gates that behind a confirmation so it can't silently drop an in-progress
+  CV edit or application form.
 
 ## Worth knowing
 

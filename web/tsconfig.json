@@ -15,8 +15,10 @@
     "noImplicitReturns": true,
     // Ambient module declarations for `virtual:pwa-register` (imported dynamically
     // in +layout.svelte) — vite-plugin-pwa ships these per-entrypoint rather than
-    // globally, so the entry must be named explicitly.
-    "types": ["vite-plugin-pwa/client"]
+    // globally, so the entry must be named explicitly. Listing `types` at all
+    // stops TS from auto-including every `@types/*` package, so `node` has to be
+    // named too — dropping it broke ambient `Buffer` in src/lib/server/og/*.
+    "types": ["node", "vite-plugin-pwa/client"]
   }
   // Path aliases ($lib) and includes are provided by SvelteKit's generated
   // ./.svelte-kit/tsconfig.json (run `svelte-kit sync` to (re)generate it).
