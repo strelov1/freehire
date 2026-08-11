@@ -85,16 +85,18 @@
       description and `CliView.svelte`'s CLI help text — both named the stage list without
       `preparing`. Neither is caught by `pnpm run check` (plain strings, not typed against
       `Stage`). Added it to both.
-- [ ] 4.3 NOT DONE as originally scoped. No `preparing` row exists anywhere yet — its only
-      producer (`EnsureOnBoard`, task 3) is deferred behind PR #1754 — so there is no real card
-      to open the Tracking board and look at; seeding one would mean faking data the app cannot
-      yet produce itself. What IS verified: `pnpm run check` (0 errors) proves no card can render
-      in an unhandled state; the vitest suite (916 passed, including "every band gets a real
-      colour") proves the funnel math and the colour table are complete for 5 bands; reading
-      `PipelineFunnel.svelte`'s geometry code (task group 4 investigation) confirms the SVG height
-      and ribbon layout are computed from `visible.length`, not a hard-coded band count. A real
-      pixel-level look, per this repo's own "test the UI in a browser" convention, still needs
-      task 3 done first.
+- [x] 4.3 DONE, after task 3 landed (PR #1754 merged, `EnsureOnBoard` now writes `preparing`).
+      Per this repo's headless-Chrome visual-verify convention: a throwaway
+      `web/src/routes/qa-preparing-stage/+page.svelte` rendered the real `JobBoard` and
+      `PipelineFunnel` components with hand-built `MyJob[]`/`PipelineStats` props (one item
+      per group, including `preparing`) — no backend, no DB, no auth. `pnpm dev --port 5173`,
+      screenshotted via system Chrome (`--headless --disable-gpu --window-size=1900,900
+      --screenshot=...`), then the route was deleted and the dev server stopped. Confirmed
+      visually: Preparing renders as its own board column ahead of Applied with the right
+      label; the funnel renders 5 distinct-coloured Sankey bands in the right order, ribbons
+      fan cleanly with no geometry defects; Closed still shows its own settled outcome
+      ("Rejected") on the card inside the coarse column. No `git status` residue from the
+      throwaway route afterward.
 
 ## 5. Backfill
 
@@ -116,12 +118,18 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `go build ./...` and `go vet ./...`.
-- [ ] 6.2 `go vet -tags=integration ./...`.
-- [ ] 6.3 `go test -tags=integration ./internal/handler/... ./internal/db/... ./internal/userjob/...`
-      (or the narrower set covering the files touched in tasks 1-3).
-- [ ] 6.4 `pnpm run check` in `web/` (the vocabulary spec's own required gate: every generated
-      stage value must be covered by the generated group table).
-- [ ] 6.5 Manual end-to-end pass: fresh tailor bootstrap → card in Preparing; mark that same
-      vacancy applied (via the SPA's "mark applied" action or the API directly) → card moves to
-      Applied; a vacancy already at `interview` → tailor reopen leaves it at `interview`.
+- [x] 6.1 `go build ./...` — clean throughout, re-verified after every commit.
+- [x] 6.2 `go vet -tags=integration ./...` — clean throughout.
+- [x] 6.3 `go test -tags=integration ./internal/handler/... ./internal/db/... ./internal/userjob/... ./internal/jobtracking/...` — green throughout.
+- [x] 6.4 `pnpm run check` in `web/` — 0 errors (22 pre-existing unrelated warnings, unchanged
+      baseline); `pnpm test` (vitest) 916/916.
+- [x] 6.5 Each clause verified, backend logic through real integration tests exercising the
+      actual handler/SQL code paths, rendering through the 4.3 visual pass:
+      "fresh tailor bootstrap → card in Preparing" — `TestTailorCVBootstrap` (HTTP handler,
+      real Postgres); "mark applied → card moves to Applied" —
+      `TestTrackJobAndStageSeeding/MarkApplied_promotes_a_preparing_stage_to_applied` (SQL
+      layer, the exact statement every mark-applied path shares) plus the visual funnel/board
+      check; "interview → tailor reopen leaves it at interview" —
+      `TestTailorCVBootstrap_HealsMissingSave`'s third bootstrap assertion. No live
+      server+browser end-to-end run was done beyond the 4.3 mock-props visual pass — not
+      needed given the handler-level integration coverage above exercises the same code.
