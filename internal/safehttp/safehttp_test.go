@@ -27,6 +27,14 @@ func TestBlockedClassifiesAddresses(t *testing.T) {
 		{"100.127.255.255", true}, // CGNAT upper bound
 		{"0.0.0.0", true},         // unspecified
 		{"fc00::1", true},         // unique local v6
+		{"192.0.0.1", true},       // IETF protocol assignments
+		{"192.0.2.1", true},       // documentation (TEST-NET-1)
+		{"198.18.0.1", true},      // benchmarking
+		{"198.19.255.255", true},  // benchmarking upper bound
+		{"198.51.100.1", true},    // documentation (TEST-NET-2)
+		{"203.0.113.1", true},     // documentation (TEST-NET-3)
+		{"240.0.0.1", true},       // reserved
+		{"255.255.255.255", true}, // limited broadcast
 		{"8.8.8.8", false},        // public
 		{"1.1.1.1", false},        // public
 		{"93.184.216.34", false},  // public

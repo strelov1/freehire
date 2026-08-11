@@ -24,30 +24,55 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// cgnat is the RFC6598 shared address space (100.64.0.0/10). IsPrivate does not
-// cover it, but cloud providers (AWS/GCP) use it for internal/infra addressing and
-// it is reachable from instances — so an SSRF guard must block it too.
-var cgnat = func() *net.IPNet {
-	_, n, _ := net.ParseCIDR("100.64.0.0/10")
-	return n
+// specialPurpose are IANA special-purpose IPv4 blocks that net.IP.IsPrivate does not
+// cover (it only implements RFC1918 for v4 and RFC4193 ULA for v6). None of these are
+// publicly routable, but a deployment network can still forward to them, so the SSRF
+// guard must deny them explicitly rather than rely on the caller-facing "any
+// non-public address" policy being satisfied by IsPrivate alone.
+var specialPurpose = func() []*net.IPNet {
+	cidrs := []string{
+		"100.64.0.0/10",   // RFC6598 CGNAT shared space (also cloud infra addressing)
+		"192.0.0.0/24",    // RFC6890 IETF protocol assignments
+		"192.0.2.0/24",    // RFC5737 documentation (TEST-NET-1)
+		"198.18.0.0/15",   // RFC2544 benchmarking
+		"198.51.100.0/24", // RFC5737 documentation (TEST-NET-2)
+		"203.0.113.0/24",  // RFC5737 documentation (TEST-NET-3)
+		"240.0.0.0/4",     // RFC1112 reserved (includes 255.255.255.255 limited broadcast)
+	}
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(fmt.Sprintf("safehttp: bad CIDR %q: %v", c, err))
+		}
+		nets = append(nets, n)
+	}
+	return nets
 }()
 
 // blocked reports whether ip must not be dialed: loopback, RFC1918/ULA private,
-// CGNAT shared space, link-local (which includes the 169.254.169.254 cloud-metadata
-// address), multicast, and the unspecified address. nil is treated as blocked (fail
-// closed).
+// link-local (which includes the 169.254.169.254 cloud-metadata address), multicast,
+// unspecified, and the IANA special-purpose blocks in specialPurpose. nil is treated
+// as blocked (fail closed).
 func blocked(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	return ip.IsLoopback() ||
+	if ip.IsLoopback() ||
 		ip.IsPrivate() ||
-		cgnat.Contains(ip) ||
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() ||
 		ip.IsMulticast() ||
-		ip.IsUnspecified()
+		ip.IsUnspecified() {
+		return true
+	}
+	for _, n := range specialPurpose {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // GuardedDialer returns a net.Dialer whose Control hook rejects a connection to any
