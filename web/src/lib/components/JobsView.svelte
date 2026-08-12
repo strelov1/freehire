@@ -55,16 +55,24 @@
   // hides facets that are redundant under that scope (e.g. Source on a company).
   // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
   // company page's facts card); the standalone /jobs list omits it.
+  //
+  // `initialParams` overrides the seed below with a param string that doesn't
+  // appear in the address bar — the homepage's first-visit default (see
+  // +page.server.ts): `initial` was searched with it, so the client must seed
+  // off the same string, not the (bare) URL, or the two would disagree and the
+  // mount effect would immediately discard the SSR page and refetch.
   let {
     initial,
     scope = {},
     excludeFacets = [],
     sidebarTop,
+    initialParams,
   }: {
     initial: Slice<Job>;
     scope?: Record<string, string>;
     excludeFacets?: string[];
     sidebarTop?: Snippet;
+    initialParams?: string;
   } = $props();
 
   // Standalone /jobs (no fixed scope) hands its text search to the header; an
@@ -74,8 +82,12 @@
   // Seed filters from the current URL so the server and the hydrated client
   // render the same filtered view. Only the standalone list persists to storage;
   // the embedded company list must not clobber the shared key. Persistence is
-  // fixed for the store's life, so the initial `standalone` is captured once.
-  const filters = new FilterStore(page.url.searchParams, untrack(() => standalone));
+  // fixed for the store's life, so the initial `standalone` and `initialParams`
+  // are captured once.
+  const filters = new FilterStore(
+    untrack(() => (initialParams != null ? new URLSearchParams(initialParams) : page.url.searchParams)),
+    untrack(() => standalone),
+  );
 
   // CV-similarity sort is offered only on the standalone feed (the company-embedded
   // list never ranks by the visitor's CV). Read off the debounced `applied` sort so

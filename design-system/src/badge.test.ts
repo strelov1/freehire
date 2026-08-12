@@ -33,7 +33,7 @@ describe('Badge', () => {
   // @source scan's business. This asserts the half that is testable; the other
   // half is CI's assertion over storybook-static, and the eye.
   it('names the destructive tint on the missing variant', () => {
-    expect(classesFor({ variant: 'missing' })).toContain('text-destructive/75');
+    expect(classesFor({ variant: 'missing' })).toContain('text-destructive/90');
   });
 
   it('lets a caller override a base class', () => {

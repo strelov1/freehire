@@ -95,13 +95,16 @@
       <button
         type="button"
         onclick={() => target?.openFilters?.()}
-        aria-label="Filters"
+        aria-label={filterTrigger.count > 0
+          ? `Filters (${filterTrigger.count} active)`
+          : 'Filters'}
         title="Filters"
         class="relative flex shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground"
       >
         <SlidersHorizontal class="size-4 shrink-0" />
         {#if filterTrigger.count > 0}
           <span
+            aria-hidden="true"
             class="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-brand-foreground"
           >
             {filterTrigger.count}

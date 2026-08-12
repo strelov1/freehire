@@ -104,6 +104,7 @@
     type="button"
     aria-haspopup="menu"
     aria-expanded={open}
+    aria-label={summary.label}
     onclick={(e) => {
       // Stop the toggle's own click from reaching the window outside-handler, which
       // would otherwise immediately re-close the just-opened popover.

@@ -92,10 +92,11 @@
     <div class={['flex shrink-0 items-center', fullBleed && 'flex-1 basis-0']}>
       <a
         href={resolve('/')}
+        aria-label="freehire"
         class="flex items-center gap-2 text-sm font-semibold tracking-tight"
       >
         <BrandMark />
-        <span class="hidden sm:inline">freehire</span>
+        <span class="hidden sm:inline" aria-hidden="true">freehire</span>
       </a>
     </div>
 

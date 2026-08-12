@@ -33,5 +33,6 @@
        hidden: the page's purpose is clear from the feed and onboarding banner, so
        the on-screen title was redundant. sr-only takes no layout space. -->
   <h1 class="sr-only">Tech jobs</h1>
-  <JobsView initial={data.initial} />
+  <h2 class="sr-only">Job listings</h2>
+  <JobsView initial={data.initial} initialParams={data.filterParams} />
 </div>

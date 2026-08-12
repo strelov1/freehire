@@ -1,6 +1,5 @@
-import { redirect } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
-import { FILTERS_TOUCHED_COOKIE } from '$lib/filterStorage';
+import { FILTERS_TOUCHED_COOKIE, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
 import { defaultFilterTarget, isCrawler } from '$lib/firstVisit';
 import type { PageServerLoad } from './$types';
 
@@ -12,17 +11,21 @@ const LIMIT = 20;
 // search API reads; `searchJobs` adds pagination. Filters/sort/"load more" then
 // run client-side over the same client.
 export const load: PageServerLoad = async ({ url, fetch, cookies, request }) => {
-  // First-visit default: redirect a brand-new human on a bare homepage to the
-  // remote-worldwide slice before render, so the filtered feed is server-rendered
-  // (no flash, no post-hydration store mutation). defaultFilterTarget owns which
-  // requests are exempt (shared links, returning visitors, crawlers).
-  const target = defaultFilterTarget({
-    search: url.search,
-    touched: !!cookies.get(FILTERS_TOUCHED_COOKIE),
-    crawler: isCrawler(request.headers.get('user-agent')),
-  });
-  if (target) redirect(302, target);
+  // First-visit default: a brand-new human on a bare homepage gets the
+  // remote-worldwide slice — applied implicitly (search with its params, seed
+  // the client's filter state with the same string below) rather than via a
+  // redirect, so there's no extra round trip before the page can render.
+  // defaultFilterTarget owns which requests are exempt (shared links, returning
+  // visitors, crawlers) — a non-null result just means "use the default set";
+  // its `/?...` path isn't needed since the address bar never changes.
+  const useDefault =
+    defaultFilterTarget({
+      search: url.search,
+      touched: !!cookies.get(FILTERS_TOUCHED_COOKIE),
+      crawler: isCrawler(request.headers.get('user-agent')),
+    }) !== null;
 
-  const initial = await serverApi(fetch).searchJobs(url.searchParams, LIMIT, 0);
-  return { initial };
+  const params = useDefault ? new URLSearchParams(DEFAULT_JOB_FILTERS) : url.searchParams;
+  const initial = await serverApi(fetch).searchJobs(params, LIMIT, 0);
+  return { initial, filterParams: params.toString() };
 };
