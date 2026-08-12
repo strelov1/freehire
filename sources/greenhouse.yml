@@ -14365,8 +14365,6 @@
   board: zoomget
 
 # greenhouse board mined from remote.io (2026-08-09, live-validated)
-- company: Greenplaces
-  board: greenplaces
 
 # greenhouse boards mined from dynamitejobs.com (2026-08-10, live-validated)
 - company: Insurity

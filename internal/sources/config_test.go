@@ -249,3 +249,67 @@ func TestConfigValidateRejectsEmptyBoardForPerEntryBoardProvider(t *testing.T) {
 		t.Fatalf("expected empty-board error naming Acme, got %v", err)
 	}
 }
+
+// ParseConfig decodes strictly: a typo'd key has no required-field error to catch it (it
+// just leaves the intended field at its zero value), so an unrecognized key must fail the
+// parse outright instead of silently doing nothing.
+func TestParseConfigRejectsUnknownField(t *testing.T) {
+	_, err := ParseConfig("greenhouse", []byte("- company: Cohere\n  regoin: eu\n  board: cohere\n"))
+	if err == nil {
+		t.Fatal("expected an error for the unrecognized field, got nil")
+	}
+}
+
+// A board file that is comments only (e.g. a deprecated provider kept registered but
+// superseded, see sources/careerspage.yml) has no YAML document at all, which the
+// underlying decoder reports as io.EOF — that must read as zero entries, not a failure.
+func TestParseConfigAcceptsCommentOnlyFile(t *testing.T) {
+	cfg, err := ParseConfig("careerspage", []byte("# superseded by sources/manatal.yml\n"))
+	if err != nil {
+		t.Fatalf("ParseConfig: %v", err)
+	}
+	if len(cfg.Sources) != 0 {
+		t.Errorf("Sources = %+v, want none", cfg.Sources)
+	}
+}
+
+// DuplicateBoards is what cmd/validate-sources uses to fail loudly on the exact
+// collisions ParseConfig's dedupeBoards otherwise fixes quietly.
+func TestDuplicateBoardsReportsCaseVariantCollisions(t *testing.T) {
+	entries := []CompanyEntry{
+		{Company: "SopraSteria1", Provider: "smartrecruiters", Board: "SopraSteria1"},
+		{Company: "Stripe", Provider: "smartrecruiters", Board: "stripe"},
+		{Company: "soprasteria1", Provider: "smartrecruiters", Board: "soprasteria1"},
+	}
+	dups := DuplicateBoards(entries)
+	if len(dups) != 1 {
+		t.Fatalf("DuplicateBoards = %v, want exactly one collision", dups)
+	}
+	if !strings.Contains(dups[0], "SopraSteria1") || !strings.Contains(dups[0], "soprasteria1") {
+		t.Errorf("message %q should name both colliding companies", dups[0])
+	}
+}
+
+// A same-name board on two different regions is a real, distinct crawl target — not a
+// duplicate — matching TestParseConfigKeepsSameBoardOnDifferentRegions.
+func TestDuplicateBoardsKeepsSameBoardOnDifferentRegions(t *testing.T) {
+	entries := []CompanyEntry{
+		{Company: "Acme", Provider: "lever", Board: "acme", Region: "us"},
+		{Company: "Acme", Provider: "lever", Board: "acme", Region: "eu"},
+	}
+	if dups := DuplicateBoards(entries); len(dups) != 0 {
+		t.Errorf("DuplicateBoards = %v, want none (region variants)", dups)
+	}
+}
+
+// Boardless entries have no tenant id, so two of them must never read as duplicates of
+// each other just because both have an empty board.
+func TestDuplicateBoardsKeepsBoardlessEntries(t *testing.T) {
+	entries := []CompanyEntry{
+		{Company: "VK", Provider: "vk"},
+		{Company: "Ozon", Provider: "ozon"},
+	}
+	if dups := DuplicateBoards(entries); len(dups) != 0 {
+		t.Errorf("DuplicateBoards = %v, want none (boardless entries)", dups)
+	}
+}

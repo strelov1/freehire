@@ -973,8 +973,6 @@
   board: apmgroup
 - company: applaudostudios
   board: applaudostudios
-- company: applusidiada1
-  board: applusidiada1
 - company: asos
   board: asos
 - company: avenues1
@@ -5665,8 +5663,6 @@
   board: acrobytetechnologies
 - company: Advantine Technologies
   board: advantinetechnologies
-- company: Agile IT
-  board: agileit
 - company: Airswift
   board: airswift
 - company: AJNA INFOTECH
@@ -5681,8 +5677,6 @@
   board: alquicoche
 - company: American IT Staff
   board: americanitstaff
-- company: American Montessori Society
-  board: americanmontessorisociety
 - company: American Veterinary Group
   board: americanveterinarygroup
 - company: AngioDynamics
@@ -5723,8 +5717,6 @@
   board: beigene
 - company: Benivo Limited
   board: benivo
-- company: Bertoni Solutions
-  board: bertonisolutions
 - company: BHC Press
   board: bhcpress
 - company: BigBinary
@@ -5739,8 +5731,6 @@
   board: bluecoding
 - company: B Riley Financial
   board: brileyfinancial
-- company: Bringle Excellence
-  board: bringleexcellence
 - company: Bucketlist Xperiences
   board: bucketlistxperiences
 - company: Business Wire
@@ -5791,8 +5781,6 @@
   board: coherusbiosciences
 - company: Concurrences
   board: concurrences
-- company: CONFISA INTERNATIONAL GROUP
-  board: confisainternationalgroup
 - company: Cornerstone Building Brands, Inc.
   board: cornerstonebuildingbrands
 - company: Creatively Smart Marketing
@@ -5823,10 +5811,6 @@
   board: divertinc
 - company: Doc Clik
   board: docclik
-- company: Domino's
-  board: dominos
-- company: Dresden Partners
-  board: dresdenpartners
 - company: DRT Strategies
   board: drtstrategies
 - company: Dwellworks
@@ -5903,8 +5887,6 @@
   board: hiretechgroup
 - company: HIRINGMAN
   board: hiringman
-- company: Hitachi Solutions
-  board: hitachisolutions
 - company: Hivemapper
   board: hivemapper
 - company: HiWave
@@ -5931,8 +5913,6 @@
   board: infoya
 - company: inSegment
   board: insegment
-- company: insightsoftware
-  board: insightsoftware
 - company: Inspectorio
   board: inspectorio
 - company: IntegriChain
@@ -5957,8 +5937,6 @@
   board: itechstack
 - company: IvyPanda
   board: ivypanda
-- company: JACOBS DOUWE EGBERTS
-  board: jacobsdouweegberts
 - company: jetfuel.agency
   board: jetfuelagency
 - company: JFL Media
@@ -5979,8 +5957,6 @@
   board: kitusystems
 - company: Knimbus
   board: knimbus
-- company: KoiReader Technologies
-  board: koireadertechnologies
 - company: Kore.ai
   board: koreai
 - company: Land O'Lakes, Inc.
@@ -5991,8 +5967,6 @@
   board: lanshore
 - company: Leadway Pensure
   board: leadwaypensure
-- company: LegalAndGeneral
-  board: legalandgeneral
 - company: Lifted (an Upwork Company)
   board: liftedanupworkcompany
 - company: Lingaro
@@ -6005,8 +5979,6 @@
   board: ludwig
 - company: Lynx Solutions
   board: lynxsolutions
-- company: M3 USA
-  board: m3usa
 - company: Magellan Health
   board: magellanhealth
 - company: Magic Ears
@@ -6041,8 +6013,6 @@
   board: montu
 - company: M&S Consulting
   board: msconsulting
-- company: NECSWS
-  board: necsws
 - company: Neilson Financial Services
   board: neilsonfinancialservices
 - company: New Amsterdam Technology and Business Ventures
@@ -6051,8 +6021,6 @@
   board: nextsteprecruitment
 - company: Next Step Systems
   board: nextstepsystems
-- company: Nile Bits
-  board: nilebits
 - company: NOCD
   board: nocd
 - company: Node.Digital
@@ -6089,8 +6057,6 @@
   board: polyconsulting
 - company: Privafy
   board: privafy
-- company: Privia Health
-  board: priviahealth
 - company: Pro Coffee Gear
   board: procoffeegear
 - company: Public Outdoor Creations
@@ -6115,8 +6081,6 @@
   board: recruitaidagency
 - company: Rede Consulting Services
   board: redeconsultingservices
-- company: REDICA Systems
-  board: redicasystems
 - company: Red Stamp Media
   board: redstampmedia
 - company: Relief International
@@ -6213,8 +6177,6 @@
   board: swisstankmedia
 - company: Syke Legal Engineering
   board: sykelegalengineering
-- company: Syncreon Consulting
-  board: syncreonconsulting
 - company: Talent2Africa
   board: talent2africa
 - company: Talent Navigation Experts
@@ -6245,8 +6207,6 @@
   board: thehrhubnigeria
 - company: The Impact Project
   board: theimpactproject
-- company: The Nielsen Company
-  board: thenielsencompany
 - company: The Opportunity Group
   board: theopportunitygroup
 - company: The Restory
@@ -6265,8 +6225,6 @@
   board: tripexpert
 - company: 'TTEC '
   board: ttec
-- company: Turner & Townsend
-  board: turnertownsend
 - company: U-Haul
   board: u-haul
 - company: Unowhy
@@ -6305,8 +6263,6 @@
   board: widercircle
 - company: Work Better Now
   board: workbetternow
-- company: XceedSearch.com
-  board: xceedsearchcom
 - company: Xinnovit
   board: xinnovit
 - company: Ziffity Solutions
@@ -6325,88 +6281,40 @@
   board: ContinentalGroupSectorContiTech
 - company: IOTA GROUP
   board: IOTAGROUP
-- company: SOCOTEC UK & Ireland
-  board: SOCOTECUKIreland
-- company: Agile IT
-  board: agileit
-- company: American Montessori Society
-  board: americanmontessorisociety
 - company: Armis
   board: armis
-- company: Bertoni Solutions
-  board: bertonisolutions
 - company: Blu Selection
   board: bluselection
 - company: BorderBuddy
   board: borderbuddy
-- company: Bringle Excellence
-  board: bringleexcellence
 - company: Brushfire
   board: brushfire
 - company: Center for Applied Linguistics
   board: centerforappliedlinguistics
-- company: CONFISA INTERNATIONAL GROUP
-  board: confisainternationalgroup
-- company: Domino's
-  board: dominos
 - company: Dotsub
   board: dotsub
-- company: Dresden Partners
-  board: dresdenpartners
-- company: Hitachi Solutions
-  board: hitachisolutions
-- company: H&M Group
-  board: hmgroup
 - company: Host & Stay
   board: hoststay
-- company: insightsoftware
-  board: insightsoftware
 - company: InVita Healthcare Technologies
   board: invitahealthcaretechnologies
-- company: JACOBS DOUWE EGBERTS
-  board: jacobsdouweegberts
-- company: KoiReader Technologies
-  board: koireadertechnologies
 - company: KPMG Australia
   board: kpmgaustralia
-- company: LegalAndGeneral
-  board: legalandgeneral
-- company: M3 USA
-  board: m3usa
-- company: NECSWS
-  board: necsws
-- company: Nile Bits
-  board: nilebits
 - company: Opportunity@Work
   board: opportunitywork
 - company: PeopleReady
   board: peopleready
-- company: Privia Health
-  board: priviahealth
 - company: RealDefense
   board: realdefense
-- company: REDICA Systems
-  board: redicasystems
 - company: Schoolyear
   board: schoolyear
 - company: Shaped
   board: shaped
 - company: Space Inch
   board: spaceinch
-- company: Syncreon Consulting
-  board: syncreonconsulting
 - company: TBD_14_10_2022_Ludia
   board: tbd14102022ludia
-- company: The Nielsen Company
-  board: thenielsencompany
-- company: Turner & Townsend
-  board: turnertownsend
 - company: Volunteers of America National Services
   board: volunteersofamericanationalservices
-- company: XceedSearch.com
-  board: xceedsearchcom
-- company: Abano Healthcare
-  board: abanohealthcare
 - company: Accenture Federal Services
   board: accenturefederalservices
 - company: Accion Labs
@@ -6417,8 +6325,6 @@
   board: agriculturalrecruitmentspecialists
 - company: Aizen Recruitment
   board: aizenrecruitment
-- company: Aldi Stores
-  board: aldistores
 - company: Alexander Associates
   board: alexanderassociates
 - company: Alliance IT
@@ -6435,8 +6341,6 @@
   board: arkinfotechspectrum
 - company: Asbury Automotive Group
   board: asburyautomotivegroup
-- company: Ashburn Consulting
-  board: ashburnconsulting
 - company: Aspire Technology Solutions
   board: aspiretechnologysolutions
 - company: Athena Technology Group, Inc.
@@ -6479,8 +6383,6 @@
   board: ceterafinancialgroup
 - company: Chandler Macleod Group
   board: chandlermacleodgroup
-- company: City of New York
-  board: cityofnewyork
 - company: CleanPeak Energy
   board: cleanpeakenergy
 - company: codeconvergence
@@ -6533,8 +6435,6 @@
   board: erpinternational
 - company: eSense Incorporated
   board: esenseincorporated
-- company: Experian Ltd
-  board: experian
 - company: Fintricity
   board: fintricity
 - company: Frank Recruitment Group Inc
@@ -6567,8 +6467,6 @@
   board: hireblazer
 - company: Hired by Matrix, Inc.
   board: hiredbymatrix
-- company: Hitachi Solutions
-  board: hitachisolutions
 - company: HonorVet Technologies
   board: honorvettechnologies
 - company: Horizontal Talent
@@ -6589,8 +6487,6 @@
   board: inlogik
 - company: Innovative IT Solutions Inc
   board: innovativeitsolutions
-- company: insightsoftware
-  board: insightsoftware
 - company: Intelizign
   board: intelizign
 - company: IPS Group
@@ -6613,8 +6509,6 @@
   board: kyrasolutions
 - company: LaSalle Network
   board: lasallenetwork
-- company: LegalAndGeneral
-  board: legalandgeneral
 - company: Leonardo DRS, Inc.
   board: leonardodrs
 - company: Linchpin Software
@@ -6649,8 +6543,6 @@
   board: navasoftwaresolutions
 - company: Naztec International Group LLC
   board: naztecinternationalgroup
-- company: NECSWS
-  board: necsws
 - company: NeerInfo Solutions Inc.
   board: neerinfosolutions
 - company: Negocios IT Solutions  LTD
@@ -6771,8 +6663,6 @@
   board: trigyntechnologies
 - company: Trinity Envision Business Services LLC
   board: trinityenvisionbusinessservices
-- company: Turner & Townsend
-  board: turnertownsend
 - company: United Technology
   board: unitedtechnology
 - company: USEReady
@@ -6789,8 +6679,6 @@
   board: vitashealthcare
 - company: Voluble Systems LLC
   board: volublesystems
-- company: Wabtec Corporation
-  board: wabtec
 - company: Webster & Webster Associates
   board: websterwebsterassociates
 - company: WhereGroup
