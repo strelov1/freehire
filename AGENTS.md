@@ -44,12 +44,19 @@ go build ./...  &&  go vet ./...
 go test ./...                             # unit tests (no external deps)
 go vet -tags=integration ./...            # compiles the tagged tests — run before EVERY push
 go test -tags=integration ./internal/db/  # queue integration tests (needs Docker; testcontainers)
+golangci-lint run                         # .golangci.yml; CI only fails on issues new-from-main (ratchet)
 ```
 
 **Before committing** any `*.go` file: `gofmt -w` those paths (`gofmt -l .` must print
 nothing), then `go vet ./...` and `go test ./...`. Do not commit if they fail. Skip this
 suite when the commit has no Go. Integration-tagged tests stay push-time (`go vet
 -tags=integration ./...` before every push; the full tagged suite when behaviour changed).
+
+**Pre-commit hooks:** [lefthook](https://github.com/evilmartians/lefthook) (`go install
+github.com/evilmartians/lefthook@latest`, then `lefthook install` once per clone) runs
+gofmt/vet/golangci-lint on staged Go files and eslint on staged files in web/, extension/,
+design-system/ — the same ratchet policy as CI (only new issues fail the commit), so it
+won't block on the pre-existing backlog.
 
 **`go test ./...` compiles no `//go:build integration` file, and those files are not
 confined to `internal/db`** — there are 187 of them across 20 packages, and `internal/handler`

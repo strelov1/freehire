@@ -4,7 +4,7 @@ import { applyRealtimeEvent, canUseVoiceCall, initVoiceCallState } from './voice
 describe('canUseVoiceCall', () => {
   it('is true only when both APIs are present', () => {
     expect(
-      canUseVoiceCall({ mediaDevices: { getUserMedia: () => {} }, RTCPeerConnection: class {} }),
+      canUseVoiceCall({ mediaDevices: { getUserMedia: () => {} }, RTCPeerConnection: {} }),
     ).toBe(true);
   });
 
@@ -13,8 +13,8 @@ describe('canUseVoiceCall', () => {
   });
 
   it('is false without getUserMedia, which is what an insecure context looks like', () => {
-    expect(canUseVoiceCall({ RTCPeerConnection: class {} })).toBe(false);
-    expect(canUseVoiceCall({ mediaDevices: {}, RTCPeerConnection: class {} })).toBe(false);
+    expect(canUseVoiceCall({ RTCPeerConnection: {} })).toBe(false);
+    expect(canUseVoiceCall({ mediaDevices: {}, RTCPeerConnection: {} })).toBe(false);
   });
 
   it('is false in a bare environment', () => {

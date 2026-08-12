@@ -555,7 +555,7 @@
         </div>
       {/if}
     {/each}
-    {#each notices as notice}
+    {#each notices as notice, i (i)}
       <div class="message system">{notice}</div>
     {/each}
     {#if overrideFill}

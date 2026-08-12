@@ -228,7 +228,7 @@
       // saved mark and reappears under Activity → Saved.
       if (prevCol) {
         columns[prevCol] = columns[prevCol].filter((i) => i.id !== item.id);
-        delete cardCol[item.id];
+        Reflect.deleteProperty(cardCol, item.id);
       }
       openItem = null;
     } else if (prevCol && nextCol !== prevCol) {
@@ -269,7 +269,7 @@
     const col = cardCol[item.id];
     if (col) {
       columns[col] = columns[col].filter((i) => i.id !== item.id);
-      delete cardCol[item.id];
+      Reflect.deleteProperty(cardCol, item.id);
     }
     openItem = null;
     try {

@@ -41,7 +41,7 @@
   <div class="group">
     <div class="glabel"><span class="dot good"></span> You have</div>
     <div class="chips">
-      {#each match.matched as s}<span class="chip good">{s}</span>{/each}
+      {#each match.matched as s (s)}<span class="chip good">{s}</span>{/each}
       {#if match.matched.length === 0}<span class="none">no matching skills yet</span>{/if}
     </div>
   </div>
@@ -50,7 +50,7 @@
     <div class="group">
       <div class="glabel"><span class="dot miss"></span> Missing</div>
       <div class="chips">
-        {#each match.missing as s}<span class="chip miss">{s}</span>{/each}
+        {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
       </div>
     </div>
   {/if}

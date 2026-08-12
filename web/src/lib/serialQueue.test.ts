@@ -3,7 +3,7 @@ import { serialQueue } from './serialQueue';
 
 /** A promise the test settles by hand, so a second job can be queued while the first
  *  is still running. */
-function deferred<T>() {
+function deferred<T = void>() {
   let resolve!: (v: T) => void;
   let reject!: (e: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
@@ -42,7 +42,7 @@ describe('serialQueue', () => {
 
   it('lets a job read state its predecessor wrote', async () => {
     const queue = serialQueue();
-    const first = deferred<void>();
+    const first = deferred();
     let state = 'initial';
 
     const a = queue(async () => {
