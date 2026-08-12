@@ -12,9 +12,9 @@
 
 ## 3. Backend read/write API
 
-- [ ] 3.1 `internal/handler/me_notifications.go`: `GetNotifications` (`GET /me/notifications`, `pageParamsBounded` + `listResponse`-style envelope with `meta.unread_count`), `MarkNotificationRead` (`POST /me/notifications/:id/read`, owner-scoped, 404 for another user's, idempotent), `MarkAllNotificationsRead` (`POST /me/notifications/read-all`, returns `{"data":{"marked":n}}`) — all cookie-only (`mw.cookie`, matching the rest of `/me/*`)
-- [ ] 3.2 Register the three routes; unit tests for each handler (fake store) covering: default page, pagination bounds, owner-scoping 404, idempotent mark-read, mark-all-read count
-- [ ] 3.3 Integration test (`//go:build integration`): seed rows across users, confirm list/pagination/unread_count/mark-read/mark-all-read against real Postgres and real owner-scoping
+- [x] 3.1 `internal/handler/me_notifications.go`: `GetNotifications` (`GET /me/notifications`, `pageParamsBounded` + `listResponse`-style envelope with `meta.unread_count`), `MarkNotificationRead` (`POST /me/notifications/:id/read`, owner-scoped, 404 for another user's, idempotent), `MarkAllNotificationsRead` (`POST /me/notifications/read-all`, returns `{"data":{"marked":n}}`) — all cookie-only (`mw.cookie`, matching the rest of `/me/*`)
+- [x] 3.2 Register the three routes; unit tests for each handler (fake store) covering: default page, pagination bounds, owner-scoping 404, idempotent mark-read, mark-all-read count
+- [x] 3.3 Integration test (`//go:build integration`): seed rows across users, confirm list/pagination/unread_count/mark-read/mark-all-read against real Postgres and real owner-scoping
 
 ## 4. Web UI
 
