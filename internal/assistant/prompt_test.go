@@ -18,15 +18,20 @@ func TestEachPresetHasItsOwnPrompt(t *testing.T) {
 	}
 }
 
-// Surfaces are aligned before the first model turn. Without this sentence the agent
-// rediscovers IaC ↔ infrastructure as code and burns the turn on wording.
-func TestTailorPromptSaysSurfacesAreAlreadyAligned(t *testing.T) {
+// Wording is handled outside the conversation. Without this sentence the agent rediscovers
+// IaC ↔ infrastructure as code and burns the turn on it. The sentence must not claim the
+// alignment already ran: a tailored copy minted before the prepass existed, or one for a
+// vacancy that names no interchangeable skill, reaches this prompt unaligned.
+func TestTailorPromptTellsTheAgentNotToSpendEditsOnWording(t *testing.T) {
 	p := SystemPrompt(PresetTailor)
-	if !strings.Contains(p, "already aligned") {
-		t.Error("tailor prompt never says skill surfaces are already aligned")
+	if !strings.Contains(p, "handled outside this conversation") {
+		t.Error("tailor prompt never says skill wording is handled elsewhere")
 	}
-	if !strings.Contains(p, "Do NOT rename skills for wording") {
-		t.Error("tailor prompt never tells the agent not to rename skills for wording")
+	if !strings.Contains(p, "Do NOT spend an edit renaming a skill for wording") {
+		t.Error("tailor prompt never tells the agent not to spend edits on wording")
+	}
+	if strings.Contains(p, "already aligned") {
+		t.Error("tailor prompt asserts the CV is already aligned, which is not true on every path")
 	}
 }
 

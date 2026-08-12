@@ -26,17 +26,14 @@ func (h *cvHandlers) commitSurfaceAlign(ctx context.Context, userID int64, cvID 
 	if err != nil {
 		return err
 	}
-	aligned := cv.Align(rec.Document, preferred)
-	if !cv.AlignChanged(rec.Document, preferred) {
+	aligned, changed := cv.Align(rec.Document, preferred)
+	if !changed {
 		return nil
 	}
 	_, _, err = h.editor.CommitDocument(ctx, cvID, userID,
 		cvedit.ActorSystem, cvedit.OriginImport,
 		cvedit.State{Title: rec.Title, TemplateID: rec.TemplateID, Document: aligned})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // logSurfaceAlign is best-effort commitSurfaceAlign for call sites that must not fail the

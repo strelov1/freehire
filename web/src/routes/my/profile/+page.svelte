@@ -235,6 +235,9 @@
     void offerCvRefresh({
       message: BASE_REFRESH_MESSAGE,
       apply: async () => {
+        // Cleared on the way in, so a failure from one edit does not outlive the next one that
+        // succeeds — the banner sits under the page header and nothing else would ever drop it.
+        actionError = null;
         try {
           await api.resetBaseCvFromResume();
         } catch {

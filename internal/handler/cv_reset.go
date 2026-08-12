@@ -49,12 +49,22 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before resetting from it")
 	}
 	seeded := cv.Seed(st)
+
 	// Align only the tailored copy to the vacancy. The base stays on the résumé's own
-	// spellings — JD surfaces are per-vacancy, not a rewrite of the candidate's seed.
-	tailoredSeed := seeded
+	// spellings — a vacancy's wording belongs to the copy aimed at it, not to the
+	// candidate's seed.
+	//
+	// Alignment runs on the MERGED state, not on the seed: applySeedContent keeps the
+	// summary and skills already on the page when the seed carries none, and aligning
+	// beforehand would leave exactly those kept sections in the old wording.
+	next := applySeedContent(cvedit.State{
+		Title:      rec.Title,
+		TemplateID: rec.TemplateID,
+		Document:   rec.Document,
+	}, seeded)
 	if rec.JobID != 0 {
 		if job, jerr := h.queries.GetJob(c.Context(), rec.JobID); jerr == nil {
-			tailoredSeed = cv.Align(seeded, skilltag.PreferredFromText(job.Description))
+			next.Document, _ = cv.Align(next.Document, skilltag.PreferredFromText(job.Description))
 		} else {
 			log.Printf("cv: loading job %d for reset surface-align: %v", rec.JobID, jerr)
 		}
@@ -67,12 +77,7 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 	// would find it in before this call — rather than a request that "failed" while having
 	// silently rewritten a CV the caller did not ask to touch.
 	_, _, err = h.editor.CommitDocument(c.Context(), id, userID,
-		cvedit.ActorCandidate, cvedit.OriginImport,
-		applySeedContent(cvedit.State{
-			Title:      rec.Title,
-			TemplateID: rec.TemplateID,
-			Document:   rec.Document,
-		}, tailoredSeed))
+		cvedit.ActorCandidate, cvedit.OriginImport, next)
 	if err != nil {
 		return mapCVError(err)
 	}

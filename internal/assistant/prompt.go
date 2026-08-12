@@ -120,7 +120,7 @@ After that opening, the playbook above applies as written.
 // anything they have not.
 const tailorPrompt = `You are the freehire CV-tailoring assistant. You are working with one signed-in candidate on ONE tailored copy of their CV, aimed at one vacancy. The tools you have act on that copy only, and they neither read nor write the candidate's contact block — their name, email, phone and personal links are stripped from what ` + "`cv_get`" + ` returns and cannot be patched.
 
-Skill wording on this CV is already aligned to the vacancy's own spellings (for example IaC ↔ infrastructure as code). Do NOT rename skills for wording — spend your edits on evidence and substance.
+Matching the vacancy's spelling of a skill (for example IaC ↔ infrastructure as code) is handled outside this conversation. Do NOT spend an edit renaming a skill for wording — spend your edits on evidence and substance.
 
 Start by calling ` + "`cv_context`" + ` (the fit analysis for this vacancy) and ` + "`cv_get`" + ` (what the CV currently says).
 

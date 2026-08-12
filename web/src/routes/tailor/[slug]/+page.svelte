@@ -362,6 +362,10 @@
 
   let resetBusy = $state(false);
   let resetError = $state('');
+  // The one condition that forbids replacing the whole document: another reset already in
+  // flight, or any agent turn. All three write the same document, so a second writer loses
+  // one side's work silently. Every entry point to a reset reads this, so none can drift.
+  const resetLocked = $derived(resetBusy || turnActive || runActive);
 
   async function applyResetFromResume() {
     resetBusy = true;
@@ -398,7 +402,11 @@
     await applyResetFromResume();
   }
 
+  // A bank edit offers the same whole-document reset the History tab's control offers, so it
+  // answers to the same guard. While that guard is up the offer is skipped rather than shown:
+  // asking and then doing nothing reads as a broken control, and the next bank edit asks again.
   function offerRefreshAfterBankEdit() {
+    if (resetLocked) return;
     void offerCvRefresh({
       message: TAILOR_REFRESH_MESSAGE,
       apply: applyResetFromResume,
@@ -647,6 +655,17 @@
                checking, confirming, or editing what the assistant knows never means leaving the
                workspace. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
+            <!-- The refresh a bank edit offers is the same reset the History tab's control runs,
+                 and it fails into the same `resetError` — but someone who triggered it from here
+                 is not looking at that tab, so the failure is said here too. -->
+            {#if resetError}
+              <p
+                class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {resetError}
+              </p>
+            {/if}
             <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
           </div>
           <!-- Presentation, in two blocks of label→control rows. Both write straight into the
@@ -758,7 +777,7 @@
         onUndoRevision={undoRevision}
         onUndoRevisionRun={undoRevisionRun}
         onResetFromResume={resetFromResume}
-        resetBusy={resetBusy || turnActive || runActive}
+        resetBusy={resetLocked}
         {resetError}
         bind:tab={artifactTab}
         mobileVisible={mobileView === 'jd' || mobileView === 'jobmatch' || mobileView === 'score' || mobileView === 'history'}

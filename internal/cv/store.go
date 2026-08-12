@@ -320,10 +320,7 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 		return Meta{}, Meta{}, false, err
 	}
 
-	doc := base.Document
-	if len(preferred) > 0 {
-		doc = Align(doc, preferred)
-	}
+	doc, _ := Align(base.Document, preferred)
 	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, doc)
 	if err != nil {
 		return Meta{}, Meta{}, false, err

@@ -1,6 +1,8 @@
 package cv
 
 import (
+	"cmp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -8,41 +10,37 @@ import (
 	"github.com/strelov1/freehire/internal/skilltag"
 )
 
-// Align rewrites doc so skill wording matches preferred surfaces (canonical →
-// JD spelling from skilltag.PreferredFromText). Skills chips and experience
-// stacks accept any alias; summary and bullets only unambiguous aliases. Same-
-// canonical duplicate chips are collapsed. Pure and deterministic; no LLM.
-// The input is not mutated — a rewritten copy is returned. preferred may be nil.
-func Align(doc Document, preferred map[string]string) Document {
+// Align rewrites doc so skill wording matches the spellings the vacancy used (canonical →
+// spelling, from skilltag.PreferredFromText) and reports whether anything changed. Skill
+// chips and experience stacks are matched through the full alias tables; summary and
+// bullet prose only through spellings that cannot be ordinary English. Same-skill
+// duplicates the rewrite creates are collapsed. Pure, deterministic and idempotent; no
+// LLM. The input is not mutated — a rewritten copy is returned. preferred may be nil.
+func Align(doc Document, preferred map[string]string) (Document, bool) {
 	if len(preferred) == 0 {
-		return doc
+		return doc, false
 	}
+	rules := proseRules(preferred)
 	out := doc
 	out.Skills = alignSkillGroups(doc.Skills, preferred)
-	out.Summary = replaceProse(doc.Summary, preferred)
+	out.Summary = replaceProse(doc.Summary, rules)
 	if len(doc.Experience) > 0 {
 		out.Experience = make([]ExperienceItem, len(doc.Experience))
 		copy(out.Experience, doc.Experience)
 		for i := range out.Experience {
-			out.Experience[i].Stack = alignChipList(doc.Experience[i].Stack, preferred)
-			out.Experience[i].Summary = replaceProse(doc.Experience[i].Summary, preferred)
-			out.Experience[i].Bullets = alignProseList(doc.Experience[i].Bullets, preferred)
+			out.Experience[i].Stack = alignChips(doc.Experience[i].Stack, preferred)
+			out.Experience[i].Summary = replaceProse(doc.Experience[i].Summary, rules)
+			out.Experience[i].Bullets = alignProseList(doc.Experience[i].Bullets, rules)
 		}
 	}
 	if len(doc.Projects) > 0 {
 		out.Projects = make([]Project, len(doc.Projects))
 		copy(out.Projects, doc.Projects)
 		for i := range out.Projects {
-			out.Projects[i].Bullets = alignProseList(doc.Projects[i].Bullets, preferred)
+			out.Projects[i].Bullets = alignProseList(doc.Projects[i].Bullets, rules)
 		}
 	}
-	return out
-}
-
-// AlignChanged reports whether Align would change doc for the given preferred map.
-func AlignChanged(doc Document, preferred map[string]string) bool {
-	aligned := Align(doc, preferred)
-	return !documentsEqualForAlign(doc, aligned)
+	return out, !documentsEqualForAlign(doc, out)
 }
 
 func alignSkillGroups(groups []SkillGroup, preferred map[string]string) []SkillGroup {
@@ -51,135 +49,151 @@ func alignSkillGroups(groups []SkillGroup, preferred map[string]string) []SkillG
 	}
 	out := make([]SkillGroup, len(groups))
 	for i, g := range groups {
-		out[i] = SkillGroup{Group: g.Group, Items: collapseIdentical(alignChipList(g.Items, preferred))}
+		out[i] = SkillGroup{Group: g.Group, Items: alignChips(g.Items, preferred)}
 	}
 	return out
 }
 
-func alignChipList(items []string, preferred map[string]string) []string {
+// alignChips rewrites each chip that resolves to a canonical the vacancy spelled its own
+// way, then drops the duplicates that rewrite can create — two spellings of one skill
+// become one chip, not two identical ones. A chip already in the vacancy's spelling keeps
+// the candidate's own casing: matching its wording is the point, matching its shouting is
+// not.
+func alignChips(items []string, preferred map[string]string) []string {
 	if len(items) == 0 {
 		return items
 	}
-	out := make([]string, len(items))
-	copy(out, items)
-	for i, item := range items {
-		resolved := skilltag.Canonicalize([]string{item}, skilltag.WithResumeAcronyms())
-		if len(resolved) != 1 {
-			continue
-		}
-		want, ok := preferred[resolved[0]]
-		if !ok || want == "" {
-			continue
-		}
-		if strings.EqualFold(item, want) {
-			// Already the right wording; keep the JD casing.
-			out[i] = want
-			continue
-		}
-		out[i] = want
-	}
-	return out
-}
-
-func collapseIdentical(items []string) []string {
-	if len(items) < 2 {
-		return items
-	}
-	seen := map[string]struct{}{}
 	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		key := strings.ToLower(strings.TrimSpace(item))
-		if key == "" {
-			out = append(out, item)
-			continue
+		if resolved := skilltag.Canonicalize([]string{item}, skilltag.WithResumeAcronyms()); len(resolved) == 1 {
+			if want := preferred[resolved[0]]; want != "" && !strings.EqualFold(item, want) {
+				item = want
+			}
 		}
-		if _, ok := seen[key]; ok {
-			continue
+		if key := strings.ToLower(strings.TrimSpace(item)); key != "" {
+			if _, duplicate := seen[key]; duplicate {
+				continue
+			}
+			seen[key] = struct{}{}
 		}
-		seen[key] = struct{}{}
 		out = append(out, item)
 	}
 	return out
 }
 
-func alignProseList(items []string, preferred map[string]string) []string {
+func alignProseList(items []string, rules []proseRule) []string {
 	if len(items) == 0 {
 		return items
 	}
 	out := make([]string, len(items))
 	for i, s := range items {
-		out[i] = replaceProse(s, preferred)
+		out[i] = replaceProse(s, rules)
 	}
 	return out
 }
 
-// replaceProse rewrites unambiguous aliases of preferred canonicals in text.
-func replaceProse(text string, preferred map[string]string) string {
-	if text == "" || len(preferred) == 0 {
-		return text
-	}
-	out := text
+// proseRule rewrites one spelling of a skill into the spelling the vacancy used. from is
+// ASCII-lowercase, so it can be compared against asciiLower(text) at the same offsets.
+type proseRule struct{ from, to string }
+
+// proseRules flattens preferred into the replacements a single pass over prose applies.
+// The order is total and derived only from the rules themselves, so the map's iteration
+// order cannot reach the output; longest-first keeps a short spelling from matching inside
+// a longer one ("node" inside "node.js").
+func proseRules(preferred map[string]string) []proseRule {
+	var rules []proseRule
 	for canonical, want := range preferred {
 		if want == "" {
 			continue
 		}
-		for _, alias := range skilltag.AliasesOf(canonical) {
-			if !skilltag.IsProseSafeAlias(alias) {
-				continue
+		for _, spelling := range skilltag.ProseSurfaces(canonical) {
+			for _, from := range separatorVariants(strings.ToLower(spelling)) {
+				// Nothing to do when the prose already reads the way the vacancy writes it —
+				// and rewriting it anyway would only impose the vacancy's casing. Checked per
+				// separator spelling, so "infrastructure-as-code" is still rewritten when the
+				// vacancy spells it with spaces.
+				if strings.EqualFold(from, want) {
+					continue
+				}
+				rules = append(rules, proseRule{from: from, to: want})
 			}
-			if strings.EqualFold(alias, want) {
-				// Still rewrite casing to the JD form when the alias matches want ignoring case.
-				out = replaceWholeFold(out, alias, want)
-				continue
-			}
-			out = replaceWholeFold(out, alias, want)
 		}
 	}
-	return out
+	slices.SortFunc(rules, func(a, b proseRule) int {
+		return cmp.Or(
+			cmp.Compare(len(b.from), len(a.from)),
+			strings.Compare(a.from, b.from),
+			strings.Compare(a.to, b.to),
+		)
+	})
+	return rules
 }
 
-// replaceWholeFold replaces whole-token occurrences of from (case-insensitive) with to.
-// ASCII alphanumeric boundaries plus a leading '.'/'-' guard (same idea as skilltag).
-func replaceWholeFold(text, from, to string) string {
-	if from == "" || text == "" {
+// separatorVariants spells a multi-word term the three ways a CV writes it. The vacancy
+// side gets this for free from skilltag's separator-insensitive phrase matcher; prose
+// rewriting compares bytes, so it needs the spellings up front.
+func separatorVariants(spelling string) []string {
+	if !strings.Contains(spelling, " ") {
+		return []string{spelling}
+	}
+	return []string{
+		spelling,
+		strings.ReplaceAll(spelling, " ", "-"),
+		strings.ReplaceAll(spelling, " ", "_"),
+	}
+}
+
+// replaceProse applies rules in one left-to-right pass. What a rule writes is never
+// re-examined: the scan continues after the matched SOURCE span, so no replacement can
+// feed another rule. That is what makes a second alignment a no-op — the sequential
+// replace it replaces turned "REST API" into "REST APIs APIs", and then into
+// "REST APIs APIs APIs" on the next autopilot run.
+func replaceProse(text string, rules []proseRule) string {
+	if text == "" || len(rules) == 0 {
 		return text
 	}
-	fromLower := strings.ToLower(from)
+	lower := asciiLower(text)
 	var b strings.Builder
 	b.Grow(len(text))
-	lower := strings.ToLower(text)
 	for i := 0; i < len(text); {
-		j := strings.Index(lower[i:], fromLower)
-		if j < 0 {
-			b.WriteString(text[i:])
-			break
-		}
-		j += i
-		end := j + len(fromLower)
-		// fromLower is ASCII for curated aliases; match length equals the source slice
-		// when the original run is the same byte length (true for ASCII casing).
-		if end > len(text) {
-			b.WriteString(text[i:])
-			break
-		}
-		// Align end to the actual UTF-8 slice of equal lowercase length in text[j:].
-		src := text[j:end]
-		if strings.ToLower(src) != fromLower {
-			// Multi-byte casing mismatch — advance one byte and continue.
-			b.WriteByte(text[i])
-			i++
+		if r, ok := ruleAt(text, lower, i, rules); ok {
+			b.WriteString(r.to)
+			i += len(r.from)
 			continue
 		}
-		if !proseBoundary(text, j, end) {
-			b.WriteString(text[i : j+1])
-			i = j + 1
-			continue
-		}
-		b.WriteString(text[i:j])
-		b.WriteString(to)
-		i = end
+		b.WriteByte(text[i])
+		i++
 	}
 	return b.String()
+}
+
+// ruleAt returns the first rule whose spelling starts at i as a whole word. rules are
+// longest-first, so "node.js" is preferred over the "node" inside it.
+func ruleAt(text, lower string, i int, rules []proseRule) (proseRule, bool) {
+	for _, r := range rules {
+		end := i + len(r.from)
+		if end <= len(text) && lower[i:end] == r.from && proseBoundary(text, i, end) {
+			return r, true
+		}
+	}
+	return proseRule{}, false
+}
+
+// asciiLower lowercases the ASCII letters and leaves every other byte untouched, so the
+// result indexes byte-for-byte into its source. strings.ToLower does not: it is not
+// length-preserving (U+023A lowercases to a rune one byte longer), and mixing its offsets
+// with the original string is how a name written in Turkish silently disabled the rest of
+// a bullet — or ran off the end of it. Curated spellings are ASCII, so folding only ASCII
+// loses no match.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i := 0; i < len(b); i++ {
+		if b[i] >= 'A' && b[i] <= 'Z' {
+			b[i] += 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 // proseBoundary mirrors wordmatch.ASCIIBoundary but also treats non-ASCII letters
@@ -208,7 +222,7 @@ func documentsEqualForAlign(a, b Document) bool {
 		return false
 	}
 	for i := range a.Skills {
-		if a.Skills[i].Group != b.Skills[i].Group || !stringSlicesEqual(a.Skills[i].Items, b.Skills[i].Items) {
+		if a.Skills[i].Group != b.Skills[i].Group || !slices.Equal(a.Skills[i].Items, b.Skills[i].Items) {
 			return false
 		}
 	}
@@ -217,7 +231,7 @@ func documentsEqualForAlign(a, b Document) bool {
 	}
 	for i := range a.Experience {
 		ae, be := a.Experience[i], b.Experience[i]
-		if ae.Summary != be.Summary || !stringSlicesEqual(ae.Bullets, be.Bullets) || !stringSlicesEqual(ae.Stack, be.Stack) {
+		if ae.Summary != be.Summary || !slices.Equal(ae.Bullets, be.Bullets) || !slices.Equal(ae.Stack, be.Stack) {
 			return false
 		}
 	}
@@ -225,19 +239,7 @@ func documentsEqualForAlign(a, b Document) bool {
 		return false
 	}
 	for i := range a.Projects {
-		if !stringSlicesEqual(a.Projects[i].Bullets, b.Projects[i].Bullets) {
-			return false
-		}
-	}
-	return true
-}
-
-func stringSlicesEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
+		if !slices.Equal(a.Projects[i].Bullets, b.Projects[i].Bullets) {
 			return false
 		}
 	}

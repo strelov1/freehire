@@ -92,23 +92,26 @@ func (m phraseMatcher) matches(norm string) bool {
 	return false
 }
 
-// phraseMatchers compiles phraseAliases once at startup: a multi-word alias (split
-// on '-'/'_'/space) becomes a separator-insensitive regex; a single token stays a
-// substring match. Only the match key is transformed — canonicals are unchanged.
+// compilePhraseMatcher turns one lowercase alias into its matcher: a multi-word alias
+// (split on '-'/'_'/space) becomes a separator-insensitive regex; a single token stays a
+// substring match. Only the match key is transformed — the canonical is unchanged.
+func compilePhraseMatcher(canonical, alias string) phraseMatcher {
+	segs := nonEmpty(sepRE.Split(alias, -1))
+	if len(segs) <= 1 {
+		return phraseMatcher{canonical: canonical, token: alias}
+	}
+	quoted := make([]string, len(segs))
+	for i, s := range segs {
+		quoted[i] = regexp.QuoteMeta(s)
+	}
+	return phraseMatcher{canonical: canonical, re: regexp.MustCompile(strings.Join(quoted, `[-_\s]+`))}
+}
+
+// phraseMatchers compiles phraseAliases once at startup.
 var phraseMatchers = func() []phraseMatcher {
 	out := make([]phraseMatcher, 0, len(phraseAliases))
 	for _, p := range phraseAliases {
-		segs := nonEmpty(sepRE.Split(strings.ToLower(p.alias), -1))
-		if len(segs) <= 1 {
-			out = append(out, phraseMatcher{canonical: p.canonical, token: strings.ToLower(p.alias)})
-			continue
-		}
-		quoted := make([]string, len(segs))
-		for i, s := range segs {
-			quoted[i] = regexp.QuoteMeta(s)
-		}
-		re := regexp.MustCompile(strings.Join(quoted, `[-_\s]+`))
-		out = append(out, phraseMatcher{canonical: p.canonical, re: re})
+		out = append(out, compilePhraseMatcher(p.canonical, strings.ToLower(p.alias)))
 	}
 	return out
 }()

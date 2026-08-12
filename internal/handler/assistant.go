@@ -761,7 +761,7 @@ func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
 // two rhythms the candidate chose, because a turn does not start until a message arrives.
 const autopilotBrief = "Tailor this CV for the vacancy yourself, working from my experience bank. " +
 	"Go through every requirement without stopping to ask me, then tell me what is left. " +
-	"Skill wording on this CV is already aligned to the vacancy's own spellings — do not rename skills for wording; spend your edits on evidence and substance."
+	"Matching the vacancy's spelling of a skill is handled outside this run — do not spend an edit renaming skills for wording; spend them on evidence and substance."
 
 // PostAssistantAutopilot runs the unattended tailoring pass on a tailoring session as one
 // long streamed turn. Every edit of the turn is filed under one revision batch (streamSSE
@@ -784,8 +784,17 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	if sess.Preset != assistant.PresetTailor || sess.CVID == nil || sess.JobID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
-	refreshAnalysis := h.prepareAutopilotAnalysis(c, sess)
-	h.alignAutopilotCV(c.Context(), sess)
+	// One read of the vacancy for the whole pre-run: the fit analysis and the surface
+	// alignment both need it, and a run must not ask the database twice for the same row.
+	refreshAnalysis := func(context.Context) {}
+	if job, err := h.queries.GetJob(c.Context(), *sess.JobID); err != nil {
+		log.Printf("assistant: loading job %d for the autopilot pre-run: %v", *sess.JobID, err)
+	} else {
+		refreshAnalysis = h.prepareAutopilotAnalysis(c, sess, job)
+		// Its own system revision — not the run's edit batch — so undoing the run leaves the
+		// vacancy's wording in place.
+		h.cv.logSurfaceAlign(c.Context(), sess.UserID, *sess.CVID, job.Description)
+	}
 	h.layDownRunPlan(c.Context(), sess)
 	return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
 		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
@@ -797,36 +806,14 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	})
 }
 
-// alignAutopilotCV surface-aligns the bound tailored CV to the vacancy before the
-// unattended turn starts. Its own system revision — not the run's edit batch — so
-// undoing the run leaves JD wording in place.
-func (h *assistantHandlers) alignAutopilotCV(ctx context.Context, sess assistant.Session) {
-	if h.cv == nil || sess.CVID == nil || sess.JobID == nil {
-		return
-	}
-	job, err := h.queries.GetJob(ctx, *sess.JobID)
-	if err != nil {
-		log.Printf("assistant: loading job %d for surface-align: %v", *sess.JobID, err)
-		return
-	}
-	h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, job.Description)
-}
-
-// prepareAutopilotAnalysis resolves the run's vacancy and delegates to
-// matchHandlers.prepareAutopilotRun, which both fills the fit-analysis cache when empty (so
-// cv_context — the run's first tool call — has something to read instead of erroring) and
-// returns the closure that unconditionally refreshes that cache once the run ends. A missing
-// match surface or a job lookup failure degrades to a no-op refresh — the same best-effort
-// posture the pre-run ensure step already had before this change.
-func (h *assistantHandlers) prepareAutopilotAnalysis(c *fiber.Ctx, sess assistant.Session) func(context.Context) {
-	noop := func(context.Context) {}
+// prepareAutopilotAnalysis delegates to matchHandlers.prepareAutopilotRun, which both fills
+// the fit-analysis cache when empty (so cv_context — the run's first tool call — has
+// something to read instead of erroring) and returns the closure that unconditionally
+// refreshes that cache once the run ends. A missing match surface degrades to a no-op
+// refresh — the same best-effort posture the pre-run ensure step already had.
+func (h *assistantHandlers) prepareAutopilotAnalysis(c *fiber.Ctx, sess assistant.Session, job db.Job) func(context.Context) {
 	if h.cv == nil || h.cv.match == nil {
-		return noop
-	}
-	job, err := h.queries.GetJob(c.Context(), *sess.JobID)
-	if err != nil {
-		log.Printf("assistant: loading job %d for autopilot's analysis: %v", *sess.JobID, err)
-		return noop
+		return func(context.Context) {}
 	}
 	return h.cv.match.prepareAutopilotRun(c, sess.UserID, job)
 }
