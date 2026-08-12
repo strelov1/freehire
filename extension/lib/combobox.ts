@@ -146,7 +146,7 @@ function findWidget(doc: Document, label: string): { widget: Element | null; sta
     .map((q) => q.controls[0])
     .filter(isComboWidget);
 
-  // Guarded by the length check above: index 0 exists.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guarded by the length check above: index 0 exists
   if (widgets.length === 1) return { widget: widgets[0]!, status: 'not_found' };
   return { widget: null, status: widgets.length > 1 ? 'ambiguous' : 'not_found' };
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { sendTurn } from './client';
 import type { TurnEvent } from './wire';
+import { must } from '../test-utils';
 
 /** A response body that emits the given chunks, then ends. */
 function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
@@ -53,8 +54,8 @@ describe('sendTurn', () => {
 
     await sendTurn('s1', 'hello there', 'tok-9', () => {}).done;
 
-    expect(calls[0]!.init.headers).toMatchObject({ Authorization: 'Bearer tok-9' });
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ text: 'hello there' });
+    expect(must(calls[0]).init.headers).toMatchObject({ Authorization: 'Bearer tok-9' });
+    expect(JSON.parse(must(calls[0]).init.body as string)).toEqual({ text: 'hello there' });
   });
 
   // Stopping is something the user chose. It has to arrive as a terminal event, or

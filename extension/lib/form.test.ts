@@ -8,11 +8,7 @@ import {
   looksLikeApplication,
   scopeToApplication,
 } from './form';
-
-function must<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error('expected a defined value');
-  return value;
-}
+import { must } from './test-utils';
 
 function reset() {
   document.body.replaceChildren();
@@ -244,7 +240,7 @@ describe('extractForm combo flag', () => {
     select.setAttribute('aria-label', 'Country');
     document.body.append(select);
 
-    expect(extractForm(document)[0]!.combo).toBe(false);
+    expect(must(extractForm(document)[0]).combo).toBe(false);
   });
 
   it("carries a widget's options when it exposes them without being opened", () => {
@@ -274,9 +270,9 @@ describe('extractForm combo flag', () => {
     // aria-controls is absent. The agent must reach for combobox.open.
     labeledInput('co', 'Country', { type: 'text', role: 'combobox', 'aria-autocomplete': 'list' });
 
-    const [field] = extractForm(document);
-    expect(field!.combo).toBe(true);
-    expect(field!.options).toBeUndefined();
+    const field = must(extractForm(document)[0]);
+    expect(field.combo).toBe(true);
+    expect(field.options).toBeUndefined();
   });
 
   it("does not lift a neighbouring widget's options onto a closed one", () => {
@@ -293,9 +289,9 @@ describe('extractForm combo flag', () => {
     listbox.append(option);
     document.body.append(listbox);
 
-    const [sponsorship, country] = extractForm(document);
-    expect(sponsorship!.options).toBeUndefined();
-    expect(country!.options).toEqual(['Germany']);
+    const fields = extractForm(document);
+    expect(must(fields[0]).options).toBeUndefined();
+    expect(must(fields[1]).options).toEqual(['Germany']);
   });
 });
 
@@ -344,7 +340,7 @@ describe('fillByLabel', () => {
     fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com' }]);
 
     expect(extra.value).toBe('');
-    expect(document.querySelector<HTMLInputElement>('#em')!.value).toBe('ilya@example.com');
+    expect(must(document.querySelector<HTMLInputElement>('#em')).value).toBe('ilya@example.com');
   });
 
   it('skips a custom-widget combobox instead of writing stale text into it', () => {
@@ -430,10 +426,10 @@ describe('extractForm grouping', () => {
   });
 
   it('reports which options of a group are already chosen as its value', () => {
-    const [, poland] = checkboxGroup('Countries', ['Germany', 'Poland', 'Spain']);
-    poland!.checked = true;
+    const poland = must(checkboxGroup('Countries', ['Germany', 'Poland', 'Spain'])[1]);
+    poland.checked = true;
 
-    expect(extractForm(document)[0]!.value).toBe('Poland');
+    expect(must(extractForm(document)[0]).value).toBe('Poland');
   });
 
   it('does not group text inputs that merely share a fieldset', () => {
@@ -555,7 +551,7 @@ describe('extractForm grouping', () => {
     const germany = must(checkboxGroup('Countries', ['Germany', 'Poland', 'Spain'])[0]);
     const email = labeledInput('em', 'Email', { type: 'email' });
 
-    const emailField = extractForm(document).find((f) => f.label === 'Email')!;
+    const emailField = must(extractForm(document).find((f) => f.label === 'Email'));
     fillByLabel(document, [{ label: emailField.label, value: 'ilya@example.com' }]);
 
     expect(email.value).toBe('ilya@example.com');
@@ -604,17 +600,19 @@ describe('fillByLabel on a group', () => {
     // Both chosen, so the reported value is "Germany, Korea, Republic of" — which
     // splits into three parts the group has never heard of. Only matching the
     // longest offered option at each step recovers the two real answers.
-    const [germany, korea] = checkboxGroup('Which countries?', ['Germany', 'Korea, Republic of']);
-    germany!.checked = true;
-    korea!.checked = true;
-    const reported = extractForm(document)[0]!.value;
+    const countries = checkboxGroup('Which countries?', ['Germany', 'Korea, Republic of']);
+    const germany = must(countries[0]);
+    const korea = must(countries[1]);
+    germany.checked = true;
+    korea.checked = true;
+    const reported = must(extractForm(document)[0]).value;
     expect(reported).toBe('Germany, Korea, Republic of');
 
-    germany!.checked = false;
-    korea!.checked = false;
+    germany.checked = false;
+    korea.checked = false;
     const outcomes = fillByLabel(document, [{ label: 'Which countries?', value: reported }]);
 
-    expect([germany!.checked, korea!.checked]).toEqual([true, true]);
+    expect([germany.checked, korea.checked]).toEqual([true, true]);
     expect(outcomes).toEqual([{ label: 'Which countries?', status: 'filled' }]);
   });
 
@@ -628,23 +626,27 @@ describe('fillByLabel on a group', () => {
   });
 
   it("leaves the user's own choice alone rather than clearing it", () => {
-    const [germany, poland] = checkboxGroup('Which countries?', ['Germany', 'Poland']);
-    poland!.checked = true;
+    const countries = checkboxGroup('Which countries?', ['Germany', 'Poland']);
+    const germany = must(countries[0]);
+    const poland = must(countries[1]);
+    poland.checked = true;
 
     fillByLabel(document, [{ label: 'Which countries?', value: 'Germany' }]);
 
-    expect(germany!.checked).toBe(true);
-    expect(poland!.checked).toBe(true);
+    expect(germany.checked).toBe(true);
+    expect(poland.checked).toBe(true);
   });
 
   it('lets a radio group hold one answer, unchecking the sibling the browser clears', () => {
-    const [yes, no] = checkboxGroup('Do you require sponsorship?', ['Yes', 'No'], 'radio', 'visa');
-    yes!.checked = true;
+    const options = checkboxGroup('Do you require sponsorship?', ['Yes', 'No'], 'radio', 'visa');
+    const yes = must(options[0]);
+    const no = must(options[1]);
+    yes.checked = true;
 
     fillByLabel(document, [{ label: 'Do you require sponsorship?', value: 'No' }]);
 
-    expect(no!.checked).toBe(true);
-    expect(yes!.checked).toBe(false);
+    expect(no.checked).toBe(true);
+    expect(yes.checked).toBe(false);
   });
 
   it('leaves the group untouched when the option is not one it offers', () => {

@@ -37,10 +37,6 @@ export default ts.config(
   {
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-
-      // `strict` bans `x!` everywhere; downgraded to warn to match
-      // web/eslint.config.js until existing uses are cleaned up.
-      '@typescript-eslint/no-non-null-assertion': 'warn',
     },
   },
 
