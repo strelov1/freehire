@@ -58,7 +58,7 @@
     "flag-icons": "^7.5.0",
     "isomorphic-dompurify": "^3.22.0",
     "marked": "^18.0.9",
-    "posthog-js": "^1.404.1",
+    "posthog-js": "^1.414.0",
     "satori": "^0.29.0",
     "satori-html": "^0.3.2",
     "shiki": "^4.4.2",

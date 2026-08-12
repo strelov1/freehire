@@ -36,8 +36,8 @@ importers:
         specifier: ^18.0.9
         version: 18.0.9
       posthog-js:
-        specifier: ^1.404.1
-        version: 1.406.2
+        specifier: ^1.414.0
+        version: 1.414.0
       satori:
         specifier: ^0.29.0
         version: 0.29.0
@@ -1008,14 +1008,14 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@posthog/browser-common@0.2.0':
-    resolution: {integrity: sha512-w+/0/Be/x48uNM7d/M37ZimSGwhuh8WBSvx61xzKzFnuoV5HqmH7GNDhaM3E3exXoBZmWNPS8hM/Ufy8zoOQSg==}
+  '@posthog/browser-common@0.4.0':
+    resolution: {integrity: sha512-W9DCGVks15docUMPvJ2nd8NS16Gn74bsGWuaeg31beEKFSjdW8wvnQ1ETY6WSql5pYxZb3GdJmEUZVVstKSrBQ==}
 
-  '@posthog/core@1.44.0':
-    resolution: {integrity: sha512-uE+mdKvetxNQC6gWQf4MHIH8bGt+JN6z7ho0A4G3t9G1VGQTx9wHYHNwkKf3gzi+1oAXS9ej2VVY4pjWUU2PWg==}
+  '@posthog/core@1.47.0':
+    resolution: {integrity: sha512-LW62V+9yx7G7mLd+EYpwW0PiaPZI8XRJ1tLuhw+9fXHpugLp8XQD5JuCQ2kIXvoUfyx1DpKfGQY3dUnzMOIn7Q==}
 
-  '@posthog/types@1.397.1':
-    resolution: {integrity: sha512-W/LpWbKVaaUnfZKuFuHa+Dg03D+fC87cM+PQbG+59JcSPW8F0JcBtSoXmpfrqbpuxUToMo+gktutrUkAb/KQBw==}
+  '@posthog/types@1.402.3':
+    resolution: {integrity: sha512-nnqKIGUqggeNbCZg6of/hYN+4shYZUoPFkILIIpYq0p9HDX8PgOrnrtBAUH8kr1MOmDh2nm+fY5Ceks7A5y6BQ==}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     resolution: {integrity: sha512-FrJibrAk6v29eabIPgcTUMPXiEz8ssrAk7TXxsiZzww9UTQ1Z5KAbFJs+Z0Ez+VZTYgnE5IQJqBcoSiMebtPHA==}
@@ -2237,8 +2237,8 @@ packages:
     resolution: {integrity: sha512-XGpFGbMLHwSt74YLTKho7Ib242qi6O8MSX+sRokV4oz7iKXvQWGYZthjIhjRGMxjzVkAubBO512dKGYcefmX3Q==}
     engines: {node: '>=6.4.0'}
 
-  core-js@3.49.0:
-    resolution: {integrity: sha512-es1U2+YTtzpwkxVLwAFdSpaIMyQaq0PBgm3YD1W3Qpsn1NAmO3KSgZfu+oGSWVu6NvLHoHCV/aYcsE5wiB7ALg==}
+  core-js@3.50.0:
+    resolution: {integrity: sha512-BRWgOLKkFeCgRudR6zrs8p9XJZcE14grzKMMssoYrk6krtuEZ7MTKPIY5RzOnqsEKIR9kst7wNzphttraT+Yqw==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -3353,11 +3353,11 @@ packages:
     resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-js@1.406.2:
-    resolution: {integrity: sha512-HNJO6Llro79s3x/ScxGY7i+Tf/o+ctJkOc79vrnS6R1I3TzucfzfwgAip1JVnQHnkBPV4JE8hI6nUXMJdU113Q==}
+  posthog-js@1.414.0:
+    resolution: {integrity: sha512-dtZd4asdskr8lNyltAEX6zyn48uO1pO0EMvx6AXJU65PFhu6yn2LPbKtQcyLysjcN57FJPNT9QYL6St5SBJHqw==}
 
-  preact@10.29.7:
-    resolution: {integrity: sha512-DCHYrK/B10yUD3ZjLfhZ3WIE/9Vf9VFUODcRE2dRomTYDpJk6z6L9wecSfhfE6M9ZTHUdyQkoC46arIDhEV84Q==}
+  preact@10.29.8:
+    resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
     peerDependencies:
       preact-render-to-string: '>=5'
     peerDependenciesMeta:
@@ -4000,6 +4000,9 @@ packages:
 
   web-vitals@5.3.0:
     resolution: {integrity: sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==}
+
+  web-vitals@6.0.0:
+    resolution: {integrity: sha512-Guaibvy/+uNtL6Bsu4jmMJGzuSl91oeRH5iO9pPRbYftnFUr3yqT1TUNX/OE4o9HexuEMU3Kb/Wg7iKhlffZUA==}
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
@@ -5086,16 +5089,16 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@posthog/browser-common@0.2.0':
+  '@posthog/browser-common@0.4.0':
     dependencies:
-      '@posthog/core': 1.44.0
-      '@posthog/types': 1.397.1
+      '@posthog/core': 1.47.0
+      '@posthog/types': 1.402.3
 
-  '@posthog/core@1.44.0':
+  '@posthog/core@1.47.0':
     dependencies:
-      '@posthog/types': 1.397.1
+      '@posthog/types': 1.402.3
 
-  '@posthog/types@1.397.1': {}
+  '@posthog/types@1.402.3': {}
 
   '@resvg/resvg-js-android-arm-eabi@2.6.2':
     optional: true
@@ -6203,7 +6206,7 @@ snapshots:
     dependencies:
       browserslist: 4.28.8
 
-  core-js@3.49.0: {}
+  core-js@3.50.0: {}
 
   cross-spawn@7.0.6:
     dependencies:
@@ -7346,21 +7349,22 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-js@1.406.2:
+  posthog-js@1.414.0:
     dependencies:
-      '@posthog/browser-common': 0.2.0
-      '@posthog/core': 1.44.0
-      '@posthog/types': 1.397.1
-      core-js: 3.49.0
+      '@posthog/browser-common': 0.4.0
+      '@posthog/core': 1.47.0
+      '@posthog/types': 1.402.3
+      core-js: 3.50.0
       dompurify: 3.4.13
       fflate: 0.4.9
-      preact: 10.29.7
+      preact: 10.29.8
       query-selector-shadow-dom: 1.0.1
       web-vitals: 5.3.0
+      web-vitals-soft-navs: web-vitals@6.0.0
     transitivePeerDependencies:
       - preact-render-to-string
 
-  preact@10.29.7: {}
+  preact@10.29.8: {}
 
   prelude-ls@1.2.1: {}
 
@@ -8106,6 +8110,8 @@ snapshots:
       xml-name-validator: 5.0.0
 
   web-vitals@5.3.0: {}
+
+  web-vitals@6.0.0: {}
 
   webidl-conversions@3.0.1: {}
 
