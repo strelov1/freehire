@@ -31,7 +31,7 @@ type fakeSendNotifier struct {
 	outcomes map[string]error // token -> error to return (nil = "sent")
 }
 
-func (n *fakeSendNotifier) Send(ctx context.Context, token, title, body string) error {
+func (n *fakeSendNotifier) Send(ctx context.Context, token, title, body string, data map[string]string) error {
 	return n.outcomes[token]
 }
 
