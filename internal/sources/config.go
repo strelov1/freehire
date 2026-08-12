@@ -61,6 +61,15 @@ func ParseRawEntries(provider string, data []byte) ([]CompanyEntry, error) {
 	if err := dec.Decode(&entries); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("sources: parse config: %w", err)
 	}
+	// A `---`-separated second document would bypass KnownFields on this decoder (it only
+	// inspects the document it decodes into), so reject anything past the first outright
+	// rather than silently ignore it.
+	var extra yaml.Node
+	if err := dec.Decode(&extra); err == nil {
+		return nil, fmt.Errorf("sources: parse config: unexpected second YAML document")
+	} else if !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("sources: parse config: %w", err)
+	}
 	for i := range entries {
 		if entries[i].Provider == "" {
 			entries[i].Provider = provider
@@ -109,7 +118,7 @@ func boardDedupeKey(e CompanyEntry) (key string, ok bool) {
 	if e.Board == "" {
 		return "", false
 	}
-	return e.Provider + "\x00" + strings.ToLower(e.Board) + "\x00" + e.Region, true
+	return strings.ToLower(e.Provider) + "\x00" + strings.ToLower(e.Board) + "\x00" + strings.ToLower(e.Region), true
 }
 
 // DuplicateBoards reports every entry that collides with an earlier one under

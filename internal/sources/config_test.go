@@ -313,3 +313,36 @@ func TestDuplicateBoardsKeepsBoardlessEntries(t *testing.T) {
 		t.Errorf("DuplicateBoards = %v, want none (boardless entries)", dups)
 	}
 }
+
+// boardDedupeKey folds case on Provider and Region too, not just Board — a region typed
+// "US" on one entry and "us" on another is the same host, and a case-variant Provider
+// would otherwise dodge the collision boardDedupeKey exists to catch.
+func TestDuplicateBoardsCatchesRegionCaseVariant(t *testing.T) {
+	entries := []CompanyEntry{
+		{Company: "Acme", Provider: "lever", Board: "acme", Region: "US"},
+		{Company: "Acme Inc", Provider: "lever", Board: "acme", Region: "us"},
+	}
+	if dups := DuplicateBoards(entries); len(dups) != 1 {
+		t.Errorf("DuplicateBoards = %v, want exactly one collision (region case variant)", dups)
+	}
+}
+
+func TestDuplicateBoardsCatchesProviderCaseVariant(t *testing.T) {
+	entries := []CompanyEntry{
+		{Company: "Acme", Provider: "Lever", Board: "acme"},
+		{Company: "Acme Inc", Provider: "lever", Board: "acme"},
+	}
+	if dups := DuplicateBoards(entries); len(dups) != 1 {
+		t.Errorf("DuplicateBoards = %v, want exactly one collision (provider case variant)", dups)
+	}
+}
+
+// A `---`-separated second YAML document would bypass this decoder's KnownFields check
+// entirely — it only inspects the document it decodes into — so ParseConfig must reject
+// it outright rather than silently parse just the first and ignore the rest.
+func TestParseConfigRejectsSecondYAMLDocument(t *testing.T) {
+	data := []byte("- company: Cohere\n  board: cohere\n---\n- company: Stripe\n  board: stripe\n")
+	if _, err := ParseConfig("greenhouse", data); err == nil {
+		t.Fatal("expected an error for a second YAML document, got nil")
+	}
+}
