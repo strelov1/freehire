@@ -33,6 +33,7 @@ export type CategoryGroup = (typeof CATEGORY_GROUP_ORDER)[number];
 /** Each category → its section. Keyed by the full Category union: a missing key
  *  fails the type-check, keeping the grouping exhaustive as the vocabulary grows. */
 export const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
+  software_engineering: 'Engineering',
   backend: 'Engineering',
   frontend: 'Engineering',
   fullstack: 'Engineering',

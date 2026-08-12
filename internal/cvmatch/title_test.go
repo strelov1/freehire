@@ -87,12 +87,13 @@ func TestTitleCategoryUnavailableWithoutAVacancyTitle(t *testing.T) {
 }
 
 // The recursive half of the unverifiable rule: a check the dictionaries cannot evaluate
-// leaves the CATEGORY's own denominator. "Staff Software Engineer" resolves no role
-// category — the dictionary has no value for a software generalist and deliberately emits
-// nothing — so the category scores out of the exact-title check alone, not out of 20 with
-// 8 points the candidate could never have earned.
+// leaves the CATEGORY's own denominator. "Product Engineer" resolves no role category —
+// prod titles split ~2:1 software vs manufacturing for that exact phrase, so classify
+// deliberately emits nothing rather than guess — so the category scores out of the
+// exact-title check alone, not out of 20 with 8 points the candidate could never have
+// earned.
 func TestTitleCategoryUnresolvedRoleCategoryShrinksTheDenominator(t *testing.T) {
-	c := titleCategory("Staff Software Engineer", "Staff Software Engineer at Acme, five years in Go.")
+	c := titleCategory("Product Engineer", "Product Engineer at Acme, five years in Go.")
 
 	if !c.Available {
 		t.Fatalf("category is unavailable: %q", c.Reason)
@@ -102,6 +103,25 @@ func TestTitleCategoryUnresolvedRoleCategoryShrinksTheDenominator(t *testing.T) 
 	}
 	if c.Earned != c.Weight {
 		t.Errorf("earned = %d of weight %d: an exact title match must earn everything still on the table", c.Earned, c.Weight)
+	}
+}
+
+// "Staff Software Engineer" USED to be the unresolvable example above: the dictionary had
+// no value for a software generalist. It now resolves to the software_engineering
+// catch-all category, so the role-field check becomes evaluable too — the full weight is
+// on the table, and a CV that never claims software work at all loses real points instead
+// of the vacancy being scored on title text alone.
+func TestTitleCategoryGenericSoftwareEngineerNowResolvesTheFullWeight(t *testing.T) {
+	c := titleCategory("Staff Software Engineer", "Staff Software Engineer at Acme, five years in Go.")
+
+	if !c.Available {
+		t.Fatalf("category is unavailable: %q", c.Reason)
+	}
+	if c.Weight != WeightTitle {
+		t.Errorf("weight = %d, want the full %d — software_engineering now resolves, so the role-field check is evaluable", c.Weight, WeightTitle)
+	}
+	if c.Earned != c.Weight {
+		t.Errorf("earned = %d of weight %d: exact title plus a CV that states software work should earn everything", c.Earned, c.Weight)
 	}
 }
 

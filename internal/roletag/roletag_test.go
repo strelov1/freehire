@@ -35,6 +35,12 @@ func TestDerive(t *testing.T) {
 
 		// Named roles come from the title regardless of the grid.
 		{"software engineer catch-all", "", "", "Software Engineer", []string{"software_engineer"}},
+		// classify's software_engineering category (added alongside this named
+		// role) now ALSO resolves a bare "Software Engineer", so real input carries
+		// both: the bare category role plus the named role, deliberately under
+		// different labels ("Software Generalist" vs "Software Engineer" — see
+		// categoryNoun) so the picker never shows two identical-looking options.
+		{"software engineering category + named role coexist", "", "software_engineering", "Software Engineer", []string{"software_engineering", "software_engineer"}},
 		{"founding engineer, empty grid", "", "", "Founding Engineer", []string{"founding_engineer"}},
 		// Generalist titles classify assigns no category to: the named role is the
 		// only thing that makes them pickable.

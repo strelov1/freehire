@@ -35,6 +35,15 @@ var (
 	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	CategoryValues       = []string{
+		// "software_engineering" is the generic bucket for a title the dictionary
+		// confirms is software/IT work (feeds is_tech via classify.IsTech's
+		// techTitleTerms) but that names no sub-discipline to resolve to — a bare
+		// "Software Engineer" or "Java Developer" does not say backend vs frontend
+		// vs fullstack, and classify never guesses. Before this category existed
+		// that population sat at `category = ""` forever (~110k open postings on
+		// prod at introduction) despite being fully enriched; this gives it a home
+		// instead of leaving it unfilterable.
+		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
@@ -82,6 +91,7 @@ var (
 	// solutions_engineering/developer_relations/technical_writing — count as technical
 	// here (IT-industry roles), so they are enriched; the back-office roles are not.
 	TechCategories = []string{
+		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
 		"network_engineering",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
