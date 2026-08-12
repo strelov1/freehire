@@ -9,7 +9,7 @@
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
   import type { Job, UserJob } from '$lib/types';
-  import { Badge, Button } from '$lib/ui';
+  import { Badge, Button, Chip } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -250,9 +250,9 @@
       <div class="flex flex-wrap items-center gap-2.5">
         <h1 class="text-2xl font-semibold tracking-tight">{job.title}</h1>
         {#if applied}
-          <span class="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-muted px-2.5 py-0.5 text-xs font-semibold text-brand-strong">
+          <Chip variant="brand" class="gap-1.5 border-brand/30 font-semibold">
             <CheckCircle2 class="size-3.5" aria-hidden="true" /> Applied
-          </span>
+          </Chip>
         {/if}
       </div>
 

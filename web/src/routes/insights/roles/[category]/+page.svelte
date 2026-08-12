@@ -4,6 +4,7 @@
   import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
   import { seniorityLabel } from '$lib/insights';
+  import { Table } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -44,31 +45,29 @@
   {#if data.roles.length === 0}
     <p class="text-muted-foreground">No role data for this category yet.</p>
   {:else}
-    <table class="w-full border-collapse text-left text-sm">
-      <thead>
+    <Table>
+      {#snippet header()}
         <tr class="border-b border-border text-muted-foreground">
-          <th class="py-2 pr-4 font-medium">Level</th>
+          <th class="py-2 pr-4 text-left font-medium">Level</th>
           <th class="py-2 pr-4 font-medium text-right">Open roles</th>
           <th class="py-2 font-medium text-right">30-day growth</th>
         </tr>
-      </thead>
-      <tbody>
-        {#each data.roles as r (r.seniority)}
-          {@const growthTone =
-            r.growth > 0
-              ? 'text-green-600 dark:text-green-400'
-              : r.growth < 0
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-muted-foreground'}
-          <tr class="border-b border-border">
-            <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(r.seniority)}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{r.open_count.toLocaleString('en-US')}</td>
-            <td class="py-2 text-right tabular-nums {growthTone}">
-              {r.growth > 0 ? '+' : ''}{r.growth.toLocaleString('en-US')}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+      {/snippet}
+      {#each data.roles as r (r.seniority)}
+        {@const growthTone =
+          r.growth > 0
+            ? 'text-green-600 dark:text-green-400'
+            : r.growth < 0
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-muted-foreground'}
+        <tr class="border-b border-border">
+          <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(r.seniority)}</td>
+          <td class="py-2 pr-4 text-right tabular-nums">{r.open_count.toLocaleString('en-US')}</td>
+          <td class="py-2 text-right tabular-nums {growthTone}">
+            {r.growth > 0 ? '+' : ''}{r.growth.toLocaleString('en-US')}
+          </td>
+        </tr>
+      {/each}
+    </Table>
   {/if}
 </InsightsPageShell>

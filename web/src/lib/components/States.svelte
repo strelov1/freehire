@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from '$lib/ui';
+  import { EmptyState, Skeleton } from '$lib/ui';
 
   // Shared rendering for the three async states every data view goes through.
   // `loading` shows placeholder rows; `empty`/`error` show a centered message.
@@ -25,7 +25,5 @@
     {/each}
   </div>
 {:else}
-  <p class="py-12 text-center text-sm {state === 'error' ? 'text-destructive' : 'text-muted-foreground'}">
-    {fallback}
-  </p>
+  <EmptyState title={fallback} variant={state === 'error' ? 'destructive' : 'muted'} />
 {/if}

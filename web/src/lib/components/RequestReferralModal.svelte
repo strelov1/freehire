@@ -4,7 +4,7 @@
   import { api, ApiError } from '$lib/api';
   import type { CvTailoredItem } from '$lib/cv';
   import type { ReferralRequestInput } from '$lib/types';
-  import { Button, Dialog } from '$lib/ui';
+  import { Button, Dialog, FormField } from '$lib/ui';
   import { isLinkedInUrl } from '$lib/utils';
 
   // The parent owns open/close; this component owns the request form. jobId is the
@@ -178,21 +178,25 @@
           </label>
         </fieldset>
 
-        <label class="flex flex-col gap-1.5 text-sm">
-          <span class="font-medium">Your LinkedIn profile</span>
-          <input
-            type="url"
-            bind:value={linkedinUrl}
-            placeholder="https://linkedin.com/in/your-handle"
-            aria-invalid={linkedinUrl.trim() !== '' && !linkedinValid}
-            class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
-          />
-          {#if linkedinUrl.trim() !== '' && !linkedinValid}
-            <span class="text-xs text-destructive">Enter a full linkedin.com/in/… profile URL.</span>
-          {:else}
-            <span class="text-xs text-muted-foreground">The referrer vets you before reaching out.</span>
-          {/if}
-        </label>
+        <FormField
+          label="Your LinkedIn profile"
+          error={linkedinUrl.trim() !== '' && !linkedinValid
+            ? 'Enter a full linkedin.com/in/… profile URL.'
+            : undefined}
+          hint="The referrer vets you before reaching out."
+        >
+          {#snippet children({ id, describedBy, invalid })}
+            <input
+              {id}
+              type="url"
+              bind:value={linkedinUrl}
+              placeholder="https://linkedin.com/in/your-handle"
+              aria-invalid={invalid}
+              aria-describedby={describedBy}
+              class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
+            />
+          {/snippet}
+        </FormField>
 
         <div class="flex flex-col gap-1.5 text-sm">
           <span class="font-medium">

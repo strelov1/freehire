@@ -13,7 +13,7 @@
     ReferralRequestStatus,
     SeekerReferralRequest,
   } from '$lib/types';
-  import { Button } from '$lib/ui';
+  import { Button, FormField, Table } from '$lib/ui';
   import { isLinkedInUrl, timeAgo } from '$lib/utils';
   import CompanyLogo from './CompanyLogo.svelte';
   import CompanyPicker from './CompanyPicker.svelte';
@@ -173,37 +173,35 @@
   {:else if requests.value.length === 0}
     <States state="empty" message="You haven't requested any referrals yet." />
   {:else}
-    <table class="mt-4 w-full text-sm">
-      <thead>
+    <Table class="mt-4">
+      {#snippet header()}
         <tr class="text-xs uppercase tracking-wide text-muted-foreground">
           <th class="pb-2 pr-4 text-left font-semibold">Company</th>
           <th class="pb-2 pr-4 text-left font-semibold">CV shared</th>
           <th class="pb-2 pr-4 text-left font-semibold">Status</th>
           <th class="pb-2 text-left font-semibold">Sent</th>
         </tr>
-      </thead>
-      <tbody>
-        {#each requests.value as r (r.id)}
-          <tr class="border-t border-border">
-            <td class="py-3 pr-4 font-medium">
-              <a href={resolve('/companies/[slug]', { slug: r.company_slug })} class="flex items-center gap-2 hover:underline">
-                <CompanyLogo name={r.company_name || r.company_slug} size="size-6" />
-                <span class="min-w-0 truncate">{r.company_name || r.company_slug}</span>
-              </a>
-            </td>
-            <td class="py-3 pr-4 text-muted-foreground">
-              {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded CV'}
-            </td>
-            <td class="py-3 pr-4">
-              <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {pillClass[r.status]}">
-                {pillLabel[r.status]}
-              </span>
-            </td>
-            <td class="py-3 text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : ''}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+      {/snippet}
+      {#each requests.value as r (r.id)}
+        <tr class="border-t border-border">
+          <td class="py-3 pr-4 font-medium">
+            <a href={resolve('/companies/[slug]', { slug: r.company_slug })} class="flex items-center gap-2 hover:underline">
+              <CompanyLogo name={r.company_name || r.company_slug} size="size-6" />
+              <span class="min-w-0 truncate">{r.company_name || r.company_slug}</span>
+            </a>
+          </td>
+          <td class="py-3 pr-4 text-muted-foreground">
+            {r.cv_kind === 'built' ? 'Tailored CV' : 'Uploaded CV'}
+          </td>
+          <td class="py-3 pr-4">
+            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {pillClass[r.status]}">
+              {pillLabel[r.status]}
+            </span>
+          </td>
+          <td class="py-3 text-muted-foreground">{r.created_at ? timeAgo(r.created_at) : ''}</td>
+        </tr>
+      {/each}
+    </Table>
     <p class="mt-4 text-xs text-muted-foreground">
       No notifications here — the referrer contacts you over the channel you left.
     </p>
@@ -223,21 +221,25 @@
         <CompanyPicker onSelect={(c) => (offerSlug = c?.slug ?? '')} />
         <span class="text-xs text-muted-foreground">Search and pick the company you work at.</span>
       </div>
-      <label class="flex flex-col gap-1.5 text-sm">
-        <span class="font-medium">Your LinkedIn profile</span>
-        <input
-          type="url"
-          bind:value={offerLinkedin}
-          placeholder="https://linkedin.com/in/your-handle"
-          aria-invalid={offerLinkedin.trim() !== '' && !offerLinkedinValid}
-          class="rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
-        />
-        {#if offerLinkedin.trim() !== '' && !offerLinkedinValid}
-          <span class="text-xs text-destructive">Enter a full linkedin.com/in/… profile URL.</span>
-        {:else}
-          <span class="text-xs text-muted-foreground">Helps the moderator confirm you work there.</span>
-        {/if}
-      </label>
+      <FormField
+        label="Your LinkedIn profile"
+        error={offerLinkedin.trim() !== '' && !offerLinkedinValid
+          ? 'Enter a full linkedin.com/in/… profile URL.'
+          : undefined}
+        hint="Helps the moderator confirm you work there."
+      >
+        {#snippet children({ id, describedBy, invalid })}
+          <input
+            {id}
+            type="url"
+            bind:value={offerLinkedin}
+            placeholder="https://linkedin.com/in/your-handle"
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
+            class="rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[invalid=true]:border-destructive"
+          />
+        {/snippet}
+      </FormField>
       <label class="flex flex-col gap-1.5 text-sm">
         <span class="font-medium">Proof of employment (PDF)</span>
         <input type="file" accept="application/pdf" bind:files={offerFile} class="text-sm" />

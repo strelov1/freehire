@@ -1,17 +1,17 @@
 {
-  "Alert": 0,
+  "Alert": 1,
   "Avatar": 0,
   "Badge": 12,
   "Button": 55,
   "Card": 1,
-  "Chip": 0,
+  "Chip": 1,
   "Dialog": 6,
-  "EmptyState": 0,
-  "FormField": 0,
+  "EmptyState": 1,
+  "FormField": 2,
   "Input": 12,
   "Pagination": 0,
   "Skeleton": 1,
-  "Table": 0,
+  "Table": 6,
   "Tabs": 0,
   "Tooltip": 0
 }

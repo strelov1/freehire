@@ -394,6 +394,16 @@
           "type": "Snippet"
         },
         {
+          "name": "variant",
+          "type": "EmptyStateVariant",
+          "default": "default",
+          "values": [
+            "default",
+            "muted",
+            "destructive"
+          ]
+        },
+        {
           "name": "action",
           "type": "Snippet"
         },
