@@ -17,6 +17,7 @@
   import { api, ApiError } from '$lib/api';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '$lib/cvRefreshOffer';
   import { track } from '$lib/analytics';
+  import { must } from '$lib/utils';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
   import CliEditDialog from '$lib/components/cv/CliEditDialog.svelte';
@@ -765,7 +766,7 @@
       <!-- RIGHT: Templates / Job description / Verdict (renders its own splitter). Shown on mobile
            only when one of its tabs is picked; always shown at lg. -->
       <ArtifactPanel
-        job={job!}
+        job={must(job, 'job')}
         {analysis}
         {autopilotReport}
         autopilotBusy={turnActive || runActive}

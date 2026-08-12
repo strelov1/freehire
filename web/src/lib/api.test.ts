@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { ApiError, createApi } from './api';
+import { must } from './utils';
 
 /** A fetch that never answers, and only settles if the caller aborts it. Stands in for
  *  the failure this timeout exists for: an API call that neither returns nor errors. */
 function hangingFetch(): typeof fetch {
   return ((_url: string, init?: RequestInit) =>
     new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      init?.signal?.addEventListener('abort', () => reject(must(init.signal).reason));
     })) as unknown as typeof fetch;
 }
 

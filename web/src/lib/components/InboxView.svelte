@@ -21,7 +21,7 @@
   import ApplicationLinkPicker from './ApplicationLinkPicker.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import { Mail, Search, RefreshCw, ChevronLeft, CheckCheck, Trash2 } from '@lucide/svelte';
-  import { timeAgo, errorMessage } from '$lib/utils';
+  import { timeAgo, errorMessage, must } from '$lib/utils';
   import { avatarInitials, avatarColor } from '$lib/avatar';
 
   const PAGE_SIZE = 7;
@@ -349,11 +349,10 @@
       // mail names a job slug, and an application whose posting was pruned has none.
       trackedApps = res.items
         .filter((m) => m.job)
-        .map((m) => ({
-          slug: m.job!.public_slug,
-          company: m.job!.company,
-          title: m.job!.title,
-        }));
+        .map((m) => {
+          const job = must(m.job, 'm.job');
+          return { slug: job.public_slug, company: job.company, title: job.title };
+        });
       trackedLoaded = true;
     } catch {
       // Leave the list empty; the picker shows its empty state.

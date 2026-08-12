@@ -18,6 +18,7 @@ import {
   type FacetState,
   type JobFilters,
 } from './facetModel';
+import { must } from './utils';
 
 // A JobFilters seeded with one facet's state, for serialization tests.
 function withSkills(st: Partial<FacetState>): JobFilters {
@@ -28,7 +29,7 @@ function withSkills(st: Partial<FacetState>): JobFilters {
 
 // The skills facet is always present (emptyFacets seeds every FACET), so this read
 // is safe; the helper drops the index-signature `| undefined` for terser asserts.
-const sk = (f: JobFilters): FacetState => f.facets.skills!;
+const sk = (f: JobFilters): FacetState => must(f.facets.skills);
 
 describe('emptyFacet', () => {
   it('is two empty sets and OR mode', () => {
@@ -130,9 +131,10 @@ describe('role facet round-trips through the generic param path', () => {
     expect(p.get('role_mode')).toBe('and');
 
     const back = filtersFromParams(p);
-    expect(back.facets.role!.include).toEqual(['senior_backend', 'lead_frontend']);
-    expect(back.facets.role!.exclude).toEqual(['fractional_cto']);
-    expect(back.facets.role!.matchAll).toBe(true);
+    const role = must(back.facets.role);
+    expect(role.include).toEqual(['senior_backend', 'lead_frontend']);
+    expect(role.exclude).toEqual(['fractional_cto']);
+    expect(role.matchAll).toBe(true);
   });
 });
 

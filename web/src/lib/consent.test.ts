@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONSENT_KEY, needsBanner, readConsent, regionNeedsConsent, writeConsent } from './consent';
+import { must } from './utils';
 
 // A minimal in-memory localStorage stub for the read/write round-trip tests. The
 // pure functions must degrade to a no-op / null when storage is unavailable (SSR),
@@ -7,7 +8,7 @@ import { CONSENT_KEY, needsBanner, readConsent, regionNeedsConsent, writeConsent
 function stubLocalStorage(): Storage {
   const map = new Map<string, string>();
   const storage = {
-    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
+    getItem: (k: string) => (map.has(k) ? must(map.get(k)) : null),
     setItem: (k: string, v: string) => void map.set(k, v),
     removeItem: (k: string) => void map.delete(k),
     clear: () => map.clear(),

@@ -2,6 +2,7 @@
   import { CONVERGENCE, WITNESS_GATE } from '$lib/ghost';
   import { gateMatrix } from '$lib/ghostDiagrams';
   import { cn } from '$lib/ui';
+  import { must } from '$lib/utils';
 
   // Two gates, four outcomes. The cell wording is asked of the rule rather than typed
   // here, so the diagram cannot caption a level the classifier stopped producing.
@@ -62,9 +63,9 @@
             {witnessed ? `${WITNESS_GATE}+ people` : `under ${WITNESS_GATE} people`}
           </th>
           {#each [false, true] as converged (converged)}
-            {@const cell = cells.find(
-              (c) => c.converged === converged && c.witnessed === witnessed,
-            )!}
+            {@const cell = must(
+              cells.find((c) => c.converged === converged && c.witnessed === witnessed),
+            )}
             <td
               class={cn(
                 'border-l border-border p-3',

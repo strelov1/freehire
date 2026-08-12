@@ -8,6 +8,7 @@
 // pipeline came to call the same settled application by two different names.
 import { STAGE_GROUPS } from './generated/contracts';
 import type { MyJob } from './types';
+import { must } from './utils';
 
 export type BoardColumnId = (typeof STAGE_GROUPS)[number]['id'];
 
@@ -35,7 +36,10 @@ export function columnOf(item: MyJob): BoardColumnId | null {
 // file: a hand-written copy went stale the moment a settled stage was added, leaving the new
 // stage unreachable from the board while every type check still passed — the generated-stage
 // check binds Stage to STAGE_GROUPS and says nothing about a literal array.
-export const CLOSED_OUTCOMES = STAGE_GROUPS.find((g) => g.id === 'closed')!.stages;
+export const CLOSED_OUTCOMES = must(
+  STAGE_GROUPS.find((g) => g.id === 'closed'),
+  "STAGE_GROUPS's closed group",
+).stages;
 export type ClosedOutcome = (typeof CLOSED_OUTCOMES)[number];
 
 // svelte-dnd-action keys each draggable by a top-level `id`; MyJob has none, so

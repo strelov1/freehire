@@ -2,6 +2,8 @@
 // from a curated palette (seeded by the address), so the message list gets a
 // visual anchor without fetching external logos. Pure + unit-tested.
 
+import { must } from './utils';
+
 // Muted, saturated-enough hues that read as white-on-colour on both the light
 // and dark card backgrounds. Deliberately not the brand olive — the avatar is a
 // per-sender accent, not a CTA.
@@ -39,5 +41,5 @@ export function avatarColor(seed: string): string {
   for (let i = 0; i < seed.length; i++) {
     h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   }
-  return PALETTE[h % PALETTE.length] ?? PALETTE[0]!;
+  return PALETTE[h % PALETTE.length] ?? must(PALETTE[0], 'PALETTE[0]');
 }

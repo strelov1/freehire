@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { timeAgo } from '$lib/utils';
+  import { timeAgo, must } from '$lib/utils';
   // A provider key is a source facet code, so it renders through the one label map every
   // other surface uses: a provider must not be "WhatJobs" on the filter panel and
   // "Whatjobs" here.
@@ -65,7 +65,7 @@
   const kindCounts = $derived.by(() => {
     const counts: Partial<Record<ProviderKind, number>> = {};
     for (const p of providers) counts[p.kind] = (counts[p.kind] ?? 0) + 1;
-    return KIND_ORDER.filter((k) => counts[k]).map((k) => ({ kind: k, count: counts[k]! }));
+    return KIND_ORDER.filter((k) => counts[k]).map((k) => ({ kind: k, count: must(counts[k]) }));
   });
 
   // Two combined filters: a kind chip ('all' = no kind constraint) and a free-text

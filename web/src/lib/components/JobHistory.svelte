@@ -5,6 +5,7 @@
   import JobRow from './JobRow.svelte';
   import LoadMore from './LoadMore.svelte';
   import States from './States.svelte';
+  import { must } from '$lib/utils';
 
   const page = new Paginator(async (limit, offset) => {
     const slice = await api.listMyJobs('viewed', limit, offset);
@@ -28,7 +29,7 @@
          application, and an application was never a view. The guard is the type's,
          not a real case. -->
     {#each page.items.filter((i) => i.job) as item (item.id)}
-      <li><JobRow job={item.job!} dimViewed={false} /></li>
+      <li><JobRow job={must(item.job, 'item.job')} dimViewed={false} /></li>
     {/each}
   </ul>
   {#if page.hasMore}

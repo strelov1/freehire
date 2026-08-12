@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BOARD_COLUMNS, CLOSED_OUTCOMES, boardRefFor, columnOf, matchesQuery } from './board';
 import { STAGE_GROUPS } from './generated/contracts';
+import { must } from './utils';
 import type { MyJob } from './types';
 
 // columnOf reads only `stage` and `applied_at`; a minimal cast fixture suffices.
@@ -131,7 +132,7 @@ describe('boardRefFor', () => {
 // generated-stage check binds Stage to STAGE_GROUPS, and says nothing about a literal array.
 describe('CLOSED_OUTCOMES', () => {
   it('is the generated closed group', () => {
-    const closed = STAGE_GROUPS.find((g) => g.id === 'closed');
-    expect([...CLOSED_OUTCOMES]).toEqual([...closed!.stages]);
+    const closed = must(STAGE_GROUPS.find((g) => g.id === 'closed'));
+    expect([...CLOSED_OUTCOMES]).toEqual([...closed.stages]);
   });
 });

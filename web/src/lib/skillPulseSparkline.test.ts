@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSparkline } from './skillPulseSparkline';
+import { must } from './utils';
 import type { SkillPulsePoint } from './api';
 
 const pt = (week_start: string, open_count: number): SkillPulsePoint => ({ week_start, open_count });
@@ -40,8 +41,8 @@ describe('buildSparkline', () => {
     const m = buildSparkline([pt('2026-07-27', 10), pt('2026-08-03', 100), pt('2026-08-10', 55)]);
     const points = m.points.split(' ').map(parsePoint);
     expect(points).toHaveLength(3);
-    expect(points[0]!.y).toBeCloseTo(29); // the min (10) → HEIGHT(32) - PAD_Y(3)
-    expect(points[1]!.y).toBeCloseTo(3); // the max (100) → PAD_Y(3)
+    expect(must(points[0]).y).toBeCloseTo(29); // the min (10) → HEIGHT(32) - PAD_Y(3)
+    expect(must(points[1]).y).toBeCloseTo(3); // the max (100) → PAD_Y(3)
   });
 
   it("the accent dot sits at the last point's own computed x,y, not a default", () => {

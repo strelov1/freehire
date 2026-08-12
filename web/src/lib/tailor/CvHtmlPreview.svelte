@@ -13,6 +13,7 @@
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '$lib/cv';
   import HeadshotSilhouette from '$lib/components/HeadshotSilhouette.svelte';
   import { paginateBlocks, previewTypography } from './geometry';
+  import { must } from '$lib/utils';
   import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
   let {
@@ -166,7 +167,9 @@
     // page pack slightly past its body.
     const measure = () => {
       const tops = present.map((el) => el.offsetTop);
-      heights = present.map((el, i) => (i + 1 < present.length ? tops[i + 1]! - tops[i]! : el.offsetHeight));
+      heights = present.map((el, i) =>
+        i + 1 < present.length ? must(tops[i + 1]) - must(tops[i]) : el.offsetHeight,
+      );
     };
     const ro = new ResizeObserver(measure);
     present.forEach((el) => ro.observe(el));

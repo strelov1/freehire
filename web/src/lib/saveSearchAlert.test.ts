@@ -10,6 +10,7 @@ import {
   PENDING_ALERT_KEY,
   type SavedSearchesPort,
 } from './saveSearchAlert';
+import { must } from './utils';
 
 // In-memory localStorage stand-in for the Node test env (mirrors filterStorage.test.ts).
 class MemoryStorage {
@@ -126,7 +127,7 @@ describe('ensureSaved', () => {
     const set = await ensureSaved('category=backend', port);
     expect(set.id).toBe(9);
     expect(createCalls).toHaveLength(2);
-    expect(createCalls[1]!.name).not.toBe(createCalls[0]!.name);
+    expect(must(createCalls[1]).name).not.toBe(must(createCalls[0]).name);
   });
 });
 

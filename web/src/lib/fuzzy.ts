@@ -19,6 +19,7 @@ function osaDistance(a: string, b: string): number {
   const d = new Int32Array((m + 1) * w);
   // Every read below is provably in-bounds; the assertion just drops the
   // `| undefined` that noUncheckedIndexedAccess adds to indexed access.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- hot per-keystroke loop; a real check would run per cell
   const at = (k: number): number => d[k]!;
   for (let i = 0; i <= m; i++) d[i * w] = i;
   for (let j = 0; j <= n; j++) d[j] = j;

@@ -10,6 +10,7 @@ import {
 import { serverApi } from '$lib/server/api';
 import type { FacetCounts, Job } from '$lib/types';
 import type { PageServerLoad } from './$types';
+import { must } from '$lib/utils';
 
 type Api = ReturnType<typeof serverApi>;
 
@@ -30,7 +31,7 @@ function splitParams(params: Record<string, string>): {
   lastValue: string;
 } {
   const entries = Object.entries(params);
-  const [lastKey, lastValue] = entries[entries.length - 1]!;
+  const [lastKey, lastValue] = must(entries[entries.length - 1]);
   return { filter: Object.fromEntries(entries.slice(0, -1)), lastKey, lastValue };
 }
 

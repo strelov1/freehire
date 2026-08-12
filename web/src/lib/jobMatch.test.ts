@@ -8,6 +8,7 @@ import {
   partitionBlockers,
   claimSkill,
 } from './jobMatch';
+import { must } from './utils';
 
 describe('resolveMatchState', () => {
   const base = { jobSkills: ['go'], authenticated: true, profileLoaded: true, profileSkills: ['go'] };
@@ -89,14 +90,14 @@ describe('matchTeaser', () => {
   // Enough distinct slugs to exercise the hash rather than one lucky seed.
   const MANY = Array.from(
     { length: 200 },
-    (_, i) => matchTeaser(`senior-go-engineer-at-acme-${i}`, SKILLS)!,
+    (_, i) => must(matchTeaser(`senior-go-engineer-at-acme-${i}`, SKILLS)),
   );
   // The percent ceiling has three regimes — a fractional bound below five skills, an
   // exact-integer one at five (where 90% would round 4.5 up to a full house), and the
   // flat 90 cap above six. Sampling only one skill count would leave two untested.
   const ACROSS_COUNTS = [2, 3, 4, 5, 6, 10, 36, 100].flatMap((total) => {
     const skills = Array.from({ length: total }, (_, i) => `skill-${i}`);
-    return Array.from({ length: 40 }, (_, i) => matchTeaser(`job-${total}-${i}`, skills)!);
+    return Array.from({ length: 40 }, (_, i) => must(matchTeaser(`job-${total}-${i}`, skills)));
   });
 
   it('is nothing at all for a job with no skills, leaving the no-skills state to render', () => {
@@ -115,7 +116,7 @@ describe('matchTeaser', () => {
     const first = matchTeaser('senior-go-engineer-at-acme', SKILLS);
     const second = matchTeaser('senior-go-engineer-at-acme', SKILLS);
     expect(second).toEqual(first);
-    expect([...second!.missing]).toEqual([...first!.missing]);
+    expect([...must(second).missing]).toEqual([...must(first).missing]);
   });
 
   it('keeps the percent inside the 60-90 teaser band for every slug', () => {
@@ -126,8 +127,8 @@ describe('matchTeaser', () => {
   });
 
   it('takes the total from the real skill count of the job', () => {
-    expect(matchTeaser('a-slug', SKILLS)!.total).toBe(5);
-    expect(matchTeaser('a-slug', ['go', 'kafka'])!.total).toBe(2);
+    expect(must(matchTeaser('a-slug', SKILLS)).total).toBe(5);
+    expect(must(matchTeaser('a-slug', ['go', 'kafka'])).total).toBe(2);
   });
 
   it('derives matched from the percent, so the label cannot contradict the bar', () => {
@@ -154,7 +155,7 @@ describe('matchTeaser', () => {
       expect(t.missing.size).toBeGreaterThanOrEqual(1);
       expect(t.missing.size).toBeLessThanOrEqual(SKILLS.length - 1);
     }
-    expect(matchTeaser('two-skill-job', ['go', 'kafka'])!.missing.size).toBe(1);
+    expect(must(matchTeaser('two-skill-job', ['go', 'kafka'])).missing.size).toBe(1);
   });
 
   it('holds the percent band and both tones at every skill count', () => {

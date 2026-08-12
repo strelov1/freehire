@@ -7,6 +7,7 @@
 // is best-effort — private mode / SSR must never break the feed.
 
 import { emptyFilters, filtersToParams, type JobFilters } from './facetModel';
+import { must } from './utils';
 
 // The wizard's captured preferences. Every field is optional: the wizard is
 // skippable per field, and an empty field contributes no filter constraint.
@@ -36,12 +37,12 @@ export function emptySelection(): OnboardingSelection {
  *  No hand-written param strings: the facet-param contract stays in facetModel. */
 export function selectionsToQuery(sel: OnboardingSelection): string {
   const f = emptyFilters();
-  if (sel.specializations.length) f.facets.category!.include = [...sel.specializations];
-  if (sel.seniorities.length) f.facets.seniority!.include = [...sel.seniorities];
-  if (sel.workMode) f.facets.work_mode!.include = [sel.workMode];
-  if (sel.region) f.facets.regions!.include = [sel.region];
+  if (sel.specializations.length) must(f.facets.category, 'category facet').include = [...sel.specializations];
+  if (sel.seniorities.length) must(f.facets.seniority, 'seniority facet').include = [...sel.seniorities];
+  if (sel.workMode) must(f.facets.work_mode, 'work_mode facet').include = [sel.workMode];
+  if (sel.region) must(f.facets.regions, 'regions facet').include = [sel.region];
   const stack = sel.stack.map((s) => s.trim()).filter(Boolean);
-  if (stack.length) f.facets.skills!.include = stack;
+  if (stack.length) must(f.facets.skills, 'skills facet').include = stack;
   return filtersToParams(f).toString();
 }
 

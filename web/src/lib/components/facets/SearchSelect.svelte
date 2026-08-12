@@ -4,6 +4,7 @@
   import { Input } from '$lib/ui';
   import CountryFlag from '../CountryFlag.svelte';
   import { pillClass, pillTitle } from './pill';
+  import { must } from '$lib/utils';
 
   // A searchable multi-select: a filter field over the options rendered as a
   // scrollable list of three-state pills (off / include / exclude). Selected options
@@ -74,7 +75,7 @@
   // any selected options, so nothing selected is hidden. Typing lifts the cap.
   const capped = $derived(cap && !filter.trim() && matched.length > cap);
   const shown = $derived(
-    capped ? matched.filter((o, i) => i < cap! || isSelected(o.value)) : matched,
+    capped ? matched.filter((o, i) => i < must(cap) || isSelected(o.value)) : matched,
   );
   const hiddenCount = $derived(capped ? matched.length - shown.length : 0);
 

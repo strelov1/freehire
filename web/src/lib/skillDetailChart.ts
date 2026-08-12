@@ -5,6 +5,7 @@
 // week/count for that tooltip — the compact sparkline throws those away.
 
 import type { SkillPulsePoint } from './api';
+import { must } from './utils';
 
 export interface DetailChartPoint {
   x: number;
@@ -46,7 +47,7 @@ export function buildSkillDetailChart(series: SkillPulsePoint[]): SkillDetailCha
   const range = max - min;
 
   if (series.length === 1) {
-    const only = series[0]!;
+    const only = must(series[0]);
     return {
       ...frame,
       max,

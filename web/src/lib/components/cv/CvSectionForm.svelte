@@ -54,7 +54,7 @@
     </div>
     <div>
       <p class="mb-1 text-sm text-muted-foreground">Links</p>
-      <StringListEditor bind:items={doc.header.links!} placeholder="https://…" addLabel="Add link" />
+      <StringListEditor bind:items={doc.header.links as string[]} placeholder="https://…" addLabel="Add link" />
     </div>
   </section>
 
@@ -96,11 +96,11 @@
         <Input bind:value={entry.summary} placeholder="One-line company/role context (optional)" class="w-full" />
         <div>
           <p class="mb-1 text-sm text-muted-foreground">Bullets</p>
-          <StringListEditor bind:items={entry.bullets!} placeholder="Achievement or responsibility" addLabel="Add bullet" />
+          <StringListEditor bind:items={entry.bullets as string[]} placeholder="Achievement or responsibility" addLabel="Add bullet" />
         </div>
         <div>
           <p class="mb-1 text-sm text-muted-foreground">Stack</p>
-          <StringListEditor bind:items={entry.stack!} placeholder="e.g. Go" addLabel="Add technology" />
+          <StringListEditor bind:items={entry.stack as string[]} placeholder="e.g. Go" addLabel="Add technology" />
         </div>
       </div>
     {/each}
@@ -148,7 +148,7 @@
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
-        <StringListEditor bind:items={entry.items!} placeholder="e.g. Go" addLabel="Add skill" />
+        <StringListEditor bind:items={entry.items as string[]} placeholder="e.g. Go" addLabel="Add skill" />
       </div>
     {/each}
   </section>
@@ -189,7 +189,7 @@
             <Trash2 class="h-4 w-4" />
           </Button>
         </div>
-        <StringListEditor bind:items={entry.bullets!} placeholder="What it does / your role" addLabel="Add bullet" />
+        <StringListEditor bind:items={entry.bullets as string[]} placeholder="What it does / your role" addLabel="Add bullet" />
       </div>
     {/each}
   </section>

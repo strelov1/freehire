@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSkillDetailChart } from './skillDetailChart';
+import { must } from './utils';
 import type { SkillPulsePoint } from './api';
 
 const pt = (week_start: string, open_count: number): SkillPulsePoint => ({ week_start, open_count });
@@ -16,8 +17,9 @@ describe('buildSkillDetailChart', () => {
   it('centers a single point in the frame', () => {
     const m = buildSkillDetailChart([pt('2026-08-10', 40)]);
     expect(m.points).toHaveLength(1);
-    expect(m.points[0]!.x).toBeCloseTo(m.width / 2);
-    expect(m.points[0]!.openCount).toBe(40);
+    const p0 = must(m.points[0]);
+    expect(p0.x).toBeCloseTo(m.width / 2);
+    expect(p0.openCount).toBe(40);
   });
 
   it('centers a flat series on the midline rather than the baseline', () => {
@@ -27,8 +29,10 @@ describe('buildSkillDetailChart', () => {
 
   it('places the max at the top and the min at the baseline', () => {
     const m = buildSkillDetailChart([pt('2026-07-27', 10), pt('2026-08-03', 100), pt('2026-08-10', 55)]);
-    expect(m.points[1]!.y).toBeCloseTo(m.topY); // 100 = max
-    expect(m.points[0]!.y).toBeCloseTo(m.baselineY); // 10 = min
+    const p0 = must(m.points[0]);
+    const p1 = must(m.points[1]);
+    expect(p1.y).toBeCloseTo(m.topY); // 100 = max
+    expect(p0.y).toBeCloseTo(m.baselineY); // 10 = min
     expect(m.max).toBe(100);
   });
 

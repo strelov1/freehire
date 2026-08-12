@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { STAGE_GROUPS, STAGE_LABELS, STAGE_VALUES } from './generated/contracts';
 import { groupedStages, offersDebrief } from './stages';
+import { must } from './utils';
 
 // The debrief reviews an interview that has already happened, so the offer follows the
 // stage: it is noise on an application nobody has been interviewed for.
@@ -57,10 +58,10 @@ describe('groupedStages', () => {
     // Compared against the generated tables rather than a written-out list: the point of the
     // test is that the labels come from generation, and a literal here would have to be edited
     // every time a stage is added — which is the same coupling it exists to forbid.
-    const generated = STAGE_GROUPS.find((g) => g.id === 'closed');
-    expect(closed?.options.map((o) => o.value)).toEqual([...generated!.stages]);
+    const generated = must(STAGE_GROUPS.find((g) => g.id === 'closed'));
+    expect(closed?.options.map((o) => o.value)).toEqual([...generated.stages]);
     expect(closed?.options.map((o) => o.label)).toEqual(
-      generated!.stages.map((s) => STAGE_LABELS[s]),
+      generated.stages.map((s) => STAGE_LABELS[s]),
     );
   });
 });

@@ -7,6 +7,7 @@
   import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '$lib/headerScope';
   import { pillClass, pillTitle } from './facets/pill';
   import LocationPane from './filters/LocationPane.svelte';
+  import { must } from '$lib/utils';
 
   // The header's cross-cutting location filter — a scope-prefix trigger inside the
   // search box that opens a popover, in one of three modes:
@@ -67,14 +68,14 @@
 <svelte:window onclick={onWindowClick} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 {#snippet storePills(param: string, options: FacetOption[])}
-  {@const f = store!.facet(param)}
+  {@const f = must(store, 'store').facet(param)}
   <div class="flex flex-wrap gap-2">
     {#each options as opt (opt.value)}
       {@const inc = f.include.includes(opt.value)}
       {@const exc = f.exclude.includes(opt.value)}
       <button
         type="button"
-        onclick={() => store!.cycle(param, opt.value)}
+        onclick={() => must(store, 'store').cycle(param, opt.value)}
         title={pillTitle(inc, exc, true)}
         class={pillClass(inc || exc, exc, 'px-3 py-1.5 text-sm')}
       >
@@ -142,7 +143,7 @@
           {@render storePills('work_mode', WORK_MODE_OPTIONS)}
         </div>
         <div class="border-t border-border pt-4">
-          <LocationPane store={store!} {counts} />
+          <LocationPane store={must(store, 'store')} {counts} />
         </div>
       {:else if variant === 'companies'}
         <div class="mb-4">

@@ -14,6 +14,7 @@
   import States from '$lib/components/States.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
   import type { ExperienceAtom, ExperienceBank, ExperienceEmployment, ExperienceProvenance } from '$lib/types';
+  import { must } from '$lib/utils';
 
   /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
    *  The bank itself never talks to the CV store. */
@@ -133,8 +134,8 @@
 
   const mergeReady = $derived.by(() => {
     if (selected.length !== 2) return false;
-    const a = atomById.get(selected[0]!);
-    const b = atomById.get(selected[1]!);
+    const a = atomById.get(must(selected[0]));
+    const b = atomById.get(must(selected[1]));
     return !!a && !!b && bucketKey(a) === bucketKey(b);
   });
 
@@ -286,8 +287,8 @@
 
   async function mergeSelected() {
     if (!mergeReady || busy || selected.length !== 2) return;
-    const a = atomById.get(selected[0]!);
-    const b = atomById.get(selected[1]!);
+    const a = atomById.get(must(selected[0]));
+    const b = atomById.get(must(selected[1]));
     if (!a || !b) return;
     if (
       !confirm(
@@ -298,7 +299,7 @@
     }
     busy = true;
     try {
-      await api.mergeExperienceAtoms([selected[0]!, selected[1]!]);
+      await api.mergeExperienceAtoms([must(selected[0]), must(selected[1])]);
       await load();
       onBankMutated?.();
     } catch (e) {

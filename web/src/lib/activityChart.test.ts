@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildActivityChart, formatCount, pickTickIndices, type ActivityBar } from './activityChart';
+import { must } from './utils';
 import type { ActivityPoint } from './types';
 
 const pt = (period: string, added: number, removed: number): ActivityPoint => ({
@@ -91,8 +92,9 @@ describe('pickTickIndices', () => {
     expect(ticks.length).toBeLessThanOrEqual(12);
     // strictly increasing, in range
     for (let i = 1; i < ticks.length; i++) {
-      expect(ticks[i]!).toBeGreaterThan(ticks[i - 1]!);
-      expect(ticks[i]!).toBeLessThan(90);
+      const tick = must(ticks[i]);
+      expect(tick).toBeGreaterThan(must(ticks[i - 1]));
+      expect(tick).toBeLessThan(90);
     }
   });
   it('returns nothing for an empty series', () => {

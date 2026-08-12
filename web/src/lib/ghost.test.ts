@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { must } from './utils';
 import {
   CONVERGENCE,
   CRITERIA,
@@ -30,8 +31,8 @@ describe('ghostBadge', () => {
   // strongest wording available is that a posting may be inactive.
   it('hedges the wording at every level', () => {
     const labels = [
-      ghostBadge(possible)!.label,
-      ghostBadge({ ...possible, level: 'likely' })!.label,
+      must(ghostBadge(possible)).label,
+      must(ghostBadge({ ...possible, level: 'likely' })).label,
     ];
     for (const label of labels) {
       expect(label.toLowerCase()).toMatch(/possibly|likely/);
@@ -40,16 +41,18 @@ describe('ghostBadge', () => {
   });
 
   it('distinguishes the two levels', () => {
-    expect(ghostBadge(possible)!.label).not.toBe(ghostBadge({ ...possible, level: 'likely' })!.label);
+    expect(must(ghostBadge(possible)).label).not.toBe(
+      must(ghostBadge({ ...possible, level: 'likely' })).label,
+    );
   });
 
   it('carries the scale as fired-over-total', () => {
-    expect(ghostBadge(possible)!.scale).toBe('2/4');
+    expect(must(ghostBadge(possible)).scale).toBe('2/4');
   });
 
   it('tones the stronger level more loudly', () => {
-    expect(ghostBadge(possible)!.tone).toBe('muted');
-    expect(ghostBadge({ ...possible, level: 'likely' })!.tone).toBe('warn');
+    expect(must(ghostBadge(possible)).tone).toBe('muted');
+    expect(must(ghostBadge({ ...possible, level: 'likely' })).tone).toBe('warn');
   });
 
   // An unknown level must not render as a badge with an empty label: a chip that
@@ -75,7 +78,7 @@ describe('ghostChecklist', () => {
   // The tick beside the row already says "yes". Repeating it on its own line was a
   // second line of type carrying nothing.
   it('adds no detail to a criterion whose firing is the whole fact', () => {
-    const evergreen = ghostChecklist(possible).find((r) => r.code === 'evergreen_posting')!;
+    const evergreen = must(ghostChecklist(possible).find((r) => r.code === 'evergreen_posting'));
     expect(evergreen.fired).toBe(true);
     expect(evergreen.detail).toBe('');
   });
@@ -96,7 +99,7 @@ describe('ghostChecklist', () => {
       ...possible,
       ats_checked_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
     });
-    const ats = rows.find((r) => r.code === 'ats_absent')!;
+    const ats = must(rows.find((r) => r.code === 'ats_absent'));
     expect(ats.detail.startsWith('checked ')).toBe(true);
   });
 
@@ -107,7 +110,7 @@ describe('ghostChecklist', () => {
       criteria: [...possible.criteria, 'user_reports'],
       contributors: 4,
     });
-    const reports = rows.find((r) => r.code === 'user_reports')!;
+    const reports = must(rows.find((r) => r.code === 'user_reports'));
     expect(reports.fired).toBe(true);
     expect(reports.detail).toContain('4');
   });
@@ -125,7 +128,7 @@ describe('ghostChecklist', () => {
       ...possible,
       ats_checked_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
     });
-    const ats = rows.find((r) => r.code === 'ats_absent')!;
+    const ats = must(rows.find((r) => r.code === 'ats_absent'));
     expect(ats.detail.toLowerCase()).toMatch(/checked/);
   });
 });
@@ -155,25 +158,25 @@ describe('ghostUnobserved', () => {
 
 describe('ghostGauge', () => {
   it('draws one segment per criterion the classifier weighs', () => {
-    expect(ghostGauge(possible)!.segments).toBe(4);
+    expect(must(ghostGauge(possible)).segments).toBe(4);
   });
 
   it('fills exactly the criteria that fired', () => {
-    expect(ghostGauge(possible)!.filled).toBe(2);
+    expect(must(ghostGauge(possible)).filled).toBe(2);
   });
 
   // The gauge is a second reading of the same evidence, and it has to be readable
   // at four states where the wording has only two. Keying the tone to `level` would
   // render one-of-four and two-of-four identically.
   it('separates a count the wording cannot', () => {
-    const one = ghostGauge({ ...possible, criteria: ['evergreen_posting'] })!;
-    const two = ghostGauge(possible)!;
+    const one = must(ghostGauge({ ...possible, criteria: ['evergreen_posting'] }));
+    const two = must(ghostGauge(possible));
     expect(one.tone).not.toBe(two.tone);
   });
 
   it('escalates the tone as more criteria fire', () => {
     const tones = [1, 2, 3, 4].map(
-      (n) => ghostGauge({ ...possible, criteria: CODES.slice(0, n) })!.tone,
+      (n) => must(ghostGauge({ ...possible, criteria: CODES.slice(0, n) })).tone,
     );
     expect(new Set(tones).size).toBe(4);
     expect(tones.at(-1)).toBe('severe');
@@ -182,8 +185,10 @@ describe('ghostGauge', () => {
   // Thresholds keyed to an absolute count would mis-tone the day the classifier
   // gains a fifth criterion: three of five is not three of four.
   it('tones on the share that fired, not the raw count', () => {
-    const threeOfFour = ghostGauge({ ...possible, criteria: CODES.slice(0, 3) })!;
-    const threeOfSix = ghostGauge({ ...possible, criteria: CODES.slice(0, 3), criteria_total: 6 })!;
+    const threeOfFour = must(ghostGauge({ ...possible, criteria: CODES.slice(0, 3) }));
+    const threeOfSix = must(
+      ghostGauge({ ...possible, criteria: CODES.slice(0, 3), criteria_total: 6 }),
+    );
     expect(threeOfSix.tone).not.toBe(threeOfFour.tone);
   });
 
@@ -203,7 +208,7 @@ describe('ghostGauge', () => {
   // The scale's denominator is served, so a payload claiming more fired criteria
   // than the total must not paint segments that do not exist.
   it('never fills past the segments it has', () => {
-    const gauge = ghostGauge({ ...possible, criteria: CODES, criteria_total: 2 })!;
+    const gauge = must(ghostGauge({ ...possible, criteria: CODES, criteria_total: 2 }));
     expect(gauge.filled).toBeLessThanOrEqual(gauge.segments);
   });
 });

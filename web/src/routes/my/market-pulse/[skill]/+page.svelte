@@ -9,6 +9,7 @@
   import { Button } from '$lib/ui';
   import States from '$lib/components/States.svelte';
   import SkillDeltaBadge from '$lib/components/SkillDeltaBadge.svelte';
+  import { must } from '$lib/utils';
 
   // One skill's full retained history, zoomed in from the /my/market-pulse card
   // grid. Reuses the same GET /me/market-pulse call (already returns every
@@ -36,7 +37,7 @@
   const ticks = $derived(model ? pickTickIndices(model.points.length) : []);
   // Points are evenly spaced from the first point's x — reused as the left/right
   // plot padding rather than re-deriving the chart module's PAD constant here.
-  const padX = $derived(model && model.points.length > 0 ? model.points[0]!.x : 0);
+  const padX = $derived(model && model.points.length > 0 ? must(model.points[0]).x : 0);
 
   let hovered = $state<number | null>(null);
   let tipX = $state(0);

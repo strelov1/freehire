@@ -8,6 +8,7 @@ import {
   isCvRefreshDismissed,
   offerCvRefresh,
 } from './cvRefreshOffer';
+import { must } from './utils';
 
 function memStorage(initial: Record<string, string> = {}): Storage {
   const data = { ...initial };
@@ -19,7 +20,7 @@ function memStorage(initial: Record<string, string> = {}): Storage {
       for (const k of Object.keys(data)) Reflect.deleteProperty(data, k);
     },
     getItem(key: string) {
-      return Object.prototype.hasOwnProperty.call(data, key) ? data[key]! : null;
+      return Object.prototype.hasOwnProperty.call(data, key) ? must(data[key]) : null;
     },
     key() {
       return null;

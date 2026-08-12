@@ -1,4 +1,5 @@
 import type { Margins } from '$lib/generated/contracts';
+import { must } from '../utils';
 
 /** Clamp a pixel width to [min, max], rounded to whole pixels. Used by the artifact-panel
  *  splitter so a drag can't collapse or overflow the panel. */
@@ -118,7 +119,7 @@ export function paginateBlocks(blockHeights: number[], pageBodyHeight: number): 
   const pages: number[][] = [[]];
   let used = 0;
   blockHeights.forEach((h, i) => {
-    const page = pages[pages.length - 1]!;
+    const page = must(pages[pages.length - 1]);
     // Break only when the current page already carries something, so a block taller than a
     // whole page lands on its own page instead of looping forever.
     if (page.length > 0 && used + h > pageBodyHeight) {
