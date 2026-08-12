@@ -530,6 +530,9 @@ type Querier interface {
 	// "dismissed" counts jobs the user hid from the feed, matching the ListUserJobs
 	// dismissed filter.
 	CountUserJobs(ctx context.Context, userID int64) (CountUserJobsRow, error)
+	// Total and unread counts in one statement and one set of predicates, so the
+	// two numbers in a list response's meta always describe the same mailbox.
+	CountUserNotifications(ctx context.Context, userID int64) (CountUserNotificationsRow, error)
 	// Create an API key for a user. The caller passes the SHA-256 token_hash and the
 	// display token_prefix; the plaintext token is shown once and never stored.
 	// expires_at NULL means the key never expires. scope confines the credential to a
@@ -2008,6 +2011,9 @@ type Querier interface {
 	// application — asking `job_id IS NULL` instead is the same set today only by the coincidence
 	// that every writer setting job_id also clears the suggestion.
 	ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]ListUserJobsRow, error)
+	// The caller's own notifications, newest first, standard offset/limit paging
+	// (matching every other /me/* list endpoint in this codebase).
+	ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error)
 	// Users whose stored structured résumé currently describes their stored CV, for the
 	// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
 	// deriving geography from one would route around the staleness rule that governs the
@@ -2050,6 +2056,9 @@ type Querier interface {
 	// listing, so "mark all read" means "everything currently shown". Only unread,
 	// live rows are touched; returns how many it marked.
 	MarkAllEmailsRead(ctx context.Context, arg MarkAllEmailsReadParams) (int64, error)
+	// Bulk mark-as-read for the caller; only unread rows are touched, and the
+	// affected count is returned to the client as confirmation.
+	MarkAllNotificationsRead(ctx context.Context, userID int64) (int64, error)
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
@@ -2101,6 +2110,12 @@ type Querier interface {
 	// Stamp notified_at on the jobs that were just delivered for a subscription, so
 	// they leave the pending queue and are never sent again.
 	MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifiedParams) (int64, error)
+	// Owner-scoped and idempotent in one statement: COALESCE leaves an
+	// already-set read_at untouched (so repeating the call doesn't bump the
+	// timestamp), while the WHERE clause alone still matches the row — a zero
+	// affected-row count therefore unambiguously means the id doesn't exist or
+	// isn't the caller's (the handler maps that to 404), never "already read".
+	MarkNotificationRead(ctx context.Context, arg MarkNotificationReadParams) (int64, error)
 	// Terminal success: flip a fired nudge to delivered so it leaves the pending scan
 	// and is never sent again. Guarded on status='pending' for idempotency under a
 	// worker retry that already delivered.
@@ -2434,6 +2449,11 @@ type Querier interface {
 	// is left in place — its expiry gates the retry to a later pass and doubles as the
 	// crash reaper, mirroring enrichment_outbox.
 	RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatchDeliveryFailureParams) error
+	// Record one delivered notify/reminder/nudge event for the in-app notification
+	// center, independent of which channel(s) carried it. Called right alongside
+	// each engine's own "marked delivered" write; a failure here must never fail
+	// the delivery it accompanies (see the add-notification-center design).
+	RecordNotification(ctx context.Context, arg RecordNotificationParams) error
 	// Record one matched nudge candidate. The unique index on
 	// (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the
 	// same unchanged episode is a no-op — so MATCH can freely re-run over the same

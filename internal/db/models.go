@@ -924,6 +924,17 @@ type UserJobAnalysis struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type UserNotification struct {
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Kind       string             `json:"kind"`
+	Title      string             `json:"title"`
+	Body       string             `json:"body"`
+	PublicSlug pgtype.Text        `json:"public_slug"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ReadAt     pgtype.Timestamptz `json:"read_at"`
+}
+
 type UserProfile struct {
 	UserID              int64              `json:"user_id"`
 	Skills              []string           `json:"skills"`
