@@ -11,11 +11,11 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - OAuth buttons render from `GET /api/v1/auth/oauth/providers`. Callbacks 302 back to the
   SPA; failures 302 with `?auth_error=oauth`, never JSON.
 - `stage` in job tracking mirrors the backend vocabulary (`internal/userjob/stages.go`):
-  applied/screening/responded/interview/offer/accepted/rejected/withdrawn/expired.
+  preparing/applied/screening/responded/interview/offer/accepted/rejected/withdrawn/expired.
 - A view is recorded silently when a signed-in user opens a job — failure is swallowed and
   must not break the page.
 - `MatchSummary.svelte` is the compact sidebar summary (overall % + verdict + top gap)
-  linking to the full `/match/[slug]/` page — it never computes inline.
+  linking to the full analysis in the `/tailor/[slug]` workspace — it never computes inline.
 - The profile headshot (`HeadshotField.svelte`, profile Settings tab) is one image per member,
   reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
@@ -41,10 +41,13 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 
 ## Worth knowing
 
-- **Job-fit analysis** (`web/src/routes/match/[slug]/`): `+page.server.ts` SSRs a fresh
-  cached analysis for an instant paint; otherwise the page opens an `EventSource` and
-  renders a stepper + thinking panel + progressive sections. The pure SSE reducer
-  `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested).
+- **Job-fit analysis**: the standalone `/match/[slug]/` page is gone — its
+  `+page.server.ts` is only a 308 redirect to `/tailor/[slug]`, and the Tailor workspace
+  is the sole surface for viewing and triggering the analysis. The analysis UI is
+  `MatchAnalysisFull.svelte` (stepper + thinking panel + progressive sections over an
+  `EventSource`), embedded in the workspace's `ArtifactPanel` and in `JobDrawer.svelte`.
+  The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts`
+  (unit-tested).
 - **Filters**: the companies FilterModal uses `COMPANY_FACETS` from `web/src/lib/facets.ts`,
   including a "Remote hiring" pill that reuses the shared `REGION` vocabulary for the
   `remote_regions` overlap facet.

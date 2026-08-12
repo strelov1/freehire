@@ -32,7 +32,8 @@ Response shapes and error rendering are the handler layer's concern — see
 
 sqlc reads `migrations/` for the schema and the hand-written SQL in
 `internal/db/queries/*.sql` for the operations, generating `models.go` (types) and
-`*.sql.go` (queries). The connection pool is owned by `internal/database/pgxpool`; the
+`*.sql.go` (queries). The connection pool is owned by `internal/database` (package
+`database`), which wraps the third-party `github.com/jackc/pgx/v5/pgxpool`; the
 server and every worker get `DATABASE_URL` via `config.Load`.
 
 Two migration paths, one ordering rule (filename order, always):

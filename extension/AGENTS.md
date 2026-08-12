@@ -51,6 +51,8 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
     protocol.ts       in-extension RuntimeMessage contract (+ test)
     scraper.ts        DOM -> PageSnapshot, pure over its Document arg (+ test)
     form.ts           form observe/map/act for Autofill (+ test)
+    combobox.ts       drives custom-widget comboboxes (open/options/select/verify);
+                      pure over its Document like form.ts, but async (+ test)
   wxt.config.ts       manifest (permissions, side_panel, host_permissions) +
                       the Tailwind Vite plugin
 ```
@@ -99,7 +101,7 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   port and `read_current_page` cannot occur in the web app.
 - **`lib/assistant/` mirrors the freehire web assistant** (`web/src/lib/assistant`
   in this repo). `sse`, `wire`, `chat`, `deck` and `tool-formatters` are
-  verbatim ports — keep them aligned. Exactly two files diverge, and they say so
+  verbatim ports — keep them aligned. Three files diverge, and they say so
   at the top: `api.ts`/`client.ts` (absolute origin + Bearer, since extension code
   has no cookie) and `jobCache.ts` (reads the token the web's cookie made
   implicit).
@@ -122,8 +124,8 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
 
 ```bash
 # hire must be reachable at WXT_HIRE_ORIGIN (default: the local SPA at :5173,
-# which proxies /api). The signed-in account needs the assistant's restricted
-# rollout — moderator or beta_tester — or every turn is a 403.
+# which proxies /api). Any signed-in account will do — the assistant is open
+# to every signed-in user.
 
 cd design-system && pnpm install     # once, and after pulling design-system changes
 cd extension && npm install          # runs `wxt prepare` (generates .wxt/)

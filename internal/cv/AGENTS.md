@@ -59,8 +59,10 @@ template uses". That is the opposite of `Margins`, where an unset side resolves 
 - A template stays a whole design choice: switching one still moves whatever the candidate has
   not overridden.
 
-Writing `clampFontSize` by analogy with `clampMargin` — the obvious thing, they sit ten lines
-apart — would rewrite every CV in the database to the minimum size on its next save.
+The clamping stays inline in `Style.sanitized()` — a `clampFloat` per field, each guarded by a
+zero check. Writing a `clampFontSize` by analogy with `clampMargin`, the obvious thing, would
+rewrite every CV in the database to the minimum size on its next save: `clampMargin` maps an
+unset side to a concrete default, and the same shape for a font size maps "unset" to the floor.
 `TestSanitizeStyleLeavesUnsetValuesUnset` is the tripwire.
 
 The style block is **not** in `PatchOps`: the tailoring agent edits content, the candidate
@@ -192,8 +194,11 @@ and the handler test pins exactly that.
 Four things the code decides and a reader would otherwise have to infer:
 
 - **The comparison holds everything but content constant.** The base CV is rendered with the
-  *tailored copy's* template and margins (an in-memory copy — the stored base is never touched),
-  and both sides are scored against one keyword baseline: the bound vacancy's canonical
+  *tailored copy's* template, margins and typography (an in-memory copy — the stored base is
+  never touched). Typography is in that list because type size and leading decide how much
+  text lands on a page and the score reads the rendered PDF's text layer; omitting it would
+  hand the candidate a way to move their own delta by changing a font. Both sides are scored
+  against one keyword baseline: the bound vacancy's canonical
   `jobs.skills`. Not the role facet's top skills, and not the LLM's requirement match, whose
   drift would move the delta while the CV stood still.
 - **The baseline is the base CV as it stands NOW.** There is one base CV per user
@@ -244,8 +249,11 @@ One edge remains, deliberately:
 ## Who may write a stored CV
 
 Nothing in this package writes `cvs.data`. `internal/cvedit` owns the only path, and the seam
-is held by visibility rather than by review: `Store.update` is unexported, and `Store.Patch`
-and the eight-op patch vocabulary it applied no longer exist.
+is held by absence rather than by review: `Store` has no method that writes a document at all
+(its one unexported helper, `tailoredForJob`, is a read), and `Repository` declares none either
+— one declared here, even unused, would be an invitation to write a document with no revision,
+no policy and no evidence gate behind it. The write itself lives in cvedit's `Tx.Save`, which
+runs the `UpdateCV` query inside the locked commit.
 
 Every entry point — the editor's autosave, the template picker, the CLI's `PATCH`, the
 assistant's `cv_edit`, seeding a tailored copy — commits through `cvedit.Editor`, which applies

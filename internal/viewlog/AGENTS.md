@@ -15,12 +15,13 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
   data request `/jobs/<slug>/__data.json` (`KindPage`), or `/api/v1/jobs/<slug>`
   (`KindAPI`) → the slug; everything else ignored (a slug is one path segment, so
   lists and sub-resources like `/similar`, `/fit` don't count).
-- `Aggregate(reader) map[day]map[slug]int` — dedups by `(hash(IP+UA), slug, day)`,
-  the day taken from each line's timestamp (UTC); page opens from known bots are
-  dropped, API reads are not bot-filtered.
+- `Aggregate(reader) map[day]map[slug]int` — dedups by the raw `(IP, UA, slug, day)`
+  tuple (NUL-joined, no hashing), the day taken from each line's timestamp (UTC);
+  page opens from known bots are dropped, API reads are not bot-filtered.
 - `RotatedFiles(dir, base)` / `LogFile.Open()` — lists rotated files (skips the live
-  `access.log`), exposes each file's `(Device, Inode)` identity (the worker's cursor
-  key across numeric-suffix rotation), and opens gzip transparently.
+  `access.log`) and opens gzip transparently. `LogFile` is just a path; the worker's
+  cursor key across numeric-suffix rotation is an FNV-64 hash over the file's
+  decompressed content, computed by the worker itself.
 
 ## Conventions
 

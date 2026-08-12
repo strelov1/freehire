@@ -46,8 +46,8 @@ type createAPIKeyRequest struct {
 
 // mintAPIKey generates a new API key for the user and persists it (only the hash
 // is stored), returning the plaintext token — revealed to the caller exactly once —
-// and the stored row. Shared by the key-management endpoint and the
-// browser-extension connect flow.
+// and the stored row. Used by the key-management endpoint (the
+// browser-extension connect flow issues a session JWT instead).
 func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string, expiresAt pgtype.Timestamptz) (string, db.CreateAPIKeyRow, error) {
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {

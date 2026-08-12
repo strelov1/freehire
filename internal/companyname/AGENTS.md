@@ -16,9 +16,14 @@ Consumed by `cmd/backfill-company-names`.
   approximation; this is the gate the worker trusts.
 - **`Resolver` + `Registry`** — one resolver per source, keyed by source name. A
   source with no resolver is left alone, never guessed. Only *title resolvers*
-  exist so far (Pinpoint, BambooHR, Lever, Ashby): fetch the careers page and pull
-  the name out of `<title>` via `ExtractTitleName` (a `<lead-in> at {Name}` prefix
-  or a trailing `{Name} Careers`, with a stray `| …` section trimmed off).
+  exist so far (Pinpoint, Lever, Ashby): fetch the careers page and pull the name
+  out of `<title>`, each source with its own extractor — Pinpoint's
+  `ExtractTitleName` (a `<lead-in> at {Name}` prefix or a trailing `{Name}
+  Careers`, with a stray `| …` section trimmed off), Lever's bare-name title,
+  Ashby's `{Name} Jobs`. BambooHR is deliberately absent: its careers page is a
+  client-rendered SPA whose static `<title>` is platform boilerplate, never the
+  tenant's name, so a resolver would always return `""` — `BoardFromURL` still
+  handles `bamboohr` URLs, there is just no resolver wired for it.
 - **`BoardFromURL(source, url)`** — extracts the ATS board id from a representative
   job URL (host label for Pinpoint/BambooHR; first path segment for Lever/Ashby),
   matching what each resolver fetches against. Sources whose job URL is a vanity

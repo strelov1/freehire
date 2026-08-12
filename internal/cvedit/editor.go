@@ -349,7 +349,7 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 		// first cv.MaxBullets and drops the rest; checking after it ran would see a document
 		// that already lost the excess and could never trip ErrListCap. This is the same
 		// guard commit() applies to an agent's Ops batch, extended to a whole-document save —
-		// PATCH /me/cvs/:id (the editor's autosave) and Reset from résumé both go through
+		// PUT /me/cvs/:id (the editor's autosave) and Reset from résumé both go through
 		// here, and a pasted section or a bank seed can carry more than the cap.
 		if e.refuseListCap {
 			if err := refuseIfSanitizeDropsContent(next, State{}); err != nil {

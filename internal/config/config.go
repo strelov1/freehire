@@ -64,8 +64,8 @@ type Settings struct {
 	// MailboxDomain is the receiving domain hosted mailboxes live on
 	// (<handle>@MailboxDomain, e.g. inbox.freehire.me). Empty = the hosted-mailbox
 	// option is off (claim route unregistered, status reports unavailable). It is
-	// deliberately NOT named MAIL_DOMAIN — that shared var already holds the SES
-	// *sending* identity (notifications), a different, non-receiving domain.
+	// deliberately NOT named MAIL_DOMAIN — that name reads like the SES *sending*
+	// identity (notifications, NOTIFY_EMAIL_FROM), a different, non-receiving domain.
 	MailboxDomain string
 
 	// Meilisearch backs the job search endpoint and the reindex command. Shared

@@ -19,7 +19,10 @@ nothing but the URL. No network, no database.
   exist, while one adapter serves both domains as `factorial`.
 - **Adding an ATS is one row plus one test case.** Extraction modes say where the tenant sits:
   `path` (first path segment), `pathlocale` (same, skipping a leading `xx-XX` locale),
-  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs), `subdomain`
+  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs),
+  `pathnumeric` (like `path`, but the segment must be an all-digit id — PageUp's board is a
+  numeric institution id, so localisation/section segments like `/cw/en/search` are not
+  boards), `subdomain`
   (leftmost DNS label), `subdomainchain` (every label under the apex, for a tenant nested under a
   regional instance like `<tenant>.global.huntflow.io`), `host` (the whole careers host IS the
   tenant), `hostpath` (host + first path segment, for Workday).

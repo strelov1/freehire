@@ -22,24 +22,30 @@ lives in `internal/llm` (`Client.As`); the one place per-user calls resolve thro
   `LLM_API_KEY` exactly as it did before this existed. That is also the rollback.
 
 ## The endpoints are not where you would guess
-Administration lives at the gateway **root**, inference under `/v1`. Verified: `/key/info`
-answers 200 while `/v1/key/info` and `/v1/key/generate` both answer 404. `LLM_ADMIN_URL` is
-therefore configured separately and never derived from `LLM_BASE_URL` — which also allows
-keeping the admin API off the public host.
+Administration lives at the gateway **root**, inference under `/v1`: every call this
+client makes — `/key/generate`, `/key/block`, `/key/delete`, `/user/daily/activity` —
+is a root path on the ADMIN key. `LLM_ADMIN_URL` is therefore configured separately and
+never derived from `LLM_BASE_URL` — which also allows keeping the admin API off the
+public host.
 
 ## Three rules that are easy to get wrong
 
-**The usage read authenticates AS the key, never as the administrator.** `/key/info` accepts
-both, but the gateway logs `$request_uri`, so passing the key as a query parameter files a
-live credential into an access log in plaintext on every read. The bearer header is not
-logged, and the read then needs no administrative rights at all — a user key cannot mint
-keys (the gateway answers 401).
+**The usage read authenticates as the administrator, scoped by account id — never AS
+the key.** `Client.Activity` reads `GET /user/daily/activity` on the admin key with the
+account id in the query string: an internal number, not a secret, so it can travel where
+a credential could not. The handler above it (`newUsageHandlers` in `me_usage.go`) takes
+no resolver on purpose — the read needs no key, cannot mint one, and still reports a
+month during which the key was replaced.
 
-**A 401 means different things depending on whose credential was refused.** On the self-read
-it is the user's key: unknown, re-mint. On an administrative call it is our own admin key:
-misconfiguration. Conflating them would let one mistyped environment variable read as "every
-account's key is stale" and set off a re-minting storm. Hence the internal `errUnauthorized`,
-classified by each caller.
+**A 401 on a per-user call means the gateway forgot the key; on an administrative call it
+means our own admin key is wrong.** Conflating them would let one mistyped environment
+variable read as "every account's key is stale" and set off a re-minting storm. The two
+are kept apart structurally rather than by a sentinel: `do` classifies only 404 (→
+`ErrUnknownKey`, treated by `Block`/`Delete` as already done) and sends every other
+non-2xx, 401 included, to the generic `ErrUpstream` branch. The 401 that matters — the
+gateway refusing a user's credential on an inference call — is caught in `internal/llm`'s
+transport, which retries once on the fallback and calls `Resolver.Forget` to clear the
+row so the next call re-mints.
 
 **Block, do not delete, a credential that has been spent with.** The gateway's record of what
 a key spent hangs off that key, so deleting it takes the cost history along. `Revoke` (account

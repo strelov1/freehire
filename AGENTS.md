@@ -19,7 +19,7 @@ Stack: **Go + Fiber v2**, **PostgreSQL**, **sqlc**, **Meilisearch**, **Docker Co
 ## Layout
 
 `internal/<domain>/` — domain packages, the substantial ones carry their own AGENTS.md (see the table below).
-`cmd/<name>/` — every binary is a **run-once-and-exit** worker except `cmd/server`. They are cron-driven, not daemons; they need `DATABASE_URL` and exit non-zero on failure.
+`cmd/<name>/` — every binary is a **run-once-and-exit** worker except `cmd/server` and `cmd/mail-ingest` (a long-lived SES inbound daemon, `Restart=always`). The rest are cron-driven, not daemons; they need `DATABASE_URL` and exit non-zero on failure.
 
 Non-obvious:
 
@@ -47,8 +47,8 @@ go test -tags=integration ./internal/db/  # queue integration tests (needs Docke
 ```
 
 **`go test ./...` compiles no `//go:build integration` file, and those files are not
-confined to `internal/db`** — there are 152 of them across 13 packages, and `internal/handler`
-holds 65, which call unexported constructors like `newCVHandlers`. A changed signature
+confined to `internal/db`** — there are 187 of them across 20 packages, and `internal/handler`
+holds 78, which call unexported constructors like `newCVHandlers`. A changed signature
 therefore passes every command above except the `vet` line, then fails CI, which runs
 `go test -tags=integration ./...` over the whole module. The vet line is the cheap guard:
 seconds, no Docker. Run the full tagged suite when you change behaviour rather than a
@@ -63,7 +63,7 @@ Worker gotchas (`go run ./cmd/<name>`, all need `DATABASE_URL`; run `ls cmd/` fo
 - `backfill-derive` — re-derives every deterministic column (facets, `role_fingerprint`, slugs) in one keyset pass; `BACKFILL_CONCURRENCY` tunes the pool. Follow with `make reindex` — it collapses newly-clustered reposts and unions their geography.
 - `capture-apply-form` — drains the apply-form capture queue: fetches each queued posting's application form from `greenhouse`/`ashby`/`workable`/`lever` and stores it in `apply_forms`. Needs nothing but `DATABASE_URL`; `APPLY_FORM_CONCURRENCY` (default 4) bounds how hard one run leans on a platform and `APPLY_FORM_MAX_PER_RUN` (default 5000) how much of the backlog it takes — the second matters because the first drain faces a ~185k backlog and an unbounded run would work for hours, which `Type=oneshot` turns into silently skipped timer firings. `recruitee` forms never reach this queue — its listing carries them, so ingest writes them directly.
 - `hydrate-adzuna-description` — drains the Adzuna full-description capture queue (`cmd/ingest` enqueues eligible postings; see [internal/sources/AGENTS.md](internal/sources/AGENTS.md)). `ADZUNA_DESCRIPTION_MAX_PER_RUN` (default 500) is deliberately conservative — untested against Adzuna at real crawl-host volume. `seed-adzuna-description-queue` is the one-off companion that queues the pre-existing backlog; run it once, then let the cron drain handle the rest.
-- **Nothing holds a flock** — `grep flock` finds none in Go and none in the systemd units. What keeps a cron worker from stacking on itself is systemd: a `Type=oneshot` unit will not start a second instance while the first is active. That protects the TIMER path only, so a run started by hand has no lock at all. **Never stack `reindex-companies` with `make reindex`** — Meilisearch deadlocks, and nothing will stop you. Two workers additionally take a Postgres advisory lock (`cmd/liveness`, `cmd/ghost-crosscheck`); their keys are listed in `internal/migrate`.
+- **Nothing holds a flock** — no file locks in Go or in the systemd units; the word survives only in a few stale comments. What keeps a cron worker from stacking on itself is systemd: a `Type=oneshot` unit will not start a second instance while the first is active. That protects the TIMER path only, so a run started by hand has no lock at all. **Never stack `reindex-companies` with `make reindex`** — Meilisearch runs one serial task queue, so the second rebuild queues behind the first and looks like a hang, and a swap transiently holds ~2x the index's disk. Two workers additionally take a Postgres advisory lock (`cmd/liveness`, `cmd/ghost-crosscheck`); their keys are listed in `internal/migrate`.
 - `prune` — the **only** hard-delete path. Dry-run by default; archives every removal to `pruned_jobs`.
 
 ## Module files
@@ -84,8 +84,13 @@ Each is self-contained and can be read independently.
 | **Browser extension** (WXT + Svelte side-panel agent client, the other end of Browser tools) | [extension/AGENTS.md](extension/AGENTS.md) |
 | **Source ingest** (board files, provider registry, validation) | [internal/sources/AGENTS.md](internal/sources/AGENTS.md) |
 | **Pipeline** (Runner, dedup, UpsertJob, board health, search indexing) | [internal/pipeline/AGENTS.md](internal/pipeline/AGENTS.md) |
+| **Apply-form capture** (ATS application forms, verbatim platform vocabulary, queue drain) | [internal/applyform/AGENTS.md](internal/applyform/AGENTS.md) |
+| **Job fingerprints** (content_hash vs role_fingerprint vs RoleKey — which hash for which job) | [internal/jobhash/AGENTS.md](internal/jobhash/AGENTS.md) |
+| **Cron worker plumbing** (Main/Bootstrap, exit codes, heartbeat, corruption-tolerant scans) | [internal/worker/AGENTS.md](internal/worker/AGENTS.md) |
 | **Link resolution** (outbound job URL → destination's own identity) | [internal/linksource/AGENTS.md](internal/linksource/AGENTS.md) |
+| **ATS board recognition** (URL → (source, board), shared conventions) | [internal/atsboard/AGENTS.md](internal/atsboard/AGENTS.md) |
 | **Board contributions** (crowdsourced URL → (source, board) onboarding) | [internal/contribution/AGENTS.md](internal/contribution/AGENTS.md) |
+| **Employee referrals** (offer/request marketplace, moderation, anonymity) | [internal/referral/AGENTS.md](internal/referral/AGENTS.md) |
 | **Telegram** (crawl + LLM vacancy extraction) | [internal/telegram/AGENTS.md](internal/telegram/AGENTS.md) |
 | **Company names** (real display names for slug-named companies) | [internal/companyname/AGENTS.md](internal/companyname/AGENTS.md) |
 | **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/vocab`) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
@@ -93,18 +98,24 @@ Each is self-contained and can be read independently.
 | **Facet-search drain** (search_outbox, incremental facet-index pushes, reconciler) | [internal/searchdrain/AGENTS.md](internal/searchdrain/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **Speech to text** (dictation into the composer, the filename rule, spend bounds) | [internal/speech/AGENTS.md](internal/speech/AGENTS.md) |
+| **LLM client** (provider-agnostic wrapper, schema cache, streaming, attribution tags) | [internal/llm/AGENTS.md](internal/llm/AGENTS.md) |
 | **LLM spend attribution** (per-user gateway credential, feature tags, fail-open) | [internal/llmkey/AGENTS.md](internal/llmkey/AGENTS.md) |
 | **AI fit analysis** (three-stage LLM prompt-chain, score, verdict, stream) | [internal/matchanalysis/AGENTS.md](internal/matchanalysis/AGENTS.md) |
 | **Job-match scoring** (deterministic CV-vs-vacancy score, the unverifiable rule) | [internal/cvmatch/AGENTS.md](internal/cvmatch/AGENTS.md) |
+| **ATS-readiness score** (deterministic CV score, de-identified LLM review, delta) | [internal/atscheck/AGENTS.md](internal/atscheck/AGENTS.md) |
 | **Experience bank** (durable employments + evidence atoms, provenance, retrieval) | [internal/experience/AGENTS.md](internal/experience/AGENTS.md) |
+| **Résumé identity** (one stored CV per user, contact-block layers) | [internal/resume/AGENTS.md](internal/resume/AGENTS.md) |
 | **Structured CV** (LLM parse of stored CV, stamp-and-compare) | [internal/resumeextract/AGENTS.md](internal/resumeextract/AGENTS.md) |
+| **PII masking** (fail-closed CV→LLM redaction, reversible placeholders) | [internal/pii/AGENTS.md](internal/pii/AGENTS.md) |
 | **CV rendering** (templates, fonts, previews) | [internal/cv/AGENTS.md](internal/cv/AGENTS.md) |
 | **CV edits** (the only writer: path operations, revisions, undo, the evidence gate) | [internal/cvedit/AGENTS.md](internal/cvedit/AGENTS.md) |
 | **Geography** (country/region codes, work-mode hint, dict-only vs hybrid) | [internal/location/AGENTS.md](internal/location/AGENTS.md) |
 | **Skill tagging** (alias→canonical dictionary, jobs.skills facet) | [internal/skilltag/AGENTS.md](internal/skilltag/AGENTS.md) |
 | **Seniority & category** (title→seniority/category, dict-only) | [internal/classify/AGENTS.md](internal/classify/AGENTS.md) |
 | **View counts** (nginx access logs → per-job views) | [internal/viewlog/AGENTS.md](internal/viewlog/AGENTS.md) |
+| **Ghost detection** (hedged posting-reality verdict, two evidence tiers, crosscheck) | [internal/ghost/AGENTS.md](internal/ghost/AGENTS.md) |
 | **YC directory** (import-yc, curated facets, matching by former names) | [internal/ycdir/AGENTS.md](internal/ycdir/AGENTS.md) |
+| **Company collections** (curated company tags, register datasets, reconciliation) | [internal/collections/AGENTS.md](internal/collections/AGENTS.md) |
 | **Sentry error tracking** (backend, workers, frontend — env-gated) | [internal/observability/AGENTS.md](internal/observability/AGENTS.md) |
 | **Mail stack** (Gmail + SES inbound → classify → link → stage advance) | [docs/agents/mail-stack.md](docs/agents/mail-stack.md) |
 | **Notifications** (subscription digests, saved-job reminders, channels) | [docs/agents/notifications.md](docs/agents/notifications.md) |

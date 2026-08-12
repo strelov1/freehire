@@ -106,8 +106,8 @@ type API struct {
 type middleware struct {
 	optional fiber.Handler
 	key      fiber.Handler
-	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the CV surface (and
-	// the caller's own identity read) mounts it; every other key-accepting route stays
+	// cvKey is keyAuth widened to admit the narrow `cv` key. Only the caller's own
+	// identity read (/auth/me) mounts it; every other key-accepting route stays
 	// on key, which is full-scope-only — so a new endpoint is out of a leaked agent
 	// credential's reach unless it opts in.
 	cvKey  fiber.Handler

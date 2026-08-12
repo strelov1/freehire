@@ -5,7 +5,9 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
 ## Architecture
 
 - `API` (`handler.go`) holds only the cross-cutting dependencies: the DB pool, the sqlc
-  queries, and the token issuer the auth middleware is built from. `Register` builds the
+  queries, the token issuer the auth middleware is built from, and the browser-tool hub
+  (`browserTools`) that relays tool frames between a user's harness and their extension.
+  `Register` builds the
   shared services, constructs every feature handler, and calls each feature's `register`
   in an order that keeps literal routes before param routes (e.g. `/jobs/search` before
   `/jobs/:slug`, `/threads/count` before `/threads/:id`, the static `/me/tracking/*`
@@ -21,8 +23,13 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   blocker/credits helpers for tailoring), and `jobs_moderation.go` carries the
   moderator-authored writes behind the `moderator` gate.
 - The `middleware` bundle (`handler.go`) carries the shared auth gates features mount
-  behind: `optional` (attach caller, never reject), `key` (cookie or API key), `cookie`
-  (cookie-only), `moderator` (role gate, stacked after `key`/`cookie`).
+  behind: `optional` (attach caller, never reject), `key` (cookie or full-scope API key),
+  `cvKey` (`key` widened to admit the narrow `cv` key — the CV surface and `/me` only),
+  `cookie` (cookie-only), `optionalCookie` (attach a cookie session, never reject — for
+  provider callbacks, which are browser navigations), `moderator` (role gate, stacked
+  after `key`/`cookie`). It also carries the two rate-limit pieces: `outboundFetch`
+  (throttles endpoints that fetch a caller-supplied URL) and `throttler` (backs the
+  per-route limiters features build in their own `register`).
 - Services shared across features (résumé store, profile, credits, CV store/renderer,
   conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
   are built once in `Register` and passed to each constructor; single-feature services are
@@ -33,20 +40,24 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   first feature's struct.
 - **No post-construction setter for a dependency that exists before construction.** Three
   of them (`withAssistantSessions`, `withFollowUps`, `withKeys`) existed only because of
-  the ownership above, and each made a handler's field nil for part of its life. The two
-  that survive — `withAccountDeletion`, `accounts.WithCodes`/`report.WithNotifier` — are
-  conditioned on an SES client built inside an `if`, which is a different thing: the
-  dependency genuinely does not exist yet. Two same-typed clients go in a named struct
-  (`assistantModels`), not as adjacent parameters — a swap there compiles.
+  the ownership above, and each made a handler's field nil for part of its life. What
+  survives is the other kind — the dependency genuinely does not exist when the handler is
+  constructed: `accounts.WithCodes`/`report.WithNotifier` attach to an SES client built
+  inside an `if`, `inboxH.withRecall` waits on `cfg.LLM`, and `withAccountDeletion`,
+  `experienceH.withRequireContext` and `accountDeletion.WithGatewayKeys` wire services
+  `Register` finishes building further down. A few plain field assignments do the same
+  (`authH.*` config fields, `assistantH.realtime`, the `resumeH.llm`/`matchH.llm`
+  bindings). Two same-typed clients go in a named struct (`assistantModels`), not as
+  adjacent parameters — a swap there compiles.
 - Tests construct the feature struct directly with fakes/stubs (e.g.
   `&trackingHandlers{tracking: ...}`) and mount routes on a bare `fiber.App`.
-- Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, everything else→500.
+- Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: a `codedError`→its status with a `code` field, `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, `inbox.ErrNotFound`→404, `inbox.InvalidError`/`inbox.ErrSlugRequired`/`search.ErrBadQuery`→400, `inbox.ErrPendingSuggestion`→409, `context.Canceled`→499 (client closed request), everything else→500.
 - Handlers signal failure by returning an error — `fiber.NewError(status, msg)` for specific codes, bare error (e.g. `pgx.ErrNoRows`) for common cases. Don't hand-roll per-handler error JSON; don't re-map `ErrNoRows` in read handlers (just `return err`).
 
 ## Auth Handlers (`auth.go`)
 
-- `register`/`login` set JWT cookie + return `{"data": user}`. `logout` clears it. `me` is guarded by `RequireAuthOrKey` (cookie or API key).
-- Rate-limited credential endpoints (10/min, keyed on client IP).
+- `register`/`login` set JWT cookie + return `{"data": user}`. `logout` clears it. `me` is guarded by `RequireAuthOrScopedKey` (cookie or API key — the narrow `cv` key included, so an agent can resolve which account its key belongs to).
+- Credential endpoints are rate-limited per route, keyed on client IP: register 5/min, login 10/min, verify-request 5/min, verify-confirm 10/15min, password/forgot 3/5min, password/reset 10/15min.
 
 ## Account Deletion (`me_delete.go`)
 
@@ -66,7 +77,7 @@ Pipeline and cross-package invariants live in [docs/agents/mail-stack.md](../../
 
 It is the **harness** surface, not "the agent surface": there are two agents on this store now, and only this one speaks HTTP.
 
-- Mounted on `mw.key`, so a user's own agent harness drives the inbox with the full-scope key it already uses for the tracker. **Exception: the Gmail OAuth connect/callback pair stays `mw.cookie`** — it redirects a browser to Google's consent screen and a keyed client cannot complete it.
+- Mounted on `mw.key`, so a user's own agent harness drives the inbox with the full-scope key it already uses for the tracker. **Exception: the Google OAuth pairs — `/me/gmail/connect`+`/me/gmail/callback`, and the calendar's own connect/callback beside them.** Each connect stays `mw.cookie` — it redirects a browser to Google's consent screen and a keyed client cannot complete it. Each callback mounts `mw.optionalCookie` instead: it is the browser returning from Google, and under `RequireAuth` a session that did not survive the round-trip would render a JSON 401 into the address bar, so the callback answers that case itself with a redirect.
 - `TriageEmail` is `SetEmailClassification`'s sibling: status, link, provenance (`link_source = 'agent'`) and the classified stamp in **one** update, then `mailclassify.AdvanceStage`. Splitting it would manufacture states the worker never produces. An omitted slug means "not deciding the link", never "clear it". The stage advance is best-effort — the verdict is already durable.
 - `IngestEmails` validates the whole batch before writing any of it and commits in one transaction, so a bad message at the end cannot leave earlier ones stored under a 400.
 - `renderMutation` is the shared tail of every mutation that returns the message it changed (link, unlink, confirm, reject, triage, create-application), so those cannot drift from one another or from `GetEmail`. Unlike `GetEmail` it does not mark the message read: the caller is acting on the message, not opening it.
@@ -84,22 +95,27 @@ has not replaced it yet:
 
 | Route | Does |
 |---|---|
-| `POST /assistant/sessions` | start a conversation in the preset asked for — `chat` or `browse`; a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind |
+| `POST /assistant/sessions` | start a conversation in the preset asked for — `chat`, `profile`, `browse`, `interview` or `debrief`; a tailoring one is minted by the CV bootstrap, which knows the CV and vacancy to bind |
 | `GET /assistant/sessions` | the caller's conversations, most recently active first |
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
 | `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events |
 | `POST /assistant/sessions/:id/retry` | resume after a failed turn without appending another user message (same SSE stream) |
+| `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
+| `POST /assistant/sessions/:id/opening` | the assistant speaks first in a rehearsal or debrief, under a server-side brief; an already-answered opening is a 409 |
+| `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential (per-caller limited) |
+| `POST /assistant/sessions/:id/voice-turns` | append a completed spoken turn to the transcript |
 | `POST /assistant/sessions/:id/autopilot` | run the tailoring pass unattended — same stream, server-owned brief and ceiling (**cookie-only**) |
 
 A session the caller does not own is a 404, never a 403, so ids stay unprobeable.
 The autopilot route departs from the `key` gate above: it rewrites a CV without
 being asked anything, and the browser is the one place the candidate can watch it
 happen and undo it. It refuses anything but a tailoring session bound to a CV
-(**409**), and snapshots that CV itself before the turn starts — a snapshot the
-client could forget to ask for is a run nobody can take back. Undoing it is
-`POST /me/cvs/:id/autopilot/undo` (also cookie-only), which restores the pre-run
-document and clears the run's report with it.
+(**409**). There is no pre-run snapshot any more: every edit the agent makes in
+the turn is filed under one revision batch, so "undo the run" is undoing that
+batch. Undoing it is `POST /me/cvs/:id/revisions/batch/:bid/undo` (also
+cookie-only), which reverts the batch's standing edits newest-first and clears
+the run's report with it.
 
 Both SSE endpoints — the turn and the fit analysis — write through `sseStream`
 (`match_analysis_stream.go`), the one owner of the stream protocol: it serializes the
@@ -171,8 +187,8 @@ empty profile the model would read as "no preferences".
 
 - The bot mirrors Telegram's role but has one on/off switch, not two: `newDiscordHandlers`
   wires the client only when all four env vars are set (`DISCORD_BOT_TOKEN`,
-  `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_GUILD_ID` — see `config.go` for
-  what each does). Missing any one, the bot is fully inert: `POST /me/discord/link` answers
+  `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_GUILD_ID` — documented on the
+  `Config` fields in `handler.go`, read from env in `internal/config/config.go`). Missing any one, the bot is fully inert: `POST /me/discord/link` answers
   503, `GET /me/discord` reports `enabled: false`, and `POST /api/v1/discord/interactions`
   404s instead of attempting Ed25519 verification.
 - One-time setup once those four are set: point Discord's Interactions Endpoint URL at

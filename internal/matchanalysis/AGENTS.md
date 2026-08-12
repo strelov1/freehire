@@ -1,7 +1,7 @@
 # AI fit analysis conventions
 
 ## Scope
-On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, job). Backend `internal/matchanalysis`; frontend analysis page in `web/src/routes/match/[slug]/`.
+On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, job). Backend `internal/matchanalysis`; frontend embedded in the Tailor workspace (`web/src/routes/tailor/[slug]/`), with `web/src/routes/match/[slug]/` kept only as a 308 redirect to it.
 
 ## Always true
 - **Fixed prompt-chain, NOT an autonomous agent.** Deterministic, typed, cacheable. Runs over the shared `internal/llm` client — provider-agnostic, no vendor baked in.
@@ -20,11 +20,11 @@ On-demand, cached, three-stage LLM prompt-chain for job-fit analysis per (user, 
 
 `internal/matchanalysis` is complemented by the deterministic `internal/jobmatch` bar (skills-only, instant, free). The LLM analysis is opt-in and reads the whole vacancy + `company_info` + the caller's de-identified structured résumé.
 
-**The chain:** `matchanalysis.go` defines the `Analysis` wire shape and `AnalyzeStream(ctx, in, emit)` — the one chain implementation. `analyzer.go` is a thin collector over it. `Analyze` is the sync entry point that collects stream events into the final `Analysis`.
+**The chain:** `analyzer.go` holds the one chain implementation, `AnalyzeStream(ctx, in, emit)` — a method on `*Analyzer`. `Analyze` is the sync entry point, a one-line wrapper that runs it with a no-op emit. `matchanalysis.go` holds the `Analysis` wire shape, the sanitize pass, and the weighted scoring.
 
 **SSE streaming:** `GET /jobs/:slug/match-analysis/stream` opens an SSE endpoint (`SetBodyStreamWriter` with `X-Accel-Buffering: no`). Events: `stage_start`/`stage_done` (3-step stepper), `thinking` (reasoning-token deltas via `llm.GenerateJSONStream`'s `WithStreamingReasoningFunc` — empty on non-reasoning models; raw JSON tokens are never surfaced), and each section as it resolves (`requirements`→S1, `dimensions`→interim S2, `final`→audited). The final result is cached exactly as the sync path on completion.
 
-**Frontend:** a dedicated full-width analysis page SSRs a fresh cached analysis via `+page.server.ts` for instant paint; otherwise opens an `EventSource` with a stepper, thinking panel, and progressive sections. The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested). The Profile-match sidebar block (`MatchSummary.svelte`) is a compact summary linking to the page — it never computes inline.
+**Frontend:** the standalone analysis page was removed; the Tailor workspace is the sole surface. `MatchAnalysisFull.svelte`, embedded in the workspace, fetches the cached analysis and otherwise opens an `EventSource` with a stepper, thinking panel, and progressive sections. `web/src/routes/match/[slug]/+page.server.ts` remains only as a 308 redirect to `/tailor/[slug]`, so old links keep working. The pure SSE reducer `reduceMatchEvent` lives in `web/src/lib/matchAnalysis.ts` (unit-tested). The Profile-match sidebar block (`MatchSummary.svelte`) is a compact summary linking to the workspace — it never computes inline.
 
 **Structured resume context:** `resumeextract.Professional` — the contact-free projection, as a TYPE, not a convention about a JSON string — is the SOLE candidate context of the fit chain (`matchanalysis.Input.StructuredResume`). The raw CV text is never sent to the model, and this package strips nothing: a field the projection does not name cannot arrive here. A candidate with no banked experience means NO analysis is produced (the endpoint degrades to `has_cv` with a null analysis); there is deliberately no text-only fallback and no fallback to the structure's own copy of the work history.
 

@@ -27,11 +27,14 @@ Meilisearch-backed keyword and hybrid search over jobs and companies. The packag
 - **Killing the reindex client does not cancel enqueued Meili tasks.** To actually stop:
   `POST /tasks/cancel?indexUids=<uid>&statuses=enqueued,processing`. That cancelation itself
   queues, and it is irreversible — don't fire it on an unconfirmed diagnosis.
-- **A failed rebuild leaves an orphan `*_rebuild` index.** `Rebuild.Promote` drops the old
-  data only *after* a successful swap, so an aborted run leaves a full-size index on disk
-  (~55 GB at catalogue scale). That has filled the production disk and put rebuilds into a
-  death spiral: ENOSPC → orphan → less disk → ENOSPC. Reclaim with
-  `DELETE /indexes/<uid>_rebuild`. `Rebuild.Prepare` also drops a leftover before starting.
+- **A normally-aborted rebuild no longer orphans the `*_rebuild` index.** `reindexFull`
+  (and `reindexCompanies`, likewise) defers `Rebuild.Cleanup` on every non-promoted exit —
+  best-effort on a cancellation-immune 30s context — so a failed or cancelled run drops its
+  half-built rebuild index itself rather than leaving a full-size index (~55 GB at
+  catalogue scale) on disk. An orphan now survives only a hard kill (SIGKILL, power loss)
+  or a failed cleanup; reclaim that with `DELETE /indexes/<uid>_rebuild`. (The production
+  ENOSPC → orphan → less disk → ENOSPC death spiral came from these orphans.)
+  `Rebuild.Prepare` also drops a leftover before starting.
 - **Live reads are never affected by a rebuild** — the swap is atomic.
 - A full rebuild (`scope=full`) pushes **every** open, non-private, categorized document
   unconditionally to the fresh rebuild index — `content_hash` is never read in
@@ -51,7 +54,7 @@ Meilisearch-backed keyword and hybrid search over jobs and companies. The packag
   push there would leave the outbox entry deleted with nothing actually indexed). Pick
   deliberately: **never call `SubmitJobs` from a high-frequency caller** — Meilisearch
   re-merges its inverted index/facet structures across the WHOLE live index on every push
-  regardless of batch size (observed 50-90s per push at catalogue scale), so many small
+  regardless of batch size (measured 2026-08-05 at 90-180s+ per push on the ~2.7M-doc index), so many small
   unawaited pushes queue up and saturate host disk IO. That is exactly what happened when
   `cmd/ingest` called it once per crawl across ~169 independent per-board processes; the
   fix routes that traffic through `search_outbox` + `cmd/search-drain` instead (see
@@ -75,6 +78,10 @@ or empty — never a 500).
 ## Limitations
 
 - A Meili filter error 500s the page instead of degrading. That's the robustness seam.
-- `jobs_semantic` is built by a separate, much slower pass and is only queried when
-  `SemanticRatio > 0`. Always scope a semantic rebuild (`--posted-within 30d`); a bare full
-  embed of the whole catalogue takes hours and monopolizes the queue.
+- `jobs_semantic` is queried only when `SemanticRatio > 0`. The slow path is a scoped
+  swap-rebuild that re-embeds via TEI (always scope it: `--posted-within 30d`; a bare full
+  embed of the whole catalogue takes hours and monopolizes the queue). It is no longer the
+  only path: `cmd/embed` persists every computed vector to Postgres
+  (`jobs.semantic_embedding`), so `reindex --semantic --from-pg` rehydrates the index in
+  place (reset + re-fill of the live index, no swap, no re-embedding, no 2x disk) from
+  those stored vectors.

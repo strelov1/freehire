@@ -5,7 +5,7 @@ codes, password reset/change, and mapping an external sign-in identity onto a lo
 
 ## Scope boundary
 
-Three packages split this surface — keep the split:
+Four packages split this surface — keep the split:
 
 - **`internal/accounts`** (here) — the *policy*: who an identity resolves to, what a valid
   password is, when a code is burnt.
@@ -55,4 +55,4 @@ Three packages split this surface — keep the split:
 ## Limitations
 
 - No magic-link sign-in, no identity unlinking (the repository seam exists, the UI doesn't).
-- The rate limiter on credential endpoints is per-instance, in-memory (`internal/handler`).
+- The rate limiter on credential endpoints fails open on Redis errors (`internal/ratelimit`, Redis-backed GCRA — a Redis outage means no throttling, only log warnings).

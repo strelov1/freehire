@@ -1,6 +1,6 @@
 # Mail stack
 
-Six packages and three workers turn inbound recruiter mail into linked, stage-advancing
+Eight packages and three workers turn inbound recruiter mail into linked, stage-advancing
 applications. Each package has a package doc explaining *what* it does; this file explains
 how they compose and where the traps are.
 
@@ -39,6 +39,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 | `internal/maillink` | Drains the classification outbox, decides link + stage (`cmd/classify-mail`) |
 | `internal/mailmatch` | Deterministic match: thread continuity, company name in sender/subject |
 | `internal/mailclassify` | Status vocabulary, sanitizer, LLM adapter |
+| `internal/mailrecall` | Pull direction: one Gmail search scoped to an employer, proposals only — never stored, never linked |
 
 ## Always true
 
@@ -80,7 +81,7 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   other employers — an application that then could never look silent, while the real ones
   lost their mail. Adding a brand there is deliberately lossy (that brand's own mail stops
   auto-linking, degrading to a suggestion) and that trade is always worth taking.
-- **Read the body via `readableBody(text, html)`, never `body_text` alone.** Many ATS senders
+- **Read the body via `maillink.ReadableBody(text, html)`, never `body_text` alone.** Many ATS senders
   (Gem, Ashby, Greenhouse) send **HTML-only** mail with no `text/plain` part, so `body_text`
   is empty and a classifier fed only that judges from the subject line — which once turned a
   plain rejection into `screening`. Bounded downstream by `TruncateRunes(4000)`.
@@ -120,12 +121,17 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
 - **`mailclassify` is the prompt-injection and out-of-vocabulary guard.** Email bodies are
   attacker-controlled. An unknown signal is sanitized to `other` before anything is
   persisted or served — do not persist a raw model string.
-- **`MAILBOX_DOMAIN` ≠ `MAIL_DOMAIN`.** The first is the *receiving* domain (mailbox
+- **`MAILBOX_DOMAIN` ≠ `NOTIFY_EMAIL_FROM`.** The first is the *receiving* domain (mailbox
   addresses; read by both the API's `mailboxReady` gate and `cmd/mail-ingest`); the second is
   the SES *sending* identity for notifications. They may point at the same host — they are
   still separate settings with separate IAM.
 - Recipient lookup in `mailingest` is **case-insensitive**; addresses are allocated
   lowercase.
+- **`mailbox.reservedHandles` blocks more than RFC 2142 role names.** It also reserves the
+  CA/Browser Forum "constructed email addresses" (`admin`, `administrator`, `webmaster`,
+  `hostmaster`, `postmaster`): domain validation lets a certificate be issued to whoever
+  answers one at the domain, so allocating `admin@` would hand out the ability to get a TLS
+  certificate for the receiving domain.
 - **`EnqueuePendingEmailClassification` must keep excluding `source = 'external'`.** That
   one predicate is what makes the bring-your-own-harness tier free; drop it and every
   pushed message gets picked up by `cmd/classify-mail` on the next cron run and billed to
@@ -163,6 +169,15 @@ the point: it is the tier that costs us nothing. See the `external` bullets belo
   scan of the package for `LinkEmailToJob` / `application_events` / `calsync`.
   **The calendar still needs no code**: `cmd/cal-sync` re-reads its whole ±90-day window
   every run, so an invitation linked here yields its meeting on the next one.
+- **`internal/calsync` stores only meetings an application earned.** `cmd/cal-sync` reads each
+  connected candidate's calendar ±90 days around now and writes ONLY a meeting `calmatch` can
+  attach to one of the candidate's own applications — the schema backstops the rule
+  (`application_interviews.application_id` is NOT NULL), so a mistake cannot become a stored
+  dentist appointment. The whole window is re-read on every run; there is no incremental
+  state to drift. The only status ever written is `confirmed`. Connections are filtered by
+  the scopes recorded at consent, so a Google grant that predates the calendar consent never
+  reaches the worker and never costs an API call to discover. The worker shares the Gmail
+  Google grant and `gmailsync.CalendarScope`, and nothing else.
 - **Two known gaps in the PUSH path, measured and not yet fixed.** They are why the pull
   direction has so much to find. `gmailsync.BuildQuery` fetched **431** messages over 120
   days from a mailbox holding **3297**; **739** hiring-shaped messages were never fetched,

@@ -49,6 +49,13 @@ Telegram), each with its own small `Notifier`/`Router` pair:
 - `Digest.Jobs` is capped to the configured digest size while `Digest.Total` carries the true
   count, so a renderer can show the "and N more" tail. Don't derive the count from `len(Jobs)`.
 - `DigestJob` deliberately carries **no internal job id** — only the public slug and URL.
+- **The Telegram link token is deliberately NOT a JWT.** Telegram's deep-link `start`
+  parameter allows only 1–64 chars of `[A-Za-z0-9_-]`, which a dotted ~200-char JWT
+  violates, so the token is a ~43-char base64url(payload‖truncated-HMAC) blob signed with
+  `JWT_SECRET` (`internal/telegramnotify`). The 4096-char message cap is measured the way
+  Telegram measures it — UTF-16 code units, with the widest possible "+ N more" tail
+  reserved up front — because an oversized digest fails deterministically, every retry
+  re-fails, and the whole batch is dead-lettered.
 - Salary fields are projected from enrichment; zero min/max or an empty currency means
   unknown, and the renderer omits the line rather than printing a zero.
 

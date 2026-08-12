@@ -186,7 +186,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
 	// this in the freehire origin via launchWebAuthFlow. Cookie-only (RequireAuth)
 	// like key management — a leaked key must not mint further keys. GET shows the
-	// consent screen; POST mints a named key and redirects the token in the
+	// consent screen; POST issues a session JWT and redirects the token in the
 	// fragment. Both refuse any redirect outside the configured allowlist.
 	authGroup.Get("/extension/connect", mw.cookie, h.ExtensionConnect)
 	authGroup.Post("/extension/connect", mw.cookie, h.ExtensionConnectSubmit)

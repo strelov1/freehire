@@ -45,7 +45,9 @@ contributions are URL-only, auto-validated, unmoderated.
   audit for the full 138-adapter classification).
 - **Checks run cheapest-first.** unsupported ATS (`ErrUnsupportedATS`, 422) before any DB read;
   board already crawled (`ErrBoardAlreadyTracked`, 409 — a job exists with `external_id`
-  prefixed by `<board>:`, via `starts_with`) before any write; the record+point transaction
+  prefixed by `<board>:`, matched by a LIKE-prefix the `(source, external_id
+  text_pattern_ops)` index serves as a range scan; `starts_with()` would seq-scan the
+  whole source) before any write; the record+point transaction
   last, where a duplicate board (the partial unique index on `link_contributions (source, board)
   WHERE status <> 'rejected'`) surfaces as `ErrBoardAlreadyContributed` (409).
 - **`Record` is a single insert** (`QueriesRepository.Record`, the `accounts` repo pattern): it
@@ -66,7 +68,7 @@ form, the Telegram bot, the browser extension, the CLI — posts to `POST /api/v
 whose sequence lives in `handler/intake.go`: catalog lookup, then import, then record. A second
 door onto the same flow is a second behaviour waiting to drift. `GET /api/v1/me/contributions`
 still lists the caller's own, now carrying the `surface` each row came through
-(`web` | `telegram` | `extension` | `cli` | `unknown`).
+(`web` | `telegram` | `discord` | `extension` | `cli` | `unknown`).
 
 The intake answers with five outcomes, all of them about the BOARD: `found` (already carried),
 `tracked` (imported, and we already crawl this board), `imported` (imported, board queued for
@@ -102,14 +104,13 @@ Two orderings inside it are load-bearing, both pinned by tests:
   posting under that very board — asking afterwards reports every freshly imported board as
   already tracked.
 
-`Submit` (inspect + record in one call) remains for callers that do not import first.
+The service surface is `Inspect` + `RecordIntake`; callers that do not import first compose
+the two themselves.
 
 
 ## Limitations
 - Credits are awarded before the board is verified to fetch (no network on submit). Onboarding
   the board into `sources` and any claw-back for an unreachable board are deferred to a
   background ingest worker; the `status` column keeps that option open.
-- Coverage is the 4 path-based multi-tenant ATS. Subdomain-based and the long tail are a
-  follow-up (one `atsBoards`-style rule + test each).
-- Migration `0025_link_contributions.sql` (table + `users.points`) applies via Postgres initdb
-  only on first volume init — **apply it manually to an existing prod volume BEFORE deploying**.
+- Coverage is the ~37 multi-tenant ATS in the `atsBoards` table — path-, subdomain-, host-,
+  and hostpath-based. The long tail is a follow-up (one `atsBoards`-style rule + test each).

@@ -42,8 +42,10 @@ built from the same services the HTTP handlers use.
   per-process, so a turn started before a blue/green flip cannot be cancelled and ends
   at its step cap.
 - **The transcript IS the model's history.** One table holds both, including the
-  assistant's tool calls and each tool's result, with the model's argument string
-  stored verbatim. Two stores would drift; re-encoding parsed arguments would
+  assistant's tool calls and each tool's result. The model's argument string is stored
+  verbatim except for one repair: `EncodeAssistant` runs `healToolArguments` first,
+  stripping what a provider appended after valid JSON (Haiku's trailing `</invoke>`)
+  so a retry can replay it. Two stores would drift; re-encoding parsed arguments would
   change the bytes the model saw.
 - **Ownership is a `WHERE user_id = $1`.** A session the caller does not own is
   reported as missing, never as forbidden.
@@ -78,8 +80,9 @@ owner-scoped persistence; `prompt.go` the per-preset system prompts.
 that walks every requirement of the vacancy in ONE turn — searching the experience
 bank per requirement, editing what the evidence supports, asking nothing until it is
 done. Everything a client could otherwise dictate is server-owned: the brief, the
-raised ceiling (30 rounds against the usual 8), and the pre-run snapshot of the CV
-that makes the run undoable. The method itself is a section of `tailorPrompt`, not a
+raised ceiling (30 rounds against the usual 8), and the undo handle — every edit of
+the turn is filed under one revision batch, so undoing the run is reverting that
+batch (`UndoCVRevisionBatch` → `cvedit.RevertBatch`), newest first. The method itself is a section of `tailorPrompt`, not a
 second implementation — the rhythm changes, the rules do not, and `cv_edit` still
 refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
@@ -107,9 +110,11 @@ required — a tool may go unnamed, its own description is what the model reads.
 one application. It is minted from `POST /assistant/sessions?preset=interview&job=<slug>`,
 binds to a vacancy and to NO CV, and opens itself: `POST /assistant/sessions/:id/opening`
 runs one turn under a server-side brief, the way autopilot does, because the candidate
-arrived from an application with nothing to type. That endpoint refuses a session that
-already has a transcript — a reload replays the conversation rather than restarting the
-interview.
+arrived from an application with nothing to type. That endpoint refuses only an ANSWERED
+opening — a transcript holding an assistant message. The runner records the brief before
+it calls the model, so a turn that dies upstream leaves one user line behind, and
+refusing on that would strand the session with no way to retry. A reload of a live
+conversation replays it rather than restarting the interview.
 
 Three decisions carry it:
 
@@ -130,11 +135,13 @@ Three decisions carry it:
   a different set. `experience_get` resolves ids in one owner-scoped pass, reports
   unresolvable ones instead of failing, and caps a call while naming what it did not read.
   A foreign id reads exactly like a deleted one.
-- **The bank gate is a prompt rule, deliberately.** `experience_add` takes `said` as a
-  string and stamps `stated_in_chat` whoever composed it, so the service cannot tell the
-  candidate's words from the model's paraphrase. The prompt requires their explicit
-  agreement before recording anything; what makes that checkable is the transcript, where
-  both the offer and the "yes" are visible. A rehearsal is where people improvise, and an
+- **The bank gate is enforced in code, not trusted to the prompt.** `experience_add`
+  takes `said` as a quote, and `provenanceFor` checks it verbatim against what the
+  candidate actually typed in this session (`assistant.UserSaid` over the transcript,
+  whitespace-collapsed and case-insensitive, otherwise literal). A quote that appears
+  is stamped `stated_in_chat`; one that does not — a paraphrase, a summary, an
+  invention — is stamped `agent_inferred` and barred from CVs. An unverifiable
+  transcript fails closed the same way. A rehearsal is where people improvise, and an
   improvisation banked as evidence is a claim they never made.
 
 The preset carries the discovery, tracking and bank tools plus `interview_context`, and
@@ -256,7 +263,7 @@ is never mistaken for the answer.
    a name, a one-paragraph description the model reads, a JSON schema, and a
    `Run` that decodes with `assistant.DecodeArgs` and calls the same service the
    HTTP handler calls.
-2. Register it in `assistantRegistry` under the presets that should offer it.
+2. Register it in `registry` (`internal/handler/assistant_tools.go`) under the presets that should offer it.
 3. Return structured data, not prose. Include the fields the model needs to act
    (a vacancy's `public_slug`, not just its title; an achievement's id and whether it may
    be written to a CV, not just its text).

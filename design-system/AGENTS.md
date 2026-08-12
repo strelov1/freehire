@@ -61,7 +61,7 @@ rather than here — their census of `web/` was already off by a third.
   (`scripts/build-tokens.mjs`) into `dist/`. Edit the JSON, run `pnpm build` — never hand-edit
   `dist/`.
 - **`.dark` carries only what dark changes.** The dark build reads `color-dark.tokens.json`
-  alone, so `dist/tokens-dark.css` is 24 declarations, not a second copy of the whole scale —
+  alone, so `dist/tokens-dark.css` is 28 declarations, not a second copy of the whole scale —
   the cascade already inherits the rest from `:root`. A dark override of a non-colour token
   would need its file added to `darkSources`; nothing needs one yet.
 - **A token name may not be authored twice.** `build-tokens.mjs` throws and names both files.
@@ -77,21 +77,21 @@ rather than here — their census of `web/` was already off by a third.
   if that exception ever stops applying. See `docs/verification.md`.
 - **The same check has a second radius over `../web/src`, and it is not the same rule.** The
   package is held at zero; web is held at its current count *per file* in
-  `scripts/web-token-baseline.json` (550 across 106 files), because a rule nobody can satisfy
+  `scripts/web-token-baseline.json` (459 across 111 files), because a rule nobody can satisfy
   gets switched off rather than obeyed. Web also gets a third detector the package does not:
   `text-amber-600` is a well-formed utility off Tailwind's own palette — neither a literal nor
   an arbitrary value, invisible to both other detectors, and the majority of what web has.
   **Add a detector once, in `DETECTORS`, and put it in a radius** — never fork it.
 - **Both baselines are exact in both directions.** An improvement is red too, and says so:
   rerun with `--update` and commit the diff. Do not "fix" that by loosening the comparison to
-  `>=`. A ratchet that absorbs improvements silently sits at 550 while reality is 40, and the
-  regression back to 550 passes green — asserting nothing.
+  `>=`. A ratchet that absorbs improvements silently sits at 459 while reality is 40, and the
+  regression back to 459 passes green — asserting nothing.
 - **`pnpm check:adoption` is the only check that reads both halves of the repo.** This job
   proves the package builds and the `web` job proves the app builds, and both are true whether
   or not they are connected — which is how eleven primitives stayed unreachable from app code
   for three phases with everything green. It counts the `web/src` files importing each
   primitive against `scripts/adoption-baseline.json`, and names the unused ones every run
-  (eleven of fifteen today). The primitive list is derived from `src/index.ts`, so a new
+  (nine of fifteen today). The primitive list is derived from `src/index.ts`, so a new
   primitive joins the census by itself — **do not list them in the script.**
 - **`$lib/ui` is a wall, not a convention.** A `.svelte` or `.ts` file under `web/src` that
   imports `freehire-design-system` by name fails `check:adoption` outright — no baseline, no

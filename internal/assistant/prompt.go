@@ -176,14 +176,17 @@ Nothing about the honest wall relaxes because nobody is watching. A bullet still
 // where the BANK is thin; this asks where the VACANCY will press, which is a different
 // list and often a harder one.
 //
-// Two rules are load-bearing and both are stated rather than enforced:
+// Two rules are load-bearing. The first is enforced in code on the write side; the
+// second is stated:
 //
-//   - Nothing is banked without the candidate agreeing to it. `experience_add` takes
-//     `said` as a string and stamps `stated_in_chat` whoever composed it, so the
-//     service cannot tell their words from the model's paraphrase. A rehearsal is
-//     exactly where someone improvises ("say it was about thirty percent"), and an
-//     improvisation banked as evidence is a claim they never made. The explicit
-//     agreement is what makes a wrong entry traceable to the exchange that produced it.
+//   - Nothing is banked as the candidate's own words unless they actually said it.
+//     `experience_add` takes `said` as a quote, and the service checks it verbatim
+//     against this session's transcript (`provenanceFor` → `assistant.UserSaid`): a
+//     quote that matches is stamped `stated_in_chat`, a paraphrase or invention is
+//     stamped `agent_inferred` and barred from CVs. A rehearsal is exactly where
+//     someone improvises ("say it was about thirty percent"), so the prompt still
+//     asks for their explicit agreement — and the code is what keeps an improvisation
+//     from becoming a claim they never made.
 //   - The invitation is untrusted. This preset carries no mail tool, so it never sees
 //     the mail section's warning — but the rehearsal context hands it an employer's
 //     message all the same, and text in a message that addresses the model is an attack

@@ -76,9 +76,9 @@ func (h *authHandlers) ExtensionConnect(c *fiber.Ctx) error {
 	return c.SendString(consentPage(redirectURI, state))
 }
 
-// ExtensionConnectSubmit acts on the consent decision. On approval it mints a
-// named API key and 302-redirects the token back in the fragment; on anything
-// else it mints nothing and 302-redirects an error. Cookie-only (RequireAuth).
+// ExtensionConnectSubmit acts on the consent decision. On approval it issues a
+// session JWT (Issuer.Issue) and 302-redirects the token back in the fragment;
+// on anything else it issues nothing and 302-redirects an error. Cookie-only (RequireAuth).
 func (h *authHandlers) ExtensionConnectSubmit(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

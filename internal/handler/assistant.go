@@ -762,12 +762,13 @@ func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
 const autopilotBrief = "Tailor this CV for the vacancy yourself, working from my experience bank. " +
 	"Go through every requirement without stopping to ask me, then tell me what is left."
 
-// PostAssistantAutopilot runs the unattended tailoring pass on a tailoring session: it
-// snapshots the CV so the whole run can be undone, then streams one long turn.
+// PostAssistantAutopilot runs the unattended tailoring pass on a tailoring session as one
+// long streamed turn. Every edit of the turn is filed under one revision batch (streamSSE
+// mints the id), so undoing the run is reverting that batch.
 //
-// Everything a client could otherwise dictate is fixed here — the brief, the ceiling, and
-// the snapshot. The snapshot in particular cannot be the client's job: a run that edits a
-// CV whose pre-run state was never captured is a run nobody can take back.
+// Everything a client could otherwise dictate is fixed here — the brief and the ceiling.
+// The undo handle in particular cannot be the client's job: a run whose edits were never
+// batched is a run nobody can take back.
 func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 	sess, err := h.ownedSession(c)
 	if err != nil {

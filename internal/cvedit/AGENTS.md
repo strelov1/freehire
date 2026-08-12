@@ -99,10 +99,15 @@ writing a whole `header` object replaces every contact identifier at once, and t
 vocabulary published to the model offers the container alongside the leaf. A rule that only
 looked downwards was a rule the model could step over, and it did in the test that found it.
 
-The gate is keyed on **paths that carry a claim about the candidate** — the summary, an entry's
-summary, bullets, a project's bullets, a technology line, a skill group. The last two are new:
-under the named vocabulary only two of eight ops required evidence, so a technology written into
-a stack line arrived uncited while the same claim as a bullet was refused.
+The gate is keyed on what is NOT a claim. `presentationShapes` is the **exemption** list — the
+title, the template, style and margins, the header — the places that say how the CV looks and
+what it is called, and nothing about the candidate's career. **Everything else is a claim by
+default**: the summary and bullets, the stack line and skill groups, but also education,
+certifications, entry roles, languages — and any field added to the document later, until
+someone exempts it. The list is inverted on purpose. The earlier version named the places that
+DO carry a claim — summary, bullets, stack, skills — so a degree nobody earned, a certification
+nobody holds and a job title nobody had all landed uncited. They are the larger lie: a recruiter
+checks a diploma, not a bullet's phrasing.
 
 It applies to the **agent only**. The rule is that a model's inference must not reach the page;
 the candidate writing about their own career is the source the bank exists to record.
@@ -148,7 +153,7 @@ documents on the table behind every CV page.
 
 `cv.MaxBullets` (default 20, override with `CV_MAX_BULLETS`) is enforced by `Sanitize`,
 which keeps the first N and drops the rest. Both `Commit` (an ops batch — cv_edit, template
-picks) and `CommitDocument` (a whole-document save — the editor's PATCH autosave, Reset from
+picks) and `CommitDocument` (a whole-document save — the editor's PUT autosave, Reset from
 résumé) refuse that class of loss up front (`ErrListCap` / `bullet_cap`) so neither an
 agent's insert into a full list nor a pasted/seeded document that is itself over the cap can
 look like a successful write while content vanishes. The guard is on by default;
@@ -159,7 +164,7 @@ restores the old sanitize-and-drop behaviour without a code change, for both pat
 — that Sanitize existed first (so the diff is against what will actually be stored) and would
 otherwise erase the overflow before the guard ever saw it, making the refuse a no-op for
 every whole-document save. Get this ordering backwards again and the guard silently stops
-protecting PATCH /me/cvs/:id and Reset from résumé while still working for cv_edit —
+protecting PUT /me/cvs/:id and Reset from résumé while still working for cv_edit —
 `TestCommitDocumentRefusesAWholeDocumentSaveOverTheCap` and
 `TestUpdateCV_RefusesAWholeDocumentSaveOverTheBulletCap` pin it.
 

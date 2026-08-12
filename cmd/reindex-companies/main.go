@@ -1,9 +1,11 @@
 // Command reindex-companies rebuilds the Meilisearch companies index from Postgres.
 // It streams every hiring company (job_count > 0) into a fresh index and atomically
 // swaps it in (see search.CompanyRebuild), then exits — run it on a schedule (cron),
-// on its own flock, and never stacked with the jobs reindex on the same host (a swap
-// transiently holds both the old and new index, ~2x that index's disk). Building this
-// index never touches the jobs index, so jobs search cannot regress.
+// and never stacked with the jobs reindex on the same host: Meilisearch runs one
+// serial task queue, so the second rebuild queues behind the first and looks like a
+// hang, and a swap transiently holds both the old and new index (~2x that index's
+// disk). Building this index never touches the jobs index, so jobs search cannot
+// regress.
 //
 // Indexing is a full swap-rebuild: the live index keeps serving until the single
 // atomic swap, and re-runs are safe (the rebuild index always starts empty).
