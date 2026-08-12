@@ -1,0 +1,25 @@
+// Where tapping a notification card navigates — the pure decision behind design.md's
+// decision 5 (openspec/changes/add-notification-center), kept out of the component so
+// it can be tested without mounting Svelte.
+
+import type { NotificationItem } from './types';
+
+export type NotificationTarget =
+  | { kind: 'job'; slug: string }
+  | { kind: 'tracking' }
+  | { kind: 'none' };
+
+/** A card with no `public_slug` (a subscription digest that matched more than one job)
+ *  has nothing to open. `nudge_follow_up`/`nudge_interview_prep` point at the tracking
+ *  board on web — matching the existing Telegram/email link target for those two kinds —
+ *  even though the row itself always carries a slug. Every other slug-bearing kind
+ *  (reminder, nudge_job_closed, a single-job subscription_digest) points at the job. */
+export function notificationTarget(
+  item: Pick<NotificationItem, 'kind' | 'public_slug'>,
+): NotificationTarget {
+  if (!item.public_slug) return { kind: 'none' };
+  if (item.kind === 'nudge_follow_up' || item.kind === 'nudge_interview_prep') {
+    return { kind: 'tracking' };
+  }
+  return { kind: 'job', slug: item.public_slug };
+}

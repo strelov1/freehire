@@ -509,6 +509,31 @@ export interface NotificationSettings {
   channels: string[];
 }
 
+/** The five notification-center event kinds a `user_notifications` row can carry —
+ *  matches internal/notify/reminder/nudge's kind strings exactly (see
+ *  openspec/changes/add-notification-center/design.md decision 1). */
+export type NotificationKind =
+  | 'subscription_digest'
+  | 'reminder'
+  | 'nudge_follow_up'
+  | 'nudge_interview_prep'
+  | 'nudge_job_closed';
+
+/** One row in the notification center (GET /me/notifications) — a durable,
+ *  readable-by-the-owner record of a delivery event, independent of which channel
+ *  carried it. `public_slug` is the job it concerns, or null for a subscription
+ *  digest that matched more than one job (nothing single to deep-link to).
+ *  `read_at` is null until the caller marks it read. */
+export interface NotificationItem {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  public_slug: string | null;
+  created_at: string | null;
+  read_at: string | null;
+}
+
 /** The classification/link overlay an inbox email carries: its classified status
  *  and, when resolved, the linked application (slug + company) or a pending
  *  suggestion the reading pane confirms inline. All optional/omitempty. */

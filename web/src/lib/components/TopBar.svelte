@@ -7,6 +7,7 @@
   import HeaderSearch from './HeaderSearch.svelte';
   import HeaderListSearch from './HeaderListSearch.svelte';
   import HeaderMenu from './HeaderMenu.svelte';
+  import NotificationBell from './NotificationBell.svelte';
   import BrandMark from './BrandMark.svelte';
   import { safeRedirect } from '$lib/safeRedirect';
   import { isFullBleedRoute } from '$lib/shellLayout';
@@ -113,7 +114,8 @@
       {/if}
     </div>
 
-    <div class={['flex shrink-0 items-center', fullBleed && 'flex-1 basis-0 justify-end']}>
+    <div class={['flex shrink-0 items-center gap-1', fullBleed && 'flex-1 basis-0 justify-end']}>
+      <NotificationBell />
       <HeaderMenu />
     </div>
   </div>

@@ -82,6 +82,7 @@ import type {
   IngestStatus,
   LocationPreferences,
   NotificationSettings,
+  NotificationItem,
   CommunityThread,
   CommunityReply,
   CompanyFeedback,
@@ -960,6 +961,39 @@ export function createApi(
    *  without authenticating the public job list. */
   async function listDismissedSlugs(): Promise<string[]> {
     return requestData<string[]>('/api/v1/me/tracking/dismissed');
+  }
+
+  // --- Notification center ---------------------------------------------------
+  //
+  // The durable, readable record of every subscription-digest/reminder/nudge
+  // delivered to the caller over any channel — independent of the notification
+  // *rule* above, which only gates whether those events fire at all.
+
+  /** A page of the caller's notification-center entries, newest first.
+   *  `meta.unread_count` rides alongside the page (not a separate endpoint — see
+   *  design.md's non-goals) so the bell badge can be refreshed from the same call
+   *  that fetches a page. */
+  async function getNotifications(
+    limit = 20,
+    offset = 0,
+  ): Promise<{ data: NotificationItem[]; meta: { total: number; unread_count: number; limit: number; offset: number } }> {
+    return request<{
+      data: NotificationItem[];
+      meta: { total: number; unread_count: number; limit: number; offset: number };
+    }>(`/api/v1/me/notifications${query(limit, offset)}`);
+  }
+
+  /** Mark one notification read. Idempotent; owner-scoped (404s for another
+   *  user's, but that never happens from this client since ids come from the
+   *  caller's own list). */
+  async function markNotificationRead(id: number): Promise<void> {
+    await call(`/api/v1/me/notifications/${id}/read`, { method: 'POST' });
+  }
+
+  /** Mark every currently-unread notification of the caller's read; returns the
+   *  count marked. */
+  async function markAllNotificationsRead(): Promise<{ marked: number }> {
+    return requestData<{ marked: number }>('/api/v1/me/notifications/read-all', { method: 'POST' });
   }
 
   // --- API keys -------------------------------------------------------------
@@ -1978,6 +2012,9 @@ export function createApi(
     getNotificationSettings,
     updateNotificationSettings,
     listDismissedSlugs,
+    getNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
     listApiKeys,
     createApiKey,
     revokeApiKey,
