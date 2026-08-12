@@ -1157,10 +1157,10 @@ type Querier interface {
 	GetReferralRequest(ctx context.Context, id uuid.UUID) (ReferralRequest, error)
 	// The delivery context for one reminder: the job display fields, the channel set,
 	// the user's live destinations (account email; linked Telegram chat, NULL when
-	// unlinked -> that channel soft-skips), and the fire-time re-check flags. job_open
-	// and still_actionable let the worker cancel-and-skip a reminder whose job has since
-	// closed or is no longer saved-but-unapplied, closing the race between a cancel and
-	// the fire.
+	// unlinked -> that channel soft-skips; whether a push device is registered), and
+	// the fire-time re-check flags. job_open and still_actionable let the worker
+	// cancel-and-skip a reminder whose job has since closed or is no longer
+	// saved-but-unapplied, closing the race between a cancel and the fire.
 	GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error)
 	// Load a single report by id for the review path, with the reporter's email and the
 	// reported job's slug and title — the decision notice needs them, and joining here spares
@@ -1179,8 +1179,10 @@ type Querier interface {
 	GetSubmission(ctx context.Context, id int64) (JobSubmission, error)
 	// The delivery context for one subscription: channel + destination, the saved
 	// search name (for the digest heading), the user's account email (the email
-	// channel's live recipient), and the user's linked Telegram chat (NULL when
-	// unlinked → the worker soft-skips telegram delivery rather than failing it).
+	// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
+	// → the worker soft-skips telegram delivery rather than failing it), and whether
+	// the user has at least one registered push device (the push channel's live
+	// deliverability check, same soft-skip role as the Telegram link).
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
 	// The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
 	// reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
@@ -1532,10 +1534,10 @@ type Querier interface {
 	// companies sort last), falling through to the default job_count DESC, name
 	// for the tiebreak. Any other value (including '', the default) leaves the
 	// CASE NULL for every row, so this ORDER BY is byte-for-byte the old one.
-	// Applies to this Postgres path only — a request that also carries a search
-	// or facet, routed to Meili instead when configured (see ListCompanies in
-	// internal/handler/companies.go), keeps Meili's relevance ordering; rating is
-	// not (yet) a Meili-sortable attribute.
+	// sort=rating forces every request onto this Postgres path even with a search
+	// or facet present that would otherwise route to Meili (see ListCompanies in
+	// internal/handler/companies.go) — rating is not (yet) a Meili-sortable
+	// attribute, so routing there would silently drop the requested order.
 	ListCompanies(ctx context.Context, arg ListCompaniesParams) ([]ListCompaniesRow, error)
 	// Keyset page of hiring companies (job_count > 0) for the companies search reindex,
 	// cursored by the slug primary key (first chunk keyed by the empty string, which

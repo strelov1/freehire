@@ -87,12 +87,15 @@ RETURNING m.subscription_id, m.job_id;
 -- name: GetSubscriptionForDelivery :one
 -- The delivery context for one subscription: channel + destination, the saved
 -- search name (for the digest heading), the user's account email (the email
--- channel's live recipient), and the user's linked Telegram chat (NULL when
--- unlinked → the worker soft-skips telegram delivery rather than failing it).
+-- channel's live recipient), the user's linked Telegram chat (NULL when unlinked
+-- → the worker soft-skips telegram delivery rather than failing it), and whether
+-- the user has at least one registered push device (the push channel's live
+-- deliverability check, same soft-skip role as the Telegram link).
 SELECT s.id, s.user_id, s.channel, s.destination,
        ss.name AS saved_search_name,
        u.email AS account_email,
-       tl.chat_id AS telegram_chat_id
+       tl.chat_id AS telegram_chat_id,
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id

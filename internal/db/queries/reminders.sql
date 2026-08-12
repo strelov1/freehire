@@ -68,16 +68,17 @@ RETURNING r.id;
 -- name: GetReminderForDelivery :one
 -- The delivery context for one reminder: the job display fields, the channel set,
 -- the user's live destinations (account email; linked Telegram chat, NULL when
--- unlinked -> that channel soft-skips), and the fire-time re-check flags. job_open
--- and still_actionable let the worker cancel-and-skip a reminder whose job has since
--- closed or is no longer saved-but-unapplied, closing the race between a cancel and
--- the fire.
+-- unlinked -> that channel soft-skips; whether a push device is registered), and
+-- the fire-time re-check flags. job_open and still_actionable let the worker
+-- cancel-and-skip a reminder whose job has since closed or is no longer
+-- saved-but-unapplied, closing the race between a cancel and the fire.
 SELECT r.id, r.user_id, r.job_id, r.channels,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,
-       tl.chat_id AS telegram_chat_id
+       tl.chat_id AS telegram_chat_id,
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device
 FROM job_reminders r
 JOIN jobs j ON j.id = r.job_id
 JOIN users u ON u.id = r.user_id

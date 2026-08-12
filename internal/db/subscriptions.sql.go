@@ -197,7 +197,8 @@ const getSubscriptionForDelivery = `-- name: GetSubscriptionForDelivery :one
 SELECT s.id, s.user_id, s.channel, s.destination,
        ss.name AS saved_search_name,
        u.email AS account_email,
-       tl.chat_id AS telegram_chat_id
+       tl.chat_id AS telegram_chat_id,
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
@@ -213,12 +214,15 @@ type GetSubscriptionForDeliveryRow struct {
 	SavedSearchName string      `json:"saved_search_name"`
 	AccountEmail    string      `json:"account_email"`
 	TelegramChatID  pgtype.Int8 `json:"telegram_chat_id"`
+	HasPushDevice   bool        `json:"has_push_device"`
 }
 
 // The delivery context for one subscription: channel + destination, the saved
 // search name (for the digest heading), the user's account email (the email
-// channel's live recipient), and the user's linked Telegram chat (NULL when
-// unlinked → the worker soft-skips telegram delivery rather than failing it).
+// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
+// → the worker soft-skips telegram delivery rather than failing it), and whether
+// the user has at least one registered push device (the push channel's live
+// deliverability check, same soft-skip role as the Telegram link).
 func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, getSubscriptionForDelivery, id)
 	var i GetSubscriptionForDeliveryRow
@@ -230,6 +234,7 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 		&i.SavedSearchName,
 		&i.AccountEmail,
 		&i.TelegramChatID,
+		&i.HasPushDevice,
 	)
 	return i, err
 }
