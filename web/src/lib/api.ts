@@ -84,6 +84,7 @@ import type {
   NotificationSettings,
   CommunityThread,
   CommunityReply,
+  CompanyFeedback,
   ExperienceAtom,
   ExperienceBank,
   TalentNetworkSetting,
@@ -1846,6 +1847,32 @@ export function createApi(
     );
   }
 
+  /** A company's feedback, newest first, offset-paginated. Public. */
+  async function listCompanyFeedback(slug: string, limit: number, offset: number): Promise<Slice<CompanyFeedback>> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    return toSlice(await request<Page<CompanyFeedback>>(`/api/v1/companies/${slug}/feedback?${params}`), offset);
+  }
+
+  /** The caller's own feedback on a company, or null when they have not left one
+   *  yet — the edit form's prefill. Requires a session. */
+  function getMyCompanyFeedback(slug: string): Promise<CompanyFeedback | null> {
+    return requestData<CompanyFeedback | null>(`/api/v1/companies/${slug}/feedback/mine`);
+  }
+
+  /** Create or overwrite the caller's feedback on a company in place
+   *  (edit-by-resubmit). Requires a session. */
+  function upsertCompanyFeedback(
+    slug: string,
+    input: { rating: number; feedback_type: string; body: string },
+  ): Promise<CompanyFeedback> {
+    return requestData<CompanyFeedback>(`/api/v1/companies/${slug}/feedback`, jsonBody('POST', input));
+  }
+
+  /** Delete the caller's own feedback on a company. Idempotent (no-op when none). */
+  async function deleteCompanyFeedback(slug: string): Promise<void> {
+    await call(`/api/v1/companies/${slug}/feedback`, { method: 'DELETE' });
+  }
+
   return {
     listJobs,
     getJob,
@@ -2035,6 +2062,10 @@ export function createApi(
     getThread,
     createThread,
     createReply,
+    listCompanyFeedback,
+    getMyCompanyFeedback,
+    upsertCompanyFeedback,
+    deleteCompanyFeedback,
   };
 }
 

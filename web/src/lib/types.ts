@@ -158,6 +158,24 @@ export interface Company {
   upvote_count: number;
   downvote_count: number;
   my_vote: number;
+  // Materialized feedback counters (internal/companyfeedback): how many users
+  // left a rated review and their average star rating. rating_avg is null while
+  // feedback_count is 0.
+  feedback_count: number;
+  feedback_rating_avg: number | null;
+}
+
+/** One user's rating + category + text about a company (internal/companyfeedback).
+ *  The author is a pseudonymous persona handle, the same one CommunityThread uses —
+ *  the backend never sends the real user id. */
+export interface CompanyFeedback {
+  id: number;
+  author: string;
+  rating: number;
+  feedback_type: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** The result of casting or clearing a thumbs vote: the target's resulting public

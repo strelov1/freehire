@@ -722,6 +722,101 @@ export const StrengthResponsibility = "responsibility"; // clear ownership with 
  */
 export const StrengthKeyword = "keyword"; // the term is present but the evidence is a bare mention or duty-only
 /**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxCommentRunes = 240; // per-dimension Comment
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxListItemRunes = 200; // each Strengths / Gaps bullet
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxRecommendRunes = 1200; // free-text Recommendation: two or three short prose paragraphs
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxReqTextRunes = 200; // Requirement.Text
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxReqEvidenceRunes = 240; // Requirement.Evidence
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxStrengths = 6; // Strengths list length
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxGaps = 6; // Gaps list length
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxRequirements = 30; // RequirementMatch list length
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxSignals = 5; // HiddenSignals list length
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxSignalQuoteRunes = 200; // Signal.Quote
+/**
+ * Default sanitize caps for untrusted model text. Override at process start via
+ * SetBounds (cmd/server reads MATCH_ANALYSIS_* from the environment). A typo that
+ * yields a non-positive value falls back to the matching default so a bound can
+ * never be erased.
+ */
+export const DefaultMaxSignalInsightRunes = 200; // Signal.Insight
+/**
+ * Bounds is the tunable sanitize ceiling for fit-analysis model output. Every field
+ * is a positive count (runes for text, items for lists). Zero / negative values are
+ * rejected by SetBounds and replaced with that field's Default*.
+ */
+export interface Bounds {
+  MaxCommentRunes: number /* int */;
+  MaxListItemRunes: number /* int */;
+  MaxRecommendRunes: number /* int */;
+  MaxReqTextRunes: number /* int */;
+  MaxReqEvidenceRunes: number /* int */;
+  MaxStrengths: number /* int */;
+  MaxGaps: number /* int */;
+  MaxRequirements: number /* int */;
+  MaxSignals: number /* int */;
+  MaxSignalQuoteRunes: number /* int */;
+  MaxSignalInsightRunes: number /* int */;
+}
+/**
  * Dimension is one scored fit dimension on the wire.
  */
 export interface Dimension {
@@ -1114,7 +1209,7 @@ export interface Question {
   answer?: string;
 }
 
-export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'deel', 'djinni', 'earcu', 'echojobs', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotive', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
+export const SOURCE_VALUES = ['telegram', 'workatastartup', 'remoteok', 'arc', '4dayweek', 'adp', 'adzuna', 'aijobs', 'applicantpro', 'apploi', 'arbeitnow', 'arbeitsagentur', 'ashby', 'ashbygraphql', 'avature', 'bamboohr', 'bayt', 'betterteam', 'breezy', 'briefhq', 'bullhorn', 'careerplug', 'careerspage', 'catsone', 'cleverstaff', 'clinch', 'comeet', 'compleo', 'cornerstone', 'crelate', 'cryptocurrencyjobs', 'deel', 'djinni', 'earcu', 'echojobs', 'eightfold', 'enlizt', 'epam', 'erecruiter', 'factorial', 'freshteam', 'functionalworks', 'geekjob', 'gem', 'getmanfred', 'getmatch', 'getonbrd', 'getro', 'globalpayments', 'greenhouse', 'gulftalent', 'gupy', 'habr_career', 'hh', 'hibob', 'himalayas', 'hireology', 'huntflow', 'hurma', 'icims', 'infojobs', 'inhire', 'instaffo', 'ismartrecruit', 'isolvedhire', 'itechart', 'jazzhr', 'jibe', 'jobdanmark', 'jobicy', 'jobnet', 'jobscore', 'jobspresso', 'jobstash', 'jobtech', 'jobvite', 'jobylon', 'join', 'justjoin', 'lever', 'likeit', 'loxo', 'luxoft', 'manatal', 'mindsight', 'mycareersfuture', 'neogov', 'nodesk', 'nofluffjobs', 'northstone', 'odoo', 'opencats', 'oracle', 'pageup', 'paycom', 'paylocity', 'peopleforce', 'personio', 'phenom', 'pinpoint', 'powertofly', 'quickin', 'radancy', 'rapyd', 'recruitee', 'recruitingsolutions', 'reed', 'remotive', 'remotli', 'rippling', 'senior', 'smartrecruiters', 'softgarden', 'solides', 'solidjobs', 'spark', 'speedrun', 'startupandvc', 'successfactors', 'talentadore', 'talenthr', 'talentlyft', 'taleo', 'teamex', 'teamtailor', 'tecla', 'thehub', 'themuse', 'topco', 'traffit', 'trakstar', 'trudvsem', 'tyomarkkinatori', 'ukg', 'usajobs', 'vagas', 'vention', 'vouch', 'wantapply', 'wantedkr', 'weworkremotely', 'whatjobs', 'whatjobs-ae', 'whatjobs-ar', 'whatjobs-at', 'whatjobs-au', 'whatjobs-be', 'whatjobs-bh', 'whatjobs-br', 'whatjobs-ca', 'whatjobs-ch', 'whatjobs-cl', 'whatjobs-co', 'whatjobs-de', 'whatjobs-dk', 'whatjobs-eg', 'whatjobs-es', 'whatjobs-fi', 'whatjobs-fr', 'whatjobs-gr', 'whatjobs-hk', 'whatjobs-hu', 'whatjobs-id', 'whatjobs-ie', 'whatjobs-in', 'whatjobs-it', 'whatjobs-ke', 'whatjobs-kw', 'whatjobs-lu', 'whatjobs-mx', 'whatjobs-my', 'whatjobs-nl', 'whatjobs-no', 'whatjobs-nz', 'whatjobs-om', 'whatjobs-pe', 'whatjobs-ph', 'whatjobs-pk', 'whatjobs-pl', 'whatjobs-pt', 'whatjobs-py', 'whatjobs-qa', 'whatjobs-sa', 'whatjobs-se', 'whatjobs-sg', 'whatjobs-sv', 'whatjobs-th', 'whatjobs-tr', 'whatjobs-uk', 'whatjobs-ve', 'whatjobs-vn', 'whatjobs-za', 'workable', 'workablemarketplace', 'workday', 'workingnomads', 'wpyoast', 'zohorecruit'] as const;
 export type Source = (typeof SOURCE_VALUES)[number];
 export const STAGE_VALUES = ['preparing', 'applied', 'screening', 'responded', 'interview', 'offer', 'accepted', 'rejected', 'withdrawn', 'expired'] as const;
 export type Stage = (typeof STAGE_VALUES)[number];
@@ -1155,6 +1250,8 @@ export const ENGLISH_LEVEL_VALUES = ['none', 'a1', 'a2', 'b1', 'b2', 'c1', 'c2',
 export type EnglishLevel = (typeof ENGLISH_LEVEL_VALUES)[number];
 export const COMPANY_TYPE_VALUES = ['product', 'startup', 'outsource', 'outstaff', 'agency', 'inhouse', 'government'] as const;
 export type CompanyType = (typeof COMPANY_TYPE_VALUES)[number];
+export const COMPANY_FEEDBACK_TYPE_VALUES = ['interview', 'culture', 'compensation', 'management', 'work_life_balance', 'career_growth', 'other'] as const;
+export type CompanyFeedbackType = (typeof COMPANY_FEEDBACK_TYPE_VALUES)[number];
 export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gamedev', 'media', 'travel', 'healthcare', 'edtech', 'govtech', 'devtools', 'cybersecurity', 'ai', 'hrtech', 'adtech', 'proptech', 'logistics', 'mobility', 'climatetech', 'other'] as const;
 export type Domain = (typeof DOMAIN_VALUES)[number];
 export const AI_ARCHETYPE_VALUES = ['rag_app_builder', 'agent_builder', 'cloud_ml_platform_engineer', 'ml_trainer_researcher', 'fullstack_ai_engineer', 'devops_infra_engineer'] as const;
@@ -2630,9 +2727,9 @@ export const ROLE_ALIASES = {
   'customer_success': ['client success', 'customer onboarding', 'customer success', 'implementation consultant', 'implementation specialist', 'onboarding manager', 'onboarding specialist', 'renewal manager', 'renewals manager', 'менеджер по работе с клиентами', 'менеджер по успеху клиентов', 'специалист по адаптации клиентов'],
   'customer_success_manager': ['csm', 'customer success manager'],
   'cybersecurity_engineer': ['cyber security engineer', 'cybersecurity engineer'],
-  'data_analytics': ['analyst', 'bi analyst', 'bi developer', 'bi-аналитик', 'business intelligence analyst', 'business intelligence developer', 'data analyst', 'data analytics', 'data аналитик', 'аналитик', 'аналитик bi', 'аналитик данных'],
+  'data_analytics': ['analyst', 'analytics engineer', 'bi analyst', 'bi developer', 'bi-аналитик', 'business intelligence analyst', 'business intelligence developer', 'data analyst', 'data analytics', 'data аналитик', 'аналитик', 'аналитик bi', 'аналитик данных'],
   'data_architect': ['data architect'],
-  'data_engineering': ['data engineer', 'data engineering', 'дата-инженер', 'инженер данных'],
+  'data_engineering': ['data engineer', 'data engineering', 'data governance', 'data platform', 'data steward', 'дата-инженер', 'инженер данных'],
   'data_platform_engineer': ['data platform engineer'],
   'data_science': ['data scien', 'data science', 'data scientist', 'дата-сайентист'],
   'deep_learning_engineer': ['deep learning engineer'],
@@ -2643,7 +2740,7 @@ export const ROLE_ALIASES = {
   'design_ops': ['design operations', 'design ops', 'designops'],
   'developer_advocate': ['developer advocate', 'developer evangelist', 'developer relations', 'devrel'],
   'developer_relations': ['developer advocate', 'developer community manager', 'developer evangelist', 'developer experience engineer', 'developer relations', 'devrel', 'technical evangelist', 'деврел', 'технический евангелист'],
-  'devops': ['cloud design engineer', 'cloud engineer', 'devops', 'infrastructure engineer', 'platform engineer', 'sysadmin', 'system administrator', 'девопс'],
+  'devops': ['cloud design engineer', 'cloud engineer', 'devops', 'infrastructure engineer', 'ml ops', 'mlops', 'platform engineer', 'platform engineering', 'sysadmin', 'system administrator', 'девопс'],
   'director': ['director'],
   'drafter': ['cad drafter', 'design drafter', 'design draftsman', 'drafter', 'draftsman', 'draughtsman'],
   'electrical_designer': ['electrical design engineer', 'electrical designer'],
@@ -2721,7 +2818,7 @@ export const ROLE_ALIASES = {
   'product_marketing_manager': ['pmm', 'product marketing manager'],
   'product_operations_manager': ['product operations manager'],
   'program_manager': ['program manager'],
-  'project_management': ['delivery manager', 'program coordinator', 'program manager', 'programme manager', 'project administrator', 'project coordinator', 'project manager', 'scrum master', 'scrum-master', 'проджект', 'проект-менеджер', 'скрам мастер', 'скрам-мастер'],
+  'project_management': ['agile coach', 'agile transformation lead', 'agile transformation manager', 'delivery manager', 'program coordinator', 'program manager', 'programme manager', 'project administrator', 'project coordinator', 'project manager', 'release train engineer', 'safe practitioner', 'scaled agile framework', 'scrum master', 'scrum-master', 'проджект', 'проект-менеджер', 'скрам мастер', 'скрам-мастер'],
   'prompt_engineer': ['prompt engineer'],
   'qa': ['design engineer in test', 'qa', 'quality assurance', 'sdet', 'software design engineer in test', 'test automation', 'test engineer', 'tester', 'тестирование', 'тестировщик'],
   'qa_automation_engineer': ['automation qa engineer', 'qa automation engineer', 'sdet', 'test automation engineer'],
@@ -2733,7 +2830,7 @@ export const ROLE_ALIASES = {
   'sales_engineer': ['sales engineer'],
   'scrum_master': ['scrum master'],
   'sdr': ['sales development representative', 'sdr'],
-  'security': ['appsec', 'cyber security', 'cybersecurity', 'infosec', 'security', 'безопасности', 'безопасность', 'кибербезопасность'],
+  'security': ['appsec', 'blue team', 'ciso', 'cyber security', 'cybersecurity', 'devsecops', 'grc', 'iam', 'identity and access management', 'incident response', 'infosec', 'penetration tester', 'penetration testing', 'pentest', 'pentester', 'red team', 'red teamer', 'security', 'threat intel', 'threat intelligence', 'vulnerability analyst', 'vulnerability management', 'безопасности', 'безопасность', 'кибербезопасность'],
   'security_officer': ['security officer'],
   'senior': ['senior', 'sr', 'сеньор', 'синьор', 'старший'],
   'seo_analyst': ['seo analyst'],

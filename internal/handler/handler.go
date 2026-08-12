@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/browsertools"
+	"github.com/strelov1/freehire/internal/companyfeedback"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -320,6 +321,10 @@ func Register(app *fiber.App, cfg Config) {
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
+	// Feedback reuses communityH's persona minting (via the communityPersonas
+	// adapter) so a user's pseudonym stays the same one discussion threads show,
+	// which is why it is constructed after communityH rather than alongside it.
+	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}))
 	submissionsH := newSubmissionHandlers(queries, moderationSvc)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
@@ -591,6 +596,7 @@ func Register(app *fiber.App, cfg Config) {
 	// segment under /me/tracking — see the comment on its register.
 	timelineH.register(api, mw)
 	votesH.register(api, mw)
+	companyFeedbackH.register(api, mw)
 	// Per-job skill match + the on-demand LLM fit analysis (see matchHandlers).
 	matchH.register(api, mw)
 	// The contact block the extension writes into forms, plain and agent-driven (see

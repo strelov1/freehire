@@ -42,6 +42,8 @@ function company(overrides: Partial<Company> = {}): Company {
     upvote_count: 0,
     downvote_count: 0,
     my_vote: 0,
+    feedback_count: 0,
+    feedback_rating_avg: null,
     ...overrides,
   };
 }

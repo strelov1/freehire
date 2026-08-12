@@ -1,8 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { MessageSquare } from '@lucide/svelte';
+  import { MessageSquare, Star } from '@lucide/svelte';
   import { api } from '$lib/api';
+  import { isAuthenticated } from '$lib/auth.svelte';
+  import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import type { Company } from '$lib/types';
+  import CompanyFeedbackDialog from './CompanyFeedbackDialog.svelte';
+  import CompanyFeedbackListDialog from './CompanyFeedbackListDialog.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -29,6 +33,41 @@
       alive = false;
     };
   });
+
+  // The feedback list dialog (star ratings + category + text), opened from the
+  // rating badge below. Before any feedback exists there's nothing to list, so the
+  // same slot instead opens the write dialog directly — the header always carries
+  // one feedback entry point, not just once a rating exists to show.
+  //
+  // feedbackCount/feedbackRatingAvg start from the server-rendered `company` prop
+  // but then live in local state: after a save, the dialog reports success via
+  // `onSaved`, and we re-fetch just the company summary so the badge flips to the
+  // rating immediately instead of waiting for a full page reload.
+  let showFeedbackList = $state(false);
+  let showFeedbackForm = $state(false);
+  let feedbackCount = $state(company.feedback_count);
+  let feedbackRatingAvg = $state(company.feedback_rating_avg);
+  function openFeedbackEntry() {
+    if (feedbackCount > 0) {
+      showFeedbackList = true;
+      return;
+    }
+    if (!isAuthenticated()) {
+      openAuthDialog('login');
+      return;
+    }
+    showFeedbackForm = true;
+  }
+  async function refreshFeedbackSummary() {
+    try {
+      const { company: refreshed } = await api.getCompany(slug, 1, 0);
+      feedbackCount = refreshed.feedback_count;
+      feedbackRatingAvg = refreshed.feedback_rating_avg;
+    } catch {
+      // Leave the previous summary in place; the next full page load will
+      // pick up the change regardless.
+    }
+  }
 
   const info = $derived(company.company_info ?? {});
   const industries = $derived(company.industries ?? []);
@@ -81,6 +120,19 @@
         ? ` · ${threadCount}`
         : ''}
     </a>
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      onclick={openFeedbackEntry}
+    >
+      {#if feedbackCount > 0}
+        <Star class="size-4" fill="currentColor" aria-hidden="true" />
+        {(feedbackRatingAvg ?? 0).toFixed(1)} · {feedbackCount}
+      {:else}
+        <Star class="size-4" aria-hidden="true" />
+        Leave feedback
+      {/if}
+    </button>
     <VoteControl
       target="company"
       {slug}
@@ -128,3 +180,10 @@
     </div>
   {/if}
 </section>
+
+{#if showFeedbackList}
+  <CompanyFeedbackListDialog {slug} companyName={company.name} onClose={() => (showFeedbackList = false)} />
+{/if}
+{#if showFeedbackForm}
+  <CompanyFeedbackDialog {slug} onClose={() => (showFeedbackForm = false)} onSaved={refreshFeedbackSummary} />
+{/if}

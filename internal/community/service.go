@@ -166,6 +166,14 @@ func (s *Service) Close(ctx context.Context, threadID int64) error {
 	return s.repo.CloseThread(ctx, threadID)
 }
 
+// PersonaFor returns userID's stable pseudonymous handle, minting one on first
+// use. Exported so other packages that attach the same site-wide persona to
+// their own content (company feedback) keep a user's pseudonym consistent
+// everywhere it's shown, rather than minting a second identity.
+func (s *Service) PersonaFor(ctx context.Context, userID int64) (Persona, error) {
+	return s.persona(ctx, userID)
+}
+
 // persona returns the user's stable handle, minting one on first use. It retries on
 // a handle collision with a fresh candidate; the user_id primary key makes a
 // concurrent same-user mint resolve to the existing persona in the repository.

@@ -96,36 +96,43 @@ type companyView struct {
 	UpvoteCount   int32 `json:"upvote_count"`
 	DownvoteCount int32 `json:"downvote_count"`
 	MyVote        int32 `json:"my_vote"`
+	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
+	// counters (internal/companyfeedback), the same read-straight-from-the-row
+	// shape as UpvoteCount/DownvoteCount above.
+	FeedbackCount     int32         `json:"feedback_count"`
+	FeedbackRatingAvg pgtype.Float4 `json:"feedback_rating_avg"`
 }
 
 // companyViewFrom projects a stored company onto its public view, dropping only the
 // internal bookkeeping columns.
 func companyViewFrom(c db.Company) companyView {
 	return companyView{
-		Slug:             c.Slug,
-		Name:             c.Name,
-		Collections:      c.Collections,
-		JobCount:         c.JobCount,
-		Regions:          c.Regions,
-		Countries:        c.Countries,
-		Domains:          c.Domains,
-		CompanyTypes:     c.CompanyTypes,
-		CompanySizes:     c.CompanySizes,
-		Industries:       c.Industries,
-		YearFounded:      c.YearFounded,
-		EmployeeCount:    c.EmployeeCount,
-		HqCountry:        c.HqCountry,
-		OrganizationType: c.OrganizationType,
-		Tagline:          c.Tagline,
-		CompanyInfo:      c.CompanyInfo,
-		RemoteRegions:    c.RemoteRegions,
-		YcBatch:          c.YcBatch,
-		YcStatus:         c.YcStatus,
-		YcStage:          c.YcStage,
-		YcFlags:          c.YcFlags,
-		Maturity:         c.Maturity,
-		UpvoteCount:      c.UpvoteCount,
-		DownvoteCount:    c.DownvoteCount,
+		Slug:              c.Slug,
+		Name:              c.Name,
+		Collections:       c.Collections,
+		JobCount:          c.JobCount,
+		Regions:           c.Regions,
+		Countries:         c.Countries,
+		Domains:           c.Domains,
+		CompanyTypes:      c.CompanyTypes,
+		CompanySizes:      c.CompanySizes,
+		Industries:        c.Industries,
+		YearFounded:       c.YearFounded,
+		EmployeeCount:     c.EmployeeCount,
+		HqCountry:         c.HqCountry,
+		OrganizationType:  c.OrganizationType,
+		Tagline:           c.Tagline,
+		CompanyInfo:       c.CompanyInfo,
+		RemoteRegions:     c.RemoteRegions,
+		YcBatch:           c.YcBatch,
+		YcStatus:          c.YcStatus,
+		YcStage:           c.YcStage,
+		YcFlags:           c.YcFlags,
+		Maturity:          c.Maturity,
+		UpvoteCount:       c.UpvoteCount,
+		DownvoteCount:     c.DownvoteCount,
+		FeedbackCount:     c.FeedbackCount,
+		FeedbackRatingAvg: c.FeedbackRatingAvg,
 	}
 }
 

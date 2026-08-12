@@ -190,35 +190,48 @@ type CommunityPersona struct {
 }
 
 type Company struct {
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	Collections      []string           `json:"collections"`
-	JobCount         int32              `json:"job_count"`
-	Regions          []string           `json:"regions"`
-	Countries        []string           `json:"countries"`
-	Domains          []string           `json:"domains"`
-	CompanyTypes     []string           `json:"company_types"`
-	CompanySizes     []string           `json:"company_sizes"`
-	Industries       []string           `json:"industries"`
-	YearFounded      pgtype.Int4        `json:"year_founded"`
-	EmployeeCount    pgtype.Int4        `json:"employee_count"`
-	HqCountry        pgtype.Text        `json:"hq_country"`
-	OrganizationType pgtype.Text        `json:"organization_type"`
-	Tagline          pgtype.Text        `json:"tagline"`
-	CompanyInfo      json.RawMessage    `json:"company_info"`
-	IsReference      bool               `json:"is_reference"`
-	CompanyInfoAt    pgtype.Timestamptz `json:"company_info_at"`
-	RemoteRegions    []string           `json:"remote_regions"`
-	YcBatch          []string           `json:"yc_batch"`
-	YcStatus         []string           `json:"yc_status"`
-	YcStage          []string           `json:"yc_stage"`
-	YcFlags          []string           `json:"yc_flags"`
-	Maturity         pgtype.Text        `json:"maturity"`
-	Subindustry      pgtype.Text        `json:"subindustry"`
-	UpvoteCount      int32              `json:"upvote_count"`
-	DownvoteCount    int32              `json:"downvote_count"`
+	Slug              string             `json:"slug"`
+	Name              string             `json:"name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	Collections       []string           `json:"collections"`
+	JobCount          int32              `json:"job_count"`
+	Regions           []string           `json:"regions"`
+	Countries         []string           `json:"countries"`
+	Domains           []string           `json:"domains"`
+	CompanyTypes      []string           `json:"company_types"`
+	CompanySizes      []string           `json:"company_sizes"`
+	Industries        []string           `json:"industries"`
+	YearFounded       pgtype.Int4        `json:"year_founded"`
+	EmployeeCount     pgtype.Int4        `json:"employee_count"`
+	HqCountry         pgtype.Text        `json:"hq_country"`
+	OrganizationType  pgtype.Text        `json:"organization_type"`
+	Tagline           pgtype.Text        `json:"tagline"`
+	CompanyInfo       json.RawMessage    `json:"company_info"`
+	IsReference       bool               `json:"is_reference"`
+	CompanyInfoAt     pgtype.Timestamptz `json:"company_info_at"`
+	RemoteRegions     []string           `json:"remote_regions"`
+	YcBatch           []string           `json:"yc_batch"`
+	YcStatus          []string           `json:"yc_status"`
+	YcStage           []string           `json:"yc_stage"`
+	YcFlags           []string           `json:"yc_flags"`
+	Maturity          pgtype.Text        `json:"maturity"`
+	Subindustry       pgtype.Text        `json:"subindustry"`
+	UpvoteCount       int32              `json:"upvote_count"`
+	DownvoteCount     int32              `json:"downvote_count"`
+	FeedbackCount     int32              `json:"feedback_count"`
+	FeedbackRatingAvg pgtype.Float4      `json:"feedback_rating_avg"`
+}
+
+type CompanyFeedback struct {
+	ID           int64              `json:"id"`
+	UserID       pgtype.Int8        `json:"user_id"`
+	CompanySlug  string             `json:"company_slug"`
+	Rating       int16              `json:"rating"`
+	FeedbackType string             `json:"feedback_type"`
+	Body         string             `json:"body"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CompanyVote struct {
