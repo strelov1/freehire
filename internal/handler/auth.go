@@ -133,6 +133,13 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
 	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
 
+	// The in-app notification center: a durable, channel-independent record of
+	// every delivered subscription digest/reminder/nudge. Cookie-only, same
+	// reasoning as push-token management.
+	meGroup.Get("/notifications", mw.cookie, h.GetNotifications)
+	meGroup.Post("/notifications/:id/read", mw.cookie, h.MarkNotificationRead)
+	meGroup.Post("/notifications/read-all", mw.cookie, h.MarkAllNotificationsRead)
+
 	// Account deletion is permanent and cookie-only, for the same reason key
 	// management is: a leaked API key must not be able to destroy the account that
 	// issued it. The body confirms the caller's own email address. It requires
