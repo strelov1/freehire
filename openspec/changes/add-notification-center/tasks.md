@@ -31,8 +31,8 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean
-- [ ] 6.2 `go test -tags=integration ./...` (full module) clean
-- [ ] 6.3 Web `eslint`/`svelte-check` clean on changed/new files
-- [ ] 6.4 Mobile `jest`/`tsc`/`eslint` clean on changed/new files
+- [x] 6.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean
+- [x] 6.2 `go test -tags=integration ./...` (full module) clean
+- [x] 6.3 Web `eslint`/`svelte-check` clean on changed/new files
+- [x] 6.4 Mobile `jest`/`tsc`/`eslint` clean on changed/new files
 - [ ] 6.5 Manual smoke on a real device + web: trigger a delivery (as done for the push-channel change), confirm it appears in both notification centers, confirm badge count, mark-read, and tap-to-navigate for a job-bearing and a tracking-board-bound (web) card
