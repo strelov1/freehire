@@ -44,7 +44,7 @@
 
 ## 8. Verification
 
-- [ ] 8.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`
-- [ ] 8.2 `go test -tags=integration ./internal/notify/... ./internal/reminder/... ./internal/nudge/... ./internal/pushnotify/...` (needs Docker/testcontainers)
-- [ ] 8.3 Web: `eslint`/`tsc` clean on the two changed components
+- [x] 8.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`
+- [x] 8.2 `go test -tags=integration ./internal/notify/... ./internal/reminder/... ./internal/nudge/... ./internal/pushnotify/...` (needs Docker/testcontainers)
+- [x] 8.3 Web: `eslint`/`tsc` clean on the two changed components
 - [ ] 8.4 End-to-end manual smoke on a real device: enable the Push chip for a subscription, a reminder, and (if reproducible) a nudge; trigger each backend worker; confirm delivery and, where a single job is involved, the deep link
