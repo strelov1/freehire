@@ -44,21 +44,25 @@ jobs:
         working-directory: design-system
         run: pnpm install --frozen-lockfile
 
+      # design-system carries both pnpm-lock.yaml and pnpm-workspace.yaml —
+      # a plain `snyk test` refuses (422) and asks for --all-projects.
       - name: Test design-system dependencies
         working-directory: design-system
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test
+        run: snyk test --all-projects
 
       - name: Install web dependencies
         working-directory: web
         run: pnpm install --frozen-lockfile
 
+      # web also carries pnpm-workspace.yaml alongside its lockfile — same
+      # 422 trap as design-system.
       - name: Test web dependencies
         working-directory: web
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: snyk test
+        run: snyk test --all-projects
 
       - name: Install extension dependencies
         working-directory: extension
