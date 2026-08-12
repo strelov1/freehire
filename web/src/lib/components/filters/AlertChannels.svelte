@@ -1,20 +1,22 @@
 <script lang="ts">
-  import { Bell, Check, Mail } from '@lucide/svelte';
+  import { Bell, Check, Mail, Smartphone } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { notifications } from '$lib/notifications.svelte';
   import ProviderIcon from '../ProviderIcon.svelte';
 
   // The unified per-search alert control: one toggle chip per delivery channel
-  // (Telegram, Email) for an already-saved search. This is the single home of channel
-  // subscribe/unsubscribe logic — Telegram carries a connect step (link the bot, then
-  // recheck once), email delivers to the account address with no linking. Shared by the
-  // account page (/my/searches), the filter modal, and the sidebar's post-save state.
+  // (Telegram, Email, Push) for an already-saved search. This is the single home of
+  // channel subscribe/unsubscribe logic — Telegram carries a connect step (link the
+  // bot, then recheck once); email and push subscribe/unsubscribe directly, with no
+  // linking step (push delivers to whatever device the mobile app has registered).
+  // Shared by the account page (/my/searches), the filter modal, and the sidebar's
+  // post-save state.
   //
   // A chip is "on" when a subscription exists for that channel; tapping an on chip turns
   // it off. Telegram hides itself when the feature isn't configured server-side.
   let { savedSearchId, showLabel = true }: { savedSearchId: number; showLabel?: boolean } = $props();
 
-  let busy = $state<'telegram' | 'email' | null>(null);
+  let busy = $state<'telegram' | 'email' | 'push' | null>(null);
   // The Telegram deep link was opened; we await the user's "I've connected" recheck.
   let connecting = $state(false);
   let error = $state<string | null>(null);
@@ -22,6 +24,7 @@
   const tg = $derived(notifications.telegram);
   const tgSub = $derived(notifications.forSavedSearch(savedSearchId, 'telegram'));
   const emailSub = $derived(notifications.forSavedSearch(savedSearchId, 'email'));
+  const pushSub = $derived(notifications.forSavedSearch(savedSearchId, 'push'));
 
   // Telegram: unsubscribe if on; else subscribe — linking the bot first when the chat
   // isn't connected yet (the "I've connected" recheck then finishes the subscribe).
@@ -84,6 +87,22 @@
     }
   }
 
+  // Push: plain subscribe/unsubscribe — no linking here either; delivery reaches
+  // whichever device(s) the mobile app has registered, or soft-skips until one is.
+  async function togglePush() {
+    if (busy) return;
+    busy = 'push';
+    error = null;
+    try {
+      if (pushSub) await notifications.unsubscribe(pushSub.id);
+      else await notifications.subscribe(savedSearchId, 'push');
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Could not update the push alert. Please try again.';
+    } finally {
+      busy = null;
+    }
+  }
+
   // A chip: filled brand tint when on, neutral outline when off; the leading glyph is a
   // check once subscribed, otherwise the channel mark.
   const chipClass = (on: boolean) =>
@@ -121,6 +140,15 @@
         <Mail class="size-3.5" aria-hidden="true" />
       {/if}
       Email
+    </button>
+
+    <button type="button" onclick={togglePush} disabled={busy !== null} aria-pressed={pushSub != null} class={chipClass(pushSub != null)}>
+      {#if pushSub}
+        <Check class="size-3.5" aria-hidden="true" />
+      {:else}
+        <Smartphone class="size-3.5" aria-hidden="true" />
+      {/if}
+      Push
     </button>
   </div>
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, Check, Mail } from '@lucide/svelte';
+  import { Bell, Check, Mail, Smartphone } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -164,6 +164,14 @@
               <Mail class="size-3.5" aria-hidden="true" />
             {/if}
             Email
+          </button>
+          <button type="button" onclick={() => toggleChannel('push')} aria-pressed={channels.includes('push')} class={pill(channels.includes('push'))}>
+            {#if channels.includes('push')}
+              <Check class="size-3.5" aria-hidden="true" />
+            {:else}
+              <Smartphone class="size-3.5" aria-hidden="true" />
+            {/if}
+            Push
           </button>
         </div>
         {#if channels.includes('telegram')}
