@@ -148,10 +148,11 @@ func companyViewFrom(c db.Company) companyView {
 func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	search := c.Query("q")
-	// sort=rating orders the Postgres path by feedback_rating_avg (see
-	// ListCompanies in internal/db/queries/companies.sql); any other value
-	// (including absent) is the existing job_count DESC, name ordering. Not
-	// yet honoured on the Meili path — see companySettings' doc comment.
+	// sort=rating orders by feedback_rating_avg (see ListCompanies in
+	// internal/db/queries/companies.sql); any other value (including absent)
+	// is the existing job_count DESC, name ordering. Forces the Postgres path
+	// below regardless of any filter present — rating isn't a Meili-sortable
+	// attribute yet (see companySettings' doc comment).
 	sort := c.Query("sort")
 	vals := queryValues(c)
 
@@ -179,7 +180,11 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// Postgres ordering (job_count DESC, name) and its O(1) total estimate, so it is
 	// deliberately not routed to Meili. On ANY Meili error the request falls through to
 	// the Postgres substring path below, so /companies never depends on Meili being up.
-	if h.companySearch != nil && isCompanyFilter(search, collections, regions, countries,
+	//
+	// sort=rating also stays off Meili even when a filter is present: rating isn't a
+	// Meili-sortable attribute yet (see companySettings), so routing there would
+	// silently ignore the caller's requested order instead of honouring it.
+	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, collections, regions, countries,
 		domains, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
 		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {

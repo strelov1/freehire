@@ -41,10 +41,10 @@ WHERE job_count > 0
 -- companies sort last), falling through to the default job_count DESC, name
 -- for the tiebreak. Any other value (including '', the default) leaves the
 -- CASE NULL for every row, so this ORDER BY is byte-for-byte the old one.
--- Applies to this Postgres path only — a request that also carries a search
--- or facet, routed to Meili instead when configured (see ListCompanies in
--- internal/handler/companies.go), keeps Meili's relevance ordering; rating is
--- not (yet) a Meili-sortable attribute.
+-- sort=rating forces every request onto this Postgres path even with a search
+-- or facet present that would otherwise route to Meili (see ListCompanies in
+-- internal/handler/companies.go) — rating is not (yet) a Meili-sortable
+-- attribute, so routing there would silently drop the requested order.
 ORDER BY
   CASE WHEN sqlc.arg('sort')::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name

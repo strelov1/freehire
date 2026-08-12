@@ -36,6 +36,13 @@ CREATE UNIQUE INDEX company_feedback_reports_reporter_feedback_uniq_idx
 CREATE INDEX company_feedback_reports_feedback_id_idx
     ON public.company_feedback_reports (feedback_id);
 
+-- The reporter_user_id FK needs its own leading-column index (the uniq index
+-- above has reporter_user_id second) — required so deleting an account isn't a
+-- full-table scan; internal/db's TestEveryUserForeignKeyIsIndexed enforces
+-- this for every FK into users.
+CREATE INDEX company_feedback_reports_reporter_user_id_idx
+    ON public.company_feedback_reports (reporter_user_id);
+
 -- The per-user rate-limit check (company_feedback rows created recently by one user).
 CREATE INDEX company_feedback_user_id_created_at_idx
     ON public.company_feedback (user_id, created_at) WHERE user_id IS NOT NULL;

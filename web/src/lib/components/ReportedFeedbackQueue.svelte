@@ -79,7 +79,7 @@
             </div>
             <p class="whitespace-pre-wrap text-sm text-muted-foreground">{r.body}</p>
             <span class="text-xs text-muted-foreground">
-              {r.rating}★ by {r.author} · reported for {r.report_reasons.join(', ')} · {timeAgo(r.created_at)}
+              {r.rating}★ by {r.author}, posted {timeAgo(r.created_at)} · reported for {r.report_reasons.join(', ')}
             </span>
           </div>
           <div class="flex shrink-0 gap-2">

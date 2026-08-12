@@ -95,9 +95,9 @@
 
 <!-- The catalog sort control, handed to ListToolbar so it sits in the shared toolbar
      (mobile) / above the list (desktop) — same shape as the jobs feed's sortSelect.
-     "Highest rated" only reorders the Postgres path (see companyFacetModel.ts's
-     CompanySortField doc comment); it still narrows correctly when combined with a
-     search/facet that routes to Meili, just not by rating. -->
+     "Highest rated" forces the Postgres path server-side even alongside a search/
+     facet (see companyFacetModel.ts's CompanySortField doc comment) — rating isn't
+     a Meili-sortable attribute yet. -->
 {#snippet sortSelect()}
   <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
     <span class="hidden sm:inline">Sort</span>

@@ -51,6 +51,14 @@
   let showFeedbackList = $state(false);
   let showFeedbackForm = $state(false);
   let feedbackOverride = $state<CompanyFeedbackSummary | null>(null);
+  // A save applies to one company only; drop a stale override on a client-side
+  // switch to another company (SvelteKit reuses this component across a
+  // `/companies/[slug]` param change) — otherwise the previous company's
+  // reviewed-just-now counters would keep showing on the new one.
+  $effect(() => {
+    void slug;
+    feedbackOverride = null;
+  });
   const feedbackCount = $derived(feedbackOverride?.feedback_count ?? company.feedback_count);
   const feedbackRatingAvg = $derived(feedbackOverride?.feedback_rating_avg ?? company.feedback_rating_avg);
   function openFeedbackEntry() {

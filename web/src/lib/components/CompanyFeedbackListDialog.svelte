@@ -114,6 +114,7 @@
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/40 p-2">
               <select
                 bind:value={reportReason}
+                aria-label="Reason for reporting this review"
                 class="rounded-md border border-border bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="" disabled>Why are you reporting this?</option>

@@ -68,7 +68,7 @@ func doFeedbackRequest(t *testing.T, app *fiber.App, method, path, cookie, body 
 	if cookie != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	}
-	resp, err := app.Test(r)
+	resp, err := app.Test(r, 10_000)
 	if err != nil {
 		t.Fatalf("app.Test %s %s: %v", method, path, err)
 	}
@@ -123,7 +123,7 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("create: want 201, got %d (%s)", resp.StatusCode, body)
 	}
 	created := decodeFeedback(t, resp)
-	if created.Author != "" && strings.EqualFold(created.Author, "[deleted]") {
+	if created.Author == "" || strings.EqualFold(created.Author, "[deleted]") {
 		t.Fatalf("create: author reported as deleted for a live reviewer: %+v", created)
 	}
 	if created.Company == nil || created.Company.Count != 1 || created.Company.RatingAvg == nil || *created.Company.RatingAvg != 5 {
