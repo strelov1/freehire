@@ -3,19 +3,22 @@
   import { Star } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { communityFormError } from '$lib/community';
-  import { companyFeedbackTypes } from '$lib/companyFeedback';
+  import { companyFeedbackTypes, maxFeedbackBodyLength } from '$lib/companyFeedback';
+  import type { CompanyFeedbackSummary } from '$lib/types';
   import { Button, Dialog } from '$lib/ui';
 
   // Company feedback: a 1-5 star rating + a category + free text, one per
   // (caller, company), editable by resubmitting. The parent owns open/close;
   // this component owns the form within, following ReportDialog's shape.
-  // `onSaved` fires after a successful submit/delete (not on plain cancel) so
-  // the parent can refresh its own rating summary without a page reload.
+  // `onSaved` fires after a successful submit/delete (not on plain cancel)
+  // with the company's freshly recomputed counters, so the parent can update
+  // its own rating summary directly — no follow-up fetch, so no window where
+  // that fetch can itself fail and leave a stale badge on screen.
   let {
     slug,
     onClose,
     onSaved,
-  }: { slug: string; onClose: () => void; onSaved?: () => void } = $props();
+  }: { slug: string; onClose: () => void; onSaved?: (summary: CompanyFeedbackSummary) => void } = $props();
 
   let open = $state(true);
   $effect(() => {
@@ -59,8 +62,8 @@
     submitting = true;
     error = null;
     try {
-      await api.upsertCompanyFeedback(slug, { rating, feedback_type: feedbackType, body: body.trim() });
-      onSaved?.();
+      const saved = await api.upsertCompanyFeedback(slug, { rating, feedback_type: feedbackType, body: body.trim() });
+      onSaved?.(saved.company);
       open = false;
     } catch (err) {
       error = communityFormError(err);
@@ -73,8 +76,8 @@
     deleting = true;
     error = null;
     try {
-      await api.deleteCompanyFeedback(slug);
-      onSaved?.();
+      const summary = await api.deleteCompanyFeedback(slug);
+      onSaved?.(summary);
       open = false;
     } catch (err) {
       error = communityFormError(err);
@@ -125,6 +128,7 @@
         <textarea
           bind:value={body}
           rows="5"
+          maxlength={maxFeedbackBodyLength}
           placeholder="Share your experience…"
           class="resize-y rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         ></textarea>

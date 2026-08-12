@@ -85,6 +85,8 @@ import type {
   CommunityThread,
   CommunityReply,
   CompanyFeedback,
+  CompanyFeedbackSummary,
+  ReportedCompanyFeedback,
   ExperienceAtom,
   ExperienceBank,
   TalentNetworkSetting,
@@ -1860,17 +1862,46 @@ export function createApi(
   }
 
   /** Create or overwrite the caller's feedback on a company in place
-   *  (edit-by-resubmit). Requires a session. */
+   *  (edit-by-resubmit). Requires a session. `company` is always present here
+   *  (unlike the shared CompanyFeedback shape, where it's List/Mine's unused
+   *  optional field) — the freshly recomputed counters, so the caller can
+   *  update its own view of the company without a second round trip. */
   function upsertCompanyFeedback(
     slug: string,
     input: { rating: number; feedback_type: string; body: string },
-  ): Promise<CompanyFeedback> {
-    return requestData<CompanyFeedback>(`/api/v1/companies/${slug}/feedback`, jsonBody('POST', input));
+  ): Promise<CompanyFeedback & { company: CompanyFeedbackSummary }> {
+    return requestData<CompanyFeedback & { company: CompanyFeedbackSummary }>(
+      `/api/v1/companies/${slug}/feedback`,
+      jsonBody('POST', input),
+    );
   }
 
-  /** Delete the caller's own feedback on a company. Idempotent (no-op when none). */
-  async function deleteCompanyFeedback(slug: string): Promise<void> {
-    await call(`/api/v1/companies/${slug}/feedback`, { method: 'DELETE' });
+  /** Delete the caller's own feedback on a company (idempotent — a no-op when
+   *  none exists still succeeds), returning the company's freshly recomputed
+   *  counters so the caller never needs a follow-up fetch to learn the new
+   *  count. */
+  function deleteCompanyFeedback(slug: string): Promise<CompanyFeedbackSummary> {
+    return requestData<CompanyFeedbackSummary>(`/api/v1/companies/${slug}/feedback`, { method: 'DELETE' });
+  }
+
+  /** Flag a specific review as spam/offensive/false/other — evidence for a
+   *  moderator, not a full report ticket (see reportJob for that fuller
+   *  shape). A second report of the same review by the same caller is a
+   *  silent no-op. Requires a session. */
+  async function reportCompanyFeedback(feedbackId: number, reason: string): Promise<void> {
+    await call(`/api/v1/company-feedback/${feedbackId}/report`, jsonBody('POST', { reason }));
+  }
+
+  /** The moderator queue: every review with at least one report, most-reported
+   *  first. Role-gated. */
+  function listReportedCompanyFeedback(): Promise<ReportedCompanyFeedback[]> {
+    return requestData<ReportedCompanyFeedback[]>('/api/v1/company-feedback/reported');
+  }
+
+  /** Hide a specific review, dropping it out of its company's public list and
+   *  average immediately. Idempotent. Role-gated. */
+  async function hideCompanyFeedback(feedbackId: number): Promise<void> {
+    await call(`/api/v1/company-feedback/${feedbackId}/hide`, { method: 'POST' });
   }
 
   return {
@@ -2066,6 +2097,9 @@ export function createApi(
     getMyCompanyFeedback,
     upsertCompanyFeedback,
     deleteCompanyFeedback,
+    reportCompanyFeedback,
+    listReportedCompanyFeedback,
+    hideCompanyFeedback,
   };
 }
 

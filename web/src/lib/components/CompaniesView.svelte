@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { Star } from '@lucide/svelte';
   import { browser } from '$app/environment';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { api, type Slice } from '$lib/api';
   import { Paginator } from '$lib/paginated.svelte';
   import { syncOnNavigation } from '$lib/urlSynced.svelte';
-  import { CompanyFilterStore, companyFiltersToParams } from '$lib/companyFilters';
+  import { CompanyFilterStore, companyFiltersToParams, type CompanySortField } from '$lib/companyFilters';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { CompanyListItem } from '$lib/types';
   import { Badge } from '$lib/ui';
@@ -92,6 +93,26 @@
   syncOnNavigation(filters);
 </script>
 
+<!-- The catalog sort control, handed to ListToolbar so it sits in the shared toolbar
+     (mobile) / above the list (desktop) — same shape as the jobs feed's sortSelect.
+     "Highest rated" only reorders the Postgres path (see companyFacetModel.ts's
+     CompanySortField doc comment); it still narrows correctly when combined with a
+     search/facet that routes to Meili, just not by rating. -->
+{#snippet sortSelect()}
+  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+    <span class="hidden sm:inline">Sort</span>
+    <select
+      aria-label="Sort companies"
+      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
+      value={filters.value.sort}
+      onchange={(e) => filters.setSort(e.currentTarget.value as CompanySortField)}
+    >
+      <option value="job_count">Most active</option>
+      <option value="rating">Highest rated</option>
+    </select>
+  </label>
+{/snippet}
+
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-xl border border-border bg-card p-4">
@@ -103,6 +124,7 @@
     <ListToolbar
       total={companies.status === 'ready' && companies.items.length > 0 ? companies.total : null}
       unit={companies.total === 1 ? 'company' : 'companies'}
+      sortControl={sortSelect}
     />
     {#if companies.status === 'loading'}
       <States state="loading" />
@@ -130,7 +152,15 @@
                      They sit with the name because a backer is a fact about the
                      company, the same placement the job feed card uses. -->
                 <BackerBadge collections={company.collections} class="ml-0.5" />
-                <Badge variant="outline" class="ml-auto shrink-0">{company.job_count} jobs</Badge>
+                <span class="ml-auto flex shrink-0 items-center gap-1.5">
+                  {#if company.feedback_rating_avg !== null}
+                    <Badge variant="secondary" class="flex items-center gap-1">
+                      <Star class="size-3" fill="currentColor" aria-hidden="true" />
+                      {company.feedback_rating_avg.toFixed(1)}
+                    </Badge>
+                  {/if}
+                  <Badge variant="outline">{company.job_count} jobs</Badge>
+                </span>
               </div>
               {#if company.tagline}
                 <p class="line-clamp-1 text-sm text-muted-foreground">{company.tagline}</p>

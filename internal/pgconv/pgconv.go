@@ -90,3 +90,13 @@ func TextString(t pgtype.Text) string {
 	}
 	return t.String
 }
+
+// Float4Ptr maps a nullable DB real to an optional float32: NULL becomes nil, a
+// valid value a pointer to its content — the float32 analogue of TextPtr/IntPtr.
+func Float4Ptr(f pgtype.Float4) *float32 {
+	if !f.Valid {
+		return nil
+	}
+	v := f.Float32
+	return &v
+}

@@ -188,6 +188,27 @@ describe('organizationJsonLd', () => {
 
     expect(ld).not.toHaveProperty('sameAs');
   });
+
+  it('emits aggregateRating when the company has feedback', () => {
+    const ld = organizationJsonLd(
+      company({ feedback_count: 12, feedback_rating_avg: 4.5 }),
+      ORIGIN
+    );
+
+    expect(ld.aggregateRating).toEqual({
+      '@type': 'AggregateRating',
+      ratingValue: 4.5,
+      reviewCount: 12,
+      bestRating: 5,
+      worstRating: 1,
+    });
+  });
+
+  it('omits aggregateRating when the company has no feedback yet', () => {
+    const ld = organizationJsonLd(company(), ORIGIN);
+
+    expect(ld).not.toHaveProperty('aggregateRating');
+  });
 });
 
 describe('jobPostingJsonLd', () => {

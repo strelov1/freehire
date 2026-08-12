@@ -5,7 +5,10 @@
 // shape internal/vote's company thumbs use).
 //
 // A feedback write and the affected company's counter recompute run in one pgx
-// transaction, so a reader never sees a rating without its average.
+// transaction, so a reader never sees a rating without its average. A moderator
+// can Hide a review once enough Reports come in — a lever, not a ticket queue:
+// see internal/report for the fuller resolve/dismiss/notify version of that
+// pattern, built for job postings' much higher report volume.
 package companyfeedback
 
 import (
@@ -13,6 +16,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,6 +25,20 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/vocab"
+)
+
+// maxBodyRunes bounds a review's free text — the same order of magnitude as
+// internal/report's maxDetailsLen, and for the same reason: long enough for a
+// thorough account, short enough that one entry can't bloat a company page.
+const maxBodyRunes = 5000
+
+// DefaultFeedbackWindow/DefaultFeedbackCap bound how many NEW companies one user
+// can review per window — the same shape and magnitude as
+// community.DefaultThreadWindow/Cap, since both are "post original content"
+// actions. An edit-by-resubmit never counts against this (see checkRate).
+const (
+	DefaultFeedbackWindow = 24 * time.Hour
+	DefaultFeedbackCap    = 10
 )
 
 // Sentinel errors, mapped to HTTP statuses by the handler.
@@ -33,8 +51,16 @@ var (
 	ErrInvalidFeedbackType = errors.New("companyfeedback: invalid feedback type")
 	// ErrEmptyBody is feedback submitted with no body text (422).
 	ErrEmptyBody = errors.New("companyfeedback: body is required")
-	// ErrNotFound is a caller with no feedback on the given company (404).
+	// ErrBodyTooLong is feedback text over maxBodyRunes (422).
+	ErrBodyTooLong = errors.New("companyfeedback: body is too long")
+	// ErrNotFound is a caller with no feedback on the given company, or a review
+	// id naming no row (404).
 	ErrNotFound = errors.New("companyfeedback: not found")
+	// ErrRateLimited is a user over their new-review window cap (429).
+	ErrRateLimited = errors.New("companyfeedback: rate limit exceeded")
+	// ErrInvalidReportReason is a report reason outside
+	// vocab.CompanyFeedbackReportReasonValues (400).
+	ErrInvalidReportReason = errors.New("companyfeedback: invalid report reason")
 )
 
 // Feedback is one user's rating + category + text about a company, carrying
@@ -50,6 +76,22 @@ type Feedback struct {
 	UpdatedAt    time.Time
 }
 
+// ReportedFeedback is a review with at least one report against it, plus the
+// aggregated report info a moderator triages by — the moderator queue's shape.
+type ReportedFeedback struct {
+	Feedback
+	ReportCount   int64
+	ReportReasons []string
+}
+
+// Summary is a company's recomputed materialized feedback counters, returned
+// alongside a write so the caller can update its own view of the company
+// without a second round trip — the same shape as internal/vote.Result.
+type Summary struct {
+	Count     int32
+	RatingAvg *float32
+}
+
 // PersonaSource resolves a user's stable pseudonymous handle, minting one on
 // first use — the same site-wide persona internal/community's discussion
 // threads use, so a user's pseudonym stays consistent everywhere it's shown
@@ -58,17 +100,33 @@ type PersonaSource interface {
 	PersonaFor(ctx context.Context, userID int64) (string, error)
 }
 
+// Config tunes the new-review rate limit. Zero values fall back to the
+// Default* constants in New.
+type Config struct {
+	Window time.Duration
+	Cap    int
+}
+
 // Service applies feedback writes against Postgres.
 type Service struct {
 	q        *db.Queries
 	pool     *pgxpool.Pool
 	personas PersonaSource
+	cfg      Config
+	now      func() time.Time
 }
 
 // New builds a Service over the shared queries, pool (drives the per-write
-// transaction), and persona source.
-func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource) *Service {
-	return &Service{q: q, pool: pool, personas: personas}
+// transaction), and persona source, filling any zero Config field with its
+// default.
+func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource, cfg Config) *Service {
+	if cfg.Window == 0 {
+		cfg.Window = DefaultFeedbackWindow
+	}
+	if cfg.Cap == 0 {
+		cfg.Cap = DefaultFeedbackCap
+	}
+	return &Service{q: q, pool: pool, personas: personas, cfg: cfg, now: time.Now}
 }
 
 // validFeedbackType reports whether t is one of the closed category values.
@@ -81,32 +139,79 @@ func validFeedbackType(t string) bool {
 	return false
 }
 
+// validReportReason reports whether t is one of the closed report-reason values.
+func validReportReason(t string) bool {
+	for _, v := range vocab.CompanyFeedbackReportReasonValues {
+		if v == t {
+			return true
+		}
+	}
+	return false
+}
+
+// checkRate rejects a new review once the caller is at or over their window
+// cap. An edit-by-resubmit never inserts a company_feedback row (see
+// CountRecentCompanyFeedback's doc comment), so the count this reads only
+// grows on genuinely new companies — callers only need to invoke it when
+// Upsert is about to create, not update, a row.
+func (s *Service) checkRate(ctx context.Context, userID int64) error {
+	n, err := s.q.CountRecentCompanyFeedback(ctx, db.CountRecentCompanyFeedbackParams{
+		UserID:    pgtype.Int8{Int64: userID, Valid: true},
+		CreatedAt: pgtype.Timestamptz{Time: s.now().Add(-s.cfg.Window), Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+	if n >= int64(s.cfg.Cap) {
+		return ErrRateLimited
+	}
+	return nil
+}
+
 // Upsert validates and writes the caller's feedback on a company (inserting or
 // overwriting their existing one in place), minting their persona if needed,
 // and recomputes the company's materialized counters in the same transaction.
-func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating int16, feedbackType, body string) (Feedback, error) {
+// A brand-new review (the caller has none yet on this company) is subject to
+// checkRate; editing an existing one never is — see checkRate's doc comment.
+func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating int16, feedbackType, body string) (Feedback, Summary, error) {
 	if rating < 1 || rating > 5 {
-		return Feedback{}, ErrInvalidRating
+		return Feedback{}, Summary{}, ErrInvalidRating
 	}
 	if !validFeedbackType(feedbackType) {
-		return Feedback{}, ErrInvalidFeedbackType
+		return Feedback{}, Summary{}, ErrInvalidFeedbackType
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return Feedback{}, ErrEmptyBody
+		return Feedback{}, Summary{}, ErrEmptyBody
+	}
+	if utf8.RuneCountInString(body) > maxBodyRunes {
+		return Feedback{}, Summary{}, ErrBodyTooLong
 	}
 	if err := s.requireCompany(ctx, slug); err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
+	}
+
+	_, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
+		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
+	})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		// A genuinely new review: throttle it.
+		if err := s.checkRate(ctx, userID); err != nil {
+			return Feedback{}, Summary{}, err
+		}
+	case err != nil:
+		return Feedback{}, Summary{}, err
 	}
 
 	handle, err := s.personas.PersonaFor(ctx, userID)
 	if err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
@@ -115,57 +220,65 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 	// company serializes with the recompute below — same reasoning as
 	// LockCompanyForVote, reused here rather than duplicated.
 	if err := q.LockCompanyForVote(ctx, slug); err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
 	}
 	row, err := q.UpsertCompanyFeedback(ctx, db.UpsertCompanyFeedbackParams{
 		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
 		Rating: rating, FeedbackType: feedbackType, Body: body,
 	})
 	if err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
 	}
-	if _, err := q.RecountCompanyFeedback(ctx, slug); err != nil {
-		return Feedback{}, err
+	counts, err := q.RecountCompanyFeedback(ctx, slug)
+	if err != nil {
+		return Feedback{}, Summary{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Feedback{}, err
+		return Feedback{}, Summary{}, err
 	}
-	return feedbackFromRow(row, handle), nil
+	return feedbackFromRow(row, handle), summaryFromCounts(counts), nil
 }
 
 // Delete removes the caller's own feedback (no-op when absent) and recomputes
 // the company's materialized counters in the same transaction.
-func (s *Service) Delete(ctx context.Context, userID int64, slug string) error {
+func (s *Service) Delete(ctx context.Context, userID int64, slug string) (Summary, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
-		return err
+		return Summary{}, err
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return Summary{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
 	if err := q.LockCompanyForVote(ctx, slug); err != nil {
-		return err
+		return Summary{}, err
 	}
 	if err := q.DeleteCompanyFeedback(ctx, db.DeleteCompanyFeedbackParams{
 		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
 	}); err != nil {
-		return err
+		return Summary{}, err
 	}
-	if _, err := q.RecountCompanyFeedback(ctx, slug); err != nil {
-		return err
+	counts, err := q.RecountCompanyFeedback(ctx, slug)
+	if err != nil {
+		return Summary{}, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return Summary{}, err
+	}
+	return summaryFromCounts(counts), nil
 }
 
 // Mine returns the caller's own feedback on a company (for the edit form's
-// prefill), or ErrNotFound when they have not left one yet. AuthorHandle is
-// left blank — the caller already knows who they are, so it is not worth a
-// second round trip through PersonaSource just to fill in their own handle.
+// prefill), or ErrNotFound when they have not left one yet, or
+// ErrCompanyNotFound for a bad slug (checked first, so the two cases are never
+// confused the way an earlier version of this method conflated them).
 func (s *Service) Mine(ctx context.Context, userID int64, slug string) (Feedback, error) {
+	if err := s.requireCompany(ctx, slug); err != nil {
+		return Feedback{}, err
+	}
 	row, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
 		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
 	})
@@ -175,10 +288,20 @@ func (s *Service) Mine(ctx context.Context, userID int64, slug string) (Feedback
 		}
 		return Feedback{}, err
 	}
-	return feedbackFromRow(row, ""), nil
+	// Unlike List's author handles (resolved once per page via a join), this is
+	// a single row, and it is always the caller's own — worth the extra lookup
+	// to get a real handle instead of leaving it blank, which the handler's
+	// shared personaOrDeleted would otherwise render as "[deleted]" for the
+	// caller's own, very much live, review.
+	handle, err := s.personas.PersonaFor(ctx, userID)
+	if err != nil {
+		return Feedback{}, err
+	}
+	return feedbackFromRow(row, handle), nil
 }
 
-// List returns a company's feedback, newest first, offset-paginated.
+// List returns a company's feedback, newest first, offset-paginated. Hidden
+// reviews (Hide) are excluded.
 func (s *Service) List(ctx context.Context, slug string, limit, offset int32) ([]Feedback, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
 		return nil, err
@@ -200,12 +323,83 @@ func (s *Service) List(ctx context.Context, slug string, limit, offset int32) ([
 	return out, nil
 }
 
-// Count returns how many feedback entries a company has.
+// Count returns how many (visible) feedback entries a company has.
 func (s *Service) Count(ctx context.Context, slug string) (int64, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
 		return 0, err
 	}
 	return s.q.CountCompanyFeedback(ctx, slug)
+}
+
+// Report files a complaint against a specific review — evidence for a
+// moderator to act on via Hide, not a per-report ticket with its own
+// resolve/dismiss state (see internal/report for that fuller shape, sized for
+// job postings' much higher report volume). A second report of the same
+// review by the same user is a silent no-op.
+func (s *Service) Report(ctx context.Context, userID, feedbackID int64, reason string) error {
+	if !validReportReason(reason) {
+		return ErrInvalidReportReason
+	}
+	ok, err := s.q.CompanyFeedbackExists(ctx, feedbackID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	return s.q.InsertCompanyFeedbackReport(ctx, db.InsertCompanyFeedbackReportParams{
+		FeedbackID: feedbackID, ReporterUserID: pgtype.Int8{Int64: userID, Valid: true}, Reason: reason,
+	})
+}
+
+// Hide is the moderator lever: mark a review hidden and recompute its
+// company's materialized counters in the same transaction, so a hidden review
+// stops counting toward the public average and the public list immediately.
+// Idempotent; ErrNotFound for an unknown id.
+func (s *Service) Hide(ctx context.Context, feedbackID int64) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+
+	slug, err := q.HideCompanyFeedback(ctx, feedbackID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if err := q.LockCompanyForVote(ctx, slug); err != nil {
+		return err
+	}
+	if _, err := q.RecountCompanyFeedback(ctx, slug); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// ListReported returns every review with at least one report, most-reported
+// first — the moderator queue's read; Hide is the corresponding write.
+func (s *Service) ListReported(ctx context.Context) ([]ReportedFeedback, error) {
+	rows, err := s.q.ListReportedCompanyFeedback(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ReportedFeedback, len(rows))
+	for i, row := range rows {
+		out[i] = ReportedFeedback{
+			Feedback: Feedback{
+				ID: row.ID, CompanySlug: row.CompanySlug, AuthorHandle: pgconv.TextString(row.AuthorHandle),
+				Rating: row.Rating, FeedbackType: row.FeedbackType, Body: row.Body,
+				CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
+			},
+			ReportCount:   row.ReportCount,
+			ReportReasons: row.ReportReasons,
+		}
+	}
+	return out, nil
 }
 
 // requireCompany reports ErrCompanyNotFound for a slug naming no company — the
@@ -231,4 +425,9 @@ func feedbackFromRow(row db.CompanyFeedback, handle string) Feedback {
 		Rating: row.Rating, FeedbackType: row.FeedbackType, Body: row.Body,
 		CreatedAt: row.CreatedAt.Time, UpdatedAt: row.UpdatedAt.Time,
 	}
+}
+
+// summaryFromCounts adapts RecountCompanyFeedback's return row to Summary.
+func summaryFromCounts(row db.RecountCompanyFeedbackRow) Summary {
+	return Summary{Count: row.FeedbackCount, RatingAvg: pgconv.Float4Ptr(row.FeedbackRatingAvg)}
 }

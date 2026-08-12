@@ -232,6 +232,15 @@ type CompanyFeedback struct {
 	Body         string             `json:"body"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Status       string             `json:"status"`
+}
+
+type CompanyFeedbackReport struct {
+	ID             int64              `json:"id"`
+	FeedbackID     int64              `json:"feedback_id"`
+	ReporterUserID pgtype.Int8        `json:"reporter_user_id"`
+	Reason         string             `json:"reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type CompanyVote struct {

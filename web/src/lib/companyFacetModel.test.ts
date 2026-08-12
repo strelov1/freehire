@@ -136,3 +136,23 @@ describe('yc_stage / yc_flags facets', () => {
     expect(companyFiltersFromParams(p).facets.yc_flags).toEqual(['top_company']);
   });
 });
+
+describe('sort', () => {
+  test('defaults to job_count and is omitted from the query for a clean URL', () => {
+    const f = emptyCompanyFilters();
+    expect(f.sort).toBe('job_count');
+    expect(companyFiltersToParams(f).has('sort')).toBe(false);
+  });
+
+  test('rating round-trips through the URL', () => {
+    const f = { ...emptyCompanyFilters(), sort: 'rating' as const };
+    const p = companyFiltersToParams(f);
+    expect(p.get('sort')).toBe('rating');
+    expect(companyFiltersFromParams(p).sort).toBe('rating');
+  });
+
+  test('an unrecognized sort value falls back to the default rather than forwarding it', () => {
+    const f = companyFiltersFromParams(new URLSearchParams('sort=bogus'));
+    expect(f.sort).toBe('job_count');
+  });
+});

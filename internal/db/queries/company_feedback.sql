@@ -21,30 +21,76 @@ DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2;
 
 -- name: GetMyCompanyFeedback :one
 -- The caller's own feedback on a company, for the edit form's prefill. No row
--- when they have not left one yet.
+-- when they have not left one yet. Not filtered by status: the owner can still
+-- see and edit their own review after a moderator hides it.
 SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2;
 
 -- name: ListCompanyFeedback :many
 -- A company's feedback, newest first, offset-paginated — the volume per company
 -- is small (bounded by distinct reviewers), so unlike the discussion threads this
--- does not need keyset paging.
+-- does not need keyset paging. Hidden rows (a moderator's lever) are excluded,
+-- same as an open thread listing excludes closed ones.
 SELECT f.*, p.handle AS author_handle
 FROM company_feedback f
 LEFT JOIN community_personas p ON p.user_id = f.user_id
-WHERE f.company_slug = $1
+WHERE f.company_slug = $1 AND f.status = 'visible'
 ORDER BY f.created_at DESC, f.id DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountCompanyFeedback :one
-SELECT count(*) FROM company_feedback WHERE company_slug = $1;
+SELECT count(*) FROM company_feedback WHERE company_slug = $1 AND status = 'visible';
 
 -- name: RecountCompanyFeedback :one
 -- Recompute a single company's materialized feedback_count/feedback_rating_avg
 -- from company_feedback and return them. Run as its own statement AFTER the
 -- write within one transaction, scoped to one company_slug via
 -- company_feedback_company_slug_idx — the same shape as RecountCompanyVotes.
+-- Hidden rows don't count toward either number.
 UPDATE companies SET
-    feedback_count      = (SELECT count(*) FROM company_feedback f WHERE f.company_slug = $1),
-    feedback_rating_avg = (SELECT avg(rating) FROM company_feedback f WHERE f.company_slug = $1)
+    feedback_count      = (SELECT count(*) FROM company_feedback f WHERE f.company_slug = $1 AND f.status = 'visible'),
+    feedback_rating_avg = (SELECT avg(rating) FROM company_feedback f WHERE f.company_slug = $1 AND f.status = 'visible')
 WHERE slug = $1
 RETURNING feedback_count, feedback_rating_avg;
+
+-- name: CountRecentCompanyFeedback :one
+-- How many companies this user has newly reviewed since `since` — the rate-limit
+-- check backing companyfeedback.Service.checkRate (mirrors
+-- community.CountRecentThreads). An edit-by-resubmit never inserts a new row
+-- (the ON CONFLICT DO UPDATE branch leaves created_at untouched), so this only
+-- grows on genuine new-company writes.
+SELECT count(*) FROM company_feedback WHERE user_id = $1 AND created_at >= $2;
+
+-- name: HideCompanyFeedback :one
+-- The moderator lever: hide a specific review (idempotent — hiding an already-
+-- hidden row is a no-op). Returns the company_slug so the caller can recompute
+-- that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
+UPDATE company_feedback SET status = 'hidden', updated_at = now()
+WHERE id = $1
+RETURNING company_slug;
+
+-- name: CompanyFeedbackExists :one
+-- The cheap existence check Report uses before writing, so a bad id 404s
+-- cleanly instead of surfacing company_feedback_reports' FK violation.
+SELECT EXISTS(SELECT 1 FROM company_feedback WHERE id = $1);
+
+-- name: InsertCompanyFeedbackReport :exec
+-- File a report against a specific review. A second report by the same user on
+-- the same review is a silent no-op (the partial unique index) — evidence for a
+-- moderator to act on, not a per-report ticket with its own state machine (see
+-- internal/report for that fuller shape, built for job postings).
+INSERT INTO company_feedback_reports (feedback_id, reporter_user_id, reason)
+VALUES ($1, $2, $3)
+ON CONFLICT (feedback_id, reporter_user_id) WHERE reporter_user_id IS NOT NULL DO NOTHING;
+
+-- name: ListReportedCompanyFeedback :many
+-- The moderator view: every review with at least one report, most-reported
+-- first, with the report count and the distinct reasons given so a moderator
+-- can triage without opening each report individually.
+SELECT f.*, p.handle AS author_handle,
+       count(r.id) AS report_count,
+       array_agg(DISTINCT r.reason)::text[] AS report_reasons
+FROM company_feedback f
+JOIN company_feedback_reports r ON r.feedback_id = f.id
+LEFT JOIN community_personas p ON p.user_id = f.user_id
+GROUP BY f.id, p.handle
+ORDER BY count(r.id) DESC, max(r.created_at) DESC;

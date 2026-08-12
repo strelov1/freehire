@@ -165,9 +165,18 @@ export interface Company {
   feedback_rating_avg: number | null;
 }
 
+/** A company's recomputed materialized feedback counters, carried alongside a
+ *  write response (upsert/delete) so the caller can update its own view of the
+ *  company without a second round trip. */
+export interface CompanyFeedbackSummary {
+  feedback_count: number;
+  feedback_rating_avg: number | null;
+}
+
 /** One user's rating + category + text about a company (internal/companyfeedback).
  *  The author is a pseudonymous persona handle, the same one CommunityThread uses —
- *  the backend never sends the real user id. */
+ *  the backend never sends the real user id. `company` is set only on the
+ *  upsert response (see CompanyFeedbackDialog's submit). */
 export interface CompanyFeedback {
   id: number;
   author: string;
@@ -176,6 +185,15 @@ export interface CompanyFeedback {
   body: string;
   created_at: string;
   updated_at: string;
+  company?: CompanyFeedbackSummary;
+}
+
+/** The moderator queue's shape for a reported review (internal/companyfeedback):
+ *  the review itself plus which company it's on and the aggregated report info. */
+export interface ReportedCompanyFeedback extends CompanyFeedback {
+  company_slug: string;
+  report_count: number;
+  report_reasons: string[];
 }
 
 /** The result of casting or clearing a thumbs vote: the target's resulting public
@@ -198,6 +216,10 @@ export interface CompanyListItem {
   hq_country?: string | null;
   /** Curated company tags — the catalogue card renders the backer marks from these. */
   collections?: string[] | null;
+  /** Materialized feedback counters (internal/companyfeedback), the same fields
+   *  the single-company detail view serves. */
+  feedback_count: number;
+  feedback_rating_avg: number | null;
 }
 
 /** Pagination metadata returned alongside list responses. */

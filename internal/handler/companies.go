@@ -148,6 +148,11 @@ func companyViewFrom(c db.Company) companyView {
 func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	search := c.Query("q")
+	// sort=rating orders the Postgres path by feedback_rating_avg (see
+	// ListCompanies in internal/db/queries/companies.sql); any other value
+	// (including absent) is the existing job_count DESC, name ordering. Not
+	// yet honoured on the Meili path — see companySettings' doc comment.
+	sort := c.Query("sort")
 	vals := queryValues(c)
 
 	// Parse each facet once and feed both queries, so their WHERE clauses can't
@@ -198,6 +203,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		YcFlags:       ycFlags,
 		Maturity:      maturity,
 		Subindustries: subindustries,
+		Sort:          sort,
 		Limit:         int32(limit),
 		Offset:        int32(offset),
 	})
@@ -380,19 +386,26 @@ type companyListItem struct {
 	Industries  []string `json:"industries"`
 	HqCountry   *string  `json:"hq_country"`
 	Collections []string `json:"collections"`
+	// FeedbackCount/FeedbackRatingAvg are the company's materialized feedback
+	// counters (internal/companyfeedback) — the same fields the single-company
+	// detail view (companyView) already serves.
+	FeedbackCount     int32    `json:"feedback_count"`
+	FeedbackRatingAvg *float32 `json:"feedback_rating_avg"`
 }
 
 // companyListItemFromRow projects the Postgres read onto the wire shape. The row already carries
 // null-ness, so the two nullable columns pass through as-is.
 func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
 	return companyListItem{
-		Slug:        r.Slug,
-		Name:        r.Name,
-		JobCount:    r.JobCount,
-		Tagline:     pgconv.TextPtr(r.Tagline),
-		Industries:  r.Industries,
-		HqCountry:   pgconv.TextPtr(r.HqCountry),
-		Collections: r.Collections,
+		Slug:              r.Slug,
+		Name:              r.Name,
+		JobCount:          r.JobCount,
+		Tagline:           pgconv.TextPtr(r.Tagline),
+		Industries:        r.Industries,
+		HqCountry:         pgconv.TextPtr(r.HqCountry),
+		Collections:       r.Collections,
+		FeedbackCount:     r.FeedbackCount,
+		FeedbackRatingAvg: pgconv.Float4Ptr(r.FeedbackRatingAvg),
 	}
 }
 
@@ -403,14 +416,25 @@ func companyListItemFromRow(r db.ListCompaniesRow) companyListItem {
 // array that came back null instead would make those marks disappear the moment a user searched.
 func companyListItemFromDoc(d search.CompanyDocument) companyListItem {
 	return companyListItem{
-		Slug:        d.Slug,
-		Name:        d.Name,
-		JobCount:    d.JobCount,
-		Tagline:     presentOrNil(d.Tagline),
-		Industries:  orEmpty(d.Industries),
-		HqCountry:   presentOrNil(d.HqCountry),
-		Collections: orEmpty(d.Collections),
+		Slug:              d.Slug,
+		Name:              d.Name,
+		JobCount:          d.JobCount,
+		Tagline:           presentOrNil(d.Tagline),
+		Industries:        orEmpty(d.Industries),
+		HqCountry:         presentOrNil(d.HqCountry),
+		Collections:       orEmpty(d.Collections),
+		FeedbackCount:     d.FeedbackCount,
+		FeedbackRatingAvg: presentOrNilFloat(d.FeedbackRatingAvg),
 	}
+}
+
+// presentOrNilFloat treats 0 as absent — CompanyDocument's "no rating" sentinel
+// (see its doc comment): a real average is never 0, since ratings are 1-5.
+func presentOrNilFloat(f float32) *float32 {
+	if f == 0 {
+		return nil
+	}
+	return &f
 }
 
 // presentOrNil treats the empty string as absent — the search document's way of spelling NULL.

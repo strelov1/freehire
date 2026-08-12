@@ -26,8 +26,9 @@ func (p communityPersonas) PersonaFor(ctx context.Context, userID int64) (string
 
 // companyFeedbackHandlers serves company feedback: a signed-in user's 1-5 star
 // rating + closed category + text about a company, shown under their site-wide
-// pseudonymous persona. The use cases live in companyfeedback.Service; the
-// handlers translate wire ↔ domain and delegate to it.
+// pseudonymous persona, plus the reader-report/moderator-hide lever. The use
+// cases live in companyfeedback.Service; the handlers translate wire ↔ domain
+// and delegate to it.
 type companyFeedbackHandlers struct {
 	feedback *companyfeedback.Service
 }
@@ -45,6 +46,25 @@ func (h *companyFeedbackHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/companies/:slug/feedback/mine", mw.cookie, h.GetMyFeedback)
 	api.Post("/companies/:slug/feedback", mw.cookie, h.UpsertFeedback)
 	api.Delete("/companies/:slug/feedback", mw.cookie, h.DeleteFeedback)
+	// Reporting a specific review, and the moderator lever it feeds, are addressed
+	// by the review's own id — flat routes, the same shape as /threads/:id/close —
+	// rather than nested under a company slug the id doesn't need to be found.
+	api.Post("/company-feedback/:id/report", mw.cookie, h.ReportFeedback)
+	api.Get("/company-feedback/reported", mw.cookie, mw.moderator, h.ListReportedFeedback)
+	api.Post("/company-feedback/:id/hide", mw.cookie, mw.moderator, h.HideFeedback)
+}
+
+// companyFeedbackSummaryResponse is a company's recomputed materialized
+// feedback counters, carried alongside a write response so the caller can
+// update its own view of the company without a second round trip — the same
+// shape internal/vote.Result serves for a vote cast/clear.
+type companyFeedbackSummaryResponse struct {
+	Count     int32    `json:"feedback_count"`
+	RatingAvg *float32 `json:"feedback_rating_avg"`
+}
+
+func toCompanyFeedbackSummaryResponse(s companyfeedback.Summary) companyFeedbackSummaryResponse {
+	return companyFeedbackSummaryResponse{Count: s.Count, RatingAvg: s.RatingAvg}
 }
 
 // companyFeedbackResponse is the public shape of one feedback entry: the
@@ -57,6 +77,11 @@ type companyFeedbackResponse struct {
 	Body         string    `json:"body"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	// Company carries the company's freshly recomputed feedback counters — set
+	// only on Upsert's response (see UpsertFeedback), so the caller can update
+	// its own view of the company without a second round trip. Omitted on
+	// List/Mine, where nothing just changed.
+	Company *companyFeedbackSummaryResponse `json:"company,omitempty"`
 }
 
 func toCompanyFeedbackResponse(f companyfeedback.Feedback) companyFeedbackResponse {
@@ -66,24 +91,52 @@ func toCompanyFeedbackResponse(f companyfeedback.Feedback) companyFeedbackRespon
 	}
 }
 
+// reportedFeedbackResponse is the moderator queue's shape: a review plus the
+// aggregated report info a moderator triages by.
+type reportedFeedbackResponse struct {
+	companyFeedbackResponse
+	CompanySlug   string   `json:"company_slug"`
+	ReportCount   int64    `json:"report_count"`
+	ReportReasons []string `json:"report_reasons"`
+}
+
+func toReportedFeedbackResponse(r companyfeedback.ReportedFeedback) reportedFeedbackResponse {
+	return reportedFeedbackResponse{
+		companyFeedbackResponse: toCompanyFeedbackResponse(r.Feedback),
+		CompanySlug:             r.CompanySlug,
+		ReportCount:             r.ReportCount,
+		ReportReasons:           r.ReportReasons,
+	}
+}
+
 type upsertCompanyFeedbackBody struct {
 	Rating       int16  `json:"rating"`
 	FeedbackType string `json:"feedback_type"`
 	Body         string `json:"body"`
 }
 
+type reportCompanyFeedbackBody struct {
+	Reason string `json:"reason"`
+}
+
 // companyFeedbackError maps companyfeedback sentinels to HTTP statuses; anything
 // else falls through to RenderError's 500.
 func companyFeedbackError(err error) error {
 	switch {
-	case errors.Is(err, companyfeedback.ErrCompanyNotFound):
-		return fiber.NewError(fiber.StatusNotFound, "company not found")
+	case errors.Is(err, companyfeedback.ErrCompanyNotFound), errors.Is(err, companyfeedback.ErrNotFound):
+		return fiber.NewError(fiber.StatusNotFound, "not found")
 	case errors.Is(err, companyfeedback.ErrInvalidRating):
 		return fiber.NewError(fiber.StatusBadRequest, "rating must be between 1 and 5")
 	case errors.Is(err, companyfeedback.ErrInvalidFeedbackType):
 		return fiber.NewError(fiber.StatusBadRequest, "invalid feedback type")
+	case errors.Is(err, companyfeedback.ErrInvalidReportReason):
+		return fiber.NewError(fiber.StatusBadRequest, "invalid report reason")
 	case errors.Is(err, companyfeedback.ErrEmptyBody):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "body is required")
+	case errors.Is(err, companyfeedback.ErrBodyTooLong):
+		return fiber.NewError(fiber.StatusUnprocessableEntity, "feedback is too long")
+	case errors.Is(err, companyfeedback.ErrRateLimited):
+		return fiber.NewError(fiber.StatusTooManyRequests, "you've reviewed a lot of companies today — try again tomorrow")
 	default:
 		return err
 	}
@@ -125,7 +178,10 @@ func (h *companyFeedbackHandlers) GetMyFeedback(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toCompanyFeedbackResponse(f)})
 }
 
-// UpsertFeedback creates or overwrites the caller's feedback on a company; 400/404/422.
+// UpsertFeedback creates or overwrites the caller's feedback on a company;
+// 400/404/422/429. The response's nested `company` field is the freshly
+// recomputed counters, so the caller can update its own view of the company
+// (e.g. a header badge) without a second round trip.
 func (h *companyFeedbackHandlers) UpsertFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -135,20 +191,77 @@ func (h *companyFeedbackHandlers) UpsertFeedback(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	f, err := h.feedback.Upsert(c.Context(), userID, c.Params("slug"), in.Rating, in.FeedbackType, in.Body)
+	f, summary, err := h.feedback.Upsert(c.Context(), userID, c.Params("slug"), in.Rating, in.FeedbackType, in.Body)
 	if err != nil {
 		return companyFeedbackError(err)
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toCompanyFeedbackResponse(f)})
+	out := toCompanyFeedbackResponse(f)
+	companySummary := toCompanyFeedbackSummaryResponse(summary)
+	out.Company = &companySummary
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": out})
 }
 
-// DeleteFeedback removes the caller's own feedback on a company (no-op when absent).
+// DeleteFeedback removes the caller's own feedback on a company (no-op when
+// absent) and returns the company's freshly recomputed counters — the same
+// cast/clear-returns-the-tally shape as VoteControl's clear endpoints, so the
+// caller never needs a follow-up fetch to learn the new count.
 func (h *companyFeedbackHandlers) DeleteFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	if err := h.feedback.Delete(c.Context(), userID, c.Params("slug")); err != nil {
+	summary, err := h.feedback.Delete(c.Context(), userID, c.Params("slug"))
+	if err != nil {
+		return companyFeedbackError(err)
+	}
+	return c.JSON(fiber.Map{"data": toCompanyFeedbackSummaryResponse(summary)})
+}
+
+// ReportFeedback files a complaint against a specific review, addressed by its
+// id. Any signed-in user; a second report of the same review by the same user
+// is a silent no-op. 400/404.
+func (h *companyFeedbackHandlers) ReportFeedback(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+	var in reportCompanyFeedbackBody
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := h.feedback.Report(c.Context(), userID, id, in.Reason); err != nil {
+		return companyFeedbackError(err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// ListReportedFeedback returns every review with at least one report,
+// most-reported first — the moderator queue's read. Role-gated.
+func (h *companyFeedbackHandlers) ListReportedFeedback(c *fiber.Ctx) error {
+	rows, err := h.feedback.ListReported(c.Context())
+	if err != nil {
+		return err
+	}
+	out := make([]reportedFeedbackResponse, len(rows))
+	for i, r := range rows {
+		out[i] = toReportedFeedbackResponse(r)
+	}
+	return c.JSON(fiber.Map{"data": out})
+}
+
+// HideFeedback is the moderator lever: hide a specific review, addressed by
+// its id, and drop it out of its company's public list and average in the
+// same step. Idempotent; role-gated. 404 for an unknown id.
+func (h *companyFeedbackHandlers) HideFeedback(c *fiber.Ctx) error {
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+	if err := h.feedback.Hide(c.Context(), id); err != nil {
 		return companyFeedbackError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

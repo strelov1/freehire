@@ -11,10 +11,19 @@
 
 import { COMPANY_FACETS } from './facets';
 
+/** 'job_count' is the backend's default order (most active first) and is never
+ *  written to the URL — a clean link leans on that default, mirroring
+ *  DEFAULT_SORT in facetModel.ts. 'rating' asks for feedback_rating_avg DESC
+ *  (see ListCompanies in internal/db/queries/companies.sql); it only applies on
+ *  the Postgres path — see that query's doc comment for the Meili-path caveat. */
+export type CompanySortField = 'job_count' | 'rating';
+export const DEFAULT_COMPANY_SORT: CompanySortField = 'job_count';
+
 export interface CompanyFilters {
   q: string;
   /** Selected values keyed by facet param (see COMPANY_FACETS). */
   facets: Record<string, string[]>;
+  sort: CompanySortField;
 }
 
 function emptyFacets(): Record<string, string[]> {
@@ -24,7 +33,7 @@ function emptyFacets(): Record<string, string[]> {
 }
 
 export function emptyCompanyFilters(): CompanyFilters {
-  return { q: '', facets: emptyFacets() };
+  return { q: '', facets: emptyFacets(), sort: DEFAULT_COMPANY_SORT };
 }
 
 /** Serialize to the query shape GET /api/v1/companies reads. */
@@ -34,12 +43,14 @@ export function companyFiltersToParams(f: CompanyFilters): URLSearchParams {
   for (const def of COMPANY_FACETS) {
     for (const v of f.facets[def.param] ?? []) p.append(def.param, v);
   }
+  if (f.sort !== DEFAULT_COMPANY_SORT) p.set('sort', f.sort);
   return p;
 }
 
 /** Parse back from URL params. Facet values are a set, so duplicates from a
  *  shared/edited link are collapsed (the keyed {#each} in the controls throws on a
- *  repeat), mirroring the job filters' guard. */
+ *  repeat), mirroring the job filters' guard. An unrecognized `sort` falls back
+ *  to the default rather than forwarding an arbitrary value to the backend. */
 export function companyFiltersFromParams(p: URLSearchParams): CompanyFilters {
   const f = emptyCompanyFilters();
   f.q = p.get('q') ?? '';
@@ -47,6 +58,7 @@ export function companyFiltersFromParams(p: URLSearchParams): CompanyFilters {
     const values = [...new Set(p.getAll(def.param))];
     if (values.length > 0) f.facets[def.param] = values;
   }
+  f.sort = p.get('sort') === 'rating' ? 'rating' : DEFAULT_COMPANY_SORT;
   return f;
 }
 

@@ -324,7 +324,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Feedback reuses communityH's persona minting (via the communityPersonas
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
 	// which is why it is constructed after communityH rather than alongside it.
-	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}))
+	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}, companyfeedback.Config{}))
 	submissionsH := newSubmissionHandlers(queries, moderationSvc)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an

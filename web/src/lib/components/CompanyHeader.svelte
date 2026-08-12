@@ -4,7 +4,7 @@
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
-  import type { Company } from '$lib/types';
+  import type { Company, CompanyFeedbackSummary } from '$lib/types';
   import CompanyFeedbackDialog from './CompanyFeedbackDialog.svelte';
   import CompanyFeedbackListDialog from './CompanyFeedbackListDialog.svelte';
   import CompanyLogo from './CompanyLogo.svelte';
@@ -42,9 +42,12 @@
   //
   // feedbackCount/feedbackRatingAvg are derived from the server-rendered `company`
   // prop (so a company switch or refreshed data is picked up, the same as
-  // threadCount reacting to `slug`), overridden only after a save: the dialog
-  // reports success via `onSaved`, and we re-fetch just the company summary so the
-  // badge flips to the rating immediately instead of waiting for a full page reload.
+  // threadCount reacting to `slug`), overridden only after a save: the dialog's
+  // `onSaved` already carries the write's freshly recomputed counters (Upsert
+  // and Delete both return them), so the badge flips immediately with no
+  // follow-up fetch — and so no window where that fetch can itself fail and
+  // leave the badge stale, which is what the earlier getCompany-refetch version
+  // of this function could do.
   let showFeedbackList = $state(false);
   let showFeedbackForm = $state(false);
   let feedbackOverride = $state<{ count: number; avg: number | null } | null>(null);
@@ -65,14 +68,8 @@
     showFeedbackList = false;
     showFeedbackForm = true;
   }
-  async function refreshFeedbackSummary() {
-    try {
-      const { company: refreshed } = await api.getCompany(slug, 1, 0);
-      feedbackOverride = { count: refreshed.feedback_count, avg: refreshed.feedback_rating_avg };
-    } catch {
-      // Leave the previous summary in place; the next full page load will
-      // pick up the change regardless.
-    }
+  function applyFeedbackSummary(summary: CompanyFeedbackSummary) {
+    feedbackOverride = { count: summary.feedback_count, avg: summary.feedback_rating_avg };
   }
 
   const info = $derived(company.company_info ?? {});
@@ -196,5 +193,5 @@
   />
 {/if}
 {#if showFeedbackForm}
-  <CompanyFeedbackDialog {slug} onClose={() => (showFeedbackForm = false)} onSaved={refreshFeedbackSummary} />
+  <CompanyFeedbackDialog {slug} onClose={() => (showFeedbackForm = false)} onSaved={applyFeedbackSummary} />
 {/if}

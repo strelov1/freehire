@@ -24,3 +24,23 @@ func TestValidFeedbackType(t *testing.T) {
 		}
 	}
 }
+
+func TestValidReportReason(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"spam", true},
+		{"offensive", true},
+		{"false_information", true},
+		{"other", true},
+		{"", false},
+		{"no_response", false},
+		{"SPAM", false},
+	}
+	for _, c := range cases {
+		if got := validReportReason(c.in); got != c.want {
+			t.Errorf("validReportReason(%q) = %v; want %v", c.in, got, c.want)
+		}
+	}
+}

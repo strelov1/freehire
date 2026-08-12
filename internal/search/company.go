@@ -54,6 +54,16 @@ type CompanyDocument struct {
 	YcFlags       []string `json:"yc_flags"`
 	Maturity      string   `json:"maturity"`
 	Subindustry   string   `json:"subindustry"`
+	// FeedbackCount/FeedbackRatingAvg mirror companies.feedback_count/
+	// feedback_rating_avg (internal/companyfeedback) — display-only here.
+	// FeedbackRatingAvg 0 means "no rating" (an average is never really 0:
+	// ratings are 1-5), the same absent-is-zero-value convention JobCount uses;
+	// neither is a Meili-sortable attribute yet, so "sort by rating" only
+	// works on the Postgres path (see ListCompanies in
+	// internal/db/queries/companies.sql) until that's added deliberately,
+	// alongside the reindex it requires.
+	FeedbackCount     int32   `json:"feedback_count"`
+	FeedbackRatingAvg float32 `json:"feedback_rating_avg"`
 }
 
 // FromCompany maps a stored company row to its index document. The pgtype.Text
@@ -81,6 +91,11 @@ func FromCompany(c db.Company) CompanyDocument {
 		YcFlags:       c.YcFlags,
 		Maturity:      c.Maturity.String,
 		Subindustry:   c.Subindustry.String,
+		FeedbackCount: c.FeedbackCount,
+		// pgtype.Float4's zero value is {Valid: false}, whose .Float32 is 0 —
+		// exactly the "no rating" sentinel this document already wants, so no
+		// explicit NULL handling is needed here.
+		FeedbackRatingAvg: c.FeedbackRatingAvg.Float32,
 	}
 }
 

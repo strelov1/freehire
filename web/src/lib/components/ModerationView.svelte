@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { FileText, Flag, Handshake } from '@lucide/svelte';
+  import { FileText, Flag, Handshake, Star } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
@@ -10,15 +10,17 @@
   import { Button, cn } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import ReportQueue from './ReportQueue.svelte';
+  import ReportedFeedbackQueue from './ReportedFeedbackQueue.svelte';
   import ReferralReviewView from './ReferralReviewView.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports' | 'referrals';
+  type View = 'queue' | 'reports' | 'feedback' | 'referrals';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
     { value: 'reports', label: 'Reported jobs', icon: Flag },
+    { value: 'feedback', label: 'Reported feedback', icon: Star },
     { value: 'referrals', label: 'Referral offers', icon: Handshake },
   ];
 
@@ -185,6 +187,8 @@
       </div>
     {:else if view === 'reports'}
       <ReportQueue />
+    {:else if view === 'feedback'}
+      <ReportedFeedbackQueue />
     {:else}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">

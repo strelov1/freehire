@@ -10,10 +10,12 @@ import {
   clearCompanyFacet,
   companyFiltersFromParams,
   companyFiltersToParams,
+  DEFAULT_COMPANY_SORT,
   emptyCompanyFilters,
   removeCompanyFacet,
   toggleCompanyFacet,
   type CompanyFilters,
+  type CompanySortField,
 } from './companyFacetModel';
 import { UrlSyncedState } from './urlSynced.svelte';
 
@@ -21,8 +23,10 @@ export {
   activeCompanyFilterCount,
   companyFiltersFromParams,
   companyFiltersToParams,
+  DEFAULT_COMPANY_SORT,
   emptyCompanyFilters,
   type CompanyFilters,
+  type CompanySortField,
 };
 
 /** Reactive company filters mirrored into the URL — a thin wrapper over the shared
@@ -62,6 +66,11 @@ export class CompanyFilterStore implements FacetStore {
   // Free text debounces the reload (setSoon); the URL still updates synchronously.
   setQuery(q: string) {
     this.#url.setSoon({ ...this.#url.value, q });
+  }
+
+  // A picked sort order, like a toggled facet, applies immediately.
+  setSort(sort: CompanySortField) {
+    this.#url.setNow({ ...this.#url.value, sort });
   }
 
   // Companies never exclude, so both the pills' `cycle` (off → include → exclude) and

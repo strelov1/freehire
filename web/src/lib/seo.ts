@@ -249,6 +249,21 @@ export function organizationJsonLd(company: Company, origin: string): Record<str
     ld.address = { '@type': 'PostalAddress', addressCountry: company.hq_country.toUpperCase() };
   }
 
+  // aggregateRating (internal/companyfeedback's 1-5 star reviews) is the
+  // highest-leverage addition here: it is what turns into a star rich-result
+  // snippet in search. feedback_count is the reviewCount schema.org expects;
+  // omitted entirely while it's 0, the same present-only rule every other
+  // field on this object follows.
+  if (company.feedback_count > 0 && company.feedback_rating_avg != null) {
+    ld.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: company.feedback_rating_avg,
+      reviewCount: company.feedback_count,
+      bestRating: 5,
+      worstRating: 1,
+    };
+  }
+
   return ld;
 }
 

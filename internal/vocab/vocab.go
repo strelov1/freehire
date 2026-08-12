@@ -146,7 +146,12 @@ var (
 		"interview", "culture", "compensation", "management",
 		"work_life_balance", "career_growth", "other",
 	}
-	CompanySizeValues = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
+	// CompanyFeedbackReportReasonValues is the closed reason vocabulary for
+	// flagging a specific company feedback entry (internal/companyfeedback) —
+	// deliberately smaller than internal/report's job-reasons, since a review
+	// report has no "no longer relevant" or "no response" equivalent.
+	CompanyFeedbackReportReasonValues = []string{"spam", "offensive", "false_information", "other"}
+	CompanySizeValues                 = []string{"1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"}
 	// AIArchetypeValues is the six AI skill-signature archetype slugs
 	// internal/aiarchetype's rule table can derive, in priority order. Kept here
 	// (rather than only inside internal/aiarchetype) so cmd/gen-contracts can emit

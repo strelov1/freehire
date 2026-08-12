@@ -16,7 +16,8 @@
 -- actually hiring, excluding the ~92k job-less reference rows imported by the YC
 -- and company-info backfills; it also lets both reads ride companies_hiring_job_count_idx
 -- (partial index) instead of scanning the full 2.3 GB heap.
-SELECT slug, name, job_count, tagline, industries, hq_country, collections
+SELECT slug, name, job_count, tagline, industries, hq_country, collections,
+       feedback_count, feedback_rating_avg
 FROM companies
 WHERE job_count > 0
   AND (sqlc.arg('search')::text = '' OR name ILIKE '%' || sqlc.arg('search') || '%' OR slug ILIKE '%' || sqlc.arg('search') || '%')
@@ -36,7 +37,17 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('maturity')::text[]), 0) = 0 OR maturity = ANY(sqlc.arg('maturity')::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
   AND (coalesce(cardinality(sqlc.arg('subindustries')::text[]), 0) = 0 OR subindustry = ANY(sqlc.arg('subindustries')::text[]))
-ORDER BY job_count DESC, name
+-- `sort = 'rating'` orders by the materialized feedback_rating_avg (unrated
+-- companies sort last), falling through to the default job_count DESC, name
+-- for the tiebreak. Any other value (including '', the default) leaves the
+-- CASE NULL for every row, so this ORDER BY is byte-for-byte the old one.
+-- Applies to this Postgres path only — a request that also carries a search
+-- or facet, routed to Meili instead when configured (see ListCompanies in
+-- internal/handler/companies.go), keeps Meili's relevance ordering; rating is
+-- not (yet) a Meili-sortable attribute.
+ORDER BY
+  CASE WHEN sqlc.arg('sort')::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  job_count DESC, name
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: CountCompanies :one
