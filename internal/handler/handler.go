@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/strelov1/freehire/internal/accountdelete"
 	"github.com/strelov1/freehire/internal/accounts"
@@ -525,13 +523,6 @@ func Register(app *fiber.App, cfg Config) {
 	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
 
 	app.Get("/health", a.Health)
-
-	// Process/runtime metrics (Go GC, goroutines, HTTP-level via promauto
-	// collectors registered elsewhere). Not proxied by nginx and not open in
-	// the host firewall — reachable only from other processes on host-2 or
-	// over the network from an allowlisted scraper. See freehire-ops'
-	// openspec/changes/prod-observability-infra for the Prometheus side.
-	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
 	// The public side of CV link tracing. It sits beside /health rather than under /api/v1
 	// because it lives inside a PDF a recruiter opens by hand: "freehire.me/cv/acme-x7abc" is a

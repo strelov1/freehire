@@ -13,8 +13,12 @@ import (
 
 // Settings holds application configuration read from environment variables.
 type Settings struct {
-	Env            string
-	Port           string
+	Env  string
+	Port string
+	// MetricsPort, if set, serves /metrics on its own listener instead of the
+	// main API port — so an internal-only firewall rule for this port never
+	// exposes the rest of the API surface too. Empty disables /metrics.
+	MetricsPort    string
 	DatabaseURL    string
 	FrontendOrigin string
 
@@ -294,6 +298,7 @@ func Load() Settings {
 		Env:                   env("ENV", "development"),
 		LLM:                   LoadLLM(),
 		Port:                  env("PORT", "8080"),
+		MetricsPort:           os.Getenv("METRICS_PORT"),
 		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
 		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
 		JWTSecret:             os.Getenv("JWT_SECRET"),

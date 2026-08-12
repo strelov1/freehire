@@ -311,6 +311,8 @@ func main() {
 	}()
 	log.Printf("hire listening on :%s", cfg.Port)
 
+	observability.StartMetricsServer(cfg.MetricsPort)
+
 	// Graceful shutdown on SIGINT/SIGTERM: block until the signal-bound context is
 	// cancelled (the signal arrived) or startup cancelled it.
 	<-ctx.Done()

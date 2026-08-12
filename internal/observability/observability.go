@@ -5,9 +5,12 @@
 package observability
 
 import (
+	"log"
+	"net/http"
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // flushTimeout bounds how long the returned flush waits for buffered events to
@@ -35,4 +38,21 @@ func Init(dsn, environment string) (flush func(), err error) {
 		return nil, err
 	}
 	return func() { sentry.Flush(flushTimeout) }, nil
+}
+
+// StartMetricsServer serves Prometheus /metrics on its own listener, separate
+// from the main API port. A dedicated port (rather than a route on the public
+// API) means a firewall rule scoped to a scraper's IP exposes only metrics,
+// never the rest of the API surface. No-op when port is empty.
+func StartMetricsServer(port string) {
+	if port == "" {
+		return
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	go func() {
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			log.Printf("metrics server on :%s stopped: %v", port, err)
+		}
+	}()
 }
