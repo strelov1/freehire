@@ -1,10 +1,11 @@
 import { render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import Avatar from './avatar.svelte';
+import { must } from './test-utils';
 
 function circle(name?: string) {
   const { container } = render(Avatar, { name });
-  return container.querySelector('div')!;
+  return must(container.querySelector('div'));
 }
 
 /** jsdom resolves the authored `hsl()` down to `rgb(r, g, b)`. */
@@ -90,6 +91,6 @@ describe('Avatar', () => {
   it('leaves a photo undescribed when there is no name to describe it with', () => {
     const { container } = render(Avatar, { src: 'https://example.test/a.png' });
 
-    expect(container.querySelector('img')!.getAttribute('alt')).toBe('');
+    expect(must(container.querySelector('img')).getAttribute('alt')).toBe('');
   });
 });

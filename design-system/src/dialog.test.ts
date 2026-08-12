@@ -2,6 +2,7 @@ import { render } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import Dialog from './dialog.svelte';
+import { must } from './test-utils';
 
 const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
@@ -64,13 +65,12 @@ describe('Dialog', () => {
     });
 
     const el = getByRole('dialog', { hidden: true });
-    expect(el.getAttribute('aria-labelledby')).toBeTruthy();
-    expect(document.getElementById(el.getAttribute('aria-labelledby')!)?.textContent).toBe(
-      'Delete job',
-    );
-    expect(document.getElementById(el.getAttribute('aria-describedby')!)?.textContent).toBe(
-      'This cannot be undone.',
-    );
+    const labelledBy = el.getAttribute('aria-labelledby');
+    const describedBy = el.getAttribute('aria-describedby');
+    expect(labelledBy).toBeTruthy();
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(must(labelledBy))?.textContent).toBe('Delete job');
+    expect(document.getElementById(must(describedBy))?.textContent).toBe('This cannot be undone.');
   });
 
   it('carries no name when it was given no title', () => {

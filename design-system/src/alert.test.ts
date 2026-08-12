@@ -3,12 +3,13 @@ import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import Alert from './alert.svelte';
 import type { AlertVariant } from './alert.svelte';
+import { must } from './test-utils';
 
 const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
 function setup(variant?: AlertVariant) {
   const { container } = render(Alert, { variant, children: slot('<span>Heads up</span>') });
-  return container.querySelector('div')!;
+  return must(container.querySelector('div'));
 }
 
 describe('Alert', () => {

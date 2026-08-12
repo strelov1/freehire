@@ -2,6 +2,7 @@ import { render } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import Tabs from './tabs.svelte';
+import { must } from './test-utils';
 
 const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
@@ -36,7 +37,7 @@ describe('Tabs', () => {
     const [first, second] = setup();
 
     first?.focus();
-    await fireArrow(first!, 'ArrowRight');
+    await fireArrow(must(first), 'ArrowRight');
 
     expect(second?.getAttribute('aria-selected')).toBe('true');
     expect(second?.tabIndex).toBe(0);
@@ -46,10 +47,10 @@ describe('Tabs', () => {
   it('wraps around both ends', async () => {
     const tabs = setup('one');
 
-    await fireArrow(tabs[0]!, 'ArrowLeft');
+    await fireArrow(must(tabs[0]), 'ArrowLeft');
     expect(tabs[2]?.getAttribute('aria-selected')).toBe('true');
 
-    await fireArrow(tabs[2]!, 'ArrowRight');
+    await fireArrow(must(tabs[2]), 'ArrowRight');
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
   });
 

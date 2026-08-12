@@ -1,11 +1,12 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 import Pagination from './pagination.svelte';
+import { must } from './test-utils';
 
 function setup(props: { page?: number; total: number; perPage?: number }) {
   const { container, getByLabelText } = render(Pagination, props);
   return {
-    label: () => container.querySelector('span')!.textContent!.replace(/\s+/g, ' ').trim(),
+    label: () => must(must(container.querySelector('span')).textContent).replace(/\s+/g, ' ').trim(),
     prev: getByLabelText('Previous page') as HTMLButtonElement,
     next: getByLabelText('Next page') as HTMLButtonElement,
   };
