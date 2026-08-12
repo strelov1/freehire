@@ -34,8 +34,8 @@
 
 ## 6. Web UI
 
-- [ ] 6.1 Add a third "Push" chip to `web/src/lib/components/filters/AlertChannels.svelte`, following the existing `toggleEmail`/`emailSub` pattern (no linking step)
-- [ ] 6.2 Add a third "Push" chip to the "Deliver over" row in `web/src/lib/components/ReminderSettings.svelte`
+- [x] 6.1 Add a third "Push" chip to `web/src/lib/components/filters/AlertChannels.svelte`, following the existing `toggleEmail`/`emailSub` pattern (no linking step)
+- [x] 6.2 Add a third "Push" chip to the "Deliver over" row in `web/src/lib/components/ReminderSettings.svelte`
 
 ## 7. Mobile tap-to-open deep link (`freehire-mobile`, separate repo)
 
