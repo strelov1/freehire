@@ -49,11 +49,18 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, m Remind
 		tokens[i] = row.Token
 	}
 
-	title := "⏰ Reminder"
-	body := fmt.Sprintf("You saved %s at %s — still interested?", m.JobTitle, m.Company)
+	title, body := renderReminder(m)
 	// A reminder always concerns exactly one job, so the deep-link data is
 	// unconditional here — unlike a subscription digest, which only carries a
 	// slug when it matched a single job.
 	data := map[string]string{"slug": m.Slug}
 	return pushnotify.SendToDevices(ctx, n.transport, tokens, title, body, data)
+}
+
+// renderReminder produces the short, human-readable title/body for a reminder,
+// shared by the push channel's own copy and the notification-center record — both
+// need the identical wording for the same delivery event (see the
+// add-notification-center design).
+func renderReminder(m ReminderMessage) (title, body string) {
+	return "⏰ Reminder", fmt.Sprintf("You saved %s at %s — still interested?", m.JobTitle, m.Company)
 }

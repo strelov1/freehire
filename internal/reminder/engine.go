@@ -7,6 +7,8 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/notify"
 )
@@ -58,6 +60,7 @@ type Store interface {
 	CancelReminderAtFire(ctx context.Context, id int64) (int64, error)
 	RecordReminderDeliveryFailure(ctx context.Context, arg db.RecordReminderDeliveryFailureParams) error
 	ReleaseReminderClaim(ctx context.Context, id int64) error
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
 }
 
 // Config tunes one firing pass. Defaults come from DefaultConfig.
@@ -154,6 +157,7 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 			// duplicate), preferable to losing the reminder.
 			log.Printf("reminder: mark delivered %d: %v", id, err)
 		}
+		r.recordNotification(ctx, id, info, msg)
 		stats.Delivered++
 	case failedErr != nil:
 		log.Printf("reminder: deliver %d: %v", id, failedErr)
@@ -219,6 +223,25 @@ func recipient(channel string, info db.GetReminderForDeliveryRow) (string, bool)
 		return strconv.FormatInt(info.UserID, 10), true
 	}
 	return "", false
+}
+
+// recordNotification writes the in-app notification-center record for a delivered
+// reminder. A reminder always concerns exactly one job, so the slug is always
+// populated (unlike a subscription digest, which omits it for a multi-job match).
+// A failure here must not fail the delivery it accompanies — the reminder was
+// already sent, so this is logged and dropped, not propagated.
+func (r *Runner) recordNotification(ctx context.Context, id int64, info db.GetReminderForDeliveryRow, msg ReminderMessage) {
+	title, body := renderReminder(msg)
+	err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+		UserID:     info.UserID,
+		Kind:       "reminder",
+		Title:      title,
+		Body:       body,
+		PublicSlug: pgtype.Text{String: msg.Slug, Valid: true},
+	})
+	if err != nil {
+		log.Printf("reminder: record notification %d: %v", id, err)
+	}
 }
 
 // release drops the lease on a reminder so it is retried promptly on a later pass.

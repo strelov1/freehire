@@ -19,6 +19,9 @@ type fakeStore struct {
 	cancelled []int64
 	failed    []int64
 	released  []int64
+
+	recorded  []db.RecordNotificationParams
+	recordErr error
 }
 
 func (s *fakeStore) ClaimDueReminders(_ context.Context, _ db.ClaimDueRemindersParams) ([]int64, error) {
@@ -43,6 +46,10 @@ func (s *fakeStore) ReleaseReminderClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
 	return nil
 }
+func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) error {
+	s.recorded = append(s.recorded, arg)
+	return s.recordErr
+}
 
 // fakeNotifier records deliveries and can be told to fail.
 type fakeNotifier struct {
@@ -60,7 +67,7 @@ func (n *fakeNotifier) Send(_ context.Context, channel, dest string, _ ReminderM
 
 func actionableRow(id int64, channels []string, chatID *int64, email string) db.GetReminderForDeliveryRow {
 	row := db.GetReminderForDeliveryRow{
-		ID: id, JobID: id, Channels: channels,
+		ID: id, UserID: 42, JobID: id, Channels: channels,
 		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme", URL: "https://ats/x",
 		JobOpen: true, StillActionable: true, AccountEmail: email,
 	}
@@ -214,5 +221,52 @@ func TestRun_DeliversEmailWhenTelegramMissing(t *testing.T) {
 	}
 	if len(store.delivered) != 1 {
 		t.Errorf("a partial-channel delivery still counts as delivered, delivered = %v", store.delivered)
+	}
+}
+
+func TestRun_RecordsNotificationOnDelivery(t *testing.T) {
+	chat := int64(555)
+	row := actionableRow(1, []string{"telegram"}, &chat, "a@b.c")
+	store := &fakeStore{due: []int64{1}, rows: map[int64]db.GetReminderForDeliveryRow{1: row}}
+	notifier := &fakeNotifier{}
+	run(t, store, notifier)
+
+	if len(store.recorded) != 1 {
+		t.Fatalf("recorded = %v, want exactly one RecordNotification call", store.recorded)
+	}
+	rec := store.recorded[0]
+	if rec.Kind != "reminder" {
+		t.Errorf("Kind = %q, want %q", rec.Kind, "reminder")
+	}
+	if rec.UserID != row.UserID {
+		t.Errorf("UserID = %d, want %d", rec.UserID, row.UserID)
+	}
+	if !rec.PublicSlug.Valid || rec.PublicSlug.String != row.PublicSlug {
+		t.Errorf("PublicSlug = %+v, want a valid slug %q", rec.PublicSlug, row.PublicSlug)
+	}
+	wantTitle, wantBody := renderReminder(ReminderMessage{JobTitle: row.Title, Company: row.Company, Slug: row.PublicSlug, URL: row.URL})
+	if rec.Title != wantTitle {
+		t.Errorf("Title = %q, want %q", rec.Title, wantTitle)
+	}
+	if rec.Body != wantBody {
+		t.Errorf("Body = %q, want %q", rec.Body, wantBody)
+	}
+}
+
+func TestRun_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
+	chat := int64(555)
+	store := &fakeStore{
+		due:       []int64{1},
+		rows:      map[int64]db.GetReminderForDeliveryRow{1: actionableRow(1, []string{"telegram"}, &chat, "a@b.c")},
+		recordErr: context.DeadlineExceeded,
+	}
+	notifier := &fakeNotifier{}
+	stats := run(t, store, notifier)
+
+	if len(store.delivered) != 1 || store.delivered[0] != 1 {
+		t.Errorf("must still mark delivered despite recording failure, delivered = %v", store.delivered)
+	}
+	if stats.Delivered != 1 {
+		t.Errorf("stats.Delivered = %d, want 1 despite recording failure", stats.Delivered)
 	}
 }
