@@ -27,10 +27,16 @@ import (
 // ChannelEmail is declared alongside the Router in router.go.
 const ChannelTelegram = "telegram"
 
+// ChannelPush delivers a digest as a mobile push notification (via Expo), fanned
+// out to every device the user has registered. Unlike Telegram/email it needs no
+// server-side credential, so it is always registered in a Router regardless of
+// environment configuration.
+const ChannelPush = "push"
+
 // Channels is the delivery-channel vocabulary: the single source of truth shared
 // by the router's dispatch and the subscription use case's create-time allowlist,
 // so the two can never drift.
-var Channels = []string{ChannelTelegram, ChannelEmail}
+var Channels = []string{ChannelTelegram, ChannelEmail, ChannelPush}
 
 // ValidChannel reports whether c is a delivery channel. It exists because the slice alone is
 // not usable as an allowlist, so both create-time gates — subscriptions and reminders — built

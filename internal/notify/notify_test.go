@@ -315,3 +315,13 @@ func TestValidChannel(t *testing.T) {
 		}
 	}
 }
+
+// Push is the third delivery channel, added alongside Telegram and email.
+func TestValidChannel_Push(t *testing.T) {
+	if ChannelPush != "push" {
+		t.Errorf("ChannelPush = %q, want %q", ChannelPush, "push")
+	}
+	if !ValidChannel(ChannelPush) {
+		t.Error("ValidChannel(ChannelPush) = false, want true")
+	}
+}
