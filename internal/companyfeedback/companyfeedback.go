@@ -14,6 +14,7 @@ package companyfeedback
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -129,26 +130,6 @@ func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource, cfg Config) 
 	return &Service{q: q, pool: pool, personas: personas, cfg: cfg, now: time.Now}
 }
 
-// validFeedbackType reports whether t is one of the closed category values.
-func validFeedbackType(t string) bool {
-	for _, v := range vocab.CompanyFeedbackTypeValues {
-		if v == t {
-			return true
-		}
-	}
-	return false
-}
-
-// validReportReason reports whether t is one of the closed report-reason values.
-func validReportReason(t string) bool {
-	for _, v := range vocab.CompanyFeedbackReportReasonValues {
-		if v == t {
-			return true
-		}
-	}
-	return false
-}
-
 // checkRate rejects a new review once the caller is at or over their window
 // cap. An edit-by-resubmit never inserts a company_feedback row (see
 // CountRecentCompanyFeedback's doc comment), so the count this reads only
@@ -177,7 +158,7 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 	if rating < 1 || rating > 5 {
 		return Feedback{}, Summary{}, ErrInvalidRating
 	}
-	if !validFeedbackType(feedbackType) {
+	if !slices.Contains(vocab.CompanyFeedbackTypeValues, feedbackType) {
 		return Feedback{}, Summary{}, ErrInvalidFeedbackType
 	}
 	body = strings.TrimSpace(body)
@@ -194,13 +175,12 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 	_, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
 		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
 	})
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	if errors.Is(err, pgx.ErrNoRows) {
 		// A genuinely new review: throttle it.
 		if err := s.checkRate(ctx, userID); err != nil {
 			return Feedback{}, Summary{}, err
 		}
-	case err != nil:
+	} else if err != nil {
 		return Feedback{}, Summary{}, err
 	}
 
@@ -337,7 +317,7 @@ func (s *Service) Count(ctx context.Context, slug string) (int64, error) {
 // job postings' much higher report volume). A second report of the same
 // review by the same user is a silent no-op.
 func (s *Service) Report(ctx context.Context, userID, feedbackID int64, reason string) error {
-	if !validReportReason(reason) {
+	if !slices.Contains(vocab.CompanyFeedbackReportReasonValues, reason) {
 		return ErrInvalidReportReason
 	}
 	ok, err := s.q.CompanyFeedbackExists(ctx, feedbackID)

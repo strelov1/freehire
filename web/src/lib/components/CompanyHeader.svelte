@@ -50,9 +50,9 @@
   // of this function could do.
   let showFeedbackList = $state(false);
   let showFeedbackForm = $state(false);
-  let feedbackOverride = $state<{ count: number; avg: number | null } | null>(null);
-  const feedbackCount = $derived(feedbackOverride?.count ?? company.feedback_count);
-  const feedbackRatingAvg = $derived(feedbackOverride?.avg ?? company.feedback_rating_avg);
+  let feedbackOverride = $state<CompanyFeedbackSummary | null>(null);
+  const feedbackCount = $derived(feedbackOverride?.feedback_count ?? company.feedback_count);
+  const feedbackRatingAvg = $derived(feedbackOverride?.feedback_rating_avg ?? company.feedback_rating_avg);
   function openFeedbackEntry() {
     if (feedbackCount > 0) {
       showFeedbackList = true;
@@ -67,9 +67,6 @@
     }
     showFeedbackList = false;
     showFeedbackForm = true;
-  }
-  function applyFeedbackSummary(summary: CompanyFeedbackSummary) {
-    feedbackOverride = { count: summary.feedback_count, avg: summary.feedback_rating_avg };
   }
 
   const info = $derived(company.company_info ?? {});
@@ -193,5 +190,9 @@
   />
 {/if}
 {#if showFeedbackForm}
-  <CompanyFeedbackDialog {slug} onClose={() => (showFeedbackForm = false)} onSaved={applyFeedbackSummary} />
+  <CompanyFeedbackDialog
+    {slug}
+    onClose={() => (showFeedbackForm = false)}
+    onSaved={(summary) => (feedbackOverride = summary)}
+  />
 {/if}

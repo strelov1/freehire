@@ -93,23 +93,13 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 	ctx := context.Background()
 	queries := db.New(pool)
 
-	seedUser := func(t *testing.T, email string) int64 {
-		t.Helper()
-		var id int64
-		if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, email).Scan(&id); err != nil {
-			t.Fatalf("seed user %q: %v", email, err)
-		}
-		return id
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('reviewer@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
 	}
-	seedCompany := func(t *testing.T, slug string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name) VALUES ($1, $1)`, slug); err != nil {
-			t.Fatalf("seed company %q: %v", slug, err)
-		}
+	if _, err := pool.Exec(ctx, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme')`); err != nil {
+		t.Fatalf("seed company: %v", err)
 	}
-
-	userID := seedUser(t, "reviewer@example.test")
-	seedCompany(t, "acme")
 
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	cookie, err := iss.Issue(userID, testTokenVersion)
