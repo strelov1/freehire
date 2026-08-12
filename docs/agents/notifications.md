@@ -1,7 +1,7 @@
 # Notifications
 
-Three independent delivery use cases share one channel *vocabulary* (email +
-Telegram), each with its own small `Notifier`/`Router` pair:
+Three independent delivery use cases share one channel *vocabulary* (email,
+Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
 
 | Package | Use case | Worker |
 |---|---|---|
@@ -10,19 +10,32 @@ Telegram), each with its own small `Notifier`/`Router` pair:
 | `internal/nudge` | Lifecycle nudges — an application went silent past its stage's threshold, or moved into `interview` | `cmd/nudge` |
 | `internal/emailnotify` | Email channel (SES) — implements `notify.Notifier` (the `reminder`/`nudge`-side email transports live in their own `transports.go`) | — |
 | `internal/telegramnotify` | Telegram channel (Bot API, deep-link token) | — |
+| `internal/pushnotify` | Mobile push channel (Expo relay) — the bare Expo transport; each of `notify`/`reminder`/`nudge` has its own thin `PushNotifier` on top, same as Telegram/email | — |
 
 ## Always true
 
 - **A new channel is a new `Notifier` implementation — but there are THREE of them.** Each engine
   depends only on its own `Notifier` interface plus a `Router` (a `map[channel]Notifier`); the
   three interfaces share a signature and differ in payload, and `notify`/`reminder`/`nudge` each
-  carry their own `Router`, `ErrChannelNotConfigured` and `recipient`. So adding webhooks is a
+  carry their own `Router`, `ErrChannelNotConfigured` and `recipient`. So adding a channel is a
   digest notifier, a reminder transport, a nudge transport, a case in ALL THREE `recipient`
-  functions, and a wire-up in all three `cmd` mains. That is the real cost; the earlier claim that
-  it "means adding a package, not touching `notify` or `reminder`" was not true. Collapsing the
-  set is deliberately deferred until a third *channel* (not use case) actually lands and shows
-  which half generalises — `internal/nudge` is a third **use case**, over the same two channels,
-  and does not itself trigger the collapse.
+  functions, and a wire-up in all three `cmd` mains — confirmed by push, the third channel to
+  actually land this way (`add-push-notification-channel`). Collapsing the three engines into one
+  is still not done: `internal/nudge` was a third **use case** over the same channels and didn't
+  trigger it, and landing push — a third **channel** — didn't either, since the duplication is
+  three small, near-identical `PushNotifier`s (a few lines of message-rendering each) rather than
+  three copies of anything structurally significant. Revisit if a fourth channel makes the
+  per-engine cost look different.
+- **Push needs no server-side credential and is therefore always registered.** Unlike Telegram
+  (`TELEGRAM_BOT_TOKEN`) and email (`AWS_REGION`+`NOTIFY_EMAIL_FROM`), Expo's relay holds the
+  APNs/FCM credential on its own side (set up once via `eas credentials` in `freehire-mobile`), so
+  every `cmd` main registers the push notifier unconditionally — there is no "channel not
+  configured" state for push, only a per-recipient one. `dest` for push is the recipient's user id
+  (not a device token): a user may have zero-to-many registered devices
+  (`user_push_tokens`), so each engine's `recipient()` soft-skips on a live `HasPushDevice`
+  column (mirroring `TelegramChatID.Valid`) and the `PushNotifier` fans the send out to every
+  device via `pushnotify.SendToDevices`, which is delivered as long as at least one device
+  received it.
 - **`notify.Channels` is the single source of truth** for the channel vocabulary, and
   `notify.ValidChannel` is the membership test both create-time gates use. Subscriptions and
   reminders each built their own `map[string]bool` from the slice until the test was exported.

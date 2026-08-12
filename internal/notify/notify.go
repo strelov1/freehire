@@ -164,8 +164,10 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 // recipient resolves the destination string for delivery, and whether the
 // subscription is deliverable right now. Telegram resolves the linked chat_id
 // (absent → not deliverable, soft-skipped); email resolves the user's account
-// email live (absent → soft-skipped); any other channel uses the stored
-// destination.
+// email live (absent → soft-skipped); push resolves the subscribing user's id,
+// deliverable only when they have a currently registered device (absent →
+// soft-skipped, same as an unlinked Telegram chat); any other channel uses the
+// stored destination.
 func recipient(info db.GetSubscriptionForDeliveryRow) (string, bool) {
 	switch info.Channel {
 	case ChannelTelegram:
