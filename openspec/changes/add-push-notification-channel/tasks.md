@@ -39,7 +39,7 @@
 
 ## 7. Mobile tap-to-open deep link (`freehire-mobile`, separate repo)
 
-- [ ] 7.1 Add a notification-response listener (`Notifications.addNotificationResponseReceivedListener`) near `usePushNotifications.ts` / `src/app/_layout.tsx`: when `response.notification.request.content.data.slug` is present, `router.push('/jobs/' + slug)`
+- [x] 7.1 Add a notification-response listener (`Notifications.addNotificationResponseReceivedListener`) near `usePushNotifications.ts` / `src/app/_layout.tsx`: when `response.notification.request.content.data.slug` is present, `router.push('/jobs/' + slug)`
 - [ ] 7.2 Manual device verification: trigger a push carrying a slug from a local/staging send and confirm the tap opens `src/app/jobs/[slug].tsx` for that slug; confirm a push with no slug just foregrounds the app
 
 ## 8. Verification
