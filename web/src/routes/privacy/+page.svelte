@@ -11,7 +11,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'July 22, 2026';
+  const lastUpdated = 'August 12, 2026';
 </script>
 
 <Seo
@@ -137,6 +137,40 @@
           API key) to our API. Your use of ChatGPT is also governed by OpenAI's own privacy policy.
         </li>
       </ul>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">Browser extension</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        The freehire Chrome extension puts a job-application agent in a side panel next to whatever
+        page you are on. It does nothing until you sign in from the panel.
+      </p>
+      <ul class="flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">
+        <li>
+          <span class="font-medium text-foreground">Session token.</span> Signing in stores your
+          freehire session token in <code class="font-mono text-foreground">chrome.storage.local</code
+          >, scoped to your browser profile. Nothing else is stored there.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Page content.</span> While the panel is open and
+          only in service of what you asked for, it can read the current page's URL, title, and
+          visible text (capped at 5,000 characters), or the fields of a job-application form you asked
+          it to fill. This is sent to freehire.me — the only host the extension talks to — and kept in
+          that conversation's transcript, which you can read and delete from your account. A read is
+          always named in the panel, and browser-internal pages, other extensions' pages, and local
+          files are never read.
+        </li>
+        <li>
+          <span class="font-medium text-foreground">Profile data for Autofill.</span> Filling an
+          application form sends the relevant fields from your freehire profile (name, email, phone,
+          CV fields) to the page; you review and submit yourself.
+        </li>
+      </ul>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        We do not sell this data, and we do not use it for anything unrelated to running the
+        extension's job-application agent, in line with the Chrome Web Store's limited-use
+        requirements.
+      </p>
     </section>
 
     <section class="flex flex-col gap-3">
