@@ -153,3 +153,63 @@ func TestApplySeedContentFillsEmptyHeaderFromSeed(t *testing.T) {
 		t.Fatalf("skills = %+v, want seeded Go", got.Skills)
 	}
 }
+
+// Empty seed summary/skills must not wipe what the CV already shows — provisional extract
+// strips those sections from the seed while bank experience still lets reset run.
+func TestApplySeedContentPreservesEmptySeedSummaryAndSkills(t *testing.T) {
+	keep := cvedit.State{
+		Title:      "Tailored",
+		TemplateID: cv.DefaultTemplateID,
+		Document: cv.Document{
+			Header:  cv.Header{FullName: "Ada"},
+			Summary: "keep me",
+			Skills:  []cv.SkillGroup{{Items: []string{"IaC", "Go"}}},
+			Experience: []cv.ExperienceItem{{
+				Role: "Old", Company: "OldCo",
+			}},
+		},
+	}
+	seeded := cv.Document{
+		Header: cv.Header{FullName: "Ada Lovelace"},
+		Experience: []cv.ExperienceItem{{
+			Role: "SWE", Company: "BankCo", Bullets: []string{"Shipped X"},
+		}},
+	}
+
+	got := applySeedContent(keep, seeded)
+	if got.Summary != "keep me" {
+		t.Fatalf("summary = %q, want keep's summary", got.Summary)
+	}
+	if len(got.Skills) != 1 || len(got.Skills[0].Items) != 2 ||
+		got.Skills[0].Items[0] != "IaC" || got.Skills[0].Items[1] != "Go" {
+		t.Fatalf("skills = %+v, want keep's skills", got.Skills)
+	}
+	if len(got.Experience) != 1 || got.Experience[0].Company != "BankCo" {
+		t.Fatalf("experience = %+v, want seeded body", got.Experience)
+	}
+	if got.Header.FullName != "Ada Lovelace" {
+		t.Fatalf("header name = %q, want seed", got.Header.FullName)
+	}
+}
+
+func TestApplySeedContentNonEmptySummaryAndSkillsReplace(t *testing.T) {
+	keep := cvedit.State{
+		Document: cv.Document{
+			Summary: "old summary",
+			Skills:  []cv.SkillGroup{{Items: []string{"Old"}}},
+		},
+	}
+	seeded := cv.Document{
+		Summary: "from résumé",
+		Skills:  []cv.SkillGroup{{Items: []string{"Go", "Kafka"}}},
+	}
+
+	got := applySeedContent(keep, seeded)
+	if got.Summary != "from résumé" {
+		t.Fatalf("summary = %q, want seed", got.Summary)
+	}
+	if len(got.Skills) != 1 || len(got.Skills[0].Items) != 2 ||
+		got.Skills[0].Items[0] != "Go" || got.Skills[0].Items[1] != "Kafka" {
+		t.Fatalf("skills = %+v, want seed", got.Skills)
+	}
+}

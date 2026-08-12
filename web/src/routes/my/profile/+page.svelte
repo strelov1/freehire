@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '$lib/api';
+  import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '$lib/cvRefreshOffer';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
@@ -230,6 +231,19 @@
     void loadStructured();
   }
 
+  function offerRefreshAfterBankEdit() {
+    void offerCvRefresh({
+      message: BASE_REFRESH_MESSAGE,
+      apply: async () => {
+        try {
+          await api.resetBaseCvFromResume();
+        } catch {
+          actionError = 'Could not update your base CV. Try Reset from résumé in a tailoring workspace.';
+        }
+      },
+    });
+  }
+
   // Link a gap skill to the job search under the current comparison role plus that skill.
   function gapHref(skill: string): string {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: builds an href string once, never stored as reactive state
@@ -347,7 +361,7 @@
         {#if tab === 'experience'}
           <!-- What the product has recorded about what this person has done, and the only
                place they can correct or remove it. -->
-          <ExperienceBankView />
+          <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
         {:else if tab === 'settings'}
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />

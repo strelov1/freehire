@@ -15,6 +15,7 @@
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
+  import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '$lib/cvRefreshOffer';
   import { track } from '$lib/analytics';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
   import ArtifactPanel from '$lib/tailor/ArtifactPanel.svelte';
@@ -356,14 +357,7 @@
   let resetBusy = $state(false);
   let resetError = $state('');
 
-  async function resetFromResume() {
-    if (
-      !window.confirm(
-        'Reset this tailored CV from your current uploaded résumé? Your template and typography stay; content edits can be undone from History.',
-      )
-    ) {
-      return;
-    }
+  async function applyResetFromResume() {
     resetBusy = true;
     resetError = '';
     try {
@@ -385,6 +379,24 @@
     } finally {
       resetBusy = false;
     }
+  }
+
+  async function resetFromResume() {
+    if (
+      !window.confirm(
+        'Reset this tailored CV from your current uploaded résumé? Your template and typography stay; content edits can be undone from History.',
+      )
+    ) {
+      return;
+    }
+    await applyResetFromResume();
+  }
+
+  function offerRefreshAfterBankEdit() {
+    void offerCvRefresh({
+      message: TAILOR_REFRESH_MESSAGE,
+      apply: applyResetFromResume,
+    });
   }
 
   // ---- Autosave (folded in from the old standalone CvEditor) ----
@@ -629,7 +641,7 @@
                checking, confirming, or editing what the assistant knows never means leaving the
                workspace. -->
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'experience'}>
-            <ExperienceBankView />
+            <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
           </div>
           <!-- Presentation, in two blocks of label→control rows. Both write straight into the
                shared document, so the centre preview re-renders live and autosave persists them

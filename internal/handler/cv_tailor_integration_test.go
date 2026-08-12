@@ -104,11 +104,16 @@ func doBearer(t *testing.T, app *fiber.App, method, path, token string, body any
 
 func seedJobSlug(t *testing.T, pool *pgxpool.Pool, slug string) int64 {
 	t.Helper()
+	return seedJobSlugDesc(t, pool, slug, "")
+}
+
+func seedJobSlugDesc(t *testing.T, pool *pgxpool.Pool, slug, description string) int64 {
+	t.Helper()
 	var id int64
 	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO jobs (source, external_id, url, title, public_slug)
-		 VALUES ('test', $1, 'https://e.test/'||$1, 'Backend Engineer', $1) RETURNING id`,
-		slug).Scan(&id); err != nil {
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, description)
+		 VALUES ('test', $1, 'https://e.test/'||$1, 'Backend Engineer', $1, $2) RETURNING id`,
+		slug, description).Scan(&id); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
 	return id
@@ -137,7 +142,12 @@ func seedAnalysis(t *testing.T, h *cvHandlers, userID, jobID int64) {
 // resume.Structured serves it (ok=true) and the base CV can be seeded from it.
 func seedFreshResume(t *testing.T, pool *pgxpool.Pool, userID int64) {
 	t.Helper()
-	st, _ := json.Marshal(resumeextract.Structured{FullName: "Ada Lovelace", Summary: "Engineer", Skills: []string{"Go"}})
+	seedFreshResumeSkills(t, pool, userID, []string{"Go"})
+}
+
+func seedFreshResumeSkills(t *testing.T, pool *pgxpool.Pool, userID int64, skills []string) {
+	t.Helper()
+	st, _ := json.Marshal(resumeextract.Structured{FullName: "Ada Lovelace", Summary: "Engineer", Skills: skills})
 	at := time.Now().Truncate(time.Microsecond)
 	if _, err := pool.Exec(context.Background(),
 		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = $2,
@@ -1117,6 +1127,75 @@ func TestGetCV_PartialHeaderKeepsNameFillsEmail(t *testing.T) {
 	}
 	if body.Data.Document.Header.Email != "blob@example.com" {
 		t.Fatalf("email = %q, want filled from provisional", body.Data.Document.Header.Email)
+	}
+}
+
+// TestTailorCVAlignsSkillSurfaceOnMint: a fresh tailored copy stores the vacancy's preferred
+// spelling of a skill the seed already carries (IaC → infrastructure as code). A second
+// bootstrap must not re-align — a candidate who put the acronym back keeps it.
+func TestTailorCVAlignsSkillSurfaceOnMint(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	app := buildTailorApp(h, iss)
+
+	user := seedAccount(t, pool, "align-mint@example.test", true)
+	tok, _ := iss.Issue(user, testTokenVersion)
+	seedJobSlugDesc(t, pool, "align-mint-job",
+		"We practice infrastructure as code and Terraform daily.")
+	seedFreshResumeSkills(t, pool, user, []string{"IaC", "Terraform"})
+
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "align-mint-job"})
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("bootstrap = %d, want 201", resp.StatusCode)
+	}
+	var got struct {
+		Data tailorCVResponse `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+
+	read := doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+got.Data.TailorCVID, tok, nil)
+	var doc struct {
+		Data struct {
+			Document cv.Document `json:"document"`
+		} `json:"data"`
+	}
+	json.NewDecoder(read.Body).Decode(&doc)
+	read.Body.Close()
+	if len(doc.Data.Document.Skills) == 0 || len(doc.Data.Document.Skills[0].Items) == 0 {
+		t.Fatalf("skills = %+v, want at least one chip", doc.Data.Document.Skills)
+	}
+	chip := doc.Data.Document.Skills[0].Items[0]
+	if chip != "infrastructure as code" {
+		t.Fatalf("skill chip = %q, want vacancy preferred form", chip)
+	}
+
+	// Candidate puts the acronym back; second bootstrap must leave it alone.
+	patch := doCV(t, app, fiber.MethodPatch, "/api/v1/me/cvs/"+got.Data.TailorCVID, tok, map[string]any{
+		"ops": []map[string]any{{"kind": "set", "path": "skills[0].items[0]", "value": "IaC"}},
+	})
+	if patch.StatusCode != fiber.StatusOK {
+		t.Fatalf("patch = %d, want 200", patch.StatusCode)
+	}
+	patch.Body.Close()
+
+	again := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/tailor", tok, tailorCVRequest{JobSlug: "align-mint-job"})
+	if again.StatusCode != fiber.StatusOK && again.StatusCode != fiber.StatusCreated {
+		t.Fatalf("second bootstrap = %d", again.StatusCode)
+	}
+	var againGot struct {
+		Data tailorCVResponse `json:"data"`
+	}
+	json.NewDecoder(again.Body).Decode(&againGot)
+	again.Body.Close()
+	if againGot.Data.TailorCVID != got.Data.TailorCVID {
+		t.Fatalf("second bootstrap minted a new CV %s, want existing %s", againGot.Data.TailorCVID, got.Data.TailorCVID)
+	}
+
+	read2 := doCV(t, app, fiber.MethodGet, "/api/v1/me/cvs/"+got.Data.TailorCVID, tok, nil)
+	json.NewDecoder(read2.Body).Decode(&doc)
+	read2.Body.Close()
+	if doc.Data.Document.Skills[0].Items[0] != "IaC" {
+		t.Fatalf("after second bootstrap chip = %q, want user-edited IaC left in place", doc.Data.Document.Skills[0].Items[0])
 	}
 }
 

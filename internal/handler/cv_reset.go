@@ -8,6 +8,7 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/skilltag"
 )
 
 // ResetCVFromResume rebuilds a tailored CV's content from the current résumé seed
@@ -48,6 +49,16 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before resetting from it")
 	}
 	seeded := cv.Seed(st)
+	// Align only the tailored copy to the vacancy. The base stays on the résumé's own
+	// spellings — JD surfaces are per-vacancy, not a rewrite of the candidate's seed.
+	tailoredSeed := seeded
+	if rec.JobID != 0 {
+		if job, jerr := h.queries.GetJob(c.Context(), rec.JobID); jerr == nil {
+			tailoredSeed = cv.Align(seeded, skilltag.PreferredFromText(job.Description))
+		} else {
+			log.Printf("cv: loading job %d for reset surface-align: %v", rec.JobID, jerr)
+		}
+	}
 
 	// The requested target commits first: if the tailored copy is what the seed cannot
 	// satisfy (e.g. a role over the bullet cap refuses the whole-document write), nothing
@@ -61,7 +72,7 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 			Title:      rec.Title,
 			TemplateID: rec.TemplateID,
 			Document:   rec.Document,
-		}, seeded))
+		}, tailoredSeed))
 	if err != nil {
 		return mapCVError(err)
 	}
@@ -75,6 +86,34 @@ func (h *cvHandlers) ResetCVFromResume(c *fiber.Ctx) error {
 		return mapCVError(err)
 	}
 	return c.JSON(fiber.Map{"data": recordResponse(out)})
+}
+
+// ResetBaseCVFromResume rebuilds the owner's base CV from the current résumé seed
+// (experience bank + structured extract). Cookie-only. Does not touch tailored copies —
+// those stay on History → Reset (or the tailor-workspace refresh prompt).
+func (h *cvHandlers) ResetBaseCVFromResume(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	st, ok, err := h.seedSource().Structured(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	if !ok || !hasSeedBody(st) {
+		return fiber.NewError(fiber.StatusConflict, "add a résumé before resetting from it")
+	}
+	if err := h.reseedBaseFromSeed(c, userID, cv.Seed(st)); err != nil {
+		return err
+	}
+	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
+	if err != nil {
+		return mapCVError(err)
+	}
+	if !ok {
+		return fiber.NewError(fiber.StatusInternalServerError, "base CV was not created")
+	}
+	return c.JSON(fiber.Map{"data": recordResponse(base)})
 }
 
 // reseedBaseFromSeed refreshes the current base CV from seeded content, or creates one when

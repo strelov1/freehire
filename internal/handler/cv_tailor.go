@@ -20,6 +20,7 @@ import (
 	"github.com/strelov1/freehire/internal/cvedit"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/matchanalysis"
+	"github.com/strelov1/freehire/internal/skilltag"
 )
 
 type tailorCVRequest struct {
@@ -82,7 +83,7 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if err := h.reseedBaseIfStaleVsUpload(c, userID); err != nil {
 		log.Printf("cv: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
-	base, tailored, justCreated, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource())
+	base, tailored, justCreated, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource(), skilltag.PreferredFromText(job.Description))
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}

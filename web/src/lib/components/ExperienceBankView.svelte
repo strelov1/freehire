@@ -15,6 +15,10 @@
   import { profileKickoff } from '$lib/assistant/presets';
   import type { ExperienceAtom, ExperienceBank, ExperienceEmployment, ExperienceProvenance } from '$lib/types';
 
+  /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
+   *  The bank itself never talks to the CV store. */
+  let { onBankMutated }: { onBankMutated?: () => void } = $props();
+
   let bank = $state<ExperienceBank | null>(null);
   let loading = $state(true);
   let error = $state('');
@@ -179,6 +183,7 @@
       await api.updateExperienceEmployment(employment.id, body);
       editingEmploymentId = null;
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not update.';
     } finally {
@@ -203,6 +208,7 @@
       projStart = '';
       projEnd = '';
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not create project.';
     } finally {
@@ -238,6 +244,7 @@
       promoteName = '';
       promoteLink = '';
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not save as project.';
     } finally {
@@ -269,6 +276,7 @@
       });
       editing = null;
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not save that change.';
     } finally {
@@ -292,6 +300,7 @@
     try {
       await api.mergeExperienceAtoms([selected[0]!, selected[1]!]);
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not merge those achievements.';
     } finally {
@@ -313,6 +322,7 @@
         employment_id: atom.employment_id,
       });
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not confirm that achievement.';
     } finally {
@@ -327,6 +337,7 @@
     try {
       await api.deleteExperienceAtom(atom.id);
       await load();
+      onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not remove that achievement.';
     } finally {

@@ -25,6 +25,7 @@ func buildResetApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	saved := auth.RequireAuth(iss, testVersions)
 	keyAuth := auth.RequireAuthOrScopedKey(iss, testVersions, apiKeys{h.queries}, auth.ScopeCV)
 	app.Get("/api/v1/me/cvs/:id", keyAuth, h.GetCV)
+	app.Post("/api/v1/me/cvs/base/reset-from-resume", saved, h.ResetBaseCVFromResume)
 	app.Post("/api/v1/me/cvs/:id/reset-from-resume", saved, h.ResetCVFromResume)
 	return app
 }
@@ -314,8 +315,18 @@ func TestResetCVFromResume_ProvisionalContactsPlusBankSucceeds(t *testing.T) {
 	seedBankedCareer(t, h.queries, userID)
 
 	jobID := seedJobSlug(t, pool, "prov-reset-"+uuid.NewString()[:8])
+	base, err := h.cvStore.Create(ctx, userID, "My CV", cv.DefaultTemplateID, cv.Document{
+		Header:  cv.Header{FullName: "Base Name"},
+		Summary: "base keep me",
+		Skills:  []cv.SkillGroup{{Items: []string{"BaseSkill"}}},
+	})
+	if err != nil {
+		t.Fatalf("create base: %v", err)
+	}
 	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "T", cv.DefaultTemplateID, cv.Document{
-		Header: cv.Header{}, Summary: "old",
+		Header:  cv.Header{},
+		Summary: "tailored keep me",
+		Skills:  []cv.SkillGroup{{Items: []string{"TailorSkill"}}},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -328,6 +339,15 @@ func TestResetCVFromResume_ProvisionalContactsPlusBankSucceeds(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	// Seed composition must still strip superseded summary — only identity from the blob.
+	st, ok, err := h.seedSource().Structured(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("seed Structured: ok=%v err=%v", ok, err)
+	}
+	if st.Summary != "" || len(st.Skills) != 0 {
+		t.Fatalf("seed leaked superseded semantics: summary=%q skills=%v", st.Summary, st.Skills)
+	}
+
 	got, err := h.cvStore.Get(ctx, tailored.ID, userID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
@@ -335,11 +355,28 @@ func TestResetCVFromResume_ProvisionalContactsPlusBankSucceeds(t *testing.T) {
 	if got.Document.Header.FullName != "Ada Lovelace" || got.Document.Header.Email != "ada@example.com" {
 		t.Fatalf("header = %+v, want provisional contacts", got.Document.Header)
 	}
-	if got.Document.Summary != "" {
-		t.Fatalf("summary = %q, want empty (provisional seed has no semantics)", got.Document.Summary)
+	if got.Document.Summary != "tailored keep me" {
+		t.Fatalf("summary = %q, want prior tailored summary kept", got.Document.Summary)
+	}
+	if len(got.Document.Skills) == 0 || got.Document.Skills[0].Items[0] != "TailorSkill" {
+		t.Fatalf("skills = %+v, want prior tailored skills kept", got.Document.Skills)
 	}
 	if len(got.Document.Experience) == 0 {
 		t.Fatal("want banked experience on reset")
+	}
+
+	gotBase, ok, err := h.cvStore.BaseCV(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
+	}
+	if gotBase.ID != base.ID {
+		t.Fatalf("base id = %s, want %s", gotBase.ID, base.ID)
+	}
+	if gotBase.Document.Summary != "base keep me" {
+		t.Fatalf("base summary = %q, want prior base summary kept", gotBase.Document.Summary)
+	}
+	if len(gotBase.Document.Skills) == 0 || gotBase.Document.Skills[0].Items[0] != "BaseSkill" {
+		t.Fatalf("base skills = %+v, want prior base skills kept", gotBase.Document.Skills)
 	}
 }
 
@@ -455,5 +492,275 @@ func TestResetCVFromResume_RefusesWhenTheBankSeedExceedsTheBulletCap(t *testing.
 	}
 	if gotBase.ID != base.ID || gotBase.Document.Summary != "old base summary" {
 		t.Fatalf("base = %+v, want untouched — the target failed before the base refresh ran", gotBase.Document)
+	}
+}
+
+// TestResetCVFromResume_AlignsSkillSurfaces: resetting a tailored copy whose seed says IaC
+// stores the vacancy's preferred form on the tailored document, while the base keeps IaC.
+func TestResetCVFromResume_AlignsSkillSurfaces(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "reset-align@example.com", false)
+	tok, err := iss.Issue(userID, 1)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	ctx := context.Background()
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Summary:  "Platform engineer",
+		Skills:   []string{"IaC", "Terraform"},
+	})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = now(),
+		 resume_structured = $2, resume_structured_uploaded_at = now(),
+		 resume_structured_model = 'test' WHERE id = $1`,
+		userID, blob); err != nil {
+		t.Fatalf("seed structured: %v", err)
+	}
+
+	store := h.cvStore
+	if _, err := store.Create(ctx, userID, "My CV", cv.DefaultTemplateID, cv.Document{
+		Header: cv.Header{FullName: "Old Base"},
+		Skills: []cv.SkillGroup{{Items: []string{"Go"}}},
+	}); err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	jobID := seedJobSlugDesc(t, pool, "reset-align-"+uuid.NewString()[:8],
+		"We practice infrastructure as code.")
+	tailored, err := store.CreateTailored(ctx, userID, jobID, "Tailored", cv.DefaultTemplateID, cv.Document{
+		Header: cv.Header{FullName: "Old Tailored"},
+		Skills: []cv.SkillGroup{{Items: []string{"Go"}}},
+	})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Data cvResponse `json:"data"`
+	}
+	decodeJSON(t, resp, &out)
+	if out.Data.Document.Summary != "Platform engineer" {
+		t.Fatalf("tailored summary = %q, want current extract summary", out.Data.Document.Summary)
+	}
+	if len(out.Data.Document.Skills) == 0 || out.Data.Document.Skills[0].Items[0] != "infrastructure as code" {
+		t.Fatalf("tailored skills = %+v, want infrastructure as code", out.Data.Document.Skills)
+	}
+
+	base, ok, err := store.BaseCV(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
+	}
+	if base.Document.Summary != "Platform engineer" {
+		t.Fatalf("base summary = %q, want current extract summary", base.Document.Summary)
+	}
+	if len(base.Document.Skills) == 0 || base.Document.Skills[0].Items[0] != "IaC" {
+		t.Fatalf("base skills = %+v, want IaC (résumé form, not JD)", base.Document.Skills)
+	}
+}
+
+// TestResetCVFromResume_CurrentExtractAppliesSkillsAndSummary: a current stamp with
+// summary and skills must land them on reset (seed wins over whatever was on the page).
+func TestResetCVFromResume_CurrentExtractAppliesSkillsAndSummary(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "reset-current@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace",
+		Email:    "ada@example.com",
+		Summary:  "Staff platform engineer",
+		Skills:   []string{"Go", "Kafka"},
+	})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = now(),
+		 resume_structured = $2, resume_structured_uploaded_at = now(),
+		 resume_structured_model = 'test' WHERE id = $1`,
+		userID, blob); err != nil {
+		t.Fatalf("seed structured: %v", err)
+	}
+
+	store := h.cvStore
+	if _, err := store.Create(ctx, userID, "My CV", cv.DefaultTemplateID, cv.Document{
+		Header:  cv.Header{FullName: "Old Base"},
+		Summary: "old base summary",
+		Skills:  []cv.SkillGroup{{Items: []string{"OldBase"}}},
+	}); err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	jobID := seedJobSlug(t, pool, "reset-current-"+uuid.NewString()[:8])
+	tailored, err := store.CreateTailored(ctx, userID, jobID, "Tailored", cv.DefaultTemplateID, cv.Document{
+		Header:  cv.Header{FullName: "Old Tailored"},
+		Summary: "old tailored summary",
+		Skills:  []cv.SkillGroup{{Items: []string{"OldTailor"}}},
+	})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Data cvResponse `json:"data"`
+	}
+	decodeJSON(t, resp, &out)
+	if out.Data.Document.Summary != "Staff platform engineer" {
+		t.Fatalf("tailored summary = %q, want extract", out.Data.Document.Summary)
+	}
+	if len(out.Data.Document.Skills) == 0 || len(out.Data.Document.Skills[0].Items) != 2 ||
+		out.Data.Document.Skills[0].Items[0] != "Go" || out.Data.Document.Skills[0].Items[1] != "Kafka" {
+		t.Fatalf("tailored skills = %+v, want Go/Kafka from extract", out.Data.Document.Skills)
+	}
+
+	base, ok, err := store.BaseCV(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
+	}
+	if base.Document.Summary != "Staff platform engineer" {
+		t.Fatalf("base summary = %q, want extract", base.Document.Summary)
+	}
+	if len(base.Document.Skills) == 0 || base.Document.Skills[0].Items[0] != "Go" {
+		t.Fatalf("base skills = %+v, want extract", base.Document.Skills)
+	}
+}
+
+func TestResetBaseCVFromResume_HappyPath(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "base-reset@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+	blob, _ := json.Marshal(resumeextract.Structured{
+		FullName: "Ada Lovelace", Email: "ada@example.com", Summary: "from seed",
+	})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET resume_object_key = 'k', resume_uploaded_at = now(),
+		 resume_structured = $2, resume_structured_uploaded_at = now(),
+		 resume_structured_model = 'test' WHERE id = $1`,
+		userID, blob); err != nil {
+		t.Fatalf("seed structured: %v", err)
+	}
+	seedBankedCareer(t, h.queries, userID)
+
+	store := h.cvStore
+	base, err := store.Create(ctx, userID, "My CV", cv.DefaultTemplateID, cv.Document{
+		Margins: cv.Margins{Top: 0.75, Right: 0.75, Bottom: 0.75, Left: 0.75},
+		Style:   cv.Style{FontSize: 11},
+		Header:  cv.Header{FullName: "Old Base"},
+		Summary: "old base summary",
+		Experience: []cv.ExperienceItem{{
+			Role: "Stale", Company: "OldCo",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	jobID := seedJobSlug(t, pool, "base-reset-"+uuid.NewString()[:8])
+	tailored, err := store.CreateTailored(ctx, userID, jobID, "Tailored", cv.DefaultTemplateID, cv.Document{
+		Header:  cv.Header{FullName: "Old Tailored"},
+		Summary: "old tailored summary",
+	})
+	if err != nil {
+		t.Fatalf("create tailored: %v", err)
+	}
+
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Data cvResponse `json:"data"`
+	}
+	decodeJSON(t, resp, &out)
+	if out.Data.ID != base.ID.String() {
+		t.Fatalf("id = %s, want base %s", out.Data.ID, base.ID)
+	}
+	if out.Data.Document.Header.FullName != "Ada Lovelace" || out.Data.Document.Summary != "from seed" {
+		t.Fatalf("base content = %+v / %q, want seed", out.Data.Document.Header, out.Data.Document.Summary)
+	}
+	if out.Data.Document.Margins.Top != 0.75 || out.Data.Document.Style.FontSize != 11 {
+		t.Fatalf("presentation clobbered: margins=%+v style=%+v", out.Data.Document.Margins, out.Data.Document.Style)
+	}
+	if len(out.Data.Document.Experience) == 0 || out.Data.Document.Experience[0].Company != "Acme" {
+		t.Fatalf("experience = %+v, want banked Acme", out.Data.Document.Experience)
+	}
+
+	gotTailored, err := store.Get(ctx, tailored.ID, userID)
+	if err != nil {
+		t.Fatalf("get tailored: %v", err)
+	}
+	if gotTailored.Document.Summary != "old tailored summary" {
+		t.Fatalf("tailored summary = %q, want untouched", gotTailored.Document.Summary)
+	}
+}
+
+func TestResetBaseCVFromResume_NoSeed409(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	userID := seedAccount(t, pool, "base-noseed@example.com", false)
+	tok, _ := iss.Issue(userID, 1)
+	ctx := context.Background()
+	if _, err := h.cvStore.Create(ctx, userID, "My CV", cv.DefaultTemplateID, cv.Document{
+		Summary: "keep me",
+	}); err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reset-from-resume", tok, nil)
+	if resp.StatusCode != fiber.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s, want 409", resp.StatusCode, body)
+	}
+	base, ok, err := h.cvStore.BaseCV(ctx, userID)
+	if err != nil || !ok {
+		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
+	}
+	if base.Document.Summary != "keep me" {
+		t.Fatalf("summary = %q, want untouched on 409", base.Document.Summary)
+	}
+}
+
+func TestResetBaseCVFromResume_Unauth401(t *testing.T) {
+	h, iss, _ := newTailorAPI(t)
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reset-from-resume", "", nil)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
+func TestResetBaseCVFromResume_OtherUserLeavesOwnersBase(t *testing.T) {
+	h, iss, pool := newTailorAPI(t)
+	owner := seedAccount(t, pool, "base-owner@example.com", false)
+	other := seedAccount(t, pool, "base-other@example.com", false)
+	otherTok, _ := iss.Issue(other, 1)
+	ctx := context.Background()
+	if _, err := h.cvStore.Create(ctx, owner, "My CV", cv.DefaultTemplateID, cv.Document{
+		Summary: "owner keep me",
+	}); err != nil {
+		t.Fatalf("create owner base: %v", err)
+	}
+	app := buildResetApp(h, iss)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reset-from-resume", otherTok, nil)
+	if resp.StatusCode != fiber.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d body = %s, want 409 (other has no seed)", resp.StatusCode, body)
+	}
+	base, ok, err := h.cvStore.BaseCV(ctx, owner)
+	if err != nil || !ok {
+		t.Fatalf("owner BaseCV: ok=%v err=%v", ok, err)
+	}
+	if base.Document.Summary != "owner keep me" {
+		t.Fatalf("owner summary = %q, want untouched by another account", base.Document.Summary)
 	}
 }

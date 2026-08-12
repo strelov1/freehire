@@ -285,11 +285,13 @@ func (s *Store) CreateTailored(ctx context.Context, userID, jobID int64, title, 
 }
 
 // Tailor ensures the user has a base CV — seeding one from their extracted résumé when they
-// have none — then creates a vacancy-bound tailored copy of it. It returns the base and tailored
+// have none — then creates a vacancy-bound tailored copy of it. preferred is the vacancy's
+// skilltag.PreferredFromText map; when non-empty the copy is surface-aligned before insert
+// so the stored document never held the unaligned wording. It returns the base and tailored
 // metadata plus whether THIS call is the one that just created the tailored copy (false when an
 // existing one was reused instead). It returns ErrNoResume when there is nothing to seed a base
 // from. The base CV is never modified: tailoring only ever writes the new tailored row.
-func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle string, seeder Seeder) (Meta, Meta, bool, error) {
+func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle string, seeder Seeder, preferred map[string]string) (Meta, Meta, bool, error) {
 	base, ok, err := s.BaseCV(ctx, userID)
 	if err != nil {
 		return Meta{}, Meta{}, false, err
@@ -318,7 +320,11 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 		return Meta{}, Meta{}, false, err
 	}
 
-	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, base.Document)
+	doc := base.Document
+	if len(preferred) > 0 {
+		doc = Align(doc, preferred)
+	}
+	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, doc)
 	if err != nil {
 		return Meta{}, Meta{}, false, err
 	}

@@ -760,7 +760,8 @@ func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
 // lives in the tailoring system prompt, where it is stated once. This only says which of the
 // two rhythms the candidate chose, because a turn does not start until a message arrives.
 const autopilotBrief = "Tailor this CV for the vacancy yourself, working from my experience bank. " +
-	"Go through every requirement without stopping to ask me, then tell me what is left."
+	"Go through every requirement without stopping to ask me, then tell me what is left. " +
+	"Skill wording on this CV is already aligned to the vacancy's own spellings — do not rename skills for wording; spend your edits on evidence and substance."
 
 // PostAssistantAutopilot runs the unattended tailoring pass on a tailoring session: it
 // snapshots the CV so the whole run can be undone, then streams one long turn.
@@ -783,6 +784,7 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "this conversation is not tailoring a CV")
 	}
 	refreshAnalysis := h.prepareAutopilotAnalysis(c, sess)
+	h.alignAutopilotCV(c.Context(), sess)
 	h.layDownRunPlan(c.Context(), sess)
 	return h.streamSSE(c, sess, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
 		err := runner.Run(ctx, sess, reg, system, autopilotBrief, assistant.TurnConfig{MaxSteps: autopilotMaxSteps}, emit)
@@ -792,6 +794,21 @@ func (h *assistantHandlers) PostAssistantAutopilot(c *fiber.Ctx) error {
 		refreshAnalysis(context.WithoutCancel(ctx))
 		return err
 	})
+}
+
+// alignAutopilotCV surface-aligns the bound tailored CV to the vacancy before the
+// unattended turn starts. Its own system revision — not the run's edit batch — so
+// undoing the run leaves JD wording in place.
+func (h *assistantHandlers) alignAutopilotCV(ctx context.Context, sess assistant.Session) {
+	if h.cv == nil || sess.CVID == nil || sess.JobID == nil {
+		return
+	}
+	job, err := h.queries.GetJob(ctx, *sess.JobID)
+	if err != nil {
+		log.Printf("assistant: loading job %d for surface-align: %v", *sess.JobID, err)
+		return
+	}
+	h.cv.logSurfaceAlign(ctx, sess.UserID, *sess.CVID, job.Description)
 }
 
 // prepareAutopilotAnalysis resolves the run's vacancy and delegates to

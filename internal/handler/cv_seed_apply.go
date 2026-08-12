@@ -8,7 +8,9 @@ import (
 // applySeedContent builds the next editable state from a résumé seed while keeping the
 // candidate's presentation choices. Title and template stay on the row; margins and style
 // stay on the document. Body sections come from cv.Seed; header contacts merge so an empty
-// seed field never blanks a value the candidate already has on the page.
+// seed field never blanks a value the candidate already has on the page. Summary and skills
+// follow the same keep-if-empty rule — a provisional/pending seed strips those sections, and
+// blanking a tailored CV that already had them is data loss, not a fresh start.
 //
 // Shared by Reset from résumé for both the base CV and the tailored copy so the two cannot
 // drift on what "preserve presentation" means.
@@ -17,6 +19,12 @@ func applySeedContent(keep cvedit.State, seeded cv.Document) cvedit.State {
 	doc.Margins = keep.Margins
 	doc.Style = keep.Style
 	doc.Header = mergeSeedHeader(keep.Header, seeded.Header)
+	if doc.Summary == "" {
+		doc.Summary = keep.Summary
+	}
+	if len(doc.Skills) == 0 {
+		doc.Skills = keep.Skills
+	}
 	return cvedit.State{
 		Title:      keep.Title,
 		TemplateID: keep.TemplateID,

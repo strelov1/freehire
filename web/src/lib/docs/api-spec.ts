@@ -2338,6 +2338,19 @@ ${BASE_URL}/auth/oauth/google/start`,
       },
       {
         method: 'POST',
+        path: '/me/cvs/base/reset-from-resume',
+        auth: 'cookie',
+        summary: 'Rebuild your base CV from your résumé.',
+        description:
+          'Replaces the base (non-tailored) document from the current résumé seed ' +
+          '(experience bank + structured extract). Preserves template and typography. ' +
+          'Does not rewrite tailored copies for specific jobs. 409 when there is no ' +
+          'usable résumé seed.',
+        curl: `curl -X POST "${BASE_URL}/me/cvs/base/reset-from-resume" -b cookies.txt`,
+        responseExample: `{ "data": { "id": "0f2c…", "title": "My CV", "template_id": "classic-ats", "document": { … } } }`,
+      },
+      {
+        method: 'POST',
         path: '/me/cvs/{id}/reset-from-resume',
         auth: 'cookie',
         summary: 'Rebuild this tailored CV from your résumé.',

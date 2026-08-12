@@ -18,6 +18,18 @@ func TestEachPresetHasItsOwnPrompt(t *testing.T) {
 	}
 }
 
+// Surfaces are aligned before the first model turn. Without this sentence the agent
+// rediscovers IaC ↔ infrastructure as code and burns the turn on wording.
+func TestTailorPromptSaysSurfacesAreAlreadyAligned(t *testing.T) {
+	p := SystemPrompt(PresetTailor)
+	if !strings.Contains(p, "already aligned") {
+		t.Error("tailor prompt never says skill surfaces are already aligned")
+	}
+	if !strings.Contains(p, "Do NOT rename skills for wording") {
+		t.Error("tailor prompt never tells the agent not to rename skills for wording")
+	}
+}
+
 // The panel's agent is the only one with eyes. A prompt that does not say so
 // produces an agent that asks the candidate to paste the vacancy it could have
 // read itself.
