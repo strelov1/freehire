@@ -1,19 +1,27 @@
 name: Performance
 
-# Two complementary guards, per the perf suite in perf/k6/:
+# Three complementary guards, per the perf suite in perf/k6/ and perf/lighthouse/:
 #
-#  • pr-smoke     — spins up the full stack and asserts the key pages still
-#                   render (200 + HTML) within a LOOSE latency ceiling. Safe to
-#                   require as a merge check: it runs on every PR and ALWAYS
-#                   reports a status, but only does the heavy work when the PR
-#                   touches the request path (detected via git diff below). It
-#                   runs on an empty DB, so it gates correctness of the
-#                   SSR→API→Postgres→Meili path, not data-scale performance.
+#  • pr-smoke        — spins up the full stack and asserts the key pages still
+#                       render (200 + HTML) within a LOOSE latency ceiling. Safe
+#                       to require as a merge check: it runs on every PR and
+#                       ALWAYS reports a status, but only does the heavy work
+#                       when the PR touches the request path (detected via git
+#                       diff below). It runs on an empty DB, so it gates
+#                       correctness of the SSR→API→Postgres→Meili path, not
+#                       data-scale performance.
 #
-#  • prod-watchdog — on a schedule, run the same suite against production with
-#                    tight, headroom-based thresholds and enough samples to be
-#                    stable. A breach opens an issue. This is where real
-#                    degradation (query plans at scale, cold caches) is caught.
+#  • prod-watchdog    — on a schedule, run the same suite against production
+#                       with tight, headroom-based thresholds and enough
+#                       samples to be stable. A breach opens an issue. This is
+#                       where real degradation (query plans at scale, cold
+#                       caches) is caught.
+#
+#  • lighthouse-watchdog — on the same schedule, run Lighthouse against the
+#                       production homepage and assert score floors (see
+#                       perf/lighthouse/lighthouserc.json). Catches regressions
+#                       k6 can't see: accessibility, render-blocking resources,
+#                       bundle bloat. A breach opens an issue, same as k6's.
 #
 # NOTE: no workflow-level `paths:` filter — a path-filtered workflow never
 # reports its check on unrelated PRs, which would leave a required check stuck
@@ -185,3 +193,28 @@ jobs:
             --title "Perf watchdog: prod page latency regression ($(date -u +%Y-%m-%d))" \
             --label performance \
             --body "The scheduled production performance smoke breached its latency/error thresholds. See the run: $RUN_URL"
+
+  lighthouse-watchdog:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Lighthouse against production (headroom-based score floors)
+        # Score floors live in perf/lighthouse/lighthouserc.json, generous below
+        # the ~74/85/73/100 (perf/a11y/best-practices/seo) baseline observed on
+        # freehire.me — tighten as the baseline firms up, same as k6's SLOs above.
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: ./perf/lighthouse/lighthouserc.json
+
+      - name: Open an issue on regression
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue create \
+            --title "Lighthouse watchdog: prod score regression ($(date -u +%Y-%m-%d))" \
+            --label performance \
+            --body "The scheduled production Lighthouse run breached a category score floor. See the run: $RUN_URL"
