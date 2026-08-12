@@ -325,3 +325,36 @@ func TestValidChannel_Push(t *testing.T) {
 		t.Error("ValidChannel(ChannelPush) = false, want true")
 	}
 }
+
+// recipient's push case mirrors Telegram's: a live "has device" boolean gates
+// whether the subscription is deliverable, and the destination is the user id
+// (PushNotifier expands that into N device sends).
+func TestRecipient_PushWithDevice(t *testing.T) {
+	info := db.GetSubscriptionForDeliveryRow{
+		UserID:        42,
+		Channel:       ChannelPush,
+		HasPushDevice: true,
+	}
+	dest, ok := recipient(info)
+	if !ok {
+		t.Fatal("recipient: ok = false, want true when HasPushDevice")
+	}
+	if dest != "42" {
+		t.Errorf("recipient dest = %q, want %q (the user id)", dest, "42")
+	}
+}
+
+func TestRecipient_PushWithoutDeviceIsNotDeliverable(t *testing.T) {
+	info := db.GetSubscriptionForDeliveryRow{
+		UserID:        42,
+		Channel:       ChannelPush,
+		HasPushDevice: false,
+	}
+	dest, ok := recipient(info)
+	if ok {
+		t.Errorf("recipient: ok = true, want false when no device is registered")
+	}
+	if dest != "" {
+		t.Errorf("recipient dest = %q, want empty", dest)
+	}
+}

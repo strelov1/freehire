@@ -178,6 +178,11 @@ func recipient(info db.GetSubscriptionForDeliveryRow) (string, bool) {
 			return "", false
 		}
 		return info.AccountEmail, true
+	case ChannelPush:
+		if !info.HasPushDevice {
+			return "", false
+		}
+		return strconv.FormatInt(info.UserID, 10), true
 	}
 	if !info.Destination.Valid || info.Destination.String == "" {
 		return "", false
