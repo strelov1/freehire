@@ -43,6 +43,26 @@ func TestParse(t *testing.T) {
 		{"Инженер по информационной безопасности", "", "security"},
 		{"Специалист по продажам", "", "sales"},
 		{"Специалист технической поддержки", "", "support"},
+		// Non-English forms of the generic software_engineering catch-all: only
+		// software- or language-anchored phrases resolve (never a bare
+		// developer/engineer/programmer noun — prod titles show that noun alone
+		// also names a real-estate developer in ES/PT/FR or a machine/CNC
+		// programmer in ES/DE, in every language sampled, not just English).
+		{"Desarrollador de Software Semi Senior", "senior", "software_engineering"},
+		{"Ingeniera de Software con IA", "", "software_engineering"},
+		{"Programador CNC", "", ""},
+		// The seniorityTable is ALSO English+Russian only — a separate, not-yet-done
+		// gap — so "Sênior"/"Starszy" resolve no grade even though the category
+		// does. Category and seniority are independent matches (Parse runs both
+		// against the same title), so this is not a category defect.
+		{"Engenheira de Software Sênior", "", "software_engineering"},
+		{"Développeur Java (H/F)", "", "software_engineering"},
+		{"Développeur.euse senior (C#/React)", "senior", ""},
+		{"Softwareentwickler (m/w/d)", "", "software_engineering"},
+		{"Software-Entwickler (m/w/d)", "", "software_engineering"},
+		{"SPS-Programmierer (m/w/d)", "", ""},
+		{"Starszy Programista .NET z doświadczeniem w Power BI", "", "software_engineering"},
+		{"Sviluppatore Software Junior", "junior", "software_engineering"},
 		{"Lead Senior Engineer", "lead", ""},
 		// Architecture and network engineering are their own categories.
 		{"Solutions Architect", "", "architecture"},

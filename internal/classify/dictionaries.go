@@ -296,6 +296,8 @@ var categoryTable = []aliasEntry{
 	{"firmware", "embedded"},
 	{"встраиваемые", "embedded"},
 	{"встраиваемых", "embedded"},
+	// French: "logiciel embarqué" is embedded software, unambiguous.
+	{"logiciel embarqué", "embedded"},
 	{"blockchain", "blockchain"},
 	{"блокчейн", "blockchain"},
 	// "Web3"/"smart contract" name the blockchain domain as unambiguously as the
@@ -778,6 +780,59 @@ var categoryTable = []aliasEntry{
 	// reasoning as tech.go's techTitleTerms entry for these).
 	{"ai-native engineer", "software_engineering"},
 	{"ai native engineer", "software_engineering"},
+	// software_engineering, non-English forms. Same doctrine as the English block
+	// above: only software- or language-ANCHORED phrases, never a bare
+	// developer/engineer/programmer noun. Prod titles show the bare noun is
+	// genuinely dangerous in every language sampled, not just English — "SPS-
+	// Programmierer"/"Roboterprogrammierer" (DE) and "Programador CNC" (ES) are
+	// industrial/machine programming, not software, and Spanish/Portuguese
+	// "desarrollador/desenvolvedor" alone also names a real-estate developer.
+	// Feminine/inclusive forms are listed where prod data showed them in use
+	// ("Engenheira de Software", "Pessoa Desenvolvedora"); an exhaustive sweep of
+	// every language's gendered and inclusive spellings is future work, not done
+	// here.
+	//
+	// Spanish.
+	{"desarrollador de software", "software_engineering"},
+	{"desarrolladora de software", "software_engineering"},
+	{"ingeniero de software", "software_engineering"},
+	{"ingeniera de software", "software_engineering"},
+	{"desarrollador java", "software_engineering"},
+	{"desarrolladora java", "software_engineering"},
+	// Portuguese.
+	{"desenvolvedor de software", "software_engineering"},
+	{"desenvolvedora de software", "software_engineering"},
+	{"engenheiro de software", "software_engineering"},
+	{"engenheira de software", "software_engineering"},
+	{"desenvolvedor java", "software_engineering"},
+	{"desenvolvedora java", "software_engineering"},
+	// French. No bare "développeur": it also names a real-estate/regional-economic
+	// developer in French job titles, so only the language- and software-anchored
+	// forms below resolve — a bare "Développeur" (or the inclusive "développeur.euse"
+	// spelling) with no qualifier stays unresolved rather than guessed.
+	{"ingénieur logiciel", "software_engineering"},
+	{"développeur java", "software_engineering"},
+	{"développeur salesforce", "software_engineering"},
+	// German. Compound, hyphenated, and spaced forms are three different strings
+	// to this matcher — a hyphen and a space both break a compound differently,
+	// so each spelling needs its own alias (same trap "middle-east" documents).
+	{"softwareentwickler", "software_engineering"},
+	{"software-entwickler", "software_engineering"},
+	{"software entwickler", "software_engineering"},
+	{"entwickler software", "software_engineering"},
+	{"softwareingenieur", "software_engineering"},
+	{"java entwickler", "software_engineering"},
+	{"java-entwickler", "software_engineering"},
+	{"abap entwickler", "software_engineering"},
+	// Polish.
+	{"inżynier oprogramowania", "software_engineering"},
+	{"deweloper oprogramowania", "software_engineering"},
+	{"programista .net", "software_engineering"},
+	{"programista python", "software_engineering"},
+	// Italian.
+	{"sviluppatore software", "software_engineering"},
+	{"ingegnere del software", "software_engineering"},
+	{"ingegnere software", "software_engineering"},
 	// 1С (the RU enterprise/ERP dev platform) resolves last so a more specific role word in the
 	// title wins first ("Аналитик 1С" → data_analytics, "Тестировщик 1С" → qa); a title whose only
 	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise
