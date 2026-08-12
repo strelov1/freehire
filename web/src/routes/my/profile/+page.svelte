@@ -15,7 +15,6 @@
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
-  import ResumeStructuredView from '$lib/components/ResumeStructuredView.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
@@ -24,7 +23,6 @@
     ATSResponse,
     CandidateContacts,
     FacetCounts,
-    ResumeStructured,
     TalentNetworkVisibility,
   } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -39,10 +37,8 @@
   let filters = $state<FilterStore | null>(null);
   let counts = $state<FacetCounts | null>(null);
   let ats = $state<ATSResponse | null>(null);
-  // The read-only structured résumé parsed from the CV (null when nothing to show).
   // structurePending is true while a newer upload's extract has not stamped yet —
   // contacts may still be provisional from the previous parse.
-  let structured = $state<ResumeStructured | null>(null);
   let structurePending = $state(false);
   let parseStatus = $state('');
   let parseDetail = $state('');
@@ -128,13 +124,11 @@
   async function loadStructured() {
     try {
       const meta = await api.getResume();
-      structured = meta.structured;
       structurePending = Boolean(meta.structure_pending);
       parseStatus = meta.parse_status ?? '';
       parseDetail = meta.parse_detail ?? '';
       contacts = meta.contacts ?? null;
     } catch {
-      structured = null;
       structurePending = false;
       parseStatus = '';
       parseDetail = '';
@@ -369,40 +363,14 @@
         {:else if tab === 'skills'}
           <SkillsView />
         {:else if tab === 'structured'}
-          <!-- Profile: editable contacts + read-only parse of semantic sections. -->
-          <div class="flex flex-col gap-4">
-            <CandidateContactsEditor
-              {contacts}
-              {parseStatus}
-              {parseDetail}
-              {structurePending}
-              onSaved={() => void loadStructured()}
-            />
-            {#if structured}
-              {#if structurePending}
-                <p class="rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
-                  Semantic sections below (summary, education, …) update when the current CV
-                  parse finishes. Experience comes from your bank.
-                </p>
-              {/if}
-              <ResumeStructuredView resume={structured} />
-            {:else if structurePending}
-              <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-                <p class="text-sm font-medium">Parsing your latest CV…</p>
-                <p class="text-sm text-muted-foreground">
-                  Contacts above are editable now. Summary and other parse fields appear when
-                  extract finishes — use Retry parse if this stays empty.
-                </p>
-              </div>
-            {:else}
-              <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
-                <p class="text-sm font-medium">No parsed profile yet</p>
-                <p class="text-sm text-muted-foreground">
-                  Upload your CV in the <button type="button" class="font-medium text-foreground underline underline-offset-2" onclick={() => (tab = 'settings')}>Settings</button> tab and we'll parse it into a structured profile.
-                </p>
-              </div>
-            {/if}
-          </div>
+          <!-- Profile: editable contacts, parsed from (and kept in sync with) the stored CV. -->
+          <CandidateContactsEditor
+            {contacts}
+            {parseStatus}
+            {parseDetail}
+            {structurePending}
+            onSaved={() => void loadStructured()}
+          />
         {:else if loadError}
           <States state="error" message="Couldn't load the report." />
         {:else if ats === null}

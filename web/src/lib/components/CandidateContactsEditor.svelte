@@ -150,10 +150,17 @@
     ></textarea>
   </label>
 
-  <div class="flex flex-wrap gap-2">
-    <Button size="sm" disabled={busy} onclick={save}>Save contacts</Button>
-    <Button size="sm" variant="secondary" disabled={busy} onclick={replaceFromCV}>
-      Replace from CV parse
+  <div class="flex flex-wrap items-center gap-2">
+    <Button size="sm" variant="primary" disabled={busy} onclick={save}>Save contacts</Button>
+    <Button
+      size="sm"
+      variant="ghost"
+      class="text-muted-foreground"
+      disabled={busy}
+      onclick={replaceFromCV}
+      title="Discard what's in this form and pull these fields back from the latest CV parse."
+    >
+      Reset to what CV says
     </Button>
   </div>
   {#if error}

@@ -14,8 +14,7 @@
   const projects = $derived(cv.projects ?? []);
   // Top-level facets (specializations + canonical skills from the profile), distinct
   // from cv.skills — the free-text skills the résumé parser found. Only the facets are
-  // shown here, same as ResumeStructuredView never surfaces resume.skills: they're the
-  // curated list, the résumé-parsed one is redundant with it.
+  // shown here: they're the curated list, the résumé-parsed one is redundant with it.
   // Deduped: specializations and skills are separate vocabularies that CAN genuinely
   // overlap (e.g. "devops" exists in both), and the {#each} below keys on the literal
   // string — a duplicate key throws during Svelte 5 hydration rather than just warning,
@@ -46,8 +45,7 @@
     cv.headline || 'A candidate profile shared via freehire’s Talent Network.',
   );
 
-  // A work/education entry's date range, printed as the CV wrote it ("2021 — Present"),
-  // matching ResumeStructuredView's convention.
+  // A work/education entry's date range, printed as the CV wrote it ("2021 — Present").
   function dateRange(start?: string, end?: string): string {
     return [start, end].filter(Boolean).join(' — ');
   }
