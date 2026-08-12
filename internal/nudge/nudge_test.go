@@ -10,6 +10,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/notify"
 )
 
 // fakeStore is a DB-free Store. It serves canned candidate rows and delivery
@@ -455,5 +456,31 @@ func TestDeliver_EmailDestinationIsAccountEmail(t *testing.T) {
 	}
 	if len(notifier.sent) != 1 || notifier.sent[0] != "email:user@acme.com" {
 		t.Errorf("sent = %v, want [email:user@acme.com]", notifier.sent)
+	}
+}
+
+// --- recipient: push ----------------------------------------------------------
+
+func TestRecipient_Push_ResolvesUserIDWhenDeviceRegistered(t *testing.T) {
+	info := db.GetNudgeForDeliveryRow{UserID: 42, HasPushDevice: true}
+
+	dest, ok := recipient(notify.ChannelPush, info)
+	if !ok {
+		t.Fatal("ok = false, want true (a registered device is deliverable)")
+	}
+	if dest != "42" {
+		t.Errorf("dest = %q, want %q", dest, "42")
+	}
+}
+
+func TestRecipient_Push_SoftSkipsWithNoRegisteredDevice(t *testing.T) {
+	info := db.GetNudgeForDeliveryRow{UserID: 42, HasPushDevice: false}
+
+	dest, ok := recipient(notify.ChannelPush, info)
+	if ok {
+		t.Fatal("ok = true, want false (no registered device)")
+	}
+	if dest != "" {
+		t.Errorf("dest = %q, want empty", dest)
 	}
 }

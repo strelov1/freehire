@@ -404,6 +404,11 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 			return "", false
 		}
 		return info.AccountEmail, true
+	case notify.ChannelPush:
+		if !info.HasPushDevice {
+			return "", false
+		}
+		return strconv.FormatInt(info.UserID, 10), true
 	}
 	return "", false
 }

@@ -2,15 +2,16 @@
 // single MATCH→DELIVER pass: it re-scans tracked applications for two conditions —
 // gone silent past the stage's tolerated threshold, or a stage_set moved one into
 // `interview` — records new candidates, then delivers each pending nudge over the
-// channels the account's shared notification rule configures (Telegram and/or
-// email). Run it on a schedule (e.g. cron, ~every 30-60 min); it processes a
+// channels the account's shared notification rule configures (Telegram, email,
+// and/or push). Run it on a schedule (e.g. cron, ~every 30-60 min); it processes a
 // bounded batch and exits. It exits non-zero when the run had delivery failures so
 // cron can alert.
 //
-// The feature is optional: with NO delivery channel configured (neither the
-// Telegram bot nor SES email), the worker logs that it is disabled and exits 0
-// (nothing to deliver). A nudge whose channel is not configured this run is
-// soft-skipped and retried next pass, so one channel can run without the other.
+// Telegram and email are registered conditionally, on TELEGRAM_BOT_TOKEN and
+// AWS_REGION+NOTIFY_EMAIL_FROM respectively, since those channels need server-held
+// credentials; push needs none (the push relay holds its own device credentials)
+// and is always registered. A nudge whose channel is not configured this run is
+// soft-skipped and retried next pass, so one channel can run without the others.
 package main
 
 import (
@@ -21,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/notify"
 	"github.com/strelov1/freehire/internal/nudge"
+	"github.com/strelov1/freehire/internal/pushnotify"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -36,6 +38,8 @@ func run() int {
 		return 1
 	}
 	defer cleanup()
+
+	queries := db.New(pool)
 
 	// Register every configured delivery channel; the Router dispatches each
 	// nudge to its channel and soft-skips one that is not configured. Channel
@@ -54,12 +58,12 @@ func run() int {
 			router[notify.ChannelEmail] = nudge.NewEmailNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin)
 		}
 	}
-	if len(router) == 0 {
-		log.Printf("nudge: no delivery channel configured (TELEGRAM_BOT_TOKEN or AWS_REGION+NOTIFY_EMAIL_FROM); nothing to deliver")
-		return 0
-	}
+	// Push needs no server-held credential (the Expo relay holds its own device
+	// credentials), so it is always registered, unlike Telegram/email above.
+	pushStore := pushnotify.NewQueriesStore(queries)
+	router[notify.ChannelPush] = nudge.NewPushNotifier(queries, pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore))
 
-	runner := nudge.New(db.New(pool), router, nudge.DefaultConfig())
+	runner := nudge.New(queries, router, nudge.DefaultConfig())
 
 	stats, err := runner.Run(ctx)
 	if err != nil {
