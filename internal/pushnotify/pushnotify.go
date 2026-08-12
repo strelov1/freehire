@@ -59,7 +59,7 @@ const receiptBatchSize = 100
 
 // Notifier sends one push message to a device token.
 type Notifier interface {
-	Send(ctx context.Context, token, title, body string) error
+	Send(ctx context.Context, token, title, body string, data map[string]string) error
 }
 
 // TokenPruner removes a token that's been reported permanently
@@ -91,6 +91,32 @@ type TicketStore interface {
 	DeletePushTickets(ctx context.Context, ids []int64) error
 }
 
+// SendToDevices sends one title/body/data message to every token, aggregating
+// the per-device outcomes into a single result for a caller that has one
+// recipient with several devices (unlike Telegram/email, which have exactly one
+// destination). It reports success — nil — as long as at least one device
+// received the message; a token pruned as dead is not itself a failure, but if
+// every device ends up pruned or erroring (including the degenerate case of no
+// tokens at all), the caller has nothing delivered and gets an error back.
+func SendToDevices(ctx context.Context, notifier Notifier, tokens []string, title, body string, data map[string]string) error {
+	var sent int
+	var lastErr error
+	for _, token := range tokens {
+		if err := notifier.Send(ctx, token, title, body, data); err != nil {
+			lastErr = err
+		} else {
+			sent++
+		}
+	}
+	if sent > 0 {
+		return nil
+	}
+	if lastErr != nil {
+		return fmt.Errorf("pushnotify: no device received the message: %w", lastErr)
+	}
+	return errors.New("pushnotify: no device to send to")
+}
+
 // ExpoNotifier implements Notifier over the Expo Push API.
 type ExpoNotifier struct {
 	client      *http.Client
@@ -117,9 +143,10 @@ func NewExpoNotifier(pruner TokenPruner, queuer TicketQueuer, tickets TicketStor
 }
 
 type expoMessage struct {
-	To    string `json:"to"`
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	To    string            `json:"to"`
+	Title string            `json:"title"`
+	Body  string            `json:"body"`
+	Data  map[string]string `json:"data,omitempty"`
 }
 
 // expoTicket is one entry in Send's response — an immediate acknowledgement,
@@ -143,9 +170,9 @@ type expoSendResponse struct {
 // later CheckReceipts pass, since the ticket alone doesn't say the push was
 // actually delivered; any other failure is returned as an error with the
 // token left in place, since it may be transient.
-func (n *ExpoNotifier) Send(ctx context.Context, token, title, body string) error {
+func (n *ExpoNotifier) Send(ctx context.Context, token, title, body string, data map[string]string) error {
 	var out expoSendResponse
-	if err := n.postJSON(ctx, n.apiURL, []expoMessage{{To: token, Title: title, Body: body}}, &out); err != nil {
+	if err := n.postJSON(ctx, n.apiURL, []expoMessage{{To: token, Title: title, Body: body, Data: data}}, &out); err != nil {
 		return err
 	}
 	if len(out.Data) != 1 {

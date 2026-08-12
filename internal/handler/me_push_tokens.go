@@ -158,7 +158,7 @@ func (h *authHandlers) TestPushToken(c *fiber.Ctx) error {
 
 	out := testPushTokenResponse{Devices: len(tokens)}
 	for _, t := range tokens {
-		switch err := h.pushNotifier.Send(c.Context(), t.Token, "freehire", "This is a test notification."); {
+		switch err := h.pushNotifier.Send(c.Context(), t.Token, "freehire", "This is a test notification.", nil); {
 		case err == nil:
 			out.Sent++
 		case errors.Is(err, pushnotify.ErrTokenPruned):

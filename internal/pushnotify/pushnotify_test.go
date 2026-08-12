@@ -47,12 +47,20 @@ func (s *fakeTicketStore) DeletePushTickets(ctx context.Context, ids []int64) er
 
 func stubExpo(t *testing.T, status string, errorCode string) *httptest.Server {
 	t.Helper()
+	return stubExpoCapture(t, status, errorCode, nil)
+}
+
+// stubExpoCapture is stubExpo with a hook to capture the decoded request body,
+// so a test can assert on what was actually sent to Expo (e.g. the data payload).
+func stubExpoCapture(t *testing.T, status string, errorCode string, capture *[]expoMessage) *httptest.Server {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body []struct {
-			To string `json:"to"`
-		}
+		var body []expoMessage
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)
+		}
+		if capture != nil {
+			*capture = body
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -81,7 +89,7 @@ func TestExpoNotifier_Send_SuccessEnqueuesTicketForLaterCheck(t *testing.T) {
 	n := newTestNotifier(pruner, queuer, &fakeTicketStore{})
 	n.apiURL = srv.URL
 
-	if err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World"); err != nil {
+	if err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World", nil); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if len(pruner.pruned) != 0 {
@@ -99,7 +107,7 @@ func TestExpoNotifier_Send_DeviceNotRegisteredPrunesTokenAtSendTime(t *testing.T
 	n := newTestNotifier(pruner, queuer, &fakeTicketStore{})
 	n.apiURL = srv.URL
 
-	err := n.Send(context.Background(), "ExponentPushToken[dead]", "Hello", "World")
+	err := n.Send(context.Background(), "ExponentPushToken[dead]", "Hello", "World", nil)
 	if !errors.Is(err, ErrTokenPruned) {
 		t.Fatalf("Send err = %v, want ErrTokenPruned — a caller (e.g. a self-test endpoint) must be able to tell a prune apart from a real delivery", err)
 	}
@@ -118,7 +126,7 @@ func TestExpoNotifier_Send_OtherErrorSurfacesWithoutPruningOrEnqueuing(t *testin
 	n := newTestNotifier(pruner, queuer, &fakeTicketStore{})
 	n.apiURL = srv.URL
 
-	if err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World"); err == nil {
+	if err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World", nil); err == nil {
 		t.Fatal("Send: want error for a non-DeviceNotRegistered failure")
 	}
 	if len(pruner.pruned) != 0 {
@@ -126,6 +134,41 @@ func TestExpoNotifier_Send_OtherErrorSurfacesWithoutPruningOrEnqueuing(t *testin
 	}
 	if len(queuer.enqueued) != 0 {
 		t.Errorf("enqueued = %v, want none — nothing to check later for a failed send", queuer.enqueued)
+	}
+}
+
+func TestExpoNotifier_Send_IncludesDataPayload(t *testing.T) {
+	var captured []expoMessage
+	srv := stubExpoCapture(t, "ok", "", &captured)
+	n := newTestNotifier(&fakePruner{}, &fakeQueuer{}, &fakeTicketStore{})
+	n.apiURL = srv.URL
+
+	err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World", map[string]string{"slug": "acme-backend-engineer"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(captured) != 1 {
+		t.Fatalf("captured %d messages, want 1", len(captured))
+	}
+	if got := captured[0].Data["slug"]; got != "acme-backend-engineer" {
+		t.Errorf("data[slug] = %q, want %q", got, "acme-backend-engineer")
+	}
+}
+
+func TestExpoNotifier_Send_NilDataOmitsPayloadField(t *testing.T) {
+	var captured []expoMessage
+	srv := stubExpoCapture(t, "ok", "", &captured)
+	n := newTestNotifier(&fakePruner{}, &fakeQueuer{}, &fakeTicketStore{})
+	n.apiURL = srv.URL
+
+	if err := n.Send(context.Background(), "ExponentPushToken[abc]", "Hello", "World", nil); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(captured) != 1 {
+		t.Fatalf("captured %d messages, want 1", len(captured))
+	}
+	if captured[0].Data != nil {
+		t.Errorf("data = %v, want nil", captured[0].Data)
 	}
 }
 
@@ -197,6 +240,103 @@ func TestExpoNotifier_CheckReceipts_NothingDueIsANoOp(t *testing.T) {
 	}
 	if called {
 		t.Error("getReceipts was called with nothing due")
+	}
+}
+
+// fakeDeviceNotifier is a Notifier test double keyed by token, for exercising
+// SendToDevices without going through an HTTP round trip.
+type fakeDeviceNotifier struct {
+	results map[string]error // token -> error to return; missing key = nil
+	calls   []string
+}
+
+func (f *fakeDeviceNotifier) Send(ctx context.Context, token, title, body string, data map[string]string) error {
+	f.calls = append(f.calls, token)
+	return f.results[token]
+}
+
+// notifierFunc adapts a plain function to Notifier, mirroring http.HandlerFunc.
+type notifierFunc func(ctx context.Context, token, title, body string, data map[string]string) error
+
+func (f notifierFunc) Send(ctx context.Context, token, title, body string, data map[string]string) error {
+	return f(ctx, token, title, body, data)
+}
+
+func TestSendToDevices_AllSucceed(t *testing.T) {
+	n := &fakeDeviceNotifier{}
+	tokens := []string{"tok-1", "tok-2", "tok-3"}
+
+	if err := SendToDevices(context.Background(), n, tokens, "Hello", "World", nil); err != nil {
+		t.Fatalf("SendToDevices: %v", err)
+	}
+	if len(n.calls) != 3 {
+		t.Errorf("calls = %v, want all 3 tokens attempted", n.calls)
+	}
+}
+
+func TestSendToDevices_PartialSuccessCountsAsDelivered(t *testing.T) {
+	n := &fakeDeviceNotifier{results: map[string]error{
+		"tok-bad": errors.New("transient failure"),
+	}}
+	tokens := []string{"tok-good", "tok-bad"}
+
+	if err := SendToDevices(context.Background(), n, tokens, "Hello", "World", nil); err != nil {
+		t.Fatalf("SendToDevices: %v, want nil — at least one device received it", err)
+	}
+	if len(n.calls) != 2 {
+		t.Errorf("calls = %v, want both tokens attempted (no short-circuit)", n.calls)
+	}
+}
+
+func TestSendToDevices_AllPrunedIsAFailure(t *testing.T) {
+	n := &fakeDeviceNotifier{results: map[string]error{
+		"tok-1": ErrTokenPruned,
+		"tok-2": ErrTokenPruned,
+	}}
+	tokens := []string{"tok-1", "tok-2"}
+
+	if err := SendToDevices(context.Background(), n, tokens, "Hello", "World", nil); err == nil {
+		t.Fatal("SendToDevices: want an error when every device was pruned, nothing delivered")
+	}
+}
+
+func TestSendToDevices_AllFailed(t *testing.T) {
+	n := &fakeDeviceNotifier{results: map[string]error{
+		"tok-1": errors.New("boom"),
+		"tok-2": errors.New("boom"),
+	}}
+	tokens := []string{"tok-1", "tok-2"}
+
+	if err := SendToDevices(context.Background(), n, tokens, "Hello", "World", nil); err == nil {
+		t.Fatal("SendToDevices: want an error when every device failed")
+	}
+}
+
+func TestSendToDevices_EmptyTokensIsAFailure(t *testing.T) {
+	n := &fakeDeviceNotifier{}
+
+	if err := SendToDevices(context.Background(), n, nil, "Hello", "World", nil); err == nil {
+		t.Fatal("SendToDevices: want an error for zero tokens — nothing was delivered")
+	}
+	if len(n.calls) != 0 {
+		t.Errorf("calls = %v, want none", n.calls)
+	}
+}
+
+func TestSendToDevices_ForwardsDataPayload(t *testing.T) {
+	n := &fakeDeviceNotifier{}
+	var captured map[string]string
+	wrapped := notifierFunc(func(ctx context.Context, token, title, body string, data map[string]string) error {
+		captured = data
+		return n.Send(ctx, token, title, body, data)
+	})
+
+	data := map[string]string{"slug": "acme-backend-engineer"}
+	if err := SendToDevices(context.Background(), wrapped, []string{"tok-1"}, "Hello", "World", data); err != nil {
+		t.Fatalf("SendToDevices: %v", err)
+	}
+	if captured["slug"] != "acme-backend-engineer" {
+		t.Errorf("data forwarded = %v, want slug=acme-backend-engineer", captured)
 	}
 }
 
