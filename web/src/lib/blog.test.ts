@@ -58,7 +58,7 @@ describe('parseFrontmatter', () => {
 
   it.each(['title', 'date', 'summary'])('throws naming the file when %s is missing', (field) => {
     const raw = { ...full };
-    delete (raw as Record<string, unknown>)[field];
+    Reflect.deleteProperty(raw as Record<string, unknown>, field);
     expect(() => parseFrontmatter(raw, '/src/posts/broken.svx')).toThrow(/broken\.svx/);
   });
 

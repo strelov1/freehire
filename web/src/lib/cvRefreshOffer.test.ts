@@ -16,7 +16,7 @@ function memStorage(initial: Record<string, string> = {}): Storage {
       return Object.keys(data).length;
     },
     clear() {
-      for (const k of Object.keys(data)) delete data[k];
+      for (const k of Object.keys(data)) Reflect.deleteProperty(data, k);
     },
     getItem(key: string) {
       return Object.prototype.hasOwnProperty.call(data, key) ? data[key]! : null;
@@ -25,7 +25,7 @@ function memStorage(initial: Record<string, string> = {}): Storage {
       return null;
     },
     removeItem(key: string) {
-      delete data[key];
+      Reflect.deleteProperty(data, key);
     },
     setItem(key: string, value: string) {
       data[key] = value;

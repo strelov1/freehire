@@ -10,6 +10,8 @@
     "zip": "WXT_RELEASE=1 wxt zip",
     "test": "vitest run",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "oxlint && eslint .",
+    "lint:fix": "oxlint --fix && eslint . --fix",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -17,12 +19,20 @@
     "svelte": "^5.56.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@wxt-dev/module-svelte": "^2.0.5",
+    "eslint": "^10.8.0",
+    "eslint-plugin-oxlint": "^1.77.0",
+    "eslint-plugin-svelte": "^3.22.0",
+    "globals": "^17.8.0",
     "happy-dom": "^20.11.1",
+    "oxlint": "^1.77.0",
     "svelte-check": "^4.7.3",
+    "svelte-eslint-parser": "^1.8.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.10",
     "wxt": "^0.21.3"
   }

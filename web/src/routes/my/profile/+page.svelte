@@ -19,7 +19,6 @@
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
-  import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type {
     ATSResponse,
@@ -27,7 +26,6 @@
     FacetCounts,
     ResumeStructured,
     TalentNetworkVisibility,
-    Verdict,
   } from '$lib/types';
   import { Button } from '$lib/ui';
 
@@ -39,7 +37,6 @@
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let filters = $state<FilterStore | null>(null);
-  let verdict = $state<Verdict | null>(null);
   let counts = $state<FacetCounts | null>(null);
   let ats = $state<ATSResponse | null>(null);
   // The read-only structured résumé parsed from the CV (null when nothing to show).
@@ -58,13 +55,10 @@
     { id: 'skills', label: 'Skills' },
     { id: 'structured', label: 'Profile' },
     { id: 'experience', label: 'Experience' },
-    { id: 'coverage', label: 'Market coverage' },
     { id: 'readiness', label: 'CV readiness' },
   ] as const;
   const PANEL_ID = 'profile-panel';
-  let tab = $state<'settings' | 'skills' | 'structured' | 'experience' | 'coverage' | 'readiness'>(
-    'settings',
-  );
+  let tab = $state<'settings' | 'skills' | 'structured' | 'experience' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -184,8 +178,8 @@
     });
   });
 
-  // Reload the verdict + facet counts + ATS report whenever the applied (debounced)
-  // filters change. No filter (no profile) → nothing to compute.
+  // Reload the facet counts + ATS report whenever the applied (debounced) filters
+  // change. No filter (no profile) → nothing to compute.
   $effect(() => {
     const f = filters;
     if (!f) return;
@@ -201,21 +195,16 @@
     const gen = ++reloadGeneration;
     const params = filtersToParams(filters.applied);
     // Settled separately: a Meili facet-settings lag (new filterable attr not applied yet)
-    // must not blank coverage + ATS when those endpoints are fine. Facet counts degrade to
+    // must not blank the ATS report when that endpoint is fine. Facet counts degrade to
     // empty; the report still loads.
-    const [v, c, a] = await Promise.allSettled([
-      api.getProfileVerdict(params),
-      api.facetCounts(params),
-      api.getATSReport(params),
-    ]);
+    const [a, c] = await Promise.allSettled([api.getATSReport(params), api.facetCounts(params)]);
     if (gen !== reloadGeneration) return;
-    if (v.status !== 'fulfilled') {
+    if (a.status !== 'fulfilled') {
       loadError = true;
       return;
     }
-    verdict = v.value;
+    ats = a.value;
     counts = c.status === 'fulfilled' ? c.value : null;
-    ats = a.status === 'fulfilled' ? a.value : null;
     loadError = false;
   }
 
@@ -245,14 +234,6 @@
         }
       },
     });
-  }
-
-  // Link a gap skill to the job search under the current comparison role plus that skill.
-  function gapHref(skill: string): string {
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- transient: builds an href string once, never stored as reactive state
-    const params = filters ? filtersToParams(filters.applied) : new URLSearchParams();
-    params.append('skills', skill);
-    return `/?${params}`;
   }
 
   async function remove() {
@@ -424,10 +405,8 @@
           </div>
         {:else if loadError}
           <States state="error" message="Couldn't load the report." />
-        {:else if verdict === null}
+        {:else if ats === null}
           <States state="loading" />
-        {:else if tab === 'coverage'}
-          <VerdictView {verdict} {gapHref} />
         {:else}
           <!-- CV readiness: the ATS-readiness score and the optional AI review. -->
           <div class="flex flex-col gap-6">
@@ -452,10 +431,10 @@
         </div>
       </main>
 
-      <!-- Filters refine the Market coverage comparison only, so the summary sidebar
+      <!-- Filters refine CV readiness's keyword-match role only, so the summary sidebar
            shows on that tab alone — to the right of the content, clear of the account
            nav sidebar. -->
-      {#if filters && tab === 'coverage'}
+      {#if filters && tab === 'readiness'}
         <aside class="hidden w-72 shrink-0 md:block">
           <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
             <div class="rounded-xl border border-border bg-card p-4">
@@ -463,7 +442,7 @@
                 store={filters}
                 exclude={excludeFacets}
                 onOpen={() => (modalOpen = true)}
-                description="Narrow the market to see how it reshapes your CV — pick roles, regions and seniority to compare against."
+                description="Compare your CV's keyword strength against a role, region or seniority you choose."
               />
             </div>
           </div>
@@ -471,7 +450,7 @@
       {/if}
     </div>
 
-    {#if filters && tab === 'coverage'}
+    {#if filters && tab === 'readiness'}
       <FilterEdgeTab
         active={filters.active}
         onclick={() => (modalOpen = true)}

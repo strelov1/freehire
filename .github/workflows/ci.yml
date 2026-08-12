@@ -16,6 +16,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # golangci-lint's --new-from-merge-base needs origin/main reachable locally.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -57,6 +60,14 @@ jobs:
             exit 1
           fi
 
+      # Ratchet mode: only fails on issues in lines this PR touches, not the
+      # pre-existing backlog. Mirrors the design-system token ratchet.
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          args: --new-from-merge-base=origin/main
+
       - name: Unit tests
         run: |
           mkdir -p coverage
@@ -96,6 +107,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
 
       - name: Build
         run: pnpm build

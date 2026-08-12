@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import Seo from '$lib/components/Seo.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
+  import { Table } from '$lib/ui';
   import type { InsightCompany } from '$lib/api';
   import type { PageData } from './$types';
 
@@ -41,42 +42,40 @@
     {#if rows.length === 0}
       <p class="mt-4 text-sm text-muted-foreground">Not enough data yet.</p>
     {:else}
-      <table class="mt-3 w-full border-collapse text-left text-sm">
-        <thead>
+      <Table class="mt-3">
+        {#snippet header()}
           <tr class="border-b border-border text-muted-foreground">
-            <th class="py-2 pr-3 font-medium">Company</th>
+            <th class="py-2 pr-3 text-left font-medium">Company</th>
             <th class="py-2 pr-3 text-right font-medium">Open</th>
             <th class="py-2 text-right font-medium">30-day</th>
           </tr>
-        </thead>
-        <tbody>
-          {#each rows as c, i (c.company_slug)}
-            {@const growthTone =
-              c.growth_30d > 0
-                ? 'text-green-600 dark:text-green-400'
-                : c.growth_30d < 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-muted-foreground'}
-            <tr class="border-b border-border">
-              <td class="py-2 pr-3">
-                <span class="mr-1.5 tabular-nums text-muted-foreground">{i + 1}.</span>
-                <a
-                  href={resolve('/companies/[slug]', { slug: c.company_slug })}
-                  class="font-medium text-foreground hover:text-blue-600 hover:underline"
-                >
-                  {c.company_name}
-                </a>
-              </td>
-              <td class="py-2 pr-3 text-right tabular-nums text-foreground">
-                {c.open_now.toLocaleString('en-US')}
-              </td>
-              <td class="py-2 text-right font-medium tabular-nums {growthTone}">
-                {c.growth_30d > 0 ? '+' : ''}{c.growth_30d.toLocaleString('en-US')}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+        {/snippet}
+        {#each rows as c, i (c.company_slug)}
+          {@const growthTone =
+            c.growth_30d > 0
+              ? 'text-green-600 dark:text-green-400'
+              : c.growth_30d < 0
+                ? 'text-red-600 dark:text-red-400'
+                : 'text-muted-foreground'}
+          <tr class="border-b border-border">
+            <td class="py-2 pr-3">
+              <span class="mr-1.5 tabular-nums text-muted-foreground">{i + 1}.</span>
+              <a
+                href={resolve('/companies/[slug]', { slug: c.company_slug })}
+                class="font-medium text-foreground hover:text-blue-600 hover:underline"
+              >
+                {c.company_name}
+              </a>
+            </td>
+            <td class="py-2 pr-3 text-right tabular-nums text-foreground">
+              {c.open_now.toLocaleString('en-US')}
+            </td>
+            <td class="py-2 text-right font-medium tabular-nums {growthTone}">
+              {c.growth_30d > 0 ? '+' : ''}{c.growth_30d.toLocaleString('en-US')}
+            </td>
+          </tr>
+        {/each}
+      </Table>
     {/if}
   </section>
 {/snippet}

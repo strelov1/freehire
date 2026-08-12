@@ -8,6 +8,7 @@
   import { NAV, slugify } from '$lib/docs/nav';
   import { METHOD_TEXT, inlineCode } from '$lib/docs/format';
   import { breadcrumbJsonLd, jsonLdScript, webApiJsonLd } from '$lib/seo';
+  import { Table } from '$lib/ui';
 
   let { data } = $props();
 
@@ -141,24 +142,20 @@
 </section>
 
 {#snippet filterTable(rows: { param: string; label: string; values: string }[])}
-  <div class="mt-3 overflow-x-auto rounded-xl border border-border">
-    <table class="w-full border-collapse text-left text-sm">
-      <thead class="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
-        <tr>
-          <th class="px-3 py-2 font-medium">Param</th>
-          <th class="px-3 py-2 font-medium">Filter</th>
-          <th class="px-3 py-2 font-medium">Values</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each rows as f (f.param)}
-          <tr class="border-t border-border align-top transition-colors hover:bg-secondary/30">
-            <td class="px-3 py-2"><code class="font-mono text-brand-strong">{f.param}</code></td>
-            <td class="px-3 py-2 text-foreground/80">{f.label}</td>
-            <td class="px-3 py-2 text-muted-foreground">{f.values}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+  <Table class="mt-3 rounded-xl border border-border">
+    {#snippet header()}
+      <tr class="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+        <th class="px-3 py-2 font-medium">Param</th>
+        <th class="px-3 py-2 font-medium">Filter</th>
+        <th class="px-3 py-2 font-medium">Values</th>
+      </tr>
+    {/snippet}
+    {#each rows as f (f.param)}
+      <tr class="border-t border-border align-top transition-colors hover:bg-secondary/30">
+        <td class="px-3 py-2"><code class="font-mono text-brand-strong">{f.param}</code></td>
+        <td class="px-3 py-2 text-foreground/80">{f.label}</td>
+        <td class="px-3 py-2 text-muted-foreground">{f.values}</td>
+      </tr>
+    {/each}
+  </Table>
 {/snippet}

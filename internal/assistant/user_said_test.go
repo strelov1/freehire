@@ -24,6 +24,8 @@ func TestUserSaid(t *testing.T) {
 		{"an invention does not pass", "I led a team of fifty", false},
 		{"an empty quote does not pass", "", false},
 		{"whitespace alone does not pass", "   ", false},
+		{"a single word does not pass even if it is a verbatim hit", "Kafka", false},
+		{"two short words do not pass even if the substring is real", "the Kafka", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

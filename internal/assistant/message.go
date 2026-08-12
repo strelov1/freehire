@@ -158,6 +158,13 @@ func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 	return out, nil
 }
 
+// minQuoteWords is the shortest citation UserSaid will accept. A substring match with no
+// floor lets a common short word — "I", "the", any filler that turns up somewhere in every
+// session — count as a verbatim quote of anything containing it, which promotes an invented
+// claim to the candidate's own words for free. Three words is short enough to not bother a
+// real citation but long enough that it can't be found by accident in unrelated chatter.
+const minQuoteWords = 3
+
 // UserSaid reports whether quote appears in what the user actually typed in this
 // conversation, compared case-insensitively and with whitespace collapsed.
 //
@@ -168,7 +175,7 @@ func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 // let a paraphrase pass, and a paraphrase is precisely the thing being guarded against.
 func UserSaid(transcript []Message, quote string) bool {
 	quote = collapseSpace(quote)
-	if quote == "" {
+	if quote == "" || len(strings.Fields(quote)) < minQuoteWords {
 		return false
 	}
 	for _, m := range transcript {

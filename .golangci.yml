@@ -1,0 +1,18 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - sqlclosecheck
+    - noctx
+    - unconvert
+    - misspell
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

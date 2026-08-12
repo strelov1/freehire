@@ -126,6 +126,7 @@ var categoryTable = []aliasEntry{
 	{"data platform", "data_engineering"},
 	{"data governance", "data_engineering"},
 	{"data steward", "data_engineering"},
+	{"etl developer", "data_engineering"},
 	{"data scientist", "data_science"},
 	{"data science", "data_science"},
 	// "data scien" fires only on a title truncated mid-word ("Senior Data Scien…"),
@@ -146,12 +147,18 @@ var categoryTable = []aliasEntry{
 	{"bi analyst", "data_analytics"},
 	{"business intelligence developer", "data_analytics"},
 	{"bi developer", "data_analytics"},
+	{"power bi developer", "data_analytics"},
 	{"аналитик bi", "data_analytics"},
 	{"bi-аналитик", "data_analytics"},
 	// Classic ML and explicitly ML-carrying combined forms first, so a mixed
 	// "ML/AI Engineer" resolves to ml_ai before the bare AI terms below can claim it.
 	{"machine learning", "ml_ai"},
 	{"deep learning", "ml_ai"},
+	// Classic ML sub-disciplines that name neither "machine learning" nor "ai" —
+	// unambiguous on their own, so they resolve here rather than falling to the
+	// generic software_engineering catch-all at the bottom of the table.
+	{"computer vision engineer", "ml_ai"},
+	{"nlp engineer", "ml_ai"},
 	{"ml engineer", "ml_ai"},
 	{"ml/ai", "ml_ai"},
 	{"ai/ml", "ml_ai"},
@@ -172,6 +179,7 @@ var categoryTable = []aliasEntry{
 	{"ai agent engineer", "ai_engineering"},
 	{"agent engineer", "ai_engineering"},
 	{"ai research engineer", "ai_engineering"},
+	{"ai software engineer", "ai_engineering"},
 	{"ai automation engineer", "ai_engineering"},
 	// Hyphenated spellings. A hyphen is a word boundary, so the spaced aliases above
 	// cannot reach them. "ai-agent engineer" needs no entry — the bare "agent engineer"
@@ -192,7 +200,15 @@ var categoryTable = []aliasEntry{
 	{"infrastructure engineer", "devops"},
 	{"cloud engineer", "devops"},
 	{"system administrator", "devops"},
+	// The plural is the far more common surface form in prod titles ("Systems
+	// Administrator") and does not contain "system administrator" as a substring
+	// (the trailing "s" breaks the word boundary), so it needs its own entry.
+	{"systems administrator", "devops"},
 	{"sysadmin", "devops"},
+	{"database administrator", "devops"},
+	{"linux administrator", "devops"},
+	{"windows administrator", "devops"},
+	{"it administrator", "devops"},
 	// MLOps is DevOps practice specialized to ML artifacts (CI/CD, deployment,
 	// monitoring for models) — the operational lifecycle, not the modeling itself,
 	// which stays in ml_ai/ai_engineering above.
@@ -215,9 +231,21 @@ var categoryTable = []aliasEntry{
 	{"front end", "frontend"},
 	{"фронтенд", "frontend"},
 	{"фронт", "frontend"},
+	// Frontend-only frameworks named in a "<Framework> Developer" title — the
+	// framework itself states the discipline, so this is not a guess the way a
+	// bare language ("Java Developer") would be.
+	{"react developer", "frontend"},
+	{"react.js developer", "frontend"},
+	{"reactjs developer", "frontend"},
+	{"angular developer", "frontend"},
+	{"vue developer", "frontend"},
+	{"vue.js developer", "frontend"},
+	{"vuejs developer", "frontend"},
 	{"mobile", "mobile"},
 	{"android", "mobile"},
 	{"ios", "mobile"},
+	// React Native is mobile-only, unlike bare "react" above.
+	{"react native developer", "mobile"},
 	{"мобильный", "mobile"},
 	{"мобильная", "mobile"},
 	{"мобильных", "mobile"},
@@ -270,6 +298,11 @@ var categoryTable = []aliasEntry{
 	{"встраиваемых", "embedded"},
 	{"blockchain", "blockchain"},
 	{"блокчейн", "blockchain"},
+	// "Web3"/"smart contract" name the blockchain domain as unambiguously as the
+	// word "blockchain" itself, so these resolve here rather than the generic
+	// software_engineering catch-all.
+	{"web3 developer", "blockchain"},
+	{"smart contract developer", "blockchain"},
 	{"hardware", "hardware"},
 	{"fpga", "hardware"},
 	{"solutions architect", "architecture"},
@@ -676,6 +709,75 @@ var categoryTable = []aliasEntry{
 	{"менеджер", "management"},
 	{"analyst", "data_analytics"},
 	{"аналитик", "data_analytics"},
+	// software_engineering: the generic catch-all for a title classify.IsTech's
+	// techTitleTerms already confirms as software/IT work but that names no
+	// sub-discipline — "Software Engineer" and "Java Developer" do not say
+	// backend vs frontend vs fullstack, and this package never guesses. Every
+	// entry below mirrors a techTitleTerms member that has no more specific
+	// categoryTable entry above it (cross-checked against tech.go so the two
+	// lists cannot silently drift). Kept at the very bottom, second-to-last
+	// before the 1C fallback, so any more specific alias anywhere above always
+	// wins first — these only fire once nothing else has.
+	//
+	// Deliberately EXCLUDED: bare "programmer" (techTitleTerms has it as an
+	// "unambiguous" single word for is_tech, but prod titles include "CNC
+	// Programmer" — a machining role, not software — so a category entry here
+	// would mislabel it; is_tech's false positive on it is a separate, smaller
+	// bug left alone).
+	//
+	// The base phrases ("software engineer", "software developer", "software
+	// development engineer") deliberately carry every qualified variant with
+	// them by substring, the same convention the "design engineer" bare form
+	// uses above: "Senior Software Engineer, Platform" and "AI Software
+	// Engineer, Internal Tools" resolve without their own entry.
+	{"software engineer", "software_engineering"},
+	{"software development engineer", "software_engineering"},
+	{"software developer", "software_engineering"},
+	{"web developer", "software_engineering"},
+	{"web engineer", "software_engineering"},
+	{"app developer", "software_engineering"},
+	{"application developer", "software_engineering"},
+	{"game developer", "software_engineering"},
+	{"go engineer", "software_engineering"},
+	{"golang engineer", "software_engineering"},
+	{"go developer", "software_engineering"},
+	{"golang developer", "software_engineering"},
+	{"python developer", "software_engineering"},
+	{"java developer", "software_engineering"},
+	{"javascript developer", "software_engineering"},
+	{"typescript developer", "software_engineering"},
+	{".net developer", "software_engineering"},
+	{"dotnet developer", "software_engineering"},
+	{"php developer", "software_engineering"},
+	{"ruby developer", "software_engineering"},
+	{"rails developer", "software_engineering"},
+	{"c# developer", "software_engineering"},
+	{"c++ developer", "software_engineering"},
+	{"node developer", "software_engineering"},
+	{"nodejs developer", "software_engineering"},
+	{"node.js developer", "software_engineering"},
+	{"salesforce developer", "software_engineering"},
+	{"sharepoint developer", "software_engineering"},
+	{"database developer", "software_engineering"},
+	{"rpa developer", "software_engineering"},
+	{"erp developer", "software_engineering"},
+	{"sap developer", "software_engineering"},
+	{"oracle developer", "software_engineering"},
+	{"abap developer", "software_engineering"},
+	{"wordpress developer", "software_engineering"},
+	{"drupal developer", "software_engineering"},
+	{"magento developer", "software_engineering"},
+	{"shopify developer", "software_engineering"},
+	// "Member of Technical Staff" reads as software on the same evidence tech.go
+	// cites (294/300 sampled prod postings software or AI). "Founding Engineer"
+	// is the early-startup twin of the same generalist population.
+	{"member of technical staff", "software_engineering"},
+	{"member of the technical staff", "software_engineering"},
+	{"founding engineer", "software_engineering"},
+	// "AI-native"/"AI-enabled" describe the toolchain, not the discipline (same
+	// reasoning as tech.go's techTitleTerms entry for these).
+	{"ai-native engineer", "software_engineering"},
+	{"ai native engineer", "software_engineering"},
 	// 1С (the RU enterprise/ERP dev platform) resolves last so a more specific role word in the
 	// title wins first ("Аналитик 1С" → data_analytics, "Тестировщик 1С" → qa); a title whose only
 	// signal is 1С ("Программист 1С", "1С-разработчик") reads as backend — server-side enterprise

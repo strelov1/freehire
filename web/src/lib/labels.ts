@@ -89,6 +89,7 @@ export const RELOCATION_LABELS: Record<string, string> = {
 // (TS2353) rather than leaving a stale entry. The declared type stays
 // Record<string, string> because the `label(map, value)` helpers take that shape.
 export const CATEGORY_LABELS: Record<string, string> = {
+  software_engineering: 'Software Engineering',
   backend: 'Backend',
   frontend: 'Frontend',
   fullstack: 'Full-Stack',

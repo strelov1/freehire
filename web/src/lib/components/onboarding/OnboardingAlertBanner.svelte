@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Bookmark, X } from '@lucide/svelte';
+  import { Alert } from '$lib/ui';
   import SaveSearchAlert from '../filters/SaveSearchAlert.svelte';
 
   // The ephemeral post-onboarding nudge: after the wizard configures a feed, offer to
@@ -18,7 +19,7 @@
   } = $props();
 </script>
 
-<div class="mb-3 flex items-start gap-3 rounded-xl border border-border bg-card p-3 pl-4">
+<Alert class="mb-3 rounded-xl p-3 pl-4">
   <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand-strong">
     <Bookmark class="size-4.5" />
   </div>
@@ -35,4 +36,4 @@
   >
     <X class="size-4" />
   </button>
-</div>
+</Alert>

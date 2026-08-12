@@ -31,7 +31,7 @@ describe('appendTranscript', () => {
 
 describe('canRecord', () => {
   it('is true only when both APIs are present', () => {
-    expect(canRecord({ mediaDevices: { getUserMedia: () => {} }, MediaRecorder: class {} })).toBe(
+    expect(canRecord({ mediaDevices: { getUserMedia: () => {} }, MediaRecorder: {} })).toBe(
       true,
     );
   });
@@ -41,8 +41,8 @@ describe('canRecord', () => {
   });
 
   it('is false without getUserMedia, which is what an insecure context looks like', () => {
-    expect(canRecord({ MediaRecorder: class {} })).toBe(false);
-    expect(canRecord({ mediaDevices: {}, MediaRecorder: class {} })).toBe(false);
+    expect(canRecord({ MediaRecorder: {} })).toBe(false);
+    expect(canRecord({ mediaDevices: {}, MediaRecorder: {} })).toBe(false);
   });
 
   it('is false in a bare environment', () => {

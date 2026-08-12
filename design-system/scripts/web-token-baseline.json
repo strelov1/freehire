@@ -104,6 +104,7 @@
   "web/src/routes/my/+layout.svelte": 3,
   "web/src/routes/my/assistant/[[id]]/+page.svelte": 1,
   "web/src/routes/my/market-pulse/[skill]/+page.svelte": 1,
+  "web/src/routes/my/market-pulse/+page.svelte": 2,
   "web/src/routes/my/profile/+page.svelte": 2,
   "web/src/routes/open/+page.svelte": 8,
   "web/src/routes/privacy/+page.svelte": 2,

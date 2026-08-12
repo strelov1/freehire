@@ -48,9 +48,9 @@ func titleCategory(jobTitle, cvText string) ScoredCategory {
 		fmt.Sprintf("Your CV never states the title %q", stated))
 
 	// The role-field check is only evaluable when the dictionary resolves the vacancy's
-	// title to a category. When it does not — a software generalist resolves none by design
-	// — the check leaves this category's denominator rather than costing points nobody
-	// could have earned.
+	// title to a category. When it does not — e.g. "Product Engineer", which splits too
+	// evenly between software and manufacturing for classify to guess — the check leaves
+	// this category's denominator rather than costing points nobody could have earned.
 	field := classify.Parse(jobTitle).Category
 	if field == "" {
 		return c

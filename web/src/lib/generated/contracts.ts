@@ -1240,7 +1240,7 @@ export const WORK_MODE_VALUES = ['remote', 'hybrid', 'onsite'] as const;
 export type WorkMode = (typeof WORK_MODE_VALUES)[number];
 export const SENIORITY_VALUES = ['intern', 'junior', 'middle', 'senior', 'lead', 'staff', 'principal', 'c_level'] as const;
 export type Seniority = (typeof SENIORITY_VALUES)[number];
-export const CATEGORY_VALUES = ['backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'engineering_design', 'product', 'project_management', 'management', 'marketing', 'sales', 'support', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing', 'recruiting', 'hr', 'finance', 'legal', 'operations', 'customer_success', 'other'] as const;
+export const CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'engineering_design', 'product', 'project_management', 'management', 'marketing', 'sales', 'support', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing', 'recruiting', 'hr', 'finance', 'legal', 'operations', 'customer_success', 'other'] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
 export const EMPLOYMENT_TYPE_VALUES = ['full_time', 'part_time', 'contract', 'internship'] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPE_VALUES)[number];
@@ -1250,8 +1250,6 @@ export const ENGLISH_LEVEL_VALUES = ['none', 'a1', 'a2', 'b1', 'b2', 'c1', 'c2',
 export type EnglishLevel = (typeof ENGLISH_LEVEL_VALUES)[number];
 export const COMPANY_TYPE_VALUES = ['product', 'startup', 'outsource', 'outstaff', 'agency', 'inhouse', 'government'] as const;
 export type CompanyType = (typeof COMPANY_TYPE_VALUES)[number];
-export const COMPANY_FEEDBACK_TYPE_VALUES = ['interview', 'culture', 'compensation', 'management', 'work_life_balance', 'career_growth', 'other'] as const;
-export type CompanyFeedbackType = (typeof COMPANY_FEEDBACK_TYPE_VALUES)[number];
 export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gamedev', 'media', 'travel', 'healthcare', 'edtech', 'govtech', 'devtools', 'cybersecurity', 'ai', 'hrtech', 'adtech', 'proptech', 'logistics', 'mobility', 'climatetech', 'other'] as const;
 export type Domain = (typeof DOMAIN_VALUES)[number];
 export const AI_ARCHETYPE_VALUES = ['rag_app_builder', 'agent_builder', 'cloud_ml_platform_engineer', 'ml_trainer_researcher', 'fullstack_ai_engineer', 'devops_infra_engineer'] as const;
@@ -1549,6 +1547,7 @@ export const ROLE_LABELS = {
   'c_level_social_media_manager': 'C-Level Social Media Manager',
   'c_level_software_architect': 'C-Level Software Architect',
   'c_level_software_engineer': 'C-Level Software Engineer',
+  'c_level_software_engineering': 'C-Level Software Generalist',
   'c_level_solutions_architect': 'C-Level Solutions Architect',
   'c_level_solutions_consultant': 'C-Level Solutions Consultant',
   'c_level_solutions_engineer': 'C-Level Solutions Engineer',
@@ -1762,6 +1761,7 @@ export const ROLE_LABELS = {
   'intern_social_media_manager': 'Intern Social Media Manager',
   'intern_software_architect': 'Intern Software Architect',
   'intern_software_engineer': 'Intern Software Engineer',
+  'intern_software_engineering': 'Intern Software Generalist',
   'intern_solutions_architect': 'Intern Solutions Architect',
   'intern_solutions_consultant': 'Intern Solutions Consultant',
   'intern_solutions_engineer': 'Intern Solutions Engineer',
@@ -1903,6 +1903,7 @@ export const ROLE_LABELS = {
   'junior_social_media_manager': 'Junior Social Media Manager',
   'junior_software_architect': 'Junior Software Architect',
   'junior_software_engineer': 'Junior Software Engineer',
+  'junior_software_engineering': 'Junior Software Generalist',
   'junior_solutions_architect': 'Junior Solutions Architect',
   'junior_solutions_consultant': 'Junior Solutions Consultant',
   'junior_solutions_engineer': 'Junior Solutions Engineer',
@@ -2043,6 +2044,7 @@ export const ROLE_LABELS = {
   'lead_social_media_manager': 'Lead Social Media Manager',
   'lead_software_architect': 'Lead Software Architect',
   'lead_software_engineer': 'Lead Software Engineer',
+  'lead_software_engineering': 'Lead Software Generalist',
   'lead_solutions_architect': 'Lead Solutions Architect',
   'lead_solutions_consultant': 'Lead Solutions Consultant',
   'lead_solutions_engineer': 'Lead Solutions Engineer',
@@ -2193,6 +2195,7 @@ export const ROLE_LABELS = {
   'middle_social_media_manager': 'Middle Social Media Manager',
   'middle_software_architect': 'Middle Software Architect',
   'middle_software_engineer': 'Middle Software Engineer',
+  'middle_software_engineering': 'Middle Software Generalist',
   'middle_solutions_architect': 'Middle Solutions Architect',
   'middle_solutions_consultant': 'Middle Solutions Consultant',
   'middle_solutions_engineer': 'Middle Solutions Engineer',
@@ -2345,6 +2348,7 @@ export const ROLE_LABELS = {
   'principal_social_media_manager': 'Principal Social Media Manager',
   'principal_software_architect': 'Principal Software Architect',
   'principal_software_engineer': 'Principal Software Engineer',
+  'principal_software_engineering': 'Principal Software Generalist',
   'principal_solutions_architect': 'Principal Solutions Architect',
   'principal_solutions_consultant': 'Principal Solutions Consultant',
   'principal_solutions_engineer': 'Principal Solutions Engineer',
@@ -2505,6 +2509,7 @@ export const ROLE_LABELS = {
   'senior_social_media_manager': 'Senior Social Media Manager',
   'senior_software_architect': 'Senior Software Architect',
   'senior_software_engineer': 'Senior Software Engineer',
+  'senior_software_engineering': 'Senior Software Generalist',
   'senior_solutions_architect': 'Senior Solutions Architect',
   'senior_solutions_consultant': 'Senior Solutions Consultant',
   'senior_solutions_engineer': 'Senior Solutions Engineer',
@@ -2527,6 +2532,7 @@ export const ROLE_LABELS = {
   'social_media_manager': 'Social Media Manager',
   'software_architect': 'Software Architect',
   'software_engineer': 'Software Engineer',
+  'software_engineering': 'Software Generalist',
   'solutions_architect': 'Solutions Architect',
   'solutions_consultant': 'Solutions Consultant',
   'solutions_engineer': 'Solutions Engineer',
@@ -2656,6 +2662,7 @@ export const ROLE_LABELS = {
   'staff_social_media_manager': 'Staff Social Media Manager',
   'staff_software_architect': 'Staff Software Architect',
   'staff_software_engineer': 'Staff Software Engineer',
+  'staff_software_engineering': 'Staff Software Generalist',
   'staff_solutions_architect': 'Staff Solutions Architect',
   'staff_solutions_consultant': 'Staff Solutions Consultant',
   'staff_solutions_engineer': 'Staff Solutions Engineer',
@@ -2695,7 +2702,7 @@ export const ROLE_ALIASES = {
   'account_manager': ['account manager'],
   'accountant': ['accountant'],
   'agent_engineer': ['agent engineer', 'ai agent engineer'],
-  'ai_engineering': ['agent engineer', 'ai agent engineer', 'ai automation engineer', 'ai engineer', 'ai product engineer', 'ai research engineer', 'ai-automation engineer', 'ai-product engineer', 'ai-research engineer', 'applied ai', 'genai', 'generative ai', 'llm', 'llm engineer', 'prompt engineer', 'rag engineer'],
+  'ai_engineering': ['agent engineer', 'ai agent engineer', 'ai automation engineer', 'ai engineer', 'ai product engineer', 'ai research engineer', 'ai software engineer', 'ai-automation engineer', 'ai-product engineer', 'ai-research engineer', 'applied ai', 'genai', 'generative ai', 'llm', 'llm engineer', 'prompt engineer', 'rag engineer'],
   'ai_product_engineer': ['ai product engineer', 'ai-product engineer'],
   'analytics_engineer': ['analytics engineer'],
   'android_developer': ['android developer', 'android engineer', 'android software engineer'],
@@ -2705,7 +2712,7 @@ export const ROLE_ALIASES = {
   'backend': ['1c', '1с', 'back end', 'back-end', 'backend', 'бекенд', 'бэкенд'],
   'bdr': ['bdr', 'business development representative'],
   'bim_specialist': ['bim coordinator', 'bim designer', 'bim modeler', 'bim specialist', 'revit designer'],
-  'blockchain': ['blockchain', 'блокчейн'],
+  'blockchain': ['blockchain', 'smart contract developer', 'web3 developer', 'блокчейн'],
   'brand_designer': ['brand designer', 'branding designer'],
   'brand_manager': ['brand manager', 'brand marketing manager'],
   'business_analysis': ['business analysis', 'business analyst', 'business process analyst', 'business system analyst', 'business systems analyst', 'functional analyst', 'it business analyst', 'process analyst', 'requirements analyst', 'system analyst', 'systems analyst', 'аналитик бизнес-процессов', 'аналитик требований', 'бизнес аналитик', 'бизнес-аналитик', 'системный аналитик'],
@@ -2727,9 +2734,9 @@ export const ROLE_ALIASES = {
   'customer_success': ['client success', 'customer onboarding', 'customer success', 'implementation consultant', 'implementation specialist', 'onboarding manager', 'onboarding specialist', 'renewal manager', 'renewals manager', 'менеджер по работе с клиентами', 'менеджер по успеху клиентов', 'специалист по адаптации клиентов'],
   'customer_success_manager': ['csm', 'customer success manager'],
   'cybersecurity_engineer': ['cyber security engineer', 'cybersecurity engineer'],
-  'data_analytics': ['analyst', 'analytics engineer', 'bi analyst', 'bi developer', 'bi-аналитик', 'business intelligence analyst', 'business intelligence developer', 'data analyst', 'data analytics', 'data аналитик', 'аналитик', 'аналитик bi', 'аналитик данных'],
+  'data_analytics': ['analyst', 'analytics engineer', 'bi analyst', 'bi developer', 'bi-аналитик', 'business intelligence analyst', 'business intelligence developer', 'data analyst', 'data analytics', 'data аналитик', 'power bi developer', 'аналитик', 'аналитик bi', 'аналитик данных'],
   'data_architect': ['data architect'],
-  'data_engineering': ['data engineer', 'data engineering', 'data governance', 'data platform', 'data steward', 'дата-инженер', 'инженер данных'],
+  'data_engineering': ['data engineer', 'data engineering', 'data governance', 'data platform', 'data steward', 'etl developer', 'дата-инженер', 'инженер данных'],
   'data_platform_engineer': ['data platform engineer'],
   'data_science': ['data scien', 'data science', 'data scientist', 'дата-сайентист'],
   'deep_learning_engineer': ['deep learning engineer'],
@@ -2740,7 +2747,7 @@ export const ROLE_ALIASES = {
   'design_ops': ['design operations', 'design ops', 'designops'],
   'developer_advocate': ['developer advocate', 'developer evangelist', 'developer relations', 'devrel'],
   'developer_relations': ['developer advocate', 'developer community manager', 'developer evangelist', 'developer experience engineer', 'developer relations', 'devrel', 'technical evangelist', 'деврел', 'технический евангелист'],
-  'devops': ['cloud design engineer', 'cloud engineer', 'devops', 'infrastructure engineer', 'ml ops', 'mlops', 'platform engineer', 'platform engineering', 'sysadmin', 'system administrator', 'девопс'],
+  'devops': ['cloud design engineer', 'cloud engineer', 'database administrator', 'devops', 'infrastructure engineer', 'it administrator', 'linux administrator', 'ml ops', 'mlops', 'platform engineer', 'platform engineering', 'sysadmin', 'system administrator', 'systems administrator', 'windows administrator', 'девопс'],
   'director': ['director'],
   'drafter': ['cad drafter', 'design drafter', 'design draftsman', 'drafter', 'draftsman', 'draughtsman'],
   'electrical_designer': ['electrical design engineer', 'electrical designer'],
@@ -2764,7 +2771,7 @@ export const ROLE_ALIASES = {
   'fractional_coo': ['fractional coo'],
   'fractional_cpo': ['fractional cpo'],
   'fractional_cto': ['fractional cto'],
-  'frontend': ['front end', 'front-end', 'frontend', 'фронт', 'фронтенд'],
+  'frontend': ['angular developer', 'front end', 'front-end', 'frontend', 'react developer', 'react.js developer', 'reactjs developer', 'vue developer', 'vue.js developer', 'vuejs developer', 'фронт', 'фронтенд'],
   'fullstack': ['full stack', 'full-stack', 'fullstack', 'фуллстак', 'фулстек'],
   'genai_engineer': ['genai engineer', 'generative ai engineer'],
   'geo_specialist': ['aeo manager', 'aeo specialist', 'answer engine optimization', 'generative engine optimization', 'generative search optimization', 'geo manager', 'geo specialist'],
@@ -2799,9 +2806,9 @@ export const ROLE_ALIASES = {
   'mechanical_engineer': ['mechanical engineer'],
   'member_of_technical_staff': ['member of technical staff', 'member of the technical staff', 'mts'],
   'middle': ['mid', 'mid level', 'mid-level', 'middle', 'мидл', 'средний'],
-  'ml_ai': ['ai/ml', 'deep learning', 'machine learning', 'ml engineer', 'ml/ai'],
+  'ml_ai': ['ai/ml', 'computer vision engineer', 'deep learning', 'machine learning', 'ml engineer', 'ml/ai', 'nlp engineer'],
   'mlops_engineer': ['ml ops engineer', 'mlops engineer'],
-  'mobile': ['android', 'ios', 'mobile', 'мобильная', 'мобильный', 'мобильных'],
+  'mobile': ['android', 'ios', 'mobile', 'react native developer', 'мобильная', 'мобильный', 'мобильных'],
   'motion_designer': ['motion designer', 'motion graphics designer'],
   'network_engineering': ['network administrator', 'network design engineer', 'network engineer', 'network engineering', 'сетевой администратор', 'сетевой инженер'],
   'operations': ['administrative assistant', 'biz ops', 'business operations', 'chief of staff', 'chief operating officer', 'coo', 'executive assistant', 'facilities manager', 'head of operations', 'office manager', 'operations analyst', 'operations coordinator', 'operations manager', 'operations specialist', 'ops manager', 'procurement', 'procurement manager', 'purchasing manager', 'ассистент руководителя', 'закупщик', 'операционный директор', 'операционный менеджер', 'офис-менеджер', 'помощник руководителя', 'специалист по закупкам'],
@@ -2838,6 +2845,7 @@ export const ROLE_ALIASES = {
   'social_media_manager': ['smm manager', 'smm specialist', 'social media manager'],
   'software_architect': ['software architect'],
   'software_engineer': ['sde', 'software developer', 'software development engineer', 'software engineer', 'swe', 'web developer'],
+  'software_engineering': ['.net developer', 'abap developer', 'ai native engineer', 'ai-native engineer', 'app developer', 'application developer', 'c# developer', 'c++ developer', 'database developer', 'dotnet developer', 'drupal developer', 'erp developer', 'founding engineer', 'game developer', 'go developer', 'go engineer', 'golang developer', 'golang engineer', 'java developer', 'javascript developer', 'magento developer', 'member of technical staff', 'member of the technical staff', 'node developer', 'node.js developer', 'nodejs developer', 'oracle developer', 'php developer', 'python developer', 'rails developer', 'rpa developer', 'ruby developer', 'salesforce developer', 'sap developer', 'sharepoint developer', 'shopify developer', 'software developer', 'software development engineer', 'software engineer', 'typescript developer', 'web developer', 'web engineer', 'wordpress developer'],
   'solutions_architect': ['solution architect', 'solutions architect'],
   'solutions_consultant': ['solution consultant', 'solutions consultant'],
   'solutions_engineer': ['solutions engineer'],

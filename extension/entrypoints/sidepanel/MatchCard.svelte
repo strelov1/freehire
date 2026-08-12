@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Card } from 'freehire-design-system';
+  import { Button, Card } from 'freehire-design-system';
+  import { HIRE_ORIGIN } from '../../lib/auth';
   import { companyLogoUrl, type FreehireJob, type JobMatch } from '../../lib/freehire';
 
   let { job, match }: { job: FreehireJob; match: JobMatch } = $props();
@@ -9,10 +10,12 @@
   let logoUrl = $derived(companyLogoUrl(job.company));
   let monogram = $derived((job.company || job.title || '?').trim().charAt(0).toUpperCase());
   let logoFailed = $state(false);
+  let jobUrl = $derived(`${HIRE_ORIGIN}/jobs/${encodeURIComponent(job.public_slug)}`);
+  let tailorUrl = $derived(`${HIRE_ORIGIN}/tailor/${encodeURIComponent(job.public_slug)}`);
 </script>
 
 <Card class="card">
-  <div class="job">
+  <a class="job" href={jobUrl} target="_blank" rel="noreferrer">
     {#key job.company}
       <div class="logo">
         {#if logoUrl && !logoFailed}
@@ -26,7 +29,7 @@
       {#if job.company}<div class="company">{job.company}</div>{/if}
       <div class="title">{job.title}</div>
     </div>
-  </div>
+  </a>
 
   <div class="mrow">
     <span class="label">Profile match</span>
@@ -38,7 +41,7 @@
   <div class="group">
     <div class="glabel"><span class="dot good"></span> You have</div>
     <div class="chips">
-      {#each match.matched as s}<span class="chip good">{s}</span>{/each}
+      {#each match.matched as s (s)}<span class="chip good">{s}</span>{/each}
       {#if match.matched.length === 0}<span class="none">no matching skills yet</span>{/if}
     </div>
   </div>
@@ -47,10 +50,21 @@
     <div class="group">
       <div class="glabel"><span class="dot miss"></span> Missing</div>
       <div class="chips">
-        {#each match.missing as s}<span class="chip miss">{s}</span>{/each}
+        {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
       </div>
     </div>
   {/if}
+
+  <Button
+    class="tailor"
+    variant="primary"
+    size="sm"
+    href={tailorUrl}
+    target="_blank"
+    rel="noreferrer"
+  >
+    Tailor CV
+  </Button>
 </Card>
 
 <style>
@@ -63,6 +77,8 @@
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
+    text-decoration: none;
+    color: inherit;
   }
   .logo {
     flex: none;
@@ -197,5 +213,9 @@
   .none {
     font-size: 12px;
     color: var(--muted-foreground);
+  }
+  :global(.tailor) {
+    width: 100%;
+    margin-top: 14px;
   }
 </style>

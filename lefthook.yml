@@ -1,0 +1,32 @@
+pre-commit:
+  parallel: true
+  commands:
+    go-fmt:
+      glob: "*.go"
+      run: |
+        files=$(gofmt -l {staged_files})
+        if [ -n "$files" ]; then
+          echo "Not gofmt-clean:"
+          echo "$files"
+          exit 1
+        fi
+    go-vet:
+      glob: "*.go"
+      run: go vet ./...
+    # Ratchet mode: only fails on issues in lines this commit touches, not
+    # the pre-existing backlog. Same policy as CI (see .golangci.yml).
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run --new-from-rev=HEAD --allow-parallel-runners ./...
+    web-lint:
+      root: "web/"
+      glob: "web/**/*.{js,ts,svelte}"
+      run: pnpm exec eslint {staged_files}
+    extension-lint:
+      root: "extension/"
+      glob: "extension/**/*.{js,ts,svelte}"
+      run: pnpm exec eslint {staged_files}
+    design-system-lint:
+      root: "design-system/"
+      glob: "design-system/**/*.{js,ts,svelte}"
+      run: pnpm exec eslint {staged_files}

@@ -4,6 +4,7 @@
   import InsightsPageShell from '$lib/components/InsightsPageShell.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '$lib/seo';
   import { formatSalary, seniorityLabel } from '$lib/insights';
+  import { Table } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -44,31 +45,29 @@
   {#if data.bands.length === 0}
     <p class="text-muted-foreground">No salary figures disclosed for this category yet.</p>
   {:else}
-    <table class="w-full border-collapse text-left text-sm">
-      <thead>
+    <Table>
+      {#snippet header()}
         <tr class="border-b border-border text-muted-foreground">
-          <th class="py-2 pr-4 font-medium">Level</th>
-          <th class="py-2 pr-4 font-medium">Currency</th>
-          <th class="py-2 pr-4 font-medium">Period</th>
+          <th class="py-2 pr-4 text-left font-medium">Level</th>
+          <th class="py-2 pr-4 text-left font-medium">Currency</th>
+          <th class="py-2 pr-4 text-left font-medium">Period</th>
           <th class="py-2 pr-4 font-medium text-right">25th</th>
           <th class="py-2 pr-4 font-medium text-right">Median</th>
           <th class="py-2 pr-4 font-medium text-right">75th</th>
           <th class="py-2 font-medium text-right">Postings</th>
         </tr>
-      </thead>
-      <tbody>
-        {#each data.bands as b (b.seniority + b.currency + b.period)}
-          <tr class="border-b border-border">
-            <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(b.seniority)}</td>
-            <td class="py-2 pr-4 text-muted-foreground">{b.currency.toUpperCase()}</td>
-            <td class="py-2 pr-4 text-muted-foreground">{b.period}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p25, b.currency)}</td>
-            <td class="py-2 pr-4 text-right font-semibold tabular-nums">{formatSalary(b.p50, b.currency)}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p75, b.currency)}</td>
-            <td class="py-2 text-right tabular-nums text-muted-foreground">{b.sample_size}</td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+      {/snippet}
+      {#each data.bands as b (b.seniority + b.currency + b.period)}
+        <tr class="border-b border-border">
+          <td class="py-2 pr-4 font-medium text-foreground">{seniorityLabel(b.seniority)}</td>
+          <td class="py-2 pr-4 text-muted-foreground">{b.currency.toUpperCase()}</td>
+          <td class="py-2 pr-4 text-muted-foreground">{b.period}</td>
+          <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p25, b.currency)}</td>
+          <td class="py-2 pr-4 text-right font-semibold tabular-nums">{formatSalary(b.p50, b.currency)}</td>
+          <td class="py-2 pr-4 text-right tabular-nums">{formatSalary(b.p75, b.currency)}</td>
+          <td class="py-2 text-right tabular-nums text-muted-foreground">{b.sample_size}</td>
+        </tr>
+      {/each}
+    </Table>
   {/if}
 </InsightsPageShell>

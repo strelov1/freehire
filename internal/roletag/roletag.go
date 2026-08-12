@@ -44,32 +44,38 @@ var seniorityLabel = map[string]string{
 // ("{seniorityLabel} {categoryNoun}", e.g. senior + backend → "Senior Backend
 // Engineer").
 var categoryNoun = map[string]string{
-	"backend":             "Backend Engineer",
-	"frontend":            "Frontend Engineer",
-	"fullstack":           "Fullstack Engineer",
-	"mobile":              "Mobile Engineer",
-	"devops":              "DevOps Engineer",
-	"sre":                 "Site Reliability Engineer",
-	"network_engineering": "Network Engineer",
-	"data_engineering":    "Data Engineer",
-	"data_science":        "Data Scientist",
-	"data_analytics":      "Data Analyst",
-	"ml_ai":               "ML Engineer",
-	"ai_engineering":      "AI Engineer",
-	"qa":                  "QA Engineer",
-	"security":            "Security Engineer",
-	"hardware":            "Hardware Engineer",
-	"embedded":            "Embedded Engineer",
-	"blockchain":          "Blockchain Engineer",
-	"architecture":        "Architect",
-	"design":              "Designer",
-	"engineering_design":  "Engineering Designer",
-	"product":             "Product Manager",
-	"project_management":  "Project Manager",
-	"management":          "Manager",
-	"marketing":           "Marketing Specialist",
-	"sales":               "Sales Specialist",
-	"support":             "Support Specialist",
+	// Deliberately NOT "Software Engineer": the namedRoleTable below already owns
+	// that exact label for its own "software_engineer" slug (title-matched,
+	// independent of category, and depended on by web/src/lib/roleRelated.ts and
+	// collections.ts) — an identical label on a second slug would show as a
+	// confusing duplicate in the role picker.
+	"software_engineering": "Software Generalist",
+	"backend":              "Backend Engineer",
+	"frontend":             "Frontend Engineer",
+	"fullstack":            "Fullstack Engineer",
+	"mobile":               "Mobile Engineer",
+	"devops":               "DevOps Engineer",
+	"sre":                  "Site Reliability Engineer",
+	"network_engineering":  "Network Engineer",
+	"data_engineering":     "Data Engineer",
+	"data_science":         "Data Scientist",
+	"data_analytics":       "Data Analyst",
+	"ml_ai":                "ML Engineer",
+	"ai_engineering":       "AI Engineer",
+	"qa":                   "QA Engineer",
+	"security":             "Security Engineer",
+	"hardware":             "Hardware Engineer",
+	"embedded":             "Embedded Engineer",
+	"blockchain":           "Blockchain Engineer",
+	"architecture":         "Architect",
+	"design":               "Designer",
+	"engineering_design":   "Engineering Designer",
+	"product":              "Product Manager",
+	"project_management":   "Project Manager",
+	"management":           "Manager",
+	"marketing":            "Marketing Specialist",
+	"sales":                "Sales Specialist",
+	"support":              "Support Specialist",
 	// IT-company roles added by expand-role-taxonomy.
 	"business_analysis":     "Business Analyst",
 	"solutions_engineering": "Solutions Engineer",
@@ -92,8 +98,15 @@ var namedRoleTable = []struct {
 	slug, label string
 	aliases     []string
 }{
-	// Generic engineering catch-all (classify assigns no category to a bare
-	// "Software Engineer"): the largest category-less bucket in the catalogue.
+	// Generic engineering catch-all. classify's software_engineering category
+	// (added alongside this role) now ALSO resolves a bare "Software Engineer" —
+	// the two coexist deliberately, the same layering every granular named role
+	// below uses over its coarse category (android_developer + mobile,
+	// systems_administrator + devops, …); categoryNoun gives the category a
+	// distinct label ("Software Generalist") specifically so the two do not show
+	// as duplicate-looking picker options. This role's own label/aliases/slug stay
+	// unchanged since web/src/lib/roleRelated.ts and collections.ts depend on the
+	// exact "software_engineer" slug.
 	{"software_engineer", "Software Engineer", []string{"software engineer", "software developer", "software development engineer", "web developer", "sde", "swe"}},
 
 	// Startup / cross-cutting engineering.

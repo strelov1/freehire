@@ -29,7 +29,7 @@ export class SessionNotFound extends Error {
   }
 }
 
-async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+async function request<T = void>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
@@ -61,5 +61,5 @@ export function getSession(id: string, token: string): Promise<SessionTranscript
 
 /** Delete one of the caller's conversations. */
 export function deleteSession(id: string, token: string): Promise<void> {
-  return request<void>(`/sessions/${encodeURIComponent(id)}`, token, { method: 'DELETE' });
+  return request(`/sessions/${encodeURIComponent(id)}`, token, { method: 'DELETE' });
 }

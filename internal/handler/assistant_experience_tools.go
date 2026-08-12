@@ -53,7 +53,7 @@ func (h *assistantHandlers) assistantExperienceTools(sessionID uuid.UUID) []assi
 		h.experienceGetTool(),
 		h.experienceEmploymentsTool(),
 		h.experienceAddTool(sessionID),
-		h.experienceUpdateTool(),
+		h.experienceUpdateTool(sessionID),
 		h.experienceMergeTool(),
 		h.experienceSetRequireContextTool(),
 	}
@@ -335,12 +335,14 @@ func (h *assistantHandlers) experienceAddTool(sessionID uuid.UUID) assistant.Too
 
 // experienceUpdateTool sharpens an atom the bank already holds — a metric that surfaced, a
 // detail the first telling left out.
-func (h *assistantHandlers) experienceUpdateTool() assistant.Tool {
+func (h *assistantHandlers) experienceUpdateTool(sessionID uuid.UUID) assistant.Tool {
 	return assistant.Tool{
 		Name: "experience_update",
 		Description: "Refine an achievement already in the bank: add the metric that just came up, " +
 			"correct a detail, attach it to the right role. Address it by the id a search returned. " +
-			"The fields you send replace the ones stored; omit a field to leave it as it is.",
+			"The fields you send replace the ones stored; omit a field to leave it as it is. Changing " +
+			"claim, context or metrics re-earns provenance the same way experience_add does: cite the " +
+			"candidate's own words in said, or the edit is recorded as your inference, not theirs.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -350,6 +352,12 @@ func (h *assistantHandlers) experienceUpdateTool() assistant.Tool {
 				"metrics":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The full replacement metric list."},
 				"skills":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "The full replacement skill list."},
 				"employment_id": map[string]any{"type": "string", "description": "The role this belongs to, from experience_employments."},
+				"said": map[string]any{
+					"type": "string",
+					"description": "The candidate's own words backing the new claim, context or metrics, copied " +
+						"verbatim from their message in this conversation. Required to keep a confirmed " +
+						"achievement confirmed when you change what it says; omit if they did not say it.",
+				},
 			},
 			"required":             []string{"id"},
 			"additionalProperties": false,
@@ -362,6 +370,7 @@ func (h *assistantHandlers) experienceUpdateTool() assistant.Tool {
 				Metrics      *[]string `json:"metrics"`
 				Skills       *[]string `json:"skills"`
 				EmploymentID *string   `json:"employment_id"`
+				Said         string    `json:"said"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -374,6 +383,12 @@ func (h *assistantHandlers) experienceUpdateTool() assistant.Tool {
 			atom, err := h.experience.GetAtom(ctx, id, userID)
 			if err != nil {
 				return nil, err
+			}
+			// Content the provenance is meant to vouch for is changing, so the provenance is
+			// re-derived rather than carried over from the fetch — otherwise a confirmed atom
+			// stays "confirmed" no matter how far the model edits it from what was said.
+			if in.Claim != nil || in.Context != nil || in.Metrics != nil {
+				atom.Provenance = h.provenanceFor(ctx, sessionID, in.Said)
 			}
 			if in.Claim != nil {
 				atom.Claim = *in.Claim

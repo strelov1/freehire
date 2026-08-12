@@ -24,7 +24,7 @@ func TestParse(t *testing.T) {
 		// win in any complete title).
 		{"Senior Data Scien", "senior", "data_science"},
 		{"Lead DevOps Engineer", "lead", "devops"},
-		{"Staff Software Engineer", "staff", ""},
+		{"Staff Software Engineer", "staff", "software_engineering"},
 		{"Full Stack Developer", "", "fullstack"},
 		{"Data Analyst", "", "data_analytics"},
 		{"QA Automation Engineer", "", "qa"},
@@ -94,13 +94,16 @@ func TestParse(t *testing.T) {
 		// noun ("engineer") keeps it in product.
 		{"Algebrik.ai-Product Manager", "", "product"},
 		// "AI-native"/"AI-enabled" describe how the engineer WORKS, not what they
-		// build, so they claim no category — the rest of the title still decides.
+		// build, so they name no discipline — the rest of the title still decides,
+		// and the bare form falls to the generic software_engineering catch-all.
 		{"AI-Native Engineer (Test Automation)", "", "qa"},
-		{"AI-Native Engineer", "", ""},
+		{"AI-Native Engineer", "", "software_engineering"},
 		{"Senior AI-Native Product Engineer", "senior", ""},
-		// Generalist titles state no sub-discipline, so the category stays empty
-		// rather than being guessed (they are carried by is_tech and a named role).
-		{"Founding Engineer", "", ""},
+		// "Founding Engineer" states no sub-discipline either, so it resolves to the
+		// same generic catch-all. "Product Engineer" deliberately does not (see
+		// tech.go: prod titles split ~2:1 software vs manufacturing for that one), so
+		// it stays empty rather than being guessed — carried by is_tech alone.
+		{"Founding Engineer", "", "software_engineering"},
 		{"Product Engineer", "", ""},
 		// SEO / social fold into marketing; "social media" beats a bare "manager".
 		{"SEO Specialist", "", "marketing"},
@@ -135,21 +138,23 @@ func TestParseGradeBlindPhrases(t *testing.T) {
 		wantSeniority string
 		wantCategory  string
 	}{
-		// MTS is a generic IC title at Oracle/xAI/Pure Storage, not the staff grade.
-		{"Member of Technical Staff", "", ""},
-		{"Member of the Technical Staff, Interpretability", "", ""},
+		// MTS is a generic IC title at Oracle/xAI/Pure Storage, not the staff grade —
+		// but it IS software, so it resolves to the generic catch-all category.
+		{"Member of Technical Staff", "", "software_engineering"},
+		{"Member of the Technical Staff, Interpretability", "", "software_engineering"},
 		// With the phrase masked, the remaining words state the real grade.
-		{"Senior Member of Technical Staff", "senior", ""},
+		{"Senior Member of Technical Staff", "senior", "software_engineering"},
 		{"Senior Member of Technical Staff (SMTS) - Cloud Product Support", "senior", "support"},
-		{"Principal Member of Technical Staff", "principal", ""},
+		{"Principal Member of Technical Staff", "principal", "software_engineering"},
 		{"Principal Member of Technical Staff, Full-stack Engineer", "principal", "fullstack"},
 		// "Mid-training" is a model-training stage (the sibling of pre- and
 		// post-training), not the middle grade. The hyphen is a word boundary, so
 		// the bare "mid" alias matched inside it.
-		{"Member of Technical Staff - Mid-training", "", ""},
+		{"Member of Technical Staff - Mid-training", "", "software_engineering"},
 		// "Agent Post-Training" states a research area, not a role noun, so the
-		// category stays empty — the dictionary does not guess from a topic word.
-		{"Member of Technical Staff — Agent Post-Training", "", ""},
+		// category does not narrow past the generic catch-all — the dictionary does
+		// not guess from a topic word.
+		{"Member of Technical Staff — Agent Post-Training", "", "software_engineering"},
 		// "Middle East" is a region. 142 of 217 prod titles carrying it were being
 		// graded middle on the strength of the geography alone.
 		{"Middle East Editor", "", ""},
@@ -168,7 +173,7 @@ func TestParseGradeBlindPhrases(t *testing.T) {
 		{"Lead Generation Specialist", "", ""},
 		{"Lead Generation Manager", "", "management"},
 		// Regression: an honest grade that merely shares the word is untouched.
-		{"Staff Software Engineer", "staff", ""},
+		{"Staff Software Engineer", "staff", "software_engineering"},
 		{"Senior Staff Engineer", "staff", ""},
 		{"Technical Staff Engineer", "staff", ""},
 		{"Team Lead", "lead", ""},
@@ -191,7 +196,7 @@ func TestCategories(t *testing.T) {
 		{"single category", "Senior Backend Engineer", []string{"backend"}},
 		{"several distinct categories, precedence order", "Backend Engineer and Data Engineer doing machine learning", []string{"data_engineering", "ml_ai", "backend"}},
 		{"duplicate aliases collapse to one", "backend and back-end developer", []string{"backend"}},
-		{"generic title resolves nothing", "Software Engineer", nil},
+		{"generic title resolves to the catch-all", "Software Engineer", []string{"software_engineering"}},
 		{"empty", "", nil},
 	}
 	for _, tc := range tests {

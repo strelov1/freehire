@@ -25,7 +25,7 @@ export class SessionNotFound extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
@@ -81,7 +81,7 @@ export function getSession(id: string): Promise<SessionTranscript> {
 
 /** Delete one of the caller's conversations. */
 export function deleteSession(id: string): Promise<void> {
-  return request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return request(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 /** Thrown when the deployment has no Realtime gateway configured (501). Its own type
@@ -129,7 +129,7 @@ export function appendVoiceTurn(
   role: 'user' | 'assistant',
   content: string,
 ): Promise<void> {
-  return request<void>(`/sessions/${encodeURIComponent(sessionId)}/voice-turns`, {
+  return request(`/sessions/${encodeURIComponent(sessionId)}/voice-turns`, {
     method: 'POST',
     body: JSON.stringify({ role, content }),
   });
