@@ -20,6 +20,7 @@ import {
   isOnScreen,
   normalizeLabel,
 } from './form';
+import { assertNever } from './utils';
 
 /**
  * `ambiguous` is shared by all four: a label that addresses several widgets
@@ -133,6 +134,8 @@ export function runStep(doc: Document, step: ComboboxStep): Promise<ComboboxRepl
       return select(doc, step.label, step.value);
     case 'verify':
       return Promise.resolve(verify(doc, step.label, step.value));
+    default:
+      return assertNever(step.action);
   }
 }
 

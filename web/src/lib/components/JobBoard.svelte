@@ -16,6 +16,7 @@
     type ClosedOutcome,
   } from '$lib/board';
   import { createRehearsal, createDebrief } from '$lib/assistant/api';
+  import { assertNever } from '$lib/utils';
   import BoardColumn from './BoardColumn.svelte';
   import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
@@ -194,6 +195,8 @@
           openItem = item;
           pendingOutcome = true;
           break;
+        default:
+          assertNever(to);
       }
     } catch {
       await load();
