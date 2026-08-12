@@ -92,6 +92,7 @@ type Store interface {
 	MarkMatchesNotified(ctx context.Context, arg db.MarkMatchesNotifiedParams) (int64, error)
 	RecordMatchDeliveryFailure(ctx context.Context, arg db.RecordMatchDeliveryFailureParams) error
 	ReleaseMatchClaim(ctx context.Context, arg db.ReleaseMatchClaimParams) error
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.

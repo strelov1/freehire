@@ -43,6 +43,9 @@ type fakeStore struct {
 	notified []db.MarkMatchesNotifiedParams
 	failures []db.RecordMatchDeliveryFailureParams
 	released []db.ReleaseMatchClaimParams
+
+	recordedNotifications []db.RecordNotificationParams
+	recordNotificationErr error
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -90,6 +93,11 @@ func (s *fakeStore) RecordMatchDeliveryFailure(_ context.Context, a db.RecordMat
 func (s *fakeStore) ReleaseMatchClaim(_ context.Context, a db.ReleaseMatchClaimParams) error {
 	s.released = append(s.released, a)
 	return nil
+}
+
+func (s *fakeStore) RecordNotification(_ context.Context, a db.RecordNotificationParams) error {
+	s.recordedNotifications = append(s.recordedNotifications, a)
+	return s.recordNotificationErr
 }
 
 type fakeNotifier struct {
@@ -297,6 +305,87 @@ func TestDeliver_UnlinkedTelegramIsSoftSkipped(t *testing.T) {
 	}
 	if stats.SoftSkips != 1 {
 		t.Errorf("soft skips = %d, want 1", stats.SoftSkips)
+	}
+}
+
+func TestDeliver_RecordsNotificationForSingleJobDigest(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "acme-go-engineer"}},
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedNotifications) != 1 {
+		t.Fatalf("recorded notifications = %d, want 1", len(store.recordedNotifications))
+	}
+	rec := store.recordedNotifications[0]
+	if rec.UserID != 42 {
+		t.Errorf("UserID = %d, want 42", rec.UserID)
+	}
+	if rec.Kind != "subscription_digest" {
+		t.Errorf("Kind = %q, want %q", rec.Kind, "subscription_digest")
+	}
+	if !rec.PublicSlug.Valid || rec.PublicSlug.String != "acme-go-engineer" {
+		t.Errorf("PublicSlug = %+v, want valid %q", rec.PublicSlug, "acme-go-engineer")
+	}
+}
+
+func TestDeliver_RecordsNotificationForMultiJobDigestWithoutSlug(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{
+			{SubscriptionID: 1, JobID: 10},
+			{SubscriptionID: 1, JobID: 11},
+		},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{
+			10: {ID: 10, Title: "A", PublicSlug: "a"},
+			11: {ID: 11, Title: "B", PublicSlug: "b"},
+		},
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.recordedNotifications) != 1 {
+		t.Fatalf("recorded notifications = %d, want 1", len(store.recordedNotifications))
+	}
+	if store.recordedNotifications[0].PublicSlug.Valid {
+		t.Errorf("PublicSlug = %+v, want invalid (no slug) for a multi-job digest", store.recordedNotifications[0].PublicSlug)
+	}
+}
+
+func TestDeliver_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {ID: 1, UserID: 42, Channel: ChannelTelegram, SavedSearchName: "Go", TelegramChatID: pgtype.Int8{Int64: 555, Valid: true}},
+		},
+		digestJobs:            map[int64]db.GetJobsForDigestRow{10: {ID: 10, Title: "A", PublicSlug: "a"}},
+		recordNotificationErr: errors.New("insert failed"),
+	}
+	r := New(store, &fakeSearcher{}, &fakeNotifier{}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Delivered != 1 {
+		t.Errorf("Delivered = %d, want 1 (a recording failure must not fail the delivery)", stats.Delivered)
+	}
+	if len(store.notified) != 1 {
+		t.Errorf("notified = %d, want 1 (MarkMatchesNotified must still be called)", len(store.notified))
+	}
+	if len(store.recordedNotifications) != 1 {
+		t.Errorf("recorded notifications = %d, want 1 (the attempt itself still happened)", len(store.recordedNotifications))
 	}
 }
 

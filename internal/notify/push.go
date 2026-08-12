@@ -51,8 +51,7 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 		tokens[i] = r.Token
 	}
 
-	title := "freehire"
-	body := fmt.Sprintf("%d new jobs for %q", d.Total, d.SavedSearchName)
+	title, body, _ := renderDigest(d)
 
 	var data map[string]string
 	if d.Total == 1 {
@@ -60,4 +59,18 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 	}
 
 	return pushnotify.SendToDevices(ctx, n.transport, tokens, title, body, data)
+}
+
+// renderDigest renders a digest into its short, human-readable copy: a title,
+// a body summarizing the match count, and — only when the digest matched
+// exactly one job — that job's slug (empty otherwise). This is the single
+// source of the digest's push copy; the notification-center recording in
+// deliverOne reuses it verbatim rather than re-deriving the same wording.
+func renderDigest(d Digest) (title, body, slug string) {
+	title = "freehire"
+	body = fmt.Sprintf("%d new jobs for %q", d.Total, d.SavedSearchName)
+	if d.Total == 1 {
+		slug = d.Jobs[0].Slug
+	}
+	return title, body, slug
 }

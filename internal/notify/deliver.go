@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/strelov1/freehire/internal/db"
 )
 
@@ -95,6 +97,25 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		// duplicate), which is preferable to losing the notification.
 		log.Printf("notify: mark notified for subscription %d: %v", subID, err)
 	}
+
+	title, body, slug := renderDigest(digest)
+	var publicSlug pgtype.Text
+	if slug != "" {
+		publicSlug = pgtype.Text{String: slug, Valid: true}
+	}
+	if err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+		UserID:     info.UserID,
+		Kind:       "subscription_digest",
+		Title:      title,
+		Body:       body,
+		PublicSlug: publicSlug,
+	}); err != nil {
+		// Delivered and stamped; only the in-app notification-center record
+		// failed. That's a degraded read-side feature, not a reason to fail a
+		// delivery that already succeeded.
+		log.Printf("notify: record notification for subscription %d: %v", subID, err)
+	}
+
 	stats.Delivered++
 }
 
