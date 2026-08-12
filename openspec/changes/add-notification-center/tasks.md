@@ -1,7 +1,7 @@
 ## 1. Database layer
 
-- [ ] 1.1 Migration `0090_user_notifications.sql`: `CREATE TABLE user_notifications (id bigint identity PK, user_id bigint NOT NULL, kind text NOT NULL, title text NOT NULL, body text NOT NULL, public_slug text, created_at timestamptz NOT NULL DEFAULT now(), read_at timestamptz)`, index on `(user_id, created_at DESC)`, partial index on `(user_id) WHERE read_at IS NULL`
-- [ ] 1.2 sqlc queries in `internal/db/queries/notifications.sql`: `RecordNotification :exec` (insert), `ListUserNotifications :many` (offset/limit, newest first, with a window-function or companion query for `total`), `CountUnreadNotifications :one`, `MarkNotificationRead :execrows` (owner-scoped, idempotent `WHERE read_at IS NULL`), `MarkAllNotificationsRead :execrows` (owner-scoped, unread-only); regenerate (`make sqlc`)
+- [x] 1.1 Migration `0090_user_notifications.sql`: `CREATE TABLE user_notifications (id bigint identity PK, user_id bigint NOT NULL, kind text NOT NULL, title text NOT NULL, body text NOT NULL, public_slug text, created_at timestamptz NOT NULL DEFAULT now(), read_at timestamptz)`, index on `(user_id, created_at DESC)`, partial index on `(user_id) WHERE read_at IS NULL`
+- [x] 1.2 sqlc queries in `internal/db/queries/notifications.sql`: `RecordNotification :exec` (insert), `ListUserNotifications :many` (offset/limit, newest first, with a window-function or companion query for `total`), `CountUnreadNotifications :one`, `MarkNotificationRead :execrows` (owner-scoped, idempotent `WHERE read_at IS NULL`), `MarkAllNotificationsRead :execrows` (owner-scoped, unread-only); regenerate (`make sqlc`)
 
 ## 2. Engine wiring (write side)
 
