@@ -178,6 +178,28 @@ func TestRun_RecordsFailureOnDeliveryError(t *testing.T) {
 	}
 }
 
+func TestRecipient_Push(t *testing.T) {
+	tests := []struct {
+		name          string
+		hasPushDevice bool
+		wantDest      string
+		wantOK        bool
+	}{
+		{name: "registered device", hasPushDevice: true, wantDest: "42", wantOK: true},
+		{name: "no registered device", hasPushDevice: false, wantDest: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := db.GetReminderForDeliveryRow{UserID: 42, HasPushDevice: tt.hasPushDevice}
+			dest, ok := recipient("push", info)
+			if dest != tt.wantDest || ok != tt.wantOK {
+				t.Errorf("recipient(push, HasPushDevice=%v) = (%q, %v), want (%q, %v)",
+					tt.hasPushDevice, dest, ok, tt.wantDest, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestRun_DeliversEmailWhenTelegramMissing(t *testing.T) {
 	// Both channels configured; only email has a destination.
 	store := &fakeStore{
