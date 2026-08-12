@@ -5,10 +5,10 @@
 
 ## 2. Engine wiring (write side)
 
-- [ ] 2.1 Add `RecordNotification(ctx, arg db.RecordNotificationParams) error` to `notify.Store`; call it in `deliverOne` right after a successful `MarkMatchesNotified`, building `kind=subscription_digest`, the already-rendered title/body (extract the notify push-copy render logic into a shared, channel-agnostic helper if that's cleaner than duplicating the `fmt.Sprintf` — see push.go), and `public_slug` only when the digest matched exactly one job; log-and-continue on error, never fail the delivery; unit test with a fake `Store` asserting the call happens with the right kind/slug for 1-job vs N-job digests
-- [ ] 2.2 Same for `internal/reminder`: `RecordNotification` on `reminder.Store`, called from `fire`'s delivered branch, `kind=reminder`, slug always set; unit test
-- [ ] 2.3 Same for `internal/nudge`: `RecordNotification` on `nudge.Store`, called from `fire`'s delivered branch, `kind` mapped from `Message.Kind` (`nudge_follow_up`/`nudge_interview_prep`/`nudge_job_closed`), slug always set; unit test covering all three kinds
-- [ ] 2.4 Integration test (one file, exercising all three engines against a real Postgres via `testdb.Pool`): a delivered digest/reminder/nudge each produces exactly one `user_notifications` row with the expected kind/slug; a forced recording failure (e.g. a bad FK) does not prevent the delivery from being marked notified
+- [x] 2.1 Add `RecordNotification(ctx, arg db.RecordNotificationParams) error` to `notify.Store`; call it in `deliverOne` right after a successful `MarkMatchesNotified`, building `kind=subscription_digest`, the already-rendered title/body (extract the notify push-copy render logic into a shared, channel-agnostic helper if that's cleaner than duplicating the `fmt.Sprintf` — see push.go), and `public_slug` only when the digest matched exactly one job; log-and-continue on error, never fail the delivery; unit test with a fake `Store` asserting the call happens with the right kind/slug for 1-job vs N-job digests
+- [x] 2.2 Same for `internal/reminder`: `RecordNotification` on `reminder.Store`, called from `fire`'s delivered branch, `kind=reminder`, slug always set; unit test
+- [x] 2.3 Same for `internal/nudge`: `RecordNotification` on `nudge.Store`, called from `fire`'s delivered branch, `kind` mapped from `Message.Kind` (`nudge_follow_up`/`nudge_interview_prep`/`nudge_job_closed`), slug always set; unit test covering all three kinds
+- [x] 2.4 Integration test (one file, exercising all three engines against a real Postgres via `testdb.Pool`): a delivered digest/reminder/nudge each produces exactly one `user_notifications` row with the expected kind/slug; a forced recording failure (e.g. a bad FK) does not prevent the delivery from being marked notified
 
 ## 3. Backend read/write API
 
