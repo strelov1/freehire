@@ -1,0 +1,71 @@
+name: snyk
+
+# Go dependencies are already covered by govulncheck.yml (reachability-based,
+# no token needed) — scoped here to the JS lockfiles (web/, extension/,
+# design-system/) to avoid duplicate coverage and stay inside Snyk's free-tier
+# monthly test quota.
+on:
+  schedule:
+    - cron: '41 6 * * *'
+  pull_request:
+    branches: [main]
+    paths: ['web/**', 'extension/**', 'design-system/**', '.github/workflows/snyk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snyk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            design-system/pnpm-lock.yaml
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      # design-system is a `link:`/`file:` dependency for web/extension and does
+      # not install its own deps transitively — same trap as ci.yml and
+      # extension.yml.
+      - name: Install design-system dependencies
+        working-directory: design-system
+        run: pnpm install --frozen-lockfile
+
+      - name: Test design-system dependencies
+        working-directory: design-system
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Test web dependencies
+        working-directory: web
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Test extension dependencies
+        working-directory: extension
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test
