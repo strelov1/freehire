@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Award, Briefcase, FolderKanban, GraduationCap, Languages, User } from '@lucide/svelte';
+  import { Award, Briefcase, FolderKanban, GraduationCap, Languages, Tags, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
   import type { PageData } from './$types';
 
@@ -59,7 +59,7 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+<div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
   <div class="flex flex-col gap-4">
     <div class="flex items-start gap-4">
       <div
@@ -90,138 +90,150 @@
     {#if cv.summary}
       <p class="text-sm leading-relaxed">{cv.summary}</p>
     {/if}
-
-    {#if skillChips.length}
-      <div class="flex flex-wrap gap-2" aria-label="Skills">
-        {#each skillChips as skill (skill)}
-          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
-            >{skill}</span
-          >
-        {/each}
-      </div>
-    {/if}
   </div>
 
   <hr class="border-border" />
 
-  {#if experience.length}
-    <section class="flex flex-col gap-3">
-      <h2 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Work history</h2>
-      <ul class="flex flex-col gap-3">
-        <!-- Keyed on index, not on job's fields: two entries can legitimately share
-             title|company|start (differing only in summary/location), and a composite
-             string key colliding throws during Svelte 5 hydration. This list is static
-             once loaded and never reorders, so an index key is safe here. -->
-        {#each experience as job, i (i)}
-          <li class="flex gap-3 rounded-xl border border-border bg-card p-4">
-            <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
-            <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <div class="flex flex-wrap items-baseline justify-between gap-2">
-                <span class="text-sm font-semibold">{job.title || job.company}</span>
-                {#if dateRange(job.start, job.end)}
-                  <span class="text-xs text-muted-foreground tabular-nums"
-                    >{dateRange(job.start, job.end)}</span
-                  >
-                {/if}
-              </div>
-              {#if job.title && job.company}
-                <span class="text-sm text-muted-foreground">{job.company}</span>
-              {/if}
-              {#if job.summary}
-                <p class="text-sm leading-relaxed">{job.summary}</p>
-              {/if}
-              {#if job.highlights?.length}
-                <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
-                  {#each job.highlights as highlight (highlight)}
-                    <li>{highlight}</li>
-                  {/each}
-                </ul>
-              {/if}
-              {#if job.stack?.length}
-                <div class="mt-1 flex flex-wrap gap-1.5">
-                  {#each job.stack as tech (tech)}
-                    <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
-                      >{tech}</span
-                    >
-                  {/each}
+  <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <!-- Skills move into a dedicated sidebar (rather than a wall of chips under the
+         header) since a well-rounded senior profile can carry 50+ of them — inline they
+         pushed the actual work history below the fold. -->
+    {#if skillChips.length}
+      <aside class="w-full shrink-0 lg:order-2 lg:w-72">
+        <div class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:sticky lg:top-6">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><Tags class="size-4" />Skills</h2>
+          <div class="flex flex-wrap gap-2" aria-label="Skills">
+            {#each skillChips as skill (skill)}
+              <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
+                >{skill}</span
+              >
+            {/each}
+          </div>
+        </div>
+      </aside>
+    {/if}
+
+    <div class="flex min-w-0 flex-1 flex-col gap-6">
+      {#if experience.length}
+        <section class="flex flex-col gap-3">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><Briefcase class="size-4" />Work history</h2>
+          <ul class="flex flex-col gap-3">
+            <!-- Keyed on index, not on job's fields: two entries can legitimately share
+                 title|company|start (differing only in summary/location), and a composite
+                 string key colliding throws during Svelte 5 hydration. This list is static
+                 once loaded and never reorders, so an index key is safe here. -->
+            {#each experience as job, i (i)}
+              <li class="flex gap-3 rounded-xl border border-border bg-card p-4">
+                <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+                <div class="flex min-w-0 flex-1 flex-col gap-1">
+                  <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <span class="text-sm font-semibold">{job.title || job.company}</span>
+                    {#if dateRange(job.start, job.end)}
+                      <span class="text-xs text-muted-foreground tabular-nums"
+                        >{dateRange(job.start, job.end)}</span
+                      >
+                    {/if}
+                  </div>
+                  {#if job.title && job.company}
+                    <span class="text-sm text-muted-foreground">{job.company}</span>
+                  {/if}
+                  {#if job.summary}
+                    <p class="text-sm leading-relaxed">{job.summary}</p>
+                  {/if}
+                  {#if job.highlights?.length}
+                    <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
+                      {#each job.highlights as highlight (highlight)}
+                        <li>{highlight}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                  {#if job.stack?.length}
+                    <div class="mt-1 flex flex-wrap gap-1.5">
+                      {#each job.stack as tech (tech)}
+                        <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
+                          >{tech}</span
+                        >
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
-              {/if}
-            </div>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
-  {#if education.length}
-    <section class="flex flex-col gap-3">
-      <h2 class="flex items-center gap-2 text-sm font-semibold"><GraduationCap class="size-4" />Education</h2>
-      <ul class="flex flex-col gap-2">
-        <!-- Same collision risk and same fix as the experience list above: two entries
-             can share degree|institution|year, so key on index instead. -->
-        {#each education as ed, i (i)}
-          <li class="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-card p-4">
-            <div class="flex min-w-0 flex-col">
-              <span class="text-sm font-semibold">{ed.degree || ed.institution}</span>
-              {#if ed.degree && ed.institution}
-                <span class="text-sm text-muted-foreground">{ed.institution}</span>
-              {/if}
-            </div>
-            {#if ed.year}
-              <span class="text-xs text-muted-foreground tabular-nums">{ed.year}</span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
+      {#if education.length}
+        <section class="flex flex-col gap-3">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><GraduationCap class="size-4" />Education</h2>
+          <ul class="flex flex-col gap-2">
+            <!-- Same collision risk and same fix as the experience list above: two entries
+                 can share degree|institution|year, so key on index instead. -->
+            {#each education as ed, i (i)}
+              <li class="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-card p-4">
+                <div class="flex min-w-0 flex-col">
+                  <span class="text-sm font-semibold">{ed.degree || ed.institution}</span>
+                  {#if ed.degree && ed.institution}
+                    <span class="text-sm text-muted-foreground">{ed.institution}</span>
+                  {/if}
+                </div>
+                {#if ed.year}
+                  <span class="text-xs text-muted-foreground tabular-nums">{ed.year}</span>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
-  {#if projects.length}
-    <section class="flex flex-col gap-3">
-      <h2 class="flex items-center gap-2 text-sm font-semibold"><FolderKanban class="size-4" />Projects</h2>
-      <ul class="flex flex-col gap-2">
-        {#each projects as project (project.name ?? project.link ?? '')}
-          <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
-            {#if project.link}
-              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a project's own portfolio/repo link, not an internal route -->
-              <a href={project.link} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-primary hover:underline">{project.name || project.link}</a>
-            {:else if project.name}
-              <span class="text-sm font-semibold">{project.name}</span>
-            {/if}
-            {#if project.highlights?.length}
-              <ul class="flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
-                {#each project.highlights as highlight (highlight)}
-                  <li>{highlight}</li>
-                {/each}
-              </ul>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
+      {#if projects.length}
+        <section class="flex flex-col gap-3">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><FolderKanban class="size-4" />Projects</h2>
+          <ul class="flex flex-col gap-2">
+            {#each projects as project (project.name ?? project.link ?? '')}
+              <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+                {#if project.link}
+                  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a project's own portfolio/repo link, not an internal route -->
+                  <a href={project.link} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-primary hover:underline">{project.name || project.link}</a>
+                {:else if project.name}
+                  <span class="text-sm font-semibold">{project.name}</span>
+                {/if}
+                {#if project.highlights?.length}
+                  <ul class="flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
+                    {#each project.highlights as highlight (highlight)}
+                      <li>{highlight}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
 
-  {#if languages.length}
-    <section class="flex flex-col gap-2">
-      <h2 class="flex items-center gap-2 text-sm font-semibold"><Languages class="size-4" />Languages</h2>
-      <div class="flex flex-wrap gap-2">
-        {#each languages as lang (lang)}
-          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{lang}</span>
-        {/each}
-      </div>
-    </section>
-  {/if}
+      {#if languages.length}
+        <section class="flex flex-col gap-2">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><Languages class="size-4" />Languages</h2>
+          <div class="flex flex-wrap gap-2">
+            {#each languages as lang (lang)}
+              <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{lang}</span>
+            {/each}
+          </div>
+        </section>
+      {/if}
 
-  {#if certifications.length}
-    <section class="flex flex-col gap-2">
-      <h2 class="flex items-center gap-2 text-sm font-semibold"><Award class="size-4" />Certifications</h2>
-      <div class="flex flex-wrap gap-2">
-        {#each certifications as cert (cert)}
-          <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{cert}</span>
-        {/each}
-      </div>
-    </section>
-  {/if}
+      {#if certifications.length}
+        <section class="flex flex-col gap-2">
+          <h2 class="flex items-center gap-2 text-sm font-semibold"><Award class="size-4" />Certifications</h2>
+          <div class="flex flex-wrap gap-2">
+            {#each certifications as cert (cert)}
+              <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{cert}</span>
+            {/each}
+          </div>
+        </section>
+      {/if}
+    </div>
+  </div>
 
   {#if !experience.length && !education.length && !skillChips.length && !cv.summary && !certifications.length && !languages.length && !projects.length}
     <p class="text-sm text-muted-foreground">This candidate hasn't added CV details yet.</p>
