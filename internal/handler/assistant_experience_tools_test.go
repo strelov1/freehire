@@ -471,3 +471,53 @@ func TestARejectedEmploymentIdWithNoRolesSaysSo(t *testing.T) {
 		t.Errorf("the refusal should say the bank holds no roles yet:\n%s", payload)
 	}
 }
+
+// Editing the claim of an atom the candidate already confirmed must re-earn provenance —
+// otherwise the model can quietly rewrite what a confirmed achievement says (a different
+// number, a bigger scope) and the CV gate still treats it as the candidate's own words,
+// because it only ever looks at the provenance column, not at whether today's text is what
+// was confirmed.
+func TestExperienceUpdateDropsProvenanceWhenTheClaimChangesWithoutANewQuote(t *testing.T) {
+	bank := newStubBank()
+	stored := bank.add(1, experience.Atom{Claim: "Cut latency 20s to 1s", Provenance: experience.ProvenanceStatedInChat})
+	reg, _ := experienceToolsFor(t, bank)
+
+	out := reg.Call(context.Background(), 1, "experience_update",
+		json.RawMessage(`{"id":"`+stored.ID.String()+`","claim":"Cut latency 20s to 100ms"}`))
+	var decoded struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out.Content), &decoded); err != nil {
+		t.Fatalf("tool result is not JSON: %v (%s)", err, out.Content)
+	}
+	if decoded.Error != "" {
+		t.Fatalf("update failed: %s", decoded.Error)
+	}
+	if got := bank.atoms[stored.ID].Provenance; got != experience.ProvenanceAgentInferred {
+		t.Errorf("provenance = %q after an unconfirmed claim edit, want %q", got, experience.ProvenanceAgentInferred)
+	}
+}
+
+// A field that carries no factual assertion — which role an achievement belongs to — must
+// not cost the atom its confirmed provenance. Only rewriting what the atom claims should
+// require re-confirmation.
+func TestExperienceUpdateKeepsProvenanceWhenOnlyEmploymentChanges(t *testing.T) {
+	bank := newStubBank()
+	stored := bank.add(1, experience.Atom{Claim: "Cut latency 20s to 1s", Provenance: experience.ProvenanceStatedInChat})
+	reg, _ := experienceToolsFor(t, bank)
+
+	out := reg.Call(context.Background(), 1, "experience_update",
+		json.RawMessage(`{"id":"`+stored.ID.String()+`","employment_id":"`+uuid.New().String()+`"}`))
+	var decoded struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out.Content), &decoded); err != nil {
+		t.Fatalf("tool result is not JSON: %v (%s)", err, out.Content)
+	}
+	if decoded.Error != "" {
+		t.Fatalf("update failed: %s", decoded.Error)
+	}
+	if got := bank.atoms[stored.ID].Provenance; got != experience.ProvenanceStatedInChat {
+		t.Errorf("provenance = %q after a no-op update, want unchanged %q", got, experience.ProvenanceStatedInChat)
+	}
+}
