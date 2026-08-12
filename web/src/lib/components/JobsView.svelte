@@ -84,10 +84,10 @@
   // the embedded company list must not clobber the shared key. Persistence is
   // fixed for the store's life, so the initial `standalone` and `initialParams`
   // are captured once.
-  const filters = new FilterStore(
-    untrack(() => (initialParams != null ? new URLSearchParams(initialParams) : page.url.searchParams)),
-    untrack(() => standalone),
+  const seedParams = untrack(() =>
+    initialParams != null ? new URLSearchParams(initialParams) : page.url.searchParams,
   );
+  const filters = new FilterStore(seedParams, untrack(() => standalone));
 
   // CV-similarity sort is offered only on the standalone feed (the company-embedded
   // list never ranks by the visitor's CV). Read off the debounced `applied` sort so
