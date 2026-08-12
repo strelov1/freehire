@@ -29,6 +29,9 @@ type fakeStore struct {
 	cancelled []int64
 	failed    []int64
 	released  []int64
+
+	recordedNotifications []db.RecordNotificationParams
+	notifyErr             error
 }
 
 func (s *fakeStore) ListFollowUpCandidates(context.Context, int32) ([]db.ListFollowUpCandidatesRow, error) {
@@ -73,6 +76,13 @@ func (s *fakeStore) RecordNudgeDeliveryFailure(_ context.Context, arg db.RecordN
 }
 func (s *fakeStore) ReleaseNudgeClaim(_ context.Context, id int64) error {
 	s.released = append(s.released, id)
+	return nil
+}
+func (s *fakeStore) RecordNotification(_ context.Context, arg db.RecordNotificationParams) error {
+	if s.notifyErr != nil {
+		return s.notifyErr
+	}
+	s.recordedNotifications = append(s.recordedNotifications, arg)
 	return nil
 }
 
@@ -456,6 +466,87 @@ func TestDeliver_EmailDestinationIsAccountEmail(t *testing.T) {
 	}
 	if len(notifier.sent) != 1 || notifier.sent[0] != "email:user@acme.com" {
 		t.Errorf("sent = %v, want [email:user@acme.com]", notifier.sent)
+	}
+}
+
+// --- DELIVER: notification-center recording -----------------------------------
+
+func TestDeliver_RecordsNotificationForEachKind(t *testing.T) {
+	cases := []struct {
+		kind      string
+		wantKind  string
+		wantTitle string
+		wantBody  string
+	}{
+		{KindFollowUp, "nudge_follow_up", "👋 Follow up?", "It's been 25 days since anything moved on Go Dev at Acme."},
+		{KindInterviewPrep, "nudge_interview_prep", "🎯 Interview coming up", "You're interviewing for Go Dev at Acme."},
+		{KindJobClosed, "nudge_job_closed", "📪 Job closed", "Go Dev at Acme was closed."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			chat := int64(555)
+			stage := "applied"
+			jobOpen := true
+			switch tc.kind {
+			case KindInterviewPrep:
+				stage = "interview"
+			case KindJobClosed:
+				stage = "screening"
+				jobOpen = false
+			}
+			row := deliveryRow(tc.kind, stage, 25, true, jobOpen, []string{"telegram"}, &chat, "")
+			row.UserID = 99
+			store := &fakeStore{due: []int64{1}, row: row}
+			notifier := &fakeNotifier{}
+			r := newRunner(store, notifier)
+
+			stats, err := r.Run(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(store.recordedNotifications) != 1 {
+				t.Fatalf("recordedNotifications = %d, want 1", len(store.recordedNotifications))
+			}
+			got := store.recordedNotifications[0]
+			if got.UserID != 99 {
+				t.Errorf("UserID = %d, want 99", got.UserID)
+			}
+			if got.Kind != tc.wantKind {
+				t.Errorf("Kind = %q, want %q", got.Kind, tc.wantKind)
+			}
+			if got.Title != tc.wantTitle {
+				t.Errorf("Title = %q, want %q", got.Title, tc.wantTitle)
+			}
+			if got.Body != tc.wantBody {
+				t.Errorf("Body = %q, want %q", got.Body, tc.wantBody)
+			}
+			if !got.PublicSlug.Valid || got.PublicSlug.String != "go-dev-acme" {
+				t.Errorf("PublicSlug = %+v, want valid go-dev-acme", got.PublicSlug)
+			}
+			if stats.Delivered != 1 {
+				t.Errorf("stats.Delivered = %d, want 1", stats.Delivered)
+			}
+		})
+	}
+}
+
+func TestDeliver_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
+	chat := int64(555)
+	row := deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram"}, &chat, "")
+	row.UserID = 99
+	store := &fakeStore{due: []int64{1}, row: row, notifyErr: errors.New("insert failed")}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.delivered) != 1 {
+		t.Errorf("delivered = %v, want [1] (a notification-record failure must not block delivery)", store.delivered)
+	}
+	if stats.Delivered != 1 {
+		t.Errorf("stats.Delivered = %d, want 1", stats.Delivered)
 	}
 }
 

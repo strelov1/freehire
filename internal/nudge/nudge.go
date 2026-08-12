@@ -102,6 +102,11 @@ type Store interface {
 	CancelNudgeAtFire(ctx context.Context, id int64) (int64, error)
 	RecordNudgeDeliveryFailure(ctx context.Context, arg db.RecordNudgeDeliveryFailureParams) error
 	ReleaseNudgeClaim(ctx context.Context, id int64) error
+	// RecordNotification writes the in-app notification-center row for a
+	// delivered nudge. Called from fire right after MarkNudgeDelivered; a
+	// failure must never fail the delivery it accompanies (see
+	// add-notification-center's design).
+	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.
@@ -314,6 +319,7 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 		if _, err := r.store.MarkNudgeDelivered(ctx, id); err != nil {
 			log.Printf("nudge: mark delivered %d: %v", id, err)
 		}
+		r.recordNotification(ctx, id, info, msg)
 		stats.Delivered++
 	case failedErr != nil:
 		log.Printf("nudge: deliver %d: %v", id, failedErr)
@@ -411,6 +417,27 @@ func recipient(channel string, info db.GetNudgeForDeliveryRow) (string, bool) {
 		return strconv.FormatInt(info.UserID, 10), true
 	}
 	return "", false
+}
+
+// recordNotification writes the in-app notification-center row for a delivered
+// nudge, reusing renderNudge's title/body — the same copy the push channel
+// already shows — so the in-app record never drifts from it. A nudge always
+// concerns exactly one job, so PublicSlug is always populated. A failure here
+// must not fail the delivery: the nudge was already sent and marked delivered;
+// losing the in-app record is a degraded read-side feature, not a reason to
+// treat the delivery as failed — the same posture this func's caller already
+// takes toward MarkNudgeDelivered's own failure, just above.
+func (r *Runner) recordNotification(ctx context.Context, id int64, info db.GetNudgeForDeliveryRow, msg Message) {
+	title, body := renderNudge(msg)
+	if err := r.store.RecordNotification(ctx, db.RecordNotificationParams{
+		UserID:     info.UserID,
+		Kind:       "nudge_" + msg.Kind,
+		Title:      title,
+		Body:       body,
+		PublicSlug: pgtype.Text{String: msg.Slug, Valid: true},
+	}); err != nil {
+		log.Printf("nudge: record notification %d: %v", id, err)
+	}
 }
 
 // release drops the lease on a nudge so it is retried promptly on a later pass.

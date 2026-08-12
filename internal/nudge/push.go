@@ -49,12 +49,16 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, m Messag
 		tokens[i] = d.Token
 	}
 
-	title, body := n.render(m)
+	title, body := renderNudge(m)
 	data := map[string]string{"slug": m.Slug}
 	return pushnotify.SendToDevices(ctx, n.transport, tokens, title, body, data)
 }
 
-func (n *PushNotifier) render(m Message) (title, body string) {
+// renderNudge is the shared title/body copy for one nudge Message, used by both
+// the push channel (Send, above) and the notification-center record written by
+// Runner.fire in nudge.go — one rendering, two readers, so the in-app record
+// never drifts from what push already shows.
+func renderNudge(m Message) (title, body string) {
 	switch m.Kind {
 	case KindFollowUp:
 		return "👋 Follow up?", fmt.Sprintf("It's been %d days since anything moved on %s at %s.", m.DaysSilent, m.JobTitle, m.Company)
