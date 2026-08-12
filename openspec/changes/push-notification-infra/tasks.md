@@ -26,3 +26,18 @@
 
 - [x] 5.1 `cmd/push-receipts/main.go`: run-once-and-exit worker (`worker.Bootstrap`), needs only `DATABASE_URL`; calls `ExpoNotifier.CheckReceipts` once per run
 - [x] 5.2 Document the cron schedule expectation (every 15-20 min) in the command's doc comment, matching `cmd/remind`'s style
+
+## 6. Device listing (added while building the mobile client)
+
+The first real consumer showed a gap: with register/unregister/test but no read,
+the app cannot answer "is this device registered?", and the OS permission cannot
+answer it either (an app cannot revoke its own notification permission, so
+permission stays granted after a user switches push off). The client's only
+alternative was a locally persisted opt-in flag — a second source of truth that
+drifts from the backend the moment a token is reassigned or pruned by
+`cmd/push-receipts`. Closing the gap here is the smaller, truer fix.
+
+- [x] 6.1 `ListPushTokens` (`GET /me/push-tokens`) in `internal/handler/me_push_tokens.go`: the caller's own devices as `{"data":[{token,platform,created_at,last_seen_at}],"meta":{"total":N}}`, cookie-only and owner-scoped like its siblings. Reuses the existing `ListPushTokensForUser` query — no new SQL, no `make sqlc`.
+- [x] 6.2 Route wired in `internal/handler/auth.go` alongside the other `/me/push-tokens` registrations.
+- [x] 6.3 Tests: the cookie-only table in `me_push_tokens_test.go` gains `GET` (no-credential and bearer-only); `TestPushTokensEndToEnd` gains a `list is owner-scoped` subtest asserting that after reassignment the token shows for bob and not for alice.
+- [ ] 6.4 **Verification pending** — `go build/vet/test` were NOT run for 6.1–6.3: the environment that wrote them has no Go module cache and no access to `proxy.golang.org`, so the dependencies cannot be fetched. Run `go build ./... && go vet ./... && go test ./... && go vet -tags=integration ./...` before merging.

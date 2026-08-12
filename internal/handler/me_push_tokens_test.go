@@ -21,6 +21,7 @@ func pushTokensApp() (*fiber.App, *auth.Issuer) {
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.RegisterPushToken)
+	app.Get("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.ListPushTokens)
 	app.Delete("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.UnregisterPushToken)
 	app.Post("/api/v1/me/push-tokens/test", auth.RequireAuth(iss, testVersions), h.TestPushToken)
 	return app, iss
@@ -38,6 +39,8 @@ func TestPushTokensManagement_IsCookieOnly(t *testing.T) {
 	}{
 		{"register, no credential", fiber.MethodPost, "/api/v1/me/push-tokens", false},
 		{"register, bearer only", fiber.MethodPost, "/api/v1/me/push-tokens", true},
+		{"list, no credential", fiber.MethodGet, "/api/v1/me/push-tokens", false},
+		{"list, bearer only", fiber.MethodGet, "/api/v1/me/push-tokens", true},
 		{"unregister, bearer only", fiber.MethodDelete, "/api/v1/me/push-tokens", true},
 		{"test, bearer only", fiber.MethodPost, "/api/v1/me/push-tokens/test", true},
 	}

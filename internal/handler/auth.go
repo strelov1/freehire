@@ -129,6 +129,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// notifications to itself. The self-test send only ever targets the
 	// caller's own registered token(s) — see TestPushToken.
 	meGroup.Post("/push-tokens", mw.cookie, h.RegisterPushToken)
+	meGroup.Get("/push-tokens", mw.cookie, h.ListPushTokens)
 	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
 	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
 

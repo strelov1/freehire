@@ -57,6 +57,7 @@ func TestPushTokensEndToEnd(t *testing.T) {
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.RegisterPushToken)
+	app.Get("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.ListPushTokens)
 	app.Delete("/api/v1/me/push-tokens", auth.RequireAuth(iss, testVersions), h.UnregisterPushToken)
 	app.Post("/api/v1/me/push-tokens/test", auth.RequireAuth(iss, testVersions), h.TestPushToken)
 
@@ -110,6 +111,51 @@ func TestPushTokensEndToEnd(t *testing.T) {
 		}
 		if owner != bobID {
 			t.Errorf("owner = %d, want bob (%d) after reassignment", owner, bobID)
+		}
+	})
+
+	// Runs after the reassignment above, which is exactly the state worth
+	// asserting: one token, one owner. A list that still showed it to alice
+	// would mean the app's toggle reads "on" for a device she no longer has.
+	t.Run("list is owner-scoped", func(t *testing.T) {
+		// Decoded into a local shape rather than pushTokenResponse: this test is
+		// about who sees which device, not about how a timestamp round-trips.
+		type device struct {
+			Token    string `json:"token"`
+			Platform string `json:"platform"`
+		}
+		listFor := func(cookie string) []device {
+			t.Helper()
+			resp, err := app.Test(cookieReq(fiber.MethodGet, "/api/v1/me/push-tokens", cookie, nil))
+			if err != nil {
+				t.Fatalf("list: %v", err)
+			}
+			if resp.StatusCode != fiber.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("list status = %d, want 200 (body %s)", resp.StatusCode, body)
+			}
+			var out struct {
+				Data []device `json:"data"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+				t.Fatalf("decode list: %v", err)
+			}
+			return out.Data
+		}
+
+		if got := listFor(aliceCookie); len(got) != 0 {
+			t.Errorf("alice's devices = %d, want 0 — the token was reassigned to bob", len(got))
+		}
+
+		bobDevices := listFor(bobCookie)
+		if len(bobDevices) != 1 {
+			t.Fatalf("bob's devices = %d, want 1", len(bobDevices))
+		}
+		if bobDevices[0].Token != token {
+			t.Errorf("token = %q, want %q", bobDevices[0].Token, token)
+		}
+		if bobDevices[0].Platform != "ios" {
+			t.Errorf("platform = %q, want ios", bobDevices[0].Platform)
 		}
 	})
 

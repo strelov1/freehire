@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pushnotify"
@@ -84,6 +85,49 @@ func (h *authHandlers) UnregisterPushToken(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "token not found")
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// pushTokenResponse is the public shape of one registered device. The token
+// itself is included because it is the only field that answers the question the
+// client actually asks — "is THIS device registered?" — and it is returned only
+// to the account that registered it, over a cookie-authenticated request. It is
+// a send capability for our own app's notifications, not a credential to the
+// account, so its owner seeing it costs nothing.
+type pushTokenResponse struct {
+	Token      string             `json:"token"`
+	Platform   string             `json:"platform"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+// ListPushTokens returns the caller's own registered devices. It exists so the
+// mobile app can derive its notification toggle from server state instead of
+// keeping a private copy: the OS permission alone cannot express "the user
+// turned this off" (an app cannot revoke its own permission), so without this
+// endpoint the app would have to persist a local opt-in flag that silently
+// disagrees with the backend the moment a token is reassigned or pruned.
+// Owner-scoped and cookie-only, like the rest of /me/push-tokens.
+func (h *authHandlers) ListPushTokens(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	rows, err := h.queries.ListPushTokensForUser(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	out := make([]pushTokenResponse, len(rows))
+	for i, r := range rows {
+		out[i] = pushTokenResponse{
+			Token:      r.Token,
+			Platform:   r.Platform,
+			CreatedAt:  r.CreatedAt,
+			LastSeenAt: r.LastSeenAt,
+		}
+	}
+	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"total": len(out)}})
 }
 
 // testPushTokenResponse reports what a self-test send actually did per

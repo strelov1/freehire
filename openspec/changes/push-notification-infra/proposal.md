@@ -22,6 +22,12 @@ live.
   duplicating.
 - `DELETE /api/v1/me/push-tokens` — unregisters the caller's token (sign-out,
   account deletion).
+- `GET /api/v1/me/push-tokens` — the caller's own registered devices. Added
+  once the mobile client was built: without a read, an app cannot tell whether
+  the device it is running on is registered, and the OS permission cannot tell
+  it either (permission stays granted after a user turns push off in-app). The
+  alternative was a locally persisted flag on the client that drifts from the
+  backend whenever a token is reassigned or pruned.
 - New `internal/pushnotify` package: a `Notifier` that sends one push message
   through the Expo Push API (`https://exp.host/--/api/v2/push/send`). No
   APNs/FCM credentials — Expo's relay handles both platforms from one token
