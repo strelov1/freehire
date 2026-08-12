@@ -1,16 +1,16 @@
 ## 1. Shared push transport (`internal/pushnotify`)
 
-- [ ] 1.1 Add a `data map[string]string` parameter to `pushnotify.Notifier.Send` and `ExpoNotifier.Send`; add `Data map[string]string \`json:"data,omitempty"\`` to `expoMessage`
-- [ ] 1.2 Update `TestPushToken` (`internal/handler/me_push_tokens.go`) to pass `nil` for the new parameter
-- [ ] 1.3 Add `pushnotify.SendToDevices(ctx, notifier Notifier, tokens []string, title, body string, data map[string]string) error` — sends to every token, returns nil if any succeeded, an aggregate error if all failed/were pruned; unit tests with a fake `Notifier` covering all-success, partial-success, all-pruned, all-failed, empty-tokens
+- [x] 1.1 Add a `data map[string]string` parameter to `pushnotify.Notifier.Send` and `ExpoNotifier.Send`; add `Data map[string]string \`json:"data,omitempty"\`` to `expoMessage`
+- [x] 1.2 Update `TestPushToken` (`internal/handler/me_push_tokens.go`) to pass `nil` for the new parameter
+- [x] 1.3 Add `pushnotify.SendToDevices(ctx, notifier Notifier, tokens []string, title, body string, data map[string]string) error` — sends to every token, returns nil if any succeeded, an aggregate error if all failed/were pruned; unit tests with a fake `Notifier` covering all-success, partial-success, all-pruned, all-failed, empty-tokens
 
 ## 2. Shared channel vocabulary
 
-- [ ] 2.1 Add `ChannelPush = "push"` to `internal/notify` and append it to `notify.Channels`; confirm `notify.ValidChannel("push")` is true and existing reminder/nudge validation (which already reuses this slice) accepts it
+- [x] 2.1 Add `ChannelPush = "push"` to `internal/notify` and append it to `notify.Channels`; confirm `notify.ValidChannel("push")` is true and existing reminder/nudge validation (which already reuses this slice) accepts it
 
 ## 3. `internal/notify` push channel (filter-subscriptions)
 
-- [ ] 3.1 Add a `HasPushDevice bool` column to the `GetSubscriptionForDelivery` sqlc query (`EXISTS(SELECT 1 FROM user_push_tokens WHERE user_id = s.user_id)`), regenerate (`make sqlc`)
+- [x] 3.1 Add a `HasPushDevice bool` column to the `GetSubscriptionForDelivery` sqlc query (`EXISTS(SELECT 1 FROM user_push_tokens WHERE user_id = s.user_id)`), regenerate (`make sqlc`)
 - [ ] 3.2 Add a `ChannelPush` case to `notify.recipient()` — returns `(userID string, true)` when `HasPushDevice`, else `("", false)`; unit tests for both branches
 - [ ] 3.3 Implement `notify.PushNotifier`: renders title="freehire", body="{Total} new jobs for \"{SavedSearchName}\"", sets deep-link data to the sole job's slug when `Total == 1` and omits it otherwise, then calls `pushnotify.SendToDevices`; unit tests for the render logic (0/1/N-job digests) with a fake token store + fake `pushnotify.Notifier`
 - [ ] 3.4 Register `notify.PushNotifier` in `cmd/notify`'s `Router` unconditionally (no env-var gate, unlike Telegram/email)
@@ -18,7 +18,7 @@
 
 ## 4. `internal/reminder` push channel (saved-job-reminders)
 
-- [ ] 4.1 Add a `HasPushDevice bool` column to the `GetReminderForDelivery` sqlc query, regenerate
+- [x] 4.1 Add a `HasPushDevice bool` column to the `GetReminderForDelivery` sqlc query, regenerate
 - [ ] 4.2 Add a `ChannelPush` case to `reminder.recipient()`, mirroring 3.2; unit tests
 - [ ] 4.3 Implement `reminder.PushNotifier`: short title/body ("⏰ Reminder" / "You saved {JobTitle} at {Company} — still interested?"), deep-link data always set to the reminder's job slug, calls `pushnotify.SendToDevices`; unit tests
 - [ ] 4.4 Register `reminder.PushNotifier` in `cmd/remind`'s `Router` unconditionally
@@ -26,7 +26,7 @@
 
 ## 5. `internal/nudge` push channel (mobile-push-channel: application nudge delivery)
 
-- [ ] 5.1 Add a `HasPushDevice bool` column to the `GetNudgeForDelivery` sqlc query, regenerate
+- [x] 5.1 Add a `HasPushDevice bool` column to the `GetNudgeForDelivery` sqlc query, regenerate
 - [ ] 5.2 Add a `ChannelPush` case to `nudge.recipient()`, mirroring 3.2/4.2; unit tests
 - [ ] 5.3 Implement `nudge.PushNotifier`: short per-`Kind` title/body (`KindFollowUp`/`KindInterviewPrep`/`KindJobClosed`, shortened from the existing Telegram copy in `internal/nudge/transports.go`), deep-link data always set to the job slug, calls `pushnotify.SendToDevices`; unit tests for all three kinds
 - [ ] 5.4 Register `nudge.PushNotifier` in `cmd/nudge`'s `Router` unconditionally
