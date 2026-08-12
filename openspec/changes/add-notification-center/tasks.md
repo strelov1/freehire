@@ -18,16 +18,16 @@
 
 ## 4. Web UI
 
-- [ ] 4.1 API client functions in `web/src/lib/api.ts`: `getNotifications(limit?, offset?)`, `markNotificationRead(id)`, `markAllNotificationsRead()`
-- [ ] 4.2 A `notifications.svelte.ts` store (or extend an existing one) holding the unread count + page, following this codebase's existing `.svelte.ts` store conventions (see `notifications.svelte.ts` already used by `AlertChannels.svelte` for the unrelated subscription store — pick a non-colliding name/location)
-- [ ] 4.3 Bell icon + badge component in the header chrome; a list view/panel rendering notification cards (kind icon, title/body, relative time, unread state), wired to mark-read on tap and the per-kind navigation target from design.md decision 5 (job page, or `/my/tracking` for the two web-only nudge kinds)
+- [x] 4.1 API client functions in `web/src/lib/api.ts`: `getNotifications(limit?, offset?)`, `markNotificationRead(id)`, `markAllNotificationsRead()`
+- [x] 4.2 A `notifications.svelte.ts` store (or extend an existing one) holding the unread count + page, following this codebase's existing `.svelte.ts` store conventions (see `notifications.svelte.ts` already used by `AlertChannels.svelte` for the unrelated subscription store — pick a non-colliding name/location)
+- [x] 4.3 Bell icon + badge component in the header chrome; a list view/panel rendering notification cards (kind icon, title/body, relative time, unread state), wired to mark-read on tap and the per-kind navigation target from design.md decision 5 (job page, or `/my/tracking` for the two web-only nudge kinds)
 
 ## 5. Mobile UI (`freehire-mobile`, separate repo)
 
-- [ ] 5.1 API client functions in `src/lib/api.ts`: `getNotifications`, `markNotificationRead`, `markAllNotificationsRead`, matching the existing `send`/`requestData` helpers' style
-- [ ] 5.2 Bell icon with badge in `src/app/index.tsx`'s header row, alongside the existing account icon (same `Pressable`/`SymbolView` pattern, badge reusing the existing filter-badge styles)
-- [ ] 5.3 New screen `src/app/notifications.tsx` (or similar route) listing notification cards; register it in `_layout.tsx`'s `Stack` as a modal/pushed screen like `account`/`filters`
-- [ ] 5.4 Tap-to-navigate: job-bearing cards → `/jobs/[slug]` (including `nudge_follow_up`/`nudge_interview_prep`, per design.md decision 5's mobile fallback); no-slug cards → no navigation, just mark read
+- [x] 5.1 API client functions in `src/lib/api.ts`: `getNotifications`, `markNotificationRead`, `markAllNotificationsRead`, matching the existing `send`/`requestData` helpers' style
+- [x] 5.2 Bell icon with badge in `src/app/index.tsx`'s header row, alongside the existing account icon (same `Pressable`/`SymbolView` pattern, badge reusing the existing filter-badge styles)
+- [x] 5.3 New screen `src/app/notifications.tsx` (or similar route) listing notification cards; register it in `_layout.tsx`'s `Stack` as a modal/pushed screen like `account`/`filters`
+- [x] 5.4 Tap-to-navigate: job-bearing cards → `/jobs/[slug]` (including `nudge_follow_up`/`nudge_interview_prep`, per design.md decision 5's mobile fallback); no-slug cards → no navigation, just mark read
 
 ## 6. Verification
 
