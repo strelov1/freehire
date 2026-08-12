@@ -8,8 +8,17 @@
   import { formatDate } from '$lib/utils';
 
   // Read-only list of a company's feedback, offset-paginated — structurally like
-  // RequestReferralModal's onMount-fetch-into-dialog shape, but with no form.
-  let { slug, companyName, onClose }: { slug: string; companyName?: string; onClose: () => void } = $props();
+  // RequestReferralModal's onMount-fetch-into-dialog shape, but with no form. The
+  // "Write feedback" button is the list's own entry point into the write dialog:
+  // without it, once a company has any feedback, the header badge only ever opens
+  // this read-only list and there is no way back to CompanyFeedbackDialog.
+  let {
+    slug,
+    companyName,
+    onClose,
+    onWriteFeedback,
+  }: { slug: string; companyName?: string; onClose: () => void; onWriteFeedback: () => void } =
+    $props();
 
   let open = $state(true);
   $effect(() => {
@@ -29,7 +38,7 @@
     const slice = await api.listCompanyFeedback(slug, pageSize, offset);
     items = [...items, ...slice.items];
     total = slice.total;
-    hasMore = slice.hasMore;
+    hasMore = slice.hasMore && slice.items.length > 0;
     offset += slice.items.length;
   }
 
@@ -45,6 +54,7 @@
 
   async function loadMore() {
     loadingMore = true;
+    error = null;
     try {
       await loadPage();
     } catch {
@@ -56,9 +66,14 @@
 </script>
 
 <Dialog bind:open title={companyName ? `Feedback on ${companyName}` : 'Feedback'} class="max-w-lg">
+  {#if !loading}
+    <div class="mb-4 flex justify-end">
+      <Button variant="outline" size="sm" onclick={onWriteFeedback}>Write feedback</Button>
+    </div>
+  {/if}
   {#if loading}
     <p class="text-sm text-muted-foreground">Loading…</p>
-  {:else if error}
+  {:else if error && items.length === 0}
     <p role="alert" class="text-sm text-destructive">{error}</p>
   {:else if items.length === 0}
     <p class="text-sm text-muted-foreground">No feedback yet.</p>
@@ -81,6 +96,9 @@
         </li>
       {/each}
     </ul>
+    {#if error}
+      <p role="alert" class="mt-4 text-sm text-destructive">{error}</p>
+    {/if}
     {#if hasMore}
       <Button variant="outline" class="mt-4 w-full" disabled={loadingMore} onclick={loadMore}>
         {loadingMore ? 'Loading…' : `Load more (${(total ?? 0) - items.length} more)`}

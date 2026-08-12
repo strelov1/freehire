@@ -69,6 +69,7 @@
   }
 
   async function remove() {
+    if (!window.confirm('Delete your feedback on this company? This cannot be undone.')) return;
     deleting = true;
     error = null;
     try {
@@ -95,6 +96,7 @@
               type="button"
               class="p-0.5 text-muted-foreground transition-colors hover:text-amber-500"
               class:text-amber-500={value <= (hoverRating || rating)}
+              aria-pressed={value === rating}
               onmouseenter={() => (hoverRating = value)}
               onclick={() => (rating = value)}
               aria-label={`${value} star${value === 1 ? '' : 's'}`}

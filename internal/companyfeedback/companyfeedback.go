@@ -180,6 +180,9 @@ func (s *Service) Mine(ctx context.Context, userID int64, slug string) (Feedback
 
 // List returns a company's feedback, newest first, offset-paginated.
 func (s *Service) List(ctx context.Context, slug string, limit, offset int32) ([]Feedback, error) {
+	if err := s.requireCompany(ctx, slug); err != nil {
+		return nil, err
+	}
 	rows, err := s.q.ListCompanyFeedback(ctx, db.ListCompanyFeedbackParams{
 		CompanySlug: slug, Limit: limit, Offset: offset,
 	})
@@ -199,6 +202,9 @@ func (s *Service) List(ctx context.Context, slug string, limit, offset int32) ([
 
 // Count returns how many feedback entries a company has.
 func (s *Service) Count(ctx context.Context, slug string) (int64, error) {
+	if err := s.requireCompany(ctx, slug); err != nil {
+		return 0, err
+	}
 	return s.q.CountCompanyFeedback(ctx, slug)
 }
 

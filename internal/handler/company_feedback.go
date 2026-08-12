@@ -95,11 +95,11 @@ func (h *companyFeedbackHandlers) ListFeedback(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 	items, err := h.feedback.List(c.Context(), slug, int32(limit), int32(offset))
 	if err != nil {
-		return err
+		return companyFeedbackError(err)
 	}
 	total, err := h.feedback.Count(c.Context(), slug)
 	if err != nil {
-		return err
+		return companyFeedbackError(err)
 	}
 	out := make([]companyFeedbackResponse, len(items))
 	for i, f := range items {

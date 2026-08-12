@@ -37,32 +37,38 @@
   // The feedback list dialog (star ratings + category + text), opened from the
   // rating badge below. Before any feedback exists there's nothing to list, so the
   // same slot instead opens the write dialog directly — the header always carries
-  // one feedback entry point, not just once a rating exists to show.
+  // one feedback entry point, not just once a rating exists to show. Once the list
+  // is open, its own "Write feedback" button is the way back into the write dialog.
   //
-  // feedbackCount/feedbackRatingAvg start from the server-rendered `company` prop
-  // but then live in local state: after a save, the dialog reports success via
-  // `onSaved`, and we re-fetch just the company summary so the badge flips to the
-  // rating immediately instead of waiting for a full page reload.
+  // feedbackCount/feedbackRatingAvg are derived from the server-rendered `company`
+  // prop (so a company switch or refreshed data is picked up, the same as
+  // threadCount reacting to `slug`), overridden only after a save: the dialog
+  // reports success via `onSaved`, and we re-fetch just the company summary so the
+  // badge flips to the rating immediately instead of waiting for a full page reload.
   let showFeedbackList = $state(false);
   let showFeedbackForm = $state(false);
-  let feedbackCount = $state(company.feedback_count);
-  let feedbackRatingAvg = $state(company.feedback_rating_avg);
+  let feedbackOverride = $state<{ count: number; avg: number | null } | null>(null);
+  const feedbackCount = $derived(feedbackOverride?.count ?? company.feedback_count);
+  const feedbackRatingAvg = $derived(feedbackOverride?.avg ?? company.feedback_rating_avg);
   function openFeedbackEntry() {
     if (feedbackCount > 0) {
       showFeedbackList = true;
       return;
     }
+    openFeedbackForm();
+  }
+  function openFeedbackForm() {
     if (!isAuthenticated()) {
       openAuthDialog('login');
       return;
     }
+    showFeedbackList = false;
     showFeedbackForm = true;
   }
   async function refreshFeedbackSummary() {
     try {
       const { company: refreshed } = await api.getCompany(slug, 1, 0);
-      feedbackCount = refreshed.feedback_count;
-      feedbackRatingAvg = refreshed.feedback_rating_avg;
+      feedbackOverride = { count: refreshed.feedback_count, avg: refreshed.feedback_rating_avg };
     } catch {
       // Leave the previous summary in place; the next full page load will
       // pick up the change regardless.
@@ -182,7 +188,12 @@
 </section>
 
 {#if showFeedbackList}
-  <CompanyFeedbackListDialog {slug} companyName={company.name} onClose={() => (showFeedbackList = false)} />
+  <CompanyFeedbackListDialog
+    {slug}
+    companyName={company.name}
+    onClose={() => (showFeedbackList = false)}
+    onWriteFeedback={openFeedbackForm}
+  />
 {/if}
 {#if showFeedbackForm}
   <CompanyFeedbackDialog {slug} onClose={() => (showFeedbackForm = false)} onSaved={refreshFeedbackSummary} />
