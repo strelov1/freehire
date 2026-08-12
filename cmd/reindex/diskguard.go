@@ -44,5 +44,5 @@ func statfsFree(dir string) (uint64, error) {
 	}
 	// Bavail (not Bfree) is the space usable by non-root writers — what Meilisearch
 	// actually gets.
-	return uint64(st.Bavail) * uint64(st.Bsize), nil
+	return st.Bavail * uint64(st.Bsize), nil
 }
