@@ -78,11 +78,11 @@
   {:else if items.length === 0}
     <p class="text-sm text-muted-foreground">No feedback yet.</p>
   {:else}
-    <ul class="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+    <ul class="flex max-h-96 flex-col gap-4 overflow-y-auto">
       {#each items as item (item.id)}
         <li class="border-b border-border pb-4 last:border-b-0 last:pb-0">
           <div class="flex items-center gap-2">
-            <div class="flex items-center text-amber-500">
+            <div class="flex items-center text-warning-strong">
               {#each [1, 2, 3, 4, 5] as value (value)}
                 <Star class="size-4" fill={value <= item.rating ? 'currentColor' : 'none'} />
               {/each}

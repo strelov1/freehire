@@ -94,8 +94,8 @@
           {#each [1, 2, 3, 4, 5] as value (value)}
             <button
               type="button"
-              class="p-0.5 text-muted-foreground transition-colors hover:text-amber-500"
-              class:text-amber-500={value <= (hoverRating || rating)}
+              class="p-0.5 text-muted-foreground transition-colors hover:text-warning-strong"
+              class:text-warning-strong={value <= (hoverRating || rating)}
               aria-pressed={value === rating}
               onmouseenter={() => (hoverRating = value)}
               onclick={() => (rating = value)}
