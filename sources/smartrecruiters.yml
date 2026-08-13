@@ -6699,28 +6699,16 @@
   board: aitech
 - company: Akron Children's Hospital
   board: akronchildrenshospital
-- company: Archirodon Group
-  board: archirodongroup
-- company: Aspen Skiing Company
-  board: aspenskiingcompany
-- company: Astroscale US
-  board: astroscaleus
 - company: Atera
   board: atera
-- company: Austro Holding
-  board: austroholding
 - company: Benefitfocus
   board: benefitfocus
-- company: Bertoni Solutions
-  board: bertonisolutions
 - company: bestgateengineering
   board: bestgateengineering
 - company: burnmanufacturing
   board: burnmanufacturing
 - company: Ciitizen
   board: ciitizen
-- company: Clifford Chance
-  board: cliffordchance
 - company: ctcgroup
   board: ctcgroup
 - company: DeepSpin
@@ -6729,20 +6717,14 @@
   board: fiverr
 - company: Flynn Companies
   board: flynncompanies
-- company: Forrest Johnson
-  board: forrestjohnson
 - company: ' Gloat '
   board: gloat
 - company: Grupo Mariposa
   board: grupomariposa
-- company: H&M Group
-  board: hmgroup
 - company: Improving Enterprises, Inc.
   board: improvingenterprises
 - company: Increasingly
   board: increasingly
-- company: MAT Holdings, Inc
-  board: matholdings
 - company: Namshi
   board: namshi
 - company: nationsecurity
@@ -6751,10 +6733,6 @@
   board: phoenixcybersecurity
 - company: PolicyStreet
   board: policystreet
-- company: Privia Health
-  board: priviahealth
-- company: REDICA Systems
-  board: redicasystems
 - company: rethink
   board: rethink
 - company: Risant Health
@@ -6765,20 +6743,14 @@
   board: skybox
 - company: SourceMultiplier
   board: sourcemultiplier
-- company: Syncreon Consulting
-  board: syncreonconsulting
 - company: talentconnection1
   board: talentconnection1
 - company: TELACU Construction Management
   board: telacuconstructionmanagement
-- company: Turner & Townsend
-  board: turnertownsend
 - company: Tyco
   board: tyco
 - company: Universal Music Group
   board: universalmusicgroup
-- company: VAM Systems
-  board: vamsystems
 - company: Virtual Enterprise Architects
   board: virtualenterprisearchitects
 - company: Vix Technology
