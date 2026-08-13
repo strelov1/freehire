@@ -49,6 +49,12 @@
     return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-sm' : '';
   }
 
+  function chipClass(skill: string): string {
+    return skill === hoveredSkill
+      ? 'bg-brand text-brand-foreground'
+      : 'bg-brand-muted text-brand-strong';
+  }
+
   // One <li> ref per work-history entry, indexed like `experience` — a hover needs to
   // scroll straight to the first match, which can otherwise sit off-screen above or
   // below the visible list.
@@ -75,8 +81,7 @@
   $effect(() => {
     const skill = hoveredSkill;
     if (!skill) return;
-    const match = experience.findIndex((job) => jobHasSkill(job, skill));
-    const el = match >= 0 ? jobEls[match] : null;
+    const el = jobEls[experience.findIndex((job) => jobHasSkill(job, skill))];
     if (!el) return;
     autoScrolling = true;
     clearTimeout(settleTimer);
@@ -170,10 +175,9 @@
                 onmouseleave={clearHovered}
                 onfocus={() => (hoveredSkill = skill)}
                 onblur={() => (hoveredSkill = null)}
-                class="rounded-full px-3 py-1 text-xs font-medium transition-colors {skill ===
-                hoveredSkill
-                  ? 'bg-brand text-brand-foreground'
-                  : 'bg-brand-muted text-brand-strong'}"
+                class="rounded-full px-3 py-1 text-xs font-medium transition-colors {chipClass(
+                  skill,
+                )}"
                 >{skill}</span
               >
             {/each}
