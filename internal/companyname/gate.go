@@ -121,10 +121,12 @@ func clean(s string) string {
 // Accept decodes and validates a candidate name against the slug. It returns the
 // cleaned name and true only when the candidate is non-junk and confidently
 // related to the slug (shares a substring or a multi-letter acronym) — except
-// when slug is a bare numeric platform id, where no text relation is possible
-// by construction and trust instead comes from the resolver having looked the
-// candidate up by that exact id against the platform's own API.
-func Accept(slug, candidate string) (string, bool) {
+// for join, whose numeric slug is looked up by that exact id against the
+// platform's own API, so no text relation to check is possible or needed. A
+// numeric slug from any other source still requires the confidence match: its
+// resolver reaches a candidate by scraping a board derived from the URL, not by
+// an id-exact lookup, so an unrelated page title could otherwise slip through.
+func Accept(source, slug, candidate string) (string, bool) {
 	candidate = strings.TrimSpace(html.UnescapeString(candidate))
 	// An empty or still-slug-like candidate is no improvement over what's stored,
 	// so reject it: applying it would be a no-op write that also keeps the company
@@ -138,7 +140,8 @@ func Accept(slug, candidate string) (string, bool) {
 			return "", false
 		}
 	}
-	if !NumericPlaceholder(slug) && !confident(slug, candidate) {
+	authoritative := source == "join" && NumericPlaceholder(slug)
+	if !authoritative && !confident(slug, candidate) {
 		return "", false
 	}
 	return candidate, true
