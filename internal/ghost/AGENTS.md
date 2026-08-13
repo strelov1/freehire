@@ -11,9 +11,20 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   criteria describe the shape of a posting — `evergreen_posting` (from
   `internal/jobreality`'s class) and `ats_absent` (the cross-check stamp). OUTCOME criteria
   describe what happened to people — `silent_applications` and `user_reports`. Codes and
-  their fixed order: classify.go:34-41; `CriteriaTotal = 4` (classify.go:46) is the served
-  denominator ("2 of 4") and counts criteria that had no data, so a reader sees how much
-  is unknown.
+  their fixed order: classify.go:34-41, with `CriterionCodes` the same vocabulary as an
+  ordered value. `CriteriaTotal` is `len(CriterionCodes)` — the served denominator
+  ("2 of 4"), counting criteria that had no data so a reader sees how much is unknown.
+  It is derived rather than written down because a hand-kept 4 beside a list of five is a
+  scale that lies to every reader.
+- **The web checklist is generated from the vocabulary, not synced to it.**
+  `cmd/gen-contracts` emits `CriterionCodes` as `GHOST_CRITERION_VALUES`, and
+  `web/src/lib/ghost.ts` keys its per-criterion wording off the generated union. The job
+  page draws one gauge segment per criterion the payload says fired and accounts for each
+  in the expanded list, so a criterion added here with no wording there would colour a
+  segment above a checklist that could not explain it. Adding a criterion is therefore a
+  compile error in the SPA until it is worded (`ghost.ts`) and illustrated
+  (`SignalDiagram.svelte`), and a test failure until the landing explains it
+  (`ghostSignals.ts`). Run `make gen-contracts` after touching the codes.
 - **Structural evidence can NEVER produce `LevelLikely`.** `Classify` (classify.go:110) has
   two gates that are not the same gate: `convergence = 2` criteria must fire to say anything
   at all, and `ContributorGate = 2` DISTINCT people must have contributed outcome evidence
@@ -50,6 +61,8 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   (crosscheck.go:53-61).
 
 ## Consumers
+- `cmd/gen-contracts` — emits `CriterionCodes` into the web contracts as
+  `GHOST_CRITERION_VALUES`; the SPA's checklist is keyed off it.
 - `cmd/ghost-crosscheck` (main.go + report.go) — the worker that runs `Crosscheck` per
   company and applies the stamp/clear writes.
 - `internal/handler/ghost_evidence.go` — gathers per-job outcome evidence in two batched

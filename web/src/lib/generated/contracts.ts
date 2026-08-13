@@ -1258,6 +1258,8 @@ export const DOMAIN_VALUES = ['fintech', 'crypto', 'ecommerce', 'gambling', 'gam
 export type Domain = (typeof DOMAIN_VALUES)[number];
 export const AI_ARCHETYPE_VALUES = ['rag_app_builder', 'agent_builder', 'cloud_ml_platform_engineer', 'ml_trainer_researcher', 'fullstack_ai_engineer', 'devops_infra_engineer'] as const;
 export type AIArchetype = (typeof AI_ARCHETYPE_VALUES)[number];
+export const GHOST_CRITERION_VALUES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'] as const;
+export type GhostCriterion = (typeof GHOST_CRITERION_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;
 export type EmailStatusSignal = (typeof EMAIL_STATUS_SIGNAL_VALUES)[number];
 export const SIGNAL_STAGE = {
@@ -2756,7 +2758,7 @@ export const ROLE_ALIASES = {
   'drafter': ['cad drafter', 'design drafter', 'design draftsman', 'drafter', 'draftsman', 'draughtsman'],
   'electrical_designer': ['electrical design engineer', 'electrical designer'],
   'electrical_engineer': ['electrical engineer'],
-  'embedded': ['embedded', 'firmware', 'встраиваемые', 'встраиваемых'],
+  'embedded': ['embedded', 'firmware', 'logiciel embarqué', 'встраиваемые', 'встраиваемых'],
   'engineering_design': ['architectural designer', 'bim coordinator', 'bim designer', 'bim modeler', 'bim specialist', 'cad designer', 'civil designer', 'design engineer', 'design technician', 'die designer', 'drafter', 'draftsman', 'draughtsman', 'electrical designer', 'hvac designer', 'mechanical designer', 'mold designer', 'piping designer', 'plumbing designer', 'revit designer', 'structural designer', 'tool designer', 'конструктор'],
   'engineering_manager': ['engineering manager'],
   'enterprise_architect': ['enterprise architect'],
@@ -2849,7 +2851,7 @@ export const ROLE_ALIASES = {
   'social_media_manager': ['smm manager', 'smm specialist', 'social media manager'],
   'software_architect': ['software architect'],
   'software_engineer': ['sde', 'software developer', 'software development engineer', 'software engineer', 'swe', 'web developer'],
-  'software_engineering': ['.net developer', 'abap developer', 'ai native engineer', 'ai-native engineer', 'app developer', 'application developer', 'c# developer', 'c++ developer', 'database developer', 'dotnet developer', 'drupal developer', 'erp developer', 'founding engineer', 'game developer', 'go developer', 'go engineer', 'golang developer', 'golang engineer', 'java developer', 'javascript developer', 'magento developer', 'member of technical staff', 'member of the technical staff', 'node developer', 'node.js developer', 'nodejs developer', 'oracle developer', 'php developer', 'python developer', 'rails developer', 'rpa developer', 'ruby developer', 'salesforce developer', 'sap developer', 'sharepoint developer', 'shopify developer', 'software developer', 'software development engineer', 'software engineer', 'typescript developer', 'web developer', 'web engineer', 'wordpress developer'],
+  'software_engineering': ['.net developer', 'abap developer', 'abap entwickler', 'ai native engineer', 'ai-native engineer', 'app developer', 'application developer', 'c# developer', 'c++ developer', 'database developer', 'desarrollador de software', 'desarrollador java', 'desarrolladora de software', 'desarrolladora java', 'desenvolvedor de software', 'desenvolvedor java', 'desenvolvedora de software', 'desenvolvedora java', 'deweloper oprogramowania', 'dotnet developer', 'drupal developer', 'développeur java', 'développeur salesforce', 'engenheira de software', 'engenheiro de software', 'entwickler software', 'erp developer', 'founding engineer', 'game developer', 'go developer', 'go engineer', 'golang developer', 'golang engineer', 'ingegnere del software', 'ingegnere software', 'ingeniera de software', 'ingeniero de software', 'ingénieur logiciel', 'inżynier oprogramowania', 'java developer', 'java entwickler', 'java-entwickler', 'javascript developer', 'magento developer', 'member of technical staff', 'member of the technical staff', 'node developer', 'node.js developer', 'nodejs developer', 'oracle developer', 'php developer', 'programista .net', 'programista python', 'python developer', 'rails developer', 'rpa developer', 'ruby developer', 'salesforce developer', 'sap developer', 'sharepoint developer', 'shopify developer', 'software developer', 'software development engineer', 'software engineer', 'software entwickler', 'software-entwickler', 'softwareentwickler', 'softwareingenieur', 'sviluppatore software', 'typescript developer', 'web developer', 'web engineer', 'wordpress developer'],
   'solutions_architect': ['solution architect', 'solutions architect'],
   'solutions_consultant': ['solution consultant', 'solutions consultant'],
   'solutions_engineer': ['solutions engineer'],

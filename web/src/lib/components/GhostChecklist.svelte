@@ -24,6 +24,20 @@
   const fired = $derived(rows.filter((r) => r.fired));
   const unobserved = $derived(ghost && badge ? ghostUnobserved(ghost) : '');
 
+  // Deliberately not reset between jobs. SvelteKit reuses this component across two
+  // /jobs/<slug> pages, so a reader who expanded the criteria on one job meets the next
+  // already expanded — and that is wanted rather than tolerated. Expanding reveals MORE
+  // hedging, never less: the criteria that did not fire, the "Not observed" line, the
+  // link to where each criterion is blind. The ceiling on the claim is carried by the
+  // collapsed row itself, so nothing gets louder by staying open, and a reader who has
+  // once asked for the justification is spared asking again on every job.
+  // `{#key job.public_slug}` at the JobView call site is the whole change if that is
+  // ever reconsidered.
+  //
+  // It is not a stored preference and must not be read as one: JobView renders this only
+  // where a signal exists, so an intervening job without one unmounts the component and
+  // the job after it opens collapsed. Making it survive that would mean persisting a
+  // state worth a single click.
   let open = $state(false);
 
   // Per-instance, not a constant. One call site renders one row today, and a

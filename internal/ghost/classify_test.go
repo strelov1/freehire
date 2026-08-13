@@ -166,6 +166,22 @@ func TestClassify_CriteriaTotalCountsEveryCriterion(t *testing.T) {
 	}
 }
 
+// CriterionCodes is what cmd/gen-contracts emits and what the SPA builds its
+// checklist rows from, but Classify appends its own criteria in its own order —
+// two lists free to drift. Firing everything at once pins them together: the
+// vocabulary the interface renders is exactly the one the classifier reports, in
+// the order it reports it.
+func TestClassify_ReportsTheWholeVocabularyInOrder(t *testing.T) {
+	in := absent(evergreen(base()))
+	in.SilentApplications = 1
+	in.Reports = 1
+
+	got := Classify(in).Criteria
+	if !slices.Equal(got, CriterionCodes[:]) {
+		t.Errorf("criteria = %v, want %v — every criterion, in the fixed order", got, CriterionCodes)
+	}
+}
+
 func TestClassify_Deterministic(t *testing.T) {
 	in := absent(evergreen(base()))
 	in.SilentApplications = 3

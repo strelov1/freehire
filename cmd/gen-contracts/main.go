@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/collections"
+	"github.com/strelov1/freehire/internal/ghost"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/mailclassify"
 	"github.com/strelov1/freehire/internal/roletag"
@@ -329,6 +330,13 @@ func genVocab() string {
 	// The six AI skill-signature archetype slugs (internal/aiarchetype), generated
 	// so the AI Specialization filter's valid values can't drift from the rule table.
 	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
+	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
+	// with a sharper edge: the job page draws one gauge segment per criterion the payload
+	// says fired, and the rows accounting for them come from the SPA's own list. A
+	// criterion added in Go and missing there coloured a segment above a checklist that
+	// could not explain it — the interface asserting evidence it cannot show, which is the
+	// one thing this feature must never do. Generated, the omission is a type error.
+	b.WriteString(emitVocab("GhostCriterion", "GHOST_CRITERION_VALUES", ghost.CriterionCodes[:]))
 	// The classified-mail vocabulary. It is generated rather than retyped because the
 	// inbox renders a label and a badge colour per signal, and a signal added in Go
 	// but missing from the SPA's maps rendered as a blank chip with every test green.
