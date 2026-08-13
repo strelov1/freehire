@@ -31,7 +31,9 @@ var (
 )
 
 // SlugLike reports whether name is still a squished slug rather than a real
-// display name — a single lowercase token with at least one letter.
+// display name — a single lowercase token with at least one letter — or a bare
+// numeric platform ID (e.g. a join.com company id written straight into the
+// company field by a harvest that never resolved the tenant's name).
 func SlugLike(name string) bool {
 	if name == "" || strings.ContainsFunc(name, unicode.IsSpace) {
 		return false
@@ -45,7 +47,27 @@ func SlugLike(name string) bool {
 			hasLetter = true
 		}
 	}
-	return hasLetter
+	if hasLetter {
+		return true
+	}
+	return NumericPlaceholder(name)
+}
+
+// NumericPlaceholder reports whether name is nothing but digits — the shape a
+// board id takes when a harvest writes it into the company field verbatim
+// instead of a resolved display name. Unlike a squished slug, a numeric id
+// shares no text with the real name by construction, so Accept's usual
+// substring/acronym confidence check does not apply to it.
+func NumericPlaceholder(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // ExtractTitleName pulls a company name out of a Pinpoint careers-page <title>: the shapes
@@ -98,7 +120,10 @@ func clean(s string) string {
 
 // Accept decodes and validates a candidate name against the slug. It returns the
 // cleaned name and true only when the candidate is non-junk and confidently
-// related to the slug (shares a substring or a multi-letter acronym).
+// related to the slug (shares a substring or a multi-letter acronym) — except
+// when slug is a bare numeric platform id, where no text relation is possible
+// by construction and trust instead comes from the resolver having looked the
+// candidate up by that exact id against the platform's own API.
 func Accept(slug, candidate string) (string, bool) {
 	candidate = strings.TrimSpace(html.UnescapeString(candidate))
 	// An empty or still-slug-like candidate is no improvement over what's stored,
@@ -113,7 +138,7 @@ func Accept(slug, candidate string) (string, bool) {
 			return "", false
 		}
 	}
-	if !confident(slug, candidate) {
+	if !NumericPlaceholder(slug) && !confident(slug, candidate) {
 		return "", false
 	}
 	return candidate, true

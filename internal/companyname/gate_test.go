@@ -16,11 +16,29 @@ func TestSlugLike(t *testing.T) {
 		{"Centellic", false},       // has uppercase
 		{"Bob's Red Mill", false},  // has spaces
 		{"", false},                // nothing to work with
-		{"123", false},             // no letter
+		{"123", true},              // bare numeric platform id, e.g. a join.com company id
 	}
 	for _, c := range cases {
 		if got := SlugLike(c.name); got != c.want {
 			t.Errorf("SlugLike(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestNumericPlaceholder(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"175014", true},
+		{"0", true},
+		{"", false},
+		{"175014a", false},
+		{"gs1ca", false},
+	}
+	for _, c := range cases {
+		if got := NumericPlaceholder(c.name); got != c.want {
+			t.Errorf("NumericPlaceholder(%q) = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
@@ -76,6 +94,10 @@ func TestAccept(t *testing.T) {
 		// Rejected: candidate is itself a slug — no improvement, and applying it
 		// would keep the company slug-like (non-idempotent re-runs).
 		{"osapiens", "osapiens", "", false},
+		// Accepted despite sharing no text: slug is a bare numeric platform id
+		// (join.com company id), so the confidence check is bypassed — trust
+		// comes from the resolver's authoritative id lookup, not text overlap.
+		{"175014", "Goodweek", "Goodweek", true},
 	}
 	for _, c := range cases {
 		gotName, gotOK := Accept(c.slug, c.candidate)

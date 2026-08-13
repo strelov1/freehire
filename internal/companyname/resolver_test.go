@@ -2,12 +2,30 @@ package companyname
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 )
 
 type fakeText map[string]string
 
 func (f fakeText) GetText(_ context.Context, url string) (string, error) { return f[url], nil }
+
+// GetJSON lets fakeText double as an httpGetter for tests that never need it —
+// NewRegistry takes one combined interface for both title-scrape and API resolvers.
+func (f fakeText) GetJSON(context.Context, string, any) error { return nil }
+
+// fakeJSON serves canned JSON bodies keyed by URL, for resolvers that call GetJSON.
+type fakeJSON map[string]string
+
+func (f fakeJSON) GetText(context.Context, string) (string, error) { return "", nil }
+
+func (f fakeJSON) GetJSON(_ context.Context, url string, v any) error {
+	body, ok := f[url]
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal([]byte(body), v)
+}
 
 func TestTitleResolver(t *testing.T) {
 	getter := fakeText{
@@ -48,9 +66,21 @@ func TestAshbyResolverUsesTheJobsSuffix(t *testing.T) {
 	}
 }
 
+// Live-verified against join.com's public company-profile endpoint:
+// GET https://join.com/api/public/companies/175014 -> {"name":"Goodweek",...}.
+func TestJoinResolverUsesTheCompanyProfileAPI(t *testing.T) {
+	getter := fakeJSON{
+		"https://join.com/api/public/companies/175014": `{"id":175014,"name":"Goodweek","domain":"goodweekcom"}`,
+	}
+	reg := NewRegistry(getter)
+	if got, _ := reg["join"].Name(context.Background(), "175014"); got != "Goodweek" {
+		t.Errorf("Name(175014) = %q, want Goodweek", got)
+	}
+}
+
 func TestRegistryLookup(t *testing.T) {
 	reg := NewRegistry(fakeText{})
-	for _, src := range []string{"pinpoint", "lever", "ashby"} {
+	for _, src := range []string{"pinpoint", "lever", "ashby", "join"} {
 		if _, ok := reg[src]; !ok {
 			t.Errorf("registry missing %s resolver", src)
 		}

@@ -136,7 +136,7 @@ func resolveNames(ctx context.Context, rows []db.ListSlugLikeCompaniesForBackfil
 			stats.noSource++
 			continue
 		}
-		board, ok := companyname.BoardFromURL(row.Source, row.URL)
+		board, ok := companyname.Board(row.Source, row.Name, row.URL)
 		if !ok {
 			stats.noSource++
 			continue
