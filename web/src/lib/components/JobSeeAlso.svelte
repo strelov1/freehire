@@ -41,33 +41,37 @@
           href={resolve('/collections/[slug]', { slug: card.slug })}
           class="flex w-40 shrink-0 flex-col items-start gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-muted"
         >
-          {#if card.mark.kind === 'image'}
-            <img src={card.mark.src} alt="" class="size-7 shrink-0 rounded-full object-contain" />
-          {:else if card.mark.kind === 'logo'}
-            {@const mark = card.mark}
-            <span class={badgeClass} style:background-color="#{mark.hex}">
-              <svg viewBox="0 0 24 24" class="size-4" role="img" aria-label={mark.title}>
-                <path d={mark.path} fill={glyphColorFor(`#${mark.hex}`)} />
-              </svg>
-            </span>
-          {:else if card.mark.kind === 'flag'}
-            <CountryFlag
-              code={card.mark.countryCode}
-              label={countryLabel(card.mark.countryCode)}
-              class="shrink-0 text-[28px]"
-            />
-          {:else}
-            {@const Icon = FAMILY_ICONS[card.mark.icon]}
-            <span class={badgeClass} style:background-color={card.mark.color}>
-              <Icon class="size-4 text-white" />
-            </span>
-          {/if}
+          <div class="flex w-full items-center justify-between gap-2">
+            {#if card.mark.kind === 'image'}
+              <img src={card.mark.src} alt="" class="size-7 shrink-0 rounded-full object-contain" />
+            {:else if card.mark.kind === 'logo'}
+              {@const mark = card.mark}
+              <span class={badgeClass} style:background-color="#{mark.hex}">
+                <svg viewBox="0 0 24 24" class="size-4" role="img" aria-label={mark.title}>
+                  <path d={mark.path} fill={glyphColorFor(`#${mark.hex}`)} />
+                </svg>
+              </span>
+            {:else if card.mark.kind === 'flag'}
+              <CountryFlag
+                code={card.mark.countryCode}
+                label={countryLabel(card.mark.countryCode)}
+                class="shrink-0 text-[28px]"
+              />
+            {:else}
+              {@const Icon = FAMILY_ICONS[card.mark.icon]}
+              <span class={badgeClass} style:background-color={card.mark.color}>
+                <Icon class="size-4 text-white" />
+              </span>
+            {/if}
+            {#if card.count !== null}
+              <span
+                class="shrink-0 rounded-full bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground"
+              >
+                {card.count.toLocaleString()} jobs
+              </span>
+            {/if}
+          </div>
           <span class="text-sm font-medium text-foreground">{card.title} jobs</span>
-          {#if card.count !== null}
-            <span class="rounded-full bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground">
-              {card.count.toLocaleString()} jobs
-            </span>
-          {/if}
         </a>
       {/each}
     </div>
