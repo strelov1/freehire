@@ -28,6 +28,7 @@ func notificationsIntegrationApp(queries *db.Queries, iss *auth.Issuer) *fiber.A
 	h := &authHandlers{queries: queries}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), h.GetNotifications)
+	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), h.GetNotification)
 	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), h.MarkNotificationRead)
 	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), h.MarkAllNotificationsRead)
 	return app
@@ -186,6 +187,76 @@ func TestNotificationsEndToEnd_MarkRead(t *testing.T) {
 		resp, err := app.Test(cookiePostReq(iss, aliceID, "/api/v1/me/notifications/999999999/read"))
 		if err != nil {
 			t.Fatalf("mark read nonexistent: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("status = %d, want 404", resp.StatusCode)
+		}
+	})
+}
+
+func TestNotificationsEndToEnd_GetOne(t *testing.T) {
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	aliceID := seedNotificationsUser(t, pool, "notif-get-alice@example.test")
+	bobID := seedNotificationsUser(t, pool, "notif-get-bob@example.test")
+
+	var digestID int64
+	const jobsJSON = `[{"title":"Backend Engineer","company":"Acme","slug":"acme-backend-engineer"},{"title":"SRE","company":"Acme","slug":"acme-sre"}]`
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO user_notifications (user_id, kind, title, body, jobs)
+		 VALUES ($1, 'subscription_digest', 'freehire', '2 new jobs for "Backend"', $2::jsonb)
+		 RETURNING id`, aliceID, jobsJSON).Scan(&digestID); err != nil {
+		t.Fatalf("seed digest notification: %v", err)
+	}
+
+	app := notificationsIntegrationApp(queries, iss)
+
+	t.Run("owner reads it with the jobs snapshot", func(t *testing.T) {
+		resp, err := app.Test(cookieGetReq(iss, aliceID, fmt.Sprintf("/api/v1/me/notifications/%d", digestID)))
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status = %d, want 200 (body %s)", resp.StatusCode, body)
+		}
+		var out struct {
+			Data notificationResponse `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if out.Data.ID != digestID {
+			t.Errorf("id = %d, want %d", out.Data.ID, digestID)
+		}
+		var jobs []struct {
+			Title   string `json:"title"`
+			Company string `json:"company"`
+			Slug    string `json:"slug"`
+		}
+		if err := json.Unmarshal(out.Data.Jobs, &jobs); err != nil {
+			t.Fatalf("jobs did not unmarshal: %v (raw: %s)", err, out.Data.Jobs)
+		}
+		if len(jobs) != 2 || jobs[0].Slug != "acme-backend-engineer" || jobs[1].Slug != "acme-sre" {
+			t.Errorf("jobs = %+v, want 2 entries in seeded order", jobs)
+		}
+	})
+
+	t.Run("another user's notification 404s", func(t *testing.T) {
+		resp, err := app.Test(cookieGetReq(iss, bobID, fmt.Sprintf("/api/v1/me/notifications/%d", digestID)))
+		if err != nil {
+			t.Fatalf("get as bob: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusNotFound {
+			t.Errorf("status = %d, want 404 (bob does not own alice's notification)", resp.StatusCode)
+		}
+	})
+
+	t.Run("nonexistent id 404s", func(t *testing.T) {
+		resp, err := app.Test(cookieGetReq(iss, aliceID, "/api/v1/me/notifications/999999999"))
+		if err != nil {
+			t.Fatalf("get nonexistent: %v", err)
 		}
 		if resp.StatusCode != fiber.StatusNotFound {
 			t.Errorf("status = %d, want 404", resp.StatusCode)

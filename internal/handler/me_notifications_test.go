@@ -23,6 +23,7 @@ func notificationsApp() (*fiber.App, *auth.Issuer) {
 	h := &authHandlers{}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/notifications", auth.RequireAuth(iss, testVersions), h.GetNotifications)
+	app.Get("/api/v1/me/notifications/:id", auth.RequireAuth(iss, testVersions), h.GetNotification)
 	app.Post("/api/v1/me/notifications/:id/read", auth.RequireAuth(iss, testVersions), h.MarkNotificationRead)
 	app.Post("/api/v1/me/notifications/read-all", auth.RequireAuth(iss, testVersions), h.MarkAllNotificationsRead)
 	return app, iss
@@ -39,6 +40,7 @@ func TestNotificationsManagement_IsCookieOnly(t *testing.T) {
 	}{
 		{"list, no credential", fiber.MethodGet, "/api/v1/me/notifications", false},
 		{"list, bearer only", fiber.MethodGet, "/api/v1/me/notifications", true},
+		{"get one, bearer only", fiber.MethodGet, "/api/v1/me/notifications/1", true},
 		{"mark read, bearer only", fiber.MethodPost, "/api/v1/me/notifications/1/read", true},
 		{"mark all read, bearer only", fiber.MethodPost, "/api/v1/me/notifications/read-all", true},
 	}

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -11,13 +13,16 @@ import (
 // internal job id is exposed — only the public slug, same rule DigestJob
 // already follows. public_slug/created_at/read_at use pgtype's own JSON
 // marshaling (null when not Valid), the same convention pushTokenResponse
-// already uses.
+// already uses. jobs passes the stored json.RawMessage straight through
+// (null for every kind but a multi-job digest) — omitempty so a normal
+// notification's response doesn't carry a spurious `"jobs":null`.
 type notificationResponse struct {
 	ID         int64              `json:"id"`
 	Kind       string             `json:"kind"`
 	Title      string             `json:"title"`
 	Body       string             `json:"body"`
 	PublicSlug pgtype.Text        `json:"public_slug"`
+	Jobs       json.RawMessage    `json:"jobs,omitempty"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	ReadAt     pgtype.Timestamptz `json:"read_at"`
 }
@@ -29,6 +34,20 @@ func toNotificationResponse(r db.ListUserNotificationsRow) notificationResponse 
 		Title:      r.Title,
 		Body:       r.Body,
 		PublicSlug: r.PublicSlug,
+		Jobs:       r.Jobs,
+		CreatedAt:  r.CreatedAt,
+		ReadAt:     r.ReadAt,
+	}
+}
+
+func toNotificationResponseFromGet(r db.GetNotificationRow) notificationResponse {
+	return notificationResponse{
+		ID:         r.ID,
+		Kind:       r.Kind,
+		Title:      r.Title,
+		Body:       r.Body,
+		PublicSlug: r.PublicSlug,
+		Jobs:       r.Jobs,
 		CreatedAt:  r.CreatedAt,
 		ReadAt:     r.ReadAt,
 	}
@@ -70,6 +89,29 @@ func (h *authHandlers) GetNotifications(c *fiber.Ctx) error {
 			"offset":       offset,
 		},
 	})
+}
+
+// GetNotification returns one of the caller's own notifications, including
+// its jobs snapshot when it has one — the read a direct visit or bookmark of
+// /my/notifications/[id]/jobs needs, since the list page alone only ever
+// serves whatever offset the caller last paged to. Owner-scoped: another
+// user's id — or a nonexistent one — 404s rather than revealing which.
+// Cookie-only.
+func (h *authHandlers) GetNotification(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+
+	row, err := h.queries.GetNotification(c.Context(), db.GetNotificationParams{ID: id, UserID: userID})
+	if err != nil {
+		return err // pgx.ErrNoRows → 404 via the central error handler
+	}
+	return c.JSON(fiber.Map{"data": toNotificationResponseFromGet(row)})
 }
 
 // MarkNotificationRead marks one of the caller's own notifications read.
