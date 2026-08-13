@@ -1,8 +1,9 @@
 <script lang="ts">
   import { Award, Briefcase, FolderKanban, GraduationCap, Languages, Tags, User } from '@lucide/svelte';
-  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import type { Experience } from '$lib/generated/contracts';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -25,7 +26,7 @@
   }
 
   function fadeClass(job: Experience): string {
-    return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-[2px]' : '';
+    return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-sm' : '';
   }
 
   const experience = $derived(cv.experience ?? []);
@@ -130,7 +131,7 @@
                 onmouseleave={() => (hoveredSkill = null)}
                 onfocus={() => (hoveredSkill = skill)}
                 onblur={() => (hoveredSkill = null)}
-                class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                class="rounded-full bg-brand-muted px-3 py-1 text-xs font-medium text-brand-strong"
                 >{skill}</span
               >
             {/each}
@@ -150,12 +151,18 @@
                  once loaded and never reorders, so an index key is safe here. -->
             {#each experience as job, i (i)}
               <li
-                class="flex gap-3 rounded-xl border border-border bg-card p-4 transition-[filter,opacity] duration-150 {fadeClass(
+                class="flex gap-3 rounded-xl border border-border bg-card p-4 transition duration-150 {fadeClass(
                   job,
                 )}"
               >
                 {#if job.company}
-                  <CompanyLogo name={job.company} size="size-10" />
+                  <EntityLogo
+                    name={job.company}
+                    src={companyLogoUrl(job.company) ?? undefined}
+                    shape="square"
+                    size="md"
+                    class="shrink-0"
+                  />
                 {:else}
                   <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
                 {/if}
