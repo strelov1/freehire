@@ -15,6 +15,7 @@
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
+  import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import TabRow, { tabId } from '$lib/components/TabRow.svelte';
@@ -25,6 +26,7 @@
     FacetCounts,
     TalentNetworkVisibility,
   } from '$lib/types';
+  import type { Answers } from '$lib/generated/contracts';
   import { Button } from '$lib/ui';
 
   const profile = $derived(profileStore.profile);
@@ -43,6 +45,7 @@
   let parseStatus = $state('');
   let parseDetail = $state('');
   let contacts = $state<CandidateContacts | null>(null);
+  let screeningAnswers = $state<Answers | null>(null);
   let loadError = $state(false);
   // The tab strip's sections. `as const` ties `tab` to this list, so a section can't be
   // referenced by an id the strip doesn't offer.
@@ -117,6 +120,17 @@
       status = 'error';
     }
     void loadStructured();
+    void loadScreeningAnswers();
+  }
+
+  // Best-effort, independent of the filter-driven reload — a failure here leaves the
+  // section blank on next load rather than erroring the whole profile page.
+  async function loadScreeningAnswers() {
+    try {
+      screeningAnswers = await api.getScreeningAnswers();
+    } catch {
+      screeningAnswers = null;
+    }
   }
 
   // Fetch the read-only structured résumé independently of the filter-driven reload.
@@ -344,6 +358,12 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
+          <!-- Screening answers: a separate concern from the role/skills profile above
+               (facts the candidate states directly, not a targeting profile) — its own
+               heading and its own save action. The component re-seeds its own fields from
+               `answers` on reload (dirty-guarded, same pattern as CandidateContactsEditor),
+               since there is no single identity field here to key a remount on. -->
+          <ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and
                off the other tabs, which are readings of the market, not account

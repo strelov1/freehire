@@ -50,11 +50,16 @@
 
 ## 5. Web: manual edit surface
 
-- [ ] 5.1 Add a "Screening answers" section to `web/src/routes/my/profile`, visually and
+- [x] 5.1 Add a "Screening answers" section to `web/src/routes/my/profile`, visually and
       structurally separate from the existing skills/specializations form (own heading, own
-      save action).
-- [ ] 5.2 Wire the section to `GET`/`PUT /me/screening-answers` using the generated
-      contract types.
+      save action). Implemented as `ScreeningAnswersForm.svelte`, rendered in the Settings
+      tab below `ProfileForm`.
+- [x] 5.2 Wire the section to `GET`/`PUT /me/screening-answers` using the generated
+      contract types (`api.getScreeningAnswers`/`api.updateScreeningAnswers`, `Answers`
+      type from `$lib/generated/contracts`). Verified end-to-end in a real browser against
+      a local backend — caught and fixed a real bug in the process (see commit): a
+      `type="number"` input's Svelte-coerced numeric value broke `.trim()` in `save()`,
+      leaving the button permanently disabled with no error shown.
 
 ## 6. Verification
 
