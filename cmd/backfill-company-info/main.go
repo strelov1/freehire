@@ -115,7 +115,7 @@ func run() int {
 		log.Printf("open %s: %v", path, err)
 		return 1
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	stats, err := load(ctx, db.New(pool), f)
 	if err != nil {

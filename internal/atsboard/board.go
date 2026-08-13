@@ -199,11 +199,12 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		if platformHost(host) {
 			return "", "", "", false
 		}
-		if mode == modeSubdomain {
+		switch mode {
+		case modeSubdomain:
 			board = subdomainLabel(host, apex)
-		} else if mode == modeSubdomainChain {
+		case modeSubdomainChain:
 			board = subdomainChain(host, apex)
-		} else {
+		default:
 			board = host // the whole careers host is the tenant identity
 		}
 		if board == "" {

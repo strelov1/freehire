@@ -54,7 +54,7 @@ func (f LogFile) Open() (io.ReadCloser, error) {
 	}
 	zr, err := gzip.NewReader(file)
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return nil, err
 	}
 	return gzipReadCloser{zr: zr, file: file}, nil

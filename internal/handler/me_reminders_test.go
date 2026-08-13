@@ -66,10 +66,10 @@ func do(t *testing.T, app *fiber.App, method, path, token, body string) *http.Re
 	t.Helper()
 	var r *http.Request
 	if body != "" {
-		r = httptest.NewRequest(method, path, strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	} else {
-		r = httptest.NewRequest(method, path, nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, path, nil)
 	}
 	if token != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -83,10 +83,14 @@ func do(t *testing.T, app *fiber.App, method, path, token, body string) *http.Re
 
 func TestNotificationSettings_RequiresAuth(t *testing.T) {
 	app, _, _ := remindersApp(reminder.Settings{})
-	if got := do(t, app, fiber.MethodGet, "/me/notification-settings", "", "").StatusCode; got != fiber.StatusUnauthorized {
+	getResp := do(t, app, fiber.MethodGet, "/me/notification-settings", "", "")
+	defer getResp.Body.Close()
+	if got := getResp.StatusCode; got != fiber.StatusUnauthorized {
 		t.Errorf("GET status = %d, want 401", got)
 	}
-	if got := do(t, app, fiber.MethodPut, "/me/notification-settings", "", `{"enabled":false}`).StatusCode; got != fiber.StatusUnauthorized {
+	putResp := do(t, app, fiber.MethodPut, "/me/notification-settings", "", `{"enabled":false}`)
+	defer putResp.Body.Close()
+	if got := putResp.StatusCode; got != fiber.StatusUnauthorized {
 		t.Errorf("PUT status = %d, want 401", got)
 	}
 }
@@ -94,7 +98,9 @@ func TestNotificationSettings_RequiresAuth(t *testing.T) {
 func TestSaveJob_SchedulesReminderWhenEnabled(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	if got := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "").StatusCode; got != fiber.StatusOK {
+	saveResp := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
+	defer saveResp.Body.Close()
+	if got := saveResp.StatusCode; got != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", got)
 	}
 	if repo.upserts != 1 {
@@ -105,7 +111,8 @@ func TestSaveJob_SchedulesReminderWhenEnabled(t *testing.T) {
 func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: false})
 	token, _ := iss.Issue(7, testTokenVersion)
-	do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
+	resp := do(t, app, fiber.MethodPost, "/jobs/go-dev/save", token, "")
+	defer resp.Body.Close()
 	if repo.upserts != 0 || repo.cancels != 0 {
 		t.Errorf("disabled-rule save must be a no-op: upserts=%d cancels=%d", repo.upserts, repo.cancels)
 	}
@@ -114,8 +121,10 @@ func TestSaveJob_DisabledRuleSchedulesNothing(t *testing.T) {
 func TestApplyAndUnsave_CancelReminder(t *testing.T) {
 	app, iss, repo := remindersApp(reminder.Settings{Enabled: true, Channels: []string{"email"}})
 	token, _ := iss.Issue(7, testTokenVersion)
-	do(t, app, fiber.MethodPost, "/jobs/go-dev/apply", token, "")
-	do(t, app, fiber.MethodDelete, "/jobs/go-dev/save", token, "")
+	applyResp := do(t, app, fiber.MethodPost, "/jobs/go-dev/apply", token, "")
+	defer applyResp.Body.Close()
+	unsaveResp := do(t, app, fiber.MethodDelete, "/jobs/go-dev/save", token, "")
+	defer unsaveResp.Body.Close()
 	if repo.cancels != 2 {
 		t.Errorf("apply + unsave must each cancel, got %d cancels", repo.cancels)
 	}
@@ -125,6 +134,7 @@ func TestUpdateNotificationSettings_RejectsEnabledWithoutChannels(t *testing.T) 
 	app, iss, _ := remindersApp(reminder.Settings{})
 	token, _ := iss.Issue(7, testTokenVersion)
 	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"enabled":true,"channels":[]}`)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}

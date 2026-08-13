@@ -204,7 +204,7 @@ func TestOnstriderVacancyURL(t *testing.T) {
 }
 
 func TestOnstriderProviderBoardlessAndProxied(t *testing.T) {
-	var s Source = NewOnstrider(nil)
+	var s = NewOnstrider(nil)
 	if s.Provider() != "onstrider" {
 		t.Errorf("Provider() = %q, want onstrider", s.Provider())
 	}

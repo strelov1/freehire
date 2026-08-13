@@ -86,7 +86,7 @@ func (s pgSink) Save(ctx context.Context, vecs []search.SemanticVector) (int64, 
 		batch.Queue(`UPDATE jobs SET semantic_embedding = $1 WHERE id = $2`, v.Vector, v.ID)
 	}
 	br := s.pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	var affected int64
 	for range vecs {
 		ct, err := br.Exec()

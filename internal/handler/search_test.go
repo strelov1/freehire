@@ -61,7 +61,7 @@ func searchApp(s searcher) *fiber.App {
 
 func doGet(t *testing.T, app *fiber.App, target string) (int, map[string]any) {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, target, nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

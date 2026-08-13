@@ -65,12 +65,13 @@ func registerApp() *fiber.App {
 
 func postJSON(t *testing.T, app *fiber.App, path, body string) int {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, path, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, path, strings.NewReader(body))
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode
 }
 
@@ -140,7 +141,7 @@ func TestAuthRoutes_NoCacheHeaders(t *testing.T) {
 
 	for _, r := range routes {
 		t.Run(r.method+" "+r.path, func(t *testing.T) {
-			req := httptest.NewRequest(r.method, r.path, nil)
+			req := httptest.NewRequestWithContext(context.Background(), r.method, r.path, nil)
 			resp, err := app.Test(req)
 			if err != nil {
 				t.Fatalf("Test: %v", err)

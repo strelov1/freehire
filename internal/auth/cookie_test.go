@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -18,10 +19,11 @@ func setCookieHeader(t *testing.T, domain string) string {
 		SetTokenCookie(c, "tok", time.Hour, true, domain)
 		return c.SendStatus(fiber.StatusOK)
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/", nil))
 	if err != nil {
 		t.Fatalf("test request failed: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.Header.Get("Set-Cookie")
 }
 
@@ -55,10 +57,11 @@ func clearCookieHeaders(t *testing.T, domain string) []string {
 		ClearTokenCookie(c, true, domain)
 		return c.SendStatus(fiber.StatusNoContent)
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/", nil))
 	if err != nil {
 		t.Fatalf("test request failed: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.Header.Values("Set-Cookie")
 }
 

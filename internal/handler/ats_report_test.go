@@ -78,7 +78,7 @@ func atsAppWith(t *testing.T, repo *fakeProfileRepo, fc facetCounter, store *res
 
 func postATS(t *testing.T, app *fiber.App, target, token string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, target, nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -94,7 +94,7 @@ func postATS(t *testing.T, app *fiber.App, target, token string) (int, map[strin
 
 func getATS(t *testing.T, app *fiber.App, target, token string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}

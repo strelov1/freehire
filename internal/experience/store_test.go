@@ -613,10 +613,10 @@ type raceInjectingRepo struct {
 func (r *raceInjectingRepo) GetAtom(ctx context.Context, id uuid.UUID, userID int64) (db.ExperienceAtom, error) {
 	row, err := r.fakeRepo.GetAtom(ctx, id, userID)
 	if id == r.trigger {
-		v := r.fakeRepo.atoms[r.victim]
+		v := r.atoms[r.victim]
 		v.Context = "raced in from another request"
-		v.UpdatedAt = r.fakeRepo.stamp()
-		r.fakeRepo.atoms[r.victim] = v
+		v.UpdatedAt = r.stamp()
+		r.atoms[r.victim] = v
 	}
 	return row, err
 }

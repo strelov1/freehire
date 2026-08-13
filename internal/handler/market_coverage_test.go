@@ -48,12 +48,13 @@ func coverageApp(fc facetCounter) *fiber.App {
 
 func doPostJSON(t *testing.T, app *fiber.App, target, body string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, target, bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, target, bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer resp.Body.Close()
 	var out map[string]any
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out

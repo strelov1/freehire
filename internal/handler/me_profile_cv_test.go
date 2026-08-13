@@ -138,7 +138,9 @@ func TestGetProfile_CVBlockCarriesTheResumeWithoutContacts(t *testing.T) {
 		ok: true,
 	})
 
-	cv, present := profileCV(t, doProfile(t, app, http.MethodGet, "", token))
+	resp := doProfile(t, app, http.MethodGet, "", token)
+	defer resp.Body.Close()
+	cv, present := profileCV(t, resp)
 
 	if !present {
 		t.Fatal("cv block is null for a caller who has a structured résumé")
@@ -219,7 +221,7 @@ func TestProfileRead_DerivedLocationNullWhenNothingResolved(t *testing.T) {
 // profileDerived reads the response's derived_location block, nil when the key is null.
 func profileDerived(t *testing.T, app *fiber.App, token string) *derivedLocation {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/me/profile", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/profile", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

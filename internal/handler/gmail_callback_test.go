@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -24,10 +25,11 @@ func TestGmailCallbackWithoutSessionRedirectsInsteadOfJSON(t *testing.T) {
 
 	// No auth cookie: the state the browser carried back is irrelevant, the session
 	// is what is missing.
-	resp, err := app.Test(httptest.NewRequest("GET", "/api/v1/me/gmail/callback?state=abc&code=xyz", nil), -1)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/me/gmail/callback?state=abc&code=xyz", nil), -1)
 	if err != nil {
 		t.Fatalf("callback: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusFound {
 		t.Fatalf("status = %d, want %d (a redirect, not a JSON error)", resp.StatusCode, fiber.StatusFound)
 	}
@@ -47,12 +49,13 @@ func TestGmailCallbackStateMismatchRedirects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	r := httptest.NewRequest("GET", "/api/v1/me/gmail/callback?state=abc&code=xyz", nil)
+	r := httptest.NewRequestWithContext(context.Background(), "GET", "/api/v1/me/gmail/callback?state=abc&code=xyz", nil)
 	r.Header.Set("Cookie", auth.CookieName+"="+token)
 	resp, err := app.Test(r, -1)
 	if err != nil {
 		t.Fatalf("callback: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusFound)
 	}

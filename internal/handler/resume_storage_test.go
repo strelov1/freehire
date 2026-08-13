@@ -170,7 +170,7 @@ func resumeStorageApp(t *testing.T, store *resume.Store) (*fiber.App, string) {
 
 func resumeReq(t *testing.T, app *fiber.App, method, body, token string) (int, resumeMetaResponse) {
 	t.Helper()
-	req := httptest.NewRequest(method, "/me/resume", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), method, "/me/resume", strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
 	}
@@ -301,7 +301,7 @@ func TestResume_PutContactsAndGetParseStatus(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
 
-	req := httptest.NewRequest(fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPut, "/me/resume/contacts", strings.NewReader(
 		`{"full_name":"Ada","email":"ada@example.com","links":["https://ada.example"]}`,
 	))
 	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
@@ -330,7 +330,7 @@ func TestResume_PutContactsAndGetParseStatus(t *testing.T) {
 func TestResume_RetryParseRequiresUpload(t *testing.T) {
 	store := resume.New(newFakeResumeBlobs(), &fakeResumeRepo{})
 	app, token := resumeContactsApp(t, store)
-	req := httptest.NewRequest(fiber.MethodPost, "/me/resume/parse", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -347,7 +347,7 @@ func TestResume_RetryParseMissingObject(t *testing.T) {
 	repo := &fakeResumeRepo{key: "resumes/1", set: true}
 	store := resume.New(newFakeResumeBlobs(), repo)
 	app, token := resumeContactsApp(t, store)
-	req := httptest.NewRequest(fiber.MethodPost, "/me/resume/parse", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -380,7 +380,7 @@ func TestResume_RetryParseMarksPending(t *testing.T) {
 	store := resume.New(blobs, repo)
 	app, token := resumeContactsApp(t, store)
 
-	req := httptest.NewRequest(fiber.MethodPost, "/me/resume/parse", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/parse", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

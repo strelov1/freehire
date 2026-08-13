@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,7 +38,7 @@ func TestProfileRegister_ReadTakesAKeyAndWritesDoNot(t *testing.T) {
 		{http.MethodPut, "cookie"},
 		{http.MethodDelete, "cookie"},
 	} {
-		resp, err := app.Test(httptest.NewRequest(tc.method, "/api/v1/me/profile", nil))
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), tc.method, "/api/v1/me/profile", nil))
 		if err != nil {
 			t.Fatalf("%s: %v", tc.method, err)
 		}

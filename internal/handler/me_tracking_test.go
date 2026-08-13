@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,7 +31,7 @@ func meJobsApp(t *testing.T) (*fiber.App, string) {
 
 func getMeTracking(t *testing.T, app *fiber.App, path, token string) int {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, path, nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, path, nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}

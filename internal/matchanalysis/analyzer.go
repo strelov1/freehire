@@ -453,7 +453,7 @@ func writeAnchor(b *strings.Builder, m jobmatch.JobMatch) {
 	if len(m.Matched)+len(m.Adjacent)+len(m.Missing) == 0 {
 		return
 	}
-	b.WriteString(fmt.Sprintf("Deterministic skills match (coverage %d%%):\n", m.CoveragePercent))
+	fmt.Fprintf(b, "Deterministic skills match (coverage %d%%):\n", m.CoveragePercent)
 	if len(m.Matched) > 0 {
 		b.WriteString("- has: " + strings.Join(m.Matched, ", ") + "\n")
 	}

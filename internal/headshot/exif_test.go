@@ -29,15 +29,15 @@ func exifOrientationPayload(orientation uint16, bigEndian bool) []byte {
 	}
 	var tiff bytes.Buffer
 	tiff.Write(tag)
-	binary.Write(&tiff, order, uint16(42)) // TIFF magic
-	binary.Write(&tiff, order, uint32(8))  // IFD0 starts right after the header
-	binary.Write(&tiff, order, uint16(1))  // one entry
-	binary.Write(&tiff, order, uint16(0x0112))
-	binary.Write(&tiff, order, uint16(3)) // type SHORT
-	binary.Write(&tiff, order, uint32(1)) // count
-	binary.Write(&tiff, order, orientation)
-	tiff.Write([]byte{0, 0})              // SHORT occupies the first half of the value field
-	binary.Write(&tiff, order, uint32(0)) // no next IFD
+	_ = binary.Write(&tiff, order, uint16(42)) // TIFF magic
+	_ = binary.Write(&tiff, order, uint32(8))  // IFD0 starts right after the header
+	_ = binary.Write(&tiff, order, uint16(1))  // one entry
+	_ = binary.Write(&tiff, order, uint16(0x0112))
+	_ = binary.Write(&tiff, order, uint16(3)) // type SHORT
+	_ = binary.Write(&tiff, order, uint32(1)) // count
+	_ = binary.Write(&tiff, order, orientation)
+	tiff.Write([]byte{0, 0})                  // SHORT occupies the first half of the value field
+	_ = binary.Write(&tiff, order, uint32(0)) // no next IFD
 
 	return append([]byte("Exif\x00\x00"), tiff.Bytes()...)
 }

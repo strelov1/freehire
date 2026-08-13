@@ -40,10 +40,11 @@ func roleApp(loader RoleLoader, role string, inject bool) *fiber.App {
 
 func statusOf(t *testing.T, app *fiber.App) int {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/admin", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/admin", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode
 }
 

@@ -401,7 +401,7 @@ func (s Settings) Validate() error {
 	}
 	appleWeb := s.OAuth["apple"]
 	appleFields := []bool{s.AppleNativeClientID != "", s.AppleGrantActiveKeyID != "", len(s.AppleGrantKeys) != 0}
-	partialApple := (appleFields[0] || appleFields[1] || appleFields[2]) && !(appleFields[0] && appleFields[1] && appleFields[2])
+	partialApple := (appleFields[0] || appleFields[1] || appleFields[2]) && (!appleFields[0] || !appleFields[1] || !appleFields[2])
 	if partialApple {
 		return errors.New("native Apple requires APPLE_NATIVE_CLIENT_ID, APPLE_GRANT_ACTIVE_KEY_ID, and APPLE_GRANT_KEYS")
 	}

@@ -69,7 +69,7 @@ func audioUpload(t *testing.T, data []byte, filename string) (io.Reader, string)
 
 func doTranscription(t *testing.T, app *fiber.App, body io.Reader, ctype, token string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, "/speech/transcriptions", body)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/speech/transcriptions", body)
 	if ctype != "" {
 		req.Header.Set("Content-Type", ctype)
 	}
@@ -281,7 +281,7 @@ func TestSpeechRegister_TakesTheMessageEndpointsGate(t *testing.T) {
 		cookie: namedGate("cookie"),
 	})
 
-	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/api/v1/speech/transcriptions", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/speech/transcriptions", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}

@@ -36,7 +36,7 @@ func newHeaderProxy(t *testing.T) *headerProxy {
 		p.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
+		_, _ = fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
 			`[{"index":0,"message":{"role":"assistant","content":"{}"},"finish_reason":"stop"}]}`)
 	}))
 	t.Cleanup(p.srv.Close)
@@ -197,11 +197,11 @@ func newRefusingProxy(t *testing.T, refuse string) *headerProxy {
 
 		if r.Header.Get("Authorization") == "Bearer "+refuse {
 			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprint(w, `{"error":"invalid key"}`)
+			_, _ = fmt.Fprint(w, `{"error":"invalid key"}`)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
+		_, _ = fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
 			`[{"index":0,"message":{"role":"assistant","content":"{}"},"finish_reason":"stop"}]}`)
 	}))
 	t.Cleanup(p.srv.Close)
@@ -265,7 +265,7 @@ func TestACeilingRefusalIsNotRetried(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		served++
 		w.WriteHeader(http.StatusTooManyRequests)
-		fmt.Fprint(w, `{"error":{"message":"ExceededBudget: Key over 30d budget."}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"message":"ExceededBudget: Key over 30d budget."}}`)
 	}))
 	t.Cleanup(srv.Close)
 

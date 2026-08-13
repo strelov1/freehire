@@ -189,7 +189,7 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	// Sanitize after applying and before storing, exactly as the whole-document path always
 	// has: a change states what was asked for, and the sanitizer decides what is kept.
 	after := applied
-	after.Document.Sanitize()
+	after.Sanitize()
 
 	// Sanitize used to silently keep the first MaxBullets and drop the rest. An
 	// agent insert into a full list then looked like a successful "add" while
@@ -359,7 +359,7 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 		// Sanitize the incoming state first, so the diff is against what would be stored
 		// rather than against what was sent — otherwise a value the sanitizer clamps would
 		// show up as an edit on every save.
-		next.Document.Sanitize()
+		next.Sanitize()
 
 		ops := Diff(before, next)
 		if len(ops) == 0 {

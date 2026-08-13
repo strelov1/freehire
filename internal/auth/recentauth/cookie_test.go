@@ -1,6 +1,7 @@
 package recentauth
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestRecentAuthCookieAttributes(t *testing.T) {
 		SetCookie(c, "proof", time.Now().Add(time.Minute), true, "freehire.me")
 		return c.SendStatus(204)
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/set", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/set", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestClearRecentAuthCookieExpiresSameName(t *testing.T) {
 		ClearCookie(c, false, "")
 		return c.SendStatus(204)
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/clear", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/clear", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,7 +55,7 @@ func deleteAccountApp(t *testing.T, eraser *fakeEraser, email string) (*fiber.Ap
 
 func doDelete(t *testing.T, app *fiber.App, body, token string) *http.Response {
 	t.Helper()
-	r := httptest.NewRequest(fiber.MethodDelete, "/me", strings.NewReader(body))
+	r := httptest.NewRequestWithContext(context.Background(), fiber.MethodDelete, "/me", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -72,6 +72,7 @@ func TestDeleteAccount_ConfirmedByOwnEmail(t *testing.T) {
 	app, token := deleteAccountApp(t, eraser, "member@example.test")
 
 	resp := doDelete(t, app, `{"email":"member@example.test"}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
 	}
@@ -97,7 +98,9 @@ func TestDeleteAccount_ConfirmationIsCaseInsensitive(t *testing.T) {
 	eraser := &fakeEraser{}
 	app, token := deleteAccountApp(t, eraser, "Member@Example.test")
 
-	if resp := doDelete(t, app, `{"email":"member@example.TEST"}`, token); resp.StatusCode != fiber.StatusNoContent {
+	resp := doDelete(t, app, `{"email":"member@example.TEST"}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
 	}
 	if len(eraser.deleted) != 1 {
@@ -119,7 +122,9 @@ func TestDeleteAccount_RejectsWrongOrMissingConfirmation(t *testing.T) {
 			eraser := &fakeEraser{}
 			app, token := deleteAccountApp(t, eraser, "member@example.test")
 
-			if resp := doDelete(t, app, tc.body, token); resp.StatusCode != fiber.StatusBadRequest {
+			resp := doDelete(t, app, tc.body, token)
+			defer resp.Body.Close()
+			if resp.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
 			if len(eraser.deleted) != 0 {
@@ -133,7 +138,9 @@ func TestDeleteAccount_RejectsAnonymous(t *testing.T) {
 	eraser := &fakeEraser{}
 	app, _ := deleteAccountApp(t, eraser, "member@example.test")
 
-	if resp := doDelete(t, app, `{"email":"member@example.test"}`, ""); resp.StatusCode != fiber.StatusUnauthorized {
+	resp := doDelete(t, app, `{"email":"member@example.test"}`, "")
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
 	if len(eraser.deleted) != 0 {
@@ -147,13 +154,14 @@ func TestDeleteAccount_RejectsAPIKey(t *testing.T) {
 	eraser := &fakeEraser{}
 	app, _ := deleteAccountApp(t, eraser, "member@example.test")
 
-	r := httptest.NewRequest(fiber.MethodDelete, "/me", strings.NewReader(`{"email":"member@example.test"}`))
+	r := httptest.NewRequestWithContext(context.Background(), fiber.MethodDelete, "/me", strings.NewReader(`{"email":"member@example.test"}`))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Authorization", "Bearer fh_livekey")
 	resp, err := app.Test(r)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -168,7 +176,9 @@ func TestDeleteAccount_StorageFailureIsRetryable(t *testing.T) {
 	eraser := &fakeEraser{err: fmt.Errorf("erase objects: %w", accountdelete.ErrStorageUnavailable)}
 	app, token := deleteAccountApp(t, eraser, "member@example.test")
 
-	if resp := doDelete(t, app, `{"email":"member@example.test"}`, token); resp.StatusCode != fiber.StatusServiceUnavailable {
+	resp := doDelete(t, app, `{"email":"member@example.test"}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", resp.StatusCode)
 	}
 }

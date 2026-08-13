@@ -31,7 +31,7 @@ func run() int {
 	// One construction path: llm.NewClient builds the client and, when LANGFUSE_* are
 	// set, wires tracing (source "enrich"). flush drains buffered traces at run end
 	// (no-op when tracing is off). LoadEnrich already required the LLM settings.
-	client, flush, err := llm.NewClient(ecfg.LLM.Settings(ecfg.LLM.Model), "enrich")
+	client, flush, err := llm.NewClient(ecfg.Settings(ecfg.Model), "enrich")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1

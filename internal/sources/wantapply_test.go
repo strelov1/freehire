@@ -272,7 +272,7 @@ func TestWantapplyFetchNewSeenSkipsDetail(t *testing.T) {
 }
 
 func TestWantapplyProviderBoardlessAggregatorNotSelfClosing(t *testing.T) {
-	var s Source = NewWantapply(nil)
+	var s = NewWantapply(nil)
 	if s.Provider() != "wantapply" {
 		t.Errorf("Provider() = %q, want wantapply", s.Provider())
 	}

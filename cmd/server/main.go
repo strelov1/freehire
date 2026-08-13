@@ -85,7 +85,7 @@ func main() {
 		log.Fatalf("redis: %v", err)
 	}
 	redisClient := redis.NewClient(redisOpts)
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 	throttler := ratelimit.NewRedisThrottler(redisClient)
 
 	app := fiber.New(fiber.Config{
@@ -175,7 +175,7 @@ func main() {
 	// shutdown. Nil client when unconfigured — the ATS score stays deterministic. A
 	// build error on a configured endpoint is fatal (a misconfigured gateway must not
 	// boot silently).
-	llmClient, llmFlush, err := llm.NewClient(cfg.LLM.Settings(cfg.LLM.Model), "cv-ats")
+	llmClient, llmFlush, err := llm.NewClient(cfg.Settings(cfg.Model), "cv-ats")
 	if err != nil {
 		log.Fatalf("llm: %v", err)
 	}
@@ -185,7 +185,7 @@ func main() {
 	// reliable tool calling and a large context, where LLM_MODEL is chosen for cheap
 	// one-shot JSON extraction. Unset falls back to LLM_MODEL, so a single-model
 	// deployment still works. Traced under its own source label.
-	assistantLLM, assistantFlush, err := llm.NewClient(cfg.LLM.Settings(cmp.Or(cfg.AssistantModel, cfg.LLM.Model)), "assistant")
+	assistantLLM, assistantFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.AssistantModel, cfg.Model)), "assistant")
 	if err != nil {
 		log.Fatalf("llm (assistant): %v", err)
 	}
@@ -195,14 +195,14 @@ func main() {
 	// an OpenAI-compatible endpoint serves /chat/completions and /audio/transcriptions
 	// alike — so there is nothing extra to configure and nothing extra to fail. Nil
 	// when the gateway is unset, which the composer reads as "no microphone here".
-	speechClient := speech.New(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.STTModel)
+	speechClient := speech.New(cfg.BaseURL, cfg.APIKey, cfg.STTModel)
 
 	// Voice mode's Realtime credential rides the same gateway and key as the clients
 	// above — the litellm proxy already fronts OpenAI's /v1/realtime/client_secrets
 	// the same way it fronts /audio/transcriptions, so nothing new to configure here
 	// either. Nil when the gateway or REALTIME_MODEL is unset, which the interview
 	// session view reads as "no voice mode here".
-	realtimeClient := realtime.New(cfg.LLM.BaseURL, cfg.LLM.APIKey, cfg.RealtimeModel)
+	realtimeClient := realtime.New(cfg.BaseURL, cfg.APIKey, cfg.RealtimeModel)
 
 	// The gateway's administrative API, which mints the per-user credential each
 	// account's model calls are spent under. Nil when unconfigured, and that is an

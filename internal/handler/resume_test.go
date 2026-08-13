@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -36,7 +37,7 @@ func resumeApp(t *testing.T) (*fiber.App, string) {
 
 func postResumeJSON(t *testing.T, app *fiber.App, body, token string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, "/me/resume/extract", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/extract", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -59,9 +60,9 @@ func postResumeFile(t *testing.T, app *fiber.App, filename string, content []byt
 	if _, err := fw.Write(content); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	w.Close()
+	_ = w.Close()
 
-	req := httptest.NewRequest(fiber.MethodPost, "/me/resume/extract", &buf)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/me/resume/extract", &buf)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
@@ -89,6 +90,7 @@ func decodeSkills(t *testing.T, resp *http.Response) []string {
 func TestExtractResumeProfile_Unauthenticated(t *testing.T) {
 	app, _ := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"Go and PostgreSQL"}`, "")
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -97,6 +99,7 @@ func TestExtractResumeProfile_Unauthenticated(t *testing.T) {
 func TestExtractResumeProfile_Text(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"Experienced with PostgreSQL, Kubernetes and Docker."}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -109,6 +112,7 @@ func TestExtractResumeProfile_Text(t *testing.T) {
 func TestExtractResumeProfile_TextNoSkills(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"I like long walks on the beach."}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -122,6 +126,7 @@ func TestExtractResumeProfile_TextNoSkills(t *testing.T) {
 func TestExtractResumeProfile_EmptyText(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeJSON(t, app, `{"text":"   "}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -134,6 +139,7 @@ func TestExtractResumeProfile_PDF(t *testing.T) {
 	}
 	app, token := resumeApp(t)
 	resp := postResumeFile(t, app, "resume.pdf", pdf, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -158,6 +164,7 @@ func TestExtractResumeProfile_CanvaCIDPDF(t *testing.T) {
 	}
 	app, token := resumeApp(t)
 	resp := postResumeFile(t, app, "resume.pdf", pdf, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 (Canva CID PDF must extract, not be rejected)", resp.StatusCode)
 	}
@@ -169,6 +176,7 @@ func TestExtractResumeProfile_CanvaCIDPDF(t *testing.T) {
 func TestExtractResumeProfile_MalformedPDF(t *testing.T) {
 	app, token := resumeApp(t)
 	resp := postResumeFile(t, app, "resume.pdf", []byte("this is not a pdf"), token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}

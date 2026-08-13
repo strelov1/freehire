@@ -199,7 +199,7 @@ func appendRetired(dir, name string, going []entryBlock, lines []string) error {
 	if err != nil {
 		return fmt.Errorf("prune: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.WriteString(b.String()); err != nil {
 		return fmt.Errorf("prune: append %s: %w", path, err)
 	}

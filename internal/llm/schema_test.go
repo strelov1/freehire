@@ -40,14 +40,14 @@ func newRecordingProxy(t *testing.T) *recordingProxy {
 
 		if stream, _ := body["stream"].(bool); stream {
 			w.Header().Set("Content-Type", "text/event-stream")
-			fmt.Fprint(w, "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":"+
+			_, _ = fmt.Fprint(w, "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":"+
 				"[{\"index\":0,\"delta\":{\"content\":\"{}\"}}]}\n\n")
-			fmt.Fprint(w, "data: [DONE]\n\n")
+			_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
+		_, _ = fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
 			`[{"index":0,"message":{"role":"assistant","content":"{}"},"finish_reason":"stop"}]}`)
 	}))
 	t.Cleanup(p.srv.Close)

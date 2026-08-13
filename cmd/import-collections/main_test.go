@@ -201,7 +201,7 @@ func TestResolveOne_TreatsAZeroRecordParseAsFailure(t *testing.T) {
 	// genuinely empty register. Letting it through would reconcile the tag off every
 	// company, so it must fail like a fetch failure does.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("[]"))
+		_, _ = w.Write([]byte("[]"))
 	}))
 	defer srv.Close()
 
@@ -219,7 +219,7 @@ func TestResolveOne_FetchesFromTheDatasetResolver(t *testing.T) {
 	var fetched string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fetched = r.URL.Path
-		w.Write([]byte("payload"))
+		_, _ = w.Write([]byte("payload"))
 	}))
 	defer srv.Close()
 

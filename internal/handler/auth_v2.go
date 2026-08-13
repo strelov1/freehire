@@ -171,7 +171,7 @@ func (h *authHandlers) OAuthStartV2(c *fiber.Ctx) error {
 		return authError(404, "unknown_provider", "unknown provider")
 	}
 	platform, target, purpose := c.Query("platform"), c.Query("callback_target"), c.Query("purpose")
-	if provider == "apple" && !(platform == "web" && purpose == "reauth") {
+	if provider == "apple" && (platform != "web" || purpose != "reauth") {
 		return authError(404, "unknown_provider", "unknown provider")
 	}
 	callback, ok := h.mobileCallbacks[target]

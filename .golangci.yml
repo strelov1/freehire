@@ -11,6 +11,24 @@ linters:
     - noctx
     - unconvert
     - misspell
+  settings:
+    errcheck:
+      # Best-effort cleanup calls whose error has no actionable recipient: a deferred
+      # Close/RemoveAll/Rollback runs after the operation it's cleaning up already
+      # succeeded or failed for its own, already-handled reason.
+      exclude-functions:
+        - (io.Closer).Close
+        - os.RemoveAll
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+    misspell:
+      # Real words in other languages (board-ingest dictionaries, non-English test
+      # fixtures), not English typos.
+      ignore-rules:
+        - administrativo
+        - processos
+        - operacional
+        - indonesien
+        - profissional
 
 formatters:
   enable:

@@ -13,11 +13,8 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// Fixed ids so a failure names a stable value rather than a fresh random one.
-var (
-	sessionID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
-	otherID   = uuid.MustParse("22222222-2222-4222-8222-222222222222")
-)
+// sessionID is a fixed id so a failure names a stable value rather than a fresh random one.
+var sessionID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
 
 // fakeQueries is an in-memory stand-in for the generated queries, holding one
 // session and its transcript. It records what it was asked for so the tests can

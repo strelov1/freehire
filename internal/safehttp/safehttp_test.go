@@ -62,7 +62,7 @@ func TestNewTransportWithProxy(t *testing.T) {
 	if tr.Proxy == nil {
 		t.Fatal("expected Transport.Proxy to be set")
 	}
-	got, err := tr.Proxy(httptest.NewRequest(http.MethodGet, "http://target.example/x", nil))
+	got, err := tr.Proxy(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://target.example/x", nil))
 	if err != nil {
 		t.Fatalf("proxy func: %v", err)
 	}
@@ -83,8 +83,13 @@ func TestClientRefusesLoopback(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(5 * time.Second)
-	_, err := client.Get(srv.URL)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL, nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext: %v", err)
+	}
+	resp, err := client.Do(req)
 	if err == nil {
+		resp.Body.Close()
 		t.Fatal("expected the guarded client to refuse a loopback target, got nil error")
 	}
 	if !strings.Contains(err.Error(), "blocked") {

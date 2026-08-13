@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -112,11 +113,12 @@ func TestJobsActivityValidation(t *testing.T) {
 	h := &statsHandlers{}
 	app.Get("/api/v1/stats/jobs-activity", h.JobsActivity)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/stats/jobs-activity?granularity=hour", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/stats/jobs-activity?granularity=hour", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (unauthenticated request reaches the handler and invalid granularity is a 400)", resp.StatusCode)
 	}

@@ -76,7 +76,7 @@ func TestRequireAuthWS_DBOutage_Clean503Response(t *testing.T) {
 			})
 
 			// Simulate a full WebSocket opening handshake request (RFC 6455)
-			req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 			req.Header.Set("Connection", "Upgrade")
 			req.Header.Set("Upgrade", "websocket")
 			req.Header.Set("Sec-WebSocket-Version", "13")
@@ -131,13 +131,14 @@ func TestRequireAuthWS_ScopedKeyRejection(t *testing.T) {
 			return c.SendString("ok")
 		})
 
-		req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 		req.Header.Set(fiber.HeaderAuthorization, "Bearer fh_live_cvkey")
 
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatalf("Test: %v", err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusForbidden {
 			t.Errorf("status = %d, want 403 for CV scope key", resp.StatusCode)
 		}
@@ -159,13 +160,14 @@ func TestRequireAuthWS_ScopedKeyRejection(t *testing.T) {
 			return c.SendString("ok")
 		})
 
-		req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 		req.Header.Set(fiber.HeaderAuthorization, "Bearer fh_live_fullkey")
 
 		resp, err := app.Test(req)
 		if err != nil {
 			t.Fatalf("Test: %v", err)
 		}
+		defer resp.Body.Close()
 		if resp.StatusCode != fiber.StatusOK {
 			t.Errorf("status = %d, want 200 for full scope key", resp.StatusCode)
 		}
@@ -256,7 +258,7 @@ func TestRequireAuthWS_ConcurrentStress(t *testing.T) {
 				}
 
 				// Choose carrier: JWT or API Key
-				req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+				req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 				if i%2 == 0 {
 					req.Header.Set("Sec-WebSocket-Protocol", WSSubprotocolMarker+", "+jwtToken)
 				} else {

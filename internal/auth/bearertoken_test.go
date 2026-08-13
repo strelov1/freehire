@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -27,13 +28,15 @@ func TestBearerToken(t *testing.T) {
 				got = bearerToken(c)
 				return c.SendStatus(fiber.StatusOK)
 			})
-			req := httptest.NewRequest(fiber.MethodGet, "/", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/", nil)
 			if tc.header != "" {
 				req.Header.Set(fiber.HeaderAuthorization, tc.header)
 			}
-			if _, err := app.Test(req); err != nil {
+			resp, err := app.Test(req)
+			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if got != tc.want {
 				t.Errorf("bearerToken(%q) = %q, want %q", tc.header, got, tc.want)
 			}

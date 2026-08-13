@@ -80,7 +80,7 @@ func versionedApp(iss *Issuer, versions TokenVersionLoader) *fiber.App {
 }
 
 func cookieRequest(token string) *http.Request {
-	req := httptest.NewRequest(fiber.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 	return req
 }
@@ -96,6 +96,7 @@ func TestRequireAuth_AcceptsCurrentVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 for a current token", resp.StatusCode)
 	}
@@ -113,6 +114,7 @@ func TestRequireAuth_RejectsRevokedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 for a revoked token", resp.StatusCode)
 	}
@@ -130,6 +132,7 @@ func TestRequireAuth_RejectsUnknownAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 when the account's version cannot be loaded", resp.StatusCode)
 	}
@@ -143,6 +146,7 @@ func TestRequireAuth_RejectsLegacyToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 — a pre-versioning token must not survive the deploy", resp.StatusCode)
 	}

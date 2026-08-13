@@ -97,7 +97,7 @@ func marketPulseApp(t *testing.T, repo *fakeProfileRepo, history *fakeSkillHisto
 
 func doMarketPulse(t *testing.T, app *fiber.App, token string) *http.Response {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodGet, "/me/market-pulse", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/market-pulse", nil)
 	if token != "" {
 		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -135,6 +135,7 @@ func TestMarketPulseWithProfileSkills(t *testing.T) {
 	app, token := marketPulseApp(t, repo, history)
 
 	resp := doMarketPulse(t, app, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -156,6 +157,7 @@ func TestMarketPulseEmptyProfileReturnsEmptyData(t *testing.T) {
 	app, token := marketPulseApp(t, repo, history)
 
 	resp := doMarketPulse(t, app, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -177,6 +179,7 @@ func TestMarketPulseUnauthenticatedRejected(t *testing.T) {
 	app, _ := marketPulseApp(t, repo, history)
 
 	resp := doMarketPulse(t, app, "")
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}

@@ -48,9 +48,9 @@ func appWriteReq(t *testing.T, app *fiber.App, iss *auth.Issuer, method, path, b
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequest(method, path, nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, path, nil)
 	} else {
-		r = httptest.NewRequest(method, path, strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	tok, err := iss.Issue(7, testTokenVersion)
@@ -73,6 +73,7 @@ func TestApplicationWritesRejectABadBodyBeforeTheLookup(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/a42", tc.body)
+			defer res.Body.Close()
 			if res.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400 — the body is wrong whichever way the row was named", res.StatusCode)
 			}
@@ -83,6 +84,7 @@ func TestApplicationWritesRejectABadBodyBeforeTheLookup(t *testing.T) {
 func TestApplicationWritesAcceptAValidStage(t *testing.T) {
 	app, iss := appWriteApp(t, stubTrackingRepo{})
 	res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/a42", `{"stage":"interview"}`)
+	defer res.Body.Close()
 	if res.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
@@ -94,6 +96,7 @@ func TestApplicationWritesAcceptBothIDForms(t *testing.T) {
 	app, iss := appWriteApp(t, stubTrackingRepo{})
 	for _, id := range []string{"a42", "senior-go-engineer-stripe-mfzg42lt"} {
 		res := appWriteReq(t, app, iss, fiber.MethodPatch, "/me/applications/"+id, `{"stage":"offer"}`)
+		defer res.Body.Close()
 		if res.StatusCode != fiber.StatusOK {
 			t.Errorf("id %q: status = %d, want 200", id, res.StatusCode)
 		}
@@ -111,6 +114,7 @@ func TestApplicationWritesAnswerOneNotFound(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := appWriteReq(t, app, iss, tc.method, tc.path, tc.body)
+			defer res.Body.Close()
 			if res.StatusCode != fiber.StatusNotFound {
 				t.Errorf("status = %d, want 404", res.StatusCode)
 			}
@@ -120,12 +124,13 @@ func TestApplicationWritesAnswerOneNotFound(t *testing.T) {
 
 func TestApplicationWritesRequireAuthentication(t *testing.T) {
 	app, _ := appWriteApp(t, stubTrackingRepo{})
-	req := httptest.NewRequest(fiber.MethodPatch, "/me/applications/a42", strings.NewReader(`{"stage":"offer"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/me/applications/a42", strings.NewReader(`{"stage":"offer"}`))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", res.StatusCode)
 	}

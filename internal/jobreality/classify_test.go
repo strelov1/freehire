@@ -115,7 +115,7 @@ func TestClassify_Deterministic(t *testing.T) {
 	in := base()
 	in.CreatedAt = daysAgo(200)
 	in.RepostCount, in.MassPostingCount, in.HasEvergreenText = 4, 6, true
-	if Classify(in) != Classify(in) {
+	if Classify(in) != Classify(in) { //nolint:staticcheck // SA4000: intentional determinism check, calling twice is the point
 		t.Error("classification not deterministic for identical input")
 	}
 }

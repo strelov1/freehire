@@ -73,7 +73,7 @@ func run() int {
 		return 1
 	}
 
-	llmClient, llmFlush, err := llm.NewClient(cfg.LLM.Settings(cfg.LLM.Model), "resume-structured")
+	llmClient, llmFlush, err := llm.NewClient(cfg.Settings(cfg.Model), "resume-structured")
 	if err != nil {
 		log.Printf("llm: %v", err)
 		return 1

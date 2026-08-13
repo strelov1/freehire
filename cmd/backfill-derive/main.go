@@ -180,19 +180,16 @@ func deriveRow(j db.Job) (params db.UpdateJobDerivedParams, changed, slugMoved b
 	experience := pgconv.Int4(d.ExperienceYearsMin)
 	isTech := pgconv.Bool(d.IsTech)
 
-	facetsMoved := !(slices.Equal(d.Countries, j.Countries) &&
-		slices.Equal(d.Regions, j.Regions) &&
-		slices.Equal(d.Cities, j.Cities) &&
-		d.WorkMode == j.WorkMode &&
-		slices.Equal(d.Skills, j.Skills) &&
-		d.Seniority == j.Seniority &&
-		d.Category == j.Category &&
-		isTech == j.IsTech &&
-		d.PostingLanguage == j.PostingLanguage &&
-		d.EmploymentType == j.EmploymentType &&
-		d.EducationLevel == j.EducationLevel &&
-		d.EnglishLevel == j.EnglishLevel &&
-		experience == j.ExperienceYearsMin)
+	facetsMoved := !slices.Equal(d.Countries, j.Countries) || !slices.Equal(d.Regions, j.Regions) || !slices.Equal(d.Cities, j.Cities) ||
+		d.WorkMode != j.WorkMode || !slices.Equal(d.Skills, j.Skills) ||
+		d.Seniority != j.Seniority ||
+		d.Category != j.Category ||
+		isTech != j.IsTech ||
+		d.PostingLanguage != j.PostingLanguage ||
+		d.EmploymentType != j.EmploymentType ||
+		d.EducationLevel != j.EducationLevel ||
+		d.EnglishLevel != j.EnglishLevel ||
+		experience != j.ExperienceYearsMin
 	fingerprintMoved := fingerprint != j.RoleFingerprint.String
 	slugMoved = d.PublicSlug != j.PublicSlug || d.CompanySlug != j.CompanySlug
 

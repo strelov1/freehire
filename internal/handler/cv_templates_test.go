@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http/httptest"
@@ -17,11 +18,12 @@ func TestListCVTemplates(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/cv-templates", (&cvHandlers{}).ListCVTemplates)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/cv-templates", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/cv-templates", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -56,11 +58,12 @@ func TestListCVFonts(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/cv-fonts", (&cvHandlers{}).ListCVFonts)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/cv-fonts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/cv-fonts", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestMatchAnalysisLimiter_IsKeyedOnTheUser(t *testing.T) {
 	}, matchAnalysisLimiter(newTestThrottler(t)), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
 
 	post := func(user string) int {
-		req := httptest.NewRequest(fiber.MethodPost, "/analysis", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/analysis", nil)
 		req.Header.Set("X-Test-User", user)
 		resp, err := app.Test(req)
 		if err != nil {

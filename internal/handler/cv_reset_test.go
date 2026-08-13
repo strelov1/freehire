@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ func TestCVRegister_ResetFromResumeIsCookieOnly(t *testing.T) {
 		cvKey:  namedGate("cvKey"),
 		cookie: namedGate("cookie"),
 	})
-	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/api/v1/me/cvs/"+uuid.New().String()+"/reset-from-resume", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/cvs/"+uuid.New().String()+"/reset-from-resume", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

@@ -38,7 +38,7 @@ func newSpendProxy(t *testing.T) *spendProxy {
 		p.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
+		_, _ = fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
 			`[{"index":0,"message":{"role":"assistant","content":"{}"},"finish_reason":"stop"}]}`)
 	}))
 	t.Cleanup(p.srv.Close)
@@ -182,7 +182,7 @@ func TestUserLLMForgetsARejectedCredentialAfterCancellation(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
+		_, _ = fmt.Fprint(w, `{"id":"1","object":"chat.completion","choices":`+
 			`[{"index":0,"message":{"role":"assistant","content":"{}"},"finish_reason":"stop"}]}`)
 	}))
 	t.Cleanup(refusing.Close)

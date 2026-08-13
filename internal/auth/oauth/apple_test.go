@@ -43,7 +43,7 @@ func stubAppleJWKS(t *testing.T, kid string, key *rsa.PrivateKey) *httptest.Serv
 					"kid": kid,
 					"use": "sig",
 					"alg": "RS256",
-					"n":   base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes()),
+					"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
 					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes()),
 				},
 			},
@@ -307,7 +307,7 @@ func stubApple(t *testing.T, key *rsa.PrivateKey, kid string, idTokenClaims appl
 				{
 					"kty": "RSA",
 					"kid": kid,
-					"n":   base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes()),
+					"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
 					"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes()),
 				},
 			},

@@ -68,13 +68,14 @@ func TestRequireAuthOrKey_ValidKeyAuthenticates(t *testing.T) {
 	const token = "fhk_test-key"
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := dualAuthApp(iss, keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -99,12 +100,13 @@ func TestRequireAuthOrKey_FlagsKeyAuth(t *testing.T) {
 	const token = "fhk_test-key"
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := dualAuthApp(iss, keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if !decodeViaKey(t, resp) {
 		t.Error("ViaAPIKey should be true for key auth")
 	}
@@ -114,12 +116,13 @@ func TestRequireAuthOrKey_CookieIsNotViaKey(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	token, _ := iss.Issue(7, 1)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 	resp, err := dualAuthApp(iss, fakeKeyAuth{}).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if decodeViaKey(t, resp) {
 		t.Error("ViaAPIKey should be false for cookie auth")
 	}
@@ -130,13 +133,14 @@ func TestRequireAuthOrKey_ValidCookieAuthenticates(t *testing.T) {
 	keys := fakeKeyAuth{} // no valid key; the cookie must carry the identity
 	token, _ := iss.Issue(7, 1)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := dualAuthApp(iss, keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -151,7 +155,7 @@ func TestRequireAuthOrKey_CookieTakesPrecedenceOverKey(t *testing.T) {
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
 	cookie, _ := iss.Issue(7, 1)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: cookie})
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -159,6 +163,7 @@ func TestRequireAuthOrKey_CookieTakesPrecedenceOverKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if id := decodeID(t, resp); id != 7 {
 		t.Errorf("handler saw user id %d, want 7 (a valid cookie should win)", id)
 	}
@@ -169,7 +174,7 @@ func TestRequireAuthOrKey_InvalidCookieFallsThroughToKey(t *testing.T) {
 	const token = "fhk_test-key"
 	keys := fakeKeyAuth{validHash: HashAPIKey(token), userID: 9}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: "not-a-jwt"})
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -177,6 +182,7 @@ func TestRequireAuthOrKey_InvalidCookieFallsThroughToKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -190,13 +196,14 @@ func TestRequireAuthOrKey_JWTBearerAuthenticatesAsSession(t *testing.T) {
 	token, _ := iss.Issue(42, 1) // a session JWT presented as a Bearer header
 	keys := fakeKeyAuth{}        // no valid API key — the JWT must carry the identity
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := dualAuthApp(iss, keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -219,13 +226,14 @@ func TestRequireAuthOrKey_KeyLookupErrorIsNot401(t *testing.T) {
 	iss := NewIssuer("secret", time.Hour)
 	keys := errKeyAuth{err: errors.New("connection refused")}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.Header.Set("Authorization", "Bearer fhk_whatever")
 
 	resp, err := dualAuthApp(iss, keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 (a lookup outage must surface as 503)", resp.StatusCode)
 	}
@@ -243,7 +251,7 @@ func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
 		return app
 	}
 	newReq := func() *http.Request {
-		req := httptest.NewRequest(fiber.MethodGet, "/job", nil)
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/job", nil)
 		req.Header.Set("Authorization", "Bearer fhk_whatever")
 		return req
 	}
@@ -253,6 +261,7 @@ func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("unknown key: status = %d, want 200", resp.StatusCode)
 	}
@@ -262,6 +271,7 @@ func TestOptionalAuth_KeyLookupErrorPropagates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("outage: status = %d, want 503", resp.StatusCode)
 	}
@@ -284,7 +294,7 @@ func TestRequireAuthOrKey_RejectsUnauthorized(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 			if tc.cookie != "" {
 				req.AddCookie(&http.Cookie{Name: CookieName, Value: tc.cookie})
 			}
@@ -295,6 +305,7 @@ func TestRequireAuthOrKey_RejectsUnauthorized(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401", resp.StatusCode)
 			}

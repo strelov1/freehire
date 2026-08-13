@@ -148,7 +148,7 @@ func TestSend_postsToIngestionWithAuth(t *testing.T) {
 		var env struct {
 			Batch []json.RawMessage `json:"batch"`
 		}
-		json.NewDecoder(r.Body).Decode(&env)
+		_ = json.NewDecoder(r.Body).Decode(&env)
 		gotBatchLen = len(env.Batch)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -180,7 +180,7 @@ func TestSend_207PartialErrorsAreLoggedNotFailed(t *testing.T) {
 	// transport failure.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMultiStatus)
-		w.Write([]byte(`{"successes":[],"errors":[{"id":"abc","status":400,"message":"trace name too long"}]}`))
+		_, _ = w.Write([]byte(`{"successes":[],"errors":[{"id":"abc","status":400,"message":"trace name too long"}]}`))
 	}))
 	defer srv.Close()
 
@@ -232,7 +232,7 @@ func TestObserveAndShutdown_flushesBufferedGenerations(t *testing.T) {
 		var env struct {
 			Batch []map[string]any `json:"batch"`
 		}
-		json.NewDecoder(r.Body).Decode(&env)
+		_ = json.NewDecoder(r.Body).Decode(&env)
 		for _, ev := range env.Batch {
 			if ev["type"] == "generation-create" {
 				gotGenerations++
@@ -312,7 +312,7 @@ func TestObserve_doesNotBlockWhenBufferFull(t *testing.T) {
 	close(release)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	tr.Shutdown(ctx)
+	_ = tr.Shutdown(ctx)
 }
 
 // newTestTracer builds a tracer pointing at a test server, with no async loop.

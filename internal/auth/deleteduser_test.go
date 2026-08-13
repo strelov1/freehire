@@ -38,6 +38,7 @@ func TestRequireAuth_RejectsTokenForDeletedAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status for a deleted account = %d, want 401", resp.StatusCode)
 	}
@@ -58,6 +59,7 @@ func TestRequireAuthOrKey_RejectsCookieForDeletedAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status for a deleted account's cookie = %d, want 401", resp.StatusCode)
 	}

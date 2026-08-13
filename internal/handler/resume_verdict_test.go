@@ -72,7 +72,7 @@ func verdictApp(t *testing.T, repo *fakeProfileRepo, fc facetCounter) (*fiber.Ap
 
 func getVerdict(t *testing.T, app *fiber.App, target, token string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}

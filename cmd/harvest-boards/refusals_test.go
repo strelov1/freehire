@@ -5,8 +5,9 @@ import (
 	"errors"
 	"net/http"
 
-	"golang.org/x/net/html"
 	"testing"
+
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/sources"
 )

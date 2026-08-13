@@ -15,8 +15,8 @@ func TestLoad_LLMFromEnv(t *testing.T) {
 	t.Setenv("LLM_MODEL", "some-model")
 
 	s := Load()
-	if s.LLM.BaseURL != "https://gw.example/v1" || s.LLM.APIKey != "key-123" || s.LLM.Model != "some-model" {
-		t.Errorf("LLM settings = %q/%q/%q, want the env values", s.LLM.BaseURL, s.LLM.APIKey, s.LLM.Model)
+	if s.BaseURL != "https://gw.example/v1" || s.APIKey != "key-123" || s.Model != "some-model" {
+		t.Errorf("LLM settings = %q/%q/%q, want the env values", s.BaseURL, s.APIKey, s.Model)
 	}
 }
 
@@ -238,8 +238,8 @@ func TestLoad_LLMEmptyWhenUnset(t *testing.T) {
 	t.Setenv("LLM_MODEL", "")
 
 	s := Load()
-	if s.LLM.BaseURL != "" || s.LLM.APIKey != "" || s.LLM.Model != "" {
-		t.Errorf("LLM settings should be empty when unset, got %q/%q/%q", s.LLM.BaseURL, s.LLM.APIKey, s.LLM.Model)
+	if s.BaseURL != "" || s.APIKey != "" || s.Model != "" {
+		t.Errorf("LLM settings should be empty when unset, got %q/%q/%q", s.BaseURL, s.APIKey, s.Model)
 	}
 }
 

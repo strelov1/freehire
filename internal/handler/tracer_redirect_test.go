@@ -46,7 +46,7 @@ func redirectApp(t *testing.T, links *fakeTracerLinks, signedInAs int64) *fiber.
 	t.Helper()
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h := &tracerHandlers{links: links, salt: "pepper"}
-	var gate fiber.Handler = func(c *fiber.Ctx) error { return c.Next() }
+	var gate = func(c *fiber.Ctx) error { return c.Next() }
 	if signedInAs != 0 {
 		gate = signedIn(signedInAs)
 	}
@@ -60,7 +60,7 @@ const browserUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5
 	"(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 func humanGet(target string) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
 	req.Header.Set("User-Agent", browserUA)
 	return req
 }
@@ -99,7 +99,7 @@ func TestARedirectSendsTheVisitorOnAndCountsTheClick(t *testing.T) {
 // wrong, and a bare 404 reads as a broken site rather than an expired link.
 func TestAnUnknownTokenIsGone(t *testing.T) {
 	links := &fakeTracerLinks{lookupErr: pgx.ErrNoRows}
-	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequest(http.MethodGet, "/cv/never-existed", nil))
+	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cv/never-existed", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestNothingInTheRequestCanChooseTheDestination(t *testing.T) {
 // detection rules from silently rewriting history.
 func TestAHeadRequestIsRecordedAsAutomated(t *testing.T) {
 	links := &fakeTracerLinks{row: linkRow()}
-	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequest(http.MethodHead, "/cv/acme-x7abc", nil))
+	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/cv/acme-x7abc", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestOnlyTheReferrersHostIsKept(t *testing.T) {
 // — a case that would otherwise be tested by accident rather than on purpose.
 func TestARequestWithoutAUserAgentIsAutomated(t *testing.T) {
 	links := &fakeTracerLinks{row: linkRow()}
-	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequest(http.MethodGet, "/cv/acme-x7abc", nil))
+	resp, err := redirectApp(t, links, 0).Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/cv/acme-x7abc", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

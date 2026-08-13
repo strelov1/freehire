@@ -57,7 +57,7 @@ func TestLoadEnrich_langfuseIsOptionalAndCarriedThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEnrich with no Langfuse vars: %v", err)
 	}
-	if got.LLM.LangfuseBaseURL != "" || got.LLM.LangfusePublicKey != "" || got.LLM.LangfuseSecretKey != "" {
+	if got.LangfuseBaseURL != "" || got.LangfusePublicKey != "" || got.LangfuseSecretKey != "" {
 		t.Errorf("Langfuse fields = %+v, want empty", got.LLM)
 	}
 
@@ -74,8 +74,8 @@ func TestLoadEnrich_langfuseIsOptionalAndCarriedThrough(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEnrich: %v", err)
 	}
-	if got.LLM.LangfuseBaseURL != "https://us.cloud.langfuse.com" ||
-		got.LLM.LangfusePublicKey != "pk-lf-x" || got.LLM.LangfuseSecretKey != "sk-lf-y" {
+	if got.LangfuseBaseURL != "https://us.cloud.langfuse.com" ||
+		got.LangfusePublicKey != "pk-lf-x" || got.LangfuseSecretKey != "sk-lf-y" {
 		t.Errorf("Langfuse fields not populated: %+v", got)
 	}
 }
@@ -89,7 +89,7 @@ func TestLoadEnrich_defaultsAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEnrich: %v", err)
 	}
-	if got.LLM.BaseURL != "http://gateway:4000/v1" || got.LLM.Model != "qwen2.5-72b" {
+	if got.BaseURL != "http://gateway:4000/v1" || got.Model != "qwen2.5-72b" {
 		t.Errorf("unexpected config: %+v", got)
 	}
 	// Tunables fall back to conservative defaults.

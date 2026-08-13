@@ -30,10 +30,10 @@ type LineItem struct {
 // Nothing matched is a failure rather than a warning: a CV sharing no vocabulary at all
 // with its vacancy is the one case worth alarming about.
 func tallyStatus(got, want int) Status {
-	switch {
-	case got == want:
+	switch got {
+	case want:
 		return StatusPass
-	case got == 0:
+	case 0:
 		return StatusFail
 	default:
 		return StatusWarn

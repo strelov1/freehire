@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,11 +29,12 @@ func TestKeyByIP_IncludesPrefix(t *testing.T) {
 		return c.SendString(key)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/probe", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	body := readBody(t, resp)
 	if !strings.HasPrefix(body, "login:") {
 		t.Errorf("key = %q, want prefix %q", body, "login:")
@@ -44,8 +46,10 @@ func TestKeyByIP_DifferentPrefixesDoNotCollide(t *testing.T) {
 	app.Get("/a", func(c *fiber.Ctx) error { return c.SendString(KeyByIP("routeA")(c)) })
 	app.Get("/b", func(c *fiber.Ctx) error { return c.SendString(KeyByIP("routeB")(c)) })
 
-	respA, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/a", nil))
-	respB, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/b", nil))
+	respA, _ := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/a", nil))
+	defer respA.Body.Close()
+	respB, _ := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/b", nil))
+	defer respB.Body.Close()
 
 	keyA := readBody(t, respA)
 	keyB := readBody(t, respB)
@@ -61,11 +65,12 @@ func TestKeyByUserOrIP_UsesUserIDWhenAuthenticated(t *testing.T) {
 		return c.SendString(KeyByUserOrIP("photo")(c))
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/probe", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if got, want := readBody(t, resp), "photo:user:42"; got != want {
 		t.Errorf("key = %q, want %q", got, want)
 	}
@@ -77,11 +82,12 @@ func TestKeyByUserOrIP_FallsBackToIPWhenUnauthenticated(t *testing.T) {
 		return c.SendString(KeyByUserOrIP("photo")(c))
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/probe", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	body := readBody(t, resp)
 	if !strings.HasPrefix(body, "photo:ip:") {
 		t.Errorf("key = %q, want prefix %q", body, "photo:ip:")
@@ -99,8 +105,10 @@ func TestKeyByUserOrIP_DifferentPrefixesDoNotCollideForSameUser(t *testing.T) {
 		return c.SendString(KeyByUserOrIP("contribution")(c))
 	})
 
-	respA, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/a", nil))
-	respB, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/b", nil))
+	respA, _ := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/a", nil))
+	defer respA.Body.Close()
+	respB, _ := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/b", nil))
+	defer respB.Body.Close()
 
 	keyA := readBody(t, respA)
 	keyB := readBody(t, respB)

@@ -56,10 +56,11 @@ func TestMiddleware_AllowsUnderLimit(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
@@ -74,10 +75,11 @@ func TestMiddleware_NilThrottlerPassesThrough(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 (nil throttler fails open)", resp.StatusCode)
 	}
@@ -90,18 +92,20 @@ func TestMiddleware_BlocksOverLimitWithRetryAfter(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	first, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	first, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("first request: %v", err)
 	}
+	defer first.Body.Close()
 	if first.StatusCode != fiber.StatusOK {
 		t.Fatalf("first request status = %d, want 200", first.StatusCode)
 	}
 
-	second, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	second, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("second request: %v", err)
 	}
+	defer second.Body.Close()
 	if second.StatusCode != fiber.StatusTooManyRequests {
 		t.Errorf("second request status = %d, want 429", second.StatusCode)
 	}
@@ -116,10 +120,11 @@ func TestMiddleware_FailsOpenOnThrottlerError(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 (fail open)", resp.StatusCode)
 	}
@@ -132,10 +137,11 @@ func TestMiddleware_FailsOpenWhenThrottlerExceedsBoundedTimeout(t *testing.T) {
 	})
 
 	start := time.Now()
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil), 1000)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil), 1000)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	elapsed := time.Since(start)
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 (fail open)", resp.StatusCode)
@@ -155,10 +161,11 @@ func TestMiddleware_FloorsRetryAfterToAtLeastOneSecond(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusTooManyRequests {
 		t.Fatalf("status = %d, want 429", resp.StatusCode)
 	}
@@ -182,7 +189,7 @@ func TestMiddleware_WithRedisThrottler_FailsOpenWhenRedisUnreachable(t *testing.
 		DialTimeout:   200 * time.Millisecond,
 		DialerRetries: 1,
 	})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	th := NewRedisThrottler(client)
 	app := fiber.New()
@@ -190,10 +197,11 @@ func TestMiddleware_WithRedisThrottler_FailsOpenWhenRedisUnreachable(t *testing.
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/probe", nil), 1000)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil), 1000)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 (fail open through the real RedisThrottler + Middleware pair)", resp.StatusCode)
 	}

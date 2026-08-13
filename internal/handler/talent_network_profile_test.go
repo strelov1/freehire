@@ -45,7 +45,7 @@ func talentNetworkProfileApp(store *fakeTalentNetworkPublicStore) *fiber.App {
 
 func doTalentNetworkProfile(t *testing.T, app *fiber.App, publicID string) *http.Response {
 	t.Helper()
-	r := httptest.NewRequest(fiber.MethodGet, "/talent-network/"+publicID, nil)
+	r := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/talent-network/"+publicID, nil)
 	resp, err := app.Test(r)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
@@ -114,6 +114,7 @@ func TestTalentNetworkProfile_PublicMode(t *testing.T) {
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, id.String())
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -147,6 +148,7 @@ func TestTalentNetworkProfile_AnonymousMode(t *testing.T) {
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, id.String())
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -188,6 +190,7 @@ func TestTalentNetworkProfile_ProjectLinkNeverReachesEitherMode(t *testing.T) {
 			app := talentNetworkProfileApp(store)
 
 			resp := doTalentNetworkProfile(t, app, uuid.New().String())
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusOK {
 				t.Fatalf("status = %d, want 200", resp.StatusCode)
 			}
@@ -206,6 +209,7 @@ func TestTalentNetworkProfile_VisibilityOff(t *testing.T) {
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, uuid.New().String())
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
@@ -217,6 +221,7 @@ func TestTalentNetworkProfile_NonexistentID(t *testing.T) {
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, uuid.New().String())
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
@@ -228,6 +233,7 @@ func TestTalentNetworkProfile_MalformedID(t *testing.T) {
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, "not-a-uuid")
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
@@ -240,14 +246,17 @@ func TestTalentNetworkProfile_MalformedID(t *testing.T) {
 func TestTalentNetworkProfile_OffAndNotFoundHaveIdenticalBody(t *testing.T) {
 	offStore := &fakeTalentNetworkPublicStore{row: db.GetTalentNetworkProfileByPublicIDRow{TalentNetworkVisibility: "off"}}
 	offResp := doTalentNetworkProfile(t, talentNetworkProfileApp(offStore), uuid.New().String())
+	defer offResp.Body.Close()
 	offBody := talentNetworkReadBody(t, offResp)
 
 	missingStore := &fakeTalentNetworkPublicStore{err: pgx.ErrNoRows}
 	missingResp := doTalentNetworkProfile(t, talentNetworkProfileApp(missingStore), uuid.New().String())
+	defer missingResp.Body.Close()
 	missingBody := talentNetworkReadBody(t, missingResp)
 
 	malformedStore := &fakeTalentNetworkPublicStore{}
 	malformedResp := doTalentNetworkProfile(t, talentNetworkProfileApp(malformedStore), "not-a-uuid")
+	defer malformedResp.Body.Close()
 	malformedBody := talentNetworkReadBody(t, malformedResp)
 
 	if offBody != missingBody || offBody != malformedBody {
@@ -270,6 +279,7 @@ func TestTalentNetworkProfile_NilProfileFacetsSerializeAsEmptyArrays(t *testing.
 	app := talentNetworkProfileApp(store)
 
 	resp := doTalentNetworkProfile(t, app, uuid.New().String())
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -293,6 +303,7 @@ func TestTalentNetworkProfile_EmptyResumeStructuredRendersEmptySections(t *testi
 			app := talentNetworkProfileApp(store)
 
 			resp := doTalentNetworkProfile(t, app, uuid.New().String())
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusOK {
 				t.Fatalf("status = %d, want 200", resp.StatusCode)
 			}

@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -64,10 +65,11 @@ func TestStateCookie_SetAndClear(t *testing.T) {
 		return nil
 	})
 
-	resp, err := app.Test(httptest.NewRequest("GET", "/set", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/set", nil))
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
+	defer resp.Body.Close()
 	set := resp.Header.Get("Set-Cookie")
 	for _, want := range []string{StateCookieName + "=abc", "HttpOnly", "SameSite=Lax"} {
 		if !strings.Contains(set, want) {
@@ -75,10 +77,11 @@ func TestStateCookie_SetAndClear(t *testing.T) {
 		}
 	}
 
-	resp, err = app.Test(httptest.NewRequest("GET", "/clear", nil))
+	resp, err = app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/clear", nil))
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
+	defer resp.Body.Close()
 	cleared := resp.Header.Get("Set-Cookie")
 	if !strings.Contains(cleared, StateCookieName+"=") {
 		t.Errorf("clear cookie %q does not clear %s", cleared, StateCookieName)
@@ -100,10 +103,11 @@ func TestStateCookie_SameSiteNoneWhenSecure(t *testing.T) {
 		return nil
 	})
 
-	resp, err := app.Test(httptest.NewRequest("GET", "/set", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/set", nil))
 	if err != nil {
 		t.Fatalf("set: %v", err)
 	}
+	defer resp.Body.Close()
 	set := resp.Header.Get("Set-Cookie")
 	for _, want := range []string{StateCookieName + "=abc", "HttpOnly", "secure", "SameSite=None"} {
 		if !strings.Contains(set, want) {

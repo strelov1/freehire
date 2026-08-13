@@ -36,7 +36,7 @@ func deckApp(s searcher, excluded []int64) (*fiber.App, *auth.Issuer) {
 
 func deckGet(t *testing.T, app *fiber.App, iss *auth.Issuer, target string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, target, nil)
 	if iss != nil {
 		token, _ := iss.Issue(7, testTokenVersion)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})

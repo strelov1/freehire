@@ -143,7 +143,7 @@ func doPhotoImage(t *testing.T, app *fiber.App, token string) *http.Response {
 
 func doPhotoPath(t *testing.T, app *fiber.App, method, path string, body io.Reader, ctype, token string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(method, path, body)
+	req := httptest.NewRequestWithContext(context.Background(), method, path, body)
 	if ctype != "" {
 		req.Header.Set("Content-Type", ctype)
 	}
@@ -369,7 +369,7 @@ func TestPhotoRegister_EveryRouteIsCookieOnly(t *testing.T) {
 		{http.MethodGet, "/api/v1/me/photo/image"},
 		{http.MethodDelete, "/api/v1/me/photo"},
 	} {
-		resp, err := app.Test(httptest.NewRequest(r.method, r.path, nil))
+		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), r.method, r.path, nil))
 		if err != nil {
 			t.Fatalf("%s %s: %v", r.method, r.path, err)
 		}

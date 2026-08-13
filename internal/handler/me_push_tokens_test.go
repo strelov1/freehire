@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,7 +47,7 @@ func TestPushTokensManagement_IsCookieOnly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.path, nil)
 			if tc.bearer {
 				req.Header.Set("Authorization", "Bearer fhk_whatever")
 			}
@@ -54,6 +55,7 @@ func TestPushTokensManagement_IsCookieOnly(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401 (push-token management must be cookie-only)", resp.StatusCode)
 			}
@@ -81,7 +83,7 @@ func TestRegisterPushToken_ValidationRejectsBeforeAnyDBCall(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodPost, "/api/v1/me/push-tokens", bytes.NewBufferString(tc.body))
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/push-tokens", bytes.NewBufferString(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 
@@ -89,6 +91,7 @@ func TestRegisterPushToken_ValidationRejectsBeforeAnyDBCall(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}

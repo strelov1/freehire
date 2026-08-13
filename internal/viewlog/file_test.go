@@ -19,8 +19,8 @@ func TestRotatedFiles(t *testing.T) {
 	writeGz := func(name, content string) {
 		var buf bytes.Buffer
 		zw := gzip.NewWriter(&buf)
-		zw.Write([]byte(content))
-		zw.Close()
+		_, _ = zw.Write([]byte(content))
+		_ = zw.Close()
 		if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
 			t.Fatal(err)
 		}

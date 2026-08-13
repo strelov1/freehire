@@ -67,9 +67,9 @@ func doProfile(t *testing.T, app *fiber.App, method, body, token string) *http.R
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequest(method, "/me/profile", nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, "/me/profile", nil)
 	} else {
-		r = httptest.NewRequest(method, "/me/profile", strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, "/me/profile", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -85,6 +85,7 @@ func doProfile(t *testing.T, app *fiber.App, method, body, token string) *http.R
 func TestPutProfile_Unauthenticated(t *testing.T) {
 	app, _ := profileApp(t, &fakeProfileRepo{})
 	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":["backend"],"skills":["go"]}`, "")
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -106,6 +107,7 @@ func TestPutProfile_ValidationErrors(t *testing.T) {
 			repo := &fakeProfileRepo{}
 			app, token := profileApp(t, repo)
 			resp := doProfile(t, app, fiber.MethodPut, tc.body, token)
+			defer resp.Body.Close()
 			if resp.StatusCode != tc.want {
 				t.Errorf("status = %d, want %d", resp.StatusCode, tc.want)
 			}
@@ -120,6 +122,7 @@ func TestPutProfile_ReturnsSpecializationsArray(t *testing.T) {
 	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend", "devops"}, Skills: []string{"go"}}
 	app, token := profileApp(t, &fakeProfileRepo{upsertRet: ret})
 	resp := doProfile(t, app, fiber.MethodPut, `{"specializations":["backend","devops"],"skills":["go"]}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -141,6 +144,7 @@ func TestPutProfile_NormalizesExcludedSkillsAndDropsOverlap(t *testing.T) {
 	// excluded set; "WordPress" is normalized to "wordpress".
 	resp := doProfile(t, app, fiber.MethodPut,
 		`{"specializations":["backend"],"skills":["go","php"],"excluded_skills":["php","WordPress"]}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -154,6 +158,7 @@ func TestPutProfile_EchoesExcludedSkills(t *testing.T) {
 	app, token := profileApp(t, &fakeProfileRepo{upsertRet: ret})
 	resp := doProfile(t, app, fiber.MethodPut,
 		`{"specializations":["backend"],"skills":["go"],"excluded_skills":["wordpress"]}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -175,6 +180,7 @@ func TestPutProfile_ParsesAndEchoesLocationPreferences(t *testing.T) {
 	app, token := profileApp(t, repo)
 	resp := doProfile(t, app, fiber.MethodPut,
 		`{"specializations":["backend"],"skills":["go"],"location_preferences":`+loc+`}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -199,6 +205,7 @@ func TestPutProfile_RejectsInvalidLocationBlock(t *testing.T) {
 	app, token := profileApp(t, repo)
 	resp := doProfile(t, app, fiber.MethodPut,
 		`{"specializations":["backend"],"skills":["go"],"location_preferences":{"work_modes":["freelance"]}}`, token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
@@ -212,6 +219,7 @@ func TestGetProfile_EchoesStoredLocationPreferences(t *testing.T) {
 	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}, LocationPreferences: stored}
 	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -233,6 +241,7 @@ func TestGetProfile_EchoesStoredLocationPreferences(t *testing.T) {
 func TestGetProfile_NullWhenNone(t *testing.T) {
 	app, token := profileApp(t, &fakeProfileRepo{getErr: userprofile.ErrNotFound})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -249,6 +258,7 @@ func TestGetProfile_ReturnsProfile(t *testing.T) {
 	ret := userprofile.Profile{UserID: 1, Specializations: []string{"backend"}, Skills: []string{"go"}}
 	app, token := profileApp(t, &fakeProfileRepo{getRet: ret})
 	resp := doProfile(t, app, fiber.MethodGet, "", token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -267,6 +277,7 @@ func TestDeleteProfile_Idempotent(t *testing.T) {
 	// No stored profile: the fake's Delete returns nil, and the handler still answers 204.
 	app, token := profileApp(t, &fakeProfileRepo{})
 	resp := doProfile(t, app, fiber.MethodDelete, "", token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
 	}

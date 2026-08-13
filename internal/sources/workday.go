@@ -226,10 +226,8 @@ func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[stri
 	total := -1
 	offset := 0
 	page := first
-	for {
-		if len(page.JobPostings) == 0 {
-			break
-		}
+	for len(page.JobPostings) != 0 {
+
 		postings = append(postings, page.JobPostings...)
 		offset += len(page.JobPostings)
 		if total < 0 && page.Total > 0 {

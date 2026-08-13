@@ -91,6 +91,6 @@ func fetchSitemapXML(ctx context.Context, client *http.Client, url string, v any
 	if err != nil {
 		return fmt.Errorf("gzip: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	return xml.NewDecoder(gz).Decode(v)
 }

@@ -108,7 +108,7 @@ func readInputs(path string) ([]input, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read inputs %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []input
 	sc := bufio.NewScanner(f)

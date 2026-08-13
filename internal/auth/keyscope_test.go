@@ -47,7 +47,7 @@ func scopeApp(mw fiber.Handler) *fiber.App {
 }
 
 func keyRequest(token string) *http.Request {
-	req := httptest.NewRequest(fiber.MethodGet, "/probe", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	return req
 }
@@ -61,6 +61,7 @@ func TestRequireAuthOrKey_RejectsNarrowScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Errorf("status = %d, want 403 — a cv-scoped key must not reach a full-scope route", resp.StatusCode)
 	}
@@ -75,6 +76,7 @@ func TestRequireAuthOrKey_AcceptsFullScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200 for a full-scope key", resp.StatusCode)
 	}
@@ -91,6 +93,7 @@ func TestRequireAuthOrScopedKey_AdmitsBothScopes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusOK {
 				t.Errorf("status = %d, want 200 — the CV surface admits %s keys", resp.StatusCode, scope)
 			}
@@ -106,6 +109,7 @@ func TestRequireAuthOrScopedKey_StillRejectsUnknownKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401 — an unknown key is unauthenticated, not under-scoped", resp.StatusCode)
 	}
@@ -118,12 +122,13 @@ func TestKeyScope_EmptyForCookieAuth(t *testing.T) {
 		t.Fatalf("Issue: %v", err)
 	}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/probe", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/probe", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 	resp, err := scopeApp(RequireAuthOrScopedKey(iss, anyVersion{1}, fakeScopedKeys{}, ScopeCV)).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200 for a cookie session", resp.StatusCode)
 	}

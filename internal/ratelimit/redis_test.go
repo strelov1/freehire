@@ -90,7 +90,7 @@ func TestRedisThrottler_ReturnsErrorWhenRedisUnreachable(t *testing.T) {
 		DialTimeout:   200 * time.Millisecond,
 		DialerRetries: 1,
 	})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	th := NewRedisThrottler(client)
 

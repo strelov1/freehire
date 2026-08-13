@@ -25,12 +25,12 @@ const ListCapCode = "bullet_cap"
 // shifts later roles and looks like bullet loss.
 // Dropping whitespace-only bullets is allowed — that is cleanup, not content loss.
 func refuseIfSanitizeDropsContent(applied, _ State) error {
-	for i, e := range applied.Document.Experience {
+	for i, e := range applied.Experience {
 		if countNonEmpty(e.Bullets) > cv.MaxBullets {
 			return listCapErr(experienceLabel(e, i))
 		}
 	}
-	for i, p := range applied.Document.Projects {
+	for i, p := range applied.Projects {
 		if countNonEmpty(p.Bullets) > cv.MaxBullets {
 			return listCapErr(projectLabel(p, i))
 		}

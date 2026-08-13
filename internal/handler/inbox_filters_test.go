@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -27,7 +28,7 @@ func parseFilters(t *testing.T, rawQuery string) (inbox.Query, int) {
 		got = q
 		return c.SendStatus(fiber.StatusOK)
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/f?"+rawQuery, nil), -1)
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/f?"+rawQuery, nil), -1)
 	if err != nil {
 		t.Fatalf("request ?%s: %v", rawQuery, err)
 	}

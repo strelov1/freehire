@@ -103,13 +103,14 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(tc.body))
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 			resp, err := app.Test(req)
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
@@ -119,12 +120,13 @@ func TestTrackJob_RejectsEmptyAndUnknownStage(t *testing.T) {
 
 func TestTrackJob_RequiresAuth(t *testing.T) {
 	app, _ := trackApp()
-	req := httptest.NewRequest(fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"interview"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
@@ -160,13 +162,14 @@ func TestInteractionResponse_HasStageAndNotes(t *testing.T) {
 func TestTrackJob_AcceptsExpired(t *testing.T) {
 	app, iss := trackApp()
 	token, _ := iss.Issue(7, testTokenVersion)
-	req := httptest.NewRequest(fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, "/jobs/go-dev/track", strings.NewReader(`{"stage":"expired"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}

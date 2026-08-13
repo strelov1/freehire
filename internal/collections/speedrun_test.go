@@ -85,8 +85,8 @@ func TestFetchSpeedrunDirectory_ReadsEveryPage(t *testing.T) {
 			page = "0"
 		}
 		var n int
-		fmt.Sscanf(page, "%d", &n)
-		fmt.Fprint(w, directoryPage(n, totalPages))
+		_, _ = fmt.Sscanf(page, "%d", &n)
+		_, _ = fmt.Fprint(w, directoryPage(n, totalPages))
 	}))
 	defer srv.Close()
 
@@ -117,7 +117,7 @@ func TestSpeedrunMembers_AMarketTierCompanyEarnsNoA16zTag(t *testing.T) {
 	],"total_pages":1}`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, mixed)
+		_, _ = fmt.Fprint(w, mixed)
 	}))
 	defer srv.Close()
 
@@ -145,7 +145,7 @@ func TestFetchSpeedrunDirectory_NamesItselfInTheUserAgent(t *testing.T) {
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("User-Agent")
-		fmt.Fprint(w, directoryPage(0, 1))
+		_, _ = fmt.Fprint(w, directoryPage(0, 1))
 	}))
 	defer srv.Close()
 
@@ -168,7 +168,7 @@ func TestFetchSpeedrunDirectory_AMidWalkFailureIsAnError(t *testing.T) {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
-		fmt.Fprint(w, directoryPage(0, 4))
+		_, _ = fmt.Fprint(w, directoryPage(0, 4))
 	}))
 	defer srv.Close()
 

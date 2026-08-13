@@ -55,7 +55,7 @@ func TestGenerateAPIKey_Unique(t *testing.T) {
 
 func TestHashAPIKey_Deterministic(t *testing.T) {
 	const token = "fhk_example-token"
-	if HashAPIKey(token) != HashAPIKey(token) {
+	if HashAPIKey(token) != HashAPIKey(token) { //nolint:staticcheck // SA4000: intentional determinism check, calling twice is the point
 		t.Error("HashAPIKey is not deterministic for the same input")
 	}
 	if HashAPIKey("fhk_a") == HashAPIKey("fhk_b") {

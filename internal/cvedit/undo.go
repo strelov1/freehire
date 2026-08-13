@@ -97,7 +97,7 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, fmt.Errorf("%w: %s", ErrCannotUndo, err)
 	}
 	after := applied
-	after.Document.Sanitize()
+	after.Sanitize()
 
 	// Same rule as a commit: the precise inverse unless the sanitizer moved something, in
 	// which case the diff against what was stored is the only one that applies cleanly.

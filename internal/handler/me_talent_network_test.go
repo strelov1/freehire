@@ -63,9 +63,9 @@ func doTalentNetwork(t *testing.T, app *fiber.App, method, body, token string) *
 	t.Helper()
 	var r *http.Request
 	if body == "" {
-		r = httptest.NewRequest(method, "/me/talent-network", nil)
+		r = httptest.NewRequestWithContext(context.Background(), method, "/me/talent-network", nil)
 	} else {
-		r = httptest.NewRequest(method, "/me/talent-network", strings.NewReader(body))
+		r = httptest.NewRequestWithContext(context.Background(), method, "/me/talent-network", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
@@ -83,6 +83,7 @@ func TestGetTalentNetwork_DefaultsToOff(t *testing.T) {
 	store := &fakeTalentNetworkStore{visibility: "off", publicID: id}
 	app, token := talentNetworkApp(t, store)
 	resp := doTalentNetwork(t, app, fiber.MethodGet, "", token)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -105,6 +106,7 @@ func TestPutTalentNetwork_PublicRoundTrips(t *testing.T) {
 	app, token := talentNetworkApp(t, store)
 
 	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, token)
+	defer putResp.Body.Close()
 	if putResp.StatusCode != fiber.StatusOK {
 		t.Fatalf("PUT status = %d, want 200", putResp.StatusCode)
 	}
@@ -119,6 +121,7 @@ func TestPutTalentNetwork_PublicRoundTrips(t *testing.T) {
 	}
 
 	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", token)
+	defer getResp.Body.Close()
 	var getGot struct {
 		Data talentNetworkResponse `json:"data"`
 	}
@@ -135,11 +138,13 @@ func TestPutTalentNetwork_AnonymousRoundTrips(t *testing.T) {
 	app, token := talentNetworkApp(t, store)
 
 	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"anonymous"}`, token)
+	defer putResp.Body.Close()
 	if putResp.StatusCode != fiber.StatusOK {
 		t.Fatalf("PUT status = %d, want 200", putResp.StatusCode)
 	}
 
 	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", token)
+	defer getResp.Body.Close()
 	var getGot struct {
 		Data talentNetworkResponse `json:"data"`
 	}
@@ -158,6 +163,7 @@ func TestPutTalentNetwork_RejectsInvalidValue(t *testing.T) {
 			store := &fakeTalentNetworkStore{visibility: "off", publicID: uuid.New()}
 			app, token := talentNetworkApp(t, store)
 			resp := doTalentNetwork(t, app, fiber.MethodPut, body, token)
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusBadRequest {
 				t.Errorf("status = %d, want 400", resp.StatusCode)
 			}
@@ -173,11 +179,13 @@ func TestTalentNetwork_RequiresAuth(t *testing.T) {
 	app, _ := talentNetworkApp(t, store)
 
 	getResp := doTalentNetwork(t, app, fiber.MethodGet, "", "")
+	defer getResp.Body.Close()
 	if getResp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("GET status = %d, want 401", getResp.StatusCode)
 	}
 
 	putResp := doTalentNetwork(t, app, fiber.MethodPut, `{"visibility":"public"}`, "")
+	defer putResp.Body.Close()
 	if putResp.StatusCode != fiber.StatusUnauthorized {
 		t.Errorf("PUT status = %d, want 401", putResp.StatusCode)
 	}

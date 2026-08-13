@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -34,7 +35,7 @@ func calendarConnectApp(t *testing.T) (*fiber.App, string) {
 
 func TestCalendarConnect_RequiresAuth(t *testing.T) {
 	app, _ := calendarConnectApp(t)
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/me/calendar/connect", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me/calendar/connect", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
@@ -48,7 +49,7 @@ func TestCalendarConnect_RequiresAuth(t *testing.T) {
 // its own state cookie so a mail consent in flight cannot complete this one.
 func TestCalendarConnect_SendsToGoogleForTheCalendarAlone(t *testing.T) {
 	app, token := calendarConnectApp(t)
-	req := httptest.NewRequest(fiber.MethodGet, "/me/calendar/connect", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me/calendar/connect", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 
 	resp, err := app.Test(req)

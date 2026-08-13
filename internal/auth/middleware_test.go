@@ -34,13 +34,14 @@ func TestRequireAuth_ValidTokenGrantsAccessAndPropagatesID(t *testing.T) {
 		t.Fatalf("Issue: %v", err)
 	}
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := protectedApp(iss).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -72,7 +73,7 @@ func TestRequireAuth_RejectsUnauthorized(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 			if tc.token != "" {
 				req.AddCookie(&http.Cookie{Name: CookieName, Value: tc.token})
 			}
@@ -80,6 +81,7 @@ func TestRequireAuth_RejectsUnauthorized(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401", resp.StatusCode)
 			}
@@ -102,13 +104,14 @@ func TestRequireAuth_DBInfraErrorReturns503(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on DB infra error", resp.StatusCode)
 	}
@@ -124,13 +127,14 @@ func TestOptionalCookieAuth_DBInfraErrorDegradesToGuest(t *testing.T) {
 		return c.JSON(fiber.Map{"authed": ok})
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/public", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/public", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -156,13 +160,14 @@ func TestOptionalAuth_DBInfraErrorDegradesCookieToGuest(t *testing.T) {
 		return c.JSON(fiber.Map{"authed": ok})
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/feed", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/feed", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
@@ -187,13 +192,14 @@ func TestOptionalAuth_DBInfraErrorOnAPIKeyReturns503(t *testing.T) {
 		return c.JSON(fiber.Map{"authed": ok})
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/feed", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/feed", nil)
 	req.Header.Set("Authorization", "Bearer fhk_somekey")
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on API key DB infra error for OptionalAuth", resp.StatusCode)
 	}
@@ -208,13 +214,14 @@ func TestRequireAuthOrKey_DBInfraErrorOnCookieReturns503(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on cookie DB infra error for RequireAuthOrKey", resp.StatusCode)
 	}
@@ -229,13 +236,14 @@ func TestRequireAuthWS_DBInfraErrorReturns503(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/ws", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/ws", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on DB infra error for RequireAuthWS", resp.StatusCode)
 	}
@@ -250,13 +258,14 @@ func TestRequireAuth_DBTimeout(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/protected", nil)
 	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
 
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on context timeout for RequireAuth", resp.StatusCode)
 	}
@@ -279,11 +288,12 @@ func TestRequireRole_DBDown(t *testing.T) {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	req := httptest.NewRequest(fiber.MethodGet, "/admin", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/admin", nil)
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 on role loader DB outage for RequireRole", resp.StatusCode)
 	}

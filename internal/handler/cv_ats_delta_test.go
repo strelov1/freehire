@@ -222,7 +222,7 @@ func TestCVRegister_ATSDeltaIsCookieOnly(t *testing.T) {
 		cookie: namedGate("cookie"),
 	})
 
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/me/cvs/"+uuid.New().String()+"/ats-delta", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me/cvs/"+uuid.New().String()+"/ats-delta", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

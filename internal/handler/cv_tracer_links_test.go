@@ -40,7 +40,7 @@ func TestCVRegister_TracerLinksToggleIsCookieOnly(t *testing.T) {
 		cookie: namedGate("cookie"),
 	})
 
-	req := httptest.NewRequest(http.MethodPut,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
 		"/api/v1/me/cvs/"+uuid.New().String()+"/tracer-links", strings.NewReader(`{"enabled":true}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -68,7 +68,7 @@ func TestTracerLinksToggleIsNotAnEditablePath(t *testing.T) {
 			"so an agent can set it and an undo can revoke it")
 	}
 	for _, p := range cvedit.Paths() {
-		if strings.Contains(string(p), "tracer") {
+		if strings.Contains(p, "tracer") {
 			t.Errorf("cvedit advertises the editable path %q", p)
 		}
 	}
@@ -95,7 +95,7 @@ func tracerToggleAPI(t *testing.T) (*fiber.App, uuid.UUID) {
 func TestEnablingTracingWithoutASaltIsRefused(t *testing.T) {
 	app, id := tracerToggleAPI(t)
 
-	req := httptest.NewRequest(http.MethodPut,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
 		"/api/v1/me/cvs/"+id.String()+"/tracer-links", strings.NewReader(`{"enabled":true}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -113,7 +113,7 @@ func TestEnablingTracingWithoutASaltIsRefused(t *testing.T) {
 func TestDisablingTracingIsAllowedWithoutASalt(t *testing.T) {
 	app, id := tracerToggleAPI(t)
 
-	req := httptest.NewRequest(http.MethodPut,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
 		"/api/v1/me/cvs/"+id.String()+"/tracer-links", strings.NewReader(`{"enabled":false}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -184,7 +184,7 @@ func TestCVRegister_TracerLinkStatsAreCookieOnly(t *testing.T) {
 		cookie: namedGate("cookie"),
 	})
 
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet,
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), http.MethodGet,
 		"/api/v1/me/cvs/"+uuid.New().String()+"/tracer-links", nil))
 	if err != nil {
 		t.Fatalf("request: %v", err)

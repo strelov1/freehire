@@ -178,7 +178,7 @@ func TestDataartDetailRemoteWorkMode(t *testing.T) {
 }
 
 func TestDataartProviderAndBoardless(t *testing.T) {
-	var s Source = NewDataArt(nil)
+	var s = NewDataArt(nil)
 	if s.Provider() != "dataart" {
 		t.Errorf("Provider() = %q, want dataart", s.Provider())
 	}

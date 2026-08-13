@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -41,7 +42,7 @@ func TestAPIKeysManagement_IsCookieOnly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.path, nil)
 			if tc.bearer {
 				req.Header.Set("Authorization", "Bearer fhk_whatever")
 			}
@@ -49,6 +50,7 @@ func TestAPIKeysManagement_IsCookieOnly(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401 (key management must be cookie-only)", resp.StatusCode)
 			}

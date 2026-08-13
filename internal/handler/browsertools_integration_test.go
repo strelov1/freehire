@@ -42,7 +42,7 @@ func wireServer(t *testing.T, iss *auth.Issuer) string {
 	app := fiber.New()
 	app.Get("/api/v1/tools/ws", auth.RequireAuthWS(iss, testVersions, noKeys{}), a.BrowserToolsWS())
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -61,6 +61,9 @@ func dial(t *testing.T, base, role, token string) *ws.Conn {
 		HandshakeTimeout: arrivalBudget,
 	}
 	conn, resp, err := dialer.Dial(base+"?role="+role, nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		status := 0
 		if resp != nil {
@@ -232,6 +235,9 @@ func TestBrowserToolsWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 
 	dialer := ws.Dialer{HandshakeTimeout: arrivalBudget}
 	conn, resp, err := dialer.Dial(base+"?role=extension", nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err == nil {
 		_ = conn.Close()
 		t.Fatal("an unauthenticated connection was accepted")

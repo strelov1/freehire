@@ -46,7 +46,7 @@ func TestLoadLeavesTheLLMUnvalidated(t *testing.T) {
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
 
 	s := Load()
-	if s.LLM.BaseURL != "" || s.LLM.Model != "" {
+	if s.BaseURL != "" || s.Model != "" {
 		t.Errorf("LLM = %+v, want empty", s.LLM)
 	}
 }

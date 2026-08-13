@@ -47,20 +47,22 @@ func TestListProvidersV2StructuredAndOmitsWebApple(t *testing.T) {
 func TestRegisterV2DisabledAndNoStoreHeaders(t *testing.T) {
 	disabled := fiber.New()
 	(&authHandlers{authV2Enabled: false}).registerV2(disabled.Group("/api/v2"), middleware{})
-	resp, err := disabled.Test(httptest.NewRequest("GET", "/api/v2/auth/providers", nil))
+	resp, err := disabled.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/api/v2/auth/providers", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != 404 {
 		t.Fatalf("disabled status=%d", resp.StatusCode)
 	}
+	resp.Body.Close()
 	h := &authHandlers{authV2Enabled: true, oauth: fakeRegistry{}}
 	enabled := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	h.registerV2(enabled.Group("/api/v2"), middleware{optionalCookie: func(c *fiber.Ctx) error { return c.Next() }})
-	resp, err = enabled.Test(httptest.NewRequest("GET", "/api/v2/auth/providers", nil))
+	resp, err = enabled.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/api/v2/auth/providers", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if got := resp.Header.Get("Cache-Control"); got != "private, no-store" {
 		t.Fatalf("Cache-Control=%q", got)
 	}
@@ -71,7 +73,7 @@ func TestV2CodedErrorEnvelope(t *testing.T) {
 	app.Get("/coded", func(*fiber.Ctx) error {
 		return authError(428, "recent_auth_required", "recent authentication required")
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/coded", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/coded", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +111,7 @@ func TestRecentAuthRotatesLegacySessionBeforeBinding(t *testing.T) {
 		}
 		return c.SendStatus(fiber.StatusNoContent)
 	})
-	req := httptest.NewRequest(fiber.MethodGet, "/rotate", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/rotate", nil)
 	req.Header.Set(fiber.HeaderCookie, auth.CookieName+"="+legacy)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -153,7 +155,7 @@ func TestPasswordReauthPreservesInfrastructureFailure(t *testing.T) {
 		c.Locals(auth.LocalsUserID, int64(7))
 		return c.Next()
 	}, h.PasswordReauthV2)
-	req := httptest.NewRequest(fiber.MethodPost, "/reauth", strings.NewReader(`{"password":"correct horse battery staple"}`))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/reauth", strings.NewReader(`{"password":"correct horse battery staple"}`))
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	resp, err := app.Test(req)
 	if err != nil {

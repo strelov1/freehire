@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -35,7 +36,7 @@ func discordApp(pub ed25519.PublicKey) (*fiber.App, *discordHandlers) {
 func signedRequest(t *testing.T, priv ed25519.PrivateKey, timestamp string, body []byte) *http.Request {
 	t.Helper()
 	sig := ed25519.Sign(priv, append([]byte(timestamp), body...))
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Signature-Ed25519", hex.EncodeToString(sig))
 	req.Header.Set("X-Signature-Timestamp", timestamp)
@@ -49,12 +50,13 @@ func TestDiscordInteraction_missingSignatureForbidden(t *testing.T) {
 	}
 	app, _ := discordApp(pub)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":1}`)))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":1}`)))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", res.StatusCode)
 	}
@@ -78,6 +80,7 @@ func TestDiscordInteraction_invalidSignatureForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", res.StatusCode)
 	}
@@ -95,7 +98,7 @@ func TestDiscordInteraction_tamperedBodyForbidden(t *testing.T) {
 
 	signedBody := []byte(`{"type":1}`)
 	sig := ed25519.Sign(priv, append([]byte("1700000000"), signedBody...))
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":2}`)))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":2}`)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Signature-Ed25519", hex.EncodeToString(sig))
 	req.Header.Set("X-Signature-Timestamp", "1700000000")
@@ -103,6 +106,7 @@ func TestDiscordInteraction_tamperedBodyForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", res.StatusCode)
 	}
@@ -120,6 +124,7 @@ func TestDiscordInteraction_ping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
@@ -159,6 +164,7 @@ func TestDiscordInteraction_linkCommand_invalidToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (interaction responses are always 200)", res.StatusCode)
 	}
@@ -196,6 +202,7 @@ func TestDiscordInteraction_unknownCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
@@ -240,12 +247,13 @@ func TestDiscordInteraction_disabledReturns404(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/discord/interactions", h.DiscordInteraction)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":1}`)))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/discord/interactions", bytes.NewReader([]byte(`{"type":1}`)))
 	req.Header.Set("Content-Type", "application/json")
 	res, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", res.StatusCode)
 	}
@@ -280,6 +288,7 @@ func TestDiscordInteraction_contributeMissingIdentityEphemeral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", res.StatusCode)
 	}
@@ -469,12 +478,13 @@ func TestDiscordLink_disabledReturns503(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/me/discord/link", auth.RequireAuth(iss, testVersions), h.LinkDiscord)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/me/discord/link", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/discord/link", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
 	res, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	defer res.Body.Close()
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503", res.StatusCode)
 	}

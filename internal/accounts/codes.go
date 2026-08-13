@@ -27,7 +27,7 @@ const (
 	// maxCodeAttempts is how many wrong guesses a code survives. Six digits is a million
 	// possibilities; five tries makes online guessing hopeless without frustrating a human
 	// who mistyped. It bounds the guessing rate only together with resendCooldown, which is
-	// why a burnt code keeps its row (see consumeCode).
+	// why a burnt code keeps its row (see consumeCodeTx).
 	maxCodeAttempts = 5
 
 	// resendCooldown keeps the endpoint from being used to flood an address with mail.
@@ -172,29 +172,6 @@ func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int
 		return ErrInvalidCode
 	}
 	return store.DeleteCode(ctx, userID, purpose)
-}
-
-// consumeCode checks a presented code against the outstanding one and, on success, deletes
-// it so it cannot be replayed. It wraps consumeCodeTx in a transaction.
-func (s *Service) consumeCode(ctx context.Context, userID int64, purpose, presented string) error {
-	tx, err := s.codes.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	if tx != nil {
-		defer func() { _ = tx.Rollback(ctx) }()
-	}
-	store := s.codes.WithTx(tx)
-
-	consumeErr := s.consumeCodeTx(ctx, store, userID, purpose, presented)
-	if tx != nil {
-		if errors.Is(consumeErr, ErrInvalidCode) || consumeErr == nil {
-			if commitErr := tx.Commit(ctx); commitErr != nil && consumeErr == nil {
-				return commitErr
-			}
-		}
-	}
-	return consumeErr
 }
 
 // IssueVerificationCode mails a fresh email-verification code to the account's address.

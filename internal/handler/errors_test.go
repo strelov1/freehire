@@ -68,10 +68,11 @@ func sentryApp(t *testing.T, errFn fiber.Handler) (*fiber.App, *recordingTranspo
 // error Fiber re-delivers to RenderError must NOT be reported again.
 func TestRenderError_PanicReportedExactlyOnce(t *testing.T) {
 	app, tr := sentryApp(t, func(*fiber.Ctx) error { panic("boom") })
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/x", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", resp.StatusCode)
 	}
@@ -84,10 +85,11 @@ func TestRenderError_PanicReportedExactlyOnce(t *testing.T) {
 // the dedup guard doesn't suppress real faults.
 func TestRenderError_ReturnedErrorReportedOnce(t *testing.T) {
 	app, tr := sentryApp(t, func(*fiber.Ctx) error { return errString("db exploded") })
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/x", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", resp.StatusCode)
 	}
@@ -106,10 +108,11 @@ func errorApp(errFn func(*fiber.Ctx) error) *fiber.App {
 
 func errorStatus(t *testing.T, app *fiber.App) int {
 	t.Helper()
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/x", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode
 }
 

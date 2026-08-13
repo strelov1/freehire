@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func usageApp(t *testing.T, gatewayURL string, userID int64) (*fiber.App, string
 
 func readUsage(t *testing.T, app *fiber.App, token string) (int, map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/usage", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/me/usage", nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -201,7 +202,7 @@ func TestUsageNeitherNeedsNorReturnsACredential(t *testing.T) {
 	})
 	app, token := usageApp(t, gw.URL, 7)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/me/usage", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/me/usage", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

@@ -51,7 +51,7 @@ func listSilence(t *testing.T, items []jobtracking.TrackedJob) []trackingRow {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
 
-	req := httptest.NewRequest(http.MethodGet, "/me/tracking", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/me/tracking", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req, -1)
 	if err != nil {

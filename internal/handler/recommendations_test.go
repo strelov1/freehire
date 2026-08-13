@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func recsApp(t *testing.T, store *resume.Store, s searcher) (*fiber.App, string)
 
 func getRecs(t *testing.T, app *fiber.App, token string) (status, count int) {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodGet, "/me/recommendations", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me/recommendations", nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -102,7 +103,7 @@ func TestRecommendations_FacetFilterReachesSearch(t *testing.T) {
 	fs := &fakeSearcher{recRes: search.SearchResult{Hits: []search.JobDocument{{}}, Total: 1}}
 	app, token := recsApp(t, store, fs)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me/recommendations?work_mode=remote", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me/recommendations?work_mode=remote", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
@@ -124,7 +125,7 @@ func TestRecommendations_FilterNoMatchEmpty(t *testing.T) {
 	fs := &fakeSearcher{recRes: search.SearchResult{}} // no hits
 	app, token := recsApp(t, store, fs)
 
-	req := httptest.NewRequest(fiber.MethodGet, "/me/recommendations?work_mode=remote", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me/recommendations?work_mode=remote", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {

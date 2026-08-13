@@ -17,9 +17,10 @@ import (
 	"log"
 	"strconv"
 
+	"slices"
+
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/search"
-	"slices"
 )
 
 // ChannelTelegram and ChannelEmail are the delivery channels implemented today;

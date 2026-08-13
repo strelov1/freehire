@@ -79,7 +79,7 @@ func TestResolveUKSponsorCSV_PrefersTheContentAPI(t *testing.T) {
 	var paths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.Path)
-		w.Write([]byte(contentAPIPayload))
+		_, _ = w.Write([]byte(contentAPIPayload))
 	}))
 	defer srv.Close()
 
@@ -101,8 +101,8 @@ func TestResolveUKSponsorCSV_FallsBackToTheHTMLPage(t *testing.T) {
 		api  func(http.ResponseWriter)
 	}{
 		{"api errors", func(w http.ResponseWriter) { w.WriteHeader(http.StatusInternalServerError) }},
-		{"api returns non-json", func(w http.ResponseWriter) { w.Write([]byte("<html>nope</html>")) }},
-		{"api omits the attachment", func(w http.ResponseWriter) { w.Write([]byte(`{"details":{"attachments":[]}}`)) }},
+		{"api returns non-json", func(w http.ResponseWriter) { _, _ = w.Write([]byte("<html>nope</html>")) }},
+		{"api omits the attachment", func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{"details":{"attachments":[]}}`)) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -111,7 +111,7 @@ func TestResolveUKSponsorCSV_FallsBackToTheHTMLPage(t *testing.T) {
 					tc.api(w)
 					return
 				}
-				w.Write([]byte(`<a href="` + testCSVURL + `">Register of Worker and Temporary Worker licensed sponsors</a>`))
+				_, _ = w.Write([]byte(`<a href="` + testCSVURL + `">Register of Worker and Temporary Worker licensed sponsors</a>`))
 			}))
 			defer srv.Close()
 

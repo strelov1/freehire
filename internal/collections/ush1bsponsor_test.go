@@ -150,12 +150,12 @@ func TestFetchUSH1BSponsors_CombinesAllFiveYears(t *testing.T) {
 		for _, y := range years {
 			b.WriteString(`<a href="/sites/default/files/document/data/h1b_datahubexport-` + y + `.csv">FY ` + y + ` H-1B Employer Data</a>`)
 		}
-		w.Write([]byte(b.String()))
+		_, _ = w.Write([]byte(b.String()))
 	})
 	for _, y := range years {
 		y := y
 		mux.HandleFunc("/sites/default/files/document/data/h1b_datahubexport-"+y+".csv", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
+			_, _ = w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
 				y + `,"ACME ROBOTICS INC",1,0,0,0,54,1234,CA,SAN JOSE,95110` + "\n"))
 		})
 	}
@@ -200,14 +200,14 @@ func TestFetchUSH1BSponsors_SendsABrowserUserAgent(t *testing.T) {
 			for _, y := range years {
 				b.WriteString(`<a href="/sites/default/files/document/data/h1b_datahubexport-` + y + `.csv">FY ` + y + ` H-1B Employer Data</a>`)
 			}
-			w.Write([]byte(b.String()))
+			_, _ = w.Write([]byte(b.String()))
 		})
 	})
 	for _, y := range years {
 		y := y
 		mux.HandleFunc("/sites/default/files/document/data/h1b_datahubexport-"+y+".csv", func(w http.ResponseWriter, r *http.Request) {
 			requireUA(w, r, func() {
-				w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
+				_, _ = w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
 					y + `,"ACME ROBOTICS INC",1,0,0,0,54,1234,CA,SAN JOSE,95110` + "\n"))
 			})
 		})
@@ -228,7 +228,7 @@ func TestFetchUSH1BSponsors_FailsWholeCallWhenOneYearIsUnreachable(t *testing.T)
 		for _, y := range years {
 			b.WriteString(`<a href="/sites/default/files/document/data/h1b_datahubexport-` + y + `.csv">FY ` + y + ` H-1B Employer Data</a>`)
 		}
-		w.Write([]byte(b.String()))
+		_, _ = w.Write([]byte(b.String()))
 	})
 	for _, y := range years {
 		y := y
@@ -237,7 +237,7 @@ func TestFetchUSH1BSponsors_FailsWholeCallWhenOneYearIsUnreachable(t *testing.T)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
+			_, _ = w.Write([]byte("\"Fiscal Year\",Employer,\"Initial Approval\",\"Initial Denial\",\"Continuing Approval\",\"Continuing Denial\",NAICS,\"Tax ID\",State,City,ZIP\n" +
 				y + `,"ACME ROBOTICS INC",1,0,0,0,54,1234,CA,SAN JOSE,95110` + "\n"))
 		})
 	}
@@ -252,7 +252,7 @@ func TestFetchUSH1BSponsors_FailsWholeCallWhenOneYearIsUnreachable(t *testing.T)
 func TestFetchUSH1BSponsors_FailsWholeCallWhenFewerThanFiveYearsAreListed(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/archive/h-1b-employer-data-hub-files", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<a href="/sites/default/files/document/data/h1b_datahubexport-2023.csv">FY 2023 H-1B Employer Data</a>`))
+		_, _ = w.Write([]byte(`<a href="/sites/default/files/document/data/h1b_datahubexport-2023.csv">FY 2023 H-1B Employer Data</a>`))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

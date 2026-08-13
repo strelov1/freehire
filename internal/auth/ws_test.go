@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -35,13 +36,14 @@ func TestRequireAuthWS_AcceptsAnAPIKey(t *testing.T) {
 		{"subprotocol", "Sec-WebSocket-Protocol", WSSubprotocolMarker + ", " + key},
 	} {
 		t.Run(carrier.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 			req.Header.Set(carrier.header, carrier.value)
 
 			resp, err := wsApp(NewIssuer("secret", time.Hour), keys).Test(req)
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusOK {
 				t.Fatalf("status = %d, want 200", resp.StatusCode)
 			}
@@ -60,13 +62,14 @@ func TestRequireAuthWS_AcceptsAnAPIKey(t *testing.T) {
 
 func TestRequireAuthWS_RefusesAnUnknownKey(t *testing.T) {
 	keys := fakeKeyAuth{validHash: HashAPIKey("fh_live_good"), userID: 9}
-	req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 	req.Header.Set(fiber.HeaderAuthorization, "Bearer fh_live_revoked")
 
 	resp, err := wsApp(NewIssuer("secret", time.Hour), keys).Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}
@@ -106,13 +109,14 @@ func TestRequireAuthWS_AcceptsTheJWTFromEitherCarrier(t *testing.T) {
 		{"harness bearer", fiber.HeaderAuthorization, "Bearer " + token},
 	} {
 		t.Run(carrier.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 			req.Header.Set(carrier.header, carrier.value)
 
 			resp, err := wsApp(iss).Test(req)
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusOK {
 				t.Fatalf("status = %d, want 200", resp.StatusCode)
 			}
@@ -133,7 +137,7 @@ func TestRequireAuthWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 		{"token from another secret", "Sec-WebSocket-Protocol", WSSubprotocolMarker + ", " + otherSecret},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(fiber.MethodGet, "/tools/ws", nil)
+			req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/tools/ws", nil)
 			if tt.header != "" {
 				req.Header.Set(tt.header, tt.value)
 			}
@@ -142,6 +146,7 @@ func TestRequireAuthWS_RefusesAnUnauthenticatedHandshake(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
+			defer resp.Body.Close()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Fatalf("status = %d, want 401", resp.StatusCode)
 			}

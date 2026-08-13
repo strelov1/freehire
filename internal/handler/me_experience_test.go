@@ -35,7 +35,7 @@ func experienceApp(t *testing.T) (*fiber.App, string, *stubBank) {
 
 func experienceReq(t *testing.T, app *fiber.App, method, path, body, token string) *http.Response {
 	t.Helper()
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
 	}
@@ -139,15 +139,19 @@ func TestDeleteExperienceIsOwnerScoped(t *testing.T) {
 	mine := bank.add(1, experience.Atom{Claim: "Mine", Provenance: experience.ProvenanceManual})
 	theirs := bank.add(2, experience.Atom{Claim: "Theirs", Provenance: experience.ProvenanceManual})
 
-	if resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+theirs.ID.String(), "", token); resp.StatusCode != http.StatusNotFound {
+	resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+theirs.ID.String(), "", token)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("deleting another owner's achievement = %d, want 404 (never 403)", resp.StatusCode)
 	}
 	if _, err := bank.GetAtom(ctx, theirs.ID, 2); err != nil {
 		t.Errorf("another owner's achievement was removed: %v", err)
 	}
 
-	if resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+mine.ID.String(), "", token); resp.StatusCode != http.StatusNoContent {
-		t.Errorf("deleting my own achievement = %d, want 204", resp.StatusCode)
+	resp2 := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+mine.ID.String(), "", token)
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusNoContent {
+		t.Errorf("deleting my own achievement = %d, want 204", resp2.StatusCode)
 	}
 	if _, err := bank.GetAtom(ctx, mine.ID, 1); err == nil {
 		t.Error("the achievement survived its own deletion")
@@ -392,7 +396,9 @@ func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 		"/me/experience/atoms/not-a-uuid",
 		"/me/experience/employments/not-a-uuid",
 	} {
-		if resp := experienceReq(t, app, http.MethodDelete, path, "", token); resp.StatusCode != http.StatusNotFound {
+		resp := experienceReq(t, app, http.MethodDelete, path, "", token)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
 			t.Errorf("DELETE %s = %d, want 404", path, resp.StatusCode)
 		}
 	}
@@ -401,17 +407,25 @@ func TestExperienceRoutesRefuseAMalformedID(t *testing.T) {
 func TestExperienceRoutesRequireAuth(t *testing.T) {
 	app, _, _ := experienceApp(t)
 
-	if resp := experienceReq(t, app, http.MethodGet, "/me/experience", "", ""); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("unauthenticated read = %d, want 401", resp.StatusCode)
+	resp1 := experienceReq(t, app, http.MethodGet, "/me/experience", "", "")
+	defer resp1.Body.Close()
+	if resp1.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated read = %d, want 401", resp1.StatusCode)
 	}
-	if resp := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+uuid.New().String(), "", ""); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("unauthenticated delete = %d, want 401", resp.StatusCode)
+	resp2 := experienceReq(t, app, http.MethodDelete, "/me/experience/atoms/"+uuid.New().String(), "", "")
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated delete = %d, want 401", resp2.StatusCode)
 	}
-	if resp := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"x"}`, ""); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("unauthenticated atom create = %d, want 401", resp.StatusCode)
+	resp3 := experienceReq(t, app, http.MethodPost, "/me/experience/atoms", `{"claim":"x"}`, "")
+	defer resp3.Body.Close()
+	if resp3.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated atom create = %d, want 401", resp3.StatusCode)
 	}
-	if resp := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job","company":"x"}`, ""); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("unauthenticated employment create = %d, want 401", resp.StatusCode)
+	resp4 := experienceReq(t, app, http.MethodPost, "/me/experience/employments", `{"kind":"job","company":"x"}`, "")
+	defer resp4.Body.Close()
+	if resp4.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated employment create = %d, want 401", resp4.StatusCode)
 	}
 }
 

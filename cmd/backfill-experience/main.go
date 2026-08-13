@@ -218,7 +218,7 @@ func newExtractor(cfg config.Settings, queries *db.Queries) (*resumeextract.Extr
 	if cfg.PIIFilterURL == "" {
 		return nil, nil, nil
 	}
-	llmClient, flush, err := llm.NewClient(cfg.LLM.Settings(cfg.LLM.Model), "backfill-experience")
+	llmClient, flush, err := llm.NewClient(cfg.Settings(cfg.Model), "backfill-experience")
 	if err != nil || llmClient == nil {
 		return nil, nil, nil
 	}

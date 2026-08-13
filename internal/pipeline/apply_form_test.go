@@ -17,7 +17,7 @@ type formStore struct {
 }
 
 func (s *formStore) SaveWithApplyForm(ctx context.Context, j job.Job, form applyform.Form) error {
-	if err := s.fakeStore.Save(ctx, j); err != nil {
+	if err := s.Save(ctx, j); err != nil {
 		return err
 	}
 	if s.forms == nil {

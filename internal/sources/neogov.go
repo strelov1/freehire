@@ -33,12 +33,8 @@ func NewNeogov(c neogovHTTP) Source { return neogov{http: c} }
 
 func (neogov) Provider() string { return "neogov" }
 
-const (
-	// neogovPageSize is the listing's fixed jobs-per-page; total is read from the count span.
-	neogovPageSize = 10
-	// neogovMaxPages bounds the walk far above any real agency's posting count.
-	neogovMaxPages = 200
-)
+// neogovMaxPages bounds the walk far above any real agency's posting count.
+const neogovMaxPages = 200
 
 // neogovXHR is the header the listing endpoint requires; without it it returns the SPA shell.
 var neogovXHR = map[string]string{"X-Requested-With": "XMLHttpRequest"}

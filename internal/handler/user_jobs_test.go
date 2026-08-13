@@ -38,7 +38,7 @@ func postUserJob(t *testing.T, app *fiber.App, path, token string) int {
 
 func requestUserJob(t *testing.T, app *fiber.App, method, path, token string) int {
 	t.Helper()
-	req := httptest.NewRequest(method, path, nil)
+	req := httptest.NewRequestWithContext(context.Background(), method, path, nil)
 	if token != "" {
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	}
@@ -46,6 +46,7 @@ func requestUserJob(t *testing.T, app *fiber.App, method, path, token string) in
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode
 }
 
@@ -168,13 +169,14 @@ func datedApplyApp(repo jobtracking.Repository) (*fiber.App, *auth.Issuer) {
 
 func postApply(t *testing.T, app *fiber.App, token, body string) int {
 	t.Helper()
-	req := httptest.NewRequest(fiber.MethodPost, "/jobs/go-dev/apply", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/jobs/go-dev/apply", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("Test: %v", err)
 	}
+	defer resp.Body.Close()
 	return resp.StatusCode
 }
 
