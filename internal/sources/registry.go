@@ -223,6 +223,7 @@ func All(c HTTPClient) map[string]Source {
 		NewHimalayas(c),
 		NewRemotive(c),
 		NewRemotli(c),
+		NewLandingJobs(c),
 		NewTheMuse(c),
 		NewJustJoin(c),
 		NewNoFluffJobs(c),
