@@ -20,19 +20,24 @@ func TestSchemaEmploymentType(t *testing.T) {
 }
 
 func TestSchemaNamedAreasDecodesSingleObjectOrArray(t *testing.T) {
-	cases := map[string][]string{
-		`{"@type":"Country","name":"US"}`:                                       []string{"US"},
-		`[{"@type":"Country","name":"US"},{"@type":"Country","name":"Canada"}]`: []string{"US", "Canada"},
-		`[]`: nil,
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"single object", `{"@type":"Country","name":"US"}`, []string{"US"}},
+		{"array", `[{"@type":"Country","name":"US"},{"@type":"Country","name":"Canada"}]`, []string{"US", "Canada"}},
+		{"empty array", `[]`, nil},
 	}
-	for in, want := range cases {
-		var a schemaNamedAreas
-		if err := json.Unmarshal([]byte(in), &a); err != nil {
-			t.Errorf("Unmarshal(%s): %v", in, err)
-			continue
-		}
-		if got := a.Names(); !slices.Equal(got, want) {
-			t.Errorf("Unmarshal(%s).Names() = %v, want %v", in, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var a schemaNamedAreas
+			if err := json.Unmarshal([]byte(tc.in), &a); err != nil {
+				t.Fatalf("Unmarshal(%s): %v", tc.in, err)
+			}
+			if got := a.Names(); !slices.Equal(got, tc.want) {
+				t.Errorf("Unmarshal(%s).Names() = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
