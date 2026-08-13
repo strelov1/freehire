@@ -278,3 +278,11 @@
 # jobvite board mined from remote.io (2026-08-09, live-validated)
 - company: ForeScout
   board: forescout
+- company: jbs-ltd
+  board: jbs
+- company: PHC Inc
+  board: phc
+- company: ' ProbablyMonsters '
+  board: probablymonsters
+- company: Quantum Health
+  board: quantum-health

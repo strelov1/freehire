@@ -8166,3 +8166,15 @@
 # migrated from lever.yml — board moved off Lever (issue #1529), live-verified 2026-08-11
 - company: Tunnl
   board: tunnl
+- company: Anvil Robotics
+  board: anvil-robotics
+- company: Beach Bum
+  board: beach-bum
+- company: Kaluza
+  board: kaluza
+- company: MGT Insurance
+  board: mgtinsurance
+- company: Offstream
+  board: offstream
+- company: Spur
+  board: spur
