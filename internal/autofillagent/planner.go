@@ -45,11 +45,15 @@ profile. Pick the single option the profile supports.
 
 Rules:
 - Return an option copied exactly from the list. Never return anything else.
-- If the profile does not answer the question, return an empty choice. Most
-  questions about visa sponsorship, notice periods, salary or willingness to
-  relocate are NOT answered by a profile — declining is the correct answer.
+- If the profile does not answer the question, return an empty choice —
+  declining is the correct answer whenever nothing in the profile supports any
+  of the options.
 - A location option is supported by the candidate's location (a profile of
-  "Berlin, Germany" supports the option "Germany").
+  "Berlin, Germany" supports the option "Germany"). A visa-sponsorship,
+  notice-period, salary or relocation option is supported when the profile
+  states the matching field (visa_sponsorship_needed, notice_period,
+  desired_salary, willing_to_relocate) and that value is consistent with the
+  option.
 - Never infer a claim the profile does not state.
 
 Respond with JSON: {"choice":"..."}`

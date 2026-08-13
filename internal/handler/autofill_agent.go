@@ -54,5 +54,12 @@ func profileFields(p autofillProfile) autofillagent.Profile {
 		"linkedin":   p.LinkedIn,
 		"github":     p.GitHub,
 		"portfolio":  p.Portfolio,
+
+		"authorized_countries":    p.AuthorizedCountries,
+		"visa_sponsorship_needed": p.VisaSponsorshipNeeded,
+		"desired_salary":          p.DesiredSalary,
+		"notice_period":           p.NoticePeriod,
+		"willing_to_relocate":     p.WillingToRelocate,
+		"age_18_or_older":         p.Age18OrOlder,
 	}
 }

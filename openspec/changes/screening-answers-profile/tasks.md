@@ -37,14 +37,15 @@
 
 ## 4. Autofill integration
 
-- [ ] 4.1 Extend `autofillProfile` (`internal/handler/autofill_profile.go`) to read the
+- [x] 4.1 Extend `autofillProfile` (`internal/handler/autofill_profile.go`) to read the
       caller's screening answers and format them as human-readable strings (e.g.
       `"1 month"`, `"120,000 USD/year"`, `"yes"`), added to the struct and to the
-      `Profile map[string]string` the agent plans against.
-- [ ] 4.2 Update `internal/autofillagent/planner.go`: remove the `choosePrompt` line stating
+      `Profile map[string]string` the agent plans against. Formatting itself lives in
+      `screeninganswers.Answers.AutofillFields()`, unit-tested in that package.
+- [x] 4.2 Update `internal/autofillagent/planner.go`: remove the `choosePrompt` line stating
       visa/notice-period/salary/relocation questions are never answered by a profile, since
       it is no longer true.
-- [ ] 4.3 Extend `internal/autofillagent` tests/fixtures to cover a screening-question field
+- [x] 4.3 Extend `internal/autofillagent` tests/fixtures to cover a screening-question field
       being planned and chosen from the profile.
 
 ## 5. Web: manual edit surface

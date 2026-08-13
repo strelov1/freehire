@@ -163,6 +163,30 @@ func TestRunAcceptsAValueDerivedFromAProfileValue(t *testing.T) {
 	}
 }
 
+// A screening-question field (notice period, salary, visa, relocation, 18+) reaches the
+// form through exactly the same profile-map + grounding path every other field does —
+// screeninganswers.Answers.AutofillFields just adds more keys to the flat map Run already
+// grounds fills against. This is a regression test for that wiring, not new Run behavior.
+func TestRunFillsAScreeningQuestionFromTheProfile(t *testing.T) {
+	tools := &fakeTools{fields: []autofillagent.Field{{Label: "What is your notice period?", Type: "text"}}}
+	planner := plannerFunc(func(_ []autofillagent.Field, p autofillagent.Profile) ([]autofillagent.Fill, error) {
+		return []autofillagent.Fill{{Label: "What is your notice period?", Value: p["notice_period"]}}, nil
+	})
+	profileWithScreening := profile()
+	profileWithScreening["notice_period"] = "30 days"
+
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profileWithScreening)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !contains(rep.Filled, "What is your notice period?") {
+		t.Fatalf("filled = %v, want the notice-period question", rep.Filled)
+	}
+	if len(tools.requested) != 1 || tools.requested[0].Value != "30 days" {
+		t.Fatalf("requested fills = %v, want notice period 30 days", tools.requested)
+	}
+}
+
 func TestRunReportsComboboxesInsteadOfFillingThem(t *testing.T) {
 	tools := &fakeTools{fields: []autofillagent.Field{
 		{Label: "Email", Type: "email"},
