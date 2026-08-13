@@ -14429,3 +14429,13 @@
   board: unusualmachines
 - company: Western Union
   board: westernunion
+- company: Chatbooks
+  board: chatbooks
+- company: CycloKinetics
+  board: cyclokinetics
+- company: Spaceship
+  board: spaceship
+- company: TOKEN2049
+  board: token2049
+- company: WebChart
+  board: webchartnow
