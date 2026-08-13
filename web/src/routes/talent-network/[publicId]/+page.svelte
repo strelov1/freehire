@@ -14,6 +14,26 @@
   // it in their own stack fade out — a quick "where did they use this" scan.
   let hoveredSkill = $state<string | null>(null);
 
+  // Setting hoveredSkill triggers a scrollIntoView (below) that carries the sidebar
+  // itself — not yet `sticky`-docked at scroll position 0 — out from under a stationary
+  // cursor. Chromium recomputes hover state against the moved layout mid-scroll, so a
+  // synthetic mouseenter/mouseleave can land on a *different* chip than the one the
+  // pointer is actually resting over, or on empty space. While that self-inflicted
+  // scroll is in flight, mouse-driven hover changes are ignored outright — keyboard
+  // focus (unaffected by scroll-induced reflow) still updates immediately.
+  let autoScrolling = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function setHovered(skill: string) {
+    if (autoScrolling) return;
+    hoveredSkill = skill;
+  }
+
+  function clearHovered() {
+    if (autoScrolling) return;
+    hoveredSkill = null;
+  }
+
   // Case-insensitive, either-direction match: a skill chip comes from the canonical
   // dictionary ("Node.js"), a job's stack is free text off the résumé parser and can
   // differ in casing or specificity, so a strict `===` would miss real matches.
@@ -28,6 +48,11 @@
   function fadeClass(job: Experience): string {
     return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-sm' : '';
   }
+
+  // One <li> ref per work-history entry, indexed like `experience` — a hover needs to
+  // scroll straight to the first match, which can otherwise sit off-screen above or
+  // below the visible list.
+  let jobEls: (HTMLLIElement | null)[] = [];
 
   const experience = $derived(cv.experience ?? []);
   const education = $derived(cv.education ?? []);
@@ -44,6 +69,20 @@
   const skillChips = $derived([
     ...new Set([...(profile.specializations ?? []), ...(profile.skills ?? [])]),
   ]);
+
+  // A hover jumps straight to the first matching entry — otherwise the blur alone gives
+  // no clue whether the match is above or below the current scroll position.
+  $effect(() => {
+    const skill = hoveredSkill;
+    if (!skill) return;
+    const match = experience.findIndex((job) => jobHasSkill(job, skill));
+    const el = match >= 0 ? jobEls[match] : null;
+    if (!el) return;
+    autoScrolling = true;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => (autoScrolling = false), 800);
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 
   // full_name is present only in "public" mode — the backend omits the key entirely for
   // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
@@ -127,11 +166,14 @@
               <span
                 role="button"
                 tabindex="0"
-                onmouseenter={() => (hoveredSkill = skill)}
-                onmouseleave={() => (hoveredSkill = null)}
+                onmouseenter={() => setHovered(skill)}
+                onmouseleave={clearHovered}
                 onfocus={() => (hoveredSkill = skill)}
                 onblur={() => (hoveredSkill = null)}
-                class="rounded-full bg-brand-muted px-3 py-1 text-xs font-medium text-brand-strong"
+                class="rounded-full px-3 py-1 text-xs font-medium transition-colors {skill ===
+                hoveredSkill
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-brand-muted text-brand-strong'}"
                 >{skill}</span
               >
             {/each}
@@ -151,6 +193,7 @@
                  once loaded and never reorders, so an index key is safe here. -->
             {#each experience as job, i (i)}
               <li
+                bind:this={jobEls[i]}
                 class="flex gap-3 rounded-xl border border-border bg-card p-4 transition duration-150 {fadeClass(
                   job,
                 )}"
