@@ -119,12 +119,13 @@ func wrapOrphanListItems(s string) string {
 // gates whether the caller re-serializes at all.
 func wrapOrphanListItemsIn(n *xhtml.Node) bool {
 	changed := false
-	for c := n.FirstChild; c != nil; {
-		next := c.NextSibling
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		// The recursive call only splices c's own children, never c's siblings,
+		// so c.NextSibling stays valid across the call — unlike the second loop
+		// below, which does reorder n's children and so must snapshot ahead.
 		if c.Type == xhtml.ElementNode && wrapOrphanListItemsIn(c) {
 			changed = true
 		}
-		c = next
 	}
 
 	if n.DataAtom == atom.Ul || n.DataAtom == atom.Ol {
