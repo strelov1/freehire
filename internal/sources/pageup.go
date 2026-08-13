@@ -67,11 +67,13 @@ func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 
 	// Some tenants' listing rows carry no summary of any shape (e.g. board 798) — the
-	// full text lives only on the job's own detail page. Fan out just for those, so
-	// tenants whose listing already carries a summary never pay the extra request.
+	// full text lives only on the job's own detail page. Others carry a summary that's
+	// just a short teaser rather than the posting body (pageupAlwaysDetailBoards). Fan
+	// out for both, so tenants whose listing summary already IS the full text never pay
+	// the extra request.
 	var need []int
 	for i, j := range jobs {
-		if j.Description == "" {
+		if j.Description == "" || pageupAlwaysDetailBoards[e.Board] {
 			need = append(need, i)
 		}
 	}
@@ -95,6 +97,15 @@ func (p pageup) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // since its listing already carries a summary) simply yields "" here, same as a fetch
 // failure: the posting keeps its empty description rather than being dropped.
 const pageupDetailDescriptionID = "job-details"
+
+// pageupAlwaysDetailBoards are tenants whose listing summary is a short teaser (one or two
+// sentences) rather than the actual posting body, so the "already has a summary" skip would
+// otherwise leave every job on the board stuck with that teaser. Confirmed on board 889
+// (Flight Centre): its listing row's "summary" carries a marketing blurb, while the full
+// posting lives in the same #job-details container the no-summary tenants use.
+var pageupAlwaysDetailBoards = map[string]bool{
+	"889": true,
+}
 
 // detailDescription fetches one job's detail page and returns its sanitized description
 // HTML, or "" when the fetch fails or the known container is absent.

@@ -187,6 +187,36 @@ func TestPageupFetchSkipsDetailFetchWhenListingAlreadyHasSummary(t *testing.T) {
 	}
 }
 
+func TestPageupFetchAlwaysFetchesDetailOnTeaserSummaryBoard(t *testing.T) {
+	jobURL := "https://careers.pageuppeople.com/889/cw/en/job/532245/sales-travel-consultant"
+	fixture := `
+  <tr>
+    <td><a class="job-link" href="/889/cw/en/job/532245/sales-travel-consultant">Sales Travel Consultant</a></td>
+    <td><span class="location">South Australia</span></td>
+  </tr>
+  <tr class="summary"><td colspan="2">Start your travel career with Flight Centre!</td></tr>`
+	fake := &fakePageup{
+		search: fmt.Sprintf(`{"results":%q}`, fixture),
+		detail: map[string]string{
+			jobURL: `{"results":"<div id=\"job-details\"><p>The full posting body, much longer than the teaser.</p></div>"}`,
+		},
+	}
+
+	jobs, err := NewPageUp(fake).Fetch(context.Background(), CompanyEntry{Company: "Flight Centre", Provider: "pageup", Board: "889"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1: %+v", len(jobs), jobs)
+	}
+	if got := jobs[0].Description; got != "<p>The full posting body, much longer than the teaser.</p>" {
+		t.Errorf("Description = %q, want the detail page body, not the listing teaser", got)
+	}
+	if len(fake.calls) != 2 || fake.calls[1] != jobURL {
+		t.Errorf("calls = %v, want the search URL then exactly %q", fake.calls, jobURL)
+	}
+}
+
 func TestPageupFetchDetailFailureLeavesDescriptionEmptyRatherThanDroppingTheJob(t *testing.T) {
 	fake := &fakePageup{
 		search: fmt.Sprintf(`{"results":%q}`, pageupNoSummaryFixture),
