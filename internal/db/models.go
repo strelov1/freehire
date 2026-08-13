@@ -768,6 +768,19 @@ type SavedSearch struct {
 	AuthorLabel pgtype.Text        `json:"author_label"`
 }
 
+type ScreeningAnswer struct {
+	UserID                int64              `json:"user_id"`
+	AuthorizedCountries   []string           `json:"authorized_countries"`
+	VisaSponsorshipNeeded pgtype.Bool        `json:"visa_sponsorship_needed"`
+	DesiredSalaryAmount   pgtype.Int4        `json:"desired_salary_amount"`
+	DesiredSalaryCurrency pgtype.Text        `json:"desired_salary_currency"`
+	DesiredSalaryPeriod   pgtype.Text        `json:"desired_salary_period"`
+	NoticePeriodDays      pgtype.Int4        `json:"notice_period_days"`
+	WillingToRelocate     pgtype.Bool        `json:"willing_to_relocate"`
+	Age18OrOlder          pgtype.Bool        `json:"age_18_or_older"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type SearchOutbox struct {
 	ID        int64              `json:"id"`
 	JobID     int64              `json:"job_id"`

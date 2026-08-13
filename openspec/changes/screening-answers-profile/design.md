@@ -52,8 +52,15 @@ Columns:
   Empty/null means unstated, not "authorized nowhere".
 - `visa_sponsorship_needed boolean`
 - `desired_salary_amount integer`, `desired_salary_currency text`, `desired_salary_period
-  text` (`annual`/`monthly`/`hourly`) — the same three-part shape `job_submissions` already
-  uses for salary, currency drawn from the existing `salary_currency` vocab dictionary.
+  text` — the same three-part shape `job_submissions` already uses for salary. Period is
+  validated against the existing closed enum `vocab.SalaryPeriodValues`
+  (`year`/`month`/`day`/`hour`) — the same one `job_submissions.salary_period` and jobs'
+  enrichment already use. Currency has no closed dictionary to validate against:
+  `internal/vocab`'s own doc comment lists `salary_currency` among the ISO-standard fields
+  deliberately left without a bundled vocabulary, so it is validated as a well-formed ISO
+  4217 code (three uppercase letters) rather than a dictionary lookup — format-valid, not
+  dict-recognized, which is a narrower guarantee than the country-code validation below and
+  is called out as such in the spec.
   A single amount, not a min/max range: the six ATS labels sampled ask for one number
   ("What is your desired salary?"), and a range is a speculative refinement with no
   evidence behind it yet (YAGNI).

@@ -1181,6 +1181,9 @@ type Querier interface {
 	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
 	// service maps that to ErrNotFound).
 	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
+	// The caller's single screening-answers record, keyed by user_id. No matching row means
+	// the candidate has not stated any screening answer yet.
+	GetScreeningAnswers(ctx context.Context, userID int64) (ScreeningAnswer, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.
@@ -3286,6 +3289,12 @@ type Querier interface {
 	// already belongs to a different account, this reassigns it to the caller
 	// rather than duplicating or leaving it with the previous owner.
 	UpsertPushToken(ctx context.Context, arg UpsertPushTokenParams) (UserPushToken, error)
+	// Create-or-replace the caller's one screening-answers record. Full-replace, mirroring
+	// UpsertUserProfile: the service reads the current row, merges caller-provided fields over
+	// it (omitted fields keep their stored value), and writes the merged result back whole —
+	// so the SQL layer stays a plain upsert and the partial-update semantics live in Go, where
+	// they are unit-testable without a database.
+	UpsertScreeningAnswers(ctx context.Context, arg UpsertScreeningAnswersParams) (ScreeningAnswer, error)
 	// Link (or relink) a user's Telegram chat, captured from the inbound /start. One
 	// row per user; relinking from a different chat overwrites the chat_id.
 	UpsertTelegramLink(ctx context.Context, arg UpsertTelegramLinkParams) error

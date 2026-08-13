@@ -1,17 +1,18 @@
 ## 1. Storage
 
-- [ ] 1.1 Add migration `0092_screening_answers.sql`: `screening_answers` table, one row per
+- [x] 1.1 Add migration `0092_screening_answers.sql`: `screening_answers` table, one row per
       user (`user_id bigint PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE`), the six
       nullable columns (`authorized_countries text[]`, `visa_sponsorship_needed boolean`,
       `desired_salary_amount integer`, `desired_salary_currency text`,
       `desired_salary_period text`, `notice_period_days integer`,
       `willing_to_relocate boolean`, `age_18_or_older boolean`), `updated_at timestamptz`.
-- [ ] 1.2 Add `internal/db/queries/screening_answers.sql` (get-by-user, upsert-partial) and
+- [x] 1.2 Add `internal/db/queries/screening_answers.sql` (get-by-user, upsert-partial) and
       run `make sqlc`.
-- [ ] 1.3 Create `internal/screeninganswers` package: wire shape, `Sanitize`/`Validate`
-      (country codes against `internal/location`, currency against the `salary_currency`
-      vocab), owner-scoped `Store` over the generated queries.
-- [ ] 1.4 Add `internal/screeninganswers/AGENTS.md` documenting the domain boundary
+- [x] 1.3 Create `internal/screeninganswers` package: wire shape, `Sanitize`/`Validate`
+      (country codes against `internal/location`, currency validated as well-formed ISO
+      4217 — no closed dictionary exists for it), owner-scoped `Store` over the generated
+      queries.
+- [x] 1.4 Add `internal/screeninganswers/AGENTS.md` documenting the domain boundary
       decisions from design.md (why not `userprofile`/`experience`/`resumeextract`, no
       provenance state machine).
 

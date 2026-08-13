@@ -10,9 +10,12 @@ independently nullable — a candidate who has not stated one of the six still h
 served and usable.
 
 Country codes SHALL be validated against the existing country dictionary
-(`internal/location`) and salary currency against the existing `salary_currency` vocabulary;
-an unrecognized code or currency is rejected rather than stored, following the repository's
-dict-only rule.
+(`internal/location`), an unrecognized code rejected rather than stored, following the
+repository's dict-only rule. Salary period SHALL be validated against the existing closed
+enum `vocab.SalaryPeriodValues`. Salary currency has no closed dictionary in this codebase
+(`internal/vocab` documents it as an open ISO-standard field), so it SHALL instead be
+validated as a well-formed ISO 4217 code (three uppercase letters) — a narrower guarantee
+than dictionary recognition, but the only one available.
 
 #### Scenario: A candidate states only one answer
 
@@ -25,9 +28,9 @@ dict-only rule.
 - **WHEN** a write names a country code the dictionary does not recognize
 - **THEN** the write is rejected and no field of the record changes
 
-#### Scenario: An unrecognized currency is rejected
+#### Scenario: A malformed salary currency is rejected
 
-- **WHEN** a write names a currency the `salary_currency` vocabulary does not recognize
+- **WHEN** a write names a currency that is not a three-letter ISO 4217 code
 - **THEN** the write is rejected and no field of the record changes
 
 #### Scenario: A candidate who has stated nothing reads as fully unstated
