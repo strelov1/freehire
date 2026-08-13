@@ -1,0 +1,21 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.5.0
+ignore:
+  SNYK-JS-CODEMIRROR-10494092:
+    - '*':
+        reason: >-
+          ReDoS in codemirror@5.65.21, pulled in transitively by our direct
+          dependency easymde@2.21.0. easymde's only consumer is
+          NoteEditor.svelte, a private per-user job-tracking notes field —
+          content is always self-authored by the same user who reads it back,
+          never rendered from another user's or otherwise untrusted input, so
+          the exploitable path does not exist here.
+          No safe fix is available: easymde 2.21.0 is the latest stable
+          release and still pins codemirror ^5.65.15; the only CodeMirror-6
+          line is a pre-release (3.0.0-alpha/beta) with a fully incompatible
+          API, and forcing a codemirror override under 2.21.0 breaks it at
+          runtime (CM5-only calls). Revisit when easymde ships a stable CM6
+          release, or budget a NoteEditor migration off easymde before this
+          expires.
+        expires: 2026-11-13T00:00:00.000Z
+        created: 2026-08-13T00:00:00.000Z
