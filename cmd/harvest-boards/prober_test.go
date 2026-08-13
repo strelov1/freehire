@@ -416,3 +416,28 @@ func TestNameReportingProbers(t *testing.T) {
 		}
 	})
 }
+
+// TestApploiProberRejectsNonNumericSlug guards the fix for a confirmed live false-positive
+// (see #1884): api.apploi.com/v1/jobs?employer=<slug> answers a non-empty, "live" jobs list
+// even when slug isn't a real employer id — it silently ignores a value it can't parse. The
+// canned response below WOULD read as a live board if the guard were missing and the request
+// went out at all, so this test fails loudly if the numeric-slug check regresses.
+func TestApploiProberRejectsNonNumericSlug(t *testing.T) {
+	getter := fakeGetter{
+		"https://api.apploi.com/v1/jobs?employer=101-edu&limit=100": `{"data":[{"published":true,"archived":false}]}`,
+	}
+	if _, n, err := (apploiProber{}).probe(context.Background(), getter, "101-edu"); err != nil || n != 0 {
+		t.Errorf("got (%d,%v), want (0,nil) for a non-numeric slug", n, err)
+	}
+}
+
+// TestApploiProberAcceptsNumericSlug confirms the guard doesn't also reject apploi's real
+// board-id shape.
+func TestApploiProberAcceptsNumericSlug(t *testing.T) {
+	getter := fakeGetter{
+		"https://api.apploi.com/v1/jobs?employer=55591&limit=100": `{"data":[{"published":true,"archived":false},{"published":false,"archived":true}]}`,
+	}
+	if _, n, err := (apploiProber{}).probe(context.Background(), getter, "55591"); err != nil || n != 1 {
+		t.Errorf("got (%d,%v), want (1,nil) for a numeric slug", n, err)
+	}
+}
