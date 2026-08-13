@@ -201,9 +201,12 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Run Lighthouse against production (headroom-based score floors)
-        # Score floors live in perf/lighthouse/lighthouserc.json, generous below
-        # the ~74/85/73/100 (perf/a11y/best-practices/seo) baseline observed on
-        # freehire.me — tighten as the baseline firms up, same as k6's SLOs above.
+        # URLs + score floors live in perf/lighthouse/lighthouserc.json. Floors
+        # are generous below the ~74/85/73/100 (perf/a11y/best-practices/seo)
+        # homepage baseline — tighten as baselines firm up, same as k6's SLOs
+        # above. The same floors apply to all four pages: companies and jobview
+        # both scored higher than the homepage when audited, so the shared floor
+        # has headroom everywhere, not just on the page it was measured against.
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: ./perf/lighthouse/lighthouserc.json

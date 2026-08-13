@@ -1,7 +1,12 @@
 {
   "ci": {
     "collect": {
-      "url": ["https://freehire.me/"],
+      "url": [
+        "https://freehire.me/",
+        "https://freehire.me/companies",
+        "https://freehire.me/companies/starbridge",
+        "https://freehire.me/jobs/ai-engineer-emea-latam-starbridge-ijusmrsd"
+      ],
       "numberOfRuns": 3
     },
     "assert": {
