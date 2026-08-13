@@ -1276,3 +1276,13 @@
 # --- from the contribution queue (2026-08-07, live-validated) ---
 - company: PicPay
   board: epdm.fa.la1.oraclecloud.com/PicPay
+- company: Worthington Steel
+  board: cbdt.fa.us2.oraclecloud.com/CX
+- company: Abt Global
+  board: egpy.fa.us2.oraclecloud.com/JoinAbt
+- company: East Tennessee State University
+  board: fa-evyu-saasfaprod1.fa.ocs.oraclecloud.com/CX_1
+- company: Summit Companies
+  board: fa-exxm-saasfaprod1.fa.ocs.oraclecloud.com/CX_2
+- company: Cheniere Energy
+  board: hcgi.fa.us2.oraclecloud.com/CX_2
