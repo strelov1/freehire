@@ -88,6 +88,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		EnrichedAt:    tsPtr(r.EnrichedAt),
 		CreatedAt:     tsPtr(r.CreatedAt),
 		UpdatedAt:     tsPtr(r.UpdatedAt),
+		LastSeenAt:    tsPtr(r.LastSeenAt),
 	}}, nil
 }
 

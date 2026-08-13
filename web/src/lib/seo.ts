@@ -127,9 +127,33 @@ const EDUCATION_CREDENTIAL: Record<string, string> = {
   phd: 'postgraduate degree',
 };
 
+// Days added on top of the freshest "still open" evidence to estimate how much
+// longer an open posting is likely valid. Most sources carry no real listing-
+// expiry date, and without validThrough Google assumes one itself (~30 days)
+// and drops the posting from Google Jobs even while it's still open — this
+// buffer matches that default, but keeps rolling forward on every recrawl
+// instead of freezing at first sight. Comfortably above the 48h unseen-sweep
+// grace (docs/agents/job-lifecycle.md) so an ordinary recrawl gap never reads
+// as expired.
+const VALID_THROUGH_BUFFER_DAYS = 30;
+
+/** Estimated validThrough for an OPEN job: the freshest "still open" evidence
+ *  (last_seen_at, falling back to the posting date for a job never re-crawled,
+ *  e.g. a manual import) plus the buffer above. undefined when there's no date
+ *  to estimate from at all. */
+function estimatedValidThrough(job: Job): string | undefined {
+  const evidence = job.last_seen_at ?? job.posted_at ?? job.created_at;
+  if (!evidence) return undefined;
+  const d = new Date(evidence);
+  d.setUTCDate(d.getUTCDate() + VALID_THROUGH_BUFFER_DAYS);
+  return d.toISOString();
+}
+
 /** schema.org JobPosting for a job-detail page, eligible for Google Jobs. A
  *  closed posting sets `validThrough` to its close time so it reads as expired,
- *  not open. `origin` is the absolute site origin (e.g. https://freehire.me). */
+ *  not open; an open one gets a rolling estimate (see estimatedValidThrough) so
+ *  Google doesn't apply its own ~30-day default and drop it while still live.
+ *  `origin` is the absolute site origin (e.g. https://freehire.me). */
 export function jobPostingJsonLd(job: Job, origin: string): Record<string, unknown> {
   const e = job.enrichment ?? {};
   // Our logo proxy resolves a logo from the company name (404s for unknown
@@ -153,8 +177,15 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   // so fall back to created_at (the ingest time; always set) rather than omit it.
   const datePosted = job.posted_at ?? job.created_at;
   if (datePosted) ld.datePosted = datePosted;
-  // A closed posting is no longer accepting applications: mark it expired.
-  if (job.closed_at) ld.validThrough = job.closed_at;
+  // A closed posting is no longer accepting applications: mark it expired. An
+  // open one gets a rolling estimate instead of nothing, so Google doesn't
+  // apply its own default expiry assumption to a posting that's still live.
+  if (job.closed_at) {
+    ld.validThrough = job.closed_at;
+  } else {
+    const validThrough = estimatedValidThrough(job);
+    if (validThrough) ld.validThrough = validThrough;
+  }
 
   // identifier is the hiring org's own posting id (Google-recommended): external_id
   // is the source's stable job id, so Google dedupes the vacancy across boards

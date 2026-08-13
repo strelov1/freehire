@@ -271,6 +271,34 @@ describe('jobPostingJsonLd', () => {
     const ld = jobPostingJsonLd(postingJob({ external_id: ':https://x.dev/jobs/1' }), ORIGIN);
     expect((ld.identifier as Record<string, unknown>).value).toBe('https://x.dev/jobs/1');
   });
+
+  it('sets validThrough to the close time for a closed posting', () => {
+    const ld = jobPostingJsonLd(
+      postingJob({ closed_at: '2026-02-01T00:00:00Z', last_seen_at: '2026-01-30T00:00:00Z' }),
+      ORIGIN
+    );
+    expect(ld.validThrough).toBe('2026-02-01T00:00:00Z');
+  });
+
+  it('estimates validThrough 30 days out from last_seen_at for an open posting', () => {
+    const ld = jobPostingJsonLd(postingJob({ last_seen_at: '2026-01-01T00:00:00Z' }), ORIGIN);
+    expect(ld.validThrough).toBe('2026-01-31T00:00:00.000Z');
+  });
+
+  it('falls back to posted_at, then created_at, when last_seen_at is absent', () => {
+    const byPosted = jobPostingJsonLd(
+      postingJob({ posted_at: '2026-01-01T00:00:00Z', created_at: '2025-01-01T00:00:00Z' }),
+      ORIGIN
+    );
+    expect(byPosted.validThrough).toBe('2026-01-31T00:00:00.000Z');
+
+    const byCreated = jobPostingJsonLd(postingJob({ created_at: '2026-01-01T00:00:00Z' }), ORIGIN);
+    expect(byCreated.validThrough).toBe('2026-01-31T00:00:00.000Z');
+  });
+
+  it('omits validThrough for an open posting with no date evidence at all', () => {
+    expect(jobPostingJsonLd(postingJob(), ORIGIN)).not.toHaveProperty('validThrough');
+  });
 });
 
 describe('collectionPageJsonLd', () => {

@@ -205,6 +205,13 @@ export interface Job {
   created_at?: string;
   updated_at?: string;
   /**
+   * LastSeenAt is when a re-crawl last confirmed this posting still live — see
+   * docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
+   * JobPosting.validThrough for an open job (seo.ts), since most sources carry
+   * no real listing-expiry date of their own.
+   */
+  last_seen_at?: string;
+  /**
    * ClosedAt is non-null when the posting is no longer open. Lists and the
    * search index never contain closed jobs; only the detail endpoint serves
    * them, and the SPA renders the closed state from this field.

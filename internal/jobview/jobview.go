@@ -78,6 +78,11 @@ type Job struct {
 	PostedAt  *string `json:"posted_at"`
 	CreatedAt *string `json:"created_at"`
 	UpdatedAt *string `json:"updated_at"`
+	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
+	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
+	// JobPosting.validThrough for an open job (seo.ts), since most sources carry
+	// no real listing-expiry date of their own.
+	LastSeenAt *string `json:"last_seen_at"`
 	// ClosedAt is non-null when the posting is no longer open. Lists and the
 	// search index never contain closed jobs; only the detail endpoint serves
 	// them, and the SPA renders the closed state from this field.
@@ -181,6 +186,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		PostedAt:          rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:         rfc3339Ptr(f.CreatedAt),
 		UpdatedAt:         rfc3339Ptr(f.UpdatedAt),
+		LastSeenAt:        rfc3339Ptr(f.LastSeenAt),
 		ClosedAt:          rfc3339Ptr(f.ClosedAt),
 		Enrichment:        e,
 		EnrichedAt:        rfc3339Ptr(f.EnrichedAt),

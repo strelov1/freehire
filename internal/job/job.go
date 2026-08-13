@@ -106,6 +106,10 @@ type Fields struct {
 	EnrichedAt    *time.Time
 	CreatedAt     *time.Time
 	UpdatedAt     *time.Time
+	// LastSeenAt is when a re-crawl last confirmed this posting still live (see
+	// docs/agents/job-lifecycle.md) — the freshest "still open" evidence available
+	// for an open job, used to estimate a rolling JobPosting.validThrough.
+	LastSeenAt *time.Time
 }
 
 // Job is the domain aggregate. Its state is unexported: the only ways to obtain a
