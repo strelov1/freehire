@@ -151,9 +151,9 @@ func TestSanitizeHTMLWrapsOrphanListItems(t *testing.T) {
 			`<ul><li>Ship features</li></ul>`,
 		},
 		"mixed real-world shape: two valid lists then an orphan run": {
-			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>ADN</li>\n <li>RN license</li>\n</ul>\n" +
+			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>Nursing degree</li>\n <li>RN license</li>\n</ul>\n" +
 				"<p><strong>Essential Functions:</strong></p>\n<li>Acts as liaison</li>\n<li>Coordinates care</li>",
-			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>ADN</li>\n <li>RN license</li>\n</ul>\n" +
+			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>Nursing degree</li>\n <li>RN license</li>\n</ul>\n" +
 				"<p><strong>Essential Functions:</strong></p><ul>\n<li>Acts as liaison</li>\n<li>Coordinates care</li></ul>",
 		},
 	}
