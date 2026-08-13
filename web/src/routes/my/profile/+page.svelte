@@ -51,13 +51,14 @@
   // referenced by an id the strip doesn't offer.
   const TABS = [
     { id: 'settings', label: 'Settings' },
+    { id: 'screening', label: 'Screening answers' },
     { id: 'skills', label: 'Skills' },
     { id: 'structured', label: 'Profile' },
     { id: 'experience', label: 'Experience' },
     { id: 'readiness', label: 'CV readiness' },
   ] as const;
   const PANEL_ID = 'profile-panel';
-  let tab = $state<'settings' | 'skills' | 'structured' | 'experience' | 'readiness'>('settings');
+  let tab = $state<'settings' | 'screening' | 'skills' | 'structured' | 'experience' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -358,12 +359,6 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <!-- Screening answers: a separate concern from the role/skills profile above
-               (facts the candidate states directly, not a targeting profile) — its own
-               heading and its own save action. The component re-seeds its own fields from
-               `answers` on reload (dirty-guarded, same pattern as CandidateContactsEditor),
-               since there is no single identity field here to key a remount on. -->
-          <ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and
                off the other tabs, which are readings of the market, not account
@@ -380,6 +375,15 @@
             </Button>
             <DeleteAccountButton />
           </div>
+        {:else if tab === 'screening'}
+          <!-- Screening answers: a separate concern from the role/skills profile
+               (facts the candidate states directly, not a targeting profile), and its own
+               tab rather than a section of Settings — the six fields plus the assistant/
+               autofill wiring behind them earn their own place in the nav. The component
+               re-seeds its own fields from `answers` on reload (dirty-guarded, same pattern
+               as CandidateContactsEditor), since there is no single identity field here to
+               key a remount on. -->
+          <ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
         {:else if tab === 'skills'}
           <SkillsView />
         {:else if tab === 'structured'}
