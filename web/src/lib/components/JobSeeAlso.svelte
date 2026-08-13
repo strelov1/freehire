@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Code, Globe, Layers, TrendingUp } from '@lucide/svelte';
+  import { Building2, Code, Globe, Layers, TrendingUp } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import type { FamilyIconName } from '$lib/familymarks';
@@ -23,6 +23,7 @@
     role: Layers,
     seniority: TrendingUp,
     remote: Globe,
+    company: Building2,
   };
 
   // Shared by the logo and family mark kinds — both are an icon centered on a

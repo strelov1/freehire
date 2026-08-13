@@ -41,6 +41,11 @@ describe('resolveSeeAlsoMark', () => {
     expect(mark).toEqual({ kind: 'family', icon: 'remote', color: expect.any(String) });
   });
 
+  test('a company-membership collection with no backer image gets the company family icon', () => {
+    const mark = resolveSeeAlsoMark({ collections: 'unicorn' }, null);
+    expect(mark).toEqual({ kind: 'family', icon: 'company', color: expect.any(String) });
+  });
+
   test('no params and no backer image falls back to the tech family icon', () => {
     const mark = resolveSeeAlsoMark(null, null);
     expect(mark).toEqual({ kind: 'family', icon: 'tech', color: expect.any(String) });

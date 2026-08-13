@@ -35,7 +35,9 @@ Alternative considered: keep `mark` as a single image URL and pre-render every k
 
 **2. Family is derived from which `params` key is present — no new metadata field on `FilterCollection`.**
 
-`skills` → tech; `category` → role; `seniority` → seniority; `work_mode` + (`regions` or a `countries` value that isn't a single real country, e.g. absent) → remote. A `countries` param with a concrete ISO code takes precedence and yields `flag`, not `family`.
+`skills` → tech; `category` → role; `seniority` → seniority; `work_mode` + (`regions` or a `countries` value that isn't a single real country, e.g. absent) → remote; `collections` → company. A `countries` param with a concrete ISO code takes precedence and yields `flag`, not `family`.
+
+`collections` was missed in the first pass of this design and caught in code review: `collectionBySlug()` resolves not just `FILTER_COLLECTIONS` but also `COMPANY_COLLECTIONS` (the Go-generated registry — backer, editorial, *and* credential kinds, e.g. "Unicorns", "Fortune 500", "H-1B sponsor history"), all to `{ params: { collections: slug } }`, and `relatedCollectionSlugs()` pulls every kind a job's company carries into "See also", not just backer ones. Only the 4 backer slugs have a real mark (via `backers.ts`); the other ~11 editorial/credential slugs were silently falling through to the generic `tech` family icon — a semantic mismatch this design's own goal (distinguishable card kinds) explicitly rules out. Fixed by adding a fifth family, `company` (amber, Lucide `Building2`), rather than reusing `tech`.
 
 Alternative considered: add an explicit `family: 'tech' | 'role' | ...` field to every one of the ~90 `FILTER_COLLECTIONS` entries. Rejected — the `params` key already encodes this unambiguously for every existing entry (confirmed by inspection: no entry mixes e.g. `skills` and `seniority`), so a derived function is less to keep in sync by hand.
 
@@ -51,7 +53,7 @@ Alternative considered: auto-derive the `simple-icons` slug from the collection 
 
 Keeps the registry to just `{ path, hex }` per entry — no third field to keep correct as brands are added, and it's a well-known, cheap formula (`(r*299 + g*587 + b*114) / 1000`, threshold ~128).
 
-**6. Resolution order in `buildSeeAlso()`: backer → tech logo (if `skills` param resolves in `techmarks.ts`) → country flag (if `countries` param present) → family icon (default).**
+**6. Resolution order in `buildSeeAlso()`: backer → tech logo (if `skills` param resolves in `techmarks.ts`) → country flag (if `countries` param present) → seniority/role/remote/company family (by `params` key) → tech family (default).**
 
 This is a strict fallback chain per card, not a merge — a card gets exactly one mark.
 

@@ -27,6 +27,10 @@ export function resolveSeeAlsoMark(
   if (params.seniority) return familyMark('seniority');
   if (params.category) return familyMark('role');
   if (params.work_mode) return familyMark('remote');
+  // An editorial or credential company-membership collection (e.g. "Unicorns",
+  // "H-1B sponsor history") — the backer ones already returned above via
+  // backerImageSrc, so reaching here means there's no real mark for it.
+  if (params.collections) return familyMark('company');
 
   return familyMark('tech');
 }

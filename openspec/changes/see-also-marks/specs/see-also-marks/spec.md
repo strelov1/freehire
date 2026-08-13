@@ -39,6 +39,14 @@ color-coded family icon. No card SHALL render with no mark.
   or a `work_mode` param without a concrete single-country `countries` value
 - **THEN** the card's mark is the color-coded family icon matching that param kind
 
+#### Scenario: A company-membership collection with no backer image gets a company family icon
+
+- **WHEN** a resolved collection carries a `collections` param (an editorial or
+  credential company-membership collection, such as "Unicorns" or "H-1B sponsor
+  history") and no backer image was found for it
+- **THEN** the card's mark is the color-coded company family icon, not the
+  technology family icon
+
 ### Requirement: A technology brand logo renders with a contrast-appropriate glyph color
 
 The system SHALL compute the logo glyph's fill color (white or near-black) from the
