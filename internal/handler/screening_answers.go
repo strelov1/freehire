@@ -66,7 +66,11 @@ func (h *screeningAnswersHandlers) PutScreeningAnswers(c *fiber.Ctx) error {
 
 	answers, err := h.store.Update(c.Context(), userID, in)
 	if err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		var ve *screeninganswers.ValidationError
+		if errors.As(err, &ve) {
+			return fiber.NewError(fiber.StatusBadRequest, ve.Error())
+		}
+		return err
 	}
 	return c.JSON(fiber.Map{"data": answers})
 }

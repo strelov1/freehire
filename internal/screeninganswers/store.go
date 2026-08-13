@@ -8,6 +8,18 @@ import (
 // ErrNotFound is the caller having stated no screening answer yet.
 var ErrNotFound = errors.New("screeninganswers: not found")
 
+// ValidationError is the input itself being rejected — an unrecognized country code, a
+// malformed currency, an out-of-vocabulary period, a non-positive salary, a negative
+// notice period — as opposed to a Repository failure. A caller (the HTTP handler, the
+// assistant tool) needs the distinction to answer a bad request with 400 and a genuine
+// fault with 500, rather than treating every error Update can return the same way.
+type ValidationError struct {
+	err error
+}
+
+func (e *ValidationError) Error() string { return e.err.Error() }
+func (e *ValidationError) Unwrap() error { return e.err }
+
 // Repository is the persistence contract for the single per-user screening-answers
 // record. Get maps a missing row to ErrNotFound; Upsert creates or replaces.
 // Implementations map the generated db row to Answers, so the use case never sees db.*.
@@ -40,7 +52,7 @@ func (s *Store) Get(ctx context.Context, userID int64) (Answers, error) {
 func (s *Store) Update(ctx context.Context, userID int64, update Answers) (Answers, error) {
 	update.Sanitize()
 	if err := update.Validate(); err != nil {
-		return Answers{}, err
+		return Answers{}, &ValidationError{err: err}
 	}
 
 	existing, err := s.repo.Get(ctx, userID)

@@ -68,6 +68,28 @@ func TestUpdate_MergesOverTheExistingRecord(t *testing.T) {
 	}
 }
 
+func TestUpdate_RejectsAnInvalidFieldWithAValidationError(t *testing.T) {
+	repo := &fakeRepo{getErr: screeninganswers.ErrNotFound}
+	store := screeninganswers.New(repo)
+
+	_, err := store.Update(context.Background(), 1, screeninganswers.Answers{NoticePeriodDays: ptrInt(-1)})
+	var ve *screeninganswers.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("Update with a negative notice period: err = %v, want a *ValidationError", err)
+	}
+}
+
+func TestUpdate_ARepositoryFailureIsNotAValidationError(t *testing.T) {
+	repo := &fakeRepo{getErr: errors.New("boom")}
+	store := screeninganswers.New(repo)
+
+	_, err := store.Update(context.Background(), 1, screeninganswers.Answers{})
+	var ve *screeninganswers.ValidationError
+	if errors.As(err, &ve) {
+		t.Error("a repository failure was wrapped as a *ValidationError, want it passed through as-is")
+	}
+}
+
 func TestUpdate_RejectsAnInvalidFieldWithoutCallingUpsert(t *testing.T) {
 	repo := &fakeRepo{getErr: screeninganswers.ErrNotFound}
 	store := screeninganswers.New(repo)

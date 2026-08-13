@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -168,6 +169,25 @@ func TestPutScreeningAnswers_InvalidFieldReturns400AndSkipsUpsert(t *testing.T) 
 	}
 	if repo.upsertCalled {
 		t.Error("repo.Upsert should not be called on invalid input")
+	}
+}
+
+func TestPutScreeningAnswers_RepositoryFailureReturns500NotItsRawMessage(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{getErr: errors.New("connection refused")}
+	app, token := screeningAnswersApp(t, repo)
+	resp := doScreeningAnswers(t, app, fiber.MethodPut, `{"willing_to_relocate":true}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", resp.StatusCode)
+	}
+	var got struct {
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if strings.Contains(got.Error, "connection refused") {
+		t.Errorf("response body leaked the internal error: %q", got.Error)
 	}
 }
 
