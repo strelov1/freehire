@@ -1,11 +1,32 @@
 <script lang="ts">
   import { Award, Briefcase, FolderKanban, GraduationCap, Languages, Tags, User } from '@lucide/svelte';
+  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import type { Experience } from '$lib/generated/contracts';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
   const profile = $derived(data.profile);
   const cv = $derived(profile.cv);
+
+  // The skill currently hovered in the sidebar, so work-history entries that don't carry
+  // it in their own stack fade out — a quick "where did they use this" scan.
+  let hoveredSkill = $state<string | null>(null);
+
+  // Case-insensitive, either-direction match: a skill chip comes from the canonical
+  // dictionary ("Node.js"), a job's stack is free text off the résumé parser and can
+  // differ in casing or specificity, so a strict `===` would miss real matches.
+  function jobHasSkill(job: Experience, skill: string): boolean {
+    const needle = skill.toLowerCase();
+    return (job.stack ?? []).some((tech) => {
+      const hay = tech.toLowerCase();
+      return hay === needle || hay.includes(needle) || needle.includes(hay);
+    });
+  }
+
+  function fadeClass(job: Experience): string {
+    return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-[2px]' : '';
+  }
 
   const experience = $derived(cv.experience ?? []);
   const education = $derived(cv.education ?? []);
@@ -102,7 +123,14 @@
           <h2 class="flex items-center gap-2 text-sm font-semibold"><Tags class="size-4" />Skills</h2>
           <div class="flex flex-wrap gap-2" aria-label="Skills">
             {#each skillChips as skill (skill)}
-              <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
+              <span
+                role="button"
+                tabindex="0"
+                onmouseenter={() => (hoveredSkill = skill)}
+                onmouseleave={() => (hoveredSkill = null)}
+                onfocus={() => (hoveredSkill = skill)}
+                onblur={() => (hoveredSkill = null)}
+                class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
                 >{skill}</span
               >
             {/each}
@@ -121,8 +149,16 @@
                  string key colliding throws during Svelte 5 hydration. This list is static
                  once loaded and never reorders, so an index key is safe here. -->
             {#each experience as job, i (i)}
-              <li class="flex gap-3 rounded-xl border border-border bg-card p-4">
-                <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+              <li
+                class="flex gap-3 rounded-xl border border-border bg-card p-4 transition-[filter,opacity] duration-150 {fadeClass(
+                  job,
+                )}"
+              >
+                {#if job.company}
+                  <CompanyLogo name={job.company} size="size-10" />
+                {:else}
+                  <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+                {/if}
                 <div class="flex min-w-0 flex-1 flex-col gap-1">
                   <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <span class="text-sm font-semibold">{job.title || job.company}</span>
