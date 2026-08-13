@@ -150,6 +150,13 @@ informative, since it says somebody who was in this cluster left. The immutable-
 *What is shown*, below, absorbs it: a published window is never recomputed, so a revocation takes
 effect from the next window rather than retracting a number already shown.
 
+The same rule bounds the retroactivity above, and the two resolutions have to be read together:
+consent reaches back over a candidate's existing applications, but only as far as **windows that
+are still open**. It cannot enter a window already published, because that would let a consent
+change move a number already shown — the same door §2 closes, approached from the other side.
+Retroactive therefore means "every application whose window has not yet closed", not "everything
+they have ever done", and the difference is worth stating to whoever writes the consent copy.
+
 **What is shown.** Buckets, never raw counts, and buckets with **hysteresis** — a band must be
 crossed by a margin before the display changes, so no single arrival or state change can move
 what is rendered.
@@ -168,11 +175,41 @@ connects a mailbox and back-dates a year of replies into closed windows at once.
 
 What actually closes them is a fixed **observation window** per application — admit it only once
 that window has elapsed, compute at close, and never recompute. This reframes the metric rather
-than filtering it: the published quantity becomes *"replied within N days"*, which has one
-correct value forever, instead of *"response rate"*, whose value drifts and whose drift is the
-leak. The reframing is what makes immutability honest — without it, freezing merely discards late
-replies and makes slow employers read as non-responders, the distortion `company-hiring-signal`
-exists to remove.
+than filtering it: the published quantity has one correct value forever, instead of a "response
+rate" whose value drifts and whose drift is the leak. The reframing is what makes immutability
+honest — without it, freezing merely discards late replies and makes slow employers read as
+non-responders, the distortion `company-hiring-signal` exists to remove.
+
+**Immutability and completeness genuinely conflict, and the window alone does not resolve it.**
+A window closes on `occurred_at`, but what can be *published* is bounded by `recorded_at` — the
+distinction the ledger already draws ("Events distinguish when they happened from when they were
+learned"). A reply that happened inside the window but is learned of after close is excluded
+permanently, so a metric called "replied within N days" would overstate what was measured.
+
+The channel that makes this severe rather than marginal is mailbox connection, which is a step
+change rather than a drip. It also moves more than replies: `observable` is evaluated when the
+rollup runs, so a candidate who applies before connecting a mailbox is not admitted to their
+window at all, and connecting later cannot retroactively admit them once that window has closed.
+The cohort would then be biased toward people who connected a mailbox *before* applying — the
+minority, since the common path is to apply, get no answer, and connect a mailbox to use the
+tracking features. `cmd/rollup-company` avoids all of this by rebuilding everything on every run;
+that is exactly the property the snapshot rule removes, so the cost has to be paid somewhere else.
+
+**Pay it by stamping observability at write time.** Admit only applications whose owner already
+had a connected mailbox when the application was recorded — the same move as denormalising
+`company_slug` and `role_fingerprint`, deciding at write what would otherwise be re-derived at
+read. A window is then genuinely complete at close, because every reply it could ever contain
+arrives through a mailbox that was already connected, and a later connection governs only which
+*future* applications count instead of rewriting history.
+
+That leaves bounded lag — mail sync, late classification, a link confirmed a week afterwards —
+which a **grace watermark** before close absorbs. `sources.SweepGraceWindows` is the existing
+shape: a provider whose observation is structurally incomplete gets a wider window rather than a
+wrong verdict. Days, now that the bulk channel is gone.
+
+With both in place the metric can be named for what it measures: **"replied within N days, among
+applications observable when made."** The cohort restriction belongs in the name, because it is
+the part a reader would otherwise assume away.
 
 `internal/userjob` offers `terminalStages`/`IsTerminal` as an alternative admission rule, but a
 settled stage is candidate-recorded, so gating on it would bias the cohort toward diligent
@@ -267,8 +304,13 @@ One read-only measurement decides whether the rest is worth designing further:
 > **distinct users per role cluster**, and how many clusters reach 10?
 
 The `observable` CTE below is lifted verbatim from `RebuildInsightsCompanyResponse`
-(`internal/db/queries/insights.sql`), so the measurement is taken under exactly the gate the
-feature would ship with — including the reason a calendar-only Google grant does not count.
+(`internal/db/queries/insights.sql`) — including the reason a calendar-only Google grant does not
+count. It is the shipped definition, not the proposed one: *Freeze the metric inputs* argues that
+the feature should stamp observability at **write** time, whereas this CTE evaluates it at read
+time. That difference is deliberate here and it inflates in the same direction as the missing
+opt-in predicate — a candidate who connected a mailbox only recently counts for every past
+application in this query, and would count for none of them under the write-time stamp. It is one
+more reason the histogram is a ceiling rather than a forecast.
 
 ```sql
 -- Read-only. Distribution of distinct observable trackers per role cluster.
@@ -307,15 +349,49 @@ not cancel:
   one. This inflates, and it dominates: a plausible opt-in rate divides the real figure several
   times over.
 - **Pruned postings drop out**, since the join is on `application_events.job_id` and `cmd/prune`
-  sets it to NULL. This deflates, but only slightly — pruned rows are non-IT postings freehire
-  users largely never applied to.
+  sets it to NULL. This deflates. How much is not something to assert — it is measured by the
+  second query below.
 - **Copies are included**, which is correct and not a bias at all (see *Copies are counted*).
 
-Net: the histogram **overstates**. That makes it decisive in exactly one direction — if the
-ceiling does not clear the gate, the real figure certainly does not, so a disappointing result
-settles a **no-go**. A healthy result licenses no *go*: it would have to be re-measured once a
-consent column exists. Getting this backwards inverts the decision rule, so it is worth stating
-plainly rather than leaving to the reader.
+Whether the histogram may be read as an upper bound therefore **depends on that second
+measurement**, and the label should not be applied before it is run:
+
+```sql
+-- Upper bound on what the pruned-job blind spot costs the histogram above.
+SELECT count(*) FILTER (WHERE ae.job_id IS NULL)  AS unclusterable,
+       count(*)                                    AS observable_applied,
+       round(100.0 * count(*) FILTER (WHERE ae.job_id IS NULL)
+             / nullif(count(*), 0), 1)             AS pct_lost
+  FROM application_events ae
+ WHERE ae.kind = 'applied'
+   AND ae.retracted_at IS NULL
+   AND (EXISTS (SELECT 1 FROM gmail_connections gc
+                 WHERE gc.user_id = ae.user_id AND gc.status = 'connected' AND gc.email <> '')
+     OR EXISTS (SELECT 1 FROM mailboxes mb WHERE mb.user_id = ae.user_id));
+```
+
+Two properties make a small result conclusive. `job_id IS NULL` catches more than pruning — an
+application recorded from mail against a company with no catalogue posting reads the same way —
+so the figure **over**-states the loss, which is the conservative direction here. And it is an
+absolute ceiling on the missing cluster-memberships: below the gate itself, it cannot create even
+one qualifying cluster however it concentrates.
+
+So:
+
+- **`unclusterable` small against the first histogram's mass near the gate** → the upper-bound
+  reading is earned. Inflation from the missing opt-in predicate dominates, and a disappointing
+  result settles a **no-go**: if the ceiling does not clear the gate, the real figure cannot.
+- **Otherwise** → the label is withdrawn, and the measurement is redone once `role_fingerprint`
+  is persisted on the application and the pruned rows become clusterable.
+
+In neither case does a healthy result license a *go*. That direction always requires re-measuring
+against a consent column that does not exist yet. Getting the asymmetry backwards inverts the
+decision rule, which is why it is stated rather than left to the reader.
+
+One thing the bound cannot be aligned against: the recovery path it would be compared to — pairing
+through `application_id` on a persisted fingerprint — **is a recommendation in this document, not
+shipped**. A measurement cannot match a path that has not been built; what it can do is bound how
+much that path would add, which is what the query above does.
 
 If the answer is a handful of clusters concentrated at one employer, the feature does not exist
 yet regardless of how it is designed, and the correct outcome is to close the issue as premature
@@ -334,6 +410,10 @@ the application rather than read from `jobs` — see *The cluster key does not s
   them first would be a guess presented as a threshold.
 - **The two sample gates need re-deriving at cluster grain.** 10 and 5 were judged for company
   grain, where no individual is visible; §3 argues 5 in particular is unsafe here.
+- **How long the grace watermark runs**, and how much cohort the write-time observability stamp
+  costs. The stamp trades a biased-but-large cohort for a smaller one whose bias is at least
+  stable and nameable; whether that trade is worth making cannot be settled without knowing how
+  many candidates connect a mailbox only after they have started applying.
 - **Repair versus immutability.** Under published snapshots a mislinked reply inside a closed
   window cannot be retracted out of it. Whether that is answered with an operator republish, a
   correction that only affects future windows, or a shorter window is a product decision this
