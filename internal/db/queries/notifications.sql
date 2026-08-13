@@ -2,18 +2,29 @@
 -- Record one delivered notify/reminder/nudge event for the in-app notification
 -- center, independent of which channel(s) carried it. Called right alongside
 -- each engine's own "marked delivered" write; a failure here must never fail
--- the delivery it accompanies (see the add-notification-center design).
-INSERT INTO user_notifications (user_id, kind, title, body, public_slug)
-VALUES ($1, $2, $3, $4, sqlc.narg(public_slug));
+-- the delivery it accompanies (see the add-notification-center design). jobs
+-- is only ever set by a multi-job subscription digest (see 0091); every other
+-- kind, and a single-job digest, passes NULL and relies on public_slug instead.
+INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs)
+VALUES ($1, $2, $3, $4, sqlc.narg(public_slug), sqlc.narg(jobs));
 
 -- name: ListUserNotifications :many
 -- The caller's own notifications, newest first, standard offset/limit paging
 -- (matching every other /me/* list endpoint in this codebase).
-SELECT id, kind, title, body, public_slug, created_at, read_at
+SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
 FROM user_notifications
 WHERE user_id = $1
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: GetNotification :one
+-- One notification, owner-scoped (no row for another user's id, mapped to 404
+-- by the handler) — the direct-link/detail read a bookmarked or freshly
+-- visited /my/notifications/[id]/jobs page needs, since ListUserNotifications
+-- alone only serves the caller's own current page of the list.
+SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
+FROM user_notifications
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
 -- name: CountUserNotifications :one
 -- Total and unread counts in one statement and one set of predicates, so the

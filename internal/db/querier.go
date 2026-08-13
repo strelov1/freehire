@@ -1136,6 +1136,11 @@ type Querier interface {
 	// when they have not left one yet. Not filtered by status: the owner can still
 	// see and edit their own review after a moderator hides it.
 	GetMyCompanyFeedback(ctx context.Context, arg GetMyCompanyFeedbackParams) (CompanyFeedback, error)
+	// One notification, owner-scoped (no row for another user's id, mapped to 404
+	// by the handler) — the direct-link/detail read a bookmarked or freshly
+	// visited /my/notifications/[id]/jobs page needs, since ListUserNotifications
+	// alone only serves the caller's own current page of the list.
+	GetNotification(ctx context.Context, arg GetNotificationParams) (GetNotificationRow, error)
 	// The caller's notification rule, shared by saved-job reminders and both
 	// lifecycle nudges. No row -> pgx.ErrNoRows, which the service reads as the
 	// opt-out-by-default state (never configured; see the
@@ -2452,7 +2457,9 @@ type Querier interface {
 	// Record one delivered notify/reminder/nudge event for the in-app notification
 	// center, independent of which channel(s) carried it. Called right alongside
 	// each engine's own "marked delivered" write; a failure here must never fail
-	// the delivery it accompanies (see the add-notification-center design).
+	// the delivery it accompanies (see the add-notification-center design). jobs
+	// is only ever set by a multi-job subscription digest (see 0091); every other
+	// kind, and a single-job digest, passes NULL and relies on public_slug instead.
 	RecordNotification(ctx context.Context, arg RecordNotificationParams) error
 	// Record one matched nudge candidate. The unique index on
 	// (user_id, job_id, kind, episode_key) makes this idempotent — re-scanning the

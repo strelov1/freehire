@@ -72,3 +72,47 @@ func (p *schemaPlaces) UnmarshalJSON(b []byte) error {
 	*p = []schemaPlace{one}
 	return nil
 }
+
+// schemaNamedArea is one schema.org node that carries just a name — a Country, AdministrativeArea,
+// or City entry in a JobPosting's applicantLocationRequirements. ATS ld+json only ever needs the
+// name out of it.
+type schemaNamedArea struct {
+	Name string `json:"name"`
+}
+
+// schemaNamedAreas decodes JobPosting.applicantLocationRequirements the same way schemaPlaces
+// decodes jobLocation: the schema.org spec allows EITHER a single node (one country a fully-
+// remote posting is open to) OR an array of them (several), and Go's json.Unmarshal errors on a
+// bare-object field asked to decode a JSON array — not silently, but by returning a non-nil error
+// from the TOP-LEVEL Unmarshal call even though every other field in the same object decoded
+// correctly. A caller that treats "err != nil" as "no usable JobPosting" (as ldJobPosting's own
+// callers do) then drops the WHOLE posting over one field's shape, not just the location. Shared
+// by any ld+json adapter reading this field.
+type schemaNamedAreas []schemaNamedArea
+
+func (a *schemaNamedAreas) UnmarshalJSON(b []byte) error {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		var arr []schemaNamedArea
+		if err := json.Unmarshal(trimmed, &arr); err != nil {
+			return err
+		}
+		*a = arr
+		return nil
+	}
+	var one schemaNamedArea
+	if err := json.Unmarshal(trimmed, &one); err != nil {
+		return err
+	}
+	*a = []schemaNamedArea{one}
+	return nil
+}
+
+// Names returns every area's name, in order — the only field an adapter needs out of this type.
+func (a schemaNamedAreas) Names() []string {
+	names := make([]string, 0, len(a))
+	for _, n := range a {
+		names = append(names, n.Name)
+	}
+	return names
+}

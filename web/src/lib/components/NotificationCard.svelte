@@ -30,7 +30,9 @@
       ? resolve('/jobs/[slug]', { slug: target.slug })
       : target.kind === 'tracking'
         ? resolve('/my/tracking')
-        : null,
+        : target.kind === 'digest'
+          ? resolve('/my/notifications/[id]/jobs', { id: String(target.id) })
+          : null,
   );
   const unread = $derived(item.read_at == null);
   const Icon = $derived(KIND_ICON[item.kind]);

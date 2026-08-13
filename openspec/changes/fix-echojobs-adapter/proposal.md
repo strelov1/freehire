@@ -17,7 +17,7 @@ echojobs.io removed the public JSON API (`/api/jobs` list, `/api/jobs/{handle}` 
 (none)
 
 ### Modified Capabilities
-(none — this is an internal data-source swap behind the existing echojobs adapter contract: same freshness window, same identifier scheme, same Job shape produced. No spec currently tracks echojobs as its own capability; the externally-visible ingest behavior — what postings appear, how they're deduped, how staleness is handled — is unchanged.)
+(none — this is an internal data-source swap behind the existing echojobs adapter contract: same freshness window, same identifier scheme, same identity/deduplication/persisted-catalogue behavior. No spec currently tracks echojobs as its own capability. Two field-level exceptions, both documented in design.md: `SeenRefresh` jobs now carry an empty `Title` — see design.md's Refresh strategy decision — and `Job.URL` now points at the echojobs.io page rather than the employer's own ATS link the old adapter stored — see design.md's Risks section.)
 
 ## Impact
 

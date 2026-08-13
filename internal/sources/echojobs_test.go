@@ -2,174 +2,125 @@ package sources
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
-	"net/url"
-	"regexp"
 	"slices"
-	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
-// echojobsHTTP is a paging-and-detail-aware test JSONGetter: it serves pages[i] for ?page=i+1
-// (recording every page number requested) and, for a detail request (/api/jobs/{id}), routes by
-// the id in the path — mirroring getmanfredHTTP's list/detail split.
-type echojobsHTTP struct {
-	pages      []string
-	failPage   int // 0 = never fail
-	got        []int
-	details    map[string]string
-	detailErr  map[string]bool
-	gotDetails []string
+// echojobsFakeHTTP is a routing test double for echojobs' two data sources: XML (sitemap index +
+// job shards) and HTML (a posting's detail page, carrying its JobPosting ld+json). Each is
+// keyed by exact URL, so a test wires only the routes its scenario needs. gotXML/gotHTML record
+// every URL requested, in order, so a test can assert what was (and was not) fetched — in
+// particular that a seen posting never costs an HTML request. mu guards both slices: FetchNew
+// runs detail() concurrently across a bounded worker pool (see fetchDetails), so a scenario with
+// more than one unseen posting calls GetHTML from several goroutines at once.
+type echojobsFakeHTTP struct {
+	xmlRoutes  map[string]string
+	htmlRoutes map[string]string
+	xmlErr     map[string]bool
+	htmlErr    map[string]bool
+
+	mu      sync.Mutex
+	gotXML  []string
+	gotHTML []string
 }
 
-var echojobsDetailRE = regexp.MustCompile(`/jobs/([^/?]+)$`)
-
-func (f *echojobsHTTP) GetJSON(_ context.Context, u string, v any) error {
-	parsed, err := url.Parse(u)
-	if err != nil {
-		return err
+func (f *echojobsFakeHTTP) GetXML(_ context.Context, url string, v any) error {
+	f.mu.Lock()
+	f.gotXML = append(f.gotXML, url)
+	f.mu.Unlock()
+	if f.xmlErr[url] {
+		return errors.New("echojobsFakeHTTP: xml boom")
 	}
-	if parsed.RawQuery == "" {
-		if m := echojobsDetailRE.FindStringSubmatch(parsed.Path); m != nil {
-			id := m[1]
-			f.gotDetails = append(f.gotDetails, id)
-			if f.detailErr[id] {
-				return errors.New("echojobsHTTP: detail boom")
-			}
-			raw, ok := f.details[id]
-			if !ok {
-				return errors.New("echojobsHTTP: no detail for id")
-			}
-			return json.Unmarshal([]byte(raw), v)
-		}
+	body, ok := f.xmlRoutes[url]
+	if !ok {
+		return fmt.Errorf("echojobsFakeHTTP: no xml route for %s", url)
 	}
-	page, _ := strconv.Atoi(parsed.Query().Get("page"))
-	f.got = append(f.got, page)
-	if f.failPage != 0 && page == f.failPage {
-		return errors.New("echojobsHTTP: boom")
-	}
-	if page < 1 || page > len(f.pages) {
-		return fmt.Errorf("echojobsHTTP: no page %d", page)
-	}
-	return json.Unmarshal([]byte(f.pages[page-1]), v)
+	return xml.Unmarshal([]byte(body), v)
 }
 
-func echojobsPageJSON(jobs string) string {
-	return fmt.Sprintf(`{"found":999,"page":1,"per_page":100,"jobs":[%s]}`, jobs)
+func (f *echojobsFakeHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
+	f.gotHTML = append(f.gotHTML, url)
+	f.mu.Unlock()
+	if f.htmlErr[url] {
+		return nil, errors.New("echojobsFakeHTTP: html boom")
+	}
+	body, ok := f.htmlRoutes[url]
+	if !ok {
+		return nil, fmt.Errorf("echojobsFakeHTTP: no html route for %s", url)
+	}
+	return html.Parse(strings.NewReader(body))
 }
 
-func echojobsJobJSON(handle, postedAt string) string {
-	return fmt.Sprintf(`{
-		"title":"Backend Engineer","company_name":"Acme","domain_name":"acme.com",
-		"url":"https://boards.greenhouse.io/acme/jobs/123","job_handle":%q,
-		"posted_at":%s,"locations":["California","New York"],"remote_type":"hybrid",
-		"required_skills":["Go","NotARealSkill"]
-	}`, handle, postedAt)
+// echojobsSitemapIndexXML builds a sitemap index carrying the given job-shard URLs among the
+// site's other (non-job) shards, which a correct crawl must ignore.
+func echojobsSitemapIndexXML(jobShardURLs ...string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+	b.WriteString(`<sitemap><loc>https://echojobs.io/sitemap-nav.xml</loc></sitemap>`)
+	b.WriteString(`<sitemap><loc>https://echojobs.io/sitemap-companies.xml</loc></sitemap>`)
+	for _, u := range jobShardURLs {
+		b.WriteString(`<sitemap><loc>` + u + `</loc></sitemap>`)
+	}
+	b.WriteString(`</sitemapindex>`)
+	return b.String()
 }
 
-func TestEchojobsFetchMapsFields(t *testing.T) {
-	now := time.Now().UTC()
-	http := &echojobsHTTP{pages: []string{
-		echojobsPageJSON(echojobsJobJSON("acme-swe-abc12", strconv.FormatInt(now.UnixMilli(), 10))),
-		echojobsPageJSON(""), // empty page: the walk ends cleanly here, not on an error
-	}}
-
-	jobs, err := echojobs{http: http}.Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 1 {
-		t.Fatalf("want 1 job, got %d", len(jobs))
-	}
-	job := jobs[0]
-	if job.ExternalID != "acme-swe-abc12" {
-		t.Fatalf("ExternalID: %q", job.ExternalID)
-	}
-	if job.URL != "https://boards.greenhouse.io/acme/jobs/123" {
-		t.Fatalf("URL should be the upstream ATS link, got %q", job.URL)
-	}
-	if job.Title != "Backend Engineer" || job.Company != "Acme" {
-		t.Fatalf("identity mismatch: %+v", job)
-	}
-	if job.Location != "California; New York" {
-		t.Fatalf("Location: %q", job.Location)
-	}
-	if job.WorkMode != "hybrid" || job.Remote {
-		t.Fatalf("hybrid should not be Remote: mode=%q remote=%v", job.WorkMode, job.Remote)
-	}
-	if job.PostedAt == nil {
-		t.Fatalf("PostedAt not parsed")
-	}
-	if !slices.Contains(job.Skills, "go") || slices.Contains(job.Skills, "NotARealSkill") {
-		t.Fatalf("Skills: %v", job.Skills)
-	}
+// echojobsShardEntry is one <url> in a job-shard fixture: a slug and its ISO8601 lastmod.
+type echojobsShardEntry struct {
+	slug, lastMod string
 }
 
-// Pagination keeps walking while a page's postings are within the freshness window, and stops as
-// soon as a page's LAST (oldest, since the feed is newest-first) item falls outside it — the
-// earlier, still-fresh items on that same page are kept.
-func TestEchojobsFetchStopsAtFreshnessWindow(t *testing.T) {
-	now := time.Now().UTC()
-	fresh := strconv.FormatInt(now.UnixMilli(), 10)
-	stillFresh := strconv.FormatInt(now.Add(-10*24*time.Hour).UnixMilli(), 10)
-	stale := strconv.FormatInt(now.Add(-20*24*time.Hour).UnixMilli(), 10)
-
-	page1 := echojobsPageJSON(echojobsJobJSON("job-1", fresh) + "," + echojobsJobJSON("job-2", fresh))
-	page2 := echojobsPageJSON(echojobsJobJSON("job-3", stillFresh) + "," + echojobsJobJSON("job-4", stale))
-	http := &echojobsHTTP{pages: []string{page1, page2, echojobsPageJSON(echojobsJobJSON("job-5", fresh))}}
-
-	jobs, err := echojobs{http: http}.Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+func echojobsShardXML(entries ...echojobsShardEntry) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+	for _, e := range entries {
+		b.WriteString(`<url><loc>https://echojobs.io/job/` + e.slug + `</loc><lastmod>` + e.lastMod + `</lastmod></url>`)
 	}
+	b.WriteString(`</urlset>`)
+	return b.String()
+}
 
-	var ids []string
-	for _, j := range jobs {
-		ids = append(ids, j.ExternalID)
-	}
-	if !slices.Equal(ids, []string{"job-1", "job-2", "job-3"}) {
-		t.Fatalf("want job-1,job-2,job-3 (job-4 stale, job-5 never reached), got %v", ids)
-	}
-	if !slices.Equal(http.got, []int{1, 2}) {
-		t.Fatalf("page 3 should never be requested once page 2's last item is stale, got requests %v", http.got)
+// echojobsJobHTML builds a detail page carrying a schema.org JobPosting ld+json block, as
+// echojobs.io's own /job/<slug> pages do (verified live).
+func echojobsJobHTML(fields string) string {
+	return `<html><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting",` +
+		fields + `}</script></body></html>`
+}
+
+// echojobsShard1URL is the single shard most tests below need — a scenario needing more than
+// one shard (freshness-window cutoff, shard-failure partial results) wires its own.
+const echojobsShard1URL = "https://echojobs.io/sitemap-jobs/1.xml"
+
+// echojobsSingleShardRoutes builds the xmlRoutes for a fake carrying one shard with one
+// freshly-dated posting — the common setup most detail-mapping tests need, so they need not
+// each repeat the sitemap index/shard plumbing.
+func echojobsSingleShardRoutes(slug string) map[string]string {
+	return map[string]string{
+		echojobsSitemapURL: echojobsSitemapIndexXML(echojobsShard1URL),
+		echojobsShard1URL:  echojobsShardXML(echojobsShardEntry{slug, time.Now().UTC().Format(time.RFC3339)}),
 	}
 }
 
-// A failed first page is a board-level error.
-func TestEchojobsFetchFirstPageFailure(t *testing.T) {
-	http := &echojobsHTTP{failPage: 1, pages: []string{echojobsPageJSON("")}}
-	if _, err := (echojobs{http: http}).Fetch(context.Background(), CompanyEntry{}); err == nil {
-		t.Fatal("want error on first-page failure")
-	}
-}
-
-// A later page failing ends the walk with what was gathered so far, per the house pagination rule.
-func TestEchojobsFetchLaterPageFailureReturnsPartial(t *testing.T) {
-	now := time.Now().UTC()
-	fresh := strconv.FormatInt(now.UnixMilli(), 10)
-	page1 := echojobsPageJSON(echojobsJobJSON("job-1", fresh))
-	http := &echojobsHTTP{pages: []string{page1, echojobsPageJSON(echojobsJobJSON("job-2", fresh))}, failPage: 2}
-
-	jobs, err := echojobs{http: http}.Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "job-1" {
-		t.Fatalf("want partial result [job-1], got %+v", jobs)
-	}
-}
-
-// The list endpoint carries no description (verified live), so FetchNew hydrates it from the
-// per-posting detail endpoint — but only for a posting the catalogue does not already have.
 func TestEchojobsFetchNewHydratesUnseenPosting(t *testing.T) {
-	now := time.Now().UTC()
-	fresh := strconv.FormatInt(now.UnixMilli(), 10)
-	http := &echojobsHTTP{
-		pages:   []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
-		details: map[string]string{"acme-swe": `{"description":"<p>Great role.</p>"}`},
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe-abc12"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("acme-swe-abc12"): echojobsJobHTML(`"title":"Backend Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Great role.</p>",` +
+				`"jobLocationType":"TELECOMMUTE",` +
+				`"datePosted":"2026-08-01T00:00:00Z",` +
+				`"skills":"Go, Kafka"`),
+		},
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
@@ -179,23 +130,36 @@ func TestEchojobsFetchNewHydratesUnseenPosting(t *testing.T) {
 	if len(jobs) != 1 {
 		t.Fatalf("want 1 job, got %d", len(jobs))
 	}
-	if jobs[0].Description != "<p>Great role.</p>" {
-		t.Fatalf("Description not hydrated: %q", jobs[0].Description)
+	job := jobs[0]
+	if job.ExternalID != "acme-swe-abc12" {
+		t.Errorf("ExternalID = %q", job.ExternalID)
 	}
-	if !slices.Equal(http.gotDetails, []string{"acme-swe"}) {
-		t.Fatalf("detail requests = %v, want [acme-swe]", http.gotDetails)
+	if job.URL != "https://echojobs.io/job/acme-swe-abc12" {
+		t.Errorf("URL = %q", job.URL)
+	}
+	if job.Title != "Backend Engineer" || job.Company != "Acme" {
+		t.Errorf("identity mismatch: %+v", job)
+	}
+	if job.Description != "<p>Great role.</p>" {
+		t.Errorf("Description = %q", job.Description)
+	}
+	if !job.Remote || job.WorkMode != "remote" {
+		t.Errorf("TELECOMMUTE should map to Remote=true, WorkMode=remote: %+v", job)
+	}
+	if job.PostedAt == nil {
+		t.Errorf("PostedAt not parsed")
+	}
+	if !slices.Contains(job.Skills, "go") {
+		t.Errorf("Skills = %v, want it to contain \"go\"", job.Skills)
 	}
 }
 
 // A posting the catalogue already has must not cost a detail request: it is refreshed
-// (SeenRefresh) with its list-only identity, preserving whatever description was hydrated when
-// it was new — a content-less re-upsert would wipe it.
+// (SeenRefresh) with just its identity, preserving whatever description was hydrated when it
+// was new — a content-less re-upsert would wipe it. Unlike the old list+detail split, the
+// sitemap alone carries no title/company, so a seen posting's refresh Job is intentionally bare.
 func TestEchojobsFetchNewSkipsDetailForSeenPosting(t *testing.T) {
-	now := time.Now().UTC()
-	fresh := strconv.FormatInt(now.UnixMilli(), 10)
-	http := &echojobsHTTP{
-		pages: []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
-	}
+	http := &echojobsFakeHTTP{xmlRoutes: echojobsSingleShardRoutes("acme-swe")}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(externalID string) bool {
 		return externalID == "acme-swe"
@@ -206,25 +170,280 @@ func TestEchojobsFetchNewSkipsDetailForSeenPosting(t *testing.T) {
 	if len(jobs) != 1 || !jobs[0].SeenRefresh {
 		t.Fatalf("want 1 job with SeenRefresh set, got %+v", jobs)
 	}
-	if len(http.gotDetails) != 0 {
-		t.Fatalf("a seen posting must not cost a detail request, got %v", http.gotDetails)
+	if jobs[0].ExternalID != "acme-swe" || jobs[0].URL != "https://echojobs.io/job/acme-swe" {
+		t.Errorf("seen refresh should still carry identity fields: %+v", jobs[0])
+	}
+	if len(http.gotHTML) != 0 {
+		t.Fatalf("a seen posting must not cost a detail request, got %v", http.gotHTML)
 	}
 }
 
-// A failed detail request must not drop the posting — it falls back to the list-only job.
-func TestEchojobsFetchNewDetailFailureKeepsPosting(t *testing.T) {
-	now := time.Now().UTC()
-	fresh := strconv.FormatInt(now.UnixMilli(), 10)
-	http := &echojobsHTTP{
-		pages:     []string{echojobsPageJSON(echojobsJobJSON("acme-swe", fresh)), echojobsPageJSON("")},
-		detailErr: map[string]bool{"acme-swe": true},
+// A failed detail request drops just that posting: unlike the old list+detail split, the
+// sitemap carries no fields a list-only Job could fall back to, so there is nothing left to
+// ingest for it this run.
+func TestEchojobsFetchNewDetailFailureDropsPosting(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe"),
+		htmlErr:   map[string]bool{echojobsJobURL("acme-swe"): true},
 	}
 
 	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].Description != "" || jobs[0].ExternalID != "acme-swe" {
-		t.Fatalf("posting should survive a failed detail request: %+v", jobs)
+	if len(jobs) != 0 {
+		t.Fatalf("want 0 jobs (detail failed, no list-only fallback), got %+v", jobs)
+	}
+}
+
+// A detail page carrying no JobPosting ld+json block (or one with an empty title) drops the
+// posting the same way a fetch failure does — there is no usable content to ingest.
+func TestEchojobsFetchNewMissingJSONLDDropsPosting(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("acme-swe"): `<html><body>not a job page</body></html>`,
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("want 0 jobs, got %+v", jobs)
+	}
+}
+
+// The crawl keeps walking shards while their postings are within the freshness window, and
+// stops as soon as a shard's last (oldest, since shards are newest-first) item falls outside
+// it — the earlier, still-fresh items on that same shard are kept, and a shard past that point
+// is never fetched.
+func TestEchojobsFetchStopsAtFreshnessWindow(t *testing.T) {
+	now := time.Now().UTC()
+	fresh := now.Format(time.RFC3339)
+	stillFresh := now.Add(-10 * 24 * time.Hour).Format(time.RFC3339)
+	stale := now.Add(-20 * 24 * time.Hour).Format(time.RFC3339)
+
+	shard1 := echojobsShard1URL
+	shard2 := "https://echojobs.io/sitemap-jobs/2.xml"
+	shard3 := "https://echojobs.io/sitemap-jobs/3.xml"
+
+	http := &echojobsFakeHTTP{
+		xmlRoutes: map[string]string{
+			echojobsSitemapURL: echojobsSitemapIndexXML(shard1, shard2, shard3),
+			shard1: echojobsShardXML(
+				echojobsShardEntry{"job-1", fresh}, echojobsShardEntry{"job-2", fresh}),
+			shard2: echojobsShardXML(
+				echojobsShardEntry{"job-3", stillFresh}, echojobsShardEntry{"job-4", stale}),
+			shard3: echojobsShardXML(echojobsShardEntry{"job-5", fresh}),
+		},
+	}
+
+	postings, err := echojobs{http: http}.crawl(context.Background())
+	if err != nil {
+		t.Fatalf("crawl: %v", err)
+	}
+	var slugs []string
+	for _, p := range postings {
+		slugs = append(slugs, p.Slug)
+	}
+	if !slices.Equal(slugs, []string{"job-1", "job-2", "job-3"}) {
+		t.Fatalf("want job-1,job-2,job-3 (job-4 stale, job-5 never reached), got %v", slugs)
+	}
+	if !slices.Equal(http.gotXML, []string{echojobsSitemapURL, shard1, shard2}) {
+		t.Fatalf("shard 3 should never be requested once shard 2's last item is stale, got %v", http.gotXML)
+	}
+}
+
+// A failed first shard is a board-level error, per the house pagination rule.
+func TestEchojobsCrawlFirstShardFailure(t *testing.T) {
+	shard1 := echojobsShard1URL
+	http := &echojobsFakeHTTP{
+		xmlRoutes: map[string]string{echojobsSitemapURL: echojobsSitemapIndexXML(shard1)},
+		xmlErr:    map[string]bool{shard1: true},
+	}
+	if _, err := (echojobs{http: http}).crawl(context.Background()); err == nil {
+		t.Fatal("want error on first-shard failure")
+	}
+}
+
+// A later shard failing ends the walk with what was gathered so far.
+func TestEchojobsCrawlLaterShardFailureReturnsPartial(t *testing.T) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	shard1 := echojobsShard1URL
+	shard2 := "https://echojobs.io/sitemap-jobs/2.xml"
+	http := &echojobsFakeHTTP{
+		xmlRoutes: map[string]string{
+			echojobsSitemapURL: echojobsSitemapIndexXML(shard1, shard2),
+			shard1:             echojobsShardXML(echojobsShardEntry{"job-1", now}),
+		},
+		xmlErr: map[string]bool{shard2: true},
+	}
+
+	postings, err := echojobs{http: http}.crawl(context.Background())
+	if err != nil {
+		t.Fatalf("crawl: %v", err)
+	}
+	if len(postings) != 1 || postings[0].Slug != "job-1" {
+		t.Fatalf("want partial result [job-1], got %+v", postings)
+	}
+}
+
+// A posting with no jobLocation falls back to applicantLocationRequirements for its Location —
+// the shape a fully-remote posting emits (verified live: echojobs' own Doowii listing).
+func TestEchojobsFetchNewFallsBackToApplicantLocationRequirements(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("remote-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("remote-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocationType":"TELECOMMUTE",` +
+				`"applicantLocationRequirements":{"@type":"Country","name":"US"}`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Location != "US" {
+		t.Fatalf("want Location=US from applicantLocationRequirements, got %+v", jobs)
+	}
+}
+
+// schema.org allows applicantLocationRequirements as EITHER a single object OR an array (a
+// remote posting open to several countries). Go's json.Unmarshal errors on a bare-object field
+// asked to decode an array — decoding it as a plain struct would fail the WHOLE ld+json block
+// (see schemaNamedAreas' doc), dropping the posting entirely rather than just its location. This
+// pins that the array form decodes cleanly and every field survives, not just the location.
+func TestEchojobsFetchNewHandlesArrayApplicantLocationRequirements(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("multi-country-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("multi-country-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocationType":"TELECOMMUTE",` +
+				`"applicantLocationRequirements":[{"@type":"Country","name":"US"},{"@type":"Country","name":"Canada"}]`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job (array-shaped applicantLocationRequirements must not drop the posting), got %+v", jobs)
+	}
+	job := jobs[0]
+	if job.Title != "Engineer" {
+		t.Errorf("Title = %q, want it to survive the array field", job.Title)
+	}
+	if job.Location != "US, Canada" {
+		t.Errorf("Location = %q, want both countries joined", job.Location)
+	}
+}
+
+// schema.org allows jobLocation as EITHER a single Place OR an array of them, the same way
+// applicantLocationRequirements does. This pins the array form via the shared schemaPlaces type.
+func TestEchojobsFetchNewHandlesArrayJobLocation(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("multi-location-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("multi-location-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocation":[{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Austin, TX","addressCountry":"US"}},` +
+				`{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Denver, CO","addressCountry":"US"}}]`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Location != "Austin, TX, US" {
+		t.Fatalf("want the first location (array-shaped jobLocation must not drop the posting), got %+v", jobs)
+	}
+}
+
+// datePosted may be a bare "2006-01-02" date rather than a full RFC3339 timestamp (the same
+// tenant-dependent variance northstone/briefhq already handle via parseRFC3339OrDate).
+func TestEchojobsFetchNewParsesDateOnlyPostedAt(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("date-only-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("date-only-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"datePosted":"2026-08-01"`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].PostedAt == nil {
+		t.Fatalf("want PostedAt parsed from a bare date, got %+v", jobs)
+	}
+}
+
+// A posting WITH a jobLocation address uses it, and carries no jobLocationType (on-site),
+// so WorkMode stays empty rather than guessed.
+func TestEchojobsFetchNewMapsOnsiteLocation(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("onsite-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("onsite-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Apopka, FL","addressCountry":"US"}}`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %+v", jobs)
+	}
+	job := jobs[0]
+	if job.Location != "Apopka, FL, US" {
+		t.Errorf("Location = %q", job.Location)
+	}
+	if job.Remote || job.WorkMode != "" {
+		t.Errorf("no jobLocationType should leave Remote=false, WorkMode=\"\": %+v", job)
+	}
+}
+
+// Fetch (the non-hydrating fallback) has no list-only tier to fall back to any more — the
+// sitemap alone carries no field a Job needs — so it fully hydrates every posting it finds,
+// same as FetchNew treating everything as new.
+func TestEchojobsFetchHydratesEveryPosting(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("acme-swe"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("acme-swe"): echojobsJobHTML(`"title":"Backend Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Great role.</p>"`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Title != "Backend Engineer" {
+		t.Fatalf("want 1 fully-hydrated job, got %+v", jobs)
+	}
+}
+
+func TestEchojobsProvider(t *testing.T) {
+	if got := (echojobs{}).Provider(); got != "echojobs" {
+		t.Errorf("Provider() = %q, want echojobs", got)
 	}
 }

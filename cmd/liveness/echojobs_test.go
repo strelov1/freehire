@@ -15,7 +15,6 @@ func TestCheckEchoJobsLiveOnLivePosting(t *testing.T) {
 			t.Errorf("path = %q, want /some-handle", r.URL.Path)
 		}
 		w.WriteHeader(200)
-		_, _ = w.Write([]byte(`{"id":"1","title":"Engineer","description":"..."}`))
 	}))
 	defer srv.Close()
 
@@ -27,8 +26,7 @@ func TestCheckEchoJobsLiveOnLivePosting(t *testing.T) {
 
 func TestCheckEchoJobsLiveOnRemovedPosting(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
-		_, _ = w.Write([]byte(`{"error":"job fetch failed"}`))
+		w.WriteHeader(404)
 	}))
 	defer srv.Close()
 
@@ -36,23 +34,39 @@ func TestCheckEchoJobsLiveOnRemovedPosting(t *testing.T) {
 	if verdict != liveness.Expired {
 		t.Errorf("verdict = %v, want Expired", verdict)
 	}
-	if reason != "echojobs_detail_gone" {
-		t.Errorf("reason = %q, want echojobs_detail_gone", reason)
+	if reason != "echojobs_job_gone" {
+		t.Errorf("reason = %q, want echojobs_job_gone", reason)
+	}
+}
+
+// 410 Gone is the same "removed" signal as 404 for every other liveness probe in this worker
+// (see internal/liveness.Classify) — echojobs' own probe must not treat it as merely Uncertain.
+func TestCheckEchoJobsLiveOnGonePosting(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(410)
+	}))
+	defer srv.Close()
+
+	verdict, reason := checkEchoJobsLiveAt(context.Background(), srv.Client(), srv.URL+"/%s", "gone-handle")
+	if verdict != liveness.Expired {
+		t.Errorf("verdict = %v, want Expired", verdict)
+	}
+	if reason != "echojobs_job_gone" {
+		t.Errorf("reason = %q, want echojobs_job_gone", reason)
 	}
 }
 
 func TestCheckEchoJobsLiveOnUnrelatedError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-		_, _ = w.Write([]byte(`{"error":"internal error"}`))
 	}))
 	defer srv.Close()
 
-	// A DIFFERENT error message must not read as "gone" — only the exact known signal
-	// does, so a transient/unrelated API failure stays Uncertain (under-closing bias).
+	// A non-200/404 status must not read as "gone" — only the exact known-removed signal
+	// does, so a transient/unrelated failure stays Uncertain (under-closing bias).
 	verdict, _ := checkEchoJobsLiveAt(context.Background(), srv.Client(), srv.URL+"/%s", "some-handle")
 	if verdict != liveness.Uncertain {
-		t.Errorf("verdict = %v, want Uncertain for an unrelated error body", verdict)
+		t.Errorf("verdict = %v, want Uncertain for a non-200/404 status", verdict)
 	}
 }
 
@@ -61,7 +75,6 @@ func TestCheckEchoJobsLiveStripsBoardlessColonPrefix(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		w.WriteHeader(200)
-		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 

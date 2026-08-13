@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -33,8 +34,50 @@ func (q *Queries) CountUserNotifications(ctx context.Context, userID int64) (Cou
 	return i, err
 }
 
+const getNotification = `-- name: GetNotification :one
+SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
+FROM user_notifications
+WHERE id = $1 AND user_id = $2
+`
+
+type GetNotificationParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetNotificationRow struct {
+	ID         int64              `json:"id"`
+	Kind       string             `json:"kind"`
+	Title      string             `json:"title"`
+	Body       string             `json:"body"`
+	PublicSlug pgtype.Text        `json:"public_slug"`
+	Jobs       json.RawMessage    `json:"jobs"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ReadAt     pgtype.Timestamptz `json:"read_at"`
+}
+
+// One notification, owner-scoped (no row for another user's id, mapped to 404
+// by the handler) — the direct-link/detail read a bookmarked or freshly
+// visited /my/notifications/[id]/jobs page needs, since ListUserNotifications
+// alone only serves the caller's own current page of the list.
+func (q *Queries) GetNotification(ctx context.Context, arg GetNotificationParams) (GetNotificationRow, error) {
+	row := q.db.QueryRow(ctx, getNotification, arg.ID, arg.UserID)
+	var i GetNotificationRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Title,
+		&i.Body,
+		&i.PublicSlug,
+		&i.Jobs,
+		&i.CreatedAt,
+		&i.ReadAt,
+	)
+	return i, err
+}
+
 const listUserNotifications = `-- name: ListUserNotifications :many
-SELECT id, kind, title, body, public_slug, created_at, read_at
+SELECT id, kind, title, body, public_slug, jobs, created_at, read_at
 FROM user_notifications
 WHERE user_id = $1
 ORDER BY created_at DESC, id DESC
@@ -53,6 +96,7 @@ type ListUserNotificationsRow struct {
 	Title      string             `json:"title"`
 	Body       string             `json:"body"`
 	PublicSlug pgtype.Text        `json:"public_slug"`
+	Jobs       json.RawMessage    `json:"jobs"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	ReadAt     pgtype.Timestamptz `json:"read_at"`
 }
@@ -74,6 +118,7 @@ func (q *Queries) ListUserNotifications(ctx context.Context, arg ListUserNotific
 			&i.Title,
 			&i.Body,
 			&i.PublicSlug,
+			&i.Jobs,
 			&i.CreatedAt,
 			&i.ReadAt,
 		); err != nil {
@@ -128,22 +173,25 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 }
 
 const recordNotification = `-- name: RecordNotification :exec
-INSERT INTO user_notifications (user_id, kind, title, body, public_slug)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO user_notifications (user_id, kind, title, body, public_slug, jobs)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type RecordNotificationParams struct {
-	UserID     int64       `json:"user_id"`
-	Kind       string      `json:"kind"`
-	Title      string      `json:"title"`
-	Body       string      `json:"body"`
-	PublicSlug pgtype.Text `json:"public_slug"`
+	UserID     int64           `json:"user_id"`
+	Kind       string          `json:"kind"`
+	Title      string          `json:"title"`
+	Body       string          `json:"body"`
+	PublicSlug pgtype.Text     `json:"public_slug"`
+	Jobs       json.RawMessage `json:"jobs"`
 }
 
 // Record one delivered notify/reminder/nudge event for the in-app notification
 // center, independent of which channel(s) carried it. Called right alongside
 // each engine's own "marked delivered" write; a failure here must never fail
-// the delivery it accompanies (see the add-notification-center design).
+// the delivery it accompanies (see the add-notification-center design). jobs
+// is only ever set by a multi-job subscription digest (see 0091); every other
+// kind, and a single-job digest, passes NULL and relies on public_slug instead.
 func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotificationParams) error {
 	_, err := q.db.Exec(ctx, recordNotification,
 		arg.UserID,
@@ -151,6 +199,7 @@ func (q *Queries) RecordNotification(ctx context.Context, arg RecordNotification
 		arg.Title,
 		arg.Body,
 		arg.PublicSlug,
+		arg.Jobs,
 	)
 	return err
 }

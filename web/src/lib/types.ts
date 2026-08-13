@@ -519,10 +519,21 @@ export type NotificationKind =
   | 'nudge_interview_prep'
   | 'nudge_job_closed';
 
+/** One matched job as recorded into a multi-job subscription digest's `jobs`
+ *  snapshot — the same {title, company, slug} shape as everywhere else in this
+ *  app, no internal id. */
+export interface NotificationDigestJob {
+  title: string;
+  company: string;
+  slug: string;
+}
+
 /** One row in the notification center (GET /me/notifications) — a durable,
  *  readable-by-the-owner record of a delivery event, independent of which channel
  *  carried it. `public_slug` is the job it concerns, or null for a subscription
- *  digest that matched more than one job (nothing single to deep-link to).
+ *  digest that matched more than one job (nothing single to deep-link to) — that
+ *  case instead carries `jobs`, a snapshot of what matched as of delivery (only
+ *  present on the list response for a multi-job digest; absent/null otherwise).
  *  `read_at` is null until the caller marks it read. */
 export interface NotificationItem {
   id: number;
@@ -530,6 +541,7 @@ export interface NotificationItem {
   title: string;
   body: string;
   public_slug: string | null;
+  jobs?: NotificationDigestJob[] | null;
   created_at: string | null;
   read_at: string | null;
 }

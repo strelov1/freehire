@@ -137,6 +137,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// every delivered subscription digest/reminder/nudge. Cookie-only, same
 	// reasoning as push-token management.
 	meGroup.Get("/notifications", mw.cookie, h.GetNotifications)
+	meGroup.Get("/notifications/:id", mw.cookie, h.GetNotification)
 	meGroup.Post("/notifications/:id/read", mw.cookie, h.MarkNotificationRead)
 	meGroup.Post("/notifications/read-all", mw.cookie, h.MarkAllNotificationsRead)
 

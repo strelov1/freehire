@@ -8403,3 +8403,5 @@
   board: "185256"
 - company: senvo GmbH # senvo
   board: "143084"
+- company: D4L data4life gGmbH # data4lifecare
+  board: "842"
