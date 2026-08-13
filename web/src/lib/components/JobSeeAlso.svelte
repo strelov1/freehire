@@ -2,10 +2,11 @@
   import { Building2, Code, Globe, Layers, TrendingUp } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { resolve } from '$app/paths';
+  import { countryLabel } from '$lib/facets';
   import type { FamilyIconName } from '$lib/familymarks';
   import { glyphColorFor } from '$lib/markColor';
   import type { SeeAlsoCard } from '$lib/collections';
-  import CountryFlag from './CountryFlag.svelte';
+  import { CountryFlag } from '$lib/ui';
 
   // A horizontally-scrolling row of links into existing /collections/:slug
   // pages, each showing the collection's live open-job count — mirrors the
@@ -50,7 +51,11 @@
               </svg>
             </span>
           {:else if card.mark.kind === 'flag'}
-            <CountryFlag code={card.mark.countryCode} class="shrink-0 text-[28px]" />
+            <CountryFlag
+              code={card.mark.countryCode}
+              label={countryLabel(card.mark.countryCode)}
+              class="shrink-0 text-[28px]"
+            />
           {:else}
             {@const Icon = FAMILY_ICONS[card.mark.icon]}
             <span class={badgeClass} style:background-color={card.mark.color}>
