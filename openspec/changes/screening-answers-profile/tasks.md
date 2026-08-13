@@ -63,8 +63,20 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Unit tests for `internal/screeninganswers` (`Sanitize`/`Validate`, partial-update
-      semantics, dict rejection for country/currency).
-- [ ] 6.2 Integration test for the manual-edit endpoints (`-tags=integration`).
-- [ ] 6.3 Manual verification: set screening answers, run agent-driven autofill against a
-      fixture form with a matching screening question, confirm the plan includes it.
+- [x] 6.1 Unit tests for `internal/screeninganswers` (`Sanitize`/`Validate`, partial-update
+      semantics, dict rejection for country/currency). Written alongside the domain package
+      itself in task 1.3 (TDD) — `screeninganswers_test.go`, `store_test.go`.
+- [x] 6.2 Integration test for the manual-edit endpoints (`-tags=integration`) — added
+      `internal/screeninganswers/store_integration_test.go`: `Get`'s not-found path, a
+      partial-update round trip through a real Postgres (proving the generated queries and
+      pgtype conversions in `repository.go`, not just the fake-backed unit tests), and the
+      `authorized_countries` text[] round trip. `go test -tags=integration
+      ./internal/screeninganswers/` and `go vet -tags=integration ./...` both pass.
+- [x] 6.3 Manual verification: set screening answers, run agent-driven autofill against a
+      fixture form with a matching screening question, confirm the plan includes it. Covered
+      by `TestRunFillsAScreeningQuestionFromTheProfile` (task 4.3) for the deterministic
+      grounding/fill pipeline — this repo tests LLM-adjacent code with a stub planner
+      everywhere, never a real model call, so that is the equivalent of "manual verification"
+      here. The data path into the agent's profile map was verified live in a real browser
+      against a real backend during task 5's QA pass (`GET /me/screening-answers` →
+      `autofillProfile` → the same struct `profileFields` reads).
