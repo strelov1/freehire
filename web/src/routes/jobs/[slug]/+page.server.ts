@@ -7,6 +7,7 @@ import {
   relatedCollectionLinks,
   type SeeAlsoCard,
 } from '$lib/collections';
+import { resolveSeeAlsoMark } from '$lib/seeAlsoMark';
 import { serverApi } from '$lib/server/api';
 import type { FacetCounts, Job } from '$lib/types';
 import type { PageServerLoad } from './$types';
@@ -70,15 +71,23 @@ async function buildSeeAlso(job: Job, api: Api): Promise<SeeAlsoCard[]> {
   );
 
   return resolvedLinks.map(({ link, resolved }): SeeAlsoCard => {
-    const mark = backerBadges([link.slug])[0]?.mark ?? null;
+    const backerImageSrc = backerBadges([link.slug])[0]?.mark ?? null;
     // relatedCollectionLinks already resolves every slug it returns via this
     // same collectionBySlug, so `resolved` is guaranteed here — this is TS
     // narrowing, not a real fallback path.
-    if (!resolved) return { slug: link.slug, title: link.title, count: null, mark };
+    if (!resolved) {
+      return {
+        slug: link.slug,
+        title: link.title,
+        count: null,
+        mark: resolveSeeAlsoMark(null, backerImageSrc),
+      };
+    }
 
     const { filter, lastKey, lastValue } = splitParams(resolved.params);
     const groupKey = new URLSearchParams(filter).toString();
     const count = readCount(groupedFacets.get(groupKey) ?? null, lastKey, lastValue);
+    const mark = resolveSeeAlsoMark(resolved.params, backerImageSrc);
     return { slug: link.slug, title: link.title, count, mark };
   });
 }
