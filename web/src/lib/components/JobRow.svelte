@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { resolve } from '$app/paths';
   import { Bookmark, Eye, EyeOff } from '@lucide/svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '$lib/api';
@@ -13,7 +13,7 @@
   import { profileStore } from '$lib/profile.svelte';
   import { metaDescription } from '$lib/seo';
   import type { Job, JobCard } from '$lib/types';
-  import { Badge } from '$lib/ui';
+  import { Badge, EntityLogo } from '$lib/ui';
   import { supersedesReality } from '$lib/ghost';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
@@ -226,7 +226,12 @@
        this link), so the timestamp never slides under it. -->
   <div class="flex items-center justify-between gap-3 pr-9">
     <div class="flex min-w-0 items-center gap-2">
-      <CompanyLogo name={job.company} size="size-7" />
+      <EntityLogo
+        name={job.company || 'Unknown company'}
+        src={companyLogoUrl(job.company) ?? undefined}
+        shape="square"
+        size="sm"
+      />
       <span class="truncate text-sm font-medium text-muted-foreground">
         {job.company || 'Unknown company'}
       </span>

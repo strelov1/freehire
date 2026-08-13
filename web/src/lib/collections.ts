@@ -1,3 +1,4 @@
+import type { FamilyIconName } from './familymarks';
 import type { Job } from './types';
 
 // A filter collection is the second kind of collection: a curated card that maps
@@ -603,16 +604,24 @@ export type ResolvedCollection = {
 // One card in a "see also" style block (JobSeeAlso), mirroring the /collections
 // hub's CollectionCard: count is the collection's live open-job total, or null
 // when it couldn't be fetched — decorative, so a failure degrades to no count
-// rather than breaking the block. mark is the backing brand's icon (Y
-// Combinator, Techstars, …), null for a filter collection or unbranded
-// editorial collection. The type lives here (not in a route file) so both the
-// server load that computes it and the component that renders it import from
-// one place.
+// rather than breaking the block. mark is always present — resolved by
+// resolveSeeAlsoMark (seeAlsoMark.ts) to whichever is most specific for the
+// card's underlying collection: a backer's brand image (Y Combinator,
+// Techstars, …), a technology's brand logo, a country's flag, or a
+// color-coded family icon. The type lives here (not in a route file) so both
+// the server load that computes it and the component that renders it import
+// from one place.
+export type SeeAlsoMark =
+  | { kind: 'image'; src: string }
+  | { kind: 'logo'; title: string; path: string; hex: string }
+  | { kind: 'flag'; countryCode: string }
+  | { kind: 'family'; icon: FamilyIconName; color: string };
+
 export type SeeAlsoCard = {
   slug: string;
   title: string;
   count: number | null;
-  mark: string | null;
+  mark: SeeAlsoMark;
 };
 
 // Flatten a filter collection's params to the single-valued scope shape. A

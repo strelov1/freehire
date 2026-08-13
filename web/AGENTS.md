@@ -84,3 +84,6 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   ingest host for any future `connect-src`.
 - OAuth identity unlinking/management UI is not implemented (backend seam mirrored on the
   frontend).
+- `easymde` (the `NoteEditor.svelte` markdown field for private job-tracking notes) carries a
+  known ReDoS in its bundled `codemirror@5.x`, with no safe upgrade or override available —
+  see `web/.snyk` for the accepted-risk reasoning and its revisit date.

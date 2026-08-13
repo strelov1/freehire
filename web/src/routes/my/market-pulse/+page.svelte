@@ -10,7 +10,7 @@
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import MarketPulseView from '$lib/components/MarketPulseView.svelte';
   import States from '$lib/components/States.svelte';
-  import TabRow, { tabId } from '$lib/components/TabRow.svelte';
+  import { TabStrip, tabStripId } from '$lib/ui';
   import VerdictView from '$lib/components/VerdictView.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type { FacetCounts, Verdict } from '$lib/types';
@@ -122,9 +122,9 @@
 
   <div class="flex gap-6">
     <main class="flex min-w-0 flex-1 flex-col gap-6">
-      <TabRow tabs={TABS} active={tab} onSelect={(id) => (tab = id)} label="Market pulse sections" panelId={PANEL_ID} />
+      <TabStrip tabs={TABS} active={tab} onSelect={(id) => (tab = id)} label="Market pulse sections" panelId={PANEL_ID} />
 
-      <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(PANEL_ID, tab)} class="flex flex-col gap-6">
+      <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} class="flex flex-col gap-6">
         {#if tab === 'trend'}
           <MarketPulseView />
         {:else if !profileStore.loaded}

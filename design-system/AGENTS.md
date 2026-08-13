@@ -73,11 +73,14 @@ rather than here — their census of `web/` was already off by a third.
   fails on a colour literal or a Tailwind arbitrary value in `src/*.svelte` — both are a value
   the theme cannot move and `.dark` cannot override, and both compile fine, so nothing else
   would catch one. Arbitrary *variants* pass: `[&_tr]:border-b` is a selector, not a value.
-  `avatar.svelte`'s per-name `hsl()` pair is the one allowed exception, and the script fails
-  if that exception ever stops applying. See `docs/verification.md`.
+  A handful of named exceptions are carried in the script's own `ALLOWED` list — each pinned
+  to one file and one detector kind, with the reason it exists — and the script fails if any
+  of them ever stops applying (an unused exception is exactly as wrong as an unlisted
+  violation). See `docs/verification.md`.
 - **The same check has a second radius over `../web/src`, and it is not the same rule.** The
-  package is held at zero; web is held at its current count *per file* in
-  `scripts/web-token-baseline.json` (459 across 111 files), because a rule nobody can satisfy
+  package is held at zero (modulo the `ALLOWED` list above); web is held at its current count
+  *per file* in `scripts/web-token-baseline.json` (455 across 109 files), because a rule
+  nobody can satisfy
   gets switched off rather than obeyed. Web also gets a third detector the package does not:
   `text-amber-600` is a well-formed utility off Tailwind's own palette — neither a literal nor
   an arbitrary value, invisible to both other detectors, and the majority of what web has.

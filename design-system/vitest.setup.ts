@@ -18,3 +18,15 @@ if (!HTMLDialogElement.prototype.showModal) {
     this.dispatchEvent(new Event('close'));
   };
 }
+
+// jsdom does not implement ResizeObserver at all. TabStrip only uses it to re-measure
+// overflow on layout change, which jsdom never produces (no real layout engine) — the
+// stub exists so the component's mount effect can run without throwing.
+if (typeof ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub;
+}

@@ -13,9 +13,9 @@
     ReferralRequestStatus,
     SeekerReferralRequest,
   } from '$lib/types';
-  import { Button, FormField, Table } from '$lib/ui';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Button, EntityLogo, FormField, Table } from '$lib/ui';
   import { isLinkedInUrl, timeAgo } from '$lib/utils';
-  import CompanyLogo from './CompanyLogo.svelte';
   import CompanyPicker from './CompanyPicker.svelte';
   import States from './States.svelte';
 
@@ -186,7 +186,12 @@
         <tr class="border-t border-border">
           <td class="py-3 pr-4 font-medium">
             <a href={resolve('/companies/[slug]', { slug: r.company_slug })} class="flex items-center gap-2 hover:underline">
-              <CompanyLogo name={r.company_name || r.company_slug} size="size-6" />
+              <EntityLogo
+                name={r.company_name || r.company_slug}
+                src={companyLogoUrl(r.company_name || r.company_slug) ?? undefined}
+                shape="square"
+                size="xs"
+              />
               <span class="min-w-0 truncate">{r.company_name || r.company_slug}</span>
             </a>
           </td>
@@ -264,7 +269,12 @@
     <ul class="mt-3">
       {#each offers.value as o (o.id)}
         <li class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border py-3 text-sm">
-          <CompanyLogo name={o.company_name || o.company_slug} size="size-6" />
+          <EntityLogo
+            name={o.company_name || o.company_slug}
+            src={companyLogoUrl(o.company_name || o.company_slug) ?? undefined}
+            shape="square"
+            size="xs"
+          />
           <span class="min-w-0 truncate font-medium">{o.company_name || o.company_slug}</span>
           <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {offerPill[o.status] ?? 'bg-muted text-muted-foreground'}">
             {o.status}
@@ -297,7 +307,12 @@
         <div class="rounded-lg border border-border p-4">
           <div class="flex items-center justify-between gap-4">
             <b class="flex min-w-0 items-center gap-2 text-sm">
-              <CompanyLogo name={req.company_name || req.company_slug} size="size-6" />
+              <EntityLogo
+                name={req.company_name || req.company_slug}
+                src={companyLogoUrl(req.company_name || req.company_slug) ?? undefined}
+                shape="square"
+                size="xs"
+              />
               <span class="min-w-0 truncate">Someone wants a referral into {req.company_name || req.company_slug}</span>
             </b>
             <span class="shrink-0 text-xs text-muted-foreground">{req.created_at ? timeAgo(req.created_at) : ''}</span>

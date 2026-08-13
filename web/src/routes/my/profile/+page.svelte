@@ -18,7 +18,7 @@
   import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
-  import TabRow, { tabId } from '$lib/components/TabRow.svelte';
+  import { TabStrip, tabStripId } from '$lib/ui';
   import { profileStore } from '$lib/profile.svelte';
   import type {
     ATSResponse,
@@ -335,7 +335,7 @@
     <div class="flex gap-6">
       <main class="flex min-w-0 flex-1 flex-col gap-6">
         <!-- Tabs -->
-        <TabRow
+        <TabStrip
           tabs={TABS}
           active={tab}
           onSelect={(id) => (tab = id)}
@@ -347,7 +347,7 @@
         <div
           id={PANEL_ID}
           role="tabpanel"
-          aria-labelledby={tabId(PANEL_ID, tab)}
+          aria-labelledby={tabStripId(PANEL_ID, tab)}
           class="flex flex-col gap-6"
         >
         {#if tab === 'experience'}

@@ -11,7 +11,7 @@
 
 **3.4M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
-[**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
+[**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
 [![Live](https://img.shields.io/badge/live-freehire.me-0a0a0a)](https://freehire.me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -175,6 +175,15 @@ internal/
   assistant/         the in-process agent: turn loop, tools, transcripts
 migrations/          SQL schema (source for both sqlc and initdb)
 ```
+
+## Architecture
+
+How the pieces fit together — the crawl-to-search topology, what each directory
+above is for, and walkthroughs of the three main flows (finding a job, tailoring a
+CV, the in-app assistant), plus the auth model, notifications and the job
+lifecycle: **[docs/architecture.md](docs/architecture.md)**.
+
+It is the map; the per-package `AGENTS.md` files it links to are the territory.
 
 ## API
 

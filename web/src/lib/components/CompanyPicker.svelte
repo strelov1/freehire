@@ -1,7 +1,8 @@
 <script lang="ts">
   import { api } from '$lib/api';
   import type { CompanyListItem } from '$lib/types';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
 
   // A typeahead over the company catalogue: type a name, pick from a logo'd list, and
   // the chosen company's slug flows back through onSelect. Replaces a raw slug input so
@@ -96,7 +97,7 @@
             }}
             class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent"
           >
-            <CompanyLogo name={c.name} size="size-6" />
+            <EntityLogo name={c.name} src={companyLogoUrl(c.name) ?? undefined} shape="square" size="xs" />
             <span class="flex min-w-0 flex-col">
               <span class="truncate text-sm font-medium">{c.name}</span>
               <span class="truncate text-xs text-muted-foreground">/{c.slug} · {c.job_count} open</span>

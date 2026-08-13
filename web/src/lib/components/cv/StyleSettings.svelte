@@ -11,7 +11,7 @@
   import type { Style } from '$lib/generated/contracts';
   import type { CvFont } from '$lib/cv';
   import { stepFontSize, FONT_SIZE_STEP, TEMPLATE_FONT_SIZE_PT } from '$lib/tailor/geometry';
-  import SettingRow from './SettingRow.svelte';
+  import { SettingRow } from '$lib/ui';
   import Stepper from './Stepper.svelte';
 
   let { style = $bindable(), fonts = [] }: { style: Style; fonts?: CvFont[] } = $props();

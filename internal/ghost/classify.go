@@ -40,10 +40,29 @@ const (
 	CriterionUserReports        = "user_reports"
 )
 
+// CriterionCodes is the vocabulary as an ordered value, in the same fixed order.
+// It exists because the interface has to RENDER the criteria, not merely receive
+// them: cmd/gen-contracts emits it into the web contracts, and the SPA builds its
+// checklist rows from a map keyed by the generated union. A criterion added here
+// with no row over there is then a type error rather than a gauge segment coloured
+// above a list that cannot account for it.
+//
+// The consts above stay the way Go code refers to a criterion — a bare index into
+// this array at a call site would say nothing about which criterion it meant.
+var CriterionCodes = [...]string{
+	CriterionEvergreenPosting,
+	CriterionATSAbsent,
+	CriterionSilentApplications,
+	CriterionUserReports,
+}
+
 // CriteriaTotal is the denominator of the scale the interface shows ("2 of 4").
 // It counts every criterion the classifier considers, including the ones that
 // had no data — a reader must be able to see how much is unknown.
-const CriteriaTotal = 4
+//
+// Derived rather than written down: the denominator is a fact about the vocabulary,
+// and a hand-kept 4 beside a list of five is a scale that lies to every reader.
+const CriteriaTotal = len(CriterionCodes)
 
 // ContributorGate is how many DISTINCT people must have contributed outcome
 // evidence before the stronger claim is available. It is exported because the

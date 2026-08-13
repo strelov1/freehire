@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from '$lib/ui';
+  import Button from './button.svelte';
 
   let {
     loading,

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { SectionLabel } from '$lib/ui';
 
   const repoUrl = 'https://github.com/strelov1/freehire';
   const telegramUrl = 'https://t.me/freehiredev';

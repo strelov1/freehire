@@ -1,0 +1,30 @@
+## 1. Dependency & data registries
+
+- [x] 1.1 Add `simple-icons` to `web/package.json` and install it
+- [x] 1.2 Create `web/src/lib/techmarks.ts`: `Record<string, { path: string; hex: string }>` mapping every `FILTER_COLLECTIONS` slug with a `skills` param to its named `simple-icons` import. **Deviation confirmed with user**: `simple-icons` has no AWS/Azure/Java/C# (removed after trademark takedown requests) — 40 of 44 `skills` slugs mapped, `aws`/`azure`/`java`/`csharp` intentionally omitted and fall back to the family icon.
+- [x] 1.3 Create `web/src/lib/familymarks.ts`: a `FamilyIconName` union (`'tech' | 'role' | 'seniority' | 'remote'`) and a fixed table of `{ icon: LucideIcon, color: hex }` per family. **Deviation**: the design-system has no categorical/multi-hue color scale to draw from (only neutral + brand green + destructive/warning), so colors are the four approved-in-mockup hex values (`#4f46e5`/`#7c3aed`/`#059669`/`#0891b2`) kept local to this file, not new design-system tokens.
+
+## 2. Pure mark-resolution logic (TDD)
+
+- [x] 2.1 Write a failing `vitest` test for a glyph-contrast helper (`web/src/lib/markColor.test.ts`, relative imports only, no `$lib`/`$app`): given a brand hex, returns a near-black or white glyph color via YIQ luminance threshold (~128). Implement `web/src/lib/markColor.ts` to pass it.
+- [x] 2.2 Write failing `vitest` tests for a pure mark-resolution function (`web/src/lib/seeAlsoMark.ts` / `.test.ts`, no `$app` imports) that, given a resolved collection's `params` plus an optional backer-image lookup result, returns the `SeeAlsoMark` per the precedence in design.md: backer image → tech logo (via `techmarks.ts`) → country flag (single concrete `countries` value) → family icon (via `familymarks.ts`). Cover one test per precedence branch (mirrors the spec's five scenarios). Implement to pass. **Note**: `familymarks.ts` had to stay Lucide-component-free (color table only) — importing an actual `.svelte` icon component transitively broke plain-Node vitest per the project's known worktree/vitest gotcha; the icon-component lookup moved into `JobSeeAlso.svelte` itself (task 4.1).
+- [x] 2.3 Update `SeeAlsoCard.mark`'s type in `web/src/lib/collections.ts` from `string | null` to the `SeeAlsoMark` discriminated union (`image` / `logo` / `flag` / `family`)
+
+## 3. Wire into server-side resolution
+
+- [x] 3.1 Update `buildSeeAlso()` in `web/src/routes/jobs/[slug]/+page.server.ts` to call `resolveSeeAlsoMark()` (from 2.2) per card instead of the current `backerBadges([link.slug])[0]?.mark ?? null` one-liner
+- [x] 3.2 Confirm (via existing route/test coverage or a targeted addition) that `buildSeeAlso()` still returns one card per resolved collection slug with the count logic untouched — only `mark` construction changed. Confirmed by diff inspection: `splitParams`/`groupKey`/`readCount` lines are byte-identical; only `mark` construction changed. No pre-existing test exercised this route file to extend (only `resolveSeeAlsoMark` itself is covered, in task 2.2).
+
+## 4. Component rendering
+
+- [x] 4.1 Update `web/src/lib/components/JobSeeAlso.svelte`: mark slot becomes `size-7 rounded-full` (was `size-6 rounded-sm`); remove the `{#if card.mark}` guard; render per `card.mark.kind` — `image` keeps today's `<img>`, `logo` draws a circular div in `mark.hex` with an inline `<svg>` of `mark.path` filled per `markColor.ts`, `flag` renders `<CountryFlag code={mark.countryCode} />`, `family` draws a circular div in `mark.color` with the matching Lucide icon centered, white glyph
+
+## 5. Verification
+
+- [x] 5.1 `pnpm check` (svelte-check) and `pnpm lint` clean on all touched/new files. Fixed pre-existing worktree gap along the way (`design-system` had no installed `node_modules`, per AGENTS.md's "install it before building either consumer" — unrelated to this change but was blocking a clean `svelte-check` run). **CI caught a mistake in that fix**: plain `pnpm --filter freehire-design-system install` (no `--frozen-lockfile`) silently rewrote `design-system/pnpm-lock.yaml`'s `overrides:` bookkeeping, which then failed CI's `pnpm install --frozen-lockfile` with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Fixed by reverting the lockfile to origin/main's version and re-verifying `pnpm install --frozen-lockfile` materializes `node_modules` locally without touching it — the lockfile edit was never actually necessary.
+- [x] 5.2 `pnpm test` (vitest) green, including the new `markColor`/`seeAlsoMark` suites — 87 files / 944 tests passing (934 pre-existing baseline + 10 new).
+- [x] 5.3 Visual verification: throwaway route rendering `JobSeeAlso` with 8 hardcoded cards covering all four mark kinds (Python/React logos, AWS falling back to the tech family icon, Germany flag, Senior-Level/Backend/Remote family icons, Y Combinator backer image). Screenshotted headless and reviewed live by the user in-browser — all render correctly, no broken images, React's light brand color gets a dark glyph (contrast working). Throwaway route deleted after review.
+
+## 6. Code review fix
+
+- [x] 6.1 Code review (general-purpose subagent, `git diff origin/main..HEAD`) flagged: `resolveSeeAlsoMark()` had no branch for a `collections` param, so every non-backer company-membership collection (editorial/credential kinds from the Go-generated `COMPANY_COLLECTIONS` registry — "Unicorns", "Fortune 500", "H-1B sponsor history", etc. — 11 of 15 such collections have no entry in `backers.ts`) silently fell through to the generic tech family icon. Verified against `collectionBySlug()`/`relatedCollectionSlugs()`/`generated/contracts.ts` before fixing — confirmed real and reachable, not a hypothetical. Fixed: added a fifth `FamilyIconName`, `'company'` (amber `#d97706`, Lucide `Building2`), a new `seeAlsoMark.test.ts` case (RED verified before the fix), and updated `design.md`/`specs/see-also-marks/spec.md` to document the case the first design pass missed. Re-verified: `pnpm check` 0 errors, lint clean, 945/945 tests green, visual re-check via a second throwaway route confirmed "Unicorns"/"H-1B sponsor history" now render the building icon instead of the code icon.

@@ -11,7 +11,7 @@
   // the surfaces with room for it (the job and company pages), where the badge also
   // becomes a link to the collection.
   //
-  // No monogram fallback, unlike CompanyLogo: a letter tile standing in for the a16z
+  // No monogram fallback, unlike EntityLogo: a letter tile standing in for the a16z
   // mark reads as a defect, not as graceful degradation. The marks are committed, so
   // the only way to have none is a backer with no entry in $lib/backers — and that
   // renders nothing at all.

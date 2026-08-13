@@ -34,7 +34,7 @@
   import { cn } from '$lib/ui';
   import BrandMark from './BrandMark.svelte';
   import GithubStars from './GithubStars.svelte';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
 
   // Same invite link as the footer's socials row (Footer.svelte) — no shared
   // constant exists for it yet, so it's kept inline here like GITHUB_URL's

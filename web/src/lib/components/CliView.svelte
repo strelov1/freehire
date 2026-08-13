@@ -2,7 +2,7 @@
   import { resolve } from '$app/paths';
   import { CLI_REPO, MCP_REPO } from '$lib/cliLinks';
   import { Button } from '$lib/ui';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { SectionLabel } from '$lib/ui';
 
   const SKILLS_URL = 'https://github.com/strelov1/freehire-cli/tree/main/skills';
   const INSTALL = 'curl -fsSL https://freehire.me/install.sh | sh';

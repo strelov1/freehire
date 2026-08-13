@@ -7,7 +7,7 @@
   import type { CompanyFeedback } from '$lib/types';
   import { Button, Dialog } from '$lib/ui';
   import { formatDate } from '$lib/utils';
-  import LoadMore from './LoadMore.svelte';
+  import { LoadMore } from '$lib/ui';
 
   // Read-only list of a company's feedback, offset-paginated on the shared
   // Paginator (retries a transient network blip instead of dead-ending the

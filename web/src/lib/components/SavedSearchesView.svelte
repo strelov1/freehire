@@ -9,7 +9,7 @@
   import type { SavedSearch } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { toSearchString } from '$lib/urlSearchString';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
   import AlertChannels from './filters/AlertChannels.svelte';
   import States from './States.svelte';
 

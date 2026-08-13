@@ -3,7 +3,7 @@
   import { Paginator } from '$lib/paginated.svelte';
   import type { Job } from '$lib/types';
   import JobRow from '$lib/components/JobRow.svelte';
-  import LoadMore from '$lib/components/LoadMore.svelte';
+  import { LoadMore } from '$lib/ui';
   import States from '$lib/components/States.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import type { PageData } from './$types';

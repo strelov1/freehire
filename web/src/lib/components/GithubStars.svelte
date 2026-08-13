@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
   import { githubStars, formatStars, GITHUB_URL } from '$lib/github.svelte';
   import { cn } from '$lib/ui';
 

@@ -8,7 +8,7 @@
   import { ChevronRight } from '@lucide/svelte';
   import type { Margins } from '$lib/generated/contracts';
   import { stepMargin, stepAxis, axisValue, MARGIN_STEP, type MarginAxis } from '$lib/tailor/geometry';
-  import SettingRow from './SettingRow.svelte';
+  import { SettingRow } from '$lib/ui';
   import Stepper from './Stepper.svelte';
 
   let { margins = $bindable() }: { margins: Margins } = $props();

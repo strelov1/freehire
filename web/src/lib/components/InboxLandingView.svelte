@@ -1,8 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
-  import NumberedGrid from '$lib/components/NumberedGrid.svelte';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { NumberedGrid, SectionLabel } from '$lib/ui';
   import StatusChip from '$lib/components/StatusChip.svelte';
   import { INBOX_FAQ } from '$lib/inboxFaq';
   import { INBOX_STATUS_GUIDE } from '$lib/inboxStatusGuide';

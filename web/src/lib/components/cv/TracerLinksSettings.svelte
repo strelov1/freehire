@@ -7,7 +7,7 @@
   // its own endpoint, so the switch writes immediately and reports its own failure.
   import { api } from '$lib/api';
   import type { CvTracerLink } from '$lib/cv';
-  import SettingRow from './SettingRow.svelte';
+  import { SettingRow } from '$lib/ui';
 
   let { cvId, enabled = $bindable() }: { cvId: string; enabled: boolean } = $props();
 

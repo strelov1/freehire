@@ -342,7 +342,7 @@
       "id": "component.avatar",
       "type": "component",
       "name": "Avatar",
-      "description": "Image-or-initials avatar with deterministic hue from name.",
+      "description": "Image-or-initials avatar with deterministic hue from name. A broken/missing src falls back to the initials render. Also exported as EntityLogo (same component) for the company/entity-mark call site, as distinct from a person avatar.",
       "source": {
         "file": "../../src/avatar.svelte"
       },
@@ -357,8 +357,19 @@
         },
         {
           "name": "size",
-          "type": "'sm' | 'md' | 'lg'",
+          "type": "'xs' | 'sm' | 'md' | 'lg'",
           "default": "md"
+        },
+        {
+          "name": "shape",
+          "type": "'circle' | 'square'",
+          "default": "circle",
+          "description": "square is the rounded tile EntityLogo uses; circle is the person avatar."
+        },
+        {
+          "name": "fallbackIcon",
+          "type": "Snippet",
+          "description": "Shown only when there is neither src nor name."
         },
         {
           "name": "class",
@@ -368,6 +379,53 @@
       "stories": [
         {
           "file": "../../src/avatar.stories.ts"
+        },
+        {
+          "file": "../../src/avatar-fallback-icon.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.entity-logo",
+      "type": "component",
+      "name": "EntityLogo",
+      "description": "Same implementation as Avatar (src/avatar.svelte), exported under a second name for the company/entity-mark call site — a rounded-square tile, as distinct from Avatar's circular person default.",
+      "source": {
+        "file": "../../src/avatar.svelte"
+      },
+      "props": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "src",
+          "type": "string"
+        },
+        {
+          "name": "size",
+          "type": "'xs' | 'sm' | 'md' | 'lg'",
+          "default": "md"
+        },
+        {
+          "name": "shape",
+          "type": "'circle' | 'square'",
+          "default": "circle",
+          "description": "Call sites for an entity mark pass square explicitly."
+        },
+        {
+          "name": "fallbackIcon",
+          "type": "Snippet",
+          "description": "Shown only when there is neither src nor name — e.g. a Globe icon for a company with no resolvable logo or name."
+        },
+        {
+          "name": "class",
+          "type": "string"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/entity-logo.stories.ts"
         }
       ]
     },
@@ -548,6 +606,239 @@
       "stories": [
         {
           "file": "../../src/table.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.section-label",
+      "type": "component",
+      "name": "SectionLabel",
+      "description": "Mono `// label` heading used to head a page section. The `//` is part of the rendering — callers pass the bare section name.",
+      "source": {
+        "file": "../../src/section-label.svelte"
+      },
+      "props": [
+        {
+          "name": "text",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "class",
+          "type": "string"
+        },
+        {
+          "name": "style",
+          "type": "string"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/section-label.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.provider-icon",
+      "type": "component",
+      "name": "ProviderIcon",
+      "description": "Inlined OAuth/brand SVG marks (Google keeps its official colours; the rest follow currentColor so they adapt to the theme).",
+      "source": {
+        "file": "../../src/provider-icon.svelte"
+      },
+      "props": [
+        {
+          "name": "provider",
+          "type": "string",
+          "required": true,
+          "values": [
+            "google",
+            "github",
+            "telegram",
+            "linkedin",
+            "apple",
+            "discord"
+          ]
+        },
+        {
+          "name": "class",
+          "type": "string",
+          "default": "size-4"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/provider-icon.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.numbered-grid",
+      "type": "component",
+      "name": "NumberedGrid",
+      "description": "Numbered hairline grid for \"01 / 02 / 03\" landing-page blocks — cells sit on a bg-border grid with gap-px so the 1px gaps read as hairline rules.",
+      "source": {
+        "file": "../../src/numbered-grid.svelte"
+      },
+      "props": [
+        {
+          "name": "items",
+          "type": "{ n: string; title: string; body: string }[]",
+          "required": true
+        },
+        {
+          "name": "class",
+          "type": "string"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/numbered-grid.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.setting-row",
+      "type": "component",
+      "name": "SettingRow",
+      "description": "One settings line: label (+ optional hint) on the left, an arbitrary control on the right. grow lets a variable-width control (e.g. a font-name select) take the spare space instead of truncating the label.",
+      "source": {
+        "file": "../../src/setting-row.svelte"
+      },
+      "props": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "hint",
+          "type": "string"
+        },
+        {
+          "name": "grow",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "control",
+          "type": "Snippet",
+          "required": true
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/setting-row.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.tab-strip",
+      "type": "component",
+      "name": "TabStrip",
+      "description": "Horizontally-scrolling, fade-masked underline tab strip with roving-tabindex arrow-key navigation. Distinct from Tabs (a pill/segmented control with no overflow handling) — for a row that can outgrow its container. Also exports the tabStripId(panelId, tab) helper.",
+      "source": {
+        "file": "../../src/tab-strip.svelte"
+      },
+      "props": [
+        {
+          "name": "tabs",
+          "type": "readonly { id: T; label: string }[]",
+          "required": true
+        },
+        {
+          "name": "active",
+          "type": "T",
+          "required": true
+        },
+        {
+          "name": "onSelect",
+          "type": "(id: T) => void",
+          "required": true
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": true,
+          "description": "Names the strip for assistive tech, e.g. \"Profile sections\"."
+        },
+        {
+          "name": "panelId",
+          "type": "string",
+          "required": true,
+          "description": "id of the role=\"tabpanel\" element these tabs drive."
+        },
+        {
+          "name": "class",
+          "type": "string"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/tab-strip.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.load-more",
+      "type": "component",
+      "name": "LoadMore",
+      "description": "A Button composition for paginated lists: a loading label + disabled state, and an optional error line below.",
+      "source": {
+        "file": "../../src/load-more.svelte"
+      },
+      "props": [
+        {
+          "name": "loading",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "error",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "name": "onclick",
+          "type": "() => void",
+          "required": true
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/load-more.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.country-flag",
+      "type": "component",
+      "name": "CountryFlag",
+      "description": "Round country flag backed by the flag-icons sheet (a caller-owned dependency — see the story for how it loads the sheet). Falls back to the plain upper-cased code when it is not a renderable two-letter code.",
+      "source": {
+        "file": "../../src/country-flag.svelte"
+      },
+      "props": [
+        {
+          "name": "code",
+          "type": "string",
+          "required": true,
+          "description": "ISO 3166-1 alpha-2 code in any case."
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "required": true,
+          "description": "The country's display name — resolved by the caller (e.g. $lib/facets' countryLabel), not by this primitive."
+        },
+        {
+          "name": "class",
+          "type": "string"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/country-flag.stories.ts"
         }
       ]
     }

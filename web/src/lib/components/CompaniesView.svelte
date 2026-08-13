@@ -10,14 +10,12 @@
   import { CompanyFilterStore, companyFiltersToParams, type CompanySortField } from '$lib/companyFilters';
   import { setListSearchTarget } from '$lib/listSearch.svelte';
   import type { CompanyListItem } from '$lib/types';
-  import { Badge } from '$lib/ui';
+  import { Badge, CountryFlag, EntityLogo, LoadMore } from '$lib/ui';
   import { countryLabel } from '$lib/facets';
+  import { companyLogoUrl } from '$lib/logo';
   import States from './States.svelte';
-  import LoadMore from './LoadMore.svelte';
   import InfiniteScroll from './InfiniteScroll.svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
   import BackerBadge from './BackerBadge.svelte';
-  import CountryFlag from './CountryFlag.svelte';
   import CompanyFilterSummary from './filters/CompanyFilterSummary.svelte';
   import CompanyFilterModal from './filters/CompanyFilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
@@ -144,7 +142,7 @@
             href={resolve('/companies/[slug]', { slug: company.slug })}
             class="flex items-start gap-2.5 rounded-lg border border-border px-4 py-3 transition-colors hover:bg-accent"
           >
-            <CompanyLogo name={company.name} size="size-8" />
+            <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="sm" />
             <div class="flex min-w-0 flex-1 flex-col gap-1">
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate font-medium">{company.name}</span>
@@ -168,7 +166,7 @@
               {#if industry || hq}
                 <div class="flex flex-wrap gap-1.5">
                   {#if industry}<Badge variant="secondary">{industry}</Badge>{/if}
-                  {#if hq}<Badge variant="secondary" class="gap-1.5"><CountryFlag code={company.hq_country ?? ''} />{hq}</Badge>{/if}
+                  {#if hq}<Badge variant="secondary" class="gap-1.5"><CountryFlag code={company.hq_country ?? ''} label={hq} />{hq}</Badge>{/if}
                 </div>
               {/if}
             </div>

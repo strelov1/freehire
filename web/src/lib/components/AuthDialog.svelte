@@ -5,7 +5,7 @@
   import { authDialog } from '$lib/auth-dialog.svelte';
   import { api, ApiError } from '$lib/api';
   import { Button, Dialog } from '$lib/ui';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
 
   // `mode` is bindable so the in-dialog toggle can switch between sign in and
   // register without the parent re-opening it. `initialError` lets the layout

@@ -1,11 +1,64 @@
 <script lang="ts">
   import { Award, Briefcase, FolderKanban, GraduationCap, Languages, Tags, User } from '@lucide/svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import type { Experience } from '$lib/generated/contracts';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
   const profile = $derived(data.profile);
   const cv = $derived(profile.cv);
+
+  // The skill currently hovered in the sidebar, so work-history entries that don't carry
+  // it in their own stack fade out — a quick "where did they use this" scan.
+  let hoveredSkill = $state<string | null>(null);
+
+  // Setting hoveredSkill triggers a scrollIntoView (below) that carries the sidebar
+  // itself — not yet `sticky`-docked at scroll position 0 — out from under a stationary
+  // cursor. Chromium recomputes hover state against the moved layout mid-scroll, so a
+  // synthetic mouseenter/mouseleave can land on a *different* chip than the one the
+  // pointer is actually resting over, or on empty space. While that self-inflicted
+  // scroll is in flight, mouse-driven hover changes are ignored outright — keyboard
+  // focus (unaffected by scroll-induced reflow) still updates immediately.
+  let autoScrolling = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function setHovered(skill: string) {
+    if (autoScrolling) return;
+    hoveredSkill = skill;
+  }
+
+  function clearHovered() {
+    if (autoScrolling) return;
+    hoveredSkill = null;
+  }
+
+  // Case-insensitive, either-direction match: a skill chip comes from the canonical
+  // dictionary ("Node.js"), a job's stack is free text off the résumé parser and can
+  // differ in casing or specificity, so a strict `===` would miss real matches.
+  function jobHasSkill(job: Experience, skill: string): boolean {
+    const needle = skill.toLowerCase();
+    return (job.stack ?? []).some((tech) => {
+      const hay = tech.toLowerCase();
+      return hay === needle || hay.includes(needle) || needle.includes(hay);
+    });
+  }
+
+  function fadeClass(job: Experience): string {
+    return hoveredSkill && !jobHasSkill(job, hoveredSkill) ? 'opacity-50 blur-sm' : '';
+  }
+
+  function chipClass(skill: string): string {
+    return skill === hoveredSkill
+      ? 'bg-brand text-brand-foreground'
+      : 'bg-brand-muted text-brand-strong';
+  }
+
+  // One <li> ref per work-history entry, indexed like `experience` — a hover needs to
+  // scroll straight to the first match, which can otherwise sit off-screen above or
+  // below the visible list.
+  let jobEls: (HTMLLIElement | null)[] = [];
 
   const experience = $derived(cv.experience ?? []);
   const education = $derived(cv.education ?? []);
@@ -22,6 +75,19 @@
   const skillChips = $derived([
     ...new Set([...(profile.specializations ?? []), ...(profile.skills ?? [])]),
   ]);
+
+  // A hover jumps straight to the first matching entry — otherwise the blur alone gives
+  // no clue whether the match is above or below the current scroll position.
+  $effect(() => {
+    const skill = hoveredSkill;
+    if (!skill) return;
+    const el = jobEls[experience.findIndex((job) => jobHasSkill(job, skill))];
+    if (!el) return;
+    autoScrolling = true;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => (autoScrolling = false), 800);
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 
   // full_name is present only in "public" mode — the backend omits the key entirely for
   // "anonymous" (see talentNetworkProfileResponse's doc comment), so there is nothing to
@@ -102,7 +168,16 @@
           <h2 class="flex items-center gap-2 text-sm font-semibold"><Tags class="size-4" />Skills</h2>
           <div class="flex flex-wrap gap-2" aria-label="Skills">
             {#each skillChips as skill (skill)}
-              <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs"
+              <span
+                role="button"
+                tabindex="0"
+                onmouseenter={() => setHovered(skill)}
+                onmouseleave={clearHovered}
+                onfocus={() => (hoveredSkill = skill)}
+                onblur={() => (hoveredSkill = null)}
+                class="rounded-full px-3 py-1 text-xs font-medium transition-colors {chipClass(
+                  skill,
+                )}"
                 >{skill}</span
               >
             {/each}
@@ -121,8 +196,23 @@
                  string key colliding throws during Svelte 5 hydration. This list is static
                  once loaded and never reorders, so an index key is safe here. -->
             {#each experience as job, i (i)}
-              <li class="flex gap-3 rounded-xl border border-border bg-card p-4">
-                <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+              <li
+                bind:this={jobEls[i]}
+                class="flex gap-3 rounded-xl border border-border bg-card p-4 transition duration-150 {fadeClass(
+                  job,
+                )}"
+              >
+                {#if job.company}
+                  <EntityLogo
+                    name={job.company}
+                    src={companyLogoUrl(job.company) ?? undefined}
+                    shape="square"
+                    size="md"
+                    class="shrink-0"
+                  />
+                {:else}
+                  <div class="size-10 shrink-0 rounded-lg bg-secondary"></div>
+                {/if}
                 <div class="flex min-w-0 flex-1 flex-col gap-1">
                   <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <span class="text-sm font-semibold">{job.title || job.company}</span>
