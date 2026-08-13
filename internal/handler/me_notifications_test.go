@@ -52,7 +52,7 @@ func TestNotificationsManagement_IsCookieOnly(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Test: %v", err)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != fiber.StatusUnauthorized {
 				t.Errorf("status = %d, want 401 (notification-center access must be cookie-only)", resp.StatusCode)
 			}
