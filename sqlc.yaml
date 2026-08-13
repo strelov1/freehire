@@ -24,6 +24,11 @@ sql:
           # straight through to the company-detail response ({} stays {}), not base64.
           - column: "companies.company_info"
             go_type: "encoding/json.RawMessage"
+          # A multi-job digest's job snapshot ({title, company, slug}[]): raw JSON
+          # round-trips whole into the notification-detail response (NULL stays
+          # null for every other kind), where a []byte would base64-encode it.
+          - column: "user_notifications.jobs"
+            go_type: "encoding/json.RawMessage"
           # The profile location block: raw JSON round-trips whole. The service
           # marshals a validated, normalized block (or NULL for none), and the stored
           # bytes marshal straight through to the profile response (null stays null).

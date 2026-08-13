@@ -109,6 +109,7 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 		Title:      title,
 		Body:       body,
 		PublicSlug: publicSlug,
+		Jobs:       digestJobsSnapshot(digest),
 	}); err != nil {
 		// Delivered and stamped; only the in-app notification-center record
 		// failed. That's a degraded read-side feature, not a reason to fail a

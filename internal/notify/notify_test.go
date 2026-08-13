@@ -2,7 +2,9 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -360,6 +362,26 @@ func TestDeliver_RecordsNotificationForMultiJobDigestWithoutSlug(t *testing.T) {
 	}
 	if store.recordedNotifications[0].PublicSlug.Valid {
 		t.Errorf("PublicSlug = %+v, want invalid (no slug) for a multi-job digest", store.recordedNotifications[0].PublicSlug)
+	}
+
+	var jobs []struct {
+		Title   string `json:"title"`
+		Company string `json:"company"`
+		Slug    string `json:"slug"`
+	}
+	if err := json.Unmarshal(store.recordedNotifications[0].Jobs, &jobs); err != nil {
+		t.Fatalf("Jobs did not unmarshal: %v (raw: %s)", err, store.recordedNotifications[0].Jobs)
+	}
+	want := []struct {
+		Title   string `json:"title"`
+		Company string `json:"company"`
+		Slug    string `json:"slug"`
+	}{
+		{Title: "A", Company: "", Slug: "a"},
+		{Title: "B", Company: "", Slug: "b"},
+	}
+	if !reflect.DeepEqual(jobs, want) {
+		t.Errorf("Jobs = %+v, want %+v", jobs, want)
 	}
 }
 

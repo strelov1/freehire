@@ -933,6 +933,7 @@ type UserNotification struct {
 	PublicSlug pgtype.Text        `json:"public_slug"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	ReadAt     pgtype.Timestamptz `json:"read_at"`
+	Jobs       json.RawMessage    `json:"jobs"`
 }
 
 type UserProfile struct {
