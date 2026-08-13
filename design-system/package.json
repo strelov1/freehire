@@ -41,7 +41,7 @@
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
     "globals": "^17.8.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "oxlint": "^1.77.0",
     "storybook": "10.5.7",
     "style-dictionary": "^5.5.0",
