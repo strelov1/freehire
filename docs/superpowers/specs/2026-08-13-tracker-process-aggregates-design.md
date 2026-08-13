@@ -72,8 +72,20 @@ contributor's arrival or state change**, which is a much stronger requirement th
 
 A median over five observations *is* one person's value — the third one. "Median 12 days
 applied → interview" over a 5-person sample publishes an individual's timeline under a word
-that sounds aggregate. Timing statistics need a substantially higher floor than counts do,
-and the issue treats them as one question.
+that sounds aggregate. Timing statistics need a floor of their own, over their own
+denominator, and the issue treats them as one question with the counts.
+
+The codebase already agrees, and has for longer than the spec admits:
+`responseSampleGate = 10` gates the rate over *observable* applications while
+`replySampleGate = 5` gates the median over *answered* ones
+(`internal/handler/company_response.go`), with the reasoning stated at the constant — "a
+company can clear the first comfortably while the second rests on three data points. They are
+two numbers with two denominators and they need two gates."
+
+Note that 5 is the sample size this section calls unsafe. That was a defensible judgement at
+company grain; it is not at cluster grain, where the employer knows the applicant set. The
+*shape* is what this design inherits — two gates over two denominators — not the number, which
+needs re-examining upward here.
 
 ### 4. Stage timing is mostly not computable today, by deliberate design
 
@@ -94,13 +106,18 @@ which is a much narrower feature than "applied → screen → interview → offe
 
 ## Resolutions to the issue's open questions
 
-**Anonymity floor.** Reuse **10**, the gate `company-hiring-signal` already uses for
-rate-shaped aggregates. Do not invent 5. Two gates exist in this codebase for two different
-purposes and neither is 5: 10 tracked applications for a published rate, and
-`ghost.ContributorGate = 2` for *distinct people* behind an outcome claim about a posting — the
-latter carrying the note that a served count of one deanonymises that applicant to the employer.
-A third number would be a third vocabulary for one idea, which is the mistake `internal/userjob`
-already recorded when it deleted `buckets.go` rather than deprecate it.
+**Anonymity floor.** Reuse the **pair**, never a single number: `responseSampleGate = 10` over
+observable applications, `replySampleGate = 5` over answered ones. Inventing a third threshold
+would be a third vocabulary for one idea, which is the mistake `internal/userjob` already
+recorded when it deleted `buckets.go` rather than deprecate it — and a third gate already exists
+for a third question, `ghost.ContributorGate = 2` over *distinct people* behind an outcome claim
+about a posting, carrying the note that a served count of one deanonymises that applicant to the
+employer.
+
+The timing gate additionally counts only **day-math-trusted** observations, per §4: a transition
+dated by `stage_set` is untrusted however many of them there are, so trusted-and-answered is the
+denominator the floor applies to, not answered alone. Both numbers were set at company grain and
+should be revisited upward here (§3).
 
 **Count distinct users, not applications.** At cluster grain one person can track several
 postings of the same role across cities. The `(user_id, job_id)` primary key makes one row per
@@ -116,13 +133,56 @@ applicants — so whatever ships must describe itself as "among freehire users w
 never as a market rate. Note the asymmetry with the company rate, which ships with no opt-in at
 all and is defensible because its aggregate is over a scale where no individual is visible.
 
+**Consent semantics.** Opt-in is **retroactive** over the candidate's existing applications.
+Prospective-only consent would leave the feature with no data for as long as an observation
+window plus a cohort, which in practice means it launches empty; and the candidate is consenting
+to a use of facts about their own history, not to a collection that has not happened yet.
+
+Revocation follows the precedent already in the tree: `ghost_reports.retracted_at` withdraws a
+report from the signal while keeping the row, so that "a retraction cannot be used to file
+repeatedly", and `application_events` uses the same shape. Opting out therefore excludes a
+contribution from future computations without deleting anything.
+
+That leaves one edge worth naming, because it arrives from the consent side of the same attack
+§2 describes: if revocation removed contributions from already-published windows, a cluster could
+fall back below its gate and the aggregate would **un-publish** — and the disappearance is itself
+informative, since it says somebody who was in this cluster left. The immutable-snapshot rule in
+*What is shown*, below, absorbs it: a published window is never recomputed, so a revocation takes
+effect from the next window rather than retracting a number already shown.
+
 **What is shown.** Buckets, never raw counts, and buckets with **hysteresis** — a band must be
-crossed by a margin before the display changes, so no single arrival or stage change can move
-what is rendered. Combined with a **cohort freeze** (aggregate only over applications whose
-`occurred_at` is older than a closed window, e.g. 30 days) this is what actually answers the
-differencing attack: the published value stops tracking this week's decisions, and the employer
-watching the widget sees nothing correlated with what they did on Tuesday. A floor alone does not
-buy this; the freeze and the hysteresis do.
+crossed by a margin before the display changes, so no single arrival or state change can move
+what is rendered.
+
+**Freeze the metric inputs, not cohort eligibility.** An earlier draft of this section proposed
+admitting only applications whose `applied` event is older than 30 days. That does not defend
+anything: it freezes *membership*, while the value that moves is the `employer_reply` — which is
+the event the employer controls, and the one §2's attack is built on. An application admitted at
+day 40 still flips from unanswered to answered the moment a rejection lands, so the employer acts
+on Tuesday and the bucket moves on Wednesday exactly as before. The filter froze the one thing
+the adversary does not control and left free the one thing they do.
+
+Three channels mutate a cohort frozen that way: a late reply (employer-controlled — the attack),
+a retraction from a link correction, and the bulk historical import that fires when a candidate
+connects a mailbox and back-dates a year of replies into closed windows at once.
+
+What actually closes them is a fixed **observation window** per application — admit it only once
+that window has elapsed, compute at close, and never recompute. This reframes the metric rather
+than filtering it: the published quantity becomes *"replied within N days"*, which has one
+correct value forever, instead of *"response rate"*, whose value drifts and whose drift is the
+leak. The reframing is what makes immutability honest — without it, freezing merely discards late
+replies and makes slow employers read as non-responders, the distortion `company-hiring-signal`
+exists to remove.
+
+`internal/userjob` offers `terminalStages`/`IsTerminal` as an alternative admission rule, but a
+settled stage is candidate-recorded, so gating on it would bias the cohort toward diligent
+trackers. A fixed window does not.
+
+The cost, which should be decided rather than inherited: once a window is published, a mislinked
+reply inside it can no longer be repaired by retraction. The mail stack cares about exactly this
+— one catalogue company sharing an ATS's name once collected twenty-three acknowledgements
+belonging to other employers. Under immutable snapshots, correcting that becomes a deliberate
+operator republish, and a republish is itself a value change.
 
 **Where it is not applicable.** Anywhere the gate is unmet — and the honest expectation is that
 this is nearly everywhere at posting grain. The company rate is already documented as
@@ -133,11 +193,33 @@ far smaller denominator.
 **Staleness and reposts.** Aggregating at the **role cluster** answers this rather than
 patching it. freehire already clusters postings on `role_fingerprint` (which excludes location)
 and marks non-canonical copies `duplicate_of`; the reality signal already reports `RepostCount`
-and `MassPostingCount` off that cluster, and the company rollup already excludes
-`duplicate_of` rows so counts match `companies.job_count`. Aggregating per cluster means a
-repost is the same subject as the posting it repeats, so the aggregate follows the *role* and
-does not reset every time an employer re-posts — while simultaneously raising N, which is the
-one change that helps every problem above at once.
+and `MassPostingCount` off that cluster. Aggregating per cluster means a repost is the same
+subject as the posting it repeats, so the aggregate follows the *role* and does not reset every
+time an employer re-posts — while simultaneously raising N, which is the one change that helps
+every problem above at once.
+
+**Copies are counted, deliberately.** A `duplicate_of IS NULL` filter belongs to
+`RebuildInsightsCompanyGrowth`, which counts open *postings* for the leaderboard;
+`RebuildInsightsCompanyResponse`, the rollup this design actually inherits, never joins `jobs`
+at all and reads the denormalised `company_slug` off the event instead. Applying the posting filter here
+would drop applications made against repost copies — the very population the cluster grain exists
+to capture. It is also unnecessary: `RecomputeRoleDuplicatesForCompany` marks all but `min(id)`
+*within* a fingerprint cluster, so grouping on the key already collapses canon and copies, and
+`count(DISTINCT user_id)` dedups a candidate who applied to two copies of one role.
+
+**The cluster key does not survive a prune, and that is a hole in the feature.** `cmd/prune`
+clears `jobs.job_id` references and archives the row to `pruned_jobs`, which carries `source`,
+`external_id`, `title`, `company_slug` and the matched rule — **but no `role_fingerprint`**
+(migration `0041`). So a pruned posting's application can still be resolved to a *company* and to
+an *application*, and never back to its *cluster*. With the pruning campaign slated to remove
+roughly 1.5M of a 3.5M catalogue, that means a cluster's tracker count can shrink over time
+because of an unrelated operator action — one more way a published number moves for reasons that
+have nothing to do with the employer.
+
+The remedy is the one the ledger already uses one field earlier: `application_events`
+denormalises `company_slug` at write time *precisely because* prune clears `job_id`. This design
+needs the same treatment for `role_fingerprint` — carried onto the application or the event when
+it is written. Without it the aggregate is not durable, however well it is gated.
 
 The grain is already a first-class one in the schema rather than something this feature would
 introduce: `migrations/0003_role_fingerprint.sql` creates `jobs_company_role_fingerprint_idx` on
@@ -155,9 +237,22 @@ and the attack is on the counter, so the rate limit matters less than the identi
 
 ## Recommended scope
 
-**Do not build a posting-level feature.** Extend the existing company rollup to a
-`(company_slug, role)` grain, which is the same machinery, the same gates, and the same
-worker (`cmd/rollup-company`, already an atomic delete-and-reinsert in one transaction).
+**Do not build a posting-level feature.** Aggregate at a `(company_slug, role_fingerprint)`
+grain, reusing the existing gates and the `observable` definition.
+
+`role_fingerprint` specifically, and never `internal/roletag`'s role slugs. Those are the more
+visible notion — generated into the frontend as `ROLE_LABELS`, carried on the search document as
+`Roles []string` behind the `roles` facet — and they are a per-posting **slice**, so clusters
+built on them overlap and one candidate lands in several at once, inflating every gate this
+design rests on. A fingerprint is one per posting and its clusters are disjoint.
+
+**It cannot reuse `cmd/rollup-company`'s machinery, only its shape.** That worker is an atomic
+`DELETE`-then-`INSERT` that recomputes every published value from current state on each run,
+which is exactly the mutation channel the freeze rule above exists to close. The existing rollups
+can rebuild safely because nothing they publish is attributable to an individual; this table
+cannot. It has to be append-only at window close, with published rows never recomputed — a
+different persistence discipline from every `insights_*` table in the tree today, and the main
+reason this is not the small extension it first appears to be.
 
 Everything else is deferred: stage-to-stage funnels (inputs untrusted), applicant counts on a
 posting page (differencing), per-job consent (selection bias), and the free-text interview
@@ -204,33 +299,58 @@ SELECT trackers,
  ORDER BY trackers DESC;
 ```
 
-Read it as a histogram: the rows at `trackers >= 10` are the entire addressable surface of this
-feature today. If that is a handful of clusters concentrated at one employer, the feature does
-not exist yet regardless of how it is designed, and the correct outcome is to close the issue as
-premature and revisit when the tracker base has grown. That is a query, not a project, and it
-should be run before anything else here is scheduled.
+**Read the result as an upper bound, and only in one direction.** Three biases apply, and they do
+not cancel:
 
-Note the join is on `application_events.job_id`, which `cmd/prune` sets to NULL — so pruned
-postings drop out and the figure is a slight **under**-count. That is the right direction for a
-go/no-go measurement, but it means the query cannot double as the feature's own aggregation,
-which would have to pair through `application_id` the way the company rollup does and cluster
-via the denormalised `company_slug`.
+- **No opt-in predicate**, because the column does not exist yet. Under the account-level,
+  default-off consent recommended above, the eligible population is a *subset* of the observable
+  one. This inflates, and it dominates: a plausible opt-in rate divides the real figure several
+  times over.
+- **Pruned postings drop out**, since the join is on `application_events.job_id` and `cmd/prune`
+  sets it to NULL. This deflates, but only slightly — pruned rows are non-IT postings freehire
+  users largely never applied to.
+- **Copies are included**, which is correct and not a bias at all (see *Copies are counted*).
+
+Net: the histogram **overstates**. That makes it decisive in exactly one direction — if the
+ceiling does not clear the gate, the real figure certainly does not, so a disappointing result
+settles a **no-go**. A healthy result licenses no *go*: it would have to be re-measured once a
+consent column exists. Getting this backwards inverts the decision rule, so it is worth stating
+plainly rather than leaving to the reader.
+
+If the answer is a handful of clusters concentrated at one employer, the feature does not exist
+yet regardless of how it is designed, and the correct outcome is to close the issue as premature
+and revisit when the tracker base has grown. That is a query, not a project, and it should be run
+before anything else here is scheduled.
+
+The query also cannot double as the feature's own aggregation. That would have to pair through
+`application_id` the way the company rollup does, and cluster on a `role_fingerprint` carried on
+the application rather than read from `jobs` — see *The cluster key does not survive a prune*.
 
 ## Open questions this pass did not settle
 
-- **Bucket boundaries and hysteresis width** need the distribution above to choose sensibly.
-  Picking them first would be a guess presented as a threshold.
-- **Whether the cohort freeze window is 30 days** or longer depends on how quickly a cluster
-  accumulates trackers — too long and the aggregate describes a hiring round that has closed.
+- **Bucket boundaries, hysteresis width, and the observation-window length** all need the
+  distribution above to choose sensibly, and they trade against each other: a longer window
+  raises N and immutability but describes a hiring round that has already closed. Picking any of
+  them first would be a guess presented as a threshold.
+- **The two sample gates need re-deriving at cluster grain.** 10 and 5 were judged for company
+  grain, where no individual is visible; §3 argues 5 in particular is unsafe here.
+- **Repair versus immutability.** Under published snapshots a mislinked reply inside a closed
+  window cannot be retracted out of it. Whether that is answered with an operator republish, a
+  correction that only affects future windows, or a shorter window is a product decision this
+  pass deliberately leaves open.
 - **Round-aware stages** (the issue's comment) would sharpen stage timing, but only for
   transitions that mail or calendar evidence can date. It does not change the trust rule, so it
   is a smaller unlock than it looks.
-- **Whether opting in should be retroactive** over a user's existing applications, or apply only
-  going forward. Retroactive is more useful and is a consent question, not a technical one.
 
 ## Related
 
-- `openspec/specs/company-hiring-signal/spec.md` — the shipped company-level aggregate and its gates
+- `openspec/specs/company-hiring-signal/spec.md` — the shipped company-level aggregate and its gates.
+  **Stale on one point:** it states the median is served "under the same ten-application sample
+  gate as the response rate it accompanies", which the code has not done since `replySampleGate`
+  landed (`internal/handler/company_response.go`). The code is right and the spec is wrong; worth
+  correcting separately, and it is what misled the first draft of this document.
+- `internal/handler/company_response.go` — `responseSampleGate` / `replySampleGate`, the two gates
+  over two denominators
 - `openspec/specs/application-event-ledger/spec.md` — what the ledger guarantees and what it refuses to backfill
 - `internal/appevent/appevent.go` — `TrustedForDayMath`, the trust rule
 - `internal/userjob/AGENTS.md` — stages, the silence ladder, why the ledger and not the columns feed aggregates
