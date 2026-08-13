@@ -4,9 +4,9 @@
   import { api } from '$lib/api';
   import { AsyncData } from '$lib/asyncData.svelte';
   import type { ReferralOffer } from '$lib/types';
-  import { Button } from '$lib/ui';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Button, EntityLogo } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
-  import CompanyLogo from './CompanyLogo.svelte';
   import States from './States.svelte';
 
   const pending = new AsyncData<ReferralOffer[]>([]);
@@ -40,7 +40,12 @@
     {#each pending.value as o (o.id)}
       <li class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex min-w-0 items-center gap-2">
-          <CompanyLogo name={o.company_name || o.company_slug} size="size-6" />
+          <EntityLogo
+            name={o.company_name || o.company_slug}
+            src={companyLogoUrl(o.company_name || o.company_slug) ?? undefined}
+            shape="square"
+            size="xs"
+          />
           <div class="flex min-w-0 flex-col gap-0.5">
             <span class="truncate text-sm font-medium">{o.company_name || o.company_slug}</span>
             <span class="truncate text-xs text-muted-foreground">

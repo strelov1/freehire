@@ -7,7 +7,8 @@
   import type { Company, CompanyFeedbackSummary } from '$lib/types';
   import CompanyFeedbackDialog from './CompanyFeedbackDialog.svelte';
   import CompanyFeedbackListDialog from './CompanyFeedbackListDialog.svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import CredentialBadge from './CredentialBadge.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CompanyFollowButton from './CompanyFollowButton.svelte';
@@ -90,7 +91,7 @@
 
 <section class="rounded-2xl border border-border bg-card p-5">
   <div class="flex items-start gap-3">
-    <CompanyLogo name={company.name} size="size-11" />
+    <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="lg" />
     <div class="min-w-0 flex-1">
       <!-- break-words: a long single word ("International") is wider than the phone
            column and would otherwise overflow the card instead of wrapping. -->

@@ -1,8 +1,8 @@
 <script lang="ts">
   // Brand marks (OAuth sign-in buttons, footer links), inlined because icon
   // libraries (lucide) do not ship brand logos. Google keeps its official
-  // colors; GitHub, Telegram, LinkedIn, and Apple follow the current text color
-  // so they adapt to the theme (and match the muted footer treatment).
+  // colors; GitHub, Telegram, LinkedIn, Apple and Discord follow the current
+  // text color so they adapt to the theme (and match a muted footer treatment).
   let { provider, class: className = 'size-4' }: { provider: string; class?: string } = $props();
 </script>
 

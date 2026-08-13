@@ -1,6 +1,7 @@
 <script lang="ts">
   import { filterHref } from '$lib/enrichment';
-  import CountryFlag from './CountryFlag.svelte';
+  import { countryLabel } from '$lib/facets';
+  import { CountryFlag } from '$lib/ui';
 
   // An overlapping cluster of round country flags (an avatar-stack). Collapses a
   // long country list into a compact, space-saving row: each flag laps over the
@@ -40,9 +41,9 @@
       >
         {#if link}
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal filter link from filterHref; query-only, no route to resolve -->
-          <a href={filterHref('countries', code)} class="inline-flex"><CountryFlag {code} /></a>
+          <a href={filterHref('countries', code)} class="inline-flex"><CountryFlag {code} label={countryLabel(code)} /></a>
         {:else}
-          <CountryFlag {code} />
+          <CountryFlag {code} label={countryLabel(code)} />
         {/if}
       </span>
     {/each}

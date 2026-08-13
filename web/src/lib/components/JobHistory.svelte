@@ -3,7 +3,7 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import JobRow from './JobRow.svelte';
-  import LoadMore from './LoadMore.svelte';
+  import { LoadMore } from '$lib/ui';
   import States from './States.svelte';
   import { must } from '$lib/utils';
 

@@ -20,7 +20,7 @@
   import HeadshotField from './HeadshotField.svelte';
   import RemoteSearchSelect from './facets/RemoteSearchSelect.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
-  import TabRow, { tabId } from './TabRow.svelte';
+  import { TabStrip, tabStripId } from '$lib/ui';
 
   // Mirror of the server's specialization cap (searchprofile.maxSpecializations).
   const MAX_SPECIALIZATIONS = 5;
@@ -58,7 +58,7 @@
   let formError = $state<string | null>(null);
   let busy = $state(false);
   // Which form section is shown — the profile is long, so split it into two tabs sharing
-  // one Save (both tabs feed the same PUT). The list drives TabRow, and typing it `as const`
+  // one Save (both tabs feed the same PUT). The list drives TabStrip, and typing it `as const`
   // ties `formTab` to it: an id that is not a section stops being expressible. The first
   // tab's label drops "Skills" once a profile exists — Skills and Skills to avoid live on
   // their own top-level tab then (see /my/profile's Skills tab); they stay here only for
@@ -327,7 +327,7 @@
 <form onsubmit={submit} class="flex flex-col gap-6 rounded-xl border border-border bg-card p-5 sm:p-6">
   <!-- Sub-tabs: the professional self vs. where/how you want to work. One Save below covers
        both (a single PUT). -->
-  <TabRow
+  <TabStrip
     tabs={formTabs}
     active={formTab}
     onSelect={(id) => (formTab = id)}
@@ -372,7 +372,7 @@
   <div
     id={formPanelId}
     role="tabpanel"
-    aria-labelledby={tabId(formPanelId, formTab)}
+    aria-labelledby={tabStripId(formPanelId, formTab)}
     class="flex flex-col gap-6"
   >
   {#if formTab === 'main'}

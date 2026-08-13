@@ -9,9 +9,9 @@
   import { markSaved, markUnsaved } from '$lib/savedJobs.svelte';
   import { track } from '$lib/analytics';
   import type { Job, UserJob } from '$lib/types';
-  import { Badge, Button, Chip } from '$lib/ui';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Badge, Button, Chip, EntityLogo } from '$lib/ui';
   import { formatDate } from '$lib/utils';
-  import CompanyLogo from './CompanyLogo.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobDescription from './JobDescription.svelte';
@@ -219,7 +219,12 @@
 >
   <div class="flex items-center justify-between gap-3 lg:col-start-2 lg:row-start-1">
     <div class="flex items-center gap-3">
-      <CompanyLogo name={job.company} size="size-8" />
+      <EntityLogo
+        name={job.company || 'Unknown company'}
+        src={companyLogoUrl(job.company) ?? undefined}
+        shape="square"
+        size="sm"
+      />
       <p class="text-sm text-muted-foreground">
         {#if job.company_slug}
           <a href={resolve('/companies/[slug]', { slug: job.company_slug })} class="hover:text-foreground hover:underline">

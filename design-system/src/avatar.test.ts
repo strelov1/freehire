@@ -1,4 +1,5 @@
 import { render } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import Avatar from './avatar.svelte';
 import { must } from './test-utils';
@@ -92,5 +93,94 @@ describe('Avatar', () => {
     const { container } = render(Avatar, { src: 'https://example.test/a.png' });
 
     expect(must(container.querySelector('img')).getAttribute('alt')).toBe('');
+  });
+
+  // Promoted from CompanyLogo (see openspec/changes/promote-shared-components-to-design-system).
+  describe('shape', () => {
+    it('is a circle by default', () => {
+      const el = circle('Ada Lovelace');
+      expect(el.className).toContain('rounded-full');
+    });
+
+    it('becomes a rounded square when asked', () => {
+      const { container } = render(Avatar, { name: 'Ada Lovelace', shape: 'square' });
+      const el = must(container.querySelector('div'));
+
+      expect(el.className).toContain('rounded');
+      expect(el.className).not.toContain('rounded-full');
+    });
+
+    it('applies the same shape to a photo', () => {
+      const { container } = render(Avatar, { src: 'https://example.test/a.png', shape: 'square' });
+      const img = must(container.querySelector('img'));
+
+      expect(img.className).toContain('rounded');
+      expect(img.className).not.toContain('rounded-full');
+    });
+
+    // A square (entity-mark) photo is always shown beside the name as visible text at every
+    // real call site, so it stays decorative; a circular (person) photo may be the sole
+    // identification and keeps its accessible name.
+    it('leaves a square photo decorative, since the name sits beside it as text', () => {
+      const { container } = render(Avatar, { name: 'Acme Corp', src: 'https://example.test/a.png', shape: 'square' });
+
+      expect(must(container.querySelector('img')).getAttribute('alt')).toBe('');
+    });
+
+    it('keeps a circular photo named', () => {
+      const { container } = render(Avatar, { name: 'Ada Lovelace', src: 'https://example.test/a.png' });
+
+      expect(must(container.querySelector('img')).getAttribute('alt')).toBe('Ada Lovelace');
+    });
+  });
+
+  describe('a broken photo', () => {
+    it('falls back to the initials render once the image fails to load', async () => {
+      const { container } = render(Avatar, { name: 'Ada Lovelace', src: 'https://example.test/404.png' });
+
+      const img = must(container.querySelector('img'));
+      img.dispatchEvent(new Event('error'));
+      await Promise.resolve();
+
+      expect(container.querySelector('img')).toBeNull();
+      const fallback = must(container.querySelector('div'));
+      expect(fallback.textContent?.trim()).toBe('AL');
+    });
+
+    it('resets the failure when the src changes, giving the new photo a fresh attempt', async () => {
+      const { container, rerender } = render(Avatar, {
+        name: 'Ada Lovelace',
+        src: 'https://example.test/404.png',
+      });
+      must(container.querySelector('img')).dispatchEvent(new Event('error'));
+      await Promise.resolve();
+      expect(container.querySelector('img')).toBeNull();
+
+      await rerender({ name: 'Ada Lovelace', src: 'https://example.test/ok.png' });
+
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+  });
+
+  describe('fallbackIcon', () => {
+    const icon = createRawSnippet(() => ({ render: () => '<svg data-testid="icon"></svg>' }));
+
+    it('is used instead of "?" when there is no name and no photo', () => {
+      const { container } = render(Avatar, { fallbackIcon: icon });
+
+      expect(container.querySelector('[data-testid="icon"]')).not.toBeNull();
+      expect(container.textContent?.trim()).toBe('');
+    });
+
+    it('is not shown once a name is given, even without a photo', () => {
+      const { container, getByText } = render(Avatar, { name: 'Ada Lovelace', fallbackIcon: icon });
+
+      expect(container.querySelector('[data-testid="icon"]')).toBeNull();
+      expect(getByText('AL')).toBeTruthy();
+    });
+
+    it('leaves the default "?" alone when no fallbackIcon is given', () => {
+      expect(circle().textContent?.trim()).toBe('?');
+    });
   });
 });

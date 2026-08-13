@@ -4,8 +4,8 @@
   import { Search } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import type { Job } from '$lib/types';
-  import { Button, Dialog } from '$lib/ui';
-  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Button, Dialog, EntityLogo } from '$lib/ui';
 
   // Three ways into tailoring: pick one of our own vacancies (a search/select — no backend
   // call, straight to the workspace), paste an external job posting URL, or paste the JD
@@ -149,7 +149,12 @@
                   onclick={() => selectJob(job)}
                   class="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent"
                 >
-                  <CompanyLogo name={job.company} size="size-8" />
+                  <EntityLogo
+                    name={job.company || 'Unknown company'}
+                    src={companyLogoUrl(job.company) ?? undefined}
+                    shape="square"
+                    size="sm"
+                  />
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm font-medium">{job.title}</span>
                     <span class="block truncate text-xs text-muted-foreground">{job.company}</span>

@@ -4,7 +4,7 @@
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { cn } from '$lib/ui';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
 
   // The single account-level notification rule: turn notifications on and pick
   // the delivery channels. It gates four things at once — the saved-job apply

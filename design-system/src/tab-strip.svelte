@@ -4,31 +4,34 @@
    * call site, so it needs this to point `aria-labelledby` back at its own tab — exported so
    * the convention lives in one place instead of being retyped as a magic string.
    */
-  export function tabId(panelId: string, tab: string): string {
+  export function tabStripId(panelId: string, tab: string): string {
     return `${panelId}-tab-${tab}`;
   }
 </script>
 
 <script lang="ts" generics="T extends string">
-  import { cn } from '$lib/ui';
+  import { cn } from './cn.js';
 
   // A horizontal tab strip that survives a narrow viewport. Past its own width the row
   // scrolls rather than wrapping: a flex row with nowhere to put the overflow first squeezes
   // labels down to min-content (so a two-word label breaks mid-label) and then spills the
-  // remainder past the container's edge, which is how the profile's "CV readiness" came to
-  // render as "CV readine" on a phone.
+  // remainder past the container's edge.
   //
   // Owns the tablist semantics as well — arrow-key movement over a roving tabindex — because
   // `role="tablist"` is a promise to assistive tech that the group is one widget stepped
   // through with the arrows. Hand-rolled copies of this row could not each keep that promise;
   // one component can.
+  //
+  // Distinct from `Tabs`: that primitive is a pill/segmented control with no overflow
+  // handling, for a small fixed set of options. This one is for a row that can outgrow its
+  // container.
   let {
     tabs,
     active,
     onSelect,
     label,
     panelId,
-    class: extra = '',
+    class: extra,
   }: {
     tabs: readonly { id: T; label: string }[];
     active: T;
@@ -45,7 +48,7 @@
   const activeIndex = $derived(tabs.findIndex((t) => t.id === active));
 
   // Whether either end is out of view. Measured rather than assumed: an unconditional fade
-  // would paint a phantom edge-shadow on the desktop row, which already fits.
+  // would paint a phantom edge-shadow on a row that already fits.
   let atStart = $state(true);
   let atEnd = $state(true);
 
@@ -80,9 +83,9 @@
     return `mask-image: linear-gradient(to right, ${from}, ${to})`;
   });
 
-  // Keep the active tab in view. Not cosmetic: the panels' empty states link back to a
-  // sibling tab, so the selection can change without the user having touched the strip, and
-  // the newly-active tab would otherwise stay parked off-screen.
+  // Keep the active tab in view. Not cosmetic: a call site's own empty states can link back
+  // to a sibling tab, so the selection can change without the user having touched the strip,
+  // and the newly-active tab would otherwise stay parked off-screen.
   $effect(() => {
     const el = buttons[activeIndex];
     if (!strip || !el) return;
@@ -138,7 +141,7 @@
         bind:this={buttons[i]}
         type="button"
         role="tab"
-        id={tabId(panelId, t.id)}
+        id={tabStripId(panelId, t.id)}
         aria-selected={t.id === active}
         aria-controls={panelId}
         tabindex={t.id === active ? 0 : -1}

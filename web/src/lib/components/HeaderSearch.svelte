@@ -5,8 +5,8 @@
   import { api } from '$lib/api';
   import type { Job, CompanyListItem } from '$lib/types';
   import { lockScroll, unlockScroll } from '$lib/scrollLock';
-  import { cn } from '$lib/ui';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { cn, EntityLogo } from '$lib/ui';
   import HeaderLocationFilter from './HeaderLocationFilter.svelte';
 
   // The global launcher: jumps straight to a job/company or hands a free-text
@@ -251,7 +251,12 @@
               onmouseenter={() => (activeIndex = i)}
               class={itemClass(activeIndex === i)}
             >
-              <CompanyLogo name={job.company} size="size-5" />
+              <EntityLogo
+                name={job.company || 'Unknown company'}
+                src={companyLogoUrl(job.company) ?? undefined}
+                shape="square"
+                size="xs"
+              />
               <span class="min-w-0 flex-1">
                 <span class="block truncate font-medium">{job.title}</span>
                 <span class="block truncate text-xs text-muted-foreground">
@@ -274,7 +279,7 @@
               onmouseenter={() => (activeIndex = idx)}
               class={itemClass(activeIndex === idx)}
             >
-              <CompanyLogo name={company.name} size="size-5" />
+              <EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="xs" />
               <span class="min-w-0 flex-1 truncate font-medium">{company.name}</span>
               <span class="shrink-0 text-xs text-muted-foreground">
                 {company.job_count}

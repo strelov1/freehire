@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Company } from '$lib/types';
   import { countryLabel } from '$lib/facets';
-  import CountryFlag from './CountryFlag.svelte';
+  import { CountryFlag } from '$lib/ui';
 
   // The company's scalar facts as a self-contained card, shown in the jobs sidebar
   // (desktop) and as a fallback card under the header (mobile, where the sidebar is
@@ -78,7 +78,7 @@
         {#each facts as fact (fact.term)}
           <dt class="text-muted-foreground">{fact.term}</dt>
           <dd class="flex items-center justify-end gap-1.5 text-right font-medium">
-            {#if fact.flag}<CountryFlag code={fact.flag} class="text-base" />{/if}{fact.value}
+            {#if fact.flag}<CountryFlag code={fact.flag} label={fact.value} class="text-base" />{/if}{fact.value}
           </dd>
         {/each}
       </dl>

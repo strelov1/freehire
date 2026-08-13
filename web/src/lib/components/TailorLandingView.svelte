@@ -1,8 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
-  import NumberedGrid from '$lib/components/NumberedGrid.svelte';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { NumberedGrid, SectionLabel } from '$lib/ui';
   import { TAILOR_FAQ } from '$lib/tailorFaq';
 
   // The requirement split the tailoring context hands the agent. This is the

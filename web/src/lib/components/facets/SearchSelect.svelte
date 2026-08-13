@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte';
   import { optionMatches, relatedOptions, uniqueByValue, type FacetOption } from '$lib/facets';
-  import { Input } from '$lib/ui';
-  import CountryFlag from '../CountryFlag.svelte';
+  import { CountryFlag, Input } from '$lib/ui';
   import { pillClass, pillTitle } from './pill';
   import { must } from '$lib/utils';
 
@@ -107,7 +106,7 @@
         title={pillTitle(included, excluded, excludable)}
         class={pillClass(included || excluded, excluded, 'inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 text-sm')}
       >
-        {#if opt.flag}<CountryFlag code={opt.flag} class="text-base" />{/if}
+        {#if opt.flag}<CountryFlag code={opt.flag} label={opt.label} class="text-base" />{/if}
         <!-- A very long value (roles like "Senior Business Development Representative")
              truncates to one line with an ellipsis instead of wrapping the pill onto
              two rows; the full label surfaces on hover via title. -->

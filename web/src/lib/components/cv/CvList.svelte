@@ -3,8 +3,8 @@
   import { resolve } from '$app/paths';
   import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
-  import { Button } from '$lib/ui';
-  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Button, EntityLogo } from '$lib/ui';
   import JdIntakeDialog from './JdIntakeDialog.svelte';
   import { type CvTailoredItem } from '$lib/cv';
 
@@ -102,7 +102,7 @@
           <!-- The whole card opens the workspace; the action buttons stop propagation below. -->
           <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended ?cv= query -->
           <a href={`${resolve('/tailor/[slug]', { slug: cv.job_slug })}?cv=${cv.id}`} class="absolute inset-0" aria-label="Open {cv.job_title}"></a>
-          <CompanyLogo name={cv.job_company} size="size-11" />
+          <EntityLogo name={cv.job_company} src={companyLogoUrl(cv.job_company) ?? undefined} shape="square" size="lg" />
           <div class="min-w-0 flex-1">
             <p class="truncate font-medium">{cv.job_title}</p>
             <p class="truncate text-sm text-muted-foreground">{cv.job_company}</p>

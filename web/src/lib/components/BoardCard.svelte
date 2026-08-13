@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Clock, Mail, MessageSquare } from '@lucide/svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
-  import { Badge } from '$lib/ui';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Badge, EntityLogo } from '$lib/ui';
   import { humanizeStage } from '$lib/stages';
   import { chasedLabel, cvOpenedLabel } from '$lib/followup';
   import type { MyJob } from '$lib/types';
@@ -72,7 +72,7 @@
   class="flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 text-sm font-semibold">
-    <CompanyLogo name={company} />
+    <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>
   <span class="line-clamp-2 text-sm">{title}</span>

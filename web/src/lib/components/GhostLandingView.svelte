@@ -6,8 +6,7 @@
   import GhostChecklist from '$lib/components/GhostChecklist.svelte';
   import Prevalence from '$lib/components/ghost/Prevalence.svelte';
   import SignalDiagram from '$lib/components/ghost/SignalDiagram.svelte';
-  import NumberedGrid from '$lib/components/NumberedGrid.svelte';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { NumberedGrid, SectionLabel } from '$lib/ui';
   import { CRITERIA } from '$lib/ghost';
   import type { Ghost } from '$lib/generated/contracts';
   import { GHOST_FAQ } from '$lib/ghostFaq';

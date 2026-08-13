@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { SectionLabel } from '$lib/ui';
 
   // The About page's values block — the promises behind the mission, shown only
   // on /about (HomeView carries the mission and renders on / too, so these live

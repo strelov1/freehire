@@ -11,9 +11,9 @@
   import { toSearchString } from '$lib/urlSearchString';
   import { latestOnly } from '$lib/latestOnly';
   import type { Job, FacetCounts } from '$lib/types';
-  import { Badge } from '$lib/ui';
+  import { companyLogoUrl } from '$lib/logo';
+  import { Badge, EntityLogo } from '$lib/ui';
   import { markViewed } from '$lib/viewedJobs.svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
   import FilterModal from './filters/FilterModal.svelte';
   import JobMatch from './JobMatch.svelte';
   import States from './States.svelte';
@@ -404,7 +404,12 @@
               class="swipe-scroll flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain p-5"
             >
               <div class="flex items-center gap-3">
-                <CompanyLogo name={current.company} />
+                <EntityLogo
+                  name={current.company || 'Unknown company'}
+                  src={companyLogoUrl(current.company) ?? undefined}
+                  shape="square"
+                  size="xs"
+                />
                 <div class="min-w-0">
                   <div class="truncate font-semibold">{current.company || 'Unknown company'}</div>
                   {#if current.location}

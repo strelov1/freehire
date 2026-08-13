@@ -5,7 +5,8 @@
   import { isAuthenticated } from '$lib/auth.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MyAnalysisItem } from '$lib/types';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import States from './States.svelte';
 
   // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on. Read-only —
@@ -69,7 +70,12 @@
               {/if}
             </span>
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <CompanyLogo name={it.company} size="size-4" />
+              <EntityLogo
+                name={it.company || 'Unknown company'}
+                src={companyLogoUrl(it.company) ?? undefined}
+                shape="square"
+                size="xs"
+              />
               <span class="truncate">{it.company}</span>
               <span aria-hidden="true">·</span>
               <span class="shrink-0">{fmtDate(it.analysed_at)}</span>

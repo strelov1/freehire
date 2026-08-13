@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Button, Badge, cn } from '$lib/ui';
+  import { Badge, Button, cn, EntityLogo } from '$lib/ui';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
   import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
   import { canFollowUp } from '$lib/followup';
@@ -9,7 +9,7 @@
   import { timeAgo, errorMessage } from '$lib/utils';
   import { tablist } from '$lib/actions/tablist';
   import { cardTagsFromCard } from '$lib/enrichment';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
   import JobDescription from './JobDescription.svelte';
   import MatchAnalysisFull from './MatchAnalysisFull.svelte';
   import JobMatch from './JobMatch.svelte';
@@ -288,7 +288,12 @@
     <div class="mx-auto flex w-full max-w-2xl flex-col gap-4 px-5 pb-3 pt-5 sm:px-6">
       <div class="flex items-start gap-4">
         <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl">
-          <CompanyLogo name={company} size="size-9" />
+          <EntityLogo
+            name={company || 'Unknown company'}
+            src={companyLogoUrl(company) ?? undefined}
+            shape="square"
+            size="md"
+          />
         </div>
         <div class="min-w-0 flex-1">
           <h2 class="text-xl font-bold leading-tight tracking-tight">{title}</h2>

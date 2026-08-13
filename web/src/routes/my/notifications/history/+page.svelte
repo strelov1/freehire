@@ -5,7 +5,7 @@
   import { notificationCenter } from '$lib/notificationCenter.svelte';
   import { Paginator } from '$lib/paginated.svelte';
   import NotificationCard from '$lib/components/NotificationCard.svelte';
-  import LoadMore from '$lib/components/LoadMore.svelte';
+  import { LoadMore } from '$lib/ui';
   import States from '$lib/components/States.svelte';
   import type { NotificationItem } from '$lib/types';
 

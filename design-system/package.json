@@ -40,6 +40,7 @@
     "eslint": "^10.8.0",
     "eslint-plugin-oxlint": "^1.77.0",
     "eslint-plugin-svelte": "^3.22.0",
+    "flag-icons": "^7.5.0",
     "globals": "^17.8.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.77.0",

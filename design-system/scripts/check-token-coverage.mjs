@@ -73,6 +73,28 @@ const ALLOWED = [
       'one hue per name at two fixed lightnesses; a token per hue makes no sense, ' +
       'and the pair carries its own contrast so it needs no theme override',
   },
+  {
+    file: 'avatar.svelte',
+    kind: 'Tailwind arbitrary value',
+    reason:
+      "the xs tile (size-5, promoted from CompanyLogo's smallest call sites) is too small " +
+      "for any stock text size — 9px is a deliberate one-off, not a value worth a token",
+  },
+  {
+    file: 'provider-icon.svelte',
+    kind: 'colour literal',
+    reason:
+      "Google's brand mark is specified in these four exact colours; a token would " +
+      'misrepresent the mark, and no other provider path uses a literal (they follow ' +
+      'currentColor instead)',
+  },
+  {
+    file: 'section-label.svelte',
+    kind: 'Tailwind arbitrary value',
+    reason:
+      '0.2em tracking for one mono heading style; Tailwind\'s own scale tops out at ' +
+      'tracking-widest (0.1em) and no other primitive needs this value',
+  },
 ];
 
 const baselinePath = join(fileURLToPath(new URL('.', import.meta.url)), 'web-token-baseline.json');

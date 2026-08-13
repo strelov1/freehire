@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Clock, Mail } from '@lucide/svelte';
-  import CompanyLogo from './CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import { groupedStages } from '$lib/stages';
   import { timeAgo } from '$lib/utils';
   import type { BoardItem } from '$lib/board';
@@ -37,7 +38,7 @@
           onclick={() => onopen(item)}
           class="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <CompanyLogo name={company(item)} />
+          <EntityLogo name={company(item)} src={companyLogoUrl(company(item)) ?? undefined} shape="square" size="xs" />
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-medium">{title(item)}</span>
             <span class="block truncate text-xs text-muted-foreground">{company(item) || 'Unknown company'}</span>

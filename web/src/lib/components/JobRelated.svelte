@@ -3,7 +3,7 @@
   import type { JobCopy } from '$lib/api';
   import type { Job } from '$lib/types';
   import JobRow from './JobRow.svelte';
-  import TabRow, { tabId } from './TabRow.svelte';
+  import { TabStrip, tabStripId } from '$lib/ui';
 
   // The two "more like this" surfaces for a job, tabbed: semantically similar jobs and,
   // for a collapsed mass-posted role, the other cities it is open in. `copies` is a small
@@ -41,7 +41,7 @@
 {#if hasSimilar || hasCopies}
   <section class="mt-10">
     {#if tabs.length > 1}
-      <TabRow
+      <TabStrip
         {tabs}
         {active}
         onSelect={(id) => (selected = id)}
@@ -51,7 +51,7 @@
       />
     {/if}
 
-    <div id={panelId} role="tabpanel" aria-labelledby={tabId(panelId, active)} tabindex="-1">
+    <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, active)} tabindex="-1">
       {#if active === 'similar' && hasSimilar}
         <div class="flex flex-col gap-3">
           {#each similar as job (job.public_slug)}

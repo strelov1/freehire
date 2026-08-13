@@ -2,8 +2,7 @@
   import { resolve } from '$app/paths';
   import { Button } from '$lib/ui';
   import HomeFunnel from '$lib/components/HomeFunnel.svelte';
-  import NumberedGrid from '$lib/components/NumberedGrid.svelte';
-  import SectionLabel from '$lib/components/SectionLabel.svelte';
+  import { NumberedGrid, SectionLabel } from '$lib/ui';
   import { HOME_FAQ } from '$lib/homeFaq';
 
   // Live catalogue totals from the page's server load; either may be null on an

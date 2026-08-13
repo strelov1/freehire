@@ -19,7 +19,8 @@
   import { clampWidth } from './geometry';
   import JobDescription from '$lib/components/JobDescription.svelte';
   import MatchAnalysisFull from '$lib/components/MatchAnalysisFull.svelte';
-  import CompanyLogo from '$lib/components/CompanyLogo.svelte';
+  import { companyLogoUrl } from '$lib/logo';
+  import { EntityLogo } from '$lib/ui';
   import RevisionHistory from './RevisionHistory.svelte';
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
@@ -181,7 +182,12 @@
        the posting is worth reaching from every tab, and a candidate reading a score should not
        have to change tabs to see what they are being scored against. -->
   <div class="flex items-start gap-2.5 border-b border-border px-3 py-2.5">
-    <CompanyLogo name={job.company} size="size-8" />
+    <EntityLogo
+      name={job.company || 'Unknown company'}
+      src={companyLogoUrl(job.company) ?? undefined}
+      shape="square"
+      size="sm"
+    />
     <div class="min-w-0 flex-1">
       <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={job.title}>
         {job.title}

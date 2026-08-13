@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { reopen } from '$lib/consent.svelte';
-  import ProviderIcon from './ProviderIcon.svelte';
+  import { ProviderIcon } from '$lib/ui';
 
   // Grouped navigation over existing routes only — kept deliberately small so the
   // footer stays uncluttered. Internal links go through resolve() (base-path safe),

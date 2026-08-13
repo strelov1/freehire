@@ -70,7 +70,7 @@ export const tablist: Action<HTMLElement, unknown> = (node) => {
  * because both had it, byte for byte, and a pill that drifts between two sibling sections
  * of the same account area reads as a bug rather than as a choice.
  *
- * It is NOT the underline strip (`TabRow`) or the design system's `Tabs`: those weld the
+ * It is NOT the underline strip (`TabStrip`) or the design system's `Tabs`: those weld the
  * list to a panel, and these tabs are anchors driving a route.
  */
 export function routeTabClass(active: boolean): string {

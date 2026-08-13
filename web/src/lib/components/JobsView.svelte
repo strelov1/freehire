@@ -38,7 +38,7 @@
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
   import JobRow from './JobRow.svelte';
-  import LoadMore from './LoadMore.svelte';
+  import { LoadMore } from '$lib/ui';
   import InfiniteScroll from './InfiniteScroll.svelte';
   import HiddenToast from './HiddenToast.svelte';
 
