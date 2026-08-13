@@ -983,6 +983,13 @@ export function createApi(
     }>(`/api/v1/me/notifications${query(limit, offset)}`);
   }
 
+  /** One notification, including its `jobs` snapshot when it has one — the
+   *  read a direct visit/bookmark of the digest jobs-list page needs, since
+   *  getNotifications alone only ever serves the caller's current page. */
+  async function getNotification(id: number): Promise<NotificationItem> {
+    return requestData<NotificationItem>(`/api/v1/me/notifications/${id}`);
+  }
+
   /** Mark one notification read. Idempotent; owner-scoped (404s for another
    *  user's, but that never happens from this client since ids come from the
    *  caller's own list). */
@@ -2013,6 +2020,7 @@ export function createApi(
     updateNotificationSettings,
     listDismissedSlugs,
     getNotifications,
+    getNotification,
     markNotificationRead,
     markAllNotificationsRead,
     listApiKeys,

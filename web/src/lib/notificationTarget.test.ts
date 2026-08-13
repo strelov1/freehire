@@ -23,8 +23,21 @@ describe('notificationTarget', () => {
     });
   });
 
-  it('sends a multi-job digest (no slug) nowhere', () => {
-    expect(notificationTarget({ kind: 'subscription_digest', public_slug: null })).toEqual({ kind: 'none' });
+  it('sends a multi-job digest to its own jobs-list page', () => {
+    expect(
+      notificationTarget({
+        id: 42,
+        kind: 'subscription_digest',
+        public_slug: null,
+        jobs: [{ title: 'A', company: 'Acme', slug: 'a' }],
+      }),
+    ).toEqual({ kind: 'digest', id: 42 });
+  });
+
+  it('sends a digest with neither a slug nor a jobs snapshot nowhere (defensive)', () => {
+    expect(notificationTarget({ id: 42, kind: 'subscription_digest', public_slug: null, jobs: null })).toEqual({
+      kind: 'none',
+    });
   });
 
   // The two nudge kinds the tracking board itself is about — even though the row
