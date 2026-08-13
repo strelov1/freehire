@@ -99,11 +99,22 @@ spuriously reject a posting that was already accepted once
   → `WorkMode: ""` (unknown), matching the existing adapter's principle of never guessing
   hybrid/onsite from an ambiguous signal.
 - `jobLocation.address` (`addressLocality`, `addressCountry`) when present; otherwise
-  `applicantLocationRequirements.name` for remote postings that carry no `jobLocation`.
+  `applicantLocationRequirements.name` for remote postings that carry no `jobLocation`. Both
+  fields decode through the shared object-or-array schema types (`schemaPlaces`,
+  `schemaNamedAreas` in `internal/sources/schema.go`) rather than a bare struct: schema.org
+  allows either a single node or an array for both, and every live sample so far has shipped
+  a single object — but Go's `json.Unmarshal` errors on a bare-struct field asked to decode
+  an array, and that error propagates through `ldJobPosting`'s `err == nil` check and drops
+  the WHOLE posting, not just its location, the day one tenant emits the array form (e.g. a
+  remote role open to several countries). Caught in review before this shipped; regression
+  test at `TestEchojobsFetchNewHandlesArrayApplicantLocationRequirements` /
+  `TestEchojobsFetchNewHandlesArrayJobLocation`.
 - `skills`: a single comma-separated string in the new format (was a JSON array before) —
   split and trim, then run through the existing `skilltag.Canonicalize`.
-- `datePosted`: ISO 8601 (`time.Parse(time.RFC3339, ...)`), replacing the old
-  epoch-millisecond parsing.
+- `datePosted`: `parseRFC3339OrDate` (full RFC3339 timestamp, falling back to a bare
+  `2006-01-02` date) — the same tenant-dependent variance `northstone`/`briefhq` already
+  handle for the same JobPosting field. Every live sample so far has been full RFC3339; the
+  bare-date fallback is defensive, matching house precedent rather than a live-observed need.
 
 ## Risks / Trade-offs
 
@@ -116,13 +127,47 @@ spuriously reject a posting that was already accepted once
 - **[Risk] Sitemap shard count/URLs-per-shard could change over time** (currently 23
   shards × 10,000). → Mitigation: the crawl walks `sitemap.xml` to discover shard URLs
   dynamically rather than hardcoding a shard count, and stops on the freshness-window
-  cutoff rather than a fixed shard number either way.
+  cutoff rather than a fixed shard number either way. A narrower variant of this risk —
+  the newest-first ORDER itself changing, e.g. a fresher shard appearing after a staler one
+  — was raised in review. → Not mitigated: verified live via shard-boundary sampling (see
+  Context) and accepted as a live-verified assumption, not a runtime-guarded invariant. A
+  guard (detect out-of-order lastmod, fall back to scanning every shard) is real defensive
+  value but a genuine scope increase — no evidence this happens, and the failure mode if it
+  ever does is silent staleness (missed newest postings), not corruption or a crash. Left as
+  a follow-up if it's ever observed, not built speculatively (YAGNI per this repo's working
+  principles).
 - **[Trade-off] `SeenRefresh` postings carry no `Title` any more** (previously came from
   the list endpoint, which had it; the sitemap does not). Verified harmless for the one
   path that reads it (the catalogue filter — see Decisions above), but any *future* code
   added to the `SeenRefresh` branch that assumes a non-empty `Title` would silently regress
   for echojobs specifically. Not mitigated beyond this note — the existing code path
   doesn't need it today.
+- **[Trade-off] `Job.URL` now points at the echojobs.io job page, not the employer's own ATS
+  link.** The old adapter's list JSON carried the employer's real apply URL directly (a
+  Workday/Greenhouse/etc. link); `Job.URL` is what `jobview`/`JobView.svelte` opens as the
+  "Apply" target on freehire.me, so this is a real, user-facing change, not an internal
+  detail. Investigated recovering it: the employer link is no longer present anywhere in the
+  server-rendered `/job/<slug>` page — verified by extracting every `http(s)` URL from a
+  fetched page's full text (only the company's own homepage appears, via
+  `hiringOrganization.sameAs`) — and the page's own copy now reads "Sign in to apply →",
+  which reads as echojobs.io gating the outbound link behind an account, not merely
+  client-side hydration. → Mitigation: none — recovering it would need a headless browser
+  (and possibly an authenticated echojobs.io session) per posting, which defeats the
+  plain-GET design this rewrite exists to keep, for a source that is one of ~300+ this
+  catalogue crawls. Accepted as an unavoidable quality regression specific to this source
+  until/unless echojobs.io exposes the link some other way.
+- **[Risk] A systemic detail-fetch failure (e.g. echojobs changes its page markup again)
+  drops postings silently — the per-posting `Skipped`/`Failed` stats `ingestFetched` logs
+  never see an adapter-level drop, only a `saveOne` failure.** This is exactly the failure
+  shape that let the API removal itself go unnoticed until a user reported one empty
+  description. → Mitigation: `FetchNew` now logs a per-run summary
+  (`echojobs: dropped %d/%d candidate postings this run`) whenever any posting was dropped,
+  visible in the same log stream every other adapter's anomalies already go to. This is
+  visibility, not alerting or a board-health signal — wiring a systemic echojobs failure
+  into board-health cooldown or a dedicated alert is a real follow-up, not built here: it
+  would need either a new `Job`-carried failure count or a `HydratingSource` interface
+  change reaching every adapter, out of proportion for a bug-fix change whose scope is
+  restoring the existing contract.
 - **[Risk] Volume estimate (50,000+ postings/window) is extrapolated from shard date
   ranges, not measured against the new crawl in production.** → Mitigation: the design
   bounds the *expensive* operation (full detail fetch) to genuinely new postings, which
@@ -139,7 +184,13 @@ dedup key are unaffected. Deploy is a normal `release.sh` build; the next schedu
 deploy, `cmd/backfill-echojobs` should be run once by hand to repair the empty-description
 rows accumulated during the outage window (2026-08-13 onward) — no timer runs it
 automatically (see `internal/sources/AGENTS.md`'s note that it is a one-off worker).
-Rollback is a normal `rollback.sh` to the prior color; no schema or on-disk state to undo.
+Rollback is a normal `rollback.sh` to the prior color; no schema or on-disk state to undo. Note
+what rollback does NOT do: the prior release calls the same dead `/api/jobs` endpoints this
+change replaces, so rolling back returns echojobs ingestion to the exact broken (empty-
+description) state this change exists to fix — it undoes this deploy, it does not restore a
+working echojobs adapter. That is correct, expected rollback semantics (undo a bad new deploy,
+accept the pre-existing known state), not a gap — called out explicitly here so it is not
+mistaken for one during an incident.
 
 ## Open Questions
 

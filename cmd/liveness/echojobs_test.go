@@ -39,6 +39,23 @@ func TestCheckEchoJobsLiveOnRemovedPosting(t *testing.T) {
 	}
 }
 
+// 410 Gone is the same "removed" signal as 404 for every other liveness probe in this worker
+// (see internal/liveness.Classify) — echojobs' own probe must not treat it as merely Uncertain.
+func TestCheckEchoJobsLiveOnGonePosting(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(410)
+	}))
+	defer srv.Close()
+
+	verdict, reason := checkEchoJobsLiveAt(context.Background(), srv.Client(), srv.URL+"/%s", "gone-handle")
+	if verdict != liveness.Expired {
+		t.Errorf("verdict = %v, want Expired", verdict)
+	}
+	if reason != "echojobs_job_gone" {
+		t.Errorf("reason = %q, want echojobs_job_gone", reason)
+	}
+}
+
 func TestCheckEchoJobsLiveOnUnrelatedError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,18 +18,24 @@ import (
 // job shards) and HTML (a posting's detail page, carrying its JobPosting ld+json). Each is
 // keyed by exact URL, so a test wires only the routes its scenario needs. gotXML/gotHTML record
 // every URL requested, in order, so a test can assert what was (and was not) fetched — in
-// particular that a seen posting never costs an HTML request.
+// particular that a seen posting never costs an HTML request. mu guards both slices: FetchNew
+// runs detail() concurrently across a bounded worker pool (see fetchDetails), so a scenario with
+// more than one unseen posting calls GetHTML from several goroutines at once.
 type echojobsFakeHTTP struct {
 	xmlRoutes  map[string]string
 	htmlRoutes map[string]string
 	xmlErr     map[string]bool
 	htmlErr    map[string]bool
-	gotXML     []string
-	gotHTML    []string
+
+	mu      sync.Mutex
+	gotXML  []string
+	gotHTML []string
 }
 
 func (f *echojobsFakeHTTP) GetXML(_ context.Context, url string, v any) error {
+	f.mu.Lock()
 	f.gotXML = append(f.gotXML, url)
+	f.mu.Unlock()
 	if f.xmlErr[url] {
 		return errors.New("echojobsFakeHTTP: xml boom")
 	}
@@ -40,7 +47,9 @@ func (f *echojobsFakeHTTP) GetXML(_ context.Context, url string, v any) error {
 }
 
 func (f *echojobsFakeHTTP) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gotHTML = append(f.gotHTML, url)
+	f.mu.Unlock()
 	if f.htmlErr[url] {
 		return nil, errors.New("echojobsFakeHTTP: html boom")
 	}
@@ -301,6 +310,84 @@ func TestEchojobsFetchNewFallsBackToApplicantLocationRequirements(t *testing.T) 
 	}
 	if len(jobs) != 1 || jobs[0].Location != "US" {
 		t.Fatalf("want Location=US from applicantLocationRequirements, got %+v", jobs)
+	}
+}
+
+// schema.org allows applicantLocationRequirements as EITHER a single object OR an array (a
+// remote posting open to several countries). Go's json.Unmarshal errors on a bare-object field
+// asked to decode an array — decoding it as a plain struct would fail the WHOLE ld+json block
+// (see schemaNamedAreas' doc), dropping the posting entirely rather than just its location. This
+// pins that the array form decodes cleanly and every field survives, not just the location.
+func TestEchojobsFetchNewHandlesArrayApplicantLocationRequirements(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("multi-country-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("multi-country-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocationType":"TELECOMMUTE",` +
+				`"applicantLocationRequirements":[{"@type":"Country","name":"US"},{"@type":"Country","name":"Canada"}]`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job (array-shaped applicantLocationRequirements must not drop the posting), got %+v", jobs)
+	}
+	job := jobs[0]
+	if job.Title != "Engineer" {
+		t.Errorf("Title = %q, want it to survive the array field", job.Title)
+	}
+	if job.Location != "US, Canada" {
+		t.Errorf("Location = %q, want both countries joined", job.Location)
+	}
+}
+
+// schema.org allows jobLocation as EITHER a single Place OR an array of them, the same way
+// applicantLocationRequirements does. This pins the array form via the shared schemaPlaces type.
+func TestEchojobsFetchNewHandlesArrayJobLocation(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("multi-location-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("multi-location-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"jobLocation":[{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Austin, TX","addressCountry":"US"}},` +
+				`{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Denver, CO","addressCountry":"US"}}]`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Location != "Austin, TX, US" {
+		t.Fatalf("want the first location (array-shaped jobLocation must not drop the posting), got %+v", jobs)
+	}
+}
+
+// datePosted may be a bare "2006-01-02" date rather than a full RFC3339 timestamp (the same
+// tenant-dependent variance northstone/briefhq already handle via parseRFC3339OrDate).
+func TestEchojobsFetchNewParsesDateOnlyPostedAt(t *testing.T) {
+	http := &echojobsFakeHTTP{
+		xmlRoutes: echojobsSingleShardRoutes("date-only-role"),
+		htmlRoutes: map[string]string{
+			echojobsJobURL("date-only-role"): echojobsJobHTML(`"title":"Engineer",` +
+				`"hiringOrganization":{"@type":"Organization","name":"Acme"},` +
+				`"description":"<p>Role.</p>",` +
+				`"datePosted":"2026-08-01"`),
+		},
+	}
+
+	jobs, err := echojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].PostedAt == nil {
+		t.Fatalf("want PostedAt parsed from a bare date, got %+v", jobs)
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -37,8 +38,10 @@ func trimEchoJobsHandle(externalID string) string {
 
 // checkEchoJobsLiveAt is checkEchoJobsLive with the job URL template as a parameter (already-
 // stripped slug), so a test can point it at a stub server. The page's plain HTTP status is the
-// liveness signal: 200 means still listed, 404 means removed; anything else is Uncertain, the
-// same under-closing-biased default every other adapter's liveness check falls back to.
+// liveness signal: 200 means still listed, 404 or 410 means removed (the same pair the shared
+// liveness.Classify treats as "gone" — see internal/liveness/liveness.go); anything else is
+// Uncertain, the same under-closing-biased default every other adapter's liveness check falls
+// back to.
 func checkEchoJobsLiveAt(ctx context.Context, client *http.Client, jobURLTemplate, slug string) (liveness.Verdict, string) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(jobURLTemplate, slug), nil)
 	if err != nil {
@@ -50,10 +53,12 @@ func checkEchoJobsLiveAt(ctx context.Context, client *http.Client, jobURLTemplat
 		return liveness.Uncertain, ""
 	}
 	defer resp.Body.Close()
+	// Drain so the transport can reuse the connection across a run that probes many postings.
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return liveness.Live, ""
-	case http.StatusNotFound:
+	case http.StatusNotFound, http.StatusGone:
 		return liveness.Expired, "echojobs_job_gone"
 	default:
 		return liveness.Uncertain, ""

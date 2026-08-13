@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
@@ -13,10 +14,8 @@ import (
 	"github.com/strelov1/freehire/internal/skilltag"
 )
 
-// echojobs adapts echojobs.io, a large multi-employer tech-jobs aggregator whose postings
-// resolve to the employer's own ATS URL (Workday, Greenhouse, and others show up in the feed)
-// rather than to an echojobs.io-hosted page. Boardless: one global feed, sorted newest-first, no
-// per-tenant board.
+// echojobs adapts echojobs.io, a large multi-employer tech-jobs aggregator. Boardless: one
+// global feed, sorted newest-first, no per-tenant board.
 //
 // echojobs.io retired its public JSON API (the list+detail endpoints this adapter used to call)
 // around 2026-08-13 — both 404 now, verified from prod's own egress IP as well as externally.
@@ -26,6 +25,17 @@ import (
 // in each posting's server-rendered detail page (/job/<slug>) for every structured field a
 // posting has (title, company, description, remote signal, location, skills, posting date).
 // Neither needs JavaScript execution — a plain GET reaches both.
+//
+// Job.URL now points at that echojobs.io page, NOT the employer's own ATS link the old adapter
+// used to store (its list JSON carried the employer's apply URL directly; a real Workday/
+// Greenhouse/etc. link, and jobview/JobView.svelte opens it as the "Apply" target). This is a
+// real, unavoidable regression, not an oversight: the employer link is no longer present in the
+// server-rendered page at all — verified live by diffing a fetched page's full text against the
+// dead-code's expectation, then searching it for every http(s) URL — it now only ships client-
+// side (the page even prompts a visitor to "Sign in to apply", which reads as an echojobs.io
+// account gate ahead of the outbound link, not merely a JS-hydration delay). Recovering it would
+// need a headless browser (and possibly an echojobs.io session) for every posting, which defeats
+// the plain-GET design this rewrite exists to keep. See design.md's Risks section.
 //
 // The sitemap carries nothing beyond a posting's URL and last-modified time — unlike the old
 // list JSON, it cannot supply even a title without a detail fetch — so the "list vs detail"
@@ -87,22 +97,36 @@ func (s echojobs) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // logged — there is no list-only Job left to fall back to (contrast the old list+detail split,
 // where a failed detail still yielded a list-only posting). Detail fetches run under the shared
 // bounded worker pool.
+//
+// A dropped posting never reaches the pipeline's own stats (Skipped/Failed count saveOne
+// failures, not candidates an adapter discarded before returning them at all), so a systemic
+// break here — echojobs changing its page markup again, the way it changed its API — would
+// otherwise ingest near-nothing with no board-level error and no visible anomaly: exactly the
+// failure mode that went unnoticed long enough to empty-description hundreds of postings before
+// this rewrite. The summary log line below is the cheap mitigation: not an alert, just a number
+// an operator (or a future board-health check) can see.
 func (s echojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	postings, err := s.crawl(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(postings, defaultDetailWorkers, func(p echojobsPosting) (Job, bool) {
+	var dropped atomic.Int64
+	jobs := fetchDetails(postings, defaultDetailWorkers, func(p echojobsPosting) (Job, bool) {
 		if seen(p.Slug) {
 			return Job{ExternalID: p.Slug, URL: echojobsJobURL(p.Slug), SeenRefresh: true}, true
 		}
 		job, err := s.detail(ctx, p.Slug)
 		if err != nil {
+			dropped.Add(1)
 			log.Printf("echojobs: detail %q: %v; dropping (sitemap carries no list-only fallback fields)", p.Slug, err)
 			return Job{}, false
 		}
 		return job, true
-	}), nil
+	})
+	if n := dropped.Load(); n > 0 {
+		log.Printf("echojobs: dropped %d/%d candidate postings this run (detail fetch failed or carried no usable JobPosting)", n, len(postings))
+	}
+	return jobs, nil
 }
 
 // echojobsPosting is one posting discovered from the sitemap: its slug and last-modified time.
@@ -222,10 +246,12 @@ func echojobsJobURL(slug string) string {
 }
 
 // echojobsJobPosting is the schema.org JobPosting decoded from a /job/<slug> page's ld+json
-// block. jobLocation is a single Place (absent for a fully-remote posting) and
-// applicantLocationRequirements a single Country — verified live on both an on-site posting
-// (JLL) and a remote one (Doowii). skills is a comma-separated string, not an array, unlike the
-// old list JSON's required_skills.
+// block. jobLocation and applicantLocationRequirements both use the shared object-or-array
+// schema types (schemaPlaces, schemaNamedAreas): every live sample so far has shipped a single
+// object (JLL on-site, Doowii remote), but the schema.org spec allows either shape for both
+// fields, and decoding them as a bare object would fail the WHOLE posting's ld+json the day
+// echojobs (or any single tenant) emits the array form — see schemaNamedAreas' doc. skills is a
+// comma-separated string, not an array, unlike the old list JSON's required_skills.
 type echojobsJobPosting struct {
 	Title              string `json:"title"`
 	Description        string `json:"description"`
@@ -234,23 +260,21 @@ type echojobsJobPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation struct {
-		Address schemaAddress `json:"address"`
-	} `json:"jobLocation"`
-	ApplicantLocationRequirements struct {
-		Name string `json:"name"`
-	} `json:"applicantLocationRequirements"`
-	Skills string `json:"skills"`
+	JobLocation                   schemaPlaces     `json:"jobLocation"`
+	ApplicantLocationRequirements schemaNamedAreas `json:"applicantLocationRequirements"`
+	Skills                        string           `json:"skills"`
 }
 
 // location prefers the explicit jobLocation address and falls back to
 // applicantLocationRequirements — the only signal a fully-remote posting exposes, its
 // jobLocation being absent.
 func (p echojobsJobPosting) location() string {
-	if loc := p.JobLocation.Address.Location(); loc != "" {
-		return loc
+	if len(p.JobLocation) > 0 {
+		if loc := p.JobLocation[0].Address.Location(); loc != "" {
+			return loc
+		}
 	}
-	return p.ApplicantLocationRequirements.Name
+	return joinNonEmpty(p.ApplicantLocationRequirements.Names()...)
 }
 
 // errEchojobsNoJobPosting means a detail page fetched fine but carried no usable JobPosting
@@ -286,7 +310,7 @@ func (s echojobs) detail(ctx context.Context, slug string) (Job, error) {
 		Remote:      remote,
 		WorkMode:    workModeFromRemote(remote),
 		Skills:      skilltag.Canonicalize(echojobsSplitSkills(p.Skills)),
-		PostedAt:    parseRFC3339(p.DatePosted),
+		PostedAt:    parseRFC3339OrDate(p.DatePosted),
 	}, nil
 }
 
