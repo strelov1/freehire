@@ -31,7 +31,10 @@ import (
 )
 
 const (
-	image = "postgres:18-alpine"
+	// pgvector's build, not stock postgres: migrations run `CREATE EXTENSION
+	// vector` (0092+), which the stock image doesn't ship. Must stay in sync with
+	// docker-compose.yml's `db` service image — same Postgres major (18).
+	image = "pgvector/pgvector:pg18"
 
 	// templateDB holds the migrated schema that per-test databases are cloned
 	// from. Nothing may hold a connection to it — CREATE DATABASE ... TEMPLATE

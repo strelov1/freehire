@@ -1,6 +1,11 @@
 services:
   db:
-    image: postgres:18-alpine
+    # pgvector's build, not stock postgres: migration 0092 runs `CREATE EXTENSION
+    # vector`, which the stock image doesn't ship. This is Debian-based (bookworm),
+    # not Alpine — pgvector has no Alpine variant — but pins the same Postgres major
+    # (18) as the stock image it replaces, so the version-subdirectory volume
+    # behaviour noted below is unaffected.
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: hire
       POSTGRES_PASSWORD: hire

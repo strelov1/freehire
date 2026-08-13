@@ -1,6 +1,6 @@
 ## 1. Migration and column backfill
 
-- [ ] 1.1 New migration (next number off `origin/main`'s `migrations/`, re-check at
+- [x] 1.1 New migration (next number off `origin/main`'s `migrations/`, re-check at
       implementation time — numbers have collided across branches before):
       `CREATE EXTENSION IF NOT EXISTS vector;` + `ALTER TABLE jobs ADD COLUMN
       semantic_embedding_vec vector(768)`, `ADD COLUMN similar_job_ids bigint[]`,
@@ -9,7 +9,7 @@
       `jobs.semantic_embedding` (`real[]`) rows into `semantic_embedding_vec`
       (`vector(768)`), batched, resumable, mirroring `cmd/backfill-semantic-vectors`'s
       shape.
-- [ ] 1.3 `internal/db/queries/*.sql`: add/update sqlc queries for the new columns;
+- [x] 1.3 `internal/db/queries/*.sql`: add/update sqlc queries for the new columns;
       `make sqlc` (or `~/go/bin/sqlc generate` if Docker unavailable).
 
 ## 2. `cmd/embed` writes the new column and clears staleness
