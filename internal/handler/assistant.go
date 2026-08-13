@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
 	"github.com/strelov1/freehire/internal/llmkey"
+	"github.com/strelov1/freehire/internal/screeninganswers"
 )
 
 // assistantHandlers is the in-app agent. It owns the conversation store and the
@@ -59,6 +60,10 @@ type assistantHandlers struct {
 	profile *profileHandlers
 	// experience backs the bank tools, which every preset offers.
 	experience experienceBankTools
+	// screeningAnswers backs screening_answers_set, which every preset offers for the
+	// same reason the bank tools do: a candidate states their notice period or salary
+	// expectation whenever it comes up, not on a schedule.
+	screeningAnswers *screeninganswers.Store
 	// mail backs the inbox tools, which only the general chat preset offers. The
 	// tools reach through it to inbox.Service — the same use cases /me/inbox and
 	// /me/emails render, so a rule cannot hold for one reader and not the other.
@@ -99,19 +104,20 @@ type assistantModels struct {
 func newAssistantHandlers(queries *db.Queries, models assistantModels, store *assistant.Store,
 	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
 	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers,
-	bank experienceBankTools) *assistantHandlers {
+	bank experienceBankTools, screeningAnswers *screeninganswers.Store) *assistantHandlers {
 	h := &assistantHandlers{
-		experience:   bank,
-		store:        store,
-		queries:      queries,
-		search:       search,
-		resume:       resumeH,
-		tracking:     tracking,
-		cv:           cvH,
-		profile:      profileH,
-		browserTools: browserTools,
-		mail:         mail,
-		stages:       queries,
+		experience:       bank,
+		screeningAnswers: screeningAnswers,
+		store:            store,
+		queries:          queries,
+		search:           search,
+		resume:           resumeH,
+		tracking:         tracking,
+		cv:               cvH,
+		profile:          profileH,
+		browserTools:     browserTools,
+		mail:             mail,
+		stages:           queries,
 	}
 	// The rehearsal reads the invitation through the mail service, not through the store:
 	// the guarantee that this read leaves read_at alone is inbox's, and reaching past it

@@ -26,12 +26,13 @@
 
 ## 3. Assistant tool
 
-- [ ] 3.1 Add `internal/handler/assistant_screening_tools.go`: `screening_answers_set` tool
+- [x] 3.1 Add `internal/handler/assistant_screening_tools.go`: `screening_answers_set` tool
       accepting a partial set of the six fields, calling the same store as the manual-edit
       handler, returning the fields it wrote.
-- [ ] 3.2 Register the tool in `internal/handler/assistant_tools.go` under the presets that
-      should offer it (candidate-facing chat presets).
-- [ ] 3.3 Error messages name the invalid value and the valid set, per the "Adding a tool"
+- [x] 3.2 Register the tool in `internal/handler/assistant_tools.go` under EVERY preset
+      (not gated), matching the experience-bank tools' rationale: a candidate states these
+      facts whenever they come up in conversation, not on a schedule.
+- [x] 3.3 Error messages name the invalid value and the valid set, per the "Adding a tool"
       convention in `internal/assistant/AGENTS.md`.
 
 ## 4. Autofill integration
