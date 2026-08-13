@@ -26,6 +26,20 @@
     return undefined;
   }
 
+  // Number(...) alone silently turns anything unparseable (a stray letter, or a very
+  // natural "120,000" with a thousands separator) into NaN, which JSON.stringify then
+  // serializes as null — indistinguishable on the wire from the field being omitted, so
+  // the server would leave the stored value untouched while this form still reports
+  // success. Strip thousands separators first, then fail loudly rather than silently
+  // dropping the field the candidate typed a value into.
+  function parseWholeNumber(raw: string, fieldLabel: string): number {
+    const n = Number(raw.replace(/,/g, ''));
+    if (!Number.isFinite(n)) {
+      throw new Error(`${fieldLabel} must be a number.`);
+    }
+    return n;
+  }
+
   let authorizedCountriesText = $state((answers?.authorized_countries ?? []).join(', '));
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));
   let desiredSalaryAmount = $state(answers?.desired_salary_amount?.toString() ?? '');
@@ -79,10 +93,10 @@
       if (countries.length > 0) patch.authorized_countries = countries;
       const sponsorship = fromTriState(visaSponsorshipNeeded);
       if (sponsorship !== undefined) patch.visa_sponsorship_needed = sponsorship;
-      if (desiredSalaryAmount.trim() !== '') patch.desired_salary_amount = Number(desiredSalaryAmount);
+      if (desiredSalaryAmount.trim() !== '') patch.desired_salary_amount = parseWholeNumber(desiredSalaryAmount, 'Desired salary amount');
       if (desiredSalaryCurrency.trim() !== '') patch.desired_salary_currency = desiredSalaryCurrency.trim();
       if (desiredSalaryPeriod !== '') patch.desired_salary_period = desiredSalaryPeriod;
-      if (noticePeriodDays.trim() !== '') patch.notice_period_days = Number(noticePeriodDays);
+      if (noticePeriodDays.trim() !== '') patch.notice_period_days = parseWholeNumber(noticePeriodDays, 'Notice period');
       const relocate = fromTriState(willingToRelocate);
       if (relocate !== undefined) patch.willing_to_relocate = relocate;
       const age = fromTriState(age18OrOlder);
