@@ -18,11 +18,11 @@
 
 ## 2. Manual read/write endpoint
 
-- [ ] 2.1 Add `GET /me/screening-answers` and `PUT /me/screening-answers` handlers
+- [x] 2.1 Add `GET /me/screening-answers` and `PUT /me/screening-answers` handlers
       (`internal/handler/screening_answers.go`), partial-update semantics, `{"data": ...}` /
       `{"error": ...}` response shapes per repo convention.
-- [ ] 2.2 Register routes and wire the store into `internal/handler/handler.go`.
-- [ ] 2.3 Run `cmd/gen-contracts` to emit the TypeScript wire types for the web client.
+- [x] 2.2 Register routes and wire the store into `internal/handler/handler.go`.
+- [x] 2.3 Run `cmd/gen-contracts` to emit the TypeScript wire types for the web client.
 
 ## 3. Assistant tool
 
