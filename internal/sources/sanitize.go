@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/microcosm-cc/bluemonday"
+	xhtml "golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // noBreakSpaces normalizes the no-break space characters that some ATS boards use
@@ -62,7 +64,103 @@ func sanitizeHTML(s string) string {
 		// Only a drop can empty a block, so a body with nothing stripped is never rewritten.
 		out = dropEmptyBlocks(out)
 	}
-	return out
+	return wrapOrphanListItems(out)
+}
+
+// wrapOrphanListItems wraps each maximal run of <li> siblings that lacks a <ul>/<ol>
+// parent in a synthetic <ul>. Some boards' source HTML drops the list wrapper partway
+// through a description (seen live: a posting whose first two bullet groups are
+// properly wrapped and a third is bare <li> siblings) — descriptionPolicy allows <li>
+// as a structural element but, being a sanitizer and not a tree validator, does not
+// require it to sit inside a list, so the malformed shape survives unchanged and
+// renders as a stray, un-announced bullet.
+//
+// Detecting "orphan" correctly needs real tree structure, not a regex — a properly
+// nested <li> inside <table>/<div> wrappers is indistinguishable from a bare one by
+// pattern alone. Returns s completely untouched, not merely equivalent, whenever
+// there is nothing to wrap (no <li> at all, or every one already sits in a list):
+// re-serializing a parsed tree can renormalize spelling bluemonday itself chose
+// (e.g. a void element written <br> comes back <br/> — equally valid HTML, but a
+// needless rewrite of the vast majority of descriptions that have no orphan at all).
+func wrapOrphanListItems(s string) string {
+	if !strings.Contains(s, "<li") {
+		return s
+	}
+	nodes, err := xhtml.ParseFragment(strings.NewReader(s), &xhtml.Node{
+		Type: xhtml.ElementNode, Data: "div", DataAtom: atom.Div,
+	})
+	if err != nil {
+		return s // malformed beyond repair — leave sanitizeHTML's output as-is
+	}
+
+	root := &xhtml.Node{Type: xhtml.ElementNode, Data: "div", DataAtom: atom.Div}
+	for _, n := range nodes {
+		root.AppendChild(n)
+	}
+	if !wrapOrphanListItemsIn(root) {
+		return s
+	}
+
+	var buf strings.Builder
+	for c := root.FirstChild; c != nil; c = c.NextSibling {
+		_ = xhtml.Render(&buf, c)
+	}
+	return buf.String()
+}
+
+// wrapOrphanListItemsIn recurses depth-first (so a nested orphan run inside a <div> or
+// <td> is fixed before its ancestor is considered), then splices every maximal run of
+// consecutive <li>/whitespace-text siblings under n into a new <ul> — unless n is
+// itself already a <ul>/<ol>, in which case its <li> children are already valid and
+// it is left untouched. Whitespace-only text nodes between <li> siblings (the newline
+// indentation typical of hand-written HTML) are pulled into the run too, so the
+// original spacing between items is preserved inside the new wrapper instead of being
+// severed from the list it separates. Reports whether it wrapped anything, which
+// gates whether the caller re-serializes at all.
+func wrapOrphanListItemsIn(n *xhtml.Node) bool {
+	changed := false
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		if c.Type == xhtml.ElementNode && wrapOrphanListItemsIn(c) {
+			changed = true
+		}
+		c = next
+	}
+
+	if n.DataAtom == atom.Ul || n.DataAtom == atom.Ol {
+		return changed
+	}
+
+	var run []*xhtml.Node
+	hasLi := false
+	flush := func() {
+		if !hasLi {
+			run = nil
+			return
+		}
+		ul := &xhtml.Node{Type: xhtml.ElementNode, Data: "ul", DataAtom: atom.Ul}
+		n.InsertBefore(ul, run[0])
+		for _, item := range run {
+			n.RemoveChild(item)
+			ul.AppendChild(item)
+		}
+		run, hasLi = nil, false
+		changed = true
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		switch {
+		case c.Type == xhtml.ElementNode && c.DataAtom == atom.Li:
+			run = append(run, c)
+			hasLi = true
+		case c.Type == xhtml.TextNode && strings.TrimSpace(c.Data) == "":
+			run = append(run, c)
+		default:
+			flush()
+		}
+	}
+	flush()
+	return changed
 }
 
 var (

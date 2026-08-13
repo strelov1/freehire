@@ -133,6 +133,47 @@ func TestSanitizeHTMLNormalizesNoBreakSpaces(t *testing.T) {
 	}
 }
 
+// Some ATS boards emit a description whose list wrapper drops out partway through —
+// seen live on a real posting: two properly-wrapped bullet groups followed by a third
+// group of bare <li> siblings with no <ul>/<ol> around them at all. bluemonday allows
+// <li> as a structural element but does not require a list parent, so the malformed
+// shape survived sanitization unchanged and Lighthouse flags it (a <li> outside a list
+// has no list semantics for a screen reader). sanitizeHTML now wraps any such orphan
+// run in a synthetic <ul>, and leaves an already-correct <ul> byte-for-byte untouched.
+func TestSanitizeHTMLWrapsOrphanListItems(t *testing.T) {
+	cases := map[string]struct{ in, want string }{
+		"bare li with no list at all": {
+			`<p><strong>Qualifications:</strong></p><li>A</li><li>B</li>`,
+			`<p><strong>Qualifications:</strong></p><ul><li>A</li><li>B</li></ul>`,
+		},
+		"already-wrapped list is untouched": {
+			`<ul><li>Ship features</li></ul>`,
+			`<ul><li>Ship features</li></ul>`,
+		},
+		"mixed real-world shape: two valid lists then an orphan run": {
+			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>ADN</li>\n <li>RN license</li>\n</ul>\n" +
+				"<p><strong>Essential Functions:</strong></p>\n<li>Acts as liaison</li>\n<li>Coordinates care</li>",
+			"<p><strong>Minimum Qualifications:</strong></p>\n<ul>\n <li>ADN</li>\n <li>RN license</li>\n</ul>\n" +
+				"<p><strong>Essential Functions:</strong></p><ul>\n<li>Acts as liaison</li>\n<li>Coordinates care</li></ul>",
+		},
+	}
+	for name, c := range cases {
+		if got := sanitizeHTML(c.in); got != c.want {
+			t.Errorf("%s: sanitizeHTML(%q) = %q, want %q", name, c.in, got, c.want)
+		}
+	}
+}
+
+// The backfill re-runs this pipeline over already-sanitized rows, so wrapping must be
+// a no-op on its own output — otherwise every run would keep rewriting the catalogue.
+func TestSanitizeHTMLWrapsOrphanListItemsIsIdempotent(t *testing.T) {
+	in := `<p>Qualifications:</p><li>A</li><li>B</li>`
+	once := sanitizeHTML(in)
+	if twice := sanitizeHTML(once); twice != once {
+		t.Errorf("sanitizeHTML is not idempotent:\nonce:  %q\ntwice: %q", once, twice)
+	}
+}
+
 func TestLenientPercentUnescape(t *testing.T) {
 	cases := map[string]struct{ in, want string }{
 		"plain":              {"hello world", "hello world"},
