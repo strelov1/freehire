@@ -1,15 +1,18 @@
-// Command backfill-echojobs fills the description of echojobs jobs ingested before per-posting
-// detail hydration existed. The echojobs adapter originally read only the list endpoint, which
-// omits the posting body entirely, so those rows were stored with an empty description (a blank,
-// broken job page — reported live on freehire.me). This one-off worker pages every
-// source='echojobs' row, re-fetches the posting's detail (GET /api/jobs/{job_handle}) via the
-// shared HTTP client, and rewrites the description plus a refreshed content_hash so the row
-// re-indexes. Follow it with `make reindex` (and cmd/backfill-derive to re-derive skills/facets
-// from the new descriptions).
+// Command backfill-echojobs fills the description of echojobs jobs whose original ingest never
+// hydrated one — either from the pre-hydration era (the adapter originally read only the list
+// endpoint, which omitted the posting body entirely) or from echojobs.io retiring its public
+// JSON API around 2026-08-13 (see internal/sources/echojobs.go), which left every newly-
+// discovered posting from that point with an empty description until the adapter was rewritten.
+// Either way the result is the same: a blank, broken job page, reported live on freehire.me.
+// This one-off worker pages every source='echojobs' row, re-fetches the posting's detail (GET
+// /job/{slug} + its embedded schema.org JobPosting ld+json — see sources.EchoJobsDescription)
+// via the shared HTTP client, and rewrites the description plus a refreshed content_hash so the
+// row re-indexes. Follow it with `make reindex` (and cmd/backfill-derive to re-derive
+// skills/facets from the new descriptions).
 //
 // echojobs is boardless, so its stored external_id carries the empty-board namespace prefix
 // (NamespaceExternalID("", jobHandle) == ":jobHandle") — jobHandle strips that colon before
-// calling the detail endpoint, which is keyed by the raw handle.
+// calling the detail endpoint, which is keyed by the raw slug.
 //
 // It pages by keyset and exits. Idempotent: a row whose stored description already equals the
 // fetched one is skipped, so a second run (e.g. after a rate-limit interruption) rewrites only
