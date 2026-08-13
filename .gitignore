@@ -2,6 +2,9 @@
 /bin/
 /out/
 hire
+
+# Local git worktrees for isolated feature work.
+/.worktrees/
 # Worker binaries. release.sh builds every cmd/ target into the checkout ROOT, so each
 # one lands here as an untracked file — and one committed by accident (prune, 25 MB, in
 # #1212) blocks `git pull` on every deploy host that already has its own build sitting
