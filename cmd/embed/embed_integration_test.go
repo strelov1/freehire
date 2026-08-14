@@ -1,11 +1,13 @@
 //go:build integration
 
 // End-to-end test for the incremental semantic-embedding worker: real Postgres
-// (testcontainers, migrations applied) + real Meilisearch (testcontainers) + a stub TEI
-// (bag-of-words) the search client is pointed at via EMBED_URL. It drives the real
-// dbStore + searchIndexer + embed.Runner over seeded open and closed jobs and asserts
-// the open job's vector lands in jobs_semantic, the closed job's document is removed,
-// provenance is stamped/cleared, and the outbox drains. Run with:
+// (testcontainers, migrations applied) + a stub TEI (bag-of-words) the search client
+// is pointed at via EMBED_URL. It drives the real dbStore + searchIndexer +
+// embed.Runner over seeded open and closed jobs and asserts the open job's legacy
+// vector and pgvector-backed chunk rows are persisted, the closed job's embed state
+// is cleared, provenance is stamped/cleared, and the outbox drains. No Meilisearch is
+// involved — cmd/embed no longer writes any search index (see
+// openspec/changes/drop-hybrid-search-pgvector-similar). Run with:
 //
 //	go test -tags=integration ./cmd/embed/   (requires Docker)
 package main
@@ -13,9 +15,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"hash/fnv"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,20 +26,17 @@ import (
 	"github.com/strelov1/freehire/internal/testdb"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/embed"
 	"github.com/strelov1/freehire/internal/search"
 )
 
-// embedderDimensions is the e5-base vector width Meili validates userProvided vectors
-// against (kept in sync with internal/search's unexported const of the same value).
-const embedderDimensions = 768
+// vectorWidth is the vector width the stub embedder returns — matches the real e5-base
+// model's width, though nothing here validates it against an index (there is none).
+const vectorWidth = 768
 
 // fakeTEI serves a deterministic bag-of-words vector per input so the stub stays
-// model-free while keeping the width Meili accepts. Mirrors internal/search's test stub.
+// model-free.
 func fakeTEI(t *testing.T) string {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,43 +60,15 @@ func fakeTEI(t *testing.T) string {
 }
 
 func bagOfWords(s string) []float64 {
-	v := make([]float64, embedderDimensions)
+	v := make([]float64, vectorWidth)
 	for _, tok := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
 		h := fnv.New32a()
 		_, _ = h.Write([]byte(tok))
-		v[h.Sum32()%embedderDimensions]++
+		v[h.Sum32()%vectorWidth]++
 	}
 	return v
-}
-
-func startMeili(t *testing.T) (url, key string) {
-	t.Helper()
-	ctx := context.Background()
-	key = "test-master-key"
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "getmeili/meilisearch:v1.13",
-			ExposedPorts: []string{"7700/tcp"},
-			Env:          map[string]string{"MEILI_MASTER_KEY": key, "MEILI_ENV": "development"},
-			WaitingFor:   wait.ForHTTP("/health").WithPort("7700/tcp").WithStartupTimeout(60 * time.Second),
-		},
-		Started: true,
-	})
-	if err != nil {
-		t.Fatalf("start meilisearch: %v", err)
-	}
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-	host, err := container.Host(ctx)
-	if err != nil {
-		t.Fatalf("host: %v", err)
-	}
-	port, err := container.MappedPort(ctx, "7700")
-	if err != nil {
-		t.Fatalf("port: %v", err)
-	}
-	return "http://" + host + ":" + port.Port(), key
 }
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
@@ -107,47 +76,23 @@ func startPostgres(t *testing.T) *pgxpool.Pool {
 	return testdb.Pool(t)
 }
 
-// meiliDocExists reports whether the semantic index holds a document with the given id.
-func meiliDocExists(t *testing.T, meiliURL, key string, id int64) bool {
+// newTestClient builds a search.Client pointed at the stub TEI, with no Meilisearch
+// wiring — cmd/embed's Indexer never touches Meilisearch, so url/key are irrelevant.
+func newTestClient(t *testing.T) *search.Client {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet,
-		fmt.Sprintf("%s/indexes/jobs_semantic/documents/%d", meiliURL, id), nil)
-	if err != nil {
-		t.Fatalf("build request: %v", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("get document: %v", err)
-	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true
-	case http.StatusNotFound:
-		return false
-	default:
-		t.Fatalf("get document %d: unexpected status %d", id, resp.StatusCode)
-		return false
-	}
+	return search.NewClient("", "", search.WithEmbedURL(fakeTEI(t)))
 }
 
 func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	ctx := context.Background()
-	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
+	client := newTestClient(t)
 
-	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t))) // stub TEI
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
-
-	// Seed an open job (to embed) and a closed, already-embedded job (to remove).
+	// Seed an open job (to embed) and a closed job already stamped as previously
+	// embedded (to have its embed state cleared).
 	openID := seedJob(t, pool, "open", "Senior Golang Engineer", false, true)
 	closedID := seedJob(t, pool, "closed", "Junior Frontend Developer", true, true)
-	// Pre-index the closed job's document so removal has something to delete, and stamp
-	// it as embedded so the enqueue picks it up for removal.
-	preIndexClosed(t, ctx, client, pool, closedID)
+	seedPreviouslyEmbedded(t, ctx, pool, closedID)
 
 	// Simulate a stale precomputed similar-jobs list on the open job (as if a prior
 	// cmd/similar-backfill pass had run) — the embed worker must null it out alongside
@@ -156,7 +101,7 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 		t.Fatalf("seed similar_computed_at: %v", err)
 	}
 
-	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	stats, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
 	})
@@ -165,13 +110,6 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	}
 	if stats.Indexed != 1 || stats.Removed != 1 || stats.Failed != 0 {
 		t.Fatalf("stats = %+v, want indexed=1 removed=1 failed=0", stats)
-	}
-
-	if !meiliDocExists(t, meiliURL, key, openID) {
-		t.Errorf("open job %d not in jobs_semantic after embed", openID)
-	}
-	if meiliDocExists(t, meiliURL, key, closedID) {
-		t.Errorf("closed job %d still in jobs_semantic after removal", closedID)
 	}
 
 	// Provenance: open stamped with the current model AND the exact embedded content_hash
@@ -185,14 +123,19 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 		t.Errorf("closed job stamp model = %v, want NULL (cleared)", model)
 	}
 
-	// Durability: the open job's vector is persisted to Postgres beside the stamp (the
-	// backup copy that lets the index be rehydrated without re-embedding); the removed
-	// job carries none.
-	if l := jobVectorLen(t, pool, openID); l <= 0 {
-		t.Errorf("open job semantic_embedding length = %d, want > 0 (vector persisted)", l)
+	// The OLD jobs.semantic_embedding column is no longer WRITTEN by this pipeline at
+	// all (job_semantic_chunks is the sole representation now) — the open job's column
+	// stays untouched/NULL, it was never populated to begin with. The closed job was
+	// seeded (seedPreviouslyEmbedded) with a legacy vector from a simulated prior run
+	// under the old pipeline, specifically to prove ClearSemanticEmbeddedBatch's
+	// close-path clear still nulls out any such pre-existing value even though nothing
+	// writes new ones anymore — that clear is still real, needed behavior. The column
+	// itself stays in the schema (dropping it is a separate, later change).
+	if l := jobVectorLen(t, pool, openID); l != 0 {
+		t.Errorf("open job semantic_embedding length = %d, want 0/NULL (no longer written)", l)
 	}
 	if l := jobVectorLen(t, pool, closedID); l != 0 {
-		t.Errorf("closed job semantic_embedding length = %d, want 0/NULL (cleared)", l)
+		t.Errorf("closed job semantic_embedding length = %d, want 0/NULL (cleared from its seeded legacy value)", l)
 	}
 
 	// Outbox drained.
@@ -204,9 +147,9 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 		t.Errorf("semantic_outbox has %d rows, want 0 (drained)", n)
 	}
 
-	// The additive pgvector chunk pipeline: the open job's short description ("Build
-	// things.") yields exactly one chunk row; the closed job (never given chunks by
-	// preIndexClosed, which only computes vectors, never persists) has none.
+	// The pgvector chunk pipeline: the open job's short description ("Build things.")
+	// yields exactly one chunk row; the closed job (never given chunks by
+	// seedPreviouslyEmbedded, which only stamps provenance and a legacy vector) has none.
 	if got := jobChunkCount(t, pool, openID); got != 1 {
 		t.Errorf("open job chunk rows = %d, want 1 (short description → one chunk)", got)
 	}
@@ -270,20 +213,15 @@ func jobSimilarComputedAtIsNull(t *testing.T, pool *pgxpool.Pool, id int64) bool
 // motivation #2: only ~15-20% of an average description used to reach the model).
 func TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows(t *testing.T) {
 	ctx := context.Background()
-	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
-
-	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
+	client := newTestClient(t)
 
 	longDescription := strings.Repeat(
 		"<p>We build large-scale distributed systems in Go, Postgres, and Kubernetes. "+
 			"You will own services end to end, from design through on-call.</p>", 60)
 	id := seedJobWithDescription(t, pool, "long", "Staff Backend Engineer", longDescription, false, true)
 
-	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	if _, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
 	}); err != nil {
@@ -306,16 +244,11 @@ func TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows(t *testing
 // appending to them — a job must never end up with a mix of old and new chunk vectors.
 func TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend(t *testing.T) {
 	ctx := context.Background()
-	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
-
-	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
+	client := newTestClient(t)
 
 	id := seedJob(t, pool, "reembed", "Senior Golang Engineer", false, true)
-	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	opts := embed.RunOptions{TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
 	if _, err := runner.Run(ctx, opts); err != nil {
 		t.Fatalf("first Run: %v", err)
@@ -361,16 +294,11 @@ func TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend(t *testing.T) {
 // ClearSemanticEmbeddedBatch stamp-clear.
 func TestIntegration_EmbedWorkerDeletesChunksOnClose(t *testing.T) {
 	ctx := context.Background()
-	meiliURL, key := startMeili(t)
 	pool := startPostgres(t)
-
-	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
+	client := newTestClient(t)
 
 	id := seedJob(t, pool, "toclose", "Senior Golang Engineer", false, true)
-	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	opts := embed.RunOptions{TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
 	if _, err := runner.Run(ctx, opts); err != nil {
 		t.Fatalf("first Run: %v", err)
@@ -412,25 +340,19 @@ func seedJobWithDescription(t *testing.T, pool *pgxpool.Pool, ext, title, descri
 	return id
 }
 
-// preIndexClosed embeds+indexes the closed job's document (so there is a document to
-// remove) and stamps it embedded (so the enqueue queues it for removal). It uses the
-// same indexer path, then closes the job in PG afterwards via the seed's closed flag.
-func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, pool *pgxpool.Pool, id int64) {
+// seedPreviouslyEmbedded stamps a job's provenance (model + content_hash) and gives it
+// a legacy vector directly via SQL, as if a prior embed run had already processed it —
+// so the enqueue's staleness/removal predicate picks it up as "previously embedded, now
+// closed" without needing to drive it through a real IndexOpen call first.
+func seedPreviouslyEmbedded(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id int64) {
 	t.Helper()
-	// The job was seeded already-closed; temporarily treat it as open for the pre-index
-	// by loading and indexing its document directly.
-	ix := searchIndexer{client: client, q: db.New(pool)}
-	jobs, err := newDBStore(pool).Jobs(ctx, []int64{id})
-	if err != nil || len(jobs) != 1 {
-		t.Fatalf("load closed job: rows=%d err=%v", len(jobs), err)
-	}
-	if _, _, err := ix.IndexOpen(ctx, jobs); err != nil {
-		t.Fatalf("pre-index closed job: %v", err)
-	}
+	vec := make([]float32, vectorWidth)
 	if _, err := pool.Exec(ctx,
-		"UPDATE jobs SET semantic_embedded_model = $1, semantic_embedded_hash = content_hash WHERE id = $2",
-		search.CurrentEmbedderModel(), id); err != nil {
-		t.Fatalf("stamp closed job: %v", err)
+		`UPDATE jobs SET semantic_embedded_model = $1, semantic_embedded_hash = content_hash,
+		                 semantic_embedding = $2
+		 WHERE id = $3`,
+		search.CurrentEmbedderModel(), vec, id); err != nil {
+		t.Fatalf("seed previously-embedded job: %v", err)
 	}
 }
 
@@ -457,48 +379,4 @@ func jobStamp(t *testing.T, pool *pgxpool.Pool, id int64) (model, hash *string) 
 		t.Fatalf("read stamp: %v", err)
 	}
 	return model, hash
-}
-
-// PG-only mode embeds to Postgres WITHOUT touching Meilisearch: the open job's vector
-// and stamp land in Postgres, but its document never appears in jobs_semantic (that
-// index is filled later by `reindex --semantic --from-pg`). This is the fast bulk-embed
-// path that Meili's serial task queue cannot gate.
-func TestIntegration_EmbedWorkerPGOnly(t *testing.T) {
-	ctx := context.Background()
-	meiliURL, key := startMeili(t)
-	pool := startPostgres(t)
-
-	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
-	// Create the (empty) semantic index up front so we can assert pg-only leaves it empty.
-	if err := client.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
-
-	openID := seedJob(t, pool, "pgonly-open", "Senior Golang Engineer", false, true)
-
-	runner := embed.Runner{
-		Store:   newDBStore(pool),
-		Indexer: searchIndexer{client: client, q: db.New(pool), pgOnly: true},
-	}
-	stats, err := runner.Run(ctx, embed.RunOptions{
-		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
-	})
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if stats.Indexed != 1 {
-		t.Fatalf("stats = %+v, want indexed=1", stats)
-	}
-
-	// Postgres has the vector + the current-model stamp.
-	if l := jobVectorLen(t, pool, openID); l <= 0 {
-		t.Errorf("open job semantic_embedding length = %d, want > 0 (vector persisted)", l)
-	}
-	if model, _ := jobStamp(t, pool, openID); model == nil || *model != search.CurrentEmbedderModel() {
-		t.Errorf("open job stamp model = %v, want %q", model, search.CurrentEmbedderModel())
-	}
-	// Meili was NOT touched: the document is absent from jobs_semantic.
-	if meiliDocExists(t, meiliURL, key, openID) {
-		t.Error("pg-only mode must NOT write the document into jobs_semantic")
-	}
 }

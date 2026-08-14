@@ -15,41 +15,11 @@ type fakeSearcher struct {
 	got search.SearchParams
 	res search.SearchResult
 	err error
-	// similar-jobs call recording
-	similarLimit int
-	similarHits  []search.JobDocument
-	similarErr   error
-	// embed-text call recording + canned result
-	gotEmbedText string
-	embedVec     []float64
-	embedModel   string
-	embedErr     error
-	// recommend-by-vector call recording + canned result
-	gotRecVec    []float64
-	gotRecFilter any
-	recRes       search.SearchResult
-	recErr       error
 }
 
 func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.SearchResult, error) {
 	f.got = p
 	return f.res, f.err
-}
-
-func (f *fakeSearcher) SimilarJobs(_ context.Context, _ int64, limit int) ([]search.JobDocument, error) {
-	f.similarLimit = limit
-	return f.similarHits, f.similarErr
-}
-
-func (f *fakeSearcher) EmbedText(_ context.Context, text string) ([]float64, string, error) {
-	f.gotEmbedText = text
-	return f.embedVec, f.embedModel, f.embedErr
-}
-
-func (f *fakeSearcher) RecommendByVector(_ context.Context, v []float64, filter any, _, _ int) (search.SearchResult, error) {
-	f.gotRecVec = v
-	f.gotRecFilter = filter
-	return f.recRes, f.recErr
 }
 
 func searchApp(s searcher) *fiber.App {
@@ -84,7 +54,7 @@ func TestSearchJobs_PassesParamsAndShapesResponse(t *testing.T) {
 	}}
 	app := searchApp(fake)
 
-	status, body := doGet(t, app, "/jobs/search?q=golang&limit=10&offset=20&seniority=senior&regions=eu&semantic_ratio=0.3")
+	status, body := doGet(t, app, "/jobs/search?q=golang&limit=10&offset=20&seniority=senior&regions=eu")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -95,9 +65,6 @@ func TestSearchJobs_PassesParamsAndShapesResponse(t *testing.T) {
 	}
 	if fake.got.Limit != 10 || fake.got.Offset != 20 {
 		t.Errorf("limit/offset = %d/%d, want 10/20", fake.got.Limit, fake.got.Offset)
-	}
-	if fake.got.SemanticRatio != 0.3 {
-		t.Errorf("SemanticRatio = %v, want 0.3", fake.got.SemanticRatio)
 	}
 	groups, ok := fake.got.Filter.([][]string)
 	if !ok {
@@ -153,27 +120,6 @@ func TestSearchJobs_PaginationAtWindowBoundaryAllowed(t *testing.T) {
 	}
 	if fake.got.Offset != 9900 || fake.got.Limit != 100 {
 		t.Errorf("offset/limit = %d/%d, want 9900/100 (within window)", fake.got.Offset, fake.got.Limit)
-	}
-}
-
-func TestSearchJobs_DefaultsToKeywordSemanticRatio(t *testing.T) {
-	// Semantic search is opt-in: the default routes to the always-fresh facet
-	// index (ratio 0), never the separate, optionally-built semantic index.
-	fake := &fakeSearcher{}
-	app := searchApp(fake)
-	doGet(t, app, "/jobs/search?q=go")
-	if fake.got.SemanticRatio != 0 {
-		t.Errorf("default SemanticRatio = %v, want 0 (keyword)", fake.got.SemanticRatio)
-	}
-}
-
-func TestSearchJobs_SemanticRatioOptIn(t *testing.T) {
-	// An explicit semantic_ratio>0 still reaches the backend (routes to hybrid).
-	fake := &fakeSearcher{}
-	app := searchApp(fake)
-	doGet(t, app, "/jobs/search?q=go&semantic_ratio=0.5")
-	if fake.got.SemanticRatio != 0.5 {
-		t.Errorf("opt-in SemanticRatio = %v, want 0.5", fake.got.SemanticRatio)
 	}
 }
 

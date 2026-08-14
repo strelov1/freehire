@@ -15,52 +15,6 @@ import (
 	"github.com/strelov1/freehire/internal/search"
 )
 
-func TestPostedWithinFrom(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantDur time.Duration
-		wantOK  bool
-		wantErr bool
-	}{
-		{"absent", []string{"--semantic"}, 0, false, false},
-		{"space form", []string{"--semantic", "--posted-within", "168h"}, 168 * time.Hour, true, false},
-		{"equals form", []string{"--posted-within=720h"}, 720 * time.Hour, true, false},
-		{"missing value", []string{"--posted-within"}, 0, false, true},
-		{"unparseable", []string{"--posted-within", "7d"}, 0, false, true},
-		{"non-positive", []string{"--posted-within", "0h"}, 0, false, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dur, ok, err := postedWithinFrom(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
-			}
-			if ok != tt.wantOK || dur != tt.wantDur {
-				t.Errorf("got (%v, %v), want (%v, %v)", dur, ok, tt.wantDur, tt.wantOK)
-			}
-		})
-	}
-}
-
-func TestSemanticRequested(t *testing.T) {
-	if !semanticRequested([]string{"--since", "50h", "--semantic"}) {
-		t.Error("--semantic should be detected among other args")
-	}
-	if semanticRequested([]string{"--since", "50h"}) {
-		t.Error("facet pass must not be misread as semantic")
-	}
-}
-
-func TestFromPGRequested(t *testing.T) {
-	if !fromPGRequested([]string{"--semantic", "--from-pg"}) {
-		t.Error("--from-pg should be detected among other args")
-	}
-	if fromPGRequested([]string{"--semantic"}) {
-		t.Error("absent --from-pg must not be reported")
-	}
-}
-
 // The reindex feed deliberately includes closed jobs: open ones are upserted as
 // documents, closed ones become deletions so they leave the index (job-search
 // spec: the index contains only open jobs).
@@ -297,58 +251,6 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 	}
 	if f.calls[len(f.calls)-1] != "promote" {
 		t.Errorf("expected promote at the end, calls = %v", f.calls)
-	}
-}
-
-// fakeRehydrator records the in-place semantic-rehydration orchestration without a
-// real Meilisearch: it resets the live index once, then upserts open-job batches.
-type fakeRehydrator struct {
-	calls   []string
-	pushed  [][]int64
-	pushErr error
-}
-
-func (f *fakeRehydrator) Reset(context.Context) error {
-	f.calls = append(f.calls, "reset")
-	return nil
-}
-
-func (f *fakeRehydrator) PushFromPG(_ context.Context, docs []search.JobDocument) error {
-	f.calls = append(f.calls, "push")
-	ids := make([]int64, len(docs))
-	for i, d := range docs {
-		ids[i] = d.ID
-	}
-	f.pushed = append(f.pushed, ids)
-	return f.pushErr
-}
-
-// An in-place from-PG rebuild resets the live jobs_semantic to empty ONCE, then upserts
-// only open jobs' vectors straight into it — no rebuild copy, no swap. Closed jobs are
-// absent (the fresh index never held them).
-func TestReindexSemanticFromPG_ResetsThenPushesOpen(t *testing.T) {
-	open1 := db.Job{ID: 1, Title: "A", PublicSlug: "a", Category: "backend"}
-	closed := db.Job{ID: 2, Title: "B", PublicSlug: "b",
-		ClosedAt: pgtype.Timestamptz{Time: time.Unix(1, 0), Valid: true}}
-	open3 := db.Job{ID: 3, Title: "C", PublicSlug: "c", Category: "backend"}
-	reader := &fakePageReader{pages: map[int64][]db.Job{0: {open1, closed, open3}}}
-
-	f := &fakeRehydrator{}
-	indexed, skipped, err := reindexSemanticFromPG(context.Background(), reader, f, nil, nil, time.Now())
-	if err != nil {
-		t.Fatalf("reindexSemanticFromPG: %v", err)
-	}
-	if indexed != 2 || skipped != 0 {
-		t.Errorf("indexed=%d skipped=%d, want indexed=2 skipped=0", indexed, skipped)
-	}
-	if len(f.calls) == 0 || f.calls[0] != "reset" {
-		t.Errorf("reset must run first, calls = %v", f.calls)
-	}
-	if slices.Contains(f.calls, "promote") {
-		t.Errorf("in-place rebuild must not swap/promote, calls = %v", f.calls)
-	}
-	if len(f.pushed) != 1 || !slices.Equal(f.pushed[0], []int64{1, 3}) {
-		t.Errorf("pushed = %v, want [[1 3]] (closed job 2 absent)", f.pushed)
 	}
 }
 

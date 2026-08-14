@@ -83,7 +83,7 @@
 - [x] 5.1 `internal/handler/similar.go`: read `jobs.similar_job_ids` for the
       resolved job id, fetch + filter to open jobs, project to `jobview.Job`, keep
       the same response envelope and `limit` clamping behavior.
-- [ ] 5.2 Update/replace `internal/search/client.go`'s `SimilarJobs` Meili
+- [x] 5.2 Update/replace `internal/search/client.go`'s `SimilarJobs` Meili
       implementation — remove once the handler no longer calls it (see Section 7).
 - [x] 5.3 Update `similar_integration_test.go` and unit tests for the new data path.
 
@@ -110,26 +110,69 @@
 
 ## 7. Remove the old Meili semantic path
 
-- [ ] 7.1 `internal/search/client.go`: remove `semanticSettings`,
+- [x] 7.1 `internal/search/client.go`: remove `semanticSettings`,
       `EnsureSemanticIndex`, `NewSemanticRebuild`, `IndexSemanticJobs`,
       `IndexSemanticJobsFromPG`, `ResetSemanticIndex`, the old `SimilarJobs`/
       `RecommendByVector` Meili implementations, `semanticIndexUID`/
-      `semanticRebuildUID` constants.
-- [ ] 7.2 `cmd/reindex`: remove `--semantic`, `--from-pg`, `--posted-within` flags
-      and their code paths.
-- [ ] 7.3 `internal/embed`: remove the Meili-write half of the `Indexer` port
-      (keep the Postgres-write half); update `internal/embed/AGENTS.md`.
-- [ ] 7.4 `internal/handler/search.go`: remove `semantic_ratio` param handling,
-      `defaultSemanticRatio`.
-- [ ] 7.5 `web/src/lib/api.ts`: remove `semantic_ratio` from `searchJobs()`; update
+      `semanticRebuildUID` constants. Also removed (unreachable once the above are
+      gone): `EmbedText`, `jobEmbedder`, the `semantic` `meilisearch.IndexManager`
+      field, `semanticDocument`/`embedDocs`/`vectorsByID`/`ListSemanticVectors`/
+      `SemanticVector` (the last two deleted with `internal/search/semantic_vectors.go`
+      and `semantic_rehydrate.go`). `EmbedJobs` was briefly kept, rewritten to compute
+      the legacy vector directly via `embedBatch` — then removed entirely on review
+      (see 7.3's revised note): nothing reads `jobs.semantic_embedding` anymore, so
+      computing it cost a full extra TEI call per job for no benefit.
+- [x] 7.2 `cmd/reindex`: remove `--semantic`, `--from-pg`, `--posted-within` flags
+      and their code paths (`semanticRequested`, `postedWithinFrom`, `fromPGRequested`,
+      `semanticFromPG`, `semanticRehydrator`, `reindexSemanticFromPG`). Also dropped
+      the now-dead `WithEmbedURL`/`WithEmbedAPIKey`/`WithEmbedConcurrency` wiring on
+      its `search.NewClient` call — the facet-only rebuild never embeds.
+- [x] 7.3 `internal/embed`: remove the Meili-write half of the `Indexer` port
+      (keep the Postgres-write half); update `internal/embed/AGENTS.md`. Went further
+      than a signature trim: removed `Indexer.RemoveClosed` entirely (its only
+      implementation was the Meili delete; `Store.CompleteClosed` already does the
+      whole closed-job side effect) and simplified `cmd/embed`'s `searchIndexer`
+      (dropped `pgOnly`/`q` — `EMBED_PG_ONLY` is gone, since every run is now
+      Postgres-only in effect). `cmd/embed` no longer requires `MEILI_MASTER_KEY` at
+      startup. Initially kept writing the legacy `jobs.semantic_embedding` column
+      (reasoning: design.md defers *dropping* that column to a separate change) —
+      **reversed on review**: design.md only defers the schema change (a migration,
+      real deploy-order risk), never says to keep *writing* it, and nothing reads the
+      column anymore (its only reader, `reindex --from-pg`, was deleted in this same
+      diff) — so `cmd/embed`'s open-job path no longer computes or writes it at all,
+      halving that path's TEI calls per job. `CompleteClosed`'s existing clear of the
+      column is kept (clears any pre-existing legacy value from before this reversal,
+      still real behavior for old data). The column itself stays in the schema,
+      unchanged — only the ongoing write stopped.
+- [x] 7.4 `internal/handler/search.go`: remove `semantic_ratio` param handling,
+      `defaultSemanticRatio`, and the `searcher` interface's `SimilarJobs`/
+      `RecommendByVector`/`EmbedText` (all dead — `/similar` no longer calls the
+      searcher at all).
+- [x] 7.5 `web/src/lib/api.ts`: remove `semantic_ratio` from `searchJobs()`; update
       its doc comment.
-- [ ] 7.6 `internal/search/AGENTS.md`: remove Meili semantic-index-specific
+- [x] 7.6 `internal/search/AGENTS.md`: remove Meili semantic-index-specific
       guidance that no longer applies (reindex `--semantic` hazards, `jobs_semantic`
       composition/purge notes) — keep only what's still true of the facet/keyword
-      `jobs` index.
-- [ ] 7.7 Full repo search for remaining `semantic_ratio`/`jobs_semantic`/
+      `jobs` index. Also updated the package doc comment atop `client.go`.
+- [x] 7.7 Full repo search for remaining `semantic_ratio`/`jobs_semantic`/
       `SemanticRatio` references (docs, tests, ops scripts) and clean up or confirm
-      intentionally kept (e.g. historical memory files are out of scope).
+      intentionally kept (e.g. historical memory files are out of scope). Found and
+      fixed several stragglers beyond the named list: `cmd/backfill-semantic-vectors`
+      (a whole command whose sole data source, `ListSemanticVectors`, was removed —
+      deleted outright, plus its `.gitignore` entry); `cmd/prune`'s
+      `SubmitSemanticJobDeletion` call/interface method (mirrored `DeleteSemanticJobs`
+      but for prune's hard-delete path); `cmd/server`'s and `cmd/reindex`'s dead
+      `WithEmbed*` wiring on their search clients (leftover from the removed
+      CV-embedding path and the removed `--semantic` pass, respectively);
+      `internal/worker.NewPostedSinceReader`/`PostedSinceQueries` and its two
+      sqlc queries (`ListOpenJobsPostedAfter`/`ListOpenJobIDsPostedAfter`), which
+      existed solely for `--posted-within`; stale present-tense comments in
+      `internal/db/queries/semantic.sql` (`SetSemanticEmbedding`/
+      `ClearSemanticEmbeddedBatch`/`ClaimSemanticBatch`/`EnqueuePendingSemanticJobs`)
+      still describing live Meili document upserts/removals; `docs/architecture.md`'s
+      diagram and prose (`jobs_semantic` node/edges, the sequence-diagram note); and
+      `docs/API.md` (regenerated via `pnpm run gen:api-docs` after fixing
+      `web/src/lib/docs/api-spec.ts`).
 
 ## 8. Prod ops
 

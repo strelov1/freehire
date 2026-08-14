@@ -1,9 +1,14 @@
-// Package search provides Meilisearch-backed full-text and hybrid (keyword +
-// semantic) search over jobs. It owns the document shape and two index
-// configurations — a facet/keyword index (no embedder, the fast default) and a
-// semantic index with a userProvided embedder whose vectors this package computes
-// against TEI (see embed.go) — plus the read/write helpers, so callers (the search
-// handler and the reindex command) never touch the meilisearch-go SDK directly.
+// Package search provides Meilisearch-backed full-text and faceted keyword search
+// over jobs. It owns the document shape and the single facet/keyword index
+// configuration (no embedder — the always-fresh production index), plus the
+// read/write helpers, so callers (the search handler and the reindex command) never
+// touch the meilisearch-go SDK directly. It also owns the TEI embedding calls (see
+// embed.go) that feed the pgvector-backed job_semantic_chunks table
+// (internal/embed's open-job path) and the legacy jobs.semantic_embedding column —
+// neither of which is a Meilisearch document; the semantic (jobs_semantic) index
+// this package used to also build and query was removed in
+// openspec/changes/drop-hybrid-search-pgvector-similar in favor of a precomputed
+// pgvector lookup (cmd/similar-backfill, internal/similarjobs).
 package search
 
 import (
@@ -24,22 +29,15 @@ const (
 	// so a full rebuild is ~25x faster than embedding every document. It serves all
 	// default (keyword) traffic and the facet analytics.
 	facetIndexUID = "jobs"
-	// semanticIndexUID is the optional hybrid index: the same documents plus the
-	// in-engine embedder. It is built by a separate, slower pass (reindex
-	// --semantic) and only queried when SemanticRatio > 0, so embedding never
-	// blocks facet/keyword freshness.
-	semanticIndexUID = "jobs_semantic"
-	// facetRebuildUID / semanticRebuildUID are the throwaway indexes a full rebuild
-	// streams into before atomically swapping over the live index (see Rebuild).
-	facetRebuildUID    = "jobs_rebuild"
-	semanticRebuildUID = "jobs_semantic_rebuild"
-	primaryKey         = "id"
-	embedderName       = "default"
+	// facetRebuildUID is the throwaway index a full rebuild streams into before
+	// atomically swapping over the live index (see Rebuild).
+	facetRebuildUID = "jobs_rebuild"
+	primaryKey      = "id"
 	// embedderModel is the identity of the embedding model+passage-shape, stored beside a
-	// CV vector so a change marks it stale (see CurrentEmbedderModel) and, for jobs, drives
-	// EnqueuePendingSemanticJobs' staleness check — bumping this string is what forces a
-	// full re-embed through the current pipeline (openspec/changes/
-	// drop-hybrid-search-pgvector-similar's ops step 8.3), not a separate backfill tool.
+	// job's vector so a change marks it stale and drives EnqueuePendingSemanticJobs'
+	// staleness check — bumping this string is what forces a full re-embed through the
+	// current pipeline (openspec/changes/drop-hybrid-search-pgvector-similar's ops step
+	// 8.3), not a separate backfill tool.
 	// Embedding runs on a self-hosted Text-Embeddings-Inference (TEI) service — NOT
 	// in-engine and NOT OpenAI — reached over TEI's native /embed route (embedderURL).
 	// Multilingual e5 gives far sharper skill matching than the old in-engine MiniLM, and
@@ -55,9 +53,6 @@ const (
 	// serving the same e5 model — e.g. an HF Inference Endpoint for a bulk reindex —
 	// without changing the vector space.
 	embedderURL = "http://127.0.0.1:8090/embed"
-	// embedderDimensions is the e5-base output width; declared so Meilisearch validates
-	// vectors and the userProvided CV vector matches.
-	embedderDimensions = 768
 
 	// maxTotalHits caps how high a search counts its results: below it,
 	// estimatedTotalHits is the true filtered total, so it is set well above the
@@ -81,22 +76,20 @@ const (
 )
 
 // rawClient serves the package's raw Meilisearch calls that bypass the SDK (the
-// swap-indexes POST in client.go and the vector-listing GET in semantic_vectors.go).
-// http.DefaultClient has no timeout of its own, so a hung engine would otherwise
-// block a reindex indefinitely. (The TEI embed calls in embed.go are a different
-// backend with their own per-attempt timeout — see embedAttemptTimeout.)
+// swap-indexes POST). http.DefaultClient has no timeout of its own, so a hung
+// engine would otherwise block a reindex indefinitely. (The TEI embed calls in
+// embed.go are a different backend with their own per-attempt timeout — see
+// embedAttemptTimeout.)
 var rawClient = &http.Client{Timeout: 30 * time.Second}
 
-// Client is a thin wrapper over the Meilisearch service scoped to the two job
-// indexes: facet (keyword + facets, no embedder) and semantic (adds the embedder).
-// url/key are kept for the one raw call (swap-indexes) the SDK cannot make against
-// our engine version — see swapIndexes.
+// Client is a thin wrapper over the Meilisearch service scoped to the facet
+// (keyword + facets, no embedder) job index. url/key are kept for the one raw call
+// (swap-indexes) the SDK cannot make against our engine version — see swapIndexes.
 type Client struct {
-	manager  meilisearch.ServiceManager
-	facet    meilisearch.IndexManager
-	semantic meilisearch.IndexManager
-	url      string
-	key      string
+	manager meilisearch.ServiceManager
+	facet   meilisearch.IndexManager
+	url     string
+	key     string
 	// embedURL is the TEI native /embed endpoint this client embeds against (jobs
 	// and CVs alike). It defaults to embedderURL (the host2 TEI); WithEmbedURL points a
 	// worker at a faster backend — e.g. a GPU endpoint for a bulk reindex — as long as
@@ -157,7 +150,6 @@ func NewClient(url, key string, opts ...Option) *Client {
 	c := &Client{
 		manager:          m,
 		facet:            m.Index(facetIndexUID),
-		semantic:         m.Index(semanticIndexUID),
 		url:              url,
 		key:              key,
 		embedURL:         embedderURL,
@@ -188,13 +180,6 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 	return c.awaitTask(ctx, c.facet, task.TaskUID)
 }
 
-// EnsureSemanticIndex creates the hybrid jobs index (with the userProvided embedder)
-// and applies its settings. It is built by the separate reindex --semantic pass, which
-// computes the vectors against TEI, so it is kept off the default reindex path.
-func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
-	return c.ensure(ctx, c.semantic, semanticIndexUID, primaryKey, semanticSettings())
-}
-
 // Rebuild is a fresh-index build session for a full reindex. Documents are streamed
 // into a throwaway index (Push enqueues each batch WITHOUT waiting, so Meilisearch
 // auto-batches consecutive tasks — the throughput lever), then Promote waits for the
@@ -203,26 +188,17 @@ func (c *Client) EnsureSemanticIndex(ctx context.Context) error {
 // the single swap (no half-built window), and indexing stays fast because the
 // rebuild index grows from empty instead of re-merging into an already-full one.
 type Rebuild struct {
-	c              *Client
-	liveUID        string
-	rebuildUID     string
-	settings       *meilisearch.Settings
-	resetEmbedders bool
-	// semantic marks this a hybrid-index rebuild: Push embeds each batch (via TEI) and
-	// attaches the vectors, since the semantic index uses a userProvided embedder.
-	semantic bool
-	rebuild  meilisearch.IndexManager
-	tasks    []int64
+	c          *Client
+	liveUID    string
+	rebuildUID string
+	settings   *meilisearch.Settings
+	rebuild    meilisearch.IndexManager
+	tasks      []int64
 }
 
 // NewFacetRebuild starts a full rebuild of the facet/keyword production index.
 func (c *Client) NewFacetRebuild() *Rebuild {
-	return &Rebuild{c: c, liveUID: facetIndexUID, rebuildUID: facetRebuildUID, settings: facetSettings(), resetEmbedders: true}
-}
-
-// NewSemanticRebuild starts a full rebuild of the hybrid semantic index.
-func (c *Client) NewSemanticRebuild() *Rebuild {
-	return &Rebuild{c: c, liveUID: semanticIndexUID, rebuildUID: semanticRebuildUID, settings: semanticSettings(), semantic: true}
+	return &Rebuild{c: c, liveUID: facetIndexUID, rebuildUID: facetRebuildUID, settings: facetSettings()}
 }
 
 // Prepare creates a fresh, empty rebuild index with this pass's settings, ready to
@@ -243,15 +219,12 @@ func (r *Rebuild) Prepare(ctx context.Context) error {
 		return err
 	}
 	// The facet index carries no embedder; reset it in case a prior version left one
-	// (mirrors EnsureIndex). The semantic rebuild keeps the embedder its settings add.
-	if r.resetEmbedders {
-		task, err := r.rebuild.ResetEmbeddersWithContext(ctx)
-		if err != nil {
-			return fmt.Errorf("search: reset rebuild embedders: %w", err)
-		}
-		return r.c.awaitTask(ctx, r.rebuild, task.TaskUID)
+	// (mirrors EnsureIndex).
+	task, err := r.rebuild.ResetEmbeddersWithContext(ctx)
+	if err != nil {
+		return fmt.Errorf("search: reset rebuild embedders: %w", err)
 	}
-	return nil
+	return r.c.awaitTask(ctx, r.rebuild, task.TaskUID)
 }
 
 // Push enqueues a batch into the rebuild index WITHOUT waiting for it to finish —
@@ -261,23 +234,8 @@ func (r *Rebuild) Push(ctx context.Context, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
-	// The semantic index stores userProvided vectors, so a semantic rebuild embeds each
-	// batch (via TEI) and pushes documents carrying their vectors; the facet rebuild
-	// pushes the plain documents. (A from-Postgres rehydration does NOT use this swap
-	// path — see the in-place ResetSemanticIndex/IndexSemanticJobsFromPG.)
-	var payload any = docs
-	if r.semantic {
-		sdocs, err := r.c.embedDocs(ctx, docs)
-		if err != nil {
-			return err
-		}
-		if len(sdocs) == 0 {
-			return nil // nothing to push this batch
-		}
-		payload = sdocs
-	}
 	pk := primaryKey
-	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, payload, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := r.rebuild.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: rebuild push: %w", err)
 	}
@@ -399,83 +357,6 @@ func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 	return c.indexInto(ctx, c.facet, docs)
 }
 
-// IndexSemanticJobs embeds a batch (via TEI) and upserts it into the semantic index
-// with each document's vector, since that index uses a userProvided embedder. It
-// returns the computed vectors keyed by job id so the caller can persist them to
-// Postgres in the same unit of work — the durable copy that lets the index be
-// rehydrated without re-embedding. Used by the incremental embed worker.
-func (c *Client) IndexSemanticJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
-	if len(docs) == 0 {
-		return nil, nil
-	}
-	sdocs, err := c.embedDocs(ctx, docs)
-	if err != nil {
-		return nil, err
-	}
-	pk := primaryKey
-	task, err := c.semantic.UpdateDocumentsWithContext(ctx, sdocs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
-	if err != nil {
-		return nil, fmt.Errorf("search: index semantic documents: %w", err)
-	}
-	if err := c.awaitTask(ctx, c.semantic, task.TaskUID); err != nil {
-		return nil, err
-	}
-	return vectorsByID(sdocs), nil
-}
-
-// ResetSemanticIndex drops the live semantic index and recreates it empty with the
-// semantic settings, so an in-place from-Postgres rehydration starts from a clean slate.
-// Dropping BEFORE the re-fill (instead of building a rebuild copy and swapping) keeps the
-// peak on-disk footprint at one index, never two — the reason the from-PG path is in-place.
-func (c *Client) ResetSemanticIndex(ctx context.Context) error {
-	if err := c.dropIndex(ctx, semanticIndexUID); err != nil {
-		return err
-	}
-	return c.EnsureSemanticIndex(ctx)
-}
-
-// IndexSemanticJobsFromPG upserts a batch into the live semantic index using the vector
-// each document already carries from Postgres (jobs.semantic_embedding), with no TEI call.
-// Documents without a persisted vector are dropped from the batch (semanticDocsFromPG). It
-// is the in-place rehydration counterpart of IndexSemanticJobs (which embeds via TEI).
-func (c *Client) IndexSemanticJobsFromPG(ctx context.Context, docs []JobDocument) error {
-	sdocs := semanticDocsFromPG(docs)
-	if len(sdocs) == 0 {
-		return nil
-	}
-	pk := primaryKey
-	task, err := c.semantic.UpdateDocumentsWithContext(ctx, sdocs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
-	if err != nil {
-		return fmt.Errorf("search: index semantic documents from pg: %w", err)
-	}
-	return c.awaitTask(ctx, c.semantic, task.TaskUID)
-}
-
-// EmbedJobs computes each document's vector WITHOUT touching Meilisearch, returning them
-// keyed by job id. It is the pg-only backfill path: the vector is persisted to Postgres
-// (the durable source of truth) and the semantic index is rebuilt from Postgres in one
-// pass afterwards (reindex --semantic --from-pg), so a fast bulk embed is never gated by
-// Meilisearch's serial task queue.
-func (c *Client) EmbedJobs(ctx context.Context, docs []JobDocument) (map[int64][]float32, error) {
-	if len(docs) == 0 {
-		return nil, nil
-	}
-	sdocs, err := c.embedDocs(ctx, docs)
-	if err != nil {
-		return nil, err
-	}
-	return vectorsByID(sdocs), nil
-}
-
-// vectorsByID pulls the per-job vectors out of the embedded documents.
-func vectorsByID(sdocs []semanticDocument) map[int64][]float32 {
-	vectors := make(map[int64][]float32, len(sdocs))
-	for _, sd := range sdocs {
-		vectors[sd.ID] = sd.Vectors[embedderName]
-	}
-	return vectors
-}
-
 func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, docs []JobDocument) error {
 	if len(docs) == 0 {
 		return nil
@@ -513,12 +394,6 @@ func (c *Client) DeleteJobs(ctx context.Context, ids []int64) error {
 	return c.deleteFrom(ctx, c.facet, ids)
 }
 
-// DeleteSemanticJobs removes documents from the semantic index. Used by the
-// reindex --semantic pass.
-func (c *Client) DeleteSemanticJobs(ctx context.Context, ids []int64) error {
-	return c.deleteFrom(ctx, c.semantic, ids)
-}
-
 func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, ids []int64) error {
 	task, err := c.submitDelete(ctx, idx, ids)
 	if err != nil || task == 0 {
@@ -527,8 +402,7 @@ func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, i
 	return c.awaitTask(ctx, idx, task)
 }
 
-// SubmitJobDeletion enqueues a facet-index deletion WITHOUT waiting for it, and
-// SubmitSemanticJobDeletion does the same for the semantic index.
+// SubmitJobDeletion enqueues a facet-index deletion WITHOUT waiting for it.
 //
 // Meilisearch runs one task per index at a time and a delete-by-id rebuilds the
 // affected parts of the inverted index, so its cost tracks the size of the index
@@ -541,11 +415,6 @@ func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, i
 // that ends in a full reindex, never on a path a user waits on.
 func (c *Client) SubmitJobDeletion(ctx context.Context, ids []int64) error {
 	_, err := c.submitDelete(ctx, c.facet, ids)
-	return err
-}
-
-func (c *Client) SubmitSemanticJobDeletion(ctx context.Context, ids []int64) error {
-	_, err := c.submitDelete(ctx, c.semantic, ids)
 	return err
 }
 
@@ -568,16 +437,13 @@ func (c *Client) submitDelete(ctx context.Context, idx meilisearch.IndexManager,
 }
 
 // SearchParams is a backend-agnostic search request. Filter is the value built
-// by Filter (nil for none). SemanticRatio blends keyword (0) and semantic (1);
-// the hybrid embedder is only engaged when the ratio is above zero, so plain
-// keyword search never depends on the embedder.
+// by Filter (nil for none).
 type SearchParams struct {
-	Query         string
-	Filter        any
-	Sort          []string
-	Limit         int
-	Offset        int
-	SemanticRatio float64
+	Query  string
+	Filter any
+	Sort   []string
+	Limit  int
+	Offset int
 }
 
 // SearchResult holds the matched documents and Meilisearch's estimated total.
@@ -600,7 +466,7 @@ func isBadRequest(err error) bool {
 	return errors.As(err, &me) && me.StatusCode == http.StatusBadRequest
 }
 
-// Search runs a query against the jobs index and decodes the hits.
+// Search runs a query against the jobs (facet/keyword) index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
 	req := &meilisearch.SearchRequest{
 		Filter: p.Filter,
@@ -608,26 +474,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 		Limit:  int64(p.Limit),
 		Offset: int64(p.Offset),
 	}
-	// Default (keyword) traffic hits the facet index — always fresh, no embedder.
-	// A semantic request routes to the semantic index and engages the embedder.
-	idx := c.facet
-	if p.SemanticRatio > 0 {
-		idx = c.semantic
-		// The semantic index uses a userProvided embedder, so Meilisearch cannot embed
-		// the query text itself — we embed it here (TEI, "query:" prefix for e5's
-		// asymmetric retrieval) and pass the vector for the semantic half of the blend.
-		qv, err := c.embedBatch(ctx, []string{"query: " + p.Query})
-		if err != nil {
-			return SearchResult{}, err
-		}
-		req.Vector = toFloat32(qv[0])
-		req.Hybrid = &meilisearch.SearchRequestHybrid{
-			Embedder:      embedderName,
-			SemanticRatio: p.SemanticRatio,
-		}
-	}
 
-	resp, err := idx.SearchWithContext(ctx, p.Query, req)
+	resp, err := c.facet.SearchWithContext(ctx, p.Query, req)
 	if err != nil {
 		// A cancelled/expired context surfaces here wrapped in a Meilisearch
 		// communication error that does NOT chain to context.Canceled (the SDK's
@@ -645,119 +493,6 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, erro
 	var hits []JobDocument
 	if err := resp.Hits.DecodeInto(&hits); err != nil {
 		return SearchResult{}, fmt.Errorf("search: decode hits: %w", err)
-	}
-	return SearchResult{Hits: hits, Total: resp.EstimatedTotalHits}, nil
-}
-
-// similarSourceMissingCode is the Meilisearch error code for "the similar-query
-// source id is not a document in the index". The semantic index is built
-// incrementally (reindex --semantic), so a job present in Postgres can still lack
-// a vector — its /similar is then "no neighbours", not an error.
-const similarSourceMissingCode = "not_found_similar_id"
-
-// semanticIndexMissingCode is Meilisearch's code when the semantic index itself
-// is absent (e.g. it was dropped to reclaim disk and its rebuild is paused). Like
-// a missing source document, this degrades to "no neighbours" so the detail page
-// hides the section instead of erroring.
-const semanticIndexMissingCode = "index_not_found"
-
-// SimilarJobs returns the jobs nearest to job id in embedding space, queried
-// against the semantic index by the document's stored vector (no query text, no
-// re-embedding). The semantic index holds open jobs only, so neighbours are open
-// jobs without any added filter. Meilisearch's similar endpoint already excludes
-// the source document, but we over-fetch by one and drop it defensively rather
-// than depend on that — and to avoid making the primary key a filterable
-// attribute just to express "id != source".
-//
-// A job with no vector in the semantic index yet (the index lags ingest) yields
-// an empty list, not an error: Meilisearch answers such a source id with
-// not_found_similar_id, which we map to "no neighbours" so the detail-page
-// section simply hides. A wholly absent semantic index (index_not_found, e.g.
-// dropped to reclaim disk) degrades the same way.
-func (c *Client) SimilarJobs(ctx context.Context, id int64, limit int) ([]JobDocument, error) {
-	var resp meilisearch.SimilarDocumentResult
-	err := c.semantic.SearchSimilarDocumentsWithContext(ctx, &meilisearch.SimilarDocumentQuery{
-		Id:       id,
-		Embedder: embedderName,
-		Limit:    int64(limit) + 1,
-	}, &resp)
-	if err != nil {
-		var meiliErr *meilisearch.Error
-		if errors.As(err, &meiliErr) {
-			switch meiliErr.MeilisearchApiError.Code {
-			case similarSourceMissingCode, semanticIndexMissingCode:
-				return nil, nil
-			}
-		}
-		// The caller cancelled (navigated away) — the cancellation is buried in the
-		// SDK's communication error, which has no Unwrap, so re-raise the context
-		// sentinel to keep it out of the reported-fault path upstream.
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("search: similar: %w", ctxErr)
-		}
-		return nil, fmt.Errorf("search: similar: %w", err)
-	}
-
-	var hits []JobDocument
-	if err := resp.Hits.DecodeInto(&hits); err != nil {
-		return nil, fmt.Errorf("search: decode similar hits: %w", err)
-	}
-
-	out := make([]JobDocument, 0, limit)
-	for _, h := range hits {
-		if h.ID == id {
-			continue
-		}
-		if len(out) == limit {
-			break
-		}
-		out = append(out, h)
-	}
-	return out, nil
-}
-
-// EmbedText embeds text through the SAME path (TEI, same model) that embeds jobs and
-// returns the vector plus the embedder identity that produced it, so a CV vector is
-// directly comparable to the job corpus. The CV is the query side of e5's asymmetric
-// retrieval, so it carries the "query:" prefix (jobs carry "passage:", see jobPassage).
-func (c *Client) EmbedText(ctx context.Context, text string) ([]float64, string, error) {
-	vecs, err := c.embedBatch(ctx, []string{"query: " + text})
-	if err != nil {
-		return nil, "", err
-	}
-	if len(vecs) == 0 || len(vecs[0]) == 0 {
-		return nil, "", fmt.Errorf("search: empty embedding")
-	}
-	return vecs[0], embedderModel, nil
-}
-
-// RecommendByVector ranks open jobs in the semantic index by similarity to a raw
-// vector (the caller's persisted CV embedding), the shared ranking rules breaking
-// ties toward fresher jobs. An optional filter (a Meilisearch filter expression, nil
-// for none) constrains the candidate set before ranking — the CV ranks only the jobs
-// that pass the facet filter. An empty vector or an absent semantic index yields no
-// results — the caller treats "no usable CV vector" as an empty feed, not an error.
-func (c *Client) RecommendByVector(ctx context.Context, vector []float64, filter any, limit, offset int) (SearchResult, error) {
-	if len(vector) == 0 {
-		return SearchResult{}, nil
-	}
-	resp, err := c.semantic.SearchWithContext(ctx, "", &meilisearch.SearchRequest{
-		Limit:  int64(limit),
-		Offset: int64(offset),
-		Vector: toFloat32(vector),
-		Filter: filter,
-		Hybrid: &meilisearch.SearchRequestHybrid{Embedder: embedderName, SemanticRatio: 1},
-	})
-	if err != nil {
-		var meiliErr *meilisearch.Error
-		if errors.As(err, &meiliErr) && meiliErr.MeilisearchApiError.Code == semanticIndexMissingCode {
-			return SearchResult{}, nil
-		}
-		return SearchResult{}, fmt.Errorf("search: recommend: %w", err)
-	}
-	var hits []JobDocument
-	if err := resp.Hits.DecodeInto(&hits); err != nil {
-		return SearchResult{}, fmt.Errorf("search: decode recommend hits: %w", err)
 	}
 	return SearchResult{Hits: hits, Total: resp.EstimatedTotalHits}, nil
 }
@@ -793,9 +528,8 @@ func (c *Client) awaitManagerTask(ctx context.Context, taskUID int64) error {
 }
 
 // facetSettings is the single source of truth for the facet/keyword index
-// configuration — everything EXCEPT the embedder. Indexing into it costs no
-// per-document embedding, so a full rebuild runs ~25x faster than the semantic
-// index. semanticSettings layers the embedder on top of this.
+// configuration. Indexing into it costs no per-document embedding, so a full
+// rebuild is fast.
 func facetSettings() *meilisearch.Settings {
 	return &meilisearch.Settings{
 		SearchableAttributes: []string{"title", "company", "description", "location"},
@@ -842,8 +576,7 @@ func facetSettings() *meilisearch.Settings {
 		// on every relevance rule the fresher posting wins. It uses the numeric
 		// effective-posting field (posted_ts, unix seconds) — the reliable date jobview
 		// derives, not the raw posted_at — and needs no sortable declaration (custom
-		// ranking rules are independent of SortableAttributes). Flows into the semantic
-		// index too, since semanticSettings builds on these rules.
+		// ranking rules are independent of SortableAttributes).
 		RankingRules: []string{"words", "sort", "typo", "proximity", "attribute", "exactness", "posted_ts:desc"},
 		// Typo tolerance is left at Meilisearch's defaults (on, with sensible min
 		// word sizes). We deliberately do not send a TypoTolerance struct: the SDK
@@ -882,30 +615,5 @@ func facetSettings() *meilisearch.Settings {
 		// Like FilterableAttributes above, this setting only takes effect on data
 		// written AFTER a reindex — a full `cmd/reindex` run is required post-deploy.
 		ProximityPrecision: meilisearch.ByAttribute,
-	}
-}
-
-// semanticSettings is the hybrid index configuration: the facet/keyword settings plus
-// the userProvided embedder (see jobEmbedder). Vectors are computed in Go against TEI
-// and pushed with each document, so this index is built by the separate reindex
-// --semantic pass and never on the default reindex path, and embedding never touches
-// Meilisearch's task queue.
-func semanticSettings() *meilisearch.Settings {
-	s := facetSettings()
-	s.Embedders = map[string]meilisearch.Embedder{embedderName: jobEmbedder()}
-	return s
-}
-
-// jobEmbedder is the semantic index's embedder. It is `userProvided`: Meilisearch
-// stores and searches the vectors but never computes them. We embed in Go against TEI
-// (see embedBatch/embedDocs) and push each document with its vector, instead of the
-// `rest` source that has Meili call TEI itself — the engine rejects the loopback TEI
-// URI, and owning the embedding keeps jobs and CVs on one identical path (one model,
-// one server → one vector space). Dimensions must match what TEI returns so Meili
-// validates the vectors.
-func jobEmbedder() meilisearch.Embedder {
-	return meilisearch.Embedder{
-		Source:     "userProvided",
-		Dimensions: embedderDimensions,
 	}
 }

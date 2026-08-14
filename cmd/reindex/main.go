@@ -1,28 +1,16 @@
-// Command reindex rebuilds a Meilisearch jobs index from Postgres. It ensures the
-// index settings exist, then scans jobs in batches and upserts their documents.
-// Run it on a schedule (e.g. cron); it processes the whole table and exits.
-// Indexing is idempotent (upsert by id), so re-runs are safe.
-//
-// Two passes share this binary:
-//
-//   - default: the facet/keyword index (no embedder) — the fast, always-fresh
-//     production search. A full rebuild is minutes, not hours.
-//   - reindex --semantic: the hybrid index (adds the in-engine embedder). Slower
-//     (it embeds new/changed documents); run on its own, looser schedule and only
-//     while semantic search is enabled — it never blocks the facet pass.
-//
-// A full --semantic rebuild may be scoped to a fresh posting window with
-// --posted-within <duration> (the in-engine embedder cannot embed the whole
-// catalogue in reasonable time); every other pass scans the whole table.
+// Command reindex rebuilds the Meilisearch jobs (facet/keyword) index from
+// Postgres. It ensures the index settings exist, then scans the WHOLE table in
+// batches and upserts their documents into a fresh rebuild index before atomically
+// swapping it in. Run it on a schedule (e.g. cron); it processes the whole table and
+// exits. Indexing is idempotent (upsert by id), so re-runs are safe. A full rebuild
+// is minutes, not hours — the index carries no embedder.
 package main
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"slices"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -76,96 +64,52 @@ func run() int {
 		return 1
 	}
 
-	ec := config.LoadEmbedClient()
-	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
-		search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
+	// No WithEmbed* options: the facet rebuild never embeds anything (that was only ever
+	// true of the removed --semantic pass), so there is nothing here for EMBED_URL/
+	// EMBED_API_KEY/EMBED_CONCURRENCY to configure.
+	client := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	q := db.New(pool)
 
-	semantic := semanticRequested(os.Args[1:])
-	target := "facet"
-	if semantic {
-		target = "semantic"
-	}
-
-	postedWithin, scoped, err := postedWithinFrom(os.Args[1:])
-	if err != nil {
+	// Guard free disk for the swap rebuild up front — BEFORE the expensive recompute —
+	// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
+	rcfg := config.LoadReindex()
+	if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-	// --posted-within scopes the fresh window the semantic swap rebuild embeds; it is
-	// meaningless for the facet index (which holds the whole catalogue). Reject that
-	// combo loudly rather than silently ignoring the flag.
-	if scoped && !semantic {
-		log.Print("reindex: --posted-within applies only to a full --semantic rebuild")
-		return 1
+
+	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
+	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
+	// canon has failed over. Done per company in short transactions (never a table-wide
+	// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
+	// (which also owns settings/compaction), so it degrades to the prior markers.
+	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
 	}
 
-	// --from-pg rehydrates the semantic index from the vectors already in Postgres
-	// (jobs.semantic_embedding) instead of re-embedding via TEI. It only makes sense for
-	// the semantic pass — the facet index carries no vectors.
-	fromPG := fromPGRequested(os.Args[1:])
-	if fromPG && !semantic {
-		log.Print("reindex: --from-pg applies only to a --semantic rebuild")
-		return 1
+	// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
+	// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
+	// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
+	// per-company, best-effort discipline as the role pass.
+	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 	}
 
-	// A from-Postgres rehydration is in-place (reset + re-fill the live index from the
-	// vectors already in Postgres): no 2× disk copy, no swap. It reuses the duplicate_of
-	// markers already in the DB, so it skips BOTH the disk-guard AND the per-company marker
-	// recompute below — the latter is the dominant cost on prod (one query per company, so
-	// tens of thousands of round-trips), and stale-by-one-run markers are fine for a vector
-	// rehydration.
-	inPlaceSemantic := semantic && fromPG
-	if !inPlaceSemantic {
-		// Guard free disk for the swap rebuilds up front — BEFORE the expensive recompute —
-		// so a disk refusal is a true no-op (no prod writes, no full-catalogue scans).
-		rcfg := config.LoadReindex()
-		if err := guardDisk(rcfg.MeiliDataDir, rcfg.MinFreeGB, statfsFree); err != nil {
-			log.Printf("reindex: %v", err)
-			return 1
-		}
-
-		// Refresh the role-cluster canonical markers before reading jobs, so the collapse
-		// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
-		// canon has failed over. Done per company in short transactions (never a table-wide
-		// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
-		// (which also owns settings/compaction), so it degrades to the prior markers.
-		if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
-			log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
-		} else if n > 0 {
-			log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
-		}
-
-		// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
-		// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
-		// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
-		// per-company, best-effort discipline as the role pass.
-		if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
-			log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
-		} else if n > 0 {
-			log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
-		}
-
-		// Finally collapse reposts whose descriptions are near-identical but not byte-identical —
-		// a role reposted per city with a localized salary or legal block, which the exact passes
-		// leave split. Runs LAST so it only ever claims what they did not, and shares their
-		// per-company, best-effort discipline.
-		if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
-			log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
-		} else if n > 0 {
-			log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
-		}
+	// Finally collapse reposts whose descriptions are near-identical but not byte-identical —
+	// a role reposted per city with a localized salary or legal block, which the exact passes
+	// leave split. Runs LAST so it only ever claims what they did not, and shares their
+	// per-company, best-effort discipline.
+	if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
 	}
 
-	// The rebuild optionally scopes to a fresh posting window (--posted-within); every
-	// other pass scans the whole table. A scoped reader returns open jobs only, which the
-	// rebuild wants anyway (closed jobs are simply absent).
 	reader := worker.NewFullScanReader(q)
-	scope := "full"
-	if scoped {
-		reader = worker.NewPostedSinceReader(q, time.Now().Add(-postedWithin))
-		scope = "posted-within " + postedWithin.String()
-	}
 	lookup, err := buildRealityLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
@@ -177,113 +121,24 @@ func run() int {
 		return 1
 	}
 
-	// --from-pg rehydrates the semantic index IN PLACE from the vectors already in Postgres:
-	// reset the live index and re-fill it with no TEI embedding, no rebuild copy, and no
-	// swap.
-	if inPlaceSemantic {
-		log.Printf("reindex: target=semantic scope=%s mode=in-place vectors=pg", scope)
-		rh := semanticFromPG{c: client}
-		indexed, skipped, err := reindexSemanticFromPG(ctx, reader, rh, lookup, geo, time.Now())
-		if err != nil {
-			log.Printf("reindex: %v", err)
-			return 1
-		}
-		log.Printf("reindex done: target=semantic scope=%s mode=in-place indexed=%d skipped=%d", scope, indexed, skipped)
-		return 0
-	}
-
-	// Every other pass builds a fresh index and atomically swaps it in — transiently a
-	// second full copy of the index (disk already guarded up front, before the recompute).
-	var b rebuilder = client.NewFacetRebuild()
-	vectors := "n/a"
-	if semantic {
-		b = client.NewSemanticRebuild()
-		vectors = "tei"
-	}
-	log.Printf("reindex: target=%s scope=%s mode=swap vectors=%s", target, scope, vectors)
-	indexed, skipped, err := reindexFull(ctx, reader, b, lookup, geo, time.Now())
+	// Builds a fresh index and atomically swaps it in — transiently a second full copy
+	// of the index (disk already guarded up front, before the recompute).
+	log.Print("reindex: target=facet scope=full mode=swap")
+	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
-	log.Printf("reindex done: target=%s scope=%s indexed=%d skipped=%d", target, scope, indexed, skipped)
+	log.Printf("reindex done: target=facet scope=full indexed=%d skipped=%d", indexed, skipped)
 
-	// search_outbox belongs only to the facet index (the semantic index has its own,
-	// unrelated semantic_outbox) — see the startedAt comment above for the safety
-	// argument. Best-effort: the reindex itself already succeeded, so a purge failure
-	// just leaves those rows for the next cycle rather than failing this run.
-	if !semantic {
-		if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgtype.Timestamptz{Time: startedAt, Valid: true}); err != nil {
-			log.Printf("reindex: purge stale search_outbox entries: %v", err)
-		} else if n > 0 {
-			log.Printf("reindex: purged %d stale search_outbox entries queued before this run", n)
-		}
+	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves
+	// those rows for the next cycle rather than failing this run.
+	if n, err := q.DeleteSearchOutboxCreatedBefore(ctx, pgtype.Timestamptz{Time: startedAt, Valid: true}); err != nil {
+		log.Printf("reindex: purge stale search_outbox entries: %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: purged %d stale search_outbox entries queued before this run", n)
 	}
 	return 0
-}
-
-// semanticFromPG adapts the search client to the semanticRehydrator orchestration used by
-// reindexSemanticFromPG: a Reset that clears the live jobs_semantic index and a PushFromPG
-// that upserts Postgres-persisted vectors straight into it, both in place (no swap).
-type semanticFromPG struct{ c *search.Client }
-
-func (s semanticFromPG) Reset(ctx context.Context) error { return s.c.ResetSemanticIndex(ctx) }
-
-func (s semanticFromPG) PushFromPG(ctx context.Context, docs []search.JobDocument) error {
-	return s.c.IndexSemanticJobsFromPG(ctx, docs)
-}
-
-// postedWithinFrom parses an optional --posted-within <duration> / --posted-within=<duration>
-// flag (e.g. "168h" for 7 days). It scopes a full --semantic rebuild to jobs posted
-// within that window, since the in-engine embedder cannot embed the whole catalogue in
-// reasonable time. Reports (duration, true, nil) when present, (0, false, nil) when
-// absent, and an error for a missing or unparseable value.
-func postedWithinFrom(args []string) (time.Duration, bool, error) {
-	for i, a := range args {
-		var raw string
-		switch {
-		case a == "--posted-within":
-			if i+1 >= len(args) {
-				return 0, false, fmt.Errorf("--posted-within needs a duration (e.g. 168h)")
-			}
-			raw = args[i+1]
-		case strings.HasPrefix(a, "--posted-within="):
-			raw = strings.TrimPrefix(a, "--posted-within=")
-		default:
-			continue
-		}
-		d, err := time.ParseDuration(raw)
-		if err != nil {
-			return 0, false, fmt.Errorf("--posted-within %q: %w", raw, err)
-		}
-		if d <= 0 {
-			return 0, false, fmt.Errorf("--posted-within must be positive, got %q", raw)
-		}
-		return d, true, nil
-	}
-	return 0, false, nil
-}
-
-// semanticRequested reports whether the args ask for the hybrid (embedder) pass.
-func semanticRequested(args []string) bool {
-	for _, a := range args {
-		if a == "--semantic" || a == "semantic" {
-			return true
-		}
-	}
-	return false
-}
-
-// fromPGRequested reports whether a --semantic rebuild should rehydrate from the
-// vectors persisted in Postgres (jobs.semantic_embedding) instead of re-embedding via
-// TEI — the fast disaster-recovery path that costs no model calls.
-func fromPGRequested(args []string) bool {
-	for _, a := range args {
-		if a == "--from-pg" {
-			return true
-		}
-	}
-	return false
 }
 
 // rebuilder builds a brand-new index out of band and atomically swaps it into
@@ -343,10 +198,11 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 }
 
 // streamOpenDocs pages the reindex feed by keyset and pushes each batch's open-job
-// documents through push, returning the running indexed/skipped totals. Shared by the
-// swap rebuild (reindexFull) and the in-place semantic rehydration
-// (reindexSemanticFromPG): only the per-batch sink and the surrounding index lifecycle
-// differ.
+// documents through push, returning the running indexed/skipped totals. Its own
+// function (rather than inlined into reindexFull) mostly for historical reasons — it
+// used to also back an in-place semantic rehydration path that shared this loop and
+// differed only in the per-batch sink; that path is gone (see openspec/changes/
+// drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
 func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo clusterGeoLookup, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
@@ -383,29 +239,6 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 		afterID = lastID
 	}
 	return int(indexed.Load()), skipped, nil
-}
-
-// semanticRehydrator rebuilds jobs_semantic IN PLACE from the vectors already stored in
-// Postgres: Reset clears the live index to empty, PushFromPG upserts open-job vectors
-// straight into it. No rebuild copy and no swap, so it never transiently doubles disk
-// usage the way the swap rebuild (rebuilder) does — the reason a from-PG rebuild takes
-// this path. The tradeoff is that /similar and recommendations see a partial index while
-// the rehydration runs; acceptable because the semantic index is disposable (Postgres is
-// the source of truth for the vectors).
-type semanticRehydrator interface {
-	Reset(ctx context.Context) error
-	PushFromPG(ctx context.Context, docs []search.JobDocument) error
-}
-
-// reindexSemanticFromPG resets the live jobs_semantic index and re-fills it in place from
-// the vectors persisted in Postgres, streaming only open jobs. Unlike reindexFull there
-// is no Prepare/Promote/swap and thus no disk-guard need — dropping the old index before
-// the fill means the peak footprint is ~one copy, never two.
-func reindexSemanticFromPG(ctx context.Context, reader worker.PageReader, rh semanticRehydrator, lookup realityLookup, geo clusterGeoLookup, now time.Time) (int, int, error) {
-	if err := rh.Reset(ctx); err != nil {
-		return 0, 0, err
-	}
-	return streamOpenDocs(ctx, reader, lookup, geo, now, rh.PushFromPG)
 }
 
 // realityLookup returns a role cluster's repost and concurrent-open counts for the

@@ -1,26 +1,19 @@
 //go:build integration
 
 // Integration tests for the Meilisearch-backed search package: EnsureIndex
-// (settings + embedder), IndexJobs, and Search (keyword, faceted, hybrid). These
-// exercise behavior that only a real engine exhibits. Run with:
+// (settings), IndexJobs, and Search (keyword, faceted). These exercise behavior
+// that only a real engine exhibits. Run with:
 //
 //	go test -tags=integration ./internal/search/
 //
-// Requires Docker (testcontainers spins up a throwaway Meilisearch). The semantic
-// index uses a userProvided embedder, so no model download happens in-engine; the
-// vectors come from a stub TEI (fakeTEI) the client is pointed at.
+// Requires Docker (testcontainers spins up a throwaway Meilisearch).
 package search
 
 import (
 	"context"
 	"encoding/json"
-	"hash/fnv"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/meilisearch/meilisearch-go"
@@ -30,48 +23,6 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 )
-
-// fakeTEI stands in for the embedding server, replying in the wrapped
-// {"embeddings": [...]} shape an HF Inference Endpoint uses. It returns a deterministic
-// bag-of-words vector per input, so texts sharing tokens land near each other under
-// cosine similarity — enough for the semantic assertions (a query hits jobs whose text
-// it overlaps) without a real model, and it keeps the vector width at
-// embedderDimensions so Meili accepts the userProvided vectors.
-func fakeTEI(t *testing.T) string {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
-			Inputs []string `json:"inputs"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		out := struct {
-			Embeddings [][]float64 `json:"embeddings"`
-		}{}
-		for _, s := range in.Inputs {
-			out.Embeddings = append(out.Embeddings, bagOfWords(s))
-		}
-		_ = json.NewEncoder(w).Encode(out)
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL
-}
-
-// bagOfWords hashes each token into a fixed-width count vector — a crude but
-// deterministic embedding whose cosine similarity tracks token overlap.
-func bagOfWords(s string) []float64 {
-	v := make([]float64, embedderDimensions)
-	for _, tok := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(tok))
-		v[h.Sum32()%embedderDimensions]++
-	}
-	return v
-}
 
 func startMeili(t *testing.T) *Client {
 	t.Helper()
@@ -100,9 +51,7 @@ func startMeili(t *testing.T) *Client {
 	if err != nil {
 		t.Fatalf("port: %v", err)
 	}
-	c := NewClient("http://"+host+":"+port.Port(), key)
-	c.embedURL = fakeTEI(t)
-	return c
+	return NewClient("http://"+host+":"+port.Port(), key)
 }
 
 func enrichedJSON(t *testing.T, e enrich.Enrichment) []byte {
@@ -230,24 +179,6 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 		}
 		if res.Total != 2 {
 			t.Errorf("after reopen: total=%d, want 2", res.Total)
-		}
-	})
-
-	t.Run("hybrid search hits the separate semantic index", func(t *testing.T) {
-		// Semantic search rides a second index built by the --semantic pass (the
-		// facet index above carries no embedder), so build and populate it here.
-		if err := c.EnsureSemanticIndex(ctx); err != nil {
-			t.Fatalf("EnsureSemanticIndex: %v", err)
-		}
-		if _, err := c.IndexSemanticJobs(ctx, docs); err != nil {
-			t.Fatalf("IndexSemanticJobs: %v", err)
-		}
-		res, err := c.Search(ctx, SearchParams{Query: "backend engineering role", SemanticRatio: 0.5, Limit: 10})
-		if err != nil {
-			t.Fatalf("hybrid Search: %v", err)
-		}
-		if len(res.Hits) == 0 {
-			t.Error("hybrid search returned no hits")
 		}
 	})
 }
@@ -447,182 +378,6 @@ func TestSearchFiltersByCollectionsFacet(t *testing.T) {
 	}
 }
 
-// SimilarJobs returns the nearest neighbours of a job from the semantic index:
-// other jobs are returned (ranked by embedding proximity), the source job is never
-// in its own list, and the caller's limit is honoured.
-func TestIntegration_SimilarJobs(t *testing.T) {
-	ctx := context.Background()
-	c := startMeili(t)
-
-	if err := c.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
-
-	jobs := []db.Job{
-		{ID: 1, Title: "Senior Golang Backend Engineer", Company: "Acme", Location: "Berlin",
-			Description: "Build distributed backend services and APIs in Go.",
-			PublicSlug:  "senior-golang-backend-engineer-acme-aaa",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-		{ID: 2, Title: "Backend Software Engineer (Go)", Company: "Beta", Location: "Remote",
-			Description: "Design server-side microservices and REST APIs in Golang.",
-			PublicSlug:  "backend-software-engineer-go-beta-bbb",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-		{ID: 3, Title: "Frontend React Developer", Company: "Gamma", Location: "Remote",
-			Description: "Build user interfaces with React and TypeScript.",
-			PublicSlug:  "frontend-react-developer-gamma-ccc",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-		{ID: 4, Title: "Data Scientist", Company: "Delta", Location: "London",
-			Description: "Train machine learning models and analyse datasets in Python.",
-			PublicSlug:  "data-scientist-delta-ddd",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-	}
-	if _, err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
-		t.Fatalf("IndexSemanticJobs: %v", err)
-	}
-
-	t.Run("returns neighbours and excludes the source job", func(t *testing.T) {
-		hits, err := c.SimilarJobs(ctx, 1, 10)
-		if err != nil {
-			t.Fatalf("SimilarJobs: %v", err)
-		}
-		if len(hits) == 0 {
-			t.Fatal("SimilarJobs returned no neighbours")
-		}
-		for _, h := range hits {
-			if h.ID == 1 {
-				t.Errorf("source job id 1 must not appear in its own similar list: %+v", hits)
-			}
-		}
-	})
-
-	t.Run("honours the limit", func(t *testing.T) {
-		hits, err := c.SimilarJobs(ctx, 1, 2)
-		if err != nil {
-			t.Fatalf("SimilarJobs: %v", err)
-		}
-		if len(hits) > 2 {
-			t.Errorf("limit 2 returned %d hits", len(hits))
-		}
-	})
-
-	// The semantic index is built incrementally, so a job can exist in Postgres
-	// (and thus reach this call) without a vector in the index yet. Meilisearch
-	// answers that with a 400 not_found_similar_id, which must degrade to an empty
-	// list — not a hard error — so the detail page just hides the section.
-	t.Run("source absent from the index yields empty, not an error", func(t *testing.T) {
-		hits, err := c.SimilarJobs(ctx, 9999, 10) // never indexed
-		if err != nil {
-			t.Fatalf("SimilarJobs for an unindexed id must not error: %v", err)
-		}
-		if len(hits) != 0 {
-			t.Errorf("expected no neighbours for an unindexed id, got %d", len(hits))
-		}
-	})
-
-	// The semantic index may be dropped entirely to reclaim disk while its rebuild
-	// is paused. Meilisearch then answers with index_not_found, which must degrade
-	// to an empty list — exactly like a missing source — so the detail page hides
-	// the section rather than 500ing. Runs last: it removes the shared index.
-	t.Run("absent semantic index yields empty, not an error", func(t *testing.T) {
-		if err := c.dropIndex(ctx, semanticIndexUID); err != nil {
-			t.Fatalf("dropIndex: %v", err)
-		}
-		hits, err := c.SimilarJobs(ctx, 1, 10)
-		if err != nil {
-			t.Fatalf("SimilarJobs against an absent index must not error: %v", err)
-		}
-		if len(hits) != 0 {
-			t.Errorf("expected no neighbours when the index is absent, got %d", len(hits))
-		}
-	})
-}
-
-// TestIntegration_EmbedTextAndRecommend covers the whole /my/recommendations path
-// end-to-end against a real engine: a CV is embedded (EmbedText, the query side) into
-// the same space as the indexed jobs (the passage side), and RecommendByVector ranks
-// the corpus by that vector. This is the path a unit test cannot reach — the PR that
-// shipped EmbedText broke on exactly this gap — so it must hit real Meili + the stub
-// embedder. A backend-flavoured CV must surface the backend jobs, not the frontend one.
-func TestIntegration_EmbedTextAndRecommend(t *testing.T) {
-	ctx := context.Background()
-	c := startMeili(t)
-
-	if err := c.EnsureSemanticIndex(ctx); err != nil {
-		t.Fatalf("EnsureSemanticIndex: %v", err)
-	}
-	jobs := []db.Job{
-		{ID: 1, Title: "Senior Golang Backend Engineer", Company: "Acme", Location: "Berlin",
-			Description: "Build distributed backend services and REST APIs in Go.",
-			PublicSlug:  "senior-golang-backend-engineer-acme-aaa",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-		{ID: 2, Title: "Backend Software Engineer", Company: "Beta", Location: "Remote",
-			Description: "Design server-side backend microservices and REST APIs.",
-			PublicSlug:  "backend-software-engineer-beta-bbb",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-		{ID: 3, Title: "Frontend React Developer", Company: "Gamma", Location: "Remote",
-			Description: "Build user interfaces with React and TypeScript.",
-			PublicSlug:  "frontend-react-developer-gamma-ccc",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})},
-	}
-	if _, err := c.IndexSemanticJobs(ctx, toDocs(t, jobs)); err != nil {
-		t.Fatalf("IndexSemanticJobs: %v", err)
-	}
-
-	vec, model, err := c.EmbedText(ctx, "Backend engineer building Go services and REST APIs.")
-	if err != nil {
-		t.Fatalf("EmbedText: %v", err)
-	}
-	if len(vec) != embedderDimensions {
-		t.Fatalf("EmbedText vector width = %d, want %d", len(vec), embedderDimensions)
-	}
-	if model != embedderModel {
-		t.Errorf("EmbedText model = %q, want %q", model, embedderModel)
-	}
-
-	res, err := c.RecommendByVector(ctx, vec, nil, 10, 0)
-	if err != nil {
-		t.Fatalf("RecommendByVector: %v", err)
-	}
-	if len(res.Hits) == 0 {
-		t.Fatal("RecommendByVector returned no hits for a CV that overlaps indexed jobs")
-	}
-	// The backend CV must rank a backend job first, ahead of the React job.
-	if top := res.Hits[0].ID; top != 1 && top != 2 {
-		t.Errorf("top recommendation id = %d, want a backend job (1 or 2); hits=%+v", top, ids(res.Hits))
-	}
-
-	t.Run("filter narrows the ranked set to matching jobs", func(t *testing.T) {
-		// A filter passed to the recommend call must constrain the candidates before
-		// the vector ranks them: with `id = 1` only the first job survives, even though
-		// the CV also overlaps job 2. Proves the filter reaches the semantic search.
-		res, err := c.RecommendByVector(ctx, vec, "id = 1", 10, 0)
-		if err != nil {
-			t.Fatalf("RecommendByVector(filter): %v", err)
-		}
-		if got := ids(res.Hits); len(got) != 1 || got[0] != 1 {
-			t.Errorf("filtered recommend ids = %v, want exactly [1]", got)
-		}
-	})
-
-	t.Run("empty vector yields empty feed, not an error", func(t *testing.T) {
-		empty, err := c.RecommendByVector(ctx, nil, nil, 10, 0)
-		if err != nil {
-			t.Fatalf("RecommendByVector(nil): %v", err)
-		}
-		if len(empty.Hits) != 0 {
-			t.Errorf("expected empty feed for an empty vector, got %d hits", len(empty.Hits))
-		}
-	})
-}
-
-func ids(docs []JobDocument) []int64 {
-	out := make([]int64, len(docs))
-	for i, d := range docs {
-		out[i] = d.ID
-	}
-	return out
-}
-
 func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
 	t.Helper()
 	docs := make([]JobDocument, 0, len(jobs))
@@ -692,60 +447,5 @@ func TestIntegration_RebuildSwapsFreshIndexAndDropsOld(t *testing.T) {
 
 	if _, err := c.manager.GetIndexWithContext(ctx, "jobs_rebuild"); err == nil {
 		t.Error("jobs_rebuild still exists; Promote should drop it")
-	}
-}
-
-// A --from-pg semantic rebuild rehydrates the index from the vectors persisted in
-// Postgres (jobs.semantic_embedding) instead of re-embedding via TEI: a job carrying a
-// stored vector lands in jobs_semantic with that exact vector, and a job without one is
-// left out (for the embed worker to fill). This is the disaster-recovery path.
-func TestIntegration_SemanticRebuildFromPG(t *testing.T) {
-	ctx := context.Background()
-	c := startMeili(t)
-
-	vec := func(seed float32) []float32 {
-		v := make([]float32, embedderDimensions)
-		for i := range v {
-			v[i] = seed
-		}
-		return v
-	}
-	jobs := []db.Job{
-		{ID: 1, Title: "Senior Golang Engineer", Company: "Acme", Location: "Berlin",
-			Description: "Build backend services in Go.",
-			PublicSlug:  "senior-golang-engineer-acme-aaa",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{}),
-			// 0.5 is exactly representable in float32, so the round-trip is exact.
-			SemanticEmbedding: vec(0.5)},
-		{ID: 2, Title: "Frontend Developer", Company: "Beta", Location: "Remote",
-			Description: "Build UIs in React.",
-			PublicSlug:  "frontend-developer-beta-bbb",
-			Enrichment:  enrichedJSON(t, enrich.Enrichment{})}, // no persisted vector
-	}
-
-	// In-place rehydration: reset the live index to empty, then upsert the Postgres
-	// vectors straight into it (no rebuild copy, no swap).
-	if err := c.ResetSemanticIndex(ctx); err != nil {
-		t.Fatalf("ResetSemanticIndex: %v", err)
-	}
-	if err := c.IndexSemanticJobsFromPG(ctx, toDocs(t, jobs)); err != nil {
-		t.Fatalf("IndexSemanticJobsFromPG: %v", err)
-	}
-
-	got, err := c.ListSemanticVectors(ctx, 0, 100)
-	if err != nil {
-		t.Fatalf("ListSemanticVectors: %v", err)
-	}
-	byID := make(map[int64][]float32, len(got))
-	for _, v := range got {
-		byID[v.ID] = v.Vector
-	}
-	if v, ok := byID[1]; !ok {
-		t.Fatal("job 1 missing from jobs_semantic after from-pg rebuild")
-	} else if len(v) != embedderDimensions || v[0] != 0.5 {
-		t.Errorf("job 1 vector[0] = %v (len %d); want 0.5 (len %d)", v[0], len(v), embedderDimensions)
-	}
-	if _, ok := byID[2]; ok {
-		t.Error("job 2 has no persisted vector and must be absent from the rehydrated index")
 	}
 }

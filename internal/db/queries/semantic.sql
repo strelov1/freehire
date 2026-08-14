@@ -9,17 +9,15 @@
 --      never surface via keyword/category search either (see search.CategoryUnresolved,
 --      internal/search/document.go). Before this the gate was category-based
 --      (category <> ALL(NonTechCategories)), a deliberate "category-gated, not
---      tech-only" design — measured 2026-07-22 at only 35% of jobs_semantic's ~2.05M
---      docs carrying an is_tech tag, i.e. the same undifferentiated bulk the facet-index
---      and enrichment gates were tightened against. This enqueue change does not purge
---      the existing non-tech vectors already stamped in jobs_semantic — that needs a
---      one-time surgical Meili delete-batch (expensive: re-merges the whole index), not
---      a code change; this only stops the incremental gate from re-adding them.
+--      tech-only" design — measured 2026-07-22 at only 35% of the (now-removed)
+--      jobs_semantic Meili index's ~2.05M docs carrying an is_tech tag, i.e. the same
+--      undifferentiated bulk the facet-index and enrichment gates were tightened
+--      against.
 --   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
 --      canonical) — a job now closed OR a non-canonical repost (duplicate_of set) — so
---      the worker removes their document from jobs_semantic and clears the stamp. This
---      mirrors the facet index: the full reindex --semantic also drops reposts (shared
---      splitJobs), so the incremental path must not re-add them.
+--      the worker clears their stamp, legacy vector, and job_semantic_chunks rows
+--      (Store.CompleteClosed; there is no search index left to remove a document from —
+--      see openspec/changes/drop-hybrid-search-pgvector-similar).
 -- ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
 -- command invocation never duplicates work. job_posted_at denormalizes
 -- COALESCE(posted_at, created_at) onto the outbox row so ClaimSemanticBatch can sort by
@@ -39,8 +37,8 @@ ON CONFLICT (job_id, target_model) DO NOTHING;
 -- name: ClaimSemanticBatch :many
 -- Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
 -- Unlike ClaimEnrichmentBatch this does NOT filter unindexable jobs out: a closed OR
--- non-canonical (duplicate_of) entry is the removal signal, so the worker must receive
--- it and branch on `closed` (true = remove the document).
+-- non-canonical (duplicate_of) entry is the clear-state signal, so the worker must
+-- receive it and branch on `closed` (true = clear its embed state instead of embedding).
 --
 -- Orders by the outbox's OWN job_posted_at (denormalized at enqueue time from
 -- COALESCE(jobs.posted_at, jobs.created_at) — see EnqueuePendingSemanticJobs) rather
@@ -104,22 +102,15 @@ SET semantic_embedded_model = sqlc.arg(model)::text,
     semantic_embedded_hash  = content_hash
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
--- name: SetSemanticEmbedding :exec
--- Persist one job's semantic vector — the durable copy of what was just upserted into
--- the jobs_semantic index. Called once per embedded job inside the SAME transaction as
--- StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
--- commit together (a job is never marked embedded without its vector reaching Postgres).
--- Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
--- up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
-UPDATE jobs
-SET semantic_embedding = sqlc.arg(embedding)::real[]
-WHERE id = sqlc.arg(id);
-
 -- name: ClearSemanticEmbeddedBatch :exec
--- Clear a batch of jobs' embed provenance AND their durable vector after their documents
--- are removed from jobs_semantic (closed-job path). Run in the same transaction as
--- DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
--- the index: a closed job has no vector in either place.
+-- Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
+-- column (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch
+-- and DeleteJobSemanticChunks (see that query). Nothing writes semantic_embedding on
+-- the open-job path anymore — job_semantic_chunks is the queryable representation now
+-- (see openspec/changes/drop-hybrid-search-pgvector-similar) — but this still nulls it
+-- on close: cheap, and it keeps a closed job's row free of a stale value from before
+-- that write was removed, without needing a one-off backfill to clean up the column.
+-- The column itself stays (dropping it is a separate, later change).
 UPDATE jobs
 SET semantic_embedded_model = NULL,
     semantic_embedded_hash  = NULL,

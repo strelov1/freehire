@@ -50,9 +50,6 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 		// ledger dedups, so re-scanning the same recent jobs each pass is free.
 		Sort:  []string{"created_at:desc"},
 		Limit: r.cfg.MatchLimit,
-		// Pure keyword matching (no semantic blend): a notification must be a
-		// precise match of the saved filter, not a fuzzy nearest-neighbour.
-		SemanticRatio: 0,
 	})
 	if err != nil {
 		return err

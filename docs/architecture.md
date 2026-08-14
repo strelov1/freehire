@@ -59,7 +59,6 @@ flowchart LR
     subgraph SEARCH["Meilisearch"]
         direction TB
         FACET["jobs<br/>keyword + facets"]
-        SEM["jobs_semantic<br/>opt-in hybrid"]
     end
 
     API["cmd/server · Fiber<br/>/api/v1/*"]
@@ -87,12 +86,11 @@ flowchart LR
     ENR --> PG
     CAP --> PG
     SD --> FACET
-    EMB --> SEM
+    EMB --> PG
     RI["cmd/reindex<br/>full rebuild + atomic swap"] --> FACET
     PG --> RI
     PG --> API
     FACET --> API
-    SEM --> API
     API --> SPA
     API --> EXT
     API --> BOTS
@@ -107,7 +105,7 @@ flowchart LR
 
 That batching is not a micro-optimisation. Meilisearch re-merges its inverted index across the *whole* live index on every push regardless of batch size — measured at 90–180 seconds per push on a ~2.7M-document index — so the earlier design, where ~169 independent per-board processes each pushed directly, saturated host disk IO. The outbox collapses many small pushes into few fat ones.
 
-**Search.** Two indexes. `jobs` is the keyword-and-facet index, and it stores the *complete public wire shape of a job*, not a pointer to one — which is why a search response needs no database round trip to render. `jobs_semantic` backs hybrid search and is queried only when a request opts in with a non-zero semantic ratio; the default is pure keyword, so unprepared traffic is never routed at a possibly-stale semantic index. `cmd/reindex` rebuilds the facet index from scratch and swaps it in atomically — live reads are never affected by a rebuild — and remains the index's source of truth for settings, compaction, and the removal of closed-job documents.
+**Search.** One index. `jobs` is the keyword-and-facet index, and it stores the *complete public wire shape of a job*, not a pointer to one — which is why a search response needs no database round trip to render. `cmd/reindex` rebuilds it from scratch and swaps it in atomically — live reads are never affected by a rebuild — and remains the index's source of truth for settings, compaction, and the removal of closed-job documents. There is no semantic/hybrid search mode: a prior Meilisearch-backed `jobs_semantic` index was removed once its only two real consumers stopped needing a *live* index — `/jobs/:slug/similar` now reads a precomputed nearest-neighbour lookup (`jobs.similar_job_ids`, filled offline by `cmd/similar-backfill` from pgvector queries over `job_semantic_chunks`), and CV-based recommendations were dropped outright rather than migrated. `cmd/embed` still drains `semantic_outbox` (via TEI) into Postgres — the chunk table those pgvector queries read, plus a legacy single-vector column kept for now — but writes no search index.
 
 **The API.** One Fiber server, one public wire shape. `internal/jobview` owns the single JSON representation of a job used by the list endpoint, the detail endpoint, and the search index alike, so those surfaces cannot drift apart. Responses use `{"data": ...}` for single items, `{"data": ..., "meta": {...}}` for lists, and `{"error": msg}` for failures. The catalogue is public and keyless — `GET https://freehire.me/api/v1/jobs` needs no credential.
 
@@ -229,7 +227,7 @@ sequenceDiagram
     participant PG as PostgreSQL
 
     U->>H: GET /api/v1/jobs/search?q=&facets…
-    Note over H: 503 if search unconfigured<br/>400 if offset+limit over 10000<br/>semantic_ratio defaults to 0
+    Note over H: 503 if search unconfigured<br/>400 if offset+limit over 10000
     H->>F: facet params → index filter
     Note over F: the same pure translation the<br/>notification matcher applies to a<br/>saved search, so they cannot drift
     F-->>H: filter expression

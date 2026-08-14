@@ -43,16 +43,6 @@ func (s *recordingSearcher) Search(_ context.Context, p search.SearchParams) (se
 	return s.res, nil
 }
 
-func (s *recordingSearcher) SimilarJobs(context.Context, int64, int) ([]search.JobDocument, error) {
-	return nil, nil
-}
-func (s *recordingSearcher) EmbedText(context.Context, string) ([]float64, string, error) {
-	return nil, "", nil
-}
-func (s *recordingSearcher) RecommendByVector(context.Context, []float64, any, int, int) (search.SearchResult, error) {
-	return search.SearchResult{}, nil
-}
-
 // fixedDescriptions rehydrates every requested id with the same markdown body.
 type fixedDescriptions struct{ body string }
 

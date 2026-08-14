@@ -53,11 +53,6 @@ type JobDocument struct {
 	// it backs the `ai_archetype` facet but is never part of the served public
 	// wire shape.
 	AIArchetype string `json:"ai_archetype"`
-	// semanticVector is the job's persisted embedding (jobs.semantic_embedding), carried
-	// transiently so a --from-pg rebuild can rehydrate the semantic index from the stored
-	// vectors instead of re-embedding via TEI. Unexported, so it is never serialized into
-	// the Meili document body — the vector rides _vectors on the semanticDocument wrapper.
-	semanticVector []float32
 }
 
 // FromJob maps a database job row to its index document. An empty or absent
@@ -83,7 +78,6 @@ func FromJob(j db.Job) (JobDocument, error) {
 		Roles:       roletag.Derive(j.Seniority, j.Category, j.Title),
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 	}
-	doc.semanticVector = j.SemanticEmbedding
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {
 		doc.PostedTS = eff.Time.Unix()
 	}

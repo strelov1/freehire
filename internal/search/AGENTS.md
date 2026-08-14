@@ -1,7 +1,15 @@
 # Search conventions
 
-Meilisearch-backed keyword and hybrid search over jobs and companies. The package doc in
+Meilisearch-backed keyword/faceted search over jobs and companies. The package doc in
 `client.go` explains the index topology; this file covers what the code can't tell you.
+This package also owns the TEI embedding calls (`embed.go`) that feed the pgvector-backed
+`job_semantic_chunks` table — see `internal/embed/AGENTS.md`. There is no live semantic
+search index anymore: the
+`jobs_semantic` Meilisearch index (and `reindex --semantic`/`--from-pg`/`--posted-within`,
+`SearchParams.SemanticRatio`, `Client.SimilarJobs`/`RecommendByVector`/`EmbedText`) were
+removed in openspec/changes/drop-hybrid-search-pgvector-similar — `/jobs/:slug/similar`
+reads a precomputed pgvector lookup instead (`internal/similarjobs`,
+`cmd/similar-backfill`), and `/me/recommendations` was dropped outright.
 
 ## Always true
 
@@ -22,8 +30,7 @@ Meilisearch-backed keyword and hybrid search over jobs and companies. The packag
 - **Meilisearch has ONE serial task queue.** Two rebuilds do not run concurrently — the
   second queues behind the first and looks like a hang while the engine is genuinely busy.
   Before triggering any rebuild, check `ps aux | grep reindex` and
-  `GET /tasks?statuses=processing`. Never stack `reindex-companies` with `make reindex`, and
-  never stack anything with a `--semantic` pass.
+  `GET /tasks?statuses=processing`. Never stack `reindex-companies` with `make reindex`.
 - **Killing the reindex client does not cancel enqueued Meili tasks.** To actually stop:
   `POST /tasks/cancel?indexUids=<uid>&statuses=enqueued,processing`. That cancelation itself
   queues, and it is irreversible — don't fire it on an unconfirmed diagnosis.
@@ -78,10 +85,3 @@ or empty — never a 500).
 ## Limitations
 
 - A Meili filter error 500s the page instead of degrading. That's the robustness seam.
-- `jobs_semantic` is queried only when `SemanticRatio > 0`. The slow path is a scoped
-  swap-rebuild that re-embeds via TEI (always scope it: `--posted-within 30d`; a bare full
-  embed of the whole catalogue takes hours and monopolizes the queue). It is no longer the
-  only path: `cmd/embed` persists every computed vector to Postgres
-  (`jobs.semantic_embedding`), so `reindex --semantic --from-pg` rehydrates the index in
-  place (reset + re-fill of the live index, no swap, no re-embedding, no 2x disk) from
-  those stored vectors.

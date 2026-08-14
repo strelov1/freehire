@@ -1,13 +1,13 @@
-// Package embed drives incremental semantic embedding: enqueue open jobs whose vector
-// is missing/stale (and closed jobs whose vector must be removed), then drain the
-// semantic_outbox queue wave by wave. Each wave is embedded and upserted as ONE batch
-// (one Meilisearch task per wave, not per job) so a bulk backfill isn't bottlenecked on
-// Meili's serial task queue; on a batch failure it falls back to per-item processing so
-// a single poison/corrupted row can't sink the whole batch. It mirrors internal/enrich:
-// the batch/fallback logic is unit-tested with fakes of the Store + Indexer ports and
-// cmd/embed wires the real adapters. The ports trade in db.Job rows (not a domain
-// type), so the runner is independent of the pool/queries, not of the generated row
-// shape.
+// Package embed drives incremental semantic embedding: enqueue open jobs whose
+// vector/chunks are missing/stale (and closed jobs whose embed state must be
+// cleared), then drain the semantic_outbox queue wave by wave. Each wave is embedded
+// as ONE TEI batch (not one call per job) and persisted to Postgres as one
+// transaction, so a bulk backfill isn't bottlenecked into many small round trips; on
+// a batch failure it falls back to per-item processing so a single poison/corrupted
+// row can't sink the whole batch. It mirrors internal/enrich: the batch/fallback
+// logic is unit-tested with fakes of the Store + Indexer ports and cmd/embed wires
+// the real adapters. The ports trade in db.Job rows (not a domain type), so the
+// runner is independent of the pool/queries, not of the generated row shape.
 package embed
 
 import (
@@ -24,7 +24,7 @@ import (
 
 // Claimed is one outbox entry leased to this run. Closed marks whether the job is now
 // unindexable — closed OR a non-canonical repost (duplicate_of set): open canonical jobs
-// are embedded, unindexable ones have their document removed.
+// are embedded, unindexable ones have their embed state cleared.
 type Claimed struct {
 	OutboxID int64
 	JobID    int64
@@ -32,12 +32,11 @@ type Claimed struct {
 }
 
 // ChunkEmbedding is one embedding vector for one 0-indexed chunk of a job's
-// description — the pgvector-backed job_semantic_chunks counterpart of IndexOpen's
-// single Meili-facing vector (see openspec/changes/drop-hybrid-search-pgvector-similar/
-// design.md Decisions 1/1a). ChunkIndex matches job_semantic_chunks.chunk_index. Defined
-// here (not reusing internal/search's own JobChunkEmbedding) so this package's ports
-// stay independent of internal/search's types — only cmd/embed's concrete adapters know
-// about both.
+// description — the pgvector-backed job_semantic_chunks counterpart (see
+// openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/1a).
+// ChunkIndex matches job_semantic_chunks.chunk_index. Defined here (not reusing
+// internal/search's own JobChunkEmbedding) so this package's ports stay independent
+// of internal/search's types — only cmd/embed's concrete adapters know about both.
 type ChunkEmbedding struct {
 	ChunkIndex int16
 	Vector     []float32
@@ -56,38 +55,41 @@ type Store interface {
 	// aborts the whole load, so the runner retries such a batch per item to isolate it.
 	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
 	// CompleteOpen stamps each entry's job embed provenance (model + its current
-	// content_hash), persists each job's semantic vector, replaces each job's
-	// pgvector-backed chunk rows (job_semantic_chunks), clears its similar_computed_at
-	// staleness stamp, and deletes the outbox entries — all atomically. vectors maps
-	// job id to the single vector just upserted into the Meili-facing index, so the
-	// durable Postgres copy commits with the provenance stamp. chunks maps job id to
-	// its ordered chunk vectors (see ChunkEmbedding); a job absent from chunks (an
-	// empty/very short description) has its existing chunk rows removed and gets none
-	// back — "replace", not "append".
-	CompleteOpen(ctx context.Context, entries []Claimed, model string, vectors map[int64][]float32, chunks map[int64][]ChunkEmbedding) error
-	// CompleteClosed clears each entry's job embed provenance, deletes each job's
-	// pgvector-backed chunk rows (job_semantic_chunks), and deletes the outbox entries,
-	// atomically (their documents were just removed from the index).
+	// content_hash), replaces each job's pgvector-backed chunk rows
+	// (job_semantic_chunks), clears its similar_computed_at staleness stamp, and
+	// deletes the outbox entries — all atomically. chunks maps job id to its ordered
+	// chunk vectors (see ChunkEmbedding); a job absent from chunks (an empty/very
+	// short description) has its existing chunk rows removed and gets none back —
+	// "replace", not "append". This no longer touches jobs.semantic_embedding (the
+	// legacy real[] column) — nothing reads it, so cmd/embed stopped computing and
+	// writing it; the column itself stays, per design.md's deferred-drop decision.
+	CompleteOpen(ctx context.Context, entries []Claimed, model string, chunks map[int64][]ChunkEmbedding) error
+	// CompleteClosed clears each entry's job embed provenance (stamp + the legacy
+	// jobs.semantic_embedding column, still nulled here even though nothing writes it
+	// on the open path anymore — see ClearSemanticEmbeddedBatch) and deletes each
+	// job's pgvector-backed chunk rows (job_semantic_chunks), and deletes the outbox
+	// entries, atomically — the whole closed-job side effect (there is no search
+	// index left to remove a document from).
 	CompleteClosed(ctx context.Context, entries []Claimed) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
 }
 
-// Indexer is the semantic-index side: embed+upsert open jobs, or remove closed ones.
+// Indexer is the embedding side: compute each open job's chunked embeddings. There is
+// no corresponding "remove closed" method — a closed job has nothing left to compute
+// or embed, so Store.CompleteClosed alone is the whole closed-job side effect. This
+// port used to also own upserting/removing documents in the jobs_semantic Meili index,
+// and (later, briefly) a legacy single vector per job; both are gone
+// (openspec/changes/drop-hybrid-search-pgvector-similar — the Meili index had no
+// reader left once /similar and /me/recommendations stopped needing a live index, and
+// the legacy vector had no reader once job_semantic_chunks existed), so what remains
+// is purely the pgvector chunk computation.
 type Indexer interface {
-	// IndexOpen embeds the jobs' documents and upserts their vectors into the semantic
-	// index in one batch, returning the vectors keyed by job id so they can be persisted
-	// to Postgres alongside the provenance stamp. It ALSO computes each job's chunked
-	// embeddings for the pgvector-backed job_semantic_chunks table (design.md Decisions
-	// 1/1a) — additive to, and independent of, the single Meili-facing vector: a job
-	// with no chunk-worthy description text simply has no entry in the returned chunks
-	// map, not an error. Bundled into this SAME call (rather than a separate Indexer
-	// method) so processOpenBatch's existing batch-then-per-item-fallback and
-	// skip-on-timeout machinery covers the chunk computation too, instead of a second
-	// failure-handling path that could drift from the tested one.
-	IndexOpen(ctx context.Context, jobs []db.Job) (vectors map[int64][]float32, chunks map[int64][]ChunkEmbedding, err error)
-	// RemoveClosed deletes the jobs' documents from the semantic index in one batch.
-	RemoveClosed(ctx context.Context, ids []int64) error
+	// IndexOpen computes each job's chunked embeddings for the pgvector-backed
+	// job_semantic_chunks table (design.md Decisions 1/1a): a job with no
+	// chunk-worthy description text simply has no entry in the returned map, not an
+	// error.
+	IndexOpen(ctx context.Context, jobs []db.Job) (chunks map[int64][]ChunkEmbedding, err error)
 }
 
 // RunOptions are the per-run knobs.
@@ -95,14 +97,15 @@ type RunOptions struct {
 	// TargetModel is the embedder identity: the enqueue staleness key and the value
 	// stamped on a successful embed (search.CurrentEmbedderModel()).
 	TargetModel string
-	// BatchSize is the claim wave size and the embed/upsert batch size — the lever that
-	// collapses per-doc Meili tasks into one task per wave. The embed backend chunks the
-	// batch internally (EMBED_CONCURRENCY), so this can be large (hundreds).
+	// BatchSize is the claim wave size and the embed/persist batch size — the lever that
+	// collapses per-job TEI calls and Postgres round trips into one batch. The embed
+	// backend chunks the batch internally (EMBED_CONCURRENCY), so this can be large
+	// (hundreds).
 	BatchSize    int
 	LeaseSeconds int
 	MaxAttempts  int
-	// CallTimeout bounds a single batch's (or fallback item's) index/remove operation;
-	// 0 means no per-call timeout (the embed backend has its own per-attempt timeout).
+	// CallTimeout bounds a single batch's (or fallback item's) embed operation; 0 means
+	// no per-call timeout (the embed backend has its own per-attempt timeout).
 	CallTimeout time.Duration
 }
 
@@ -215,7 +218,7 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	vectors, chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
+	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
 	if err != nil {
 		if rn.skipOnTimeout(callCtx, entries, "embed/index") {
 			return
@@ -223,7 +226,7 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 		rn.fallbackOpen(ctx, entries)
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel, vectors, chunks); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, entries, rn.opt.TargetModel, chunks); err != nil {
 		if rn.skipOnTimeout(callCtx, entries, "complete open") {
 			return
 		}
@@ -235,13 +238,15 @@ func (rn *run) processOpenBatch(ctx context.Context, entries []Claimed) {
 }
 
 // skipOnTimeout reports whether callCtx expired — a normal-but-slow operation simply
-// outran CallTimeout, not a per-document defect the semantic index reported — and, if
-// so, logs and leaves the wave claimed for its lease to expire, so a later run retries
-// the WHOLE batch fresh. Falling back to per-item on a mere timeout would be actively
-// harmful here: this index's cost is dominated by a fixed whole-index re-merge (the
-// same mechanism internal/searchdrain guards against, see its skipOnTimeout), so a
-// single document costs about as much to push as the whole batch, and per-item fallback
-// would turn one slow-but-fine batch into up to len(entries) equally slow calls.
+// outran CallTimeout, not a per-document defect the embed backend or Postgres
+// reported — and, if so, logs and leaves the wave claimed for its lease to expire, so
+// a later run retries the WHOLE batch fresh. Falling back to per-item on a mere
+// timeout would still waste real work here: a per-item TEI call pays its per-request
+// overhead len(entries) times over instead of once, and a per-item CompleteOpen
+// replaces one batched Postgres transaction (stamp + chunk rows + outbox delete for
+// the whole wave) with len(entries) of them — real multiplication even though it is no
+// longer Meili's old fixed whole-index re-merge cost (the mechanism
+// internal/searchdrain's identically-named guard still targets for its own index).
 func (rn *run) skipOnTimeout(callCtx context.Context, entries []Claimed, stage string) bool {
 	if !errors.Is(callCtx.Err(), context.DeadlineExceeded) {
 		return false
@@ -279,20 +284,23 @@ func (rn *run) processOpenOne(ctx context.Context, entry Claimed) {
 		rn.failN(entry, fmt.Errorf("job %d not found", entry.JobID), 1)
 		return
 	}
-	vectors, chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
+	chunks, err := rn.indexer.IndexOpen(callCtx, jobs)
 	if err != nil {
 		rn.fail(entry, fmt.Errorf("embed/index: %w", err))
 		return
 	}
-	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, vectors, chunks); err != nil {
+	if err := rn.store.CompleteOpen(callCtx, []Claimed{entry}, rn.opt.TargetModel, chunks); err != nil {
 		rn.fail(entry, fmt.Errorf("complete open: %w", err))
 		return
 	}
 	rn.stats.Indexed++
 }
 
-// processClosedBatch removes a whole wave of closed jobs' documents in one batch, with
-// the same per-item fallback on failure.
+// processClosedBatch clears a whole wave of closed jobs' embed state (provenance
+// stamp, persisted vector, job_semantic_chunks rows — all of it Store-owned) in one
+// batch, with the same per-item fallback on failure. There is no index-side call to
+// make first: since jobs_semantic was removed, a closed job has nothing left to
+// unindex.
 func (rn *run) processClosedBatch(ctx context.Context, entries []Claimed) {
 	if len(entries) == 0 {
 		return
@@ -300,13 +308,6 @@ func (rn *run) processClosedBatch(ctx context.Context, entries []Claimed) {
 	callCtx, cancel := rn.callContext(ctx)
 	defer cancel()
 
-	if err := rn.indexer.RemoveClosed(callCtx, jobIDs(entries)); err != nil {
-		if rn.skipOnTimeout(callCtx, entries, "remove closed") {
-			return
-		}
-		rn.fallbackClosed(ctx, entries)
-		return
-	}
 	if err := rn.store.CompleteClosed(callCtx, entries); err != nil {
 		if rn.skipOnTimeout(callCtx, entries, "complete closed") {
 			return
@@ -327,10 +328,6 @@ func (rn *run) processClosedOne(ctx context.Context, entry Claimed) {
 	callCtx, cancel := rn.callContext(ctx)
 	defer cancel()
 
-	if err := rn.indexer.RemoveClosed(callCtx, []int64{entry.JobID}); err != nil {
-		rn.fail(entry, fmt.Errorf("remove closed: %w", err))
-		return
-	}
 	if err := rn.store.CompleteClosed(callCtx, []Claimed{entry}); err != nil {
 		rn.fail(entry, fmt.Errorf("complete closed: %w", err))
 		return

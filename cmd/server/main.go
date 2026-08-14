@@ -146,13 +146,14 @@ func main() {
 	}
 
 	// Search is optional: without a Meilisearch key the client stays nil and the
-	// search endpoint reports 503, leaving the rest of the API fully functional.
-	// The embed options wire the EMBED_* env (CV embedding shares the jobs TEI path).
+	// search endpoint reports 503, leaving the rest of the API fully functional. No
+	// WithEmbed* options: the HTTP server's search client only ever runs plain
+	// keyword/facet queries — nothing reachable from it embeds via TEI (the CV-embedding
+	// write path and the Meili semantic index it fed were both removed, see
+	// openspec/changes/drop-hybrid-search-pgvector-similar).
 	var searchClient *search.Client
 	if cfg.MeiliKey != "" {
-		ec := config.LoadEmbedClient()
-		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey,
-			search.WithEmbedURL(ec.URL), search.WithEmbedAPIKey(ec.APIKey), search.WithEmbedConcurrency(ec.Concurrency))
+		searchClient = search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 	}
 
 	// Résumé storage is optional: only when all four S3 settings are present does

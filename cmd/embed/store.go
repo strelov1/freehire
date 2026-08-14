@@ -48,27 +48,13 @@ func (s *dbStore) Jobs(ctx context.Context, ids []int64) ([]db.Job, error) {
 	return s.q.GetJobsByIDs(ctx, ids)
 }
 
-func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, model string, vectors map[int64][]float32, chunks map[int64][]embed.ChunkEmbedding) error {
+func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, model string, chunks map[int64][]embed.ChunkEmbedding) error {
 	jobIDs, outboxIDs := splitIDs(entries)
 	return s.tx(ctx, func(qtx *db.Queries) error {
 		if err := qtx.StampSemanticEmbeddedBatch(ctx, db.StampSemanticEmbeddedBatchParams{
 			Model: model, Ids: jobIDs,
 		}); err != nil {
 			return fmt.Errorf("stamp: %w", err)
-		}
-		// Persist each job's vector in the same transaction as the stamp, so a job is
-		// never marked embedded without its vector reaching Postgres. A missing vector
-		// for an entry is skipped (leaves the column untouched) rather than nulling it.
-		for _, e := range entries {
-			v, ok := vectors[e.JobID]
-			if !ok {
-				continue
-			}
-			if err := qtx.SetSemanticEmbedding(ctx, db.SetSemanticEmbeddingParams{
-				ID: e.JobID, Embedding: v,
-			}); err != nil {
-				return fmt.Errorf("set embedding (job %d): %w", e.JobID, err)
-			}
 		}
 		// Replace each job's pgvector-backed chunk rows in the SAME transaction: a job's
 		// chunk COUNT can change between embeds (its source text was re-chunked), so

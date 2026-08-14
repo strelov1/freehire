@@ -56,13 +56,13 @@ func TestAgentSearchJobs_HydratesFullDescriptionByDefault(t *testing.T) {
 	desc := &fakeDescriptions{rows: []db.GetJobDescriptionsByIDsRow{{ID: 7, Description: "<p>the full verbatim description</p>"}}}
 	app := agentSearchApp(fake, desc)
 
-	status, body := doGet(t, app, "/agent/jobs/search?q=go&seniority=senior&semantic_ratio=0.4&limit=10&offset=20")
+	status, body := doGet(t, app, "/agent/jobs/search?q=go&seniority=senior&limit=10&offset=20")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	// Parity: the same query/filters/paging reach the search backend as the public
 	// endpoint would send — the shared runJobSearch core, verified at the agent layer.
-	if fake.got.Query != "go" || fake.got.Limit != 10 || fake.got.Offset != 20 || fake.got.SemanticRatio != 0.4 {
+	if fake.got.Query != "go" || fake.got.Limit != 10 || fake.got.Offset != 20 {
 		t.Errorf("search params not forwarded: %#v", fake.got)
 	}
 	if groups, ok := fake.got.Filter.([][]string); !ok || !filterHas(groups, `enrichment.seniority = "senior"`) {

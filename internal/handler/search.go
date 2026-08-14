@@ -44,24 +44,14 @@ func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 
 // searcher is the search backend the handler depends on. *search.Client
 // satisfies it; tests inject a fake. A nil searcher means search is not
-// configured (no MEILI_MASTER_KEY) and the endpoint reports 503.
+// configured (no MEILI_MASTER_KEY) and the endpoint reports 503. SimilarJobs and
+// RecommendByVector were dropped from this interface when the Meili-backed
+// jobs_semantic index they queried was removed — /similar now reads a precomputed
+// pgvector lookup (see internal/handler/similar.go) and /me/recommendations was
+// removed outright (see openspec/changes/drop-hybrid-search-pgvector-similar).
 type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
-	SimilarJobs(ctx context.Context, id int64, limit int) ([]search.JobDocument, error)
-	// EmbedText returns a vector for text in the jobs' embedding space plus the
-	// embedder identity that produced it (used to embed a CV on upload).
-	EmbedText(ctx context.Context, text string) ([]float64, string, error)
-	// RecommendByVector ranks open jobs by similarity to a raw vector (the CV feed),
-	// constrained to an optional facet filter (nil for none).
-	RecommendByVector(ctx context.Context, vector []float64, filter any, limit, offset int) (search.SearchResult, error)
 }
-
-// defaultSemanticRatio is 0 — pure keyword search against the always-fresh facet
-// index — because semantic search is opt-in: the embedder lives on a separate
-// index built by an optional reindex --semantic pass, so a default of 0 never
-// routes unprepared traffic to a stale or absent semantic index. A client opts in
-// per request with semantic_ratio>0; the SPA already does so explicitly.
-const defaultSemanticRatio = 0
 
 // maxSearchWindow bounds how deep search pagination may reach (offset+limit). It
 // is the explicit pagination guard, decoupled from the index's maxTotalHits
@@ -79,10 +69,10 @@ var searchSortable = map[string]string{
 	"salary_max": "enrichment.salary_max",
 }
 
-// SearchJobs runs a full-text + hybrid search over the jobs index. It is public
-// (unauthenticated) like the other job reads. Response: {"data": [job view...],
-// "meta": {total, limit, offset}} — results carry public_slug and never the
-// internal id.
+// SearchJobs runs a full-text/faceted keyword search over the jobs index. It is
+// public (unauthenticated) like the other job reads. Response: {"data": [job
+// view...], "meta": {total, limit, offset}} — results carry public_slug and never
+// the internal id.
 func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	res, limit, offset, err := h.runJobSearch(c)
 	if err != nil {
@@ -99,11 +89,11 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 }
 
 // runJobSearch performs the request handling shared by both job-search endpoints:
-// the availability check, the pagination-window guard, the semantic ratio, and the
-// index query. It is the single place the query is built, so the public and agent
-// search endpoints cannot drift. The availability and deep-pagination guards return
-// a fiber *Error the caller can return directly; on success it returns the raw hits
-// and the applied limit/offset.
+// the availability check, the pagination-window guard, and the index query. It is
+// the single place the query is built, so the public and agent search endpoints
+// cannot drift. The availability and deep-pagination guards return a fiber *Error
+// the caller can return directly; on success it returns the raw hits and the
+// applied limit/offset.
 func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, int, error) {
 	if h.search == nil {
 		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -113,15 +103,13 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx) (search.SearchResult, int, i
 	if offset+limit > maxSearchWindow {
 		return search.SearchResult{}, 0, 0, fiber.NewError(fiber.StatusBadRequest, "pagination too deep")
 	}
-	ratio := min(max(c.QueryFloat("semantic_ratio", defaultSemanticRatio), 0), 1)
 
 	res, err := h.search.Search(c.Context(), search.SearchParams{
-		Query:         c.Query("q"),
-		Filter:        buildSearchFilter(c),
-		Sort:          searchSort(c),
-		Limit:         limit,
-		Offset:        offset,
-		SemanticRatio: ratio,
+		Query:  c.Query("q"),
+		Filter: buildSearchFilter(c),
+		Sort:   searchSort(c),
+		Limit:  limit,
+		Offset: offset,
 	})
 	if err != nil {
 		// RenderError renders a generic 500; returning the error keeps the

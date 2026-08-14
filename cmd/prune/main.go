@@ -323,12 +323,8 @@ func deleteTargets(ctx context.Context, q batchDeleter, index docDeleter, p *pla
 		if err := index.SubmitJobDeletion(ctx, pending); err != nil {
 			return err
 		}
-		// The facet and semantic indexes are separate, and search is served straight
-		// from Meilisearch with no Postgres hydration, so a document left in either
-		// keeps appearing in results whose row is gone.
-		if err := index.SubmitSemanticJobDeletion(ctx, pending); err != nil {
-			return err
-		}
+		// search is served straight from Meilisearch with no Postgres hydration, so a
+		// document left in the index keeps appearing in results whose row is gone.
 		log.Printf("prune: deleted %d rows, %d index deletions enqueued, %s elapsed",
 			p.deleted, len(pending), time.Since(start).Round(time.Second))
 		pending = pending[:0]
@@ -387,7 +383,6 @@ type (
 	}
 	docDeleter interface {
 		SubmitJobDeletion(context.Context, []int64) error
-		SubmitSemanticJobDeletion(context.Context, []int64) error
 	}
 )
 

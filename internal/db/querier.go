@@ -229,8 +229,8 @@ type Querier interface {
 	ClaimSearchOutboxBatch(ctx context.Context, arg ClaimSearchOutboxBatchParams) ([]ClaimSearchOutboxBatchRow, error)
 	// Claim a batch of live, unleased entries, freshest job first, by stamping claimed_at.
 	// Unlike ClaimEnrichmentBatch this does NOT filter unindexable jobs out: a closed OR
-	// non-canonical (duplicate_of) entry is the removal signal, so the worker must receive
-	// it and branch on `closed` (true = remove the document).
+	// non-canonical (duplicate_of) entry is the clear-state signal, so the worker must
+	// receive it and branch on `closed` (true = clear its embed state instead of embedding).
 	//
 	// Orders by the outbox's OWN job_posted_at (denormalized at enqueue time from
 	// COALESCE(jobs.posted_at, jobs.created_at) — see EnqueuePendingSemanticJobs) rather
@@ -296,10 +296,14 @@ type Querier interface {
 	// affected row count: 1 for an owned row (whether or not it was shared — unshare is an
 	// idempotent no-op when already private), 0 when missing or not the caller's (→ 404).
 	ClearSavedSearchPublicSlug(ctx context.Context, arg ClearSavedSearchPublicSlugParams) (int64, error)
-	// Clear a batch of jobs' embed provenance AND their durable vector after their documents
-	// are removed from jobs_semantic (closed-job path). Run in the same transaction as
-	// DeleteSemanticEntriesBatch. Dropping semantic_embedding keeps Postgres consistent with
-	// the index: a closed job has no vector in either place.
+	// Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
+	// column (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch
+	// and DeleteJobSemanticChunks (see that query). Nothing writes semantic_embedding on
+	// the open-job path anymore — job_semantic_chunks is the queryable representation now
+	// (see openspec/changes/drop-hybrid-search-pgvector-similar) — but this still nulls it
+	// on close: cheap, and it keeps a closed job's row free of a stale value from before
+	// that write was removed, without needing a one-off backfill to clean up the column.
+	// The column itself stays (dropping it is a separate, later change).
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
 	// Null a batch of jobs' precomputed-similarity staleness stamp. Run in the SAME
 	// transaction as the open-job embed stamp / chunk replace (cmd/embed) — a job whose
@@ -890,17 +894,15 @@ type Querier interface {
 	//      never surface via keyword/category search either (see search.CategoryUnresolved,
 	//      internal/search/document.go). Before this the gate was category-based
 	//      (category <> ALL(NonTechCategories)), a deliberate "category-gated, not
-	//      tech-only" design — measured 2026-07-22 at only 35% of jobs_semantic's ~2.05M
-	//      docs carrying an is_tech tag, i.e. the same undifferentiated bulk the facet-index
-	//      and enrichment gates were tightened against. This enqueue change does not purge
-	//      the existing non-tech vectors already stamped in jobs_semantic — that needs a
-	//      one-time surgical Meili delete-batch (expensive: re-merges the whole index), not
-	//      a code change; this only stops the incremental gate from re-adding them.
+	//      tech-only" design — measured 2026-07-22 at only 35% of the (now-removed)
+	//      jobs_semantic Meili index's ~2.05M docs carrying an is_tech tag, i.e. the same
+	//      undifferentiated bulk the facet-index and enrichment gates were tightened
+	//      against.
 	//   2. UNINDEXABLE jobs that still carry an embed stamp (were embedded while open and
 	//      canonical) — a job now closed OR a non-canonical repost (duplicate_of set) — so
-	//      the worker removes their document from jobs_semantic and clears the stamp. This
-	//      mirrors the facet index: the full reindex --semantic also drops reposts (shared
-	//      splitJobs), so the incremental path must not re-add them.
+	//      the worker clears their stamp, legacy vector, and job_semantic_chunks rows
+	//      (Store.CompleteClosed; there is no search index left to remove a document from —
+	//      see openspec/changes/drop-hybrid-search-pgvector-similar).
 	// ON CONFLICT keeps exactly one entry per (job_id, target_model), so running this every
 	// command invocation never duplicates work. job_posted_at denormalizes
 	// COALESCE(posted_at, created_at) onto the outbox row so ClaimSemanticBatch can sort by
@@ -1897,18 +1899,6 @@ type Querier interface {
 	// index current without re-pushing the whole table. Returns closed rows too, so
 	// the caller deletes a freshly-closed job from the index.
 	ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedAfterParams) ([]Job, error)
-	// Id-only projection of ListOpenJobsPostedAfter — the corruption-degrade path for the
-	// freshness-scoped semantic scan, mirroring ListJobIDsAfter.
-	ListOpenJobIDsPostedAfter(ctx context.Context, arg ListOpenJobIDsPostedAfterParams) ([]int64, error)
-	// Freshness-scoped keyset scan for `reindex --semantic --posted-within`: open jobs
-	// whose effective posting date (COALESCE(posted_at, created_at) — the same date
-	// jobview derives and the search doc's posted_ts encodes) is at or after the cutoff.
-	// The in-engine embedder cannot embed the whole open catalogue in reasonable time, so
-	// the semantic index covers only this fresh window; being a swap rebuild it also drops
-	// jobs that have since aged out. Open-only (closed_at IS NULL): a swap rebuild never
-	// holds closed jobs, so unlike ListJobsUpdatedAfter there is nothing to delete. Served
-	// by jobs_open_enrich_freshness_idx (COALESCE(posted_at, created_at) DESC WHERE open).
-	ListOpenJobsPostedAfter(ctx context.Context, arg ListOpenJobsPostedAfterParams) ([]Job, error)
 	// Keyset continuation: rows strictly older than the cursor (created_at, id). No
 	// OFFSET, so deep pages never scan skipped rows.
 	ListOpenThreadsAfter(ctx context.Context, arg ListOpenThreadsAfterParams) ([]ListOpenThreadsAfterRow, error)
@@ -2947,13 +2937,6 @@ type Querier interface {
 	// author_label is set verbatim (NULL clears it → anonymous). No matching owner-scoped
 	// row returns no row (→ ErrNotFound).
 	SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSearchPublicSlugParams) (SavedSearch, error)
-	// Persist one job's semantic vector — the durable copy of what was just upserted into
-	// the jobs_semantic index. Called once per embedded job inside the SAME transaction as
-	// StampSemanticEmbeddedBatch on the open-job success path, so the stamp and the vector
-	// commit together (a job is never marked embedded without its vector reaching Postgres).
-	// Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
-	// up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
-	SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error
 	// Write one job's precomputed similar-jobs list and stamp similar_computed_at
 	// together, so a job is never marked computed without its list landing. A nil/empty
 	// similar_job_ids is a valid, intentional write (a job whose only close matches were

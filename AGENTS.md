@@ -145,7 +145,7 @@ Each is self-contained and can be read independently.
 - **Email ownership:** `users.email_verified`; a password registration starts unverified and is confirmed by a mailed six-digit code. An unverified, password-backed account is **seized** (password cleared, sessions revoked, API keys deleted) when a provider-verified OAuth identity arrives for its address — the account-pre-hijacking defence
 - **API keys:** Hashed at rest (SHA-256), scoped `full` or `cv`, and mintable only by an account with a verified address. Key management (create/list/revoke) and password change are cookie-only. A key does not carry the session generation, so a `token_version` bump does not revoke it — that is intentional for sign-out-everywhere and wrong for a takeover, so the seizure and the mailed-code password reset delete the rows in the same statement
 - **Enrichment:** Queue-driven (`enrichment_outbox`), provider-agnostic LLM, `Sanitize` + `Validate` gate
-- **Embeddings:** Queue-driven (`semantic_outbox`), incremental, reconciled by `reindex --semantic`
+- **Embeddings:** Queue-driven (`semantic_outbox`), incremental (`cmd/embed`) — pgvector-backed `job_semantic_chunks` plus a legacy single-vector column, no search index. Reconciled by bumping the embedder-model version string, which re-enqueues the whole catalogue through the existing staleness check
 - **Dictionaries:** All facet dictionaries are dict-only in production — never guess, emit nothing for unknowns
 - **Job deletion:** The lifecycle only soft-closes; `cmd/prune` is the sole hard-delete path
 - **In-app assistant:** a bounded tool-calling loop in-process (`internal/assistant`), streamed over SSE, open to every signed-in user. Tools act as the authenticated caller — no credential is minted for an agent

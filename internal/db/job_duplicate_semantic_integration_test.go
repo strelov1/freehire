@@ -1,8 +1,8 @@
 //go:build integration
 
 // The semantic queue must treat a non-canonical repost (duplicate_of set) like a closed
-// job: never embed it, and remove it if it was embedded while canonical — so it stays
-// consistent with the full reindex --semantic, which drops reposts via splitJobs.
+// job: never embed it, and clear its embed state if it was embedded while canonical —
+// so it stays consistent with the full facet reindex, which drops reposts via splitJobs.
 package db
 
 import (

@@ -27,19 +27,20 @@ the exit-code convention, a progress heartbeat, and a corruption-tolerant keyset
   `report` runs on a background goroutine CONCURRENTLY with the work — every counter it
   reads must be safe for concurrent access (atomic). The returned stop halts the goroutine;
   defer it.
-- **`ResilientPage` degrades on TOAST corruption, never on anything else** (resilient.go:95-
-  135). One row's damaged TOAST fails the whole `SELECT *` (Postgres XX001); the scanner
+- **`ResilientPage` degrades on TOAST corruption, never on anything else** (resilient.go:48-
+  99). One row's damaged TOAST fails the whole `SELECT *` (Postgres XX001); the scanner
   then re-lists the same window as bare ids (never detoasts, so it cannot fault) and fetches
   rows individually, collecting the readable ones and logging-skipping the corrupted.
   Non-corruption errors always propagate unchanged. The keyset cursor advances past a
   skipped row, so the scan never loops on it; a row that vanished mid-window (`ErrNoRows`)
   is skipped too, staying symmetric with the fast path.
-- **Two reader constructors, two query shapes** (resilient.go:21-42): `NewFullScanReader`
-  keysets over the whole `jobs` table; `NewPostedSinceReader` keysets over OPEN jobs in a
-  freshness window (`COALESCE(posted_at, created_at) >= since`, the
-  `reindex --semantic --posted-within` shape). Each takes its own narrow query interface so
-  a worker with its own store satisfies one without declaring methods the reader never
-  calls.
+- **One reader constructor** (resilient.go:16-46): `NewFullScanReader` keysets over the
+  whole `jobs` table via its own narrow `FullScanQueries` interface, so a worker with its
+  own store satisfies it without declaring methods the reader never calls. A second
+  constructor, `NewPostedSinceReader` (a freshness-windowed keyset over open jobs), existed
+  only to feed `reindex --semantic --posted-within` and was removed alongside it
+  (openspec/changes/drop-hybrid-search-pgvector-similar) — re-add the pattern if a future
+  worker genuinely needs a scoped scan, rather than resurrecting the old one blind.
 
 ## Usage sketch
 Every `cmd/<worker>/main.go` is a variation on:

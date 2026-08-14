@@ -428,13 +428,14 @@ export function createApi(
    *  same Job wire shape as listJobs, so views render them with the same
    *  components. `meta.total` is an estimate from the search engine.
    *
-   *  Keyword-only by default (semantic_ratio=0): hybrid/semantic ranking scores
-   *  every job by similarity, so a query like "devops" returns the whole catalogue
-   *  reordered rather than the handful that match — which reads as "search is
-   *  broken". Semantic stays available on the API for an explicit opt-in later. */
+   *  Keyword-only: the API has no semantic/hybrid ranking mode (the Meilisearch
+   *  semantic index it used to offer via `semantic_ratio` was removed — see
+   *  openspec/changes/drop-hybrid-search-pgvector-similar). A blended ranking mode
+   *  would score every job by similarity, so a query like "devops" would return the
+   *  whole catalogue reordered rather than the handful that match — which reads as
+   *  "search is broken". */
   async function searchJobs(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
     const params = new URLSearchParams(facets);
-    params.set('semantic_ratio', '0');
     params.set('limit', String(limit));
     params.set('offset', String(offset));
     return toSlice(await request<Page<Job>>(`/api/v1/jobs/search?${params}`), offset);

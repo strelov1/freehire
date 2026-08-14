@@ -11,26 +11,30 @@ import (
 // EMBED_API_KEY/EMBED_CONCURRENCY via LoadEmbedClient — so this holds only the
 // queue-drain knobs, mirroring the tuning half of config.Enrich.
 type Embed struct {
-	BatchSize    int           // claim wave + embed/upsert batch size (one Meili task per wave)
+	BatchSize    int           // claim wave + embed/persist batch size (one TEI call set + one Postgres transaction per wave)
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
 	MaxAttempts  int           // failed attempts before an entry is dead-lettered
-	CallTimeout  time.Duration // bounds a single batch's embed/index or remove operation
+	CallTimeout  time.Duration // bounds a single batch's embed-and-persist (or per-item fallback) operation
 }
 
 // LoadEmbed reads the worker's tuning from the environment, all optional with defaults.
-// EMBED_BATCH_SIZE is the wave/batch size (bigger = fewer Meili tasks for a bulk
-// backfill); EMBED_CONCURRENCY (read by LoadEmbedClient) chunks the embed calls inside
-// each batch. There is no required field — the MEILI_MASTER_KEY requirement is
-// enforced at the cmd/embed call site (like cmd/reindex), so this never fails.
+// EMBED_BATCH_SIZE is the wave/batch size (bigger = fewer TEI call sets and Postgres
+// round trips for a bulk backfill); EMBED_CONCURRENCY (read by LoadEmbedClient) chunks
+// the embed calls inside each batch. There is no required field — unlike cmd/reindex,
+// cmd/embed does not require MEILI_MASTER_KEY at all (it never touches Meilisearch), so
+// this never fails.
 func LoadEmbed() Embed {
 	e := Embed{
 		BatchSize:    envInt("EMBED_BATCH_SIZE", 500),
 		LeaseSeconds: envInt("EMBED_LEASE_SECONDS", 300),
 		MaxAttempts:  envInt("EMBED_MAX_ATTEMPTS", 3),
-		// 600s, matching SEARCH_DRAIN_CALL_TIMEOUT_SECONDS: both push into a Meili index
-		// whose cost is a fixed whole-index re-merge, so a normal-but-slow batch under load
-		// is the same failure class the search-drain outage was raised to 600s to absorb —
-		// see internal/config/search_drain.go and Runner.skipOnTimeout in both packages.
+		// 600s, matching SEARCH_DRAIN_CALL_TIMEOUT_SECONDS historically: search-drain still
+		// pushes into a Meili index whose cost is a fixed whole-index re-merge, the failure
+		// class that timeout was raised to 600s to absorb (see internal/config/
+		// search_drain.go). cmd/embed no longer pushes into any search index — its own batch
+		// is TEI calls plus one Postgres transaction — but the same generous ceiling is kept
+		// here too: a slow TEI backend or a large batch's DB transaction both deserve room
+		// before Runner.skipOnTimeout treats a batch as merely slow rather than failed.
 		CallTimeout: time.Duration(envInt("EMBED_CALL_TIMEOUT_SECONDS", 600)) * time.Second,
 	}
 	// A non-positive batch size would make the claim's LIMIT 0 (silently no-op) or feed a
@@ -48,11 +52,11 @@ func LoadEmbed() Embed {
 	return e
 }
 
-// EmbedClient holds the embedding-backend connection settings every embedding search
-// client is built with (cmd/server embeds CVs; cmd/reindex --semantic and cmd/embed
-// embed jobs). They live here rather than inside internal/search so the library stays
-// env-free; cmd wires them into search.NewClient's WithEmbed* options. All optional:
-// URL defaults to the host2 TEI (search's embedderURL), APIKey to none, Concurrency to 1.
+// EmbedClient holds the embedding-backend connection settings an embedding search
+// client is built with (cmd/embed embeds jobs). They live here rather than inside
+// internal/search so the library stays env-free; cmd wires them into search.NewClient's
+// WithEmbed* options. All optional: URL defaults to the host2 TEI (search's
+// embedderURL), APIKey to none, Concurrency to 1.
 type EmbedClient struct {
 	URL         string // EMBED_URL — TEI-compatible /embed endpoint; empty = default host2 TEI
 	APIKey      string // EMBED_API_KEY — bearer token for an authenticated endpoint

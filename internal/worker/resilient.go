@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"log"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgerr"
@@ -17,27 +15,17 @@ import (
 // batch (the fast path), an id-only projection of the same window (the degrade
 // path, which never detoasts so it cannot fault on corruption), and a single-row
 // fetch to isolate the readable rows from the corrupted one. Build one with
-// NewFullScanReader / NewPostedSinceReader; tests supply a fake.
+// NewFullScanReader; tests supply a fake.
 type PageReader interface {
 	Batch(ctx context.Context, afterID int64, batchSize int32) ([]db.Job, error)
 	IDs(ctx context.Context, afterID int64, batchSize int32) ([]int64, error)
 	Row(ctx context.Context, id int64) (db.Job, error)
 }
 
-// FullScanQueries is the subset of *db.Queries a whole-table reader calls. It is
-// declared separately from PostedSinceQueries so each constructor asks for exactly what
-// it uses: a worker with its own narrow store (cmd/backfill-derive) can satisfy one
-// without declaring methods the reader would never invoke.
+// FullScanQueries is the subset of *db.Queries a whole-table reader calls.
 type FullScanQueries interface {
 	ListJobsByIDAfter(context.Context, db.ListJobsByIDAfterParams) ([]db.Job, error)
 	ListJobIDsAfter(context.Context, db.ListJobIDsAfterParams) ([]int64, error)
-	GetJob(context.Context, int64) (db.Job, error)
-}
-
-// PostedSinceQueries is the same for the freshness-windowed reader.
-type PostedSinceQueries interface {
-	ListOpenJobsPostedAfter(context.Context, db.ListOpenJobsPostedAfterParams) ([]db.Job, error)
-	ListOpenJobIDsPostedAfter(context.Context, db.ListOpenJobIDsPostedAfterParams) ([]int64, error)
 	GetJob(context.Context, int64) (db.Job, error)
 }
 
@@ -54,30 +42,6 @@ func (r fullScanReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int
 	return r.q.ListJobIDsAfter(ctx, db.ListJobIDsAfterParams{AfterID: afterID, BatchSize: bs})
 }
 func (r fullScanReader) Row(ctx context.Context, id int64) (db.Job, error) {
-	return r.q.GetJob(ctx, id)
-}
-
-type postedSinceReader struct {
-	q     PostedSinceQueries
-	since pgtype.Timestamptz
-}
-
-// NewPostedSinceReader adapts a job store to a PageReader over OPEN jobs whose
-// effective posting date (COALESCE(posted_at, created_at)) is at or after since —
-// the freshness window `reindex --semantic --posted-within` embeds. Keyset by id.
-// Unlike the incremental reader it returns open jobs only, since the semantic swap
-// rebuild it feeds never holds closed jobs (nothing to delete).
-func NewPostedSinceReader(q PostedSinceQueries, since time.Time) PageReader {
-	return postedSinceReader{q: q, since: pgtype.Timestamptz{Time: since, Valid: true}}
-}
-
-func (r postedSinceReader) Batch(ctx context.Context, afterID int64, bs int32) ([]db.Job, error) {
-	return r.q.ListOpenJobsPostedAfter(ctx, db.ListOpenJobsPostedAfterParams{AfterID: afterID, PostedSince: r.since, BatchSize: bs})
-}
-func (r postedSinceReader) IDs(ctx context.Context, afterID int64, bs int32) ([]int64, error) {
-	return r.q.ListOpenJobIDsPostedAfter(ctx, db.ListOpenJobIDsPostedAfterParams{AfterID: afterID, PostedSince: r.since, BatchSize: bs})
-}
-func (r postedSinceReader) Row(ctx context.Context, id int64) (db.Job, error) {
 	return r.q.GetJob(ctx, id)
 }
 

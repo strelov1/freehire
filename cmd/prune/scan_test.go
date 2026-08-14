@@ -55,15 +55,10 @@ func (f *fakeDeleter) PruneJobs(_ context.Context, p db.PruneJobsParams) ([]int6
 	return out, nil
 }
 
-type fakeIndex struct{ facet, semantic []int64 }
+type fakeIndex struct{ facet []int64 }
 
 func (f *fakeIndex) SubmitJobDeletion(_ context.Context, ids []int64) error {
 	f.facet = append(f.facet, ids...)
-	return nil
-}
-
-func (f *fakeIndex) SubmitSemanticJobDeletion(_ context.Context, ids []int64) error {
-	f.semantic = append(f.semantic, ids...)
 	return nil
 }
 
@@ -252,8 +247,8 @@ func TestDeleteTargetsBatchesEveryTargetOnce(t *testing.T) {
 }
 
 // The index is cleaned with what the statement reports it actually deleted, not with
-// what was asked for — the duplicate chain means those differ — and both indexes are
-// mirrored, since search is served straight from Meilisearch with no Postgres check.
+// what was asked for — the duplicate chain means those differ — since search is served
+// straight from Meilisearch with no Postgres check.
 func TestDeleteTargetsMirrorsWhatWasActuallyDeleted(t *testing.T) {
 	p := newPlan(5, testRand())
 	p.targets = []target{{id: 1, rule: ruleTitle}}
@@ -265,9 +260,6 @@ func TestDeleteTargetsMirrorsWhatWasActuallyDeleted(t *testing.T) {
 	}
 	if !slices.Equal(idx.facet, []int64{1, 99}) {
 		t.Errorf("facet index got %v, want [1 99] — the duplicate went too", idx.facet)
-	}
-	if !slices.Equal(idx.semantic, []int64{1, 99}) {
-		t.Errorf("semantic index got %v, want [1 99] — a document left there is still served", idx.semantic)
 	}
 	if p.deleted != 2 {
 		t.Errorf("deleted = %d, want 2 — the report must count rows, not targets", p.deleted)
@@ -352,8 +344,6 @@ func (c *countingIndex) SubmitJobDeletion(_ context.Context, ids []int64) error 
 	c.ids += len(ids)
 	return nil
 }
-
-func (c *countingIndex) SubmitSemanticJobDeletion(context.Context, []int64) error { return nil }
 
 // The sample must describe what the run will delete. Feeding the reservoir the rows a
 // cap excluded empties it of real titles precisely when a cap is in use — which is
