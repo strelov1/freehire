@@ -1147,7 +1147,10 @@ type Querier interface {
 	// live destinations, and the application's CURRENT stage/last-activity/pending-
 	// suggestion so the worker can recompute the triggering condition rather than
 	// trust what MATCH saw. job_open lets the worker cancel a nudge for a job that
-	// has since closed.
+	// has since closed. application_exists distinguishes "no applications row at
+	// all" (untracked since MATCH) from "row exists with a NULL stage" — the LEFT
+	// JOIN alone leaves stage NULL in both cases, which would otherwise be judged
+	// as the active `applied` stage by userjob.SilenceThresholdDays.
 	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
