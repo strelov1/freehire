@@ -52,3 +52,16 @@ func IsDataCorrupted(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == codeDataCorrupted
 }
+
+// UniqueViolationConstraint reports the name of the violated constraint when err is
+// (or wraps) a unique-constraint violation, so a caller with more than one UNIQUE on
+// the same table can map each to its own sentinel error instead of conflating them —
+// e.g. saved_searches' name uniqueness vs. its "at most one profile-derived row per
+// user" partial index. ok is false for anything else, including a non-unique pg error.
+func UniqueViolationConstraint(err error) (name string, ok bool) {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != codeUniqueViolation {
+		return "", false
+	}
+	return pgErr.ConstraintName, true
+}

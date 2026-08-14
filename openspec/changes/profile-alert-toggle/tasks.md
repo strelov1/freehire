@@ -1,12 +1,12 @@
 ## 1. Migration & generated queries
 
-- [ ] 1.1 Migration: `saved_searches.derived_from_profile boolean NOT NULL DEFAULT false`; `CREATE UNIQUE INDEX saved_searches_derived_from_profile_idx ON saved_searches (user_id) WHERE derived_from_profile` (partial index enforces at most one per user).
-- [ ] 1.2 `internal/db/queries/saved_searches.sql`: `CreateSavedSearch` gains the `derived_from_profile` column/param; `SELECT *`-based queries (`ListSavedSearches`, `UpdateSavedSearch`, `GetSavedSearch`) pick the new column up automatically once regenerated.
-- [ ] 1.3 `make sqlc`; verify generated code compiles.
+- [x] 1.1 Migration: `saved_searches.derived_from_profile boolean NOT NULL DEFAULT false`; `CREATE UNIQUE INDEX saved_searches_derived_from_profile_idx ON saved_searches (user_id) WHERE derived_from_profile` (partial index enforces at most one per user).
+- [x] 1.2 `internal/db/queries/saved_searches.sql`: `CreateSavedSearch` gains the `derived_from_profile` column/param; `SELECT *`-based queries (`ListSavedSearches`, `UpdateSavedSearch`, `GetSavedSearch`) pick the new column up automatically once regenerated.
+- [x] 1.3 `make sqlc`; verify generated code compiles.
 
 ## 2. `internal/pgerr`: distinguish which unique constraint fired
 
-- [ ] 2.1 Add `pgerr.UniqueViolationConstraint(err) (name string, ok bool)` — returns the violated constraint's name (from `pgconn.PgError.ConstraintName`) when `err` is a unique violation, ok=false otherwise. Unit test covering: non-unique-violation error, wrapped unique violation, constraint name extraction.
+- [x] 2.1 Add `pgerr.UniqueViolationConstraint(err) (name string, ok bool)` — returns the violated constraint's name (from `pgconn.PgError.ConstraintName`) when `err` is a unique violation, ok=false otherwise. Unit test covering: non-unique-violation error, wrapped unique violation, constraint name extraction.
 
 ## 3. `internal/savedsearch`
 

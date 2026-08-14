@@ -601,7 +601,9 @@ type Querier interface {
 	// ErrBoardAlreadyContributed. A maintainer later resolves source/board and promotes the row.
 	CreateReviewContribution(ctx context.Context, arg CreateReviewContributionParams) (LinkContribution, error)
 	// Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
-	// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
+	// duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
+	// second profile-derived row for the same user (both surfaced by the repository via
+	// pgerr.UniqueViolationConstraint, mapped to distinct sentinels). Returns the row.
 	CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error)
 	// Insert a user-contributed vacancy into the moderation queue as 'pending'. The partial
 	// unique index on lower(url) WHERE status='pending' rejects a second pending submission of

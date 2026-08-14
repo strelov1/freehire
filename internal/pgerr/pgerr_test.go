@@ -47,6 +47,39 @@ func TestClassifiersRecogniseTheirOwnSQLSTATEAndNothingElse(t *testing.T) {
 	}
 }
 
+func TestUniqueViolationConstraint(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantName string
+		wantOk   bool
+	}{
+		{name: "nil"},
+		{name: "plain error", err: errors.New("boom")},
+		{name: "non-unique pg error", err: &pgconn.PgError{Code: "23503", ConstraintName: "fk_x"}},
+		{
+			name:     "unique violation carries the constraint name",
+			err:      &pgconn.PgError{Code: "23505", ConstraintName: "saved_searches_user_id_name_key"},
+			wantName: "saved_searches_user_id_name_key",
+			wantOk:   true,
+		},
+		{
+			name:     "wrapped unique violation",
+			err:      fmt.Errorf("insert: %w", &pgconn.PgError{Code: "23505", ConstraintName: "saved_searches_derived_from_profile_idx"}),
+			wantName: "saved_searches_derived_from_profile_idx",
+			wantOk:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, ok := UniqueViolationConstraint(tt.err)
+			if ok != tt.wantOk || name != tt.wantName {
+				t.Errorf("UniqueViolationConstraint(%v) = (%q, %v), want (%q, %v)", tt.err, name, ok, tt.wantName, tt.wantOk)
+			}
+		})
+	}
+}
+
 // This package's doc calls it "the single home for the SQLSTATE constants". That claim was
 // false: internal/worker declared XX001 and repeated the errors.As unwrap, and the predicted
 // consequence had already happened — internal/enrich and internal/embed pulled in the whole

@@ -48,21 +48,29 @@ func (q *Queries) CountSavedSearches(ctx context.Context, userID int64) (int64, 
 }
 
 const createSavedSearch = `-- name: CreateSavedSearch :one
-INSERT INTO saved_searches (user_id, name, query)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
+INSERT INTO saved_searches (user_id, name, query, derived_from_profile)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label, derived_from_profile
 `
 
 type CreateSavedSearchParams struct {
-	UserID int64  `json:"user_id"`
-	Name   string `json:"name"`
-	Query  string `json:"query"`
+	UserID             int64  `json:"user_id"`
+	Name               string `json:"name"`
+	Query              string `json:"query"`
+	DerivedFromProfile bool   `json:"derived_from_profile"`
 }
 
 // Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
-// duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
+// duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
+// second profile-derived row for the same user (both surfaced by the repository via
+// pgerr.UniqueViolationConstraint, mapped to distinct sentinels). Returns the row.
 func (q *Queries) CreateSavedSearch(ctx context.Context, arg CreateSavedSearchParams) (SavedSearch, error) {
-	row := q.db.QueryRow(ctx, createSavedSearch, arg.UserID, arg.Name, arg.Query)
+	row := q.db.QueryRow(ctx, createSavedSearch,
+		arg.UserID,
+		arg.Name,
+		arg.Query,
+		arg.DerivedFromProfile,
+	)
 	var i SavedSearch
 	err := row.Scan(
 		&i.ID,
@@ -73,6 +81,7 @@ func (q *Queries) CreateSavedSearch(ctx context.Context, arg CreateSavedSearchPa
 		&i.UpdatedAt,
 		&i.PublicSlug,
 		&i.AuthorLabel,
+		&i.DerivedFromProfile,
 	)
 	return i, err
 }
@@ -121,7 +130,7 @@ func (q *Queries) GetPublicBoardBySlug(ctx context.Context, publicSlug pgtype.Te
 }
 
 const getSavedSearch = `-- name: GetSavedSearch :one
-SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label FROM saved_searches
+SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label, derived_from_profile FROM saved_searches
 WHERE id = $1 AND user_id = $2
 `
 
@@ -146,12 +155,13 @@ func (q *Queries) GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) 
 		&i.UpdatedAt,
 		&i.PublicSlug,
 		&i.AuthorLabel,
+		&i.DerivedFromProfile,
 	)
 	return i, err
 }
 
 const listSavedSearches = `-- name: ListSavedSearches :many
-SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label FROM saved_searches
+SELECT id, user_id, name, query, created_at, updated_at, public_slug, author_label, derived_from_profile FROM saved_searches
 WHERE user_id = $1
 ORDER BY updated_at DESC
 `
@@ -175,6 +185,7 @@ func (q *Queries) ListSavedSearches(ctx context.Context, userID int64) ([]SavedS
 			&i.UpdatedAt,
 			&i.PublicSlug,
 			&i.AuthorLabel,
+			&i.DerivedFromProfile,
 		); err != nil {
 			return nil, err
 		}
@@ -192,7 +203,7 @@ SET public_slug  = $1,
     author_label = $2,
     updated_at   = now()
 WHERE id = $3 AND user_id = $4
-RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label, derived_from_profile
 `
 
 type SetSavedSearchPublicSlugParams struct {
@@ -225,6 +236,7 @@ func (q *Queries) SetSavedSearchPublicSlug(ctx context.Context, arg SetSavedSear
 		&i.UpdatedAt,
 		&i.PublicSlug,
 		&i.AuthorLabel,
+		&i.DerivedFromProfile,
 	)
 	return i, err
 }
@@ -235,7 +247,7 @@ SET name       = COALESCE($1, name),
     query      = COALESCE($2, query),
     updated_at = now()
 WHERE id = $3 AND user_id = $4
-RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label
+RETURNING id, user_id, name, query, created_at, updated_at, public_slug, author_label, derived_from_profile
 `
 
 type UpdateSavedSearchParams struct {
@@ -267,6 +279,7 @@ func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchPa
 		&i.UpdatedAt,
 		&i.PublicSlug,
 		&i.AuthorLabel,
+		&i.DerivedFromProfile,
 	)
 	return i, err
 }

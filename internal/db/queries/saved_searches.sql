@@ -12,9 +12,11 @@ WHERE user_id = $1;
 
 -- name: CreateSavedSearch :one
 -- Create a saved search for a user. The UNIQUE (user_id, name) constraint rejects a
--- duplicate name (surfaced by the repository as a duplicate-name error). Returns the row.
-INSERT INTO saved_searches (user_id, name, query)
-VALUES ($1, $2, $3)
+-- duplicate name; the partial UNIQUE (user_id) WHERE derived_from_profile rejects a
+-- second profile-derived row for the same user (both surfaced by the repository via
+-- pgerr.UniqueViolationConstraint, mapped to distinct sentinels). Returns the row.
+INSERT INTO saved_searches (user_id, name, query, derived_from_profile)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: UpdateSavedSearch :one
