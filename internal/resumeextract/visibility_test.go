@@ -107,6 +107,27 @@ func TestAnonymous_MultipleCurrentEntries_AllMasked(t *testing.T) {
 	}
 }
 
+// TestAnonymous_TodayLabelMasked pins notEndedLabels against internal/experience's
+// canonical "not ended" vocabulary (period_sort.go's isPresentLabel): "today" is one of
+// its recognized present labels and must mask here too, or the two would silently
+// disagree on which roles read as ongoing.
+func TestAnonymous_TodayLabelMasked(t *testing.T) {
+	s := fullStructured()
+	s.Experience = []Experience{
+		{Title: "Staff Engineer", Company: "Analytical Engines", Start: "2021-03", End: "Today"},
+	}
+
+	got := s.Anonymous()
+
+	if len(got.Experience) != 1 {
+		t.Fatalf("Experience len = %d, want 1", len(got.Experience))
+	}
+	if got.Experience[0].Company != currentEmployerLabel {
+		t.Errorf("End=%q Experience[0].Company = %q, want masked as %q",
+			"Today", got.Experience[0].Company, currentEmployerLabel)
+	}
+}
+
 func TestAnonymous_DoesNotMutateSource(t *testing.T) {
 	s := fullStructured()
 	s.Experience = oneCurrentExperience()

@@ -15,12 +15,12 @@ import "strings"
 // placeholder to be reworded later.
 const currentEmployerLabel = "Current employer"
 
-// notEndedLabels mirrors internal/experience/import_resume.go's currentEndLabels (line
-// ~16) exactly: the free-form End labels a CV uses for a role that has not ended. Kept
-// as a separate copy rather than imported — internal/experience already imports this
-// package, so the reverse import would be circular. Keep the two maps in sync if the
-// convention ever changes.
-var notEndedLabels = map[string]bool{"": true, "present": true, "current": true, "now": true, "ongoing": true}
+// notEndedLabels mirrors internal/experience/period_sort.go's isPresentLabel exactly
+// (plus the empty string, which import_resume.go treats as "not ended" too): the
+// free-form End labels a CV uses for a role that has not ended. Kept as a separate
+// copy rather than imported — internal/experience already imports this package, so the
+// reverse import would be circular. Keep the two in sync if the convention ever changes.
+var notEndedLabels = map[string]bool{"": true, "present": true, "current": true, "now": true, "ongoing": true, "today": true}
 
 // isCurrentEntry reports whether an experience entry's End label reads as "not ended",
 // case-insensitively, per notEndedLabels above.
