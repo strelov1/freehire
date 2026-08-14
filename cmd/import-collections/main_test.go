@@ -441,3 +441,36 @@ func TestProxiedClient_ErrorsOnAnUnparseableSOURCES_PROXY_URL(t *testing.T) {
 		t.Error("proxiedClient accepted an invalid SOURCES_PROXY_URL")
 	}
 }
+
+// TestFetchDataset_RejectsOversizeBody guards against an unbounded read: a
+// misconfigured <SLUG>_DATASET_URL override or a misbehaving/compromised
+// upstream returning a huge body must fail cleanly instead of buffering the
+// whole response into memory on an unattended scheduled run.
+func TestFetchDataset_RejectsOversizeBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(make([]byte, maxDatasetBody+1))
+	}))
+	defer srv.Close()
+
+	if _, err := fetchDataset(context.Background(), srv.Client(), srv.URL); err == nil {
+		t.Error("fetchDataset accepted a body over maxDatasetBody, want an error")
+	}
+}
+
+// TestFetchDataset_AcceptsBodyAtTheCap guards the boundary: a body of exactly
+// maxDatasetBody bytes is a complete, legitimate dataset and must not be
+// rejected as oversize.
+func TestFetchDataset_AcceptsBodyAtTheCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(make([]byte, maxDatasetBody))
+	}))
+	defer srv.Close()
+
+	body, err := fetchDataset(context.Background(), srv.Client(), srv.URL)
+	if err != nil {
+		t.Fatalf("fetchDataset: %v", err)
+	}
+	if len(body) != maxDatasetBody {
+		t.Errorf("len(body) = %d, want %d", len(body), maxDatasetBody)
+	}
+}

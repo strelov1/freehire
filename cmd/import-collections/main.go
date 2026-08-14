@@ -46,6 +46,17 @@ import (
 // fetchTimeout bounds each dataset download so a stalled endpoint can't hang the run.
 const fetchTimeout = 60 * time.Second
 
+// maxDatasetBody bounds how many bytes fetchDataset reads from any one dataset
+// response. Every dataset here is a company directory or register (yc-oss,
+// unicorn list, the UK/NL/US sponsor registers) — a few MiB at most — but the
+// URL can be operator-overridden per collection via <SLUG>_DATASET_URL, and
+// several collections resolve theirs dynamically (Dataset.ResolveURL) from a
+// third-party site (e.g. the monthly-republished GOV.UK register). A
+// misconfigured override, a redirect to an unexpectedly large resource, or a
+// misbehaving upstream host must not be able to buffer an unbounded response
+// into memory on a run that otherwise executes unattended on a schedule.
+const maxDatasetBody = 32 << 20 // 32 MiB
+
 // dryRun resolves, matches, and gates exactly as a real run does, reports what it
 // would write, and writes nothing.
 var (
@@ -431,5 +442,14 @@ func fetchDataset(ctx context.Context, client *http.Client, url string) ([]byte,
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("dataset %s: status %d", url, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	// Capped on the read, not on Content-Length: that header is the server's
+	// claim, not a promise about what the stream delivers.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDatasetBody+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxDatasetBody {
+		return nil, fmt.Errorf("dataset %s: body exceeds %d bytes", url, maxDatasetBody)
+	}
+	return body, nil
 }
