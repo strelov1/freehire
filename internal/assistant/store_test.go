@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -111,6 +112,26 @@ func (f *fakeQueries) ListAssistantMessages(_ context.Context, sessionID uuid.UU
 	return out, nil
 }
 
+// ListRecentAssistantMessages mimics the real query: newest limit rows first, the
+// caller (Store.RecentTranscript) is the one that reverses back to ascending order.
+func (f *fakeQueries) ListRecentAssistantMessages(_ context.Context, arg db.ListRecentAssistantMessagesParams) ([]db.AssistantMessage, error) {
+	var all []db.AssistantMessage
+	for _, m := range f.messages {
+		if m.SessionID == arg.SessionID {
+			all = append(all, db.AssistantMessage{SessionID: m.SessionID, Seq: m.Seq, Role: m.Role, Content: m.Content})
+		}
+	}
+	limit := int(arg.Limit)
+	if limit > len(all) {
+		limit = len(all)
+	}
+	out := make([]db.AssistantMessage, limit)
+	for i := 0; i < limit; i++ {
+		out[i] = all[len(all)-1-i]
+	}
+	return out, nil
+}
+
 func TestGetSessionMapsNullableColumns(t *testing.T) {
 	f := &fakeQueries{session: db.AssistantSession{
 		ID: sessionID, UserID: 3, Preset: PresetTailor,
@@ -190,6 +211,46 @@ func TestAppendAndReadTranscript(t *testing.T) {
 	}
 	if len(history) != 2 {
 		t.Errorf("history has %d messages, want 2", len(history))
+	}
+}
+
+// RecentTranscript is the bounded counterpart of Transcript used to rebuild the model's
+// own history every turn (see Runner.history) — it must return exactly the same tail
+// Transcript's own last-N slice would, in the same ascending seq order, without ever
+// asking the fake for more than `limit` rows.
+func TestRecentTranscriptReturnsTheTailInAscendingOrder(t *testing.T) {
+	f := &fakeQueries{}
+	s := NewStore(f)
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ {
+		msg, _ := EncodeUser(strings.Repeat("m", i+1))
+		if _, err := s.Append(ctx, sessionID, msg); err != nil {
+			t.Fatalf("seed message %d: %v", i, err)
+		}
+	}
+
+	got, err := s.RecentTranscript(ctx, sessionID, 3)
+	if err != nil {
+		t.Fatalf("RecentTranscript: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d messages, want 3", len(got))
+	}
+	wantSeqs := []int32{3, 4, 5}
+	for i, seq := range wantSeqs {
+		if got[i].Seq != seq {
+			t.Errorf("got[%d].Seq = %d, want %d — the tail in ascending order", i, got[i].Seq, seq)
+		}
+	}
+
+	// A limit at or above the transcript's whole length is the same as reading it all.
+	all, err := s.RecentTranscript(ctx, sessionID, 100)
+	if err != nil {
+		t.Fatalf("RecentTranscript(100): %v", err)
+	}
+	if len(all) != 5 {
+		t.Fatalf("got %d messages, want all 5 when the limit exceeds the transcript length", len(all))
 	}
 }
 

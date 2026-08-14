@@ -223,10 +223,59 @@ WHERE session_id = $1
 ORDER BY seq
 `
 
-// A session's whole transcript in order. It is both what the client replays and what the
-// model's history is rebuilt from, so tool calls and tool results are included.
+// A session's whole transcript in order, for the client to replay. Tool calls and tool
+// results are included. Unbounded by design: the client's own message list must show
+// everything, not a trimmed window — see ListRecentAssistantMessages for the bounded
+// read the model's own history is rebuilt from.
 func (q *Queries) ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error) {
 	rows, err := q.db.Query(ctx, listAssistantMessages, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssistantMessage{}
+	for rows.Next() {
+		var i AssistantMessage
+		if err := rows.Scan(
+			&i.SessionID,
+			&i.Seq,
+			&i.Role,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentAssistantMessages = `-- name: ListRecentAssistantMessages :many
+SELECT session_id, seq, role, content, created_at
+FROM assistant_messages
+WHERE session_id = $1
+ORDER BY seq DESC
+LIMIT $2
+`
+
+type ListRecentAssistantMessagesParams struct {
+	SessionID uuid.UUID `json:"session_id"`
+	Limit     int32     `json:"limit"`
+}
+
+// The session's most recent messages, newest first — the bounded counterpart of
+// ListAssistantMessages, for rebuilding the model's own history every turn. Runner.trim()
+// only ever keeps the tail (HistoryLimit, default 60) of what ListAssistantMessages
+// returns; fetching and JSON-decoding the WHOLE transcript first, only to discard
+// everything but the tail, cost time and memory proportional to total session length
+// (autopilot runs, long-lived chat/tailoring sessions can accumulate hundreds of rows)
+// instead of the fixed window actually used. The caller reverses these rows back to
+// ascending seq order before handing them to trim()/Conversation().
+func (q *Queries) ListRecentAssistantMessages(ctx context.Context, arg ListRecentAssistantMessagesParams) ([]AssistantMessage, error) {
+	rows, err := q.db.Query(ctx, listRecentAssistantMessages, arg.SessionID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

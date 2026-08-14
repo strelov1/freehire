@@ -67,6 +67,7 @@ type Queries interface {
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
 	AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error)
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]db.AssistantMessage, error)
+	ListRecentAssistantMessages(ctx context.Context, arg db.ListRecentAssistantMessagesParams) ([]db.AssistantMessage, error)
 }
 
 // Store persists sessions and their transcripts. Every session read and write is
@@ -186,7 +187,9 @@ func (s *Store) Append(ctx context.Context, sessionID uuid.UUID, m Message) (Mes
 	return Message{}, fmt.Errorf("assistant: append message: %w", err)
 }
 
-// Transcript reads a session's messages in order.
+// Transcript reads a session's WHOLE messages in order. For a client replaying the
+// conversation; the model's own history is rebuilt from RecentTranscript instead, which
+// does not pay for rows that would only be trimmed away.
 func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message, error) {
 	rows, err := s.q.ListAssistantMessages(ctx, sessionID)
 	if err != nil {
@@ -195,6 +198,27 @@ func (s *Store) Transcript(ctx context.Context, sessionID uuid.UUID) ([]Message,
 	out := make([]Message, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Message{Seq: r.Seq, Role: r.Role, Content: r.Content})
+	}
+	return out, nil
+}
+
+// RecentTranscript reads a session's most recent limit messages, oldest first — the
+// bounded counterpart of Transcript, for rebuilding the model's own history every turn
+// without fetching and JSON-decoding rows that Runner.trim() would only discard. limit
+// must be positive.
+func (s *Store) RecentTranscript(ctx context.Context, sessionID uuid.UUID, limit int) ([]Message, error) {
+	rows, err := s.q.ListRecentAssistantMessages(ctx, db.ListRecentAssistantMessagesParams{
+		SessionID: sessionID,
+		Limit:     int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("assistant: read recent transcript: %w", err)
+	}
+	// The query orders newest first so LIMIT keeps the tail; reverse back to ascending
+	// seq order, the shape every caller (trim, Conversation) expects.
+	out := make([]Message, len(rows))
+	for i, r := range rows {
+		out[len(rows)-1-i] = Message{Seq: r.Seq, Role: r.Role, Content: r.Content}
 	}
 	return out, nil
 }

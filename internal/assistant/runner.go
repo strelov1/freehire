@@ -395,8 +395,14 @@ func (r *Runner) persist(ctx context.Context, sessionID uuid.UUID, msg Message) 
 
 // history rebuilds the model's conversation: the session's system prompt followed
 // by its most recent messages.
+//
+// Fetches only the tail via RecentTranscript rather than the whole transcript via
+// Transcript — trim() below only ever keeps the last HistoryLimit messages anyway, so
+// fetching everything first paid a cost proportional to the session's total length
+// (autopilot runs and long-lived chats can accumulate hundreds of rows) on every single
+// turn, for a window whose size never changes.
 func (r *Runner) history(ctx context.Context, sessionID uuid.UUID, system string) ([]llms.MessageContent, error) {
-	stored, err := r.store.Transcript(ctx, sessionID)
+	stored, err := r.store.RecentTranscript(ctx, sessionID, r.cfg.HistoryLimit)
 	if err != nil {
 		return nil, err
 	}

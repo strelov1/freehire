@@ -1619,8 +1619,10 @@ type Querier interface {
 	// conversations are excluded for exactly that reason inverted — they belong to the CV that
 	// owns them, are reached through the tailoring workspace, and cannot be continued without it.
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error)
-	// A session's whole transcript in order. It is both what the client replays and what the
-	// model's history is rebuilt from, so tool calls and tool results are included.
+	// A session's whole transcript in order, for the client to replay. Tool calls and tool
+	// results are included. Unbounded by design: the client's own message list must show
+	// everything, not a trimmed window — see ListRecentAssistantMessages for the bounded
+	// read the model's own history is rebuilt from.
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
@@ -1996,6 +1998,15 @@ type Querier interface {
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
 	// The caller's own registered devices, for a test send or a future delivery.
 	ListPushTokensForUser(ctx context.Context, userID int64) ([]UserPushToken, error)
+	// The session's most recent messages, newest first — the bounded counterpart of
+	// ListAssistantMessages, for rebuilding the model's own history every turn. Runner.trim()
+	// only ever keeps the tail (HistoryLimit, default 60) of what ListAssistantMessages
+	// returns; fetching and JSON-decoding the WHOLE transcript first, only to discard
+	// everything but the tail, cost time and memory proportional to total session length
+	// (autopilot runs, long-lived chat/tailoring sessions can accumulate hundreds of rows)
+	// instead of the fixed window actually used. The caller reverses these rows back to
+	// ascending seq order before handing them to trim()/Conversation().
+	ListRecentAssistantMessages(ctx context.Context, arg ListRecentAssistantMessagesParams) ([]AssistantMessage, error)
 	// The "my offers" list: one member's offers with moderation status, newest first.
 	// Joins the catalogue for the company's display name (LEFT so an offer survives a
 	// company the catalogue no longer knows — the UI falls back to the slug).
