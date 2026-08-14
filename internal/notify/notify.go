@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"slices"
 
@@ -94,6 +95,7 @@ type Store interface {
 	RecordMatchDeliveryFailure(ctx context.Context, arg db.RecordMatchDeliveryFailureParams) error
 	ReleaseMatchClaim(ctx context.Context, arg db.ReleaseMatchClaimParams) error
 	RecordNotification(ctx context.Context, arg db.RecordNotificationParams) error
+	MarkDigestSent(ctx context.Context, id int64) error
 }
 
 // Config tunes one pass. Defaults come from DefaultConfig.
@@ -131,6 +133,7 @@ type Stats struct {
 	Matched   int // newly recorded (subscription, job) matches
 	Delivered int // digests sent
 	SoftSkips int // digests skipped (e.g. Telegram not linked)
+	Deferred  int // digests held back by quiet hours or a not-yet-due daily digest time
 	Failed    int // digest deliveries that errored
 }
 
@@ -140,11 +143,12 @@ type Runner struct {
 	searcher Searcher
 	notifier Notifier
 	cfg      Config
+	now      func() time.Time
 }
 
 // New builds a Runner.
 func New(store Store, searcher Searcher, notifier Notifier, cfg Config) *Runner {
-	return &Runner{store: store, searcher: searcher, notifier: notifier, cfg: cfg}
+	return &Runner{store: store, searcher: searcher, notifier: notifier, cfg: cfg, now: time.Now}
 }
 
 // Run executes one MATCH-then-DELIVER pass. MATCH records new matches; DELIVER
@@ -158,8 +162,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	if err := r.deliver(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("deliver: %w", err)
 	}
-	log.Printf("notify: queries=%d matched=%d delivered=%d soft_skips=%d failed=%d",
-		stats.Queries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Failed)
+	log.Printf("notify: queries=%d matched=%d delivered=%d soft_skips=%d deferred=%d failed=%d",
+		stats.Queries, stats.Matched, stats.Delivered, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 

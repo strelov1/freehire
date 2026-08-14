@@ -17,10 +17,10 @@
 
 ## 3. `internal/notify` wiring
 
-- [ ] 3.1 `deliverOne`: after loading `GetSubscriptionForDelivery`, if `digest_frequency == "instant"` and `deliverywindow.InQuietHours(...)`, release the claim and soft-skip (do not send, do not fail); if `digest_frequency == "daily"` and `!deliverywindow.DigestDue(...)`, release and soft-skip (quiet hours does NOT gate `daily`, per design).
-- [ ] 3.2 On a successful `daily`-mode delivery, stamp `last_digest_sent_at` (the task 1.4 query) alongside the existing `MarkMatchesNotified` call.
-- [ ] 3.3 Distinguish this soft-skip reason from the existing "channel not configured" one in `Stats` (e.g. a `Deferred` counter) so `cmd/notify`'s run summary can tell them apart.
-- [ ] 3.4 Unit tests (fake `Store`): instant + quiet hours defers; instant + no quiet hours delivers; daily + before time defers; daily + due delivers and stamps `last_digest_sent_at`; daily + already sent today defers; daily ignores quiet hours.
+- [x] 3.1 `deliverOne`: after loading `GetSubscriptionForDelivery`, if `digest_frequency == "instant"` and `deliverywindow.InQuietHours(...)`, release the claim and soft-skip (do not send, do not fail); if `digest_frequency == "daily"` and `!deliverywindow.DigestDue(...)`, release and soft-skip (quiet hours does NOT gate `daily`, per design).
+- [x] 3.2 On a successful `daily`-mode delivery, stamp `last_digest_sent_at` (the task 1.4 query) alongside the existing `MarkMatchesNotified` call.
+- [x] 3.3 Distinguish this soft-skip reason from the existing "channel not configured" one in `Stats` (e.g. a `Deferred` counter) so `cmd/notify`'s run summary can tell them apart.
+- [x] 3.4 Unit tests (fake `Store`): instant + quiet hours defers; instant + no quiet hours delivers; daily + before time defers; daily + due delivers and stamps `last_digest_sent_at`; daily + already sent today defers; daily ignores quiet hours.
 
 ## 4. `internal/reminder` wiring
 
