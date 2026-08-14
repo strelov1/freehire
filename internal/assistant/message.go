@@ -165,14 +165,29 @@ func Conversation(msgs []Message) ([]llms.MessageContent, error) {
 // real citation but long enough that it can't be found by accident in unrelated chatter.
 const minQuoteWords = 3
 
+// negationCues are words that, appearing between a sentence boundary and the quote's
+// start, flip the sentence's meaning — "I did NOT lead the migration" is a denial, not
+// an assertion, even though "lead the migration" is a literal substring of it. Checked
+// only within the same sentence as the quote (split on '.', ';', '!', '?'), so an
+// unrelated negation elsewhere in a long message cannot suppress a genuine, unrelated
+// citation. This is deliberately a blunt, high-recall list: UserSaid gates what may be
+// stamped stated_in_chat (candidate-asserted, CV-eligible), so a false rejection just
+// falls back to agent_inferred provenance, while a false acceptance would let a denial
+// be written into the CV as a claim.
+var negationCues = []string{"n't", " not ", " not,", " never ", "no longer", "without ever", "cannot "}
+
 // UserSaid reports whether quote appears in what the user actually typed in this
-// conversation, compared case-insensitively and with whitespace collapsed.
+// conversation, compared case-insensitively and with whitespace collapsed — and is NOT
+// negated by the sentence it appears in.
 //
 // It exists so a tool can verify a citation instead of trusting one. A model that must
 // quote the user verbatim to have its write treated as the user's assertion cannot promote
 // its own inference by simply claiming the user said it — the transcript is checked. The
 // comparison is deliberately literal: normalizing further (stemming, fuzzy matching) would
 // let a paraphrase pass, and a paraphrase is precisely the thing being guarded against.
+// A plain substring match alone would still misattribute provenance on a denial — "I have
+// NOT worked with Kubernetes" literally contains "worked with Kubernetes" — so every match
+// is additionally checked against negationCues within the same sentence.
 func UserSaid(transcript []Message, quote string) bool {
 	quote = collapseSpace(quote)
 	if quote == "" || len(strings.Fields(quote)) < minQuoteWords {
@@ -186,7 +201,37 @@ func UserSaid(transcript []Message, quote string) bool {
 		if err := json.Unmarshal(m.Content, &c); err != nil {
 			continue
 		}
-		if strings.Contains(collapseSpace(c.Text), quote) {
+		text := collapseSpace(c.Text)
+		for start := 0; ; {
+			idx := strings.Index(text[start:], quote)
+			if idx < 0 {
+				break
+			}
+			idx += start
+			if !sentenceNegatesQuoteAt(text, idx) {
+				return true
+			}
+			start = idx + 1
+		}
+	}
+	return false
+}
+
+// sentenceNegatesQuoteAt reports whether the sentence containing text[at:] carries a
+// negation cue before the quote begins. text is already collapseSpace-d (lowercased,
+// single-spaced), so the cues and the '.'/';'/'!'/'?' boundaries below match plain bytes.
+func sentenceNegatesQuoteAt(text string, at int) bool {
+	start := 0
+	for _, sep := range []byte{'.', ';', '!', '?'} {
+		if p := strings.LastIndexByte(text[:at], sep); p+1 > start {
+			start = p + 1
+		}
+	}
+	// Pad with a leading/trailing space so a cue like " not " matches at a sentence's
+	// very first or last word too, without needing separate anchored variants.
+	sentence := " " + text[start:at]
+	for _, cue := range negationCues {
+		if strings.Contains(sentence, cue) {
 			return true
 		}
 	}

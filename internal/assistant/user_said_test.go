@@ -54,6 +54,73 @@ func TestUserSaidOnAnEmptyTranscript(t *testing.T) {
 	}
 }
 
+// A quote that is a literal substring of a sentence the candidate used to DENY the
+// thing must not count as the candidate asserting it — the exact false-positive the
+// design's negation reasoning previously skipped over.
+func TestUserSaidRejectsAQuoteInsideANegatedSentence(t *testing.T) {
+	tests := []struct {
+		name       string
+		transcript []Message
+		quote      string
+	}{
+		{
+			"semicolon-separated denial",
+			[]Message{mustUser(t, "I did not lead the migration to Kubernetes; my colleague did all of it")},
+			"lead the migration to Kubernetes",
+		},
+		{
+			"contraction denial",
+			[]Message{mustUser(t, "I didn't work with Kubernetes at that job")},
+			"worked with Kubernetes",
+		},
+		{
+			"explicit NOT, case-insensitive",
+			[]Message{mustUser(t, "I have NOT worked with Kubernetes")},
+			"worked with Kubernetes",
+		},
+		{
+			"never",
+			[]Message{mustUser(t, "I never touched the payments service")},
+			"touched the payments service",
+		},
+		{
+			"cannot",
+			[]Message{mustUser(t, "I cannot claim experience with distributed tracing")},
+			"claim experience with distributed tracing",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if UserSaid(tt.transcript, tt.quote) {
+				t.Errorf("UserSaid confirmed %q against a sentence that denies it", tt.quote)
+			}
+		})
+	}
+}
+
+// The negation check is scoped to the sentence carrying the quote — an unrelated
+// negation elsewhere in the same message must not suppress a genuine, separate
+// assertion.
+func TestUserSaidStillPassesAGenuineAssertionNearAnUnrelatedNegation(t *testing.T) {
+	transcript := []Message{mustUser(t, "I never touched the payments service. I led the migration to Kubernetes.")}
+	if !UserSaid(transcript, "led the migration to Kubernetes") {
+		t.Error("an unrelated negation in an earlier sentence suppressed a genuine, separate assertion")
+	}
+}
+
+// A negated first occurrence must not block a later, unnegated occurrence of the exact
+// same wording elsewhere in the transcript.
+func TestUserSaidFindsALaterUnnegatedOccurrenceAfterAnEarlierDenial(t *testing.T) {
+	transcript := []Message{
+		mustUser(t, "I did not lead the migration to Kubernetes at my last job"),
+		mustAssistant(t, "Got it."),
+		mustUser(t, "Actually, I did lead the migration to Kubernetes at my CURRENT job"),
+	}
+	if !UserSaid(transcript, "lead the migration to Kubernetes") {
+		t.Error("a genuine later assertion was rejected because an earlier message denied the same wording")
+	}
+}
+
 func mustUser(t *testing.T, text string) Message {
 	t.Helper()
 	m, err := EncodeUser(text)
