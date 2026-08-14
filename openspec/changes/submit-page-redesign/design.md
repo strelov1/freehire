@@ -54,15 +54,20 @@ helper against `vocab.EmploymentTypeValues`/`vocab.SeniorityValues`. An
 out-of-vocabulary value is dropped rather than rejected, matching how an unknown
 `work_mode` already degrades to derivation.
 
-**Prefill reuses `internal/linksource` via a new non-persisting `Preview` method on
-`linkimport.Importer`**, rather than either (a) hand-writing new per-ATS fetchers, which
-would cover only a handful of platforms `internal/linksource` and its board-coverage
-adapter already exceed, or (b) calling `POST /jobs/resolve` directly, which commits an
-import and a credit reward — the wrong side effect for a moderated submission. `Preview`
-runs the identical `linksource.Find(...).Resolve(...)` step `Import` does, skipping the
-dedup check, enrichment enqueue, and search push. A miss (`ok=false`) is a normal
-outcome, not an error: the endpoint returns 200 with empty fields and the submitter
-keeps typing.
+**Prefill reuses `linkimport.Importer.Resolve`, which already exists and already does
+not write.** Investigating the package (rather than adding a method blind) found
+`Resolve(ctx, raw string, known Board) (linksource.Resolved, bool, error)`
+(`internal/linkimport/linkimport.go:126`) — `Import` itself is defined as
+`Resolve` + `Write`, and `Resolve` alone is already the exact seam `internal/jdresolve`
+uses to branch on source before deciding how to persist, proven not to write by
+`TestResolve_DoesNotWriteAnything`. No new method is needed; the prefill handler calls
+`im.Resolve(ctx, url, linkimport.Board{})` directly (an unknown board — the submitter
+has not pre-identified one) and reads the returned `sources.Job` off `resolved.Job`.
+This is a stronger foundation than the originally planned per-ATS fetchers: `Resolve`
+also covers the vanity-domain fallback (`resolveVanityDomain`) that a bare
+`linksource.Find` would miss. Calling `POST /jobs/resolve` directly was still rejected —
+it commits an import and a credit reward, the wrong side effect for a moderated
+submission — but the parsing reuse is even more direct than planned.
 
 **The prefill endpoint sits behind the same `mw.outboundFetch` throttle `/jobs/resolve`
 uses** — it makes the same class of server-initiated outbound request against an
@@ -86,8 +91,9 @@ introducing a new one.
 
 ## Migration Plan
 
-1. Ship the backend change (migration + handler/moderation wiring +
-   `linkimport.Preview`) first; it is additive and inert until the frontend calls it.
+1. Ship the backend change (migration + handler/moderation wiring + the new prefill
+   handler over the existing `linkimport.Importer.Resolve`) first; it is additive and
+   inert until the frontend calls it.
 2. Ship the frontend change (new fields, Preview tab, prefill button) in the same or a
    follow-up deploy — no ordering hazard either way since the new endpoint/fields are
    purely additive to an existing contract.

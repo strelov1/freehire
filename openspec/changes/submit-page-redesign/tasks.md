@@ -15,14 +15,16 @@
 
 ## 2. URL prefill — parsing reuse, no persistence
 
-- [ ] 2.1 Add `(im *Importer) Preview(ctx, raw string) (sources.Job, string, bool, error)`
-      to `internal/linkimport/linkimport.go`: resolve via the importer's existing
-      `linksource` registry, perform no dedup check, no enrichment enqueue, no search
-      push, no database write.
+- [x] 2.1 ~~Add a new non-persisting `Preview` method~~ — not needed:
+      `linkimport.Importer.Resolve(ctx, raw string, known Board) (linksource.Resolved, bool, error)`
+      (`internal/linkimport/linkimport.go:126`) already exists, already does not write
+      (proven by `TestResolve_DoesNotWriteAnything`), and is the exact seam
+      `internal/jdresolve` already uses for the same purpose. Design updated accordingly.
 - [ ] 2.2 Add `POST /api/v1/submissions/prefill` in `internal/handler/submissions.go`
-      (`mw.key`, `mw.outboundFetch`), calling `Preview` and projecting
-      `title`/`company`/`location`/`description`/`work_mode`/`employment_type`/
-      `seniority`/`source` into the response; `ok=false` returns `200` with empty fields.
+      (`mw.key`, `mw.outboundFetch`), calling `im.Resolve(ctx, url, linkimport.Board{})`
+      and projecting `title`/`company`/`location`/`description`/`work_mode`/
+      `employment_type`/`seniority`/`source` (from `resolved.Job`/`resolved.Source`)
+      into the response; `ok=false` returns `200` with empty fields.
 
 ## 3. Frontend contract
 

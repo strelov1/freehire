@@ -11,20 +11,24 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/net/html"
 
 	"github.com/strelov1/freehire/internal/accounts"
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
+	"github.com/strelov1/freehire/internal/linkimport"
 	"github.com/strelov1/freehire/internal/moderation"
 	"github.com/strelov1/freehire/internal/submission"
 )
@@ -459,4 +463,140 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	if enrichMin != 90000 {
 		t.Errorf("seeded enrichment salary_min = %d, want 90000", enrichMin)
 	}
+}
+
+// prefillPageClient is a fake linksource.Client keying its canned response on the
+// requested URL: prefillPageURL carries a schema.org JobPosting block (matching the
+// shape internal/linkimport's own tests use), anything else a plain page with none —
+// so the generic resolver's always-true Match still fires but finds nothing to parse.
+type prefillPageClient struct{}
+
+func (c prefillPageClient) body(url string) string {
+	if url == prefillPageURL {
+		return prefillJobPostingPage
+	}
+	return `<html><head><title>Our team</title></head><body>No vacancy here.</body></html>`
+}
+
+func (c prefillPageClient) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	return html.Parse(strings.NewReader(c.body(url)))
+}
+
+func (c prefillPageClient) GetHTMLResolved(_ context.Context, url string) (*html.Node, string, error) {
+	n, err := html.Parse(strings.NewReader(c.body(url)))
+	return n, url, err
+}
+
+func (c prefillPageClient) GetJSON(_ context.Context, url string, _ any) error {
+	return fmt.Errorf("prefillPageClient: no JSON route for %s", url)
+}
+
+const prefillPageURL = "https://careers.mindera.test/jobs/staff-java-backend-developer"
+
+const prefillJobPostingPage = `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting",
+ "title":"Staff Java Backend Developer","description":"Lead the backend guild.",
+ "datePosted":"2026-07-01","jobLocationType":"TELECOMMUTE",
+ "hiringOrganization":{"@type":"Organization","name":"Mindera"}}
+</script></head><body>Apply now</body></html>`
+
+// Prefill parses a recognized job URL into draft field values without persisting
+// anything — no job, no submission, no credit reward.
+func TestSubmissionsPrefillEndToEnd(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('prefill-user@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	userCookie, _ := iss.Issue(userID, testTokenVersion)
+	queries := db.New(pool)
+
+	importer := linkimport.New(pool, queries, nil, prefillPageClient{}, nil, nil)
+	mod := moderation.New(moderation.NewQueriesRepository(queries, pool, enrich.Version))
+	sh := newSubmissionHandlers(queries, mod, importer)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
+	app.Post("/api/v1/submissions/prefill", keyAuth, sh.PrefillSubmission)
+
+	req := func(cookie, body string) *http.Request {
+		r := httptest.NewRequest(fiber.MethodPost, "/api/v1/submissions/prefill", bytes.NewReader([]byte(body)))
+		r.Header.Set("Content-Type", "application/json")
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		}
+		return r
+	}
+
+	t.Run("recognized URL resolves without persisting", func(t *testing.T) {
+		resp, err := app.Test(req(userCookie, `{"url":"`+prefillPageURL+`"}`))
+		if err != nil {
+			t.Fatalf("prefill: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("prefill status = %d, want 200 (body %s)", resp.StatusCode, b)
+		}
+		var out struct {
+			Data struct {
+				Title   string `json:"title"`
+				Company string `json:"company"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if out.Data.Title != "Staff Java Backend Developer" || out.Data.Company != "Mindera" {
+			t.Errorf("parsed = %q/%q, want the page's title/company", out.Data.Title, out.Data.Company)
+		}
+		var rows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM jobs`).Scan(&rows); err != nil {
+			t.Fatalf("count jobs: %v", err)
+		}
+		if rows != 0 {
+			t.Errorf("catalog holds %d postings after prefill, want none", rows)
+		}
+		var subRows int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM job_submissions`).Scan(&subRows); err != nil {
+			t.Fatalf("count submissions: %v", err)
+		}
+		if subRows != 0 {
+			t.Errorf("queue holds %d submissions after prefill, want none", subRows)
+		}
+	})
+
+	t.Run("unrecognized URL degrades to empty fields, not an error", func(t *testing.T) {
+		resp, err := app.Test(req(userCookie, `{"url":"https://example.test/not-a-job"}`))
+		if err != nil {
+			t.Fatalf("prefill: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("prefill status = %d, want 200 (body %s)", resp.StatusCode, b)
+		}
+		var out struct {
+			Data struct {
+				Title string `json:"title"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if out.Data.Title != "" {
+			t.Errorf("title = %q, want empty for an unrecognized page", out.Data.Title)
+		}
+	})
+
+	t.Run("unauthenticated request is rejected", func(t *testing.T) {
+		resp, err := app.Test(req("", `{"url":"`+prefillPageURL+`"}`))
+		if err != nil {
+			t.Fatalf("prefill: %v", err)
+		}
+		if resp.StatusCode != fiber.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", resp.StatusCode)
+		}
+	})
 }
