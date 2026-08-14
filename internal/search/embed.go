@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/strelov1/freehire/internal/db"
 )
 
 // teiMaxBatch caps how many inputs go in one TEI /embed call. TEI rejects a
@@ -49,6 +51,83 @@ func jobPassage(d JobDocument) string {
 		body = s
 	}
 	return "passage: " + d.Title + " at " + d.Company + ". " + body
+}
+
+// JobChunkEmbedding is one embedding vector for one 0-indexed chunk of a job's
+// description — the pgvector-backed job_semantic_chunks counterpart of jobPassage's
+// single, possibly-truncated Meili-facing vector (see openspec/changes/
+// drop-hybrid-search-pgvector-similar/design.md Decisions 1/1a). ChunkIndex matches
+// job_semantic_chunks.chunk_index.
+type JobChunkEmbedding struct {
+	ChunkIndex int16
+	Vector     []float32
+}
+
+// jobChunkPassages renders a job's FULL, HTML-stripped description into the texts
+// embedded for the pgvector-backed job_semantic_chunks table — one passage per chunk of
+// stripToPlainText(job.Description) (see chunkText), unlike jobPassage's single passage
+// built from the enrichment summary or the facet-index-capped Description field. Every
+// chunk carries the same "passage: {title} at {company}. " prefix jobPassage uses (e5
+// is asymmetric — see jobPassage's own doc comment), since each chunk becomes an
+// independently-scored vector. A job with no description text (or one that strips to
+// nothing) yields no passages at all, not one passage of just the prefix.
+func jobChunkPassages(job db.Job) []string {
+	chunks := chunkText(stripToPlainText(job.Description))
+	if len(chunks) == 0 {
+		return nil
+	}
+	prefix := "passage: " + job.Title + " at " + job.Company + ". "
+	out := make([]string, len(chunks))
+	for i, c := range chunks {
+		out[i] = prefix + c
+	}
+	return out
+}
+
+// EmbedJobChunks computes one embedding vector per chunk of each job's full,
+// HTML-stripped description, keyed by job id — additive to, and independent of, the
+// existing single-vector jobPassage/embedDocs path: it never touches Meilisearch, only
+// feeds the pgvector-backed job_semantic_chunks table (see internal/embed's open-job
+// path). Every job's passages are flattened into ONE embedBatch call (same
+// batching/concurrency machinery the single-vector path uses) and regrouped by job
+// afterwards. A job whose description yields no chunks (jobChunkPassages returns nil —
+// an empty or markup-only description) is simply absent from the result map, not an
+// error.
+func (c *Client) EmbedJobChunks(ctx context.Context, jobs []db.Job) (map[int64][]JobChunkEmbedding, error) {
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+	type span struct {
+		jobID      int64
+		start, end int
+	}
+	var inputs []string
+	spans := make([]span, 0, len(jobs))
+	for _, job := range jobs {
+		passages := jobChunkPassages(job)
+		if len(passages) == 0 {
+			continue
+		}
+		start := len(inputs)
+		inputs = append(inputs, passages...)
+		spans = append(spans, span{jobID: job.ID, start: start, end: len(inputs)})
+	}
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+	vecs, err := c.embedBatch(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]JobChunkEmbedding, len(spans))
+	for _, sp := range spans {
+		chunks := make([]JobChunkEmbedding, 0, sp.end-sp.start)
+		for i, v := range vecs[sp.start:sp.end] {
+			chunks = append(chunks, JobChunkEmbedding{ChunkIndex: int16(i), Vector: toFloat32(v)})
+		}
+		out[sp.jobID] = chunks
+	}
+	return out, nil
 }
 
 // embedBatch turns texts into vectors, in input order, by calling the embedding backend

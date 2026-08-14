@@ -149,6 +149,13 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	// it as embedded so the enqueue picks it up for removal.
 	preIndexClosed(t, ctx, client, pool, closedID)
 
+	// Simulate a stale precomputed similar-jobs list on the open job (as if a prior
+	// cmd/similar-backfill pass had run) — the embed worker must null it out alongside
+	// the rest of its stamp, since a re-embed's chunk set makes the old list stale.
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET similar_computed_at = now() WHERE id = $1", openID); err != nil {
+		t.Fatalf("seed similar_computed_at: %v", err)
+	}
+
 	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
 	stats, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
@@ -196,19 +203,209 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	if n != 0 {
 		t.Errorf("semantic_outbox has %d rows, want 0 (drained)", n)
 	}
+
+	// The additive pgvector chunk pipeline: the open job's short description ("Build
+	// things.") yields exactly one chunk row; the closed job (never given chunks by
+	// preIndexClosed, which only computes vectors, never persists) has none.
+	if got := jobChunkCount(t, pool, openID); got != 1 {
+		t.Errorf("open job chunk rows = %d, want 1 (short description → one chunk)", got)
+	}
+	if got := jobChunkCount(t, pool, closedID); got != 0 {
+		t.Errorf("closed job chunk rows = %d, want 0", got)
+	}
+	// The precomputed similar-jobs staleness stamp is cleared by the re-embed.
+	if !jobSimilarComputedAtIsNull(t, pool, openID) {
+		t.Errorf("open job similar_computed_at not cleared by embed")
+	}
+}
+
+// jobChunkCount returns how many job_semantic_chunks rows a job has.
+func jobChunkCount(t *testing.T, pool *pgxpool.Pool, id int64) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM job_semantic_chunks WHERE job_id = $1", id).Scan(&n); err != nil {
+		t.Fatalf("count chunks: %v", err)
+	}
+	return n
+}
+
+// jobChunkIndices returns a job's chunk_index values in ascending order.
+func jobChunkIndices(t *testing.T, pool *pgxpool.Pool, id int64) []int16 {
+	t.Helper()
+	rows, err := pool.Query(context.Background(),
+		"SELECT chunk_index FROM job_semantic_chunks WHERE job_id = $1 ORDER BY chunk_index", id)
+	if err != nil {
+		t.Fatalf("query chunk indices: %v", err)
+	}
+	defer rows.Close()
+	var out []int16
+	for rows.Next() {
+		var idx int16
+		if err := rows.Scan(&idx); err != nil {
+			t.Fatalf("scan chunk index: %v", err)
+		}
+		out = append(out, idx)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate chunk indices: %v", err)
+	}
+	return out
+}
+
+// jobSimilarComputedAtIsNull reports whether a job's similar_computed_at column is NULL.
+func jobSimilarComputedAtIsNull(t *testing.T, pool *pgxpool.Pool, id int64) bool {
+	t.Helper()
+	var ts *time.Time
+	if err := pool.QueryRow(context.Background(),
+		"SELECT similar_computed_at FROM jobs WHERE id = $1", id).Scan(&ts); err != nil {
+		t.Fatalf("read similar_computed_at: %v", err)
+	}
+	return ts == nil
+}
+
+// TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows proves the whole,
+// HTML-stripped description reaches the embedder as several chunk rows, not one
+// truncated vector — the quality fix design.md folds into this change (proposal.md
+// motivation #2: only ~15-20% of an average description used to reach the model).
+func TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := startPostgres(t)
+
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
+	if err := client.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	longDescription := strings.Repeat(
+		"<p>We build large-scale distributed systems in Go, Postgres, and Kubernetes. "+
+			"You will own services end to end, from design through on-call.</p>", 60)
+	id := seedJobWithDescription(t, pool, "long", "Staff Backend Engineer", longDescription, false, true)
+
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	if _, err := runner.Run(ctx, embed.RunOptions{
+		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got := jobChunkCount(t, pool, id); got < 2 {
+		t.Fatalf("long-description job chunk rows = %d, want > 1", got)
+	}
+	indices := jobChunkIndices(t, pool, id)
+	for i, idx := range indices {
+		if int(idx) != i {
+			t.Fatalf("chunk indices = %v, want a clean 0..%d sequence", indices, len(indices)-1)
+		}
+	}
+}
+
+// TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend proves a re-embed (content
+// changed, so semantic_embedded_hash goes stale) REPLACES a job's chunk rows rather than
+// appending to them — a job must never end up with a mix of old and new chunk vectors.
+func TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := startPostgres(t)
+
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
+	if err := client.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	id := seedJob(t, pool, "reembed", "Senior Golang Engineer", false, true)
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	opts := embed.RunOptions{TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	firstCount := jobChunkCount(t, pool, id)
+	if firstCount == 0 {
+		t.Fatalf("first embed produced no chunk rows")
+	}
+
+	// Content change: a much longer description AND a new content_hash, so the
+	// staleness predicate (semantic_embedded_hash IS DISTINCT FROM content_hash)
+	// re-enqueues the job.
+	longDescription := strings.Repeat("Completely different content about distributed systems. ", 100)
+	if _, err := pool.Exec(ctx,
+		"UPDATE jobs SET description = $1, content_hash = 'h-open-v2' WHERE id = $2", longDescription, id); err != nil {
+		t.Fatalf("update job content: %v", err)
+	}
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+
+	secondCount := jobChunkCount(t, pool, id)
+	if secondCount <= firstCount {
+		t.Fatalf("re-embed with much longer content produced %d chunks, want more than the first embed's %d",
+			secondCount, firstCount)
+	}
+	// A clean 0..n-1 chunk_index sequence is proof of replace-not-append: an append bug
+	// would leave duplicate/overlapping indices (DeleteJobSemanticChunks+InsertJobSemanticChunks
+	// use job_id+chunk_index as the primary key, so a raw append would violate it — but a
+	// bug that skipped the delete and reused fresh indices from 0 would silently duplicate
+	// rows without violating the PK, which the exact-sequence check below also catches).
+	indices := jobChunkIndices(t, pool, id)
+	for i, idx := range indices {
+		if int(idx) != i {
+			t.Fatalf("chunk indices after re-embed = %v, want a clean 0..%d sequence (replace, not append)",
+				indices, len(indices)-1)
+		}
+	}
+}
+
+// TestIntegration_EmbedWorkerDeletesChunksOnClose proves the closed-job path deletes a
+// job's job_semantic_chunks rows in the same transaction as the existing
+// ClearSemanticEmbeddedBatch stamp-clear.
+func TestIntegration_EmbedWorkerDeletesChunksOnClose(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := startPostgres(t)
+
+	client := search.NewClient(meiliURL, key, search.WithEmbedURL(fakeTEI(t)))
+	if err := client.EnsureSemanticIndex(ctx); err != nil {
+		t.Fatalf("EnsureSemanticIndex: %v", err)
+	}
+
+	id := seedJob(t, pool, "toclose", "Senior Golang Engineer", false, true)
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	opts := embed.RunOptions{TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if got := jobChunkCount(t, pool, id); got == 0 {
+		t.Fatalf("open embed produced no chunk rows")
+	}
+
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", id); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if got := jobChunkCount(t, pool, id); got != 0 {
+		t.Fatalf("chunk rows after close = %d, want 0 (deleted)", got)
+	}
 }
 
 func seedJob(t *testing.T, pool *pgxpool.Pool, ext, title string, closed, withHash bool) int64 {
+	t.Helper()
+	return seedJobWithDescription(t, pool, ext, title, "Build things.", closed, withHash)
+}
+
+func seedJobWithDescription(t *testing.T, pool *pgxpool.Pool, ext, title, description string, closed, withHash bool) int64 {
 	t.Helper()
 	var id int64
 	err := pool.QueryRow(context.Background(),
 		`INSERT INTO jobs (source, external_id, url, title, company, description, public_slug,
 		                   content_hash, closed_at, enrichment, is_tech)
-		 VALUES ('test', $1, 'http://example.test', $2, 'Acme', 'Build things.', 'job-' || $1,
+		 VALUES ('test', $1, 'http://example.test', $2, 'Acme', $5, 'job-' || $1,
 		         CASE WHEN $3 THEN 'h-' || $1 ELSE NULL END,
 		         CASE WHEN $4 THEN now() ELSE NULL END, '{}', true)
 		 RETURNING id`,
-		ext, title, withHash, closed).Scan(&id)
+		ext, title, withHash, closed, description).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
@@ -227,7 +424,7 @@ func preIndexClosed(t *testing.T, ctx context.Context, client *search.Client, po
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("load closed job: rows=%d err=%v", len(jobs), err)
 	}
-	if _, err := ix.IndexOpen(ctx, jobs); err != nil {
+	if _, _, err := ix.IndexOpen(ctx, jobs); err != nil {
 		t.Fatalf("pre-index closed job: %v", err)
 	}
 	if _, err := pool.Exec(ctx,

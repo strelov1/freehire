@@ -29,17 +29,17 @@
       belong (likely `internal/embed`, since section 7 removes most of
       `internal/search`'s semantic code). No Meilisearch dependency in either
       function — should port with zero logic changes, only the package/import path.
-- [ ] 2.2 `cmd/embed`'s open-job path: build the plain-text chunks for the job's
+- [x] 2.2 `cmd/embed`'s open-job path: build the plain-text chunks for the job's
       description, embed each chunk (existing TEI embed call, `passage:` prefix +
       title/company context per chunk — mirror `jobPassages` from the same branch),
       replace the job's `job_semantic_chunks` rows (delete-then-insert) in the same
       transaction as the stamp, clear `similar_computed_at`.
-- [ ] 2.3 `cmd/embed`'s closed-job path: delete the job's `job_semantic_chunks` rows
+- [x] 2.3 `cmd/embed`'s closed-job path: delete the job's `job_semantic_chunks` rows
       alongside the existing stamp-clear.
-- [ ] 2.4 Unit + integration tests for 2.2/2.3 (mirror the existing
+- [x] 2.4 Unit + integration tests for 2.2/2.3 (mirror the existing
       `semantic_embedding` stamp/clear tests; add a multi-chunk case for a long
       description and a single-chunk case for a short one).
-- [ ] 2.5 Bump `search.CurrentEmbedderModel()`'s version string (forces the existing
+- [x] 2.5 Bump `search.CurrentEmbedderModel()`'s version string (forces the existing
       staleness check to re-enqueue the whole catalogue through the new pipeline —
       this is what makes the full re-embed happen, no separate backfill tooling).
       Actually flipping this on prod is a scheduled ops step (section 8), not bundled

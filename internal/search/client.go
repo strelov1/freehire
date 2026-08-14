@@ -35,13 +35,20 @@ const (
 	semanticRebuildUID = "jobs_semantic_rebuild"
 	primaryKey         = "id"
 	embedderName       = "default"
-	// embedderModel is the identity of the embedding model, stored beside a CV vector
-	// so a model change marks it stale (see CurrentEmbedderModel). Embedding runs on a
-	// self-hosted Text-Embeddings-Inference (TEI) service — NOT in-engine and NOT
-	// OpenAI — reached over TEI's native /embed route (embedderURL). Multilingual
-	// e5 gives far sharper skill matching than the old in-engine MiniLM, and offloading
-	// the compute keeps it off Meilisearch's single task queue.
-	embedderModel = "intfloat/multilingual-e5-base"
+	// embedderModel is the identity of the embedding model+passage-shape, stored beside a
+	// CV vector so a change marks it stale (see CurrentEmbedderModel) and, for jobs, drives
+	// EnqueuePendingSemanticJobs' staleness check — bumping this string is what forces a
+	// full re-embed through the current pipeline (openspec/changes/
+	// drop-hybrid-search-pgvector-similar's ops step 8.3), not a separate backfill tool.
+	// Embedding runs on a self-hosted Text-Embeddings-Inference (TEI) service — NOT
+	// in-engine and NOT OpenAI — reached over TEI's native /embed route (embedderURL).
+	// Multilingual e5 gives far sharper skill matching than the old in-engine MiniLM, and
+	// offloading the compute keeps it off Meilisearch's single task queue.
+	// "-chunked-v1": the passage shape changed (HTML-stripped, full-length, chunked —
+	// see internal/search/plaintext.go/chunk.go) even though the underlying e5 model did
+	// not, so this identity must change too or a job already stamped under the OLD
+	// (truncated, HTML-laden) passage would never be re-enqueued.
+	embedderModel = "intfloat/multilingual-e5-base-chunked-v1"
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
 	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
 	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend

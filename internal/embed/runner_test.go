@@ -23,11 +23,12 @@ type fakeStore struct {
 
 	indexErr map[int64]error // CompleteOpen error for a job id (single-item path)
 
-	openBatches   [][]int64           // job ids per CompleteOpen call (len>1 = a real batch)
-	openVectors   map[int64][]float32 // vectors handed to CompleteOpen, keyed by job id
-	closedBatches [][]int64           // job ids per CompleteClosed call
-	openDone      []int64             // all job ids CompleteOpen'd
-	closedDone    []int64             // all job ids CompleteClosed'd
+	openBatches   [][]int64                  // job ids per CompleteOpen call (len>1 = a real batch)
+	openVectors   map[int64][]float32        // vectors handed to CompleteOpen, keyed by job id
+	openChunks    map[int64][]ChunkEmbedding // chunks handed to CompleteOpen, keyed by job id
+	closedBatches [][]int64                  // job ids per CompleteClosed call
+	openDone      []int64                    // all job ids CompleteOpen'd
+	closedDone    []int64                    // all job ids CompleteClosed'd
 	failCalls     []failCall
 	attempts      map[int64]int // outbox id -> attempts so far
 }
@@ -80,7 +81,7 @@ func (s *fakeStore) Jobs(_ context.Context, ids []int64) ([]db.Job, error) {
 	return out, nil
 }
 
-func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string, vectors map[int64][]float32) error {
+func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string, vectors map[int64][]float32, chunks map[int64][]ChunkEmbedding) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var ids []int64
@@ -97,6 +98,18 @@ func (s *fakeStore) CompleteOpen(_ context.Context, entries []Claimed, _ string,
 	}
 	for id, v := range vectors {
 		s.openVectors[id] = v
+	}
+	if s.openChunks == nil {
+		s.openChunks = map[int64][]ChunkEmbedding{}
+	}
+	// "Replace" semantics: a job absent from this call's chunks map (no chunk-worthy
+	// description) must end up with NO entry, even if a prior call left one — every
+	// entry in this batch clears any stale chunk set before a fresh one (if any) lands.
+	for _, e := range entries {
+		delete(s.openChunks, e.JobID)
+	}
+	for id, c := range chunks {
+		s.openChunks[id] = c
 	}
 	return nil
 }
@@ -139,7 +152,7 @@ type fakeIndexer struct {
 
 func newFakeIndexer() *fakeIndexer { return &fakeIndexer{indexErr: map[int64]error{}} }
 
-func (ix *fakeIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error) {
+func (ix *fakeIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, map[int64][]ChunkEmbedding, error) {
 	ix.mu.Lock()
 	ids := make([]int64, len(jobs))
 	for i, j := range jobs {
@@ -151,25 +164,32 @@ func (ix *fakeIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64]
 
 	if block {
 		<-ctx.Done()
-		return nil, ctx.Err()
+		return nil, nil, ctx.Err()
 	}
 
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
 	vecs := make(map[int64][]float32, len(jobs))
+	chunks := make(map[int64][]ChunkEmbedding, len(jobs))
 	for _, j := range jobs {
 		vecs[j.ID] = []float32{float32(j.ID)} // deterministic per-job vector
+		// A deterministic 2-chunk set per job, so tests can assert chunks reach
+		// CompleteOpen and are keyed correctly, without a real embedder.
+		chunks[j.ID] = []ChunkEmbedding{
+			{ChunkIndex: 0, Vector: []float32{float32(j.ID), 0}},
+			{ChunkIndex: 1, Vector: []float32{float32(j.ID), 1}},
+		}
 	}
 	if ix.batchFails && len(jobs) > 1 {
-		return nil, errors.New("batch embed failed")
+		return nil, nil, errors.New("batch embed failed")
 	}
 	for _, j := range jobs {
 		if err := ix.indexErr[j.ID]; err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	ix.indexed = append(ix.indexed, ids...)
-	return vecs, nil
+	return vecs, chunks, nil
 }
 
 func (ix *fakeIndexer) RemoveClosed(_ context.Context, ids []int64) error {
@@ -383,3 +403,70 @@ func TestRunnerPersistsVectorsToStore(t *testing.T) {
 		t.Fatalf("vector for job 2 = %v; want [2]", got)
 	}
 }
+
+// The Indexer's chunk embeddings (job_semantic_chunks' source data) must reach
+// CompleteOpen alongside the single Meili-facing vector, bundled in the SAME call so
+// they share its transaction and its batch-then-per-item-fallback behavior.
+func TestRunnerPersistsChunksToStore(t *testing.T) {
+	store := newFakeStore()
+	ix := newFakeIndexer()
+	for _, id := range []int64{1, 2} {
+		store.jobs[id] = db.Job{ID: id}
+	}
+	store.pending = []Claimed{
+		{OutboxID: 10, JobID: 1, Closed: false},
+		{OutboxID: 20, JobID: 2, Closed: false},
+	}
+
+	if _, err := (Runner{Store: store, Indexer: ix}).Run(context.Background(), opt()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.openChunks) != 2 {
+		t.Fatalf("openChunks = %v; want 2 entries", store.openChunks)
+	}
+	for _, id := range []int64{1, 2} {
+		got := store.openChunks[id]
+		if len(got) != 2 {
+			t.Fatalf("chunks for job %d = %v; want 2 (fakeIndexer's fixed set)", id, got)
+		}
+		if got[0].ChunkIndex != 0 || got[1].ChunkIndex != 1 {
+			t.Errorf("chunk indices for job %d = %d,%d; want 0,1", id, got[0].ChunkIndex, got[1].ChunkIndex)
+		}
+	}
+}
+
+// A job re-embedded with NO chunks this time (an empty/very short description now)
+// must end up with none in the store — CompleteOpen replaces, it never appends, so a
+// job can't accumulate a mix of a stale chunk set and nothing new.
+func TestRunnerReplacesChunksWithEmptySetWhenIndexerReturnsNone(t *testing.T) {
+	store := newFakeStore()
+	store.jobs[1] = db.Job{ID: 1}
+	store.openChunks = map[int64][]ChunkEmbedding{
+		1: {{ChunkIndex: 0, Vector: []float32{9}}}, // simulates a stale chunk from a prior embed
+	}
+	// Drive processOpenOne directly through the runner's normal per-item path with an
+	// indexer stub that returns a vector but no chunks for job 1 — bypasses
+	// fakeIndexer's fixed 2-chunk fixture entirely.
+	store.pending = []Claimed{{OutboxID: 10, JobID: 1, Closed: false}}
+
+	rn := &run{store: store, indexer: emptyChunksIndexer{}, opt: opt()}
+	rn.processOpenOne(context.Background(), Claimed{OutboxID: 10, JobID: 1, Closed: false})
+
+	if got, ok := store.openChunks[1]; ok {
+		t.Fatalf("openChunks[1] = %v, want no entry (replaced with nothing)", got)
+	}
+}
+
+// emptyChunksIndexer is a minimal Indexer that always returns a vector but never any
+// chunks — used to exercise CompleteOpen's replace-with-nothing path.
+type emptyChunksIndexer struct{}
+
+func (emptyChunksIndexer) IndexOpen(_ context.Context, jobs []db.Job) (map[int64][]float32, map[int64][]ChunkEmbedding, error) {
+	vecs := make(map[int64][]float32, len(jobs))
+	for _, j := range jobs {
+		vecs[j.ID] = []float32{float32(j.ID)}
+	}
+	return vecs, nil, nil
+}
+
+func (emptyChunksIndexer) RemoveClosed(context.Context, []int64) error { return nil }

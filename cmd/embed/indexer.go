@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/embed"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/search"
 )
@@ -27,12 +28,12 @@ type searchIndexer struct {
 	pgOnly bool
 }
 
-func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, error) {
+func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64][]float32, map[int64][]embed.ChunkEmbedding, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	for _, job := range jobs {
 		doc, err := search.FromJob(job)
 		if err != nil {
-			return nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
+			return nil, nil, fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
 		// The job-reality signal is a Meili-document facet, so pg-only mode (which never
 		// builds a Meili doc) skips it — and its per-job cluster-count query. In the
@@ -75,11 +76,41 @@ func (ix searchIndexer) IndexOpen(ctx context.Context, jobs []db.Job) (map[int64
 	}
 	// pg-only: compute vectors only (the store persists them to Postgres); Meili is
 	// rebuilt from Postgres afterwards via `reindex --semantic --from-pg`. Otherwise embed
-	// the whole batch AND upsert it into the live semantic index as ONE Meili task.
+	// the whole batch AND upsert it into the live semantic index as ONE Meili task. This
+	// single-vector path is UNCHANGED by the chunk pipeline below — same inputs, same
+	// Meili/Postgres side effects, same error behavior.
+	var (
+		vectors map[int64][]float32
+		err     error
+	)
 	if ix.pgOnly {
-		return ix.client.EmbedJobs(ctx, docs)
+		vectors, err = ix.client.EmbedJobs(ctx, docs)
+	} else {
+		vectors, err = ix.client.IndexSemanticJobs(ctx, docs)
 	}
-	return ix.client.IndexSemanticJobs(ctx, docs)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Additive: each job's chunked embeddings for the pgvector-backed
+	// job_semantic_chunks table (design.md Decisions 1/1a/2.2) — computed from the raw
+	// jobs, not the Meili documents built above, and never touching Meilisearch
+	// regardless of pgOnly. Bundled into this same IndexOpen call (rather than a
+	// separate Indexer method) so a chunk-embed failure fails the whole batch the same
+	// way a vector-embed failure does, reusing internal/embed's existing
+	// batch-then-per-item-fallback machinery instead of a second failure path.
+	chunkVecs, err := ix.client.EmbedJobChunks(ctx, jobs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("embed chunks: %w", err)
+	}
+	chunks := make(map[int64][]embed.ChunkEmbedding, len(chunkVecs))
+	for jobID, cs := range chunkVecs {
+		out := make([]embed.ChunkEmbedding, len(cs))
+		for i, c := range cs {
+			out[i] = embed.ChunkEmbedding{ChunkIndex: c.ChunkIndex, Vector: c.Vector}
+		}
+		chunks[jobID] = out
+	}
+	return vectors, chunks, nil
 }
 
 func (ix searchIndexer) RemoveClosed(ctx context.Context, ids []int64) error {

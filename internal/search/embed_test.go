@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/db"
 )
 
 // jobPassage must prefix the corpus side with e5's "passage:" marker and weave in the
@@ -28,6 +30,104 @@ func TestJobPassage(t *testing.T) {
 	d.Enrichment.Summary = "Senior Go role building payment APIs"
 	if got, want := jobPassage(d), "passage: Backend Engineer at Acme. Senior Go role building payment APIs"; got != want {
 		t.Fatalf("jobPassage (summary preferred) = %q, want %q", got, want)
+	}
+}
+
+// jobChunkPassages must chunk the FULL, HTML-stripped description (not the enrichment
+// summary jobPassage prefers) and carry the same "passage: {title} at {company}. "
+// prefix on EVERY chunk, since each chunk becomes an independently-scored vector.
+func TestJobChunkPassages(t *testing.T) {
+	job := db.Job{Title: "Backend Engineer", Company: "Acme", Description: "<p>Go and Postgres.</p>"}
+	got := jobChunkPassages(job)
+	want := []string{"passage: Backend Engineer at Acme. Go and Postgres."}
+	if len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("jobChunkPassages = %#v, want %#v", got, want)
+	}
+}
+
+// A job with no description text (or one that strips to nothing, e.g. pure markup)
+// must yield zero passages, not one passage of just the prefix — chunkText's own
+// "empty in, empty out" contract propagates through.
+func TestJobChunkPassagesEmptyDescriptionYieldsNoPassages(t *testing.T) {
+	job := db.Job{Title: "Backend Engineer", Company: "Acme", Description: ""}
+	if got := jobChunkPassages(job); got != nil {
+		t.Fatalf("jobChunkPassages(empty) = %#v, want nil", got)
+	}
+}
+
+// A long description must split into multiple chunks, each independently prefixed.
+func TestJobChunkPassagesLongDescriptionSplitsIntoMultiplePassages(t *testing.T) {
+	var paras []string
+	for i := 0; i < 40; i++ {
+		paras = append(paras, strings.Repeat("word ", 20)+"end of paragraph.")
+	}
+	job := db.Job{Title: "Backend Engineer", Company: "Acme", Description: strings.Join(paras, "\n")}
+	got := jobChunkPassages(job)
+	if len(got) < 2 {
+		t.Fatalf("jobChunkPassages(long) = %d passages, want > 1", len(got))
+	}
+	const prefix = "passage: Backend Engineer at Acme. "
+	for i, p := range got {
+		if !strings.HasPrefix(p, prefix) {
+			t.Errorf("passage %d = %q, want prefix %q", i, p, prefix)
+		}
+	}
+}
+
+// EmbedJobChunks must return one vector per chunk per job, correctly regrouped after a
+// single flattened embedBatch call — including a job with multiple chunks interleaved
+// with jobs that have only one, so misalignment (a chunk's vector landing under the
+// wrong job, or at the wrong index) would be caught.
+func TestEmbedJobChunksRegroupsPerJob(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Inputs []string `json:"inputs"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		out := make([][]float64, len(in.Inputs))
+		for i, s := range in.Inputs {
+			// Echo back the input's length so each vector is traceable to its passage.
+			out[i] = []float64{float64(len(s))}
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	defer srv.Close()
+	c := &Client{embedURL: srv.URL, embedConcurrency: 1}
+
+	var longParas []string
+	for i := 0; i < 40; i++ {
+		longParas = append(longParas, strings.Repeat("word ", 20)+"end of paragraph.")
+	}
+	jobs := []db.Job{
+		{ID: 1, Title: "A", Company: "Acme", Description: "Short role."},
+		{ID: 2, Title: "B", Company: "Acme", Description: strings.Join(longParas, "\n")},
+		{ID: 3, Title: "C", Company: "Acme", Description: ""}, // no chunks at all
+	}
+
+	got, err := c.EmbedJobChunks(context.Background(), jobs)
+	if err != nil {
+		t.Fatalf("EmbedJobChunks: %v", err)
+	}
+	if len(got[1]) != 1 {
+		t.Fatalf("job 1 chunks = %d, want 1", len(got[1]))
+	}
+	if got[1][0].ChunkIndex != 0 {
+		t.Errorf("job 1 chunk 0 index = %d, want 0", got[1][0].ChunkIndex)
+	}
+	wantJob1Len := float64(len(jobChunkPassages(jobs[0])[0]))
+	if got[1][0].Vector[0] != float32(wantJob1Len) {
+		t.Errorf("job 1 vector = %v, want [%v]", got[1][0].Vector, wantJob1Len)
+	}
+	if n := len(got[2]); n < 2 {
+		t.Fatalf("job 2 chunks = %d, want > 1", n)
+	}
+	for i, ce := range got[2] {
+		if int(ce.ChunkIndex) != i {
+			t.Errorf("job 2 chunk %d has ChunkIndex %d, want %d", i, ce.ChunkIndex, i)
+		}
+	}
+	if _, ok := got[3]; ok {
+		t.Errorf("job 3 (empty description) should have no entry, got %v", got[3])
 	}
 }
 

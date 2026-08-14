@@ -91,7 +91,7 @@ func TestJobSemanticChunksReplace(t *testing.T) {
 		// A re-embed produces a different chunk count than before (the source text was
 		// re-chunked) — this is exactly why "replace" is delete-then-insert, not an
 		// upsert: there is no stable chunk_index target to update onto.
-		if err := q.DeleteJobSemanticChunks(ctx, j); err != nil {
+		if err := q.DeleteJobSemanticChunks(ctx, []int64{j}); err != nil {
 			t.Fatalf("delete: %v", err)
 		}
 		if err := q.InsertJobSemanticChunks(ctx, InsertJobSemanticChunksParams{
@@ -127,11 +127,36 @@ func TestJobSemanticChunksReplace(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("insert: %v", err)
 		}
-		if err := q.DeleteJobSemanticChunks(ctx, j); err != nil {
+		if err := q.DeleteJobSemanticChunks(ctx, []int64{j}); err != nil {
 			t.Fatalf("delete: %v", err)
 		}
 		if got := jobSemanticChunkIndices(t, pool, j); len(got) != 0 {
 			t.Errorf("chunk indices after delete = %v, want none", got)
+		}
+	})
+
+	t.Run("batched delete clears multiple jobs' chunks in one call", func(t *testing.T) {
+		truncate(t, pool)
+		j1 := insertChunkTestJob(t, pool, "batch-1", "acme")
+		j2 := insertChunkTestJob(t, pool, "batch-2", "acme")
+		for _, j := range []int64{j1, j2} {
+			if err := q.InsertJobSemanticChunks(ctx, InsertJobSemanticChunksParams{
+				JobID:        j,
+				ChunkIndices: []int16{0},
+				Embeddings:   []string{unitVector768(0)},
+			}); err != nil {
+				t.Fatalf("insert job %d: %v", j, err)
+			}
+		}
+
+		if err := q.DeleteJobSemanticChunks(ctx, []int64{j1, j2}); err != nil {
+			t.Fatalf("batched delete: %v", err)
+		}
+		if got := jobSemanticChunkIndices(t, pool, j1); len(got) != 0 {
+			t.Errorf("job %d chunk indices after batched delete = %v, want none", j1, got)
+		}
+		if got := jobSemanticChunkIndices(t, pool, j2); len(got) != 0 {
+			t.Errorf("job %d chunk indices after batched delete = %v, want none", j2, got)
 		}
 	})
 }

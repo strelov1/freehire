@@ -102,10 +102,29 @@ func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) e
 	return err
 }
 
+const clearSimilarComputedAtBatch = `-- name: ClearSimilarComputedAtBatch :exec
+UPDATE jobs
+SET similar_computed_at = NULL
+WHERE id = ANY($1::bigint[])
+`
+
+// Null a batch of jobs' precomputed-similarity staleness stamp. Run in the SAME
+// transaction as the open-job embed stamp / chunk replace (cmd/embed) — a job whose
+// chunks were just replaced has a stale (or absent) jobs.similar_job_ids, so this
+// clears similar_computed_at unconditionally for the whole open batch, letting
+// cmd/similar-backfill's incremental predicate ("similar_computed_at IS NULL, or a job
+// with no chunk rows at all is simply never selected") pick the job back up. Cheap and
+// idempotent — nulling an already-NULL column is a no-op write, not worth a
+// conditional guard.
+func (q *Queries) ClearSimilarComputedAtBatch(ctx context.Context, ids []int64) error {
+	_, err := q.db.Exec(ctx, clearSimilarComputedAtBatch, ids)
+	return err
+}
+
 const deleteJobSemanticChunks = `-- name: DeleteJobSemanticChunks :exec
 
 DELETE FROM job_semantic_chunks
-WHERE job_id = $1::bigint
+WHERE job_id = ANY($1::bigint[])
 `
 
 // ---------------------------------------------------------------------------
@@ -118,15 +137,25 @@ WHERE job_id = $1::bigint
 // DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
 // NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
 // ---------------------------------------------------------------------------
-// Remove every chunk row for one job. Two callers: the open-job re-embed path issues
-// this immediately before InsertJobSemanticChunks in the same transaction (a job's
-// chunk COUNT can change between embeds — the source text was re-chunked — so there is
-// no stable per-chunk_index UPDATE target, "replace" has to be delete-then-insert, not
-// an upsert); the closed-job path issues this alone, mirroring the existing
-// ClearSemanticEmbeddedBatch clear. ON DELETE CASCADE from jobs already covers a hard
-// delete (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
-func (q *Queries) DeleteJobSemanticChunks(ctx context.Context, jobID int64) error {
-	_, err := q.db.Exec(ctx, deleteJobSemanticChunks, jobID)
+// Remove every chunk row for a BATCH of jobs in one round trip — mirrors every other
+// batch mutation in this file (StampSemanticEmbeddedBatch, ClearSemanticEmbeddedBatch,
+// ClearSimilarComputedAtBatch, DeleteSemanticEntriesBatch), all one `WHERE id = ANY($1)`
+// call rather than one call per job: this pipeline was historically bottlenecked by
+// per-row Postgres round trips during a bulk backfill, not by GPU/TEI throughput, and
+// the upcoming full-catalogue re-embed (openspec/changes/
+// drop-hybrid-search-pgvector-similar, ~1.6-2M jobs) would reintroduce exactly that
+// regression at EMBED_BATCH_SIZE (default 500) deletes per transaction if this looped
+// per job instead. Two callers, both batched: the open-job re-embed path issues ONE
+// call for the whole wave's job ids immediately before the per-job
+// InsertJobSemanticChunks loop, in the same transaction (a job's chunk COUNT can change
+// between embeds — the source text was re-chunked — so there is no stable
+// per-chunk_index UPDATE target, "replace" has to be delete-then-insert, not an
+// upsert); the closed-job path issues ONE call for its whole batch alone, actually
+// mirroring ClearSemanticEmbeddedBatch's own batched round-trip shape, not just its
+// clear semantics. ON DELETE CASCADE from jobs already covers a hard delete
+// (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
+func (q *Queries) DeleteJobSemanticChunks(ctx context.Context, jobIds []int64) error {
+	_, err := q.db.Exec(ctx, deleteJobSemanticChunks, jobIds)
 	return err
 }
 
