@@ -37,15 +37,29 @@ var legalSuffixes = map[string]struct{}{
 // empty slug, because an empty slug silently matches nothing while a bad register
 // row is worth leaving visible.
 func RegisterSlug(name string) string {
-	fields := strings.Fields(name)
-	if len(fields) < 2 {
+	fields := significantFields(name)
+	if len(fields) == 0 {
 		// Nothing to strip without erasing the name entirely.
 		return normalize.Slug(name)
 	}
-	if _, isSuffix := legalSuffixes[letters(fields[len(fields)-1])]; !isSuffix {
-		return normalize.Slug(name)
+	return normalize.Slug(strings.Join(fields, " "))
+}
+
+// significantFields splits name on whitespace and drops one trailing legal-form
+// token, the same strip RegisterSlug applies before slugging. Shared so that
+// token-counting (RequireCountry) agrees with what RegisterSlug considers the
+// name's actual content, rather than re-deriving it from the slug — which has
+// already collapsed internal punctuation ("T-Mobile" -> "t-mobile") into the same
+// hyphen it uses as a field separator.
+func significantFields(name string) []string {
+	fields := strings.Fields(name)
+	if len(fields) < 2 {
+		return fields
 	}
-	return normalize.Slug(strings.Join(fields[:len(fields)-1], " "))
+	if _, isSuffix := legalSuffixes[letters(fields[len(fields)-1])]; !isSuffix {
+		return fields
+	}
+	return fields[:len(fields)-1]
 }
 
 // letters lowercases a token down to its ASCII letters, so the punctuated and bare
@@ -93,7 +107,7 @@ func RequireCountry(code string) func(Company, Record) bool {
 		if !hasCountry(co.Countries, code) {
 			return false
 		}
-		if strings.Contains(RegisterSlug(r.Name), "-") {
+		if len(significantFields(r.Name)) > 1 {
 			return true // multi-token: the country facet carries it
 		}
 		return countryMatches(co.HQCountry, code)

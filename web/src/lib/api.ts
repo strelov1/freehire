@@ -10,7 +10,7 @@
 // fetch per call site — not a module-level variable — keeps concurrent SSR
 // requests from sharing (and racing on) a session.
 
-import type { Display, RevisionView } from '$lib/generated/contracts';
+import type { Answers, Display, RevisionView } from '$lib/generated/contracts';
 import type {
   CvAtsDelta,
   CvJobMatch,
@@ -54,6 +54,7 @@ import type {
   DiscordLinkResult,
   Submission,
   SubmissionInput,
+  PrefillResult,
   Contribution,
   ResolvedLink,
   ReferralOffer,
@@ -1146,6 +1147,24 @@ export function createApi(
     await call('/api/v1/me/profile', { method: 'DELETE' });
   }
 
+  // The candidate's own screening answers — the handful of questions that repeat across
+  // ATS application forms (visa, salary, notice period, relocation, …) and no CV states.
+  // Distinct from the profile above: a different lifecycle, see
+  // internal/screeninganswers/AGENTS.md.
+
+  /** The current user's screening answers, or null when they have stated none yet. */
+  async function getScreeningAnswers(): Promise<Answers | null> {
+    return requestData<Answers | null>('/api/v1/me/screening-answers');
+  }
+
+  /** Partially update the user's screening answers: a field the patch omits keeps
+   *  whatever was already stored. An unrecognized country code, a malformed currency, an
+   *  out-of-vocabulary period, a non-positive salary, or a negative notice period is a
+   *  400 naming the invalid field. */
+  async function updateScreeningAnswers(patch: Partial<Answers>): Promise<Answers> {
+    return requestData<Answers>('/api/v1/me/screening-answers', jsonBody('PUT', patch));
+  }
+
   // Talent Network: the caller's own opt-in visibility setting (distinct from the public,
   // unauthenticated profile page at GET /talent-network/:publicID — see
   // internal/handler/me_talent_network.go and talent_network_profile.go).
@@ -1339,6 +1358,13 @@ export function createApi(
   /** The caller's own submissions with their review status. */
   async function listMySubmissions(): Promise<Submission[]> {
     return requestData<Submission[]>('/api/v1/me/submissions');
+  }
+
+  /** Parse a job URL into draft field values for the submit form to prefill — never
+   *  persisted. An unrecognized or non-vacancy URL comes back with every field empty,
+   *  not an error. */
+  async function prefillSubmission(url: string): Promise<PrefillResult> {
+    return requestData<PrefillResult>('/api/v1/submissions/prefill', jsonBody('POST', { url }));
   }
 
   /** Hand a job link to freehire. One sequence serves every surface: the catalog is checked,
@@ -2030,6 +2056,8 @@ export function createApi(
     getProfile,
     saveProfile,
     deleteProfile,
+    getScreeningAnswers,
+    updateScreeningAnswers,
     getTalentNetwork,
     setTalentNetworkVisibility,
     getTalentNetworkProfile,
@@ -2054,6 +2082,7 @@ export function createApi(
     discordUnlink,
     submitJob,
     listMySubmissions,
+    prefillSubmission,
     resolveJobLink,
     listMyContributions,
     createReferralRequest,

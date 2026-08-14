@@ -37,7 +37,7 @@
 
 <div class="max-w-2xl">
   <a
-    href={resolve('/my/notifications/history')}
+    href={resolve('/my/notifications')}
     class="mb-4 inline-block text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
   >
     ← Notification history

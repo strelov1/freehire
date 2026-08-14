@@ -31,7 +31,9 @@ var (
 )
 
 // SlugLike reports whether name is still a squished slug rather than a real
-// display name — a single lowercase token with at least one letter.
+// display name — a single lowercase token with at least one letter — or a bare
+// numeric platform ID (e.g. a join.com company id written straight into the
+// company field by a harvest that never resolved the tenant's name).
 func SlugLike(name string) bool {
 	if name == "" || strings.ContainsFunc(name, unicode.IsSpace) {
 		return false
@@ -45,7 +47,27 @@ func SlugLike(name string) bool {
 			hasLetter = true
 		}
 	}
-	return hasLetter
+	if hasLetter {
+		return true
+	}
+	return NumericPlaceholder(name)
+}
+
+// NumericPlaceholder reports whether name is nothing but digits — the shape a
+// board id takes when a harvest writes it into the company field verbatim
+// instead of a resolved display name. Unlike a squished slug, a numeric id
+// shares no text with the real name by construction, so Accept's usual
+// substring/acronym confidence check does not apply to it.
+func NumericPlaceholder(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // ExtractTitleName pulls a company name out of a Pinpoint careers-page <title>: the shapes
@@ -98,8 +120,13 @@ func clean(s string) string {
 
 // Accept decodes and validates a candidate name against the slug. It returns the
 // cleaned name and true only when the candidate is non-junk and confidently
-// related to the slug (shares a substring or a multi-letter acronym).
-func Accept(slug, candidate string) (string, bool) {
+// related to the slug (shares a substring or a multi-letter acronym) — except
+// for join, whose numeric slug is looked up by that exact id against the
+// platform's own API, so no text relation to check is possible or needed. A
+// numeric slug from any other source still requires the confidence match: its
+// resolver reaches a candidate by scraping a board derived from the URL, not by
+// an id-exact lookup, so an unrelated page title could otherwise slip through.
+func Accept(source, slug, candidate string) (string, bool) {
 	candidate = strings.TrimSpace(html.UnescapeString(candidate))
 	// An empty or still-slug-like candidate is no improvement over what's stored,
 	// so reject it: applying it would be a no-op write that also keeps the company
@@ -113,7 +140,8 @@ func Accept(slug, candidate string) (string, bool) {
 			return "", false
 		}
 	}
-	if !confident(slug, candidate) {
+	authoritative := source == "join" && NumericPlaceholder(slug)
+	if !authoritative && !confident(slug, candidate) {
 		return "", false
 	}
 	return candidate, true

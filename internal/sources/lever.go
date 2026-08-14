@@ -50,6 +50,12 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location   string `json:"location"`
 			Commitment string `json:"commitment"`
 		} `json:"categories"`
+		SalaryRange *struct {
+			Min      float64 `json:"min"`
+			Max      float64 `json:"max"`
+			Currency string  `json:"currency"`
+			Interval string  `json:"interval"`
+		} `json:"salaryRange"`
 	}
 	if err := l.http.GetJSON(ctx, url, &postings); err != nil {
 		return nil, fmt.Errorf("lever: fetch board %s: %w", e.Board, err)
@@ -72,7 +78,7 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		body.WriteString(p.Additional)
 
-		jobs = append(jobs, Job{
+		job := Job{
 			ExternalID:     p.ID,
 			URL:            p.HostedURL,
 			Title:          p.Text,
@@ -84,9 +90,39 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Countries:      countryFromCode(p.Country),
 			PostedAt:       parseEpochMillis(p.CreatedAt),
 			EmploymentType: leverEmploymentType(p.Categories.Commitment),
-		})
+		}
+		if p.SalaryRange != nil {
+			if period := leverSalaryPeriod(p.SalaryRange.Interval); period != "" {
+				min, max := roundSalaryPart(p.SalaryRange.Min), roundSalaryPart(p.SalaryRange.Max)
+				if min != nil || max != nil {
+					job.SalaryMin, job.SalaryMax = min, max
+					job.SalaryCurrency = p.SalaryRange.Currency
+					job.SalaryPeriod = period
+				}
+			}
+		}
+		jobs = append(jobs, job)
 	}
 	return jobs, nil
+}
+
+// leverSalaryPeriod maps Lever's salaryRange.interval (confirmed live: per-year-salary,
+// per-month-salary, per-hour-wage, and a one-time bonus/stipend that isn't a recurring
+// wage at all) onto freehire's salary_period vocabulary. An unrecognized interval maps
+// to "" so the caller drops the whole salary rather than mislabelling its period — e.g.
+// defaulting an hourly rate to a yearly figure downstream would misrepresent it, which
+// is worse than reporting nothing.
+func leverSalaryPeriod(interval string) string {
+	switch interval {
+	case "per-year-salary":
+		return "year"
+	case "per-month-salary":
+		return "month"
+	case "per-hour-wage":
+		return "hour"
+	default:
+		return ""
+	}
 }
 
 // leverEmploymentType maps Lever's free-text categories.commitment (a per-company label

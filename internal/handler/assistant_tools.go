@@ -356,6 +356,7 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 
 	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	tools = append(tools, h.assistantExperienceTools(sess.ID)...)
+	tools = append(tools, h.assistantScreeningTools()...)
 	if preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
 		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID, batchID)...)
 	}

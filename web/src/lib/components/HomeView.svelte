@@ -381,12 +381,12 @@
         Save a search — your stack, seniority, region, salary — and subscribe to it. When a matching job is
         added, freehire sends it to you on Telegram as a tidy digest. No inbox clutter, no checking back:
         connect once from
-        <a href={resolve('/my/searches')} class="font-medium text-foreground underline-offset-4 hover:underline">Saved searches &amp; alerts</a>
+        <a href={resolve('/my/notifications/searches')} class="font-medium text-foreground underline-offset-4 hover:underline">Saved searches &amp; alerts</a>
         and the openings come to you.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <Button href={resolve('/')} variant="primary" size="lg">Find &amp; save a filter</Button>
-        <Button href={resolve('/my/searches')} variant="ghost" size="lg">Saved searches &amp; alerts</Button>
+        <Button href={resolve('/my/notifications/searches')} variant="ghost" size="lg">Saved searches &amp; alerts</Button>
       </div>
     </div>
   </section>

@@ -74,10 +74,19 @@ export interface FramedUpload extends Upload {
 /**
  * A value to write into the question carrying `label` (see `fillByLabel`). For a
  * grouped question the value is one of the options it offers, not free text.
+ *
+ * `frame`/`form` scope the write to the question the fill was planned from —
+ * `deterministicAutofill` sets both, carried over from the `FramedField` that
+ * justified the fill, so a same-labeled control outside that frame or form is
+ * left alone. Undefined for a `fill_simple` tool call, whose label the agent
+ * names on its own with no field to read them from; such a fill still matches
+ * the first question carrying the label, as before frame/form scoping existed.
  */
 export interface LabelFill {
   label: string;
   value: string;
+  frame?: number;
+  form?: number;
 }
 
 /**

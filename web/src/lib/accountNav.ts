@@ -32,11 +32,9 @@ export const accountNav = [
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },
-  // The account-level notification rule (enable, channels): gates the saved-job
-  // apply reminder and both lifecycle nudges (follow-up, interview-prep). Distinct
-  // from the saved-search alert list below.
+  // The notification center: delivery history, saved-search alerts, and the
+  // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },
-  { href: '/my/searches', label: 'Search notifications' },
   { href: '/my/api-keys', label: 'API keys' },
   { href: '/my/submissions', label: 'My submissions' },
   // Paste a job link we don't have yet; a supported, novel link earns AI credits.

@@ -136,7 +136,7 @@ func resolveNames(ctx context.Context, rows []db.ListSlugLikeCompaniesForBackfil
 			stats.noSource++
 			continue
 		}
-		board, ok := companyname.BoardFromURL(row.Source, row.URL)
+		board, ok := companyname.Board(row.Source, row.Name, row.URL)
 		if !ok {
 			stats.noSource++
 			continue
@@ -148,7 +148,7 @@ func resolveNames(ctx context.Context, rows []db.ListSlugLikeCompaniesForBackfil
 				log.Printf("resolve %s (%s): %v", row.Slug, row.Source, err)
 				return nil // a single board failing must not abort the run
 			}
-			name, ok := companyname.Accept(row.Name, candidate)
+			name, ok := companyname.Accept(row.Source, row.Name, candidate)
 			mu.Lock()
 			defer mu.Unlock()
 			if !ok {

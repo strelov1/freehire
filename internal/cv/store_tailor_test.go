@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
@@ -143,6 +146,77 @@ func TestStoreTailorReturnsTheExistingCopyForTheSameVacancy(t *testing.T) {
 	}
 	if other.ID == first.ID {
 		t.Error("a second vacancy reused the first vacancy's tailored CV")
+	}
+}
+
+// racingGetTailoredRepo wraps fakeRepo to force the exact race Store.Tailor's check-then-insert
+// leaves open: the first two GetTailoredForJob calls (Tailor's pre-insert existence check, one
+// per concurrent caller) rendezvous before either returns, so both callers observe "no existing
+// copy" and both proceed to CreateTailored — instead of the race depending on goroutine
+// scheduling ever lining the two calls up. Any later call (the re-fetch a caller makes after
+// losing the unique-violation race) passes straight through.
+type racingGetTailoredRepo struct {
+	*fakeRepo
+	gate  sync.WaitGroup
+	calls int32
+}
+
+func (r *racingGetTailoredRepo) GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
+	row, err := r.fakeRepo.GetTailoredForJob(ctx, userID, jobID)
+	if atomic.AddInt32(&r.calls, 1) <= 2 {
+		r.gate.Done()
+		r.gate.Wait()
+	}
+	return row, err
+}
+
+// Two concurrent Tailor() calls for the same vacancy must land on exactly one tailored CV —
+// the race that shipped the production incident TestStoreTailorReturnsTheExistingCopyForTheSameVacancy
+// documents. The fake's CreateTailored enforces the same uniqueness cvs_user_id_job_id_tailored_uniq_idx
+// (migrations/0091) does in Postgres, and Store.Tailor must resolve the resulting collision by
+// re-fetching rather than surfacing it as an error.
+func TestStoreTailorRacesToOneTailoredCopy(t *testing.T) {
+	repo := &racingGetTailoredRepo{fakeRepo: newFakeRepo()}
+	s := NewStore(repo)
+	ctx := context.Background()
+
+	if _, err := s.Create(ctx, 7, "My CV", DefaultTemplateID, Document{Summary: "base"}); err != nil {
+		t.Fatalf("seed base: %v", err)
+	}
+
+	repo.gate.Add(2)
+	var wg sync.WaitGroup
+	results := make([]Meta, 2)
+	errs := make([]error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, tailored, _, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+			results[i], errs[i] = tailored, err
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("tailor call %d: %v", i, err)
+		}
+	}
+	if results[0].ID != results[1].ID {
+		t.Errorf("concurrent Tailor() calls landed on different rows: %s vs %s", results[0].ID, results[1].ID)
+	}
+
+	repo.mu.Lock()
+	tailoredCount := 0
+	for _, r := range repo.rows {
+		if r.jobID == 100 {
+			tailoredCount++
+		}
+	}
+	repo.mu.Unlock()
+	if tailoredCount != 1 {
+		t.Errorf("stored tailored CVs for job 100 = %d, want 1", tailoredCount)
 	}
 }
 

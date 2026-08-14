@@ -144,6 +144,9 @@ func TestRefreshUnchangedJobMatchesNothingWhenTheRowWouldChange(t *testing.T) {
 	movedCities := unchangedParams()
 	movedCities.Cities = []string{"munich"}
 
+	movedSalary := unchangedParams()
+	movedSalary.SalaryMinSource = pgtype.Int4{Int32: 90000, Valid: true}
+
 	absent := unchangedParams()
 	absent.ExternalID = "acme:never-ingested"
 
@@ -154,9 +157,11 @@ func TestRefreshUnchangedJobMatchesNothingWhenTheRowWouldChange(t *testing.T) {
 	}{
 		// A moved hash means the posting's indexed content changed: the full upsert must run.
 		"content hash moved": {params: movedHash},
-		// cities is the one written column the content hash does not cover, so it is matched on
-		// separately — see TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites.
+		// cities and the structured source salary are the columns the content hash does not
+		// cover, so they are matched on separately — see
+		// TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites.
 		"structured cities moved": {params: movedCities},
+		"structured salary moved": {params: movedSalary},
 		// A closed row must reach UpsertJob, which is what reopens it. Refreshing its liveness
 		// here would leave it closed forever while the unseen sweep kept seeing it.
 		"row is closed": {params: unchangedParams(), closed: true},

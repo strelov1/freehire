@@ -41,7 +41,7 @@ Telegrams a digest of what is new since the last one; a shared board is a
 link-addressed, unindexed view of a saved search that you can hand to someone
 else.
 
-**Live:** /my/searches, /b/<slug> · **Code:** `internal/savedsearch`, `internal/subscription`, `internal/notify`, `internal/telegramnotify` · **Deep dive:** [docs/agents/notifications.md](agents/notifications.md)
+**Live:** /my/notifications/searches, /b/<slug> · **Code:** `internal/savedsearch`, `internal/subscription`, `internal/notify`, `internal/telegramnotify` · **Deep dive:** [docs/agents/notifications.md](agents/notifications.md)
 
 ### Market analytics
 

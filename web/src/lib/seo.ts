@@ -18,14 +18,20 @@ const SITE_GITHUB = 'https://github.com/strelov1/freehire';
 export type FaqItem = { question: string; answer: string };
 
 /** Plain-text, length-capped description for `<meta name="description">` and OG,
- *  derived from the job's sanitized HTML body. */
-export function metaDescription(html: string, max = 200): string {
+ *  derived from the job's sanitized HTML body. Cuts at the last whole word within
+ *  the budget rather than mid-word, and defaults to ~155-160 chars — Google's own
+ *  typical search-snippet width, beyond which it truncates the snippet itself and
+ *  we lose control of where the cut lands. */
+export function metaDescription(html: string, max = 160): string {
   const text = html
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
+  const cut = text.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  const truncated = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
+  return `${truncated.trimEnd()}…`;
 }
 
 /** Plain-text, length-capped `<meta name="description">` for a company page.
@@ -118,6 +124,20 @@ function applicantRegions(regions?: string[]): unknown {
   return named.length === 1 ? named[0] : named;
 }
 
+// schema.org jobLocation from the raw location string: Google accepts a
+// PostalAddress with just locality; add the ISO country code when the geo
+// dictionary pinned one (job.countries is alpha-2), never a made-up street/postal
+// code — mismatched structured data is a ranking liability. Shared by a non-remote
+// posting and a remote one whose region never resolved (see jobPostingJsonLd).
+function jobLocationFromText(location: string, countries?: string[]): Record<string, unknown> {
+  const address: Record<string, unknown> = {
+    '@type': 'PostalAddress',
+    addressLocality: location,
+  };
+  if (countries?.[0]) address.addressCountry = countries[0].toUpperCase();
+  return { '@type': 'Place', address };
+}
+
 // schema.org educationRequirements.credentialCategory, from the enrich
 // education_level vocabulary ("none"/"bachelor"/"master"/"phd"). "none" and any
 // unmapped value carry no requirement and are omitted.
@@ -127,9 +147,33 @@ const EDUCATION_CREDENTIAL: Record<string, string> = {
   phd: 'postgraduate degree',
 };
 
+// Days added on top of the freshest "still open" evidence to estimate how much
+// longer an open posting is likely valid. Most sources carry no real listing-
+// expiry date, and without validThrough Google assumes one itself (~30 days)
+// and drops the posting from Google Jobs even while it's still open — this
+// buffer matches that default, but keeps rolling forward on every recrawl
+// instead of freezing at first sight. Comfortably above the 48h unseen-sweep
+// grace (docs/agents/job-lifecycle.md) so an ordinary recrawl gap never reads
+// as expired.
+const VALID_THROUGH_BUFFER_DAYS = 30;
+
+/** Estimated validThrough for an OPEN job: the freshest "still open" evidence
+ *  (last_seen_at, falling back to the posting date for a job never re-crawled,
+ *  e.g. a manual import) plus the buffer above. undefined when there's no date
+ *  to estimate from at all. */
+function estimatedValidThrough(job: Job): string | undefined {
+  const evidence = job.last_seen_at ?? job.posted_at ?? job.created_at;
+  if (!evidence) return undefined;
+  const d = new Date(evidence);
+  d.setUTCDate(d.getUTCDate() + VALID_THROUGH_BUFFER_DAYS);
+  return d.toISOString();
+}
+
 /** schema.org JobPosting for a job-detail page, eligible for Google Jobs. A
  *  closed posting sets `validThrough` to its close time so it reads as expired,
- *  not open. `origin` is the absolute site origin (e.g. https://freehire.me). */
+ *  not open; an open one gets a rolling estimate (see estimatedValidThrough) so
+ *  Google doesn't apply its own ~30-day default and drop it while still live.
+ *  `origin` is the absolute site origin (e.g. https://freehire.me). */
 export function jobPostingJsonLd(job: Job, origin: string): Record<string, unknown> {
   const e = job.enrichment ?? {};
   // Our logo proxy resolves a logo from the company name (404s for unknown
@@ -153,8 +197,15 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   // so fall back to created_at (the ingest time; always set) rather than omit it.
   const datePosted = job.posted_at ?? job.created_at;
   if (datePosted) ld.datePosted = datePosted;
-  // A closed posting is no longer accepting applications: mark it expired.
-  if (job.closed_at) ld.validThrough = job.closed_at;
+  // A closed posting is no longer accepting applications: mark it expired. An
+  // open one gets a rolling estimate instead of nothing, so Google doesn't
+  // apply its own default expiry assumption to a posting that's still live.
+  if (job.closed_at) {
+    ld.validThrough = job.closed_at;
+  } else {
+    const validThrough = estimatedValidThrough(job);
+    if (validThrough) ld.validThrough = validThrough;
+  }
 
   // identifier is the hiring org's own posting id (Google-recommended): external_id
   // is the source's stable job id, so Google dedupes the vacancy across boards
@@ -173,19 +224,24 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   if (empType) ld.employmentType = empType;
 
   if (job.work_mode === 'remote') {
-    ld.jobLocationType = 'TELECOMMUTE';
     const regions = applicantRegions(job.regions);
-    if (regions) ld.applicantLocationRequirements = regions;
+    if (regions) {
+      // Google requires applicantLocationRequirements whenever jobLocationType is
+      // TELECOMMUTE — set them together, never TELECOMMUTE alone.
+      ld.jobLocationType = 'TELECOMMUTE';
+      ld.applicantLocationRequirements = regions;
+    } else if (job.location) {
+      // No resolved region to state a location *requirement* from (the geo
+      // dictionary and the LLM fallback both came up empty — a real, if raw,
+      // location string still reached the posting). Asserting TELECOMMUTE without
+      // its required companion would be worse than not asserting it: fall back to
+      // the same plain jobLocation a non-remote posting gets.
+      ld.jobLocation = jobLocationFromText(job.location, job.countries);
+    }
+    // Neither a resolved region nor any location text at all: nothing honest to
+    // state, so location is omitted rather than guessed.
   } else if (job.location) {
-    // Google accepts a PostalAddress with just locality; add the ISO country code
-    // when the geo dictionary pinned one (job.countries is alpha-2), never a made-up
-    // street/postal code — mismatched structured data is a ranking liability.
-    const address: Record<string, unknown> = {
-      '@type': 'PostalAddress',
-      addressLocality: job.location,
-    };
-    if (job.countries?.[0]) address.addressCountry = job.countries[0].toUpperCase();
-    ld.jobLocation = { '@type': 'Place', address };
+    ld.jobLocation = jobLocationFromText(job.location, job.countries);
   }
 
   if (e.salary_min != null || e.salary_max != null) {

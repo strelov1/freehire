@@ -314,6 +314,59 @@ func TestParseNorthAmerica(t *testing.T) {
 	}
 }
 
+// TestParseSubdivisionCountryCodeCollision covers the ~16 US/Canada subdivision
+// postal codes that are also a curated country's ISO code ("il" Illinois/Israel,
+// "la" Louisiana/Laos, "pa" Pennsylvania/Panama, …). The subdivision reading must
+// only win when the preceding city is a recognized US/CA place; otherwise the bare
+// country code wins, so a foreign city sharing a code with a US state does not get
+// mislabeled as that state.
+func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
+	tests := []struct {
+		name     string
+		location string
+		want     Geo
+	}{
+		{
+			name:     "Tel Aviv, IL is Israel, not Illinois",
+			location: "Tel Aviv, IL",
+			want:     Geo{Countries: []string{"il"}, Regions: []string{"mena"}, Cities: []string{"Tel Aviv"}},
+		},
+		{
+			name:     "Vientiane, LA is Laos, not Louisiana",
+			location: "Vientiane, LA",
+			want:     Geo{Countries: []string{"la"}, Regions: []string{"apac"}, Cities: []string{"Vientiane"}},
+		},
+		{
+			name:     "Panama City, PA is Panama, not Pennsylvania",
+			location: "Panama City, PA",
+			want:     Geo{Countries: []string{"pa"}, Regions: []string{"latam"}, Cities: []string{"Panama City"}},
+		},
+		{
+			// Regression guard: a genuine US city still wins its colliding state code
+			// when the preceding token corroborates it.
+			name:     "Chicago, IL stays Illinois, not Israel",
+			location: "Chicago, IL",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Chicago"}},
+		},
+		{
+			// Same collision, dash-delimited instead of comma-delimited: the lead
+			// segment's context is the resolved TAIL, not a preceding comma-token.
+			name:     "IL-Cupertino is California, not Israel",
+			location: "IL-Cupertino",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Parse(tt.location)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Parse(%q) = %+v, want %+v", tt.location, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestParseCyrillic covers the RU-segment ATS data, whose location fields are in
 // Cyrillic ("Москва"), sometimes prefixed with the Russian city marker "г"
 // ("г Москва"), and which name a remote/hybrid mode in Russian ("Удалённо").

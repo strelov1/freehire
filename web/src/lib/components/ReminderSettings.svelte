@@ -175,7 +175,7 @@
           </button>
         </div>
         {#if channels.includes('telegram')}
-          <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/searches')}>search notifications</a> page.</p>
+          <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on the <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/notifications/searches')}>Search alerts</a> tab.</p>
         {/if}
       </div>
 

@@ -375,6 +375,8 @@ export interface Submission {
   regions?: string[];
   cities?: string[];
   work_mode?: string;
+  employment_type?: string;
+  seniority?: string;
   salary_min?: number;
   salary_max?: number;
   salary_currency?: string;
@@ -397,10 +399,27 @@ export interface SubmissionInput {
   regions?: string[];
   cities?: string[];
   work_mode?: string;
+  employment_type?: string;
+  seniority?: string;
   salary_min?: number;
   salary_max?: number;
   salary_currency?: string;
   salary_period?: string;
+}
+
+/** What freehire could parse from a pasted job URL, for the submit form to prefill —
+ *  never persisted. A field freehire's own dictionaries derive better than any source
+ *  page states it (skills, cities) is not included. */
+export interface PrefillResult {
+  title?: string;
+  company?: string;
+  location?: string;
+  description?: string;
+  work_mode?: string;
+  employment_type?: string;
+  seniority?: string;
+  skills?: string[];
+  source?: string;
 }
 
 /** Why a job was reported. A closed vocabulary mirroring the backend's

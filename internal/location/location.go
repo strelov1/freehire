@@ -57,6 +57,10 @@ func Parse(location string) Geo {
 	// then merged into the result.
 	tokCountry := map[string]struct{}{}
 	tokRegion := map[string]struct{}{}
+	// prevTok is the previous comma-token, after the same stripping, and is the
+	// disambiguating context resolveGeoToken needs for a colliding subdivision code
+	// ("Tel Aviv, IL" vs "Chicago, IL"). Updated at the end of the loop body.
+	prevTok := ""
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -74,7 +78,12 @@ func Parse(location string) Geo {
 		// Curated geography first, into the scratch sets (authoritative for country/region).
 		clear(tokCountry)
 		clear(tokRegion)
-		resolved := resolveGeoToken(tok, tokCountry, tokRegion)
+		resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)
+		// Recorded now, before any of the branches below (including the early
+		// "continue" on a resolved token) that would otherwise skip past the
+		// end-of-loop assignment and leave the next token's collision check
+		// looking at a stale or empty prevTok.
+		prevTok = tok
 		// City facet from the generated dictionary (cmd/gen-cities). cityDict supplies the
 		// canonical display NAME only — never a country/region — so an ambiguous city name
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
@@ -124,7 +133,12 @@ func Parse(location string) Geo {
 			}
 			lead := strings.TrimSpace(segs[0])
 			if !resolveGeoName(lead, countrySet, regionSet) && tailResolved {
-				resolveGeoToken(lead, countrySet, regionSet)
+				// The dash-tail is the context that confirms a colliding lead code
+				// ("il" in "IL-Cupertino") as a real US/CA subdivision, the same role
+				// the preceding comma-token plays for "City, XX" — without it, tailResolved
+				// having already added "us" via the tail's own city-name match would leave
+				// the lead's country-code reading (Israel) alongside it, garbling the result.
+				resolveGeoToken(lead, strings.Join(segs[1:], " "), countrySet, regionSet)
 			}
 		}
 	}
@@ -152,8 +166,12 @@ func Parse(location string) Geo {
 // resolveGeoToken resolves one already-normalized token to a country and/or
 // region, writing into the sets, and reports whether anything matched. Order: a
 // country/city name, a macro-region name, a US/Canada subdivision, then a bare
-// ISO 3166-1 alpha-2 country code (last, so a same-spelled subdivision wins).
-func resolveGeoToken(tok string, countrySet, regionSet map[string]struct{}) bool {
+// ISO 3166-1 alpha-2 country code (last, so a same-spelled subdivision wins) —
+// except for a colliding subdivision code, where resolveSubdivision itself defers
+// to prevTok and, unconfirmed, leaves the bare-code fallback to win instead.
+// prevTok is the preceding comma-token (already stripped; "" when none), the
+// context that confirms a colliding code as a real US/CA subdivision reading.
+func resolveGeoToken(tok, prevTok string, countrySet, regionSet map[string]struct{}) bool {
 	if tok == "" {
 		return false
 	}
@@ -168,7 +186,7 @@ func resolveGeoToken(tok string, countrySet, regionSet map[string]struct{}) bool
 		regionSet[r] = struct{}{}
 		return true
 	}
-	if code, ok := resolveSubdivision(tok); ok {
+	if code, ok := resolveSubdivision(tok, prevTok); ok {
 		countrySet[code] = struct{}{}
 		if r, ok := countryToRegion[code]; ok {
 			regionSet[r] = struct{}{}
@@ -262,8 +280,20 @@ func stripCityPrefix(tok string) string {
 // multi-word token ("austin tx"); and a standalone US ZIP ("94105") as a us
 // signal. It returns ("", false) for anything it cannot resolve — it never
 // guesses past the curated subdivision table.
-func resolveSubdivision(tok string) (string, bool) {
+//
+// A direct or trailing-code match that lands on a collidingSubdivisions code (a
+// code that also spells a curated country, e.g. "il") is accepted only when
+// prevTok — the city portion, either the preceding comma-token for a direct match
+// or the token's own leading words for a trailing-code match — names a recognized
+// US/CA place (subdivisionAccepted); otherwise it is rejected here so the caller
+// falls through to the bare-country-code reading ("Tel Aviv, IL" -> Israel, not
+// Illinois). The ZIP-preceded branch is never gated: a ZIP code is a US signal on
+// its own, so "il 60601" is unambiguous regardless of context.
+func resolveSubdivision(tok, prevTok string) (string, bool) {
 	if code, ok := subdivisionToCountry[tok]; ok {
+		if !subdivisionAccepted(tok, prevTok) {
+			return "", false
+		}
 		return code, true
 	}
 	fields := strings.Fields(tok)
@@ -284,9 +314,41 @@ func resolveSubdivision(tok string) (string, bool) {
 		return "us", true
 	}
 	if code, ok := subdivisionToCountry[last]; ok {
+		leading := strings.Join(fields[:len(fields)-1], " ")
+		if !subdivisionAccepted(last, leading) {
+			return "", false
+		}
 		return code, true
 	}
 	return "", false
+}
+
+// subdivisionAccepted reports whether a matched subdivision code should win over
+// its identically-spelled country-code reading. A code outside
+// collidingSubdivisions is unambiguous and always accepted; a colliding one is
+// accepted only when cityTok is isRecognizedUSCACity.
+func subdivisionAccepted(code, cityTok string) bool {
+	if _, ambiguous := collidingSubdivisions[code]; !ambiguous {
+		return true
+	}
+	return isRecognizedUSCACity(cityTok)
+}
+
+// isRecognizedUSCACity reports whether tok names a place the parser already knows
+// is in the US or Canada — checked directly against nameToCountry and cityDict
+// (not through resolveGeoToken), so a long-tail GeoNames beacon like "Baton Rouge"
+// counts just as much as a curated one like "Minneapolis". This is the signal that
+// disambiguates a colliding subdivision code from its identically-spelled country
+// code: "Baton Rouge, LA" stays Louisiana because "baton rouge" resolves here to
+// us, while "Vientiane, LA" does not, so "la" falls back to the country code Laos.
+func isRecognizedUSCACity(tok string) bool {
+	if code, ok := nameToCountry[tok]; ok {
+		return code == "us" || code == "ca"
+	}
+	if ce, ok := cityDict[tok]; ok {
+		return ce.Country == "us" || ce.Country == "ca"
+	}
+	return false
 }
 
 // isUSZip reports whether s is a US ZIP code: five digits, optionally followed by

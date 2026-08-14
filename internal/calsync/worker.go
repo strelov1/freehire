@@ -191,18 +191,21 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) error {
 	}
 
 	for _, ev := range events {
+		if ev.Cancelled {
+			// Ahead of the match gate, not behind it: Google guarantees only the
+			// provider's own id for a cancelled event, never the iCalUID Resolve keys
+			// on, so gating on Resolve first would drop every cancellation whose UID
+			// didn't survive. Marking beats storing: the row may already exist, and an
+			// organiser who called a meeting off has not scheduled a new one.
+			if err := w.store.CancelInterview(ctx, u.UserID, cancelKey(ev)); err != nil {
+				return fmt.Errorf("cancel %s: %w", cancelKey(ev), err)
+			}
+			continue
+		}
 		match := calmatch.Resolve(calmatch.Event{UID: ev.UID}, candidates)
 		if match.ApplicationID == 0 {
 			// Not this candidate's business with us. It is not stored, not logged, and
 			// not counted — the window was read into memory and is discarded with it.
-			continue
-		}
-		if ev.Cancelled {
-			// Marking beats storing: the row may already exist, and an organiser who
-			// called a meeting off has not scheduled a new one.
-			if err := w.store.CancelInterview(ctx, u.UserID, cancelKey(ev)); err != nil {
-				return fmt.Errorf("cancel %s: %w", ev.UID, err)
-			}
 			continue
 		}
 		if !match.Tier.Links() {

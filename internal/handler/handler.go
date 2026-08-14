@@ -49,6 +49,7 @@ import (
 	"github.com/strelov1/freehire/internal/report"
 	"github.com/strelov1/freehire/internal/resume"
 	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/screeninganswers"
 	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/speech"
@@ -325,7 +326,6 @@ func Register(app *fiber.App, cfg Config) {
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
 	// which is why it is constructed after communityH rather than alongside it.
 	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}, companyfeedback.Config{}))
-	submissionsH := newSubmissionHandlers(queries, moderationSvc)
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
@@ -335,6 +335,11 @@ func Register(app *fiber.App, cfg Config) {
 	savedSearchH := newSavedSearchHandlers(queries)
 	subscriptionH := newSubscriptionHandlers(queries)
 	profileSvc := userprofile.New(userprofile.NewQueriesRepository(queries))
+	// The candidate's own screening answers (visa, salary, notice period, relocation, …) —
+	// a distinct singleton from profileSvc above (search/targeting preferences, a
+	// different lifecycle; see internal/screeninganswers/AGENTS.md).
+	screeningAnswersSvc := screeninganswers.New(screeninganswers.NewQueriesRepository(queries))
+	screeningAnswersH := newScreeningAnswersHandlers(screeningAnswersSvc)
 	// Résumé storage is nil-safe: a nil Blob (S3 unconfigured) yields a disabled service
 	// whose Enabled() is false, so the upload/verdict paths degrade to in-request parsing.
 	resumeStore := resume.New(cfg.Blob, resume.NewQueriesRepository(queries))
@@ -379,6 +384,9 @@ func Register(app *fiber.App, cfg Config) {
 	ingestClient := sources.NewClient()
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
 	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
+	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
+	// a second parsing registry — see submissionHandlers.PrefillSubmission.
+	submissionsH := newSubmissionHandlers(queries, moderationSvc, importer)
 	// jd-tailor-intake reuses the SAME importer as the contribution flow (shared SSRF-guarded
 	// transport and rate limits — see the comment on ingestClient above) for its recognized-ATS
 	// branch, and internal/privatejob for its generic-scrape/pasted-text branch.
@@ -467,7 +475,7 @@ func Register(app *fiber.App, cfg Config) {
 			Agent: cfg.AssistantLLM, Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
-		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank)
+		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
 	if cfg.Realtime != nil {
@@ -478,7 +486,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The autofill planner is one cheap structured call per run, so it travels on the
 	// shared client's default timeout. The contact block it plans over comes from the base
 	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
-	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
+	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys})
 	usageH := newUsageHandlers(cfg.LLMKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 
@@ -635,6 +643,8 @@ func Register(app *fiber.App, cfg Config) {
 
 	// The per-user profile singleton (see profileHandlers).
 	profileH.register(api, mw)
+	// The candidate's own screening answers (see screeningAnswersHandlers).
+	screeningAnswersH.register(api, mw)
 	marketPulseH.register(api, mw)
 	experienceH.register(api, mw)
 	talentNetworkH.register(api, mw)

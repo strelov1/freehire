@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/screeninganswers"
 )
 
 // autofillProfile is the canonical set of fields the browser extension writes
@@ -24,6 +26,22 @@ type autofillProfile struct {
 	LinkedIn  string `json:"linkedin"`
 	GitHub    string `json:"github"`
 	Portfolio string `json:"portfolio"`
+
+	// The candidate's own screening answers (internal/screeninganswers), formatted for
+	// display/autofill. Independent of the identity fields above: there is exactly one
+	// screening-answers store, so unlike CV vs. résumé there is no precedence to resolve.
+	// Empty when the caller has stated nothing — never guessed.
+	AuthorizedCountries   string `json:"authorized_countries"`
+	VisaSponsorshipNeeded string `json:"visa_sponsorship_needed"`
+	DesiredSalary         string `json:"desired_salary"`
+	NoticePeriod          string `json:"notice_period"`
+	WillingToRelocate     string `json:"willing_to_relocate"`
+	Age18OrOlder          string `json:"age_18_or_older"`
+}
+
+// screeningAnswersReader is the one screening-answers read autofill makes.
+type screeningAnswersReader interface {
+	Get(ctx context.Context, userID int64) (screeninganswers.Answers, error)
 }
 
 // baseCVReader is the one CV read autofill makes. Tailored copies are excluded by the
@@ -56,6 +74,10 @@ type autofillHandlers struct {
 	cvs      baseCVReader
 	resumes  resumeContactReader
 	accounts accountReader
+	// screeningAnswers supplies the candidate's own screening answers. Nil reads as "no
+	// screening answers configured" — the block degrades to empty fields, same as an
+	// unconfigured résumé reader elsewhere in this handler layer.
+	screeningAnswers screeningAnswersReader
 	// browserTools is shared with /tools/ws and the assistant — the hub is per-process and
 	// routes strictly within one user's channel.
 	browserTools *browsertools.Hub
@@ -64,8 +86,8 @@ type autofillHandlers struct {
 	llm llmBinding
 }
 
-func newAutofillHandlers(cvs baseCVReader, resumes resumeContactReader, accounts accountReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
-	return &autofillHandlers{cvs: cvs, resumes: resumes, accounts: accounts, browserTools: tools, llm: llm}
+func newAutofillHandlers(cvs baseCVReader, resumes resumeContactReader, accounts accountReader, screeningAnswers screeningAnswersReader, tools *browsertools.Hub, llm llmBinding) *autofillHandlers {
+	return &autofillHandlers{cvs: cvs, resumes: resumes, accounts: accounts, screeningAnswers: screeningAnswers, browserTools: tools, llm: llm}
 }
 
 func (h *autofillHandlers) register(api fiber.Router, mw middleware) {
@@ -183,7 +205,37 @@ func (h *autofillHandlers) autofillProfile(ctx context.Context, userID int64) (a
 	if err != nil {
 		return autofillProfile{}, err
 	}
-	return buildAutofillProfile(firstStatedHeader(fromCV, fromResume), account.Email), nil
+
+	profile := buildAutofillProfile(firstStatedHeader(fromCV, fromResume), account.Email)
+	if err := applyScreeningFields(ctx, &profile, h.screeningAnswers, userID); err != nil {
+		return autofillProfile{}, err
+	}
+	return profile, nil
+}
+
+// applyScreeningFields merges the caller's screening answers into the profile. Best-effort
+// in the same shape as the CV/résumé reads' "not found" branches: no reader configured or
+// no answers stated both leave the screening fields empty rather than failing the whole
+// read. Any OTHER error is real and propagates.
+func applyScreeningFields(ctx context.Context, p *autofillProfile, reader screeningAnswersReader, userID int64) error {
+	if reader == nil {
+		return nil
+	}
+	answers, err := reader.Get(ctx, userID)
+	if err != nil {
+		if errors.Is(err, screeninganswers.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	fields := answers.AutofillFields()
+	p.AuthorizedCountries = fields["authorized_countries"]
+	p.VisaSponsorshipNeeded = fields["visa_sponsorship_needed"]
+	p.DesiredSalary = fields["desired_salary"]
+	p.NoticePeriod = fields["notice_period"]
+	p.WillingToRelocate = fields["willing_to_relocate"]
+	p.Age18OrOlder = fields["age_18_or_older"]
+	return nil
 }
 
 // AutofillProfile returns the caller's canonical autofill fields. keyAuth so the

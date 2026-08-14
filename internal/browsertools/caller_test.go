@@ -3,6 +3,7 @@ package browsertools_test
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -131,6 +132,94 @@ func TestCallerMatchesEachAnswerToItsOwnCall(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("first call never resolved")
 	}
+}
+
+func TestStaleAnswerForAnEvictedCallerDoesNotResolveASuccessorsCall(t *testing.T) {
+	hub := browsertools.New()
+
+	var mu sync.Mutex
+	var frames [][]byte
+	sent := make(chan struct{}, 2)
+	extension := senderFunc(func(frame []byte) error {
+		mu.Lock()
+		frames = append(frames, frame)
+		mu.Unlock()
+		sent <- struct{}{}
+		return nil // never answers; the caller's call times out
+	})
+	hub.Join(7, browsertools.RoleExtension, extension)
+
+	// Caller A's first call times out and is closed, exactly as a retry would.
+	callerA := hub.NewCaller(7)
+	ctxA, cancelA := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancelA()
+	if _, err := callerA.Call(ctxA, "read_form", nil); err == nil {
+		t.Fatal("callerA.Call succeeded; want it to time out since the extension never answers")
+	}
+	callerA.Close()
+	<-sent
+
+	mu.Lock()
+	idA := frameID(t, frames[0])
+	mu.Unlock()
+
+	// Caller B replaces A as the harness end and issues its own call.
+	callerB := hub.NewCaller(7)
+	defer callerB.Close()
+
+	type callResult struct {
+		res json.RawMessage
+		err error
+	}
+	done := make(chan callResult, 1)
+	go func() {
+		res, err := callerB.Call(context.Background(), "fill_simple", nil)
+		done <- callResult{res, err}
+	}()
+	// Wait for callerB's request to actually reach the extension (proving it
+	// registered its pending call) before delivering any answer — a bounded
+	// wait rather than a fixed sleep, so this cannot flake under scheduler delay.
+	select {
+	case <-sent:
+	case <-time.After(2 * time.Second):
+		t.Fatal("callerB request did not reach the extension")
+	}
+
+	mu.Lock()
+	idB := frameID(t, frames[len(frames)-1])
+	mu.Unlock()
+	if idA == idB {
+		t.Fatalf("callerA and callerB both minted call id %q; ids must be unique per hub", idA)
+	}
+
+	// A late answer for A's evicted call arrives from the extension. Routed by
+	// role, it lands on whichever Caller currently holds RoleHarness — B — and
+	// must not be mistaken for an answer to B's own pending call.
+	hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+idA+`","result":"stale"}`))
+	hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+idB+`","result":"fresh"}`))
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			t.Fatalf("callerB.Call: %v", r.err)
+		}
+		if string(r.res) != `"fresh"` {
+			t.Fatalf("callerB.Call result = %s, want its own answer, not the stale one delivered for A's call", r.res)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("callerB.Call never resolved")
+	}
+}
+
+func frameID(t *testing.T, frame []byte) string {
+	t.Helper()
+	var call struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(frame, &call); err != nil {
+		t.Fatalf("frame is not JSON: %v", err)
+	}
+	return call.ID
 }
 
 // senderFunc adapts a function to browsertools.Socket.

@@ -107,6 +107,8 @@ func reportError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "report already decided")
 	case errors.Is(err, report.ErrInvalid):
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	case errors.Is(err, report.ErrRateLimited):
+		return fiber.NewError(fiber.StatusTooManyRequests, "too many reports today")
 	default:
 		return err
 	}

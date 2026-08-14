@@ -558,6 +558,10 @@ type Job struct {
 	IsPrivate             bool               `json:"is_private"`
 	SimilarJobIds         []int64            `json:"similar_job_ids"`
 	SimilarComputedAt     pgtype.Timestamptz `json:"similar_computed_at"`
+	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource  string             `json:"salary_currency_source"`
+	SalaryPeriodSource    string             `json:"salary_period_source"`
 }
 
 type JobDailyStat struct {
@@ -633,6 +637,8 @@ type JobSubmission struct {
 	SalaryMax      pgtype.Int4        `json:"salary_max"`
 	SalaryCurrency string             `json:"salary_currency"`
 	SalaryPeriod   string             `json:"salary_period"`
+	EmploymentType string             `json:"employment_type"`
+	Seniority      string             `json:"seniority"`
 }
 
 type LearnedAtsDomain struct {
@@ -775,6 +781,19 @@ type SavedSearch struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	PublicSlug  pgtype.Text        `json:"public_slug"`
 	AuthorLabel pgtype.Text        `json:"author_label"`
+}
+
+type ScreeningAnswer struct {
+	UserID                int64              `json:"user_id"`
+	AuthorizedCountries   []string           `json:"authorized_countries"`
+	VisaSponsorshipNeeded pgtype.Bool        `json:"visa_sponsorship_needed"`
+	DesiredSalaryAmount   pgtype.Int4        `json:"desired_salary_amount"`
+	DesiredSalaryCurrency pgtype.Text        `json:"desired_salary_currency"`
+	DesiredSalaryPeriod   pgtype.Text        `json:"desired_salary_period"`
+	NoticePeriodDays      pgtype.Int4        `json:"notice_period_days"`
+	WillingToRelocate     pgtype.Bool        `json:"willing_to_relocate"`
+	Age18OrOlder          pgtype.Bool        `json:"age_18_or_older"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SearchOutbox struct {

@@ -12,6 +12,20 @@ type textGetter interface {
 	GetText(ctx context.Context, url string) (string, error)
 }
 
+// jsonGetter fetches and decodes a URL's JSON body. Matches sources.JSONGetter
+// so the production sources.Client satisfies it.
+type jsonGetter interface {
+	GetJSON(ctx context.Context, url string, v any) error
+}
+
+// httpGetter is everything NewRegistry's resolvers need from the shared HTTP
+// client — one param type so a single sources.Client satisfies both the
+// title-scrape resolvers (textGetter) and join's API resolver (jsonGetter).
+type httpGetter interface {
+	textGetter
+	jsonGetter
+}
+
 // Resolver resolves a raw display-name candidate for a board from an ATS's own
 // source. It returns "" (not an error) when the source yields no usable name;
 // an error is reserved for transport failures. The candidate is unvalidated —
@@ -46,11 +60,18 @@ type Registry map[string]Resolver
 // the tenant's name — cmd/harvest-boards' bamboohrProber reached the same conclusion and
 // falls back to the slug rather than trying. A resolver wired here would always return ""
 // while looking like it was attempting something; leaving it out is the honest answer.
-func NewRegistry(text textGetter) Registry {
+//
+// join is the odd one out: its board (used by Board, not BoardFromURL — see board.go) is
+// the company's numeric join.com id, and join's own public API resolves that id straight
+// to a display name (no title-scrape needed): GET
+// https://join.com/api/public/companies/{id} -> {"name": "..."}. Confirmed live against
+// id 175014 -> "Goodweek".
+func NewRegistry(http httpGetter) Registry {
 	return Registry{
-		"pinpoint": newTitleResolver(text, "https://%s.pinpointhq.com", ExtractTitleName),
-		"lever":    newTitleResolver(text, "https://jobs.lever.co/%s", ExtractBareTitle),
-		"ashby": newTitleResolver(text, "https://jobs.ashbyhq.com/%s", func(title string) string {
+		"pinpoint": newTitleResolver(http, "https://%s.pinpointhq.com", ExtractTitleName),
+		"lever":    newTitleResolver(http, "https://jobs.lever.co/%s", ExtractBareTitle),
+		"join":     newJoinResolver(http),
+		"ashby": newTitleResolver(http, "https://jobs.ashbyhq.com/%s", func(title string) string {
 			return ExtractSuffixName(title, " Jobs")
 		}),
 	}
@@ -78,4 +99,24 @@ func (r *titleResolver) Name(ctx context.Context, board string) (string, error) 
 		return "", nil
 	}
 	return r.extract(m[1]), nil
+}
+
+const joinCompanyURL = "https://join.com/api/public/companies/%s"
+
+// joinCompanyResp is the subset of join.com's public company-profile response
+// this package needs. board is the numeric join company id.
+type joinCompanyResp struct {
+	Name string `json:"name"`
+}
+
+type joinResolver struct{ http jsonGetter }
+
+func newJoinResolver(http jsonGetter) *joinResolver { return &joinResolver{http: http} }
+
+func (r *joinResolver) Name(ctx context.Context, board string) (string, error) {
+	var resp joinCompanyResp
+	if err := r.http.GetJSON(ctx, fmt.Sprintf(joinCompanyURL, board), &resp); err != nil {
+		return "", err
+	}
+	return resp.Name, nil
 }

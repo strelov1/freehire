@@ -15,6 +15,7 @@
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
+  import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
   import { TabStrip, tabStripId } from '$lib/ui';
@@ -25,6 +26,7 @@
     FacetCounts,
     TalentNetworkVisibility,
   } from '$lib/types';
+  import type { Answers } from '$lib/generated/contracts';
   import { Button } from '$lib/ui';
 
   const profile = $derived(profileStore.profile);
@@ -43,18 +45,20 @@
   let parseStatus = $state('');
   let parseDetail = $state('');
   let contacts = $state<CandidateContacts | null>(null);
+  let screeningAnswers = $state<Answers | null>(null);
   let loadError = $state(false);
   // The tab strip's sections. `as const` ties `tab` to this list, so a section can't be
   // referenced by an id the strip doesn't offer.
   const TABS = [
     { id: 'settings', label: 'Settings' },
+    { id: 'screening', label: 'Screening answers' },
     { id: 'skills', label: 'Skills' },
     { id: 'structured', label: 'Profile' },
     { id: 'experience', label: 'Experience' },
     { id: 'readiness', label: 'CV readiness' },
   ] as const;
   const PANEL_ID = 'profile-panel';
-  let tab = $state<'settings' | 'skills' | 'structured' | 'experience' | 'readiness'>('settings');
+  let tab = $state<'settings' | 'screening' | 'skills' | 'structured' | 'experience' | 'readiness'>('settings');
   let modalOpen = $state(false);
   let actionError = $state<string | null>(null);
 
@@ -117,6 +121,17 @@
       status = 'error';
     }
     void loadStructured();
+    void loadScreeningAnswers();
+  }
+
+  // Best-effort, independent of the filter-driven reload — a failure here leaves the
+  // section blank on next load rather than erroring the whole profile page.
+  async function loadScreeningAnswers() {
+    try {
+      screeningAnswers = await api.getScreeningAnswers();
+    } catch {
+      screeningAnswers = null;
+    }
   }
 
   // Fetch the read-only structured résumé independently of the filter-driven reload.
@@ -360,6 +375,15 @@
             </Button>
             <DeleteAccountButton />
           </div>
+        {:else if tab === 'screening'}
+          <!-- Screening answers: a separate concern from the role/skills profile
+               (facts the candidate states directly, not a targeting profile), and its own
+               tab rather than a section of Settings — the six fields plus the assistant/
+               autofill wiring behind them earn their own place in the nav. The component
+               re-seeds its own fields from `answers` on reload (dirty-guarded, same pattern
+               as CandidateContactsEditor), since there is no single identity field here to
+               key a remount on. -->
+          <ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
         {:else if tab === 'skills'}
           <SkillsView />
         {:else if tab === 'structured'}

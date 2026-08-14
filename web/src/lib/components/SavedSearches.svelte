@@ -20,7 +20,7 @@
   // and its Telegram alert (the same control the sidebar and onboarding use). It works
   // on the modal's *staged* copy — applying/saving act on the staged edits and reach
   // the live list only on the modal's Show-results action. Signed-out users see a
-  // sign-in prompt. Board sharing lives on the /my/searches account page.
+  // sign-in prompt. Board sharing lives on the /my/notifications/searches account page.
   let { store }: { store: StagedFilters } = $props();
 
   // The set the user applied (the base for "Update <name>"), distinct from the derived

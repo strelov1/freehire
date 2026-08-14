@@ -79,6 +79,7 @@ func genStructs() (string, error) {
 	cvTS := filepath.Join(tmp, "cv.ts")
 	cveditTS := filepath.Join(tmp, "cvedit.ts")
 	applyformTS := filepath.Join(tmp, "applyform.ts")
+	screeninganswersTS := filepath.Join(tmp, "screeninganswers.ts")
 
 	cfg := &tygo.Config{
 		Packages: []*tygo.PackageConfig{
@@ -181,6 +182,13 @@ func genStructs() (string, error) {
 				OutputPath:   cveditTS,
 				IncludeFiles: []string{"wire.go"},
 			},
+			{
+				// The candidate's own screening answers wire shape (Answers). Only
+				// screeninganswers.go — store.go and repository.go are server-only.
+				Path:         "github.com/strelov1/freehire/internal/screeninganswers",
+				OutputPath:   screeninganswersTS,
+				IncludeFiles: []string{"screeninganswers.go"},
+			},
 		},
 	}
 	if err := tygo.New(cfg).Generate(); err != nil {
@@ -239,7 +247,11 @@ func genStructs() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody, nil
+	screeninganswersBody, err := readBody(screeninganswersTS)
+	if err != nil {
+		return "", err
+	}
+	return enrichBody + "\n" + jobviewBody + "\n" + bundleBody + "\n" + verdictBody + "\n" + atscheckBody + "\n" + cvmatchBody + "\n" + jobmatchBody + "\n" + hardconstraintBody + "\n" + matchanalysisBody + "\n" + resumeextractBody + "\n" + cvBody + "\n" + cveditBody + "\n" + applyformBody + "\n" + screeninganswersBody, nil
 }
 
 // readBody returns a tygo output file's body with its leading preamble removed, so

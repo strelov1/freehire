@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/report"
 )
@@ -51,6 +52,9 @@ type fakeRepo struct {
 	dismissCalled bool
 	dismissErr    error
 	dismissRet    report.Report
+
+	filedToday int
+	countErr   error
 }
 
 func (f *fakeRepo) Create(_ context.Context, reportedBy, jobID int64, reason, details, contactTelegram string) (report.Report, error) {
@@ -75,6 +79,10 @@ func (f *fakeRepo) MarkResolved(_ context.Context, id, reviewedBy int64, note st
 func (f *fakeRepo) MarkDismissed(_ context.Context, id, reviewedBy int64, reviewReason string) (report.Report, error) {
 	f.dismissed, f.dismissCalled = dismissArgs{ID: id, ReviewedBy: reviewedBy, ReviewReason: reviewReason}, true
 	return f.dismissRet, f.dismissErr
+}
+
+func (f *fakeRepo) CountFiledSince(_ context.Context, _ int64, _ time.Time) (int, error) {
+	return f.filedToday, f.countErr
 }
 
 // fakeCloser stands in for the job-lifecycle soft-close: it records the close call.
@@ -175,6 +183,29 @@ func TestFile_AcceptsEveryReason(t *testing.T) {
 		if _, err := report.New(repo, &fakeCloser{}).File(context.Background(), 1, 1, in); err != nil {
 			t.Errorf("reason %q rejected: %v", reason, err)
 		}
+	}
+}
+
+// A real job seeker does not have more than a handful of postings to flag in a day; the
+// cap bounds what one account can do to the moderation queue (ghostreport's precedent).
+func TestFile_RefusesPastTheDailyCap(t *testing.T) {
+	repo := &fakeRepo{filedToday: report.DailyCap}
+	_, err := report.New(repo, &fakeCloser{}).File(context.Background(), 7, 1, validInput())
+	if !errors.Is(err, report.ErrRateLimited) {
+		t.Errorf("err = %v, want ErrRateLimited", err)
+	}
+	if repo.createCalled {
+		t.Error("the capped request still reached the repository")
+	}
+}
+
+func TestFile_AllowsTheLastFilingUnderTheCap(t *testing.T) {
+	repo := &fakeRepo{filedToday: report.DailyCap - 1, createRet: report.Report{ID: 1}}
+	if _, err := report.New(repo, &fakeCloser{}).File(context.Background(), 7, 1, validInput()); err != nil {
+		t.Errorf("File at cap-1: %v, want it allowed", err)
+	}
+	if !repo.createCalled {
+		t.Error("a filing under the cap should reach the repository")
 	}
 }
 

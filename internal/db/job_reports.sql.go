@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countReportsFiledSince = `-- name: CountReportsFiledSince :one
+SELECT count(*) FROM job_reports
+WHERE reported_by = $1::bigint
+  AND created_at >= $2::timestamptz
+`
+
+type CountReportsFiledSinceParams struct {
+	ReportedBy int64              `json:"reported_by"`
+	Since      pgtype.Timestamptz `json:"since"`
+}
+
+// How many reports this account has filed since a cutoff, for the daily cap
+// (ghost_reports.CountGhostReportsSince's counterpart for this queue). Counts every status,
+// not just pending: a report already resolved or dismissed still consumed the reporter's
+// daily allowance, so excluding it would let a decided report be re-filed for free.
+func (q *Queries) CountReportsFiledSince(ctx context.Context, arg CountReportsFiledSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countReportsFiledSince, arg.ReportedBy, arg.Since)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createReport = `-- name: CreateReport :one
 INSERT INTO job_reports (
     reported_by, job_id, reason, details, contact_telegram

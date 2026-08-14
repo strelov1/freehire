@@ -16,11 +16,29 @@ func TestSlugLike(t *testing.T) {
 		{"Centellic", false},       // has uppercase
 		{"Bob's Red Mill", false},  // has spaces
 		{"", false},                // nothing to work with
-		{"123", false},             // no letter
+		{"123", true},              // bare numeric platform id, e.g. a join.com company id
 	}
 	for _, c := range cases {
 		if got := SlugLike(c.name); got != c.want {
 			t.Errorf("SlugLike(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestNumericPlaceholder(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"175014", true},
+		{"0", true},
+		{"", false},
+		{"175014a", false},
+		{"gs1ca", false},
+	}
+	for _, c := range cases {
+		if got := NumericPlaceholder(c.name); got != c.want {
+			t.Errorf("NumericPlaceholder(%q) = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
@@ -53,35 +71,45 @@ func TestExtractTitleName(t *testing.T) {
 
 func TestAccept(t *testing.T) {
 	cases := []struct {
+		source    string
 		slug      string
 		candidate string
 		wantName  string
 		wantOK    bool
 	}{
 		// Accepted: candidate is a spaced-out form of the slug (substring match).
-		{"afcb", "AFC Bournemouth", "AFC Bournemouth", true},
-		{"gs1ca", "GS1 Canada", "GS1 Canada", true},
-		{"bathspa", "Bath Spa University", "Bath Spa University", true},
+		{"pinpoint", "afcb", "AFC Bournemouth", "AFC Bournemouth", true},
+		{"pinpoint", "gs1ca", "GS1 Canada", "GS1 Canada", true},
+		{"pinpoint", "bathspa", "Bath Spa University", "Bath Spa University", true},
 		// Accepted with HTML-entity decode.
-		{"bobsredmill", "Bob&#39;s Red Mill", "Bob's Red Mill", true},
-		{"aspireallergy", "Aspire Allergy &amp; Sinus", "Aspire Allergy & Sinus", true},
+		{"pinpoint", "bobsredmill", "Bob&#39;s Red Mill", "Bob's Red Mill", true},
+		{"pinpoint", "aspireallergy", "Aspire Allergy &amp; Sinus", "Aspire Allergy & Sinus", true},
 		// Rejected: unrelated name (recruiter / rebrand / wrong subdomain).
-		{"kempinski", "Elena - Meta Recruitment", "", false},
-		{"mountainwarehouse", "Mountain Group", "", false},
-		{"nxcus", "NexCore", "", false},        // single-letter acronym is not enough
-		{"lbresearch", "Centellic", "", false}, // rebrand shares nothing with slug
+		{"pinpoint", "kempinski", "Elena - Meta Recruitment", "", false},
+		{"pinpoint", "mountainwarehouse", "Mountain Group", "", false},
+		{"pinpoint", "nxcus", "NexCore", "", false},        // single-letter acronym is not enough
+		{"pinpoint", "lbresearch", "Centellic", "", false}, // rebrand shares nothing with slug
 		// Rejected: empty / junk.
-		{"anything", "", "", false},
-		{"joe-testing", "Joe's Test Platform", "", false},
+		{"pinpoint", "anything", "", "", false},
+		{"pinpoint", "joe-testing", "Joe's Test Platform", "", false},
 		// Rejected: candidate is itself a slug — no improvement, and applying it
 		// would keep the company slug-like (non-idempotent re-runs).
-		{"osapiens", "osapiens", "", false},
+		{"pinpoint", "osapiens", "osapiens", "", false},
+		// Accepted despite sharing no text: slug is a bare numeric platform id
+		// resolved by join's authoritative exact-id lookup, so the confidence
+		// check is bypassed — trust comes from the id match, not text overlap.
+		{"join", "175014", "Goodweek", "Goodweek", true},
+		// Rejected even though the slug is numeric: a non-join source's resolver
+		// reaches its candidate by scraping a board derived from the URL, not by
+		// an id-exact lookup, so an unrelated numeric-slug company must still
+		// pass the confidence check like any other candidate.
+		{"pinpoint", "175014", "Goodweek", "", false},
 	}
 	for _, c := range cases {
-		gotName, gotOK := Accept(c.slug, c.candidate)
+		gotName, gotOK := Accept(c.source, c.slug, c.candidate)
 		if gotOK != c.wantOK || gotName != c.wantName {
-			t.Errorf("Accept(%q, %q) = (%q, %v), want (%q, %v)",
-				c.slug, c.candidate, gotName, gotOK, c.wantName, c.wantOK)
+			t.Errorf("Accept(%q, %q, %q) = (%q, %v), want (%q, %v)",
+				c.source, c.slug, c.candidate, gotName, gotOK, c.wantName, c.wantOK)
 		}
 	}
 }

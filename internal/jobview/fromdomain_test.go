@@ -50,7 +50,7 @@ func TestFromDomain_MatchesFrozenWireShape(t *testing.T) {
 				PostedAt:  ts(2026, 1, 1), CreatedAt: ts(2026, 1, 1), UpdatedAt: ts(2026, 1, 2),
 				ViewCount: 4, AppliedCount: 2,
 			},
-			want: `{"public_slug":"senior-go-developer-acme-1","source":"greenhouse","manually_added":true,"external_id":"acme:1","url":"http://x.test?utm_source=freehire.me","title":"Senior Go Developer","company":"Acme","company_slug":"acme","location":"Berlin, Germany","description":"","countries":["de"],"regions":[],"work_mode":"onsite","skills":["go","postgresql"],"cities":["Berlin"],"collections":["bigtech","yc"],"posted_at":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","closed_at":null,"enrichment":{"summary":"Great role","employment_type":"full_time","salary_min":100000,"salary_currency":"EUR","seniority":"senior","experience_years_min":5,"english_level":"c1","education_level":"bachelor","category":"backend","posting_language":"en"},"enriched_at":"2026-01-03T00:00:00Z","enrichment_version":1,"view_count":4,"applied_count":2,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
+			want: `{"public_slug":"senior-go-developer-acme-1","source":"greenhouse","manually_added":true,"external_id":"acme:1","url":"http://x.test?utm_source=freehire.me","title":"Senior Go Developer","company":"Acme","company_slug":"acme","location":"Berlin, Germany","description":"","countries":["de"],"regions":[],"work_mode":"onsite","skills":["go","postgresql"],"cities":["Berlin"],"collections":["bigtech","yc"],"posted_at":"2026-01-01T00:00:00Z","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","last_seen_at":null,"closed_at":null,"enrichment":{"summary":"Great role","employment_type":"full_time","salary_min":100000,"salary_currency":"EUR","seniority":"senior","experience_years_min":5,"english_level":"c1","education_level":"bachelor","category":"backend","posting_language":"en"},"enriched_at":"2026-01-03T00:00:00Z","enrichment_version":1,"view_count":4,"applied_count":2,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
 		},
 		"unenriched, empty facets": {
 			row: db.Job{
@@ -58,7 +58,7 @@ func TestFromDomain_MatchesFrozenWireShape(t *testing.T) {
 				Company: "Beta", CompanySlug: "beta", PublicSlug: "engineer-beta-2",
 				CreatedAt: ts(2026, 1, 5),
 			},
-			want: `{"public_slug":"engineer-beta-2","source":"lever","manually_added":false,"external_id":"beta:2","url":"","title":"Engineer","company":"Beta","company_slug":"beta","location":"","description":"","countries":[],"regions":[],"skills":[],"cities":[],"collections":[],"posted_at":"2026-01-05T00:00:00Z","created_at":"2026-01-05T00:00:00Z","updated_at":null,"closed_at":null,"enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
+			want: `{"public_slug":"engineer-beta-2","source":"lever","manually_added":false,"external_id":"beta:2","url":"","title":"Engineer","company":"Beta","company_slug":"beta","location":"","description":"","countries":[],"regions":[],"skills":[],"cities":[],"collections":[],"posted_at":"2026-01-05T00:00:00Z","created_at":"2026-01-05T00:00:00Z","updated_at":null,"last_seen_at":null,"closed_at":null,"enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
 		},
 		"closed posting": {
 			row: db.Job{
@@ -66,7 +66,7 @@ func TestFromDomain_MatchesFrozenWireShape(t *testing.T) {
 				CompanySlug: "gamma", PublicSlug: "dev-gamma-3",
 				CreatedAt: ts(2026, 1, 4), ClosedAt: ts(2026, 2, 1),
 			},
-			want: `{"public_slug":"dev-gamma-3","source":"ashby","manually_added":false,"external_id":"g:3","url":"","title":"Dev","company":"Gamma","company_slug":"gamma","location":"","description":"","countries":[],"regions":[],"skills":[],"cities":[],"collections":[],"posted_at":"2026-01-04T00:00:00Z","created_at":"2026-01-04T00:00:00Z","updated_at":null,"closed_at":"2026-02-01T00:00:00Z","enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
+			want: `{"public_slug":"dev-gamma-3","source":"ashby","manually_added":false,"external_id":"g:3","url":"","title":"Dev","company":"Gamma","company_slug":"gamma","location":"","description":"","countries":[],"regions":[],"skills":[],"cities":[],"collections":[],"posted_at":"2026-01-04T00:00:00Z","created_at":"2026-01-04T00:00:00Z","updated_at":null,"last_seen_at":null,"closed_at":"2026-02-01T00:00:00Z","enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
 		},
 		"geo hybrid: dict unpinned, LLM restricts": {
 			row: db.Job{
@@ -77,7 +77,7 @@ func TestFromDomain_MatchesFrozenWireShape(t *testing.T) {
 				Enrichment: json.RawMessage(`{"countries":["es"],"regions":["europe"]}`),
 				CreatedAt:  ts(2026, 1, 6),
 			},
-			want: `{"public_slug":"remote-dev-delta-4","source":"manual","manually_added":false,"external_id":"d:4","url":"","title":"Remote Dev","company":"Delta","company_slug":"delta","location":"","description":"","countries":["es"],"regions":["europe"],"work_mode":"remote","skills":[],"cities":[],"collections":[],"posted_at":"2026-01-06T00:00:00Z","created_at":"2026-01-06T00:00:00Z","updated_at":null,"closed_at":null,"enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
+			want: `{"public_slug":"remote-dev-delta-4","source":"manual","manually_added":false,"external_id":"d:4","url":"","title":"Remote Dev","company":"Delta","company_slug":"delta","location":"","description":"","countries":["es"],"regions":["europe"],"work_mode":"remote","skills":[],"cities":[],"collections":[],"posted_at":"2026-01-06T00:00:00Z","created_at":"2026-01-06T00:00:00Z","updated_at":null,"last_seen_at":null,"closed_at":null,"enrichment":{},"enriched_at":null,"enrichment_version":0,"view_count":0,"applied_count":0,"upvote_count":0,"downvote_count":0,"my_vote":0}`,
 		},
 	}
 

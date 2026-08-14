@@ -60,6 +60,16 @@ func Bool(b *bool) pgtype.Bool {
 	return pgtype.Bool{Bool: *b, Valid: true}
 }
 
+// BoolPtr maps a nullable DB bool to an optional bool: an invalid (NULL) value becomes
+// nil, a valid one a pointer to its value. The read-side inverse of Bool.
+func BoolPtr(b pgtype.Bool) *bool {
+	if !b.Valid {
+		return nil
+	}
+	v := b.Bool
+	return &v
+}
+
 // Text maps a string to the pgtype the generated params expect, treating the empty
 // string as NULL. It is the write-side adapter for a nullable text column whose domain
 // zero value is "" — e.g. link_contributions.source/board, unset on a review-queue row.

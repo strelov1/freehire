@@ -387,7 +387,12 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 // matchKeyHeld reports whether two params agree on everything RefreshUnchangedJob matches on,
 // i.e. whether the cheap path would treat b as an unchanged re-ingest of a.
 func matchKeyHeld(a, b db.UpsertJobParams) bool {
-	return a.ContentHash == b.ContentHash && slices.Equal(a.Cities, b.Cities)
+	return a.ContentHash == b.ContentHash &&
+		slices.Equal(a.Cities, b.Cities) &&
+		a.SalaryMinSource == b.SalaryMinSource &&
+		a.SalaryMaxSource == b.SalaryMaxSource &&
+		a.SalaryCurrencySource == b.SalaryCurrencySource &&
+		a.SalaryPeriodSource == b.SalaryPeriodSource
 }
 
 // fullDraft populates every jobderive.Input field, including the optional structured signals,
