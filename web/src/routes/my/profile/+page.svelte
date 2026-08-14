@@ -6,7 +6,8 @@
   import { api } from '$lib/api';
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '$lib/cvRefreshOffer';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
-  import { FilterStore, filtersToParams } from '$lib/filters';
+  import { FilterStore, filtersFromProfile, filtersToParams } from '$lib/filters';
+  import { savedSearches } from '$lib/savedSearches.svelte';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
   import AccountTimezone from '$lib/components/AccountTimezone.svelte';
   import CandidateContactsEditor from '$lib/components/CandidateContactsEditor.svelte';
@@ -15,6 +16,7 @@
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
+  import ProfileAlertToggle from '$lib/components/ProfileAlertToggle.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
@@ -221,7 +223,30 @@
   // ProfileForm callbacks: a save re-fetches coverage; a CV upload also refreshes the
   // stored-CV state. During set-up both reloads are no-ops (reload bails without a
   // filter), but cvUploaded still flips so the drop-zone shows the uploaded state at once.
-  const handleSaved = () => void reload();
+  function handleSaved() {
+    void reload();
+    void syncProfileAlert();
+  }
+
+  // Keep the profile-derived saved search (the "notify me about jobs matching my
+  // profile" toggle, ProfileAlertToggle) in step with a changed role/skills/location —
+  // otherwise it would keep alerting on the profile as it stood when first enabled.
+  // Best-effort: a failure here never blocks or rolls back the profile save itself,
+  // it just leaves the alert stale until the next successful save.
+  async function syncProfileAlert() {
+    const p = profileStore.profile;
+    if (!p) return;
+    await savedSearches.ensureLoaded();
+    const existing = savedSearches.items.find((s) => s.derived_from_profile);
+    if (!existing) return;
+    try {
+      await savedSearches.update(existing.id, {
+        query: filtersToParams(filtersFromProfile(p)).toString(),
+      });
+    } catch {
+      // best-effort — see doc comment.
+    }
+  }
   function handleCvUploaded() {
     cvUploaded = true;
     void reload();
@@ -367,7 +392,8 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <div class="mt-6">
+          <div class="mt-6 flex flex-col gap-4">
+            <ProfileAlertToggle {profile} />
             <AccountTimezone />
           </div>
           <!-- Destructive actions live at the foot of the settings tab, out of

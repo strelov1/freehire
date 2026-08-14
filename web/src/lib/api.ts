@@ -1050,9 +1050,18 @@ export function createApi(
   }
 
   /** Save the current filter state under a name. `query` is the canonical search
-   *  query string (may be empty). A duplicate name or the per-user cap is a 409. */
-  async function createSavedSearch(name: string, query: string): Promise<SavedSearch> {
-    return requestData<SavedSearch>('/api/v1/me/searches', jsonBody('POST', { name, query }));
+   *  query string (may be empty). A duplicate name or the per-user cap is a 409.
+   *  `derivedFromProfile` marks the auto-generated "notify me about jobs matching my
+   *  profile" search; a second one for the same user is a 409. */
+  async function createSavedSearch(
+    name: string,
+    query: string,
+    derivedFromProfile = false,
+  ): Promise<SavedSearch> {
+    return requestData<SavedSearch>(
+      '/api/v1/me/searches',
+      jsonBody('POST', { name, query, derived_from_profile: derivedFromProfile }),
+    );
   }
 
   /** Overwrite a saved search's name and/or query; an omitted field is unchanged. */

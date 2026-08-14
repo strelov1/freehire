@@ -34,9 +34,10 @@ class SavedSearches extends UserResource<SavedSearch[]> {
   }
 
   /** Save the current filters under a name; prepend the new set (newest-first).
-   *  Throws on a duplicate name or the per-user cap (the caller shows the error). */
-  async create(name: string, query: string): Promise<SavedSearch> {
-    const row = await api.createSavedSearch(name, query);
+   *  Throws on a duplicate name, a second `derivedFromProfile` row, or the per-user
+   *  cap (the caller shows the error). */
+  async create(name: string, query: string, derivedFromProfile = false): Promise<SavedSearch> {
+    const row = await api.createSavedSearch(name, query, derivedFromProfile);
     this.#items = [row, ...this.#items];
     return row;
   }

@@ -23,12 +23,12 @@
 
 ## 5. Web: toggle + sync
 
-- [ ] 5.1 `web/src/lib/types.ts`: `SavedSearch` gains `derived_from_profile: boolean`.
-- [ ] 5.2 `web/src/lib/api.ts`: `createSavedSearch` accepts an optional `derived_from_profile` param (default omitted/false); no other client signature changes (`updateSavedSearch`/`deleteSavedSearch` already take what's needed).
-- [ ] 5.3 New component (or a small addition to an existing profile-settings card, matching `AccountTimezone.svelte`'s autosave-card style): reads `savedSearches.items` for an existing `derived_from_profile` row to determine on/off; enable computes `filtersFromProfile(profile)` → `toSearchString()` → create (flagged) → subscribe default channel (`notification_settings.channels`, falling back to `['email']`); disable deletes the row.
-- [ ] 5.4 `ProfileForm.svelte`'s `onSaved` path (or the page-level `handleSaved` in `/my/profile/+page.svelte`): after a successful profile save, if a `derived_from_profile` search exists, recompute its query and `PATCH` it — fire-and-forget, best-effort (log-only on failure, never blocks/rolls back the profile save).
-- [ ] 5.5 Wire the toggle into `/my/profile`'s Settings tab, near `AccountTimezone`.
-- [ ] 5.6 Unit tests for the sync/enable/disable logic (`web/src/lib/*.test.ts`, DB-free — fake API client).
+- [x] 5.1 `web/src/lib/types.ts`: `SavedSearch` gains `derived_from_profile: boolean`.
+- [x] 5.2 `web/src/lib/api.ts`: `createSavedSearch` accepts an optional `derived_from_profile` param (default omitted/false); no other client signature changes (`updateSavedSearch`/`deleteSavedSearch` already take what's needed).
+- [x] 5.3 New component (or a small addition to an existing profile-settings card, matching `AccountTimezone.svelte`'s autosave-card style): reads `savedSearches.items` for an existing `derived_from_profile` row to determine on/off; enable computes `filtersFromProfile(profile)` → `toSearchString()` → create (flagged) → subscribe default channel (`notification_settings.channels`, falling back to `['email']`); disable deletes the row.
+- [x] 5.4 `ProfileForm.svelte`'s `onSaved` path (or the page-level `handleSaved` in `/my/profile/+page.svelte`): after a successful profile save, if a `derived_from_profile` search exists, recompute its query and `PATCH` it — fire-and-forget, best-effort (log-only on failure, never blocks/rolls back the profile save).
+- [x] 5.5 Wire the toggle into `/my/profile`'s Settings tab, near `AccountTimezone`.
+- [x] 5.6 Unit tests for the sync/enable/disable logic (`web/src/lib/*.test.ts`, DB-free — fake API client).
 
 ## 6. Verification
 

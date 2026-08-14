@@ -1,0 +1,118 @@
+<script lang="ts">
+  import { Check, Sparkles } from '@lucide/svelte';
+  import { api, ApiError } from '$lib/api';
+  import { filtersFromProfile, filtersToParams } from '$lib/filters';
+  import { savedSearches } from '$lib/savedSearches.svelte';
+  import { cn } from '$lib/ui';
+  import type { UserProfile } from '$lib/types';
+
+  // The built-in "notify me about jobs matching my profile" toggle: flipping it on
+  // creates the exact saved search the modal's "Apply my profile" action would stage
+  // (see stagedFilters.svelte.ts's applyProfile / filtersFromProfile), marks it
+  // derived_from_profile so at most one exists per user (the server's partial unique
+  // index is the actual invariant), and subscribes it to the account's default
+  // notification channel. Flipping it off deletes that saved search — the ON DELETE
+  // CASCADE on subscriptions.saved_search_id takes the subscription with it, so there
+  // is nothing else to clean up here. On/off is derived from whether such a row
+  // exists, not a separate flag, so this component never drifts from the server.
+  let { profile }: { profile: UserProfile } = $props();
+
+  const profileSearch = $derived(savedSearches.items.find((s) => s.derived_from_profile) ?? null);
+  const enabled = $derived(profileSearch !== null);
+
+  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  let saveError = $state<string | null>(null);
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    void savedSearches.ensureLoaded();
+  });
+
+  function flash() {
+    saveState = 'saved';
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => {
+      if (saveState === 'saved') saveState = 'idle';
+    }, 1500);
+  }
+
+  async function enable() {
+    saveState = 'saving';
+    saveError = null;
+    try {
+      const query = filtersToParams(filtersFromProfile(profile)).toString();
+      const search = await savedSearches.create('My profile', query, true);
+      const settings = await api.getNotificationSettings();
+      const channel = settings.channels[0] ?? 'email';
+      await api.createSubscription(search.id, channel);
+      flash();
+    } catch (e) {
+      saveState = 'error';
+      saveError = e instanceof ApiError ? e.message : 'Could not enable the alert.';
+    }
+  }
+
+  async function disable() {
+    if (!profileSearch) return;
+    saveState = 'saving';
+    saveError = null;
+    try {
+      await savedSearches.remove(profileSearch.id);
+      flash();
+    } catch (e) {
+      saveState = 'error';
+      saveError = e instanceof ApiError ? e.message : 'Could not disable the alert.';
+    }
+  }
+
+  function toggle() {
+    void (enabled ? disable() : enable());
+  }
+</script>
+
+<section class="rounded-xl border border-border bg-card p-4">
+  <div class="flex items-center gap-3">
+    <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
+      <Sparkles class="size-4.5" aria-hidden="true" />
+    </div>
+    <div class="min-w-0 flex-1">
+      <h2 class="text-sm font-semibold leading-tight">Jobs matching my profile</h2>
+      <p class="text-xs text-muted-foreground">
+        Get notified when a new job matches your role, skills and location preferences.
+      </p>
+    </div>
+
+    {#if saveState === 'saving'}
+      <span class="text-xs text-muted-foreground">Saving…</span>
+    {:else if saveState === 'saved'}
+      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> Saved</span>
+    {:else if saveState === 'error'}
+      <span class="text-xs text-destructive">{saveError}</span>
+    {/if}
+
+    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving')}
+  </div>
+</section>
+
+{#snippet toggleSwitch(on: boolean, label: string, onToggle: () => void, disabled: boolean)}
+  <button
+    type="button"
+    role="switch"
+    aria-checked={on}
+    aria-label={label}
+    onclick={onToggle}
+    {disabled}
+    class={cn(
+      'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+      on ? 'bg-brand' : 'bg-muted',
+    )}
+  >
+    <span
+      class={cn(
+        'inline-block size-5 rounded-full bg-white shadow-sm transition-transform',
+        on ? 'translate-x-[22px]' : 'translate-x-0.5',
+      )}
+    ></span>
+  </button>
+{/snippet}
