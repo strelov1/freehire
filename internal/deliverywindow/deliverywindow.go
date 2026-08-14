@@ -6,7 +6,11 @@
 // established pattern in this codebase's three notification engines).
 package deliverywindow
 
-import "time"
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 // resolveLocation maps tz to a *time.Location, falling back to UTC for an
 // empty or unrecognized zone — a bad/missing timezone must never block
@@ -62,4 +66,26 @@ func DigestDue(now time.Time, tz string, digestTime *time.Duration, lastSentAt *
 	sentDay := time.Date(sentLocal.Year(), sentLocal.Month(), sentLocal.Day(), 0, 0, 0, 0, loc)
 	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
 	return sentDay.Before(today)
+}
+
+// FromPgTime converts a nullable Postgres `time` column to the *time.Duration
+// InQuietHours/DigestDue accept (nil when the column is NULL). All three
+// notification engines read a `time` column this way, so the conversion is
+// written once here instead of copied at each call site.
+func FromPgTime(t pgtype.Time) *time.Duration {
+	if !t.Valid {
+		return nil
+	}
+	d := time.Duration(t.Microseconds) * time.Microsecond
+	return &d
+}
+
+// FromPgTimestamptz converts a nullable Postgres `timestamptz` column to a
+// *time.Time (nil when the column is NULL).
+func FromPgTimestamptz(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	tt := t.Time
+	return &tt
 }
