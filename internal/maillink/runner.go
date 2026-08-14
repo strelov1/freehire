@@ -267,10 +267,16 @@ func (r *Runner) process(ctx context.Context, cache appCache, c Claimed) error {
 		return err
 	}
 
-	// Feed the self-learning cache: a concrete (non-"other") signal means the
-	// classifier recognised application-lifecycle mail, so its sender domain is
-	// worth learning. Best-effort — a learn failure must not fail the email.
-	if r.learner != nil && cls.Signal != "" && cls.Signal != mailclassify.SignalOther {
+	// Feed the self-learning cache: a concrete (non-"other") signal AT the same
+	// confidence bar this package already trusts to act automatically (cfg.stage —
+	// see stageAdvance) means the classifier confidently recognised
+	// application-lifecycle mail, so its sender domain is worth learning.
+	// internal/gmailsync/learn.go documents the write side as triggering on
+	// "confident job-mail sightings"; without a confidence check here, repeated
+	// low-confidence guesses on the same sender could still reach PromoteThreshold
+	// and promote a domain the rest of the pipeline treats as too weak to act on.
+	// Best-effort — a learn failure must not fail the email.
+	if r.learner != nil && cls.Signal != "" && cls.Signal != mailclassify.SignalOther && cls.Confidence >= r.cfg.stage {
 		if err := r.learner.Learn(ctx, c.FromAddr); err != nil {
 			log.Printf("maillink: learn %q: %v", c.FromAddr, err)
 		}

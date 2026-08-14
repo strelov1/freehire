@@ -193,6 +193,28 @@ func TestRunnerDoesNotLearnNonApplicationMail(t *testing.T) {
 	}
 }
 
+func TestRunnerDoesNotLearnLowConfidenceSignal(t *testing.T) {
+	store := &fakeStore{claimed: []Claimed{{
+		OutboxID: 102, EmailID: 202, UserID: 1,
+		FromAddr: "no-reply@uncertain.example", Subject: "re: your message", Body: "…",
+	}}}
+	// A non-"other" signal the classifier itself is unsure about: below cfg.stage
+	// (0.8), the same bar this package already requires before acting automatically
+	// on a classification (see stageAdvance). Three such guesses on one sender must
+	// not be enough to promote its domain — see internal/gmailsync/learn.go's
+	// "confident job-mail sightings" gate.
+	cls := &fakeClassifier{out: mailclassify.Classification{Signal: mailclassify.SignalAcknowledgement, Confidence: 0.3}}
+	learner := &fakeLearner{}
+	r := New(store, cls, "test-model").WithLearner(learner)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(learner.learned) != 0 {
+		t.Errorf("learned %v, want none (confidence 0.3 is below the learn threshold)", learner.learned)
+	}
+}
+
 func TestRunnerAmbiguousMatchOffersLLMSuggestion(t *testing.T) {
 	store := &fakeStore{
 		apps: []Application{{JobID: 5, Company: "Acme"}, {JobID: 6, Company: "Acme"}},
