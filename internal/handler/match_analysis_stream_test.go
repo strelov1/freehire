@@ -14,7 +14,65 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/hardconstraint"
+	"github.com/strelov1/freehire/internal/matchanalysis"
+	"github.com/strelov1/freehire/internal/resumeextract"
+	"github.com/strelov1/freehire/internal/userprofile"
 )
+
+// TestCapFinalEvent_CapsTheStreamedFinalEventByUnmetHardConstraint mirrors
+// hardconstraint_e2e_test.go's TestServedAnalysisCappedByUnmetHardConstraint, but for the
+// Stream path: it drives the same real blocker-evaluation chain (build inputs from the
+// job + résumé, evaluate blockers) and asserts capFinalEvent — what StreamMatchAnalysis
+// applies to the `final` SSE event right before writing it — caps the over-optimistic
+// score and surfaces the blocker, exactly as GET/POST already do for their own served
+// copies.
+func TestCapFinalEvent_CapsTheStreamedFinalEventByUnmetHardConstraint(t *testing.T) {
+	job := db.Job{Description: "Requires an active PMP certification."}
+	cv := resumeextract.Structured{Certifications: []string{"AWS Certified Solutions Architect"}} // lists certs, not PMP
+	jr, ev := buildHardConstraintInputs(job, cv.Professional(), userprofile.LocationPreferences{}, nil)
+	blockers := hardconstraint.Evaluate(jr, ev)
+
+	uncapped := &matchanalysis.Analysis{OverallScore: 88, Verdict: "Strong Fit"}
+	final := matchanalysis.Event{Kind: matchanalysis.EventFinal, Analysis: uncapped}
+
+	served := capFinalEvent(final, blockers)
+
+	if served.Analysis.OverallScore != 60 { // certification score-cap
+		t.Errorf("streamed overall_score = %d, want 60 (capped by unmet PMP)", served.Analysis.OverallScore)
+	}
+	var sawCert bool
+	for _, b := range served.Analysis.Blockers {
+		if b.Category == hardconstraint.CategoryCertification && !b.Met {
+			sawCert = true
+		}
+	}
+	if !sawCert {
+		t.Error("streamed final event should surface the unmet certification blocker")
+	}
+
+	// The object AnalyzeStream returns to StreamMatchAnalysis — the one h.cacheAnalysis
+	// upserts right after — must stay uncapped, exactly as PostMatchAnalysis leaves the
+	// cache: capFinalEvent must cap a copy, never the caller's own Analysis.
+	if uncapped.OverallScore != 88 {
+		t.Errorf("the analysis fed to h.cacheAnalysis was mutated: overall_score = %d, want 88 (uncapped)", uncapped.OverallScore)
+	}
+	if len(uncapped.Blockers) != 0 {
+		t.Errorf("the analysis fed to h.cacheAnalysis carries blockers = %v, want none (uncapped, cache-side copy)", uncapped.Blockers)
+	}
+}
+
+// A non-final event (stage_start, thinking, ...) must pass through untouched — the cap
+// only ever applies to the audited final analysis.
+func TestCapFinalEvent_NoOpForNonFinalEvents(t *testing.T) {
+	e := matchanalysis.Event{Kind: matchanalysis.EventStageStart, Stage: 1, Label: "Extract & Match"}
+	got := capFinalEvent(e, []hardconstraint.Blocker{{Category: hardconstraint.CategoryCertification}})
+	if got.Kind != e.Kind || got.Stage != e.Stage || got.Label != e.Label || got.Analysis != e.Analysis {
+		t.Errorf("capFinalEvent altered a non-final event: got %+v, want unchanged %+v", got, e)
+	}
+}
 
 // stalledConn models the socket of a reader that stopped reading: writes block until the
 // write deadline the caller set, then fail the way a real one does. With no deadline set
