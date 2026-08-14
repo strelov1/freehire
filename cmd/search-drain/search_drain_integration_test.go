@@ -164,3 +164,76 @@ func TestIntegration_SearchDrainWorkerWidensCanonWithClusterGeography(t *testing
 		t.Errorf("search_outbox has %d rows, want 0 (drained)", n)
 	}
 }
+
+// TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossContamination
+// covers the fix for IndexBatch's per-job RoleClusterCount/RoleClusterGeo round trips
+// (batched into one RoleClusterCountsFor + one RoleClusterGeoFor call per wave, keyed by
+// the (company_slug, role_fingerprint) pair): two different companies sharing the exact
+// same role_fingerprint string, plus a singleton canon with no repost at all, all drain
+// in the SAME wave. If the batched lookup ever collapsed its results by role_fingerprint
+// alone (dropping company_slug from the key), acme's canon would be widened with
+// globex's city too; if a singleton's cluster key were looked up against the wrong
+// pair, its untouched geography would change.
+func TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossContamination(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	// acme/fp-shared: canon + repost, same shape as the test above.
+	acmeCanonID := seedJob(t, pool, "acme-canon", "Senior Backend Engineer", "acme", "fp-shared", []string{"Berlin"}, nil)
+	seedJob(t, pool, "acme-repost", "Senior Backend Engineer", "acme", "fp-shared", []string{"Paris"}, &acmeCanonID)
+
+	// globex/fp-shared: a DIFFERENT company using the identical role_fingerprint string,
+	// with no repost of its own — its geography must stay exactly what it was seeded
+	// with, not pick up acme's cities (or vice versa).
+	globexCanonID := seedJob(t, pool, "globex-canon", "Senior Backend Engineer", "globex", "fp-shared", []string{"Tokyo"}, nil)
+
+	// A true singleton (no repost, no fingerprint collision) in the same wave, to prove
+	// the batched geo query is correctly skipped/no-op for it too.
+	soloID := seedJob(t, pool, "solo", "Staff Platform Engineer", "acme", "fp-solo", []string{"Warsaw"}, nil)
+
+	enqueue(t, pool, acmeCanonID)
+	enqueue(t, pool, globexCanonID)
+	enqueue(t, pool, soloID)
+
+	runner := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	stats, err := runner.Run(ctx, searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Indexed != 3 || stats.Failed != 0 {
+		t.Fatalf("stats = %+v, want indexed=3 failed=0", stats)
+	}
+
+	found, cities := meiliDoc(t, meiliURL, key, acmeCanonID)
+	if !found {
+		t.Fatalf("acme canon job %d not found in the jobs index after drain", acmeCanonID)
+	}
+	slices.Sort(cities)
+	if want := []string{"Berlin", "Paris"}; !slices.Equal(cities, want) {
+		t.Errorf("acme canon cities = %v, want %v — must not pick up globex's city despite the "+
+			"shared role_fingerprint", cities, want)
+	}
+
+	found, cities = meiliDoc(t, meiliURL, key, globexCanonID)
+	if !found {
+		t.Fatalf("globex canon job %d not found in the jobs index after drain", globexCanonID)
+	}
+	if want := []string{"Tokyo"}; !slices.Equal(cities, want) {
+		t.Errorf("globex canon cities = %v, want %v (its own, unwidened) — must not pick up "+
+			"acme's cities despite the shared role_fingerprint", cities, want)
+	}
+
+	found, cities = meiliDoc(t, meiliURL, key, soloID)
+	if !found {
+		t.Fatalf("solo job %d not found in the jobs index after drain", soloID)
+	}
+	if want := []string{"Warsaw"}; !slices.Equal(cities, want) {
+		t.Errorf("solo job cities = %v, want %v (untouched singleton)", cities, want)
+	}
+}

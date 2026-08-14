@@ -1336,6 +1336,38 @@ WHERE j.company_slug = ANY(sqlc.arg(company_slugs)::text[])
   AND j.role_fingerprint = ANY(sqlc.arg(role_fingerprints)::text[])
 GROUP BY j.company_slug, j.role_fingerprint;
 
+-- name: RoleClusterGeoFor :many
+-- Role-cluster geography unions for a SPECIFIC set of (company_slug, role_fingerprint)
+-- pairs, so an incremental index push can widen a whole wave's canons in one query
+-- instead of one RoleClusterGeo call per job — the geography counterpart of
+-- RoleClusterCountsFor, mirrored the same way RoleClusterGeo mirrors RoleClusterCount.
+--
+-- Same cross-product-narrowed-by-caller shape as RoleClusterCountsFor, for the same
+-- reason (a pair-wise join needs a two-argument unnest the analyzer cannot type). Only
+-- OPEN rows count, matching RoleClusterGeo/RoleClusterGeoAll; the caller is expected to
+-- ask only for clusters it already knows (via RoleClusterCountsFor's mass_count) have
+-- more than one open row, since a singleton's self-union is a documented no-op there —
+-- but this query carries no HAVING of its own, so a caller-supplied singleton pair
+-- still resolves (to its own geography, the same no-op RoleClusterGeo returns for one).
+SELECT
+    o.company_slug,
+    o.role_fingerprint,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL
+  AND o.company_slug = ANY(sqlc.arg(company_slugs)::text[])
+  AND o.role_fingerprint = ANY(sqlc.arg(role_fingerprints)::text[])
+GROUP BY o.company_slug, o.role_fingerprint;
+
 -- name: CompaniesWithFuzzyDedupCandidates :many
 -- Company slugs worth running the fuzzy-description pass over: a company that still has more
 -- than one open CANONICAL posting after the exact role-cluster and aggregator passes, so there

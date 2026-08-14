@@ -2317,6 +2317,78 @@ func (q *Queries) RoleClusterGeoAll(ctx context.Context) ([]RoleClusterGeoAllRow
 	return items, nil
 }
 
+const roleClusterGeoFor = `-- name: RoleClusterGeoFor :many
+SELECT
+    o.company_slug,
+    o.role_fingerprint,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'c' AND t.val <> '')::text[] AS countries,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'r' AND t.val <> '')::text[] AS regions,
+    array_agg(DISTINCT t.val) FILTER (WHERE t.kind = 'y' AND t.val <> '')::text[] AS cities
+FROM jobs o
+LEFT JOIN LATERAL (
+    SELECT 'c'::text AS kind, e AS val FROM unnest(o.countries) AS e
+    UNION ALL
+    SELECT 'r', e FROM unnest(o.regions) AS e
+    UNION ALL
+    SELECT 'y', e FROM unnest(o.cities) AS e
+) t ON true
+WHERE o.closed_at IS NULL
+  AND o.company_slug = ANY($1::text[])
+  AND o.role_fingerprint = ANY($2::text[])
+GROUP BY o.company_slug, o.role_fingerprint
+`
+
+type RoleClusterGeoForParams struct {
+	CompanySlugs     []string `json:"company_slugs"`
+	RoleFingerprints []string `json:"role_fingerprints"`
+}
+
+type RoleClusterGeoForRow struct {
+	CompanySlug     string      `json:"company_slug"`
+	RoleFingerprint pgtype.Text `json:"role_fingerprint"`
+	Countries       []string    `json:"countries"`
+	Regions         []string    `json:"regions"`
+	Cities          []string    `json:"cities"`
+}
+
+// Role-cluster geography unions for a SPECIFIC set of (company_slug, role_fingerprint)
+// pairs, so an incremental index push can widen a whole wave's canons in one query
+// instead of one RoleClusterGeo call per job — the geography counterpart of
+// RoleClusterCountsFor, mirrored the same way RoleClusterGeo mirrors RoleClusterCount.
+//
+// Same cross-product-narrowed-by-caller shape as RoleClusterCountsFor, for the same
+// reason (a pair-wise join needs a two-argument unnest the analyzer cannot type). Only
+// OPEN rows count, matching RoleClusterGeo/RoleClusterGeoAll; the caller is expected to
+// ask only for clusters it already knows (via RoleClusterCountsFor's mass_count) have
+// more than one open row, since a singleton's self-union is a documented no-op there —
+// but this query carries no HAVING of its own, so a caller-supplied singleton pair
+// still resolves (to its own geography, the same no-op RoleClusterGeo returns for one).
+func (q *Queries) RoleClusterGeoFor(ctx context.Context, arg RoleClusterGeoForParams) ([]RoleClusterGeoForRow, error) {
+	rows, err := q.db.Query(ctx, roleClusterGeoFor, arg.CompanySlugs, arg.RoleFingerprints)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RoleClusterGeoForRow{}
+	for rows.Next() {
+		var i RoleClusterGeoForRow
+		if err := rows.Scan(
+			&i.CompanySlug,
+			&i.RoleFingerprint,
+			&i.Countries,
+			&i.Regions,
+			&i.Cities,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates :many
 SELECT id, source, url, public_slug, liveness_strikes
 FROM jobs

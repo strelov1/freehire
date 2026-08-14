@@ -2911,6 +2911,19 @@ type Querier interface {
 	// JOIN so a geo-less row still counts toward HAVING count(DISTINCT id) > 1 (the true cluster
 	// size); blanks/NULLs are dropped by the FILTER. Mirrors RoleClusterCountsAll's single pass.
 	RoleClusterGeoAll(ctx context.Context) ([]RoleClusterGeoAllRow, error)
+	// Role-cluster geography unions for a SPECIFIC set of (company_slug, role_fingerprint)
+	// pairs, so an incremental index push can widen a whole wave's canons in one query
+	// instead of one RoleClusterGeo call per job — the geography counterpart of
+	// RoleClusterCountsFor, mirrored the same way RoleClusterGeo mirrors RoleClusterCount.
+	//
+	// Same cross-product-narrowed-by-caller shape as RoleClusterCountsFor, for the same
+	// reason (a pair-wise join needs a two-argument unnest the analyzer cannot type). Only
+	// OPEN rows count, matching RoleClusterGeo/RoleClusterGeoAll; the caller is expected to
+	// ask only for clusters it already knows (via RoleClusterCountsFor's mass_count) have
+	// more than one open row, since a singleton's self-union is a documented no-op there —
+	// but this query carries no HAVING of its own, so a caller-supplied singleton pair
+	// still resolves (to its own geography, the same no-op RoleClusterGeo returns for one).
+	RoleClusterGeoFor(ctx context.Context, arg RoleClusterGeoForParams) ([]RoleClusterGeoForRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
