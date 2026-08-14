@@ -55,6 +55,38 @@ describe('createApi request timeout', () => {
   });
 });
 
+describe('job path segment encoding', () => {
+  // getJob/saveJob/recordJobView/voteJob/reportJob used to interpolate `slug` raw,
+  // unlike their siblings a few hundred lines away (trackApplication,
+  // getFollowUpDraft, recordFollowUp) which already wrap it in encodeURIComponent.
+  // Slugs are dictionary-safe today, so this was latent — but a slug containing a
+  // reserved character would silently mis-route the request.
+  it('encodes a slug with reserved characters instead of splicing it into the path raw', async () => {
+    const urls: string[] = [];
+    const fetcher = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(new Response('{"data":null}', { status: 200 }));
+    }) as unknown as typeof fetch;
+    const client = createApi(fetcher);
+    const slug = 'a/b?c#d';
+    const encoded = encodeURIComponent(slug);
+
+    await client.getJob(slug);
+    await client.saveJob(slug);
+    await client.recordJobView(slug);
+    await client.voteJob(slug, 'up');
+    await client.reportJob(slug, { reason: 'other' });
+
+    expect(urls).toEqual([
+      `/api/v1/jobs/${encoded}`,
+      `/api/v1/jobs/${encoded}/save`,
+      `/api/v1/jobs/${encoded}/view`,
+      `/api/v1/jobs/${encoded}/vote`,
+      `/api/v1/jobs/${encoded}/reports`,
+    ]);
+  });
+});
+
 describe('recent authentication adapters', () => {
   it('sends password reauthentication to the v2 cookie endpoint', async () => {
     let seenURL = '';

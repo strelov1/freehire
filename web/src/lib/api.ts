@@ -359,7 +359,7 @@ export function createApi(
   }
 
   async function getJob(slug: string): Promise<Job> {
-    return requestData<Job>(`/api/v1/jobs/${slug}`);
+    return requestData<Job>(`/api/v1/jobs/${encodeURIComponent(slug)}`);
   }
 
   /** Jobs semantically nearest to the one addressed by `slug` — the "Similar jobs"
@@ -760,7 +760,7 @@ export function createApi(
     action: 'view' | 'apply' | 'save' | 'stage' | 'track' | 'dismiss',
     method: 'POST' | 'DELETE' = 'POST',
   ): Promise<UserJob> {
-    return requestData<UserJob>(`/api/v1/jobs/${slug}/${action}`, { method });
+    return requestData<UserJob>(`/api/v1/jobs/${encodeURIComponent(slug)}/${action}`, { method });
   }
 
   /** Record that the current user viewed a job; returns their interaction
@@ -778,7 +778,7 @@ export function createApi(
    *  is decided entirely by the account's notification settings — there is no
    *  per-job override. */
   function saveJob(slug: string): Promise<UserJob> {
-    return requestData<UserJob>(`/api/v1/jobs/${slug}/save`, { method: 'POST' });
+    return requestData<UserJob>(`/api/v1/jobs/${encodeURIComponent(slug)}/save`, { method: 'POST' });
   }
 
   /** Set a job's application stage and/or notes (partial update — omit a field to
@@ -828,7 +828,7 @@ export function createApi(
   /** Cast a thumbs vote on a job (toggle/flip). Returns the job's resulting public
    *  counters and the caller's own vote. Requires a session — gate on auth first. */
   function voteJob(slug: string, dir: 'up' | 'down'): Promise<VoteResult> {
-    return requestData<VoteResult>(`/api/v1/jobs/${slug}/vote`, jsonBody('POST', { vote: dir }));
+    return requestData<VoteResult>(`/api/v1/jobs/${encodeURIComponent(slug)}/vote`, jsonBody('POST', { vote: dir }));
   }
 
   /** Clear the caller's thumbs vote on a job. Idempotent (no-op when none). */
@@ -1497,7 +1497,7 @@ export function createApi(
 
   /** Report a problem with a live vacancy (by slug). Returns the pending report. */
   async function reportJob(slug: string, input: ReportInput): Promise<Report> {
-    return requestData<Report>(`/api/v1/jobs/${slug}/reports`, jsonBody('POST', input));
+    return requestData<Report>(`/api/v1/jobs/${encodeURIComponent(slug)}/reports`, jsonBody('POST', input));
   }
 
   /** File a ghost-signal claim: applied on this date, never answered. Unlike
