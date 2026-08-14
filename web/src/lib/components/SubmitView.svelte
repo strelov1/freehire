@@ -16,6 +16,7 @@
   import { tablist } from '$lib/actions/tablist';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { htmlToMarkdown } from '$lib/htmlToMarkdown';
   import {
     REGION_OPTIONS,
     WORK_MODE_OPTIONS,
@@ -139,10 +140,10 @@
       if (seniority === '' && result.seniority) seniority = result.seniority;
       if (source.trim() === '' && result.source) source = result.source;
       // The source page's description arrives as sanitized HTML, not the markdown this
-      // editor wants — dropped straight in for the submitter to clean up on review
-      // rather than left blank, since NoteEditor only reads its initial value once.
+      // editor wants, so it is converted before it lands — NoteEditor only reads its
+      // initial value once, so raw tags dropped in directly would render literally.
       if (descriptionMarkdown.trim() === '' && result.description) {
-        descriptionMarkdown = result.description;
+        descriptionMarkdown = htmlToMarkdown(result.description);
         editorKey += 1;
       }
     } catch {
