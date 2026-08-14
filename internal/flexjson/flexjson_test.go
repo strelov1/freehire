@@ -18,6 +18,7 @@ func TestInt_NumberOrString(t *testing.T) {
 		`"n/a"`:   0,
 		`null`:    0,
 		`"  12 "`: 12,
+		`1e400`:   0, // syntactically valid JSON number, overflows float64
 	}
 	for raw, want := range cases {
 		var v Int
@@ -38,6 +39,7 @@ func TestInt64_NumberOrString(t *testing.T) {
 		`"none"`: 0,
 		`""`:     0,
 		`null`:   0,
+		`1e400`:  0, // syntactically valid JSON number, overflows float64
 	}
 	for raw, want := range cases {
 		var v Int64
@@ -62,6 +64,7 @@ func TestFloat_NumberOrString(t *testing.T) {
 		`null`:     0,
 		`"85%"`:    85,
 		`"0.9 ok"`: 0.9,
+		`1e400`:    0, // syntactically valid JSON number, overflows float64
 	}
 	for raw, want := range cases {
 		var v Float
@@ -89,6 +92,7 @@ func TestBool_BoolStringOrNumber(t *testing.T) {
 		`"no"`:    false,
 		`""`:      false,
 		`null`:    false,
+		`1e400`:   false, // syntactically valid JSON number, overflows float64
 	}
 	for raw, want := range cases {
 		var v Bool

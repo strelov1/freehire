@@ -28,11 +28,7 @@ import (
 type Int int
 
 func (f *Int) UnmarshalJSON(b []byte) error {
-	n, err := decodeNumber(b)
-	if err != nil {
-		return err
-	}
-	*f = Int(int(math.Round(n)))
+	*f = Int(int(math.Round(decodeNumber(b))))
 	return nil
 }
 
@@ -40,11 +36,7 @@ func (f *Int) UnmarshalJSON(b []byte) error {
 type Int64 int64
 
 func (f *Int64) UnmarshalJSON(b []byte) error {
-	n, err := decodeNumber(b)
-	if err != nil {
-		return err
-	}
-	*f = Int64(int64(math.Round(n)))
+	*f = Int64(int64(math.Round(decodeNumber(b))))
 	return nil
 }
 
@@ -53,11 +45,7 @@ func (f *Int64) UnmarshalJSON(b []byte) error {
 type Float float64
 
 func (f *Float) UnmarshalJSON(b []byte) error {
-	n, err := decodeNumber(b)
-	if err != nil {
-		return err
-	}
-	*f = Float(n)
+	*f = Float(decodeNumber(b))
 	return nil
 }
 
@@ -91,32 +79,36 @@ func (f *Bool) UnmarshalJSON(b []byte) error {
 	}
 	var n float64
 	if err := json.Unmarshal(b, &n); err != nil {
-		return err
+		// A syntactically valid but out-of-range numeric literal (e.g. 1e400) fails here
+		// too; unrecognized input is false, same as the string branch above.
+		*f = false
+		return nil
 	}
 	*f = Bool(n != 0)
 	return nil
 }
 
 // decodeNumber extracts a float64 from a JSON number or a string carrying a leading
-// numeric token. Empty, null, or non-numeric input yields 0 (not an error), so a single
-// unparseable field never aborts the surrounding record.
-func decodeNumber(b []byte) (float64, error) {
+// numeric token. Empty, null, non-numeric, or out-of-range input (e.g. a bare 1e400,
+// which is syntactically valid JSON but overflows float64) yields 0, never an error, so a
+// single unparseable field never aborts the surrounding record.
+func decodeNumber(b []byte) float64 {
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 || string(b) == "null" {
-		return 0, nil
+		return 0
 	}
 	if b[0] == '"' {
 		var s string
 		if err := json.Unmarshal(b, &s); err != nil {
-			return 0, err
+			return 0
 		}
-		return leadingFloat(s), nil
+		return leadingFloat(s)
 	}
 	var n float64
 	if err := json.Unmarshal(b, &n); err != nil {
-		return 0, err
+		return 0
 	}
-	return n, nil
+	return n
 }
 
 // leadingFloat parses the leading numeric token of s (optional sign, digits, one decimal
