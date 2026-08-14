@@ -2,6 +2,7 @@ package jobfacts
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/vocab"
@@ -157,5 +158,26 @@ func TestEnglishLevel(t *testing.T) {
 				t.Errorf("EnglishLevel(%q) = %q, want %q", c.desc, got, c.want)
 			}
 		})
+	}
+}
+
+// EnglishLevel's near/spanNear matching is O(#keyword-matches × #phrase-matches) in the
+// worst case, so a description with no upper bound could turn one job's derivation into
+// a CPU-bound stall on the per-job ingest path (a scraped/SEO-padded posting repeating
+// "english"/CEFR-like tokens without ever pairing them closely). A real signal placed
+// past englishScanMaxRunes must be invisible to EnglishLevel — proof the input is
+// actually bounded, not just that the matching is fast on realistic descriptions.
+func TestEnglishLevelIgnoresContentPastTheLengthCap(t *testing.T) {
+	padding := strings.Repeat("x ", englishScanMaxRunes) // far past the cap on its own
+	beyondCap := padding + "Advanced English is required."
+	if got := EnglishLevel(beyondCap); got != "" {
+		t.Errorf("EnglishLevel returned %q for a signal placed past the length cap, want \"\" (the cap must apply before matching)", got)
+	}
+
+	// The same signal, comfortably inside the cap, is still found — the cap must not
+	// suppress an ordinary, in-range description.
+	withinCap := "Advanced English is required." + strings.Repeat("x", 100)
+	if got := EnglishLevel(withinCap); got != "c1" {
+		t.Errorf("EnglishLevel(%q) = %q, want %q", withinCap, got, "c1")
 	}
 }

@@ -185,15 +185,31 @@ var englishRank = map[string]int{"a1": 1, "a2": 2, "b1": 3, "b2": 4, "c1": 5, "c
 // for the two to count as one signal. Sized for Russian (2 bytes/rune), so ~15 runes.
 const englishWindow = 30
 
+// englishScanMaxRunes bounds how much of the description EnglishLevel's near/spanNear
+// matching runs over. near/spanNear are O(#keyword-matches × #phrase-matches) in the
+// worst case (no pair of matches ever falls within englishWindow of each other), so an
+// unbounded, repetitive input — a scraped/SEO-padded description repeating
+// "english"/CEFR-like tokens many times without ever pairing them closely — could turn
+// derivation of one job into a multi-second, CPU-bound stall on the otherwise fast,
+// per-job ingest path. Sized generously above any real job posting; this only ever
+// engages on pathological input.
+const englishScanMaxRunes = 20000
+
 // EnglishLevel resolves the required English level from the description, returning
 // one of vocab.EnglishLevelValues or "" when nothing is stated. When several levels
 // are named it returns the lowest (the minimum requirement); an explicit "no English"
 // phrase resolves to "none" only when no positive level is present.
 func EnglishLevel(description string) string {
 	s := strings.ToLower(description)
+	s = truncateRunes(s, englishScanMaxRunes)
 	if !reEnglishKw.MatchString(s) {
 		return ""
 	}
+
+	// Scanned once and reused by every near()/spanNear() call below instead of each one
+	// re-running FindAllStringIndex over the whole string — near was doing that on every
+	// one of its five call sites, and the per-match loops did it once per match.
+	kws := reEnglishKw.FindAllStringIndex(s, -1)
 
 	levels := map[string]bool{}
 	for _, m := range reCEFRForward.FindAllStringSubmatch(s, -1) {
@@ -202,23 +218,23 @@ func EnglishLevel(description string) string {
 	for _, m := range reCEFRBack.FindAllStringSubmatch(s, -1) {
 		levels[m[1]] = true
 	}
-	if near(s, reEnglishKw, reNative) {
+	if near(s, kws, reNative) {
 		levels["native"] = true
 	}
-	if near(s, reEnglishKw, reFluentAdv) {
+	if near(s, kws, reFluentAdv) {
 		levels["c1"] = true
 	}
-	if near(s, reEnglishKw, reConvers) {
+	if near(s, kws, reConvers) {
 		levels["b1"] = true
 	}
-	if near(s, reEnglishKw, reElementary) {
+	if near(s, kws, reElementary) {
 		levels["a1"] = true
 	}
-	if near(s, reEnglishKw, reBasic) {
+	if near(s, kws, reBasic) {
 		levels["a2"] = true
 	}
 	for _, m := range reInterFam.FindAllStringSubmatchIndex(s, -1) {
-		if !spanNearEnglish(s, m[0], m[1]) {
+		if !spanNear(s, kws, m[0], m[1]) {
 			continue
 		}
 		switch {
@@ -233,7 +249,7 @@ func EnglishLevel(description string) string {
 		}
 	}
 	for _, m := range reRuMidFam.FindAllStringSubmatchIndex(s, -1) {
-		if !spanNearEnglish(s, m[0], m[1]) {
+		if !spanNear(s, kws, m[0], m[1]) {
 			continue
 		}
 		if m[2] >= 0 { // "выше средн..." — above intermediate
@@ -258,21 +274,26 @@ func EnglishLevel(description string) string {
 	return best
 }
 
-// near reports whether any match of kw and any match of phrase in s lie within
-// englishWindow bytes of each other without a sentence boundary between them.
-func near(s string, kw, phrase *regexp.Regexp) bool {
-	kws := kw.FindAllStringIndex(s, -1)
+// truncateRunes clamps s to at most max runes, rune-boundary safe. Local rather than
+// shared: this package stays free of any dependency beyond its own dict-only matching.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
+}
+
+// near reports whether any match of phrase in s lies within englishWindow bytes of one
+// of kws (English keyword match spans, precomputed once by the caller) without a
+// sentence boundary between them.
+func near(s string, kws [][]int, phrase *regexp.Regexp) bool {
 	for _, p := range phrase.FindAllStringIndex(s, -1) {
 		if spanNear(s, kws, p[0], p[1]) {
 			return true
 		}
 	}
 	return false
-}
-
-// spanNearEnglish reports whether the [start,end) span sits near an English keyword.
-func spanNearEnglish(s string, start, end int) bool {
-	return spanNear(s, reEnglishKw.FindAllStringIndex(s, -1), start, end)
 }
 
 // spanNear reports whether [start,end) is within englishWindow bytes of any span,
