@@ -22,13 +22,19 @@ type fakeWidgets struct {
 	errs map[string]error
 
 	calls     []string
+	requested []autofillagent.Fill // what fill_simple was actually asked to write
+	frames    map[string]int       // "tool label" -> the frame arg that call carried
 	selected  map[string]string
 	committed map[string]string
 }
 
 func (f *fakeWidgets) Call(_ context.Context, tool string, args any) (json.RawMessage, error) {
-	label, value := readArgs(args)
+	label, value, frame := readArgs(args)
 	f.calls = append(f.calls, tool+" "+label)
+	if f.frames == nil {
+		f.frames = map[string]int{}
+	}
+	f.frames[tool+" "+label] = frame
 
 	if err, ok := f.errs[tool+" "+label]; ok {
 		return nil, err
@@ -39,6 +45,12 @@ func (f *fakeWidgets) Call(_ context.Context, tool string, args any) (json.RawMe
 		return json.Marshal(map[string]any{"fields": f.fields})
 
 	case "fill_simple":
+		raw, _ := json.Marshal(args)
+		var call struct {
+			Fills []autofillagent.Fill `json:"fills"`
+		}
+		_ = json.Unmarshal(raw, &call)
+		f.requested = call.Fills
 		return json.Marshal(map[string]any{"outcomes": fillOutcomes(args)})
 
 	case "combobox.open":
@@ -83,14 +95,15 @@ func (f *fakeWidgets) Call(_ context.Context, tool string, args any) (json.RawMe
 	}
 }
 
-func readArgs(args any) (label, value string) {
+func readArgs(args any) (label, value string, frame int) {
 	raw, _ := json.Marshal(args)
 	var call struct {
 		Label string `json:"label"`
 		Value string `json:"value"`
+		Frame int    `json:"frame"`
 	}
 	_ = json.Unmarshal(raw, &call)
-	return call.Label, call.Value
+	return call.Label, call.Value, call.Frame
 }
 
 func fillOutcomes(args any) []map[string]string {
@@ -385,5 +398,56 @@ func TestRunReturnsThePartialReportWhenAWidgetFails(t *testing.T) {
 	}
 	if contains(rep.Filled, "Degree") {
 		t.Errorf("Filled = %v, the widget whose tool call failed must not be reported as filled", rep.Filled)
+	}
+}
+
+// A plain field and a combobox sharing a label — e.g. the same "City" in the top
+// frame and inside an ATS iframe — must be routed and reported independently by
+// Field.Frame rather than collapsed onto whichever field happened to be last in
+// the form. Before this fix, byLabel's single-field map meant the LAST field's
+// Combo-ness decided the whole plan entry's routing, so the plain frame-0 field
+// was silently dropped from fill_simple entirely and left unmapped despite the
+// widget having been driven successfully.
+func TestRunRoutesSameLabeledFieldsInDifferentFramesIndependently(t *testing.T) {
+	tools := &fakeWidgets{
+		fields: []autofillagent.Field{
+			{Label: "City", Type: "text", Frame: 0},              // plain field, top frame
+			{Label: "City", Type: "text", Combo: true, Frame: 3}, // widget, an ATS iframe
+		},
+		offers: map[string][]string{"City": {"Berlin"}},
+	}
+	planner := &widgetPlanner{
+		fills:   []autofillagent.Fill{{Label: "City", Value: "Berlin"}},
+		choices: map[string]string{"City": "Berlin"},
+	}
+	p := profile()
+	p["location"] = "Berlin, Germany"
+
+	rep, err := autofillagent.Run(context.Background(), tools, planner, p)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// The plain frame-0 field was actually written, carrying its own frame.
+	if len(tools.requested) != 1 || tools.requested[0].Label != "City" || tools.requested[0].Frame != 0 {
+		t.Fatalf("fill_simple requested %+v, want one City fill tagged frame 0", tools.requested)
+	}
+	// The widget was driven scoped to its own frame, not the plain field's.
+	if got := tools.frames["combobox.open City"]; got != 3 {
+		t.Errorf("combobox.open frame = %d, want 3 (the widget's own frame)", got)
+	}
+	// Both physical fields ended up correctly reported as filled — neither the
+	// widget's success masked the plain field's write, nor the reverse.
+	filled := 0
+	for _, label := range rep.Filled {
+		if label == "City" {
+			filled++
+		}
+	}
+	if filled != 2 {
+		t.Fatalf("Filled = %v, want City reported filled for both fields", rep.Filled)
+	}
+	if len(rep.Unmapped) != 0 {
+		t.Fatalf("Unmapped = %v, want nothing left over", rep.Unmapped)
 	}
 }

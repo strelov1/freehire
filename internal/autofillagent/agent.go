@@ -29,10 +29,14 @@ type Field struct {
 }
 
 // Fill is one entry of the plan: the value to write into the control carrying
-// this label.
+// this label. Frame names which of the page's frames the target field was read
+// from (see Field.Frame) — set by splitByKind from the field it resolved the fill
+// against, not by the planner, so a same-labeled control in a different frame is
+// not addressed by a Fill meant for another.
 type Fill struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+	Frame int    `json:"frame"`
 }
 
 // Profile is the user's canonical autofill fields, keyed as
@@ -104,17 +108,33 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Re
 // widgets that have to be driven. Only widgets the plan named are driven: a form
 // with 27 of them would otherwise cost 27 needless round trips and 27 needless
 // model calls to discover the profile answers none of them.
+//
+// Fields sharing a label are grouped, not deduped to one: a form can carry two
+// controls under the same label — a repeated question in a multi-entry section,
+// or the same label in two different frames, which Field.Frame exists to
+// disambiguate. The plan addresses a fill by label alone (the model has no way to
+// name a frame), so a fill naming that label is routed to EVERY field carrying it,
+// each tagged with its own Frame — never collapsed onto whichever field happened
+// to be last in the page, which is what silently misrouted a plain field's value
+// to a combobox target (or vice versa) whenever the two shared a label.
 func splitByKind(fields []Field, planned []Fill) (typed []Fill, widgets []Field) {
-	byLabel := make(map[string]Field, len(fields))
+	byLabel := make(map[string][]Field, len(fields))
 	for _, field := range fields {
-		byLabel[field.Label] = field
+		byLabel[field.Label] = append(byLabel[field.Label], field)
 	}
 	for _, fill := range planned {
-		if field, ok := byLabel[fill.Label]; ok && field.Combo {
-			widgets = append(widgets, field)
+		matches, ok := byLabel[fill.Label]
+		if !ok {
+			typed = append(typed, fill)
 			continue
 		}
-		typed = append(typed, fill)
+		for _, field := range matches {
+			if field.Combo {
+				widgets = append(widgets, field)
+				continue
+			}
+			typed = append(typed, Fill{Label: fill.Label, Value: fill.Value, Frame: field.Frame})
+		}
 	}
 	return typed, widgets
 }
@@ -184,13 +204,20 @@ func driveWidgets(ctx context.Context, tools Tools, planner Planner, profile Pro
 		if err != nil {
 			return driven, err
 		}
-		driven[question.Label] = status
+		driven[widgetKey(question.Label, question.Frame)] = status
 	}
 	return driven, nil
 }
 
+// widgetKey composite-keys a driven widget's outcome by label and frame, so two
+// widgets sharing a label in different frames (see splitByKind) are tracked as the
+// distinct controls they are instead of one overwriting the other's status.
+func widgetKey(label string, frame int) string {
+	return fmt.Sprintf("%s\x00%d", label, frame)
+}
+
 func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Profile, question Field) (string, error) {
-	opened, err := comboStep(ctx, tools, "combobox.open", question.Label, "")
+	opened, err := comboStep(ctx, tools, "combobox.open", question.Label, "", question.Frame)
 	if err != nil {
 		return "", err
 	}
@@ -198,7 +225,7 @@ func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Prof
 		return opened.Status, nil
 	}
 
-	offered, err := comboStep(ctx, tools, "combobox.options", question.Label, "")
+	offered, err := comboStep(ctx, tools, "combobox.options", question.Label, "", question.Frame)
 	if err != nil {
 		return "", err
 	}
@@ -223,7 +250,7 @@ func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Prof
 		return widgetUngrounded, nil
 	}
 
-	selected, err := comboStep(ctx, tools, "combobox.select", question.Label, choice)
+	selected, err := comboStep(ctx, tools, "combobox.select", question.Label, choice, question.Frame)
 	if err != nil {
 		return "", err
 	}
@@ -233,7 +260,7 @@ func driveWidget(ctx context.Context, tools Tools, planner Planner, profile Prof
 
 	// The commit is only real once the widget says so; `verified` is the single
 	// status the report is allowed to count as filled.
-	verified, err := comboStep(ctx, tools, "combobox.verify", question.Label, choice)
+	verified, err := comboStep(ctx, tools, "combobox.verify", question.Label, choice, question.Frame)
 	if err != nil {
 		return "", err
 	}
@@ -246,8 +273,12 @@ type comboReply struct {
 	Committed string   `json:"committed"`
 }
 
-func comboStep(ctx context.Context, tools Tools, tool, label, value string) (comboReply, error) {
-	raw, err := tools.Call(ctx, tool, map[string]any{"label": label, "value": value})
+// comboStep runs one combobox primitive against the widget carrying label in the
+// given frame — frame is what lets the browser tell apart two same-labeled
+// widgets in different frames/forms (see Field.Frame), the same way it already
+// does for read_form.
+func comboStep(ctx context.Context, tools Tools, tool, label, value string, frame int) (comboReply, error) {
+	raw, err := tools.Call(ctx, tool, map[string]any{"label": label, "value": value, "frame": frame})
 	if err != nil {
 		return comboReply{}, err
 	}
@@ -328,6 +359,10 @@ func normalize(s string) string {
 }
 
 func report(fields []Field, outcomes []outcome, driven map[string]string) Report {
+	// outcomes (fill_simple's reply) carries no frame — the wire's own contract, not
+	// something this function can widen — so a simple (non-combo) field is still
+	// looked up by label alone here. driven (this package's own widget-loop
+	// bookkeeping) has no such limit and is keyed label+frame; see widgetKey.
 	byLabel := make(map[string]string, len(outcomes))
 	for _, o := range outcomes {
 		byLabel[o.Label] = o.Status
@@ -344,7 +379,7 @@ func report(fields []Field, outcomes []outcome, driven map[string]string) Report
 		if strings.TrimSpace(field.Label) == "" {
 			continue
 		}
-		switch place(field, byLabel[field.Label], driven[field.Label]) {
+		switch place(field, byLabel[field.Label], driven[widgetKey(field.Label, field.Frame)]) {
 		case wasFilled:
 			rep.Filled = append(rep.Filled, field.Label)
 		case notFillableYet:
