@@ -17,6 +17,29 @@
   let visible = $state(false);
   let triggerEl: HTMLElement | undefined = $state();
 
+  // The floating content sits outside the wrapper's own layout box (it's
+  // `position: absolute`, offset by the `positions` margin below), so the pointer
+  // crosses a real gap — not a descendant of the wrapper — on its way from the
+  // trigger to the content. A bare mouseleave fires the instant the pointer enters
+  // that gap, closing the tooltip before it arrives. Delaying the hide, and
+  // cancelling the delay if the pointer lands back inside the wrapper (trigger or
+  // content — both are covered by its mouseenter) within the grace period, is what
+  // actually satisfies the "hoverable" guarantee below.
+  const HIDE_DELAY_MS = 150;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function show() {
+    clearTimeout(hideTimer);
+    visible = true;
+  }
+
+  function scheduleHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      visible = false;
+    }, HIDE_DELAY_MS);
+  }
+
   const uid = $props.id();
   const tooltipId = `${uid}-tooltip`;
 
@@ -37,8 +60,16 @@
   // moving the pointer. Hovering keeps it dismissed until the pointer leaves
   // and comes back, which is the intent.
   function dismiss(e: KeyboardEvent) {
-    if (e.key === 'Escape') visible = false;
+    if (e.key === 'Escape') hide();
   }
+
+  function hide() {
+    clearTimeout(hideTimer);
+    visible = false;
+  }
+
+  // A pending hide left running past unmount would set state on a dead component.
+  $effect(() => () => clearTimeout(hideTimer));
 
   const positions = {
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -58,10 +89,10 @@
 <span
   class="relative inline-flex"
   bind:this={triggerEl}
-  onmouseenter={() => (visible = true)}
-  onmouseleave={() => (visible = false)}
-  onfocusin={() => (visible = true)}
-  onfocusout={() => (visible = false)}
+  onmouseenter={show}
+  onmouseleave={scheduleHide}
+  onfocusin={show}
+  onfocusout={hide}
 >
   {@render children()}
   {#if visible}

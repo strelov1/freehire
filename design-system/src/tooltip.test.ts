@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Tooltip from './tooltip.svelte';
 import { must } from './test-utils';
 
@@ -46,14 +46,45 @@ describe('Tooltip', () => {
 
   // Leaving the attribute behind would point at an id that no longer exists,
   // which reads as no description at all.
-  it('drops the description again when it closes', async () => {
-    const { wrapper, trigger, queryByRole } = setup();
+  it('drops the description again once the close delay elapses', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper, trigger, queryByRole } = setup();
 
-    await fireEvent.mouseEnter(wrapper);
-    await fireEvent.mouseLeave(wrapper);
+      await fireEvent.mouseEnter(wrapper);
+      await fireEvent.mouseLeave(wrapper);
+      // The hide is deferred (see below), so it isn't gone the instant the pointer leaves.
+      expect(queryByRole('tooltip')).not.toBeNull();
 
-    expect(queryByRole('tooltip')).toBeNull();
-    expect(trigger.getAttribute('aria-describedby')).toBeNull();
+      await vi.runAllTimersAsync();
+
+      expect(queryByRole('tooltip')).toBeNull();
+      expect(trigger.getAttribute('aria-describedby')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The regression: mouseleave used to close the tooltip the instant the pointer left
+  // the trigger's own layout box, which doesn't cover the gap to the floating content —
+  // so moving the pointer toward a link inside the tooltip closed it before arriving.
+  // A grace period, cancelled by re-entering (trigger or content) in time, fixes that.
+  it('keeps the tooltip open if the pointer returns before the close delay elapses', async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper, queryByRole } = setup();
+
+      await fireEvent.mouseEnter(wrapper);
+      await fireEvent.mouseLeave(wrapper);
+      await vi.advanceTimersByTimeAsync(50); // still mid-gap, well under the delay
+      await fireEvent.mouseEnter(wrapper); // pointer arrived at the content
+
+      await vi.runAllTimersAsync();
+
+      expect(queryByRole('tooltip')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('dismisses on Escape without moving the pointer (WCAG 2.1 SC 1.4.13)', async () => {
