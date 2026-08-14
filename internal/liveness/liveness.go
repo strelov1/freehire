@@ -13,6 +13,8 @@ package liveness
 import (
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/htmltext"
 )
 
 // Verdict is the outcome of a probe. Three states, not two, so the worker can tell a
@@ -31,8 +33,13 @@ const (
 	Expired
 )
 
-// minContentChars is the body length below which a 2xx response is treated as an empty
-// shell (nav/footer only) rather than a real posting.
+// minContentChars is the VISIBLE-text length below which a 2xx response is treated as an
+// empty shell (nav/footer only) rather than a real posting. Measured against extracted
+// text (see htmltext.ToText), not the raw HTML body: a JS-only shell still ships a full
+// <head> — meta tags, <link>/<script> references, framework bundle URLs — that alone
+// routinely exceeds this threshold in raw markup even with zero visible content, and a
+// large commented-out block or hidden boilerplate can inflate raw length without adding
+// anything a visitor (or a human reading the diff) would call content.
 const minContentChars = 300
 
 // hardExpired matches phrases an employer page shows when a posting is closed
@@ -94,7 +101,7 @@ func Classify(status int, finalURL, body string) (Verdict, string) {
 	if listingPage.MatchString(body) {
 		return Expired, "listing_page"
 	}
-	if len(strings.TrimSpace(body)) < minContentChars {
+	if len(strings.TrimSpace(htmltext.ToText(body))) < minContentChars {
 		return Expired, "insufficient_content"
 	}
 	return Live, ""

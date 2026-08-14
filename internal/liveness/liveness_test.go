@@ -1,6 +1,9 @@
 package liveness
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // A realistic healthy posting body: well over the minimum length and free of any
 // expired/listing signal. Contains an "Apply" control to prove that apply text on
@@ -107,10 +110,61 @@ func TestClassify(t *testing.T) {
 			wantReason:  "insufficient_content",
 		},
 		{
+			// A JS-only shell's <head> boilerplate (meta tags, stylesheet/script
+			// references, a framework bundle URL) alone is well over 300 raw bytes even
+			// though the rendered page shows nothing but "Loading...". Proves the check
+			// measures extracted text, not raw markup length.
+			name:     "js shell with heavy head boilerplate is insufficient content",
+			status:   200,
+			finalURL: "https://boards.example.com/jobs/123",
+			body: `<!DOCTYPE html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Careers portal powered by a single-page application">
+<meta property="og:title" content="Careers"><meta property="og:type" content="website">
+<link rel="stylesheet" href="/static/css/main.a1b2c3d4.chunk.css">
+<link rel="preload" href="/static/js/main.a1b2c3d4.chunk.js" as="script">
+<link rel="icon" href="/favicon.ico">
+<title>Careers</title>
+</head><body><div id="root">Loading...</div>
+<script src="/static/js/runtime.e5f6g7h8.js"></script>
+<script src="/static/js/main.a1b2c3d4.chunk.js"></script>
+</body></html>`,
+			wantVerdict: Expired,
+			wantReason:  "insufficient_content",
+		},
+		{
+			// A hidden HTML comment padding raw body length past minContentChars must not
+			// mask a genuinely near-empty page: extracted text drops comments entirely.
+			name:     "hidden comment block does not mask insufficient content",
+			status:   200,
+			finalURL: "https://boards.example.com/jobs/123",
+			body: `<html><body><div id="root">Loading...</div>
+<!-- ` + strings.Repeat("stale boilerplate never rendered to a visitor ", 10) + ` -->
+</body></html>`,
+			wantVerdict: Expired,
+			wantReason:  "insufficient_content",
+		},
+		{
 			name:        "healthy posting is live",
 			status:      200,
 			finalURL:    "https://boards.example.com/jobs/123",
 			body:        healthyBody,
+			wantVerdict: Live,
+		},
+		{
+			// A real posting page wraps the same healthy content in server-rendered
+			// markup (nav/footer chrome, a couple of tracking scripts). Extracted text
+			// must not fall below minContentChars just because it's shorter than the raw
+			// HTML it came from.
+			name:     "healthy posting wrapped in real markup is live",
+			status:   200,
+			finalURL: "https://boards.example.com/jobs/123",
+			body: `<html><head><title>Senior Go Engineer</title></head><body>
+<nav><a href="/">Home</a><a href="/jobs">Jobs</a></nav>
+<main><h1>` + healthyBody + `</h1></main>
+<footer>&copy; 2026 Acme Inc.</footer>
+<script src="/static/js/analytics.js"></script>
+</body></html>`,
 			wantVerdict: Live,
 		},
 		{
