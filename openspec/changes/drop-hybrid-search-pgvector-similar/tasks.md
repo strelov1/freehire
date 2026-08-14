@@ -87,20 +87,26 @@
       implementation — remove once the handler no longer calls it (see Section 7).
 - [x] 5.3 Update `similar_integration_test.go` and unit tests for the new data path.
 
-## 6. Switch `/me/recommendations` to a live pgvector query
+## 6. Remove `/me/recommendations` entirely (mid-implementation reversal — see
+      design.md Context; NOT migrated to pgvector)
 
-- [ ] 6.1 Two-stage lookup per design.md Decision 5a (mid-implementation revision —
-      no new SQL facet translator, reuse Meili's existing `jobs` index filtering):
-      (a) query the live `jobs` facet index with the request's facet params (via the
-      existing `search.FilterFromValues`/`buildSearchFilter`, unchanged) and no text
-      query, retrieving up to a capped number of matching job IDs, `id`-only; (b) a
-      new pgvector query: CV vector (from the caller's persisted embedding, still a
-      single vector — a résumé isn't chunked) against `job_semantic_chunks` using
-      the same nearest-chunk-per-job rollup as `/similar` (design.md Decision 5),
-      restricted to `WHERE job_id = ANY($meili_ids)` and open jobs, `LIMIT`/`OFFSET`.
-- [ ] 6.2 Wire the handler to the two-stage lookup instead of `search.Client.RecommendByVector`.
-- [ ] 6.3 Update recommendation tests (unit + integration) for the new path;
-      verify facet-filter scenarios from the `cv-recommendations` spec still hold.
+- [ ] 6.1 Backend: delete `internal/handler/recommendations.go`, its route
+      registration, and its tests. Delete the CV-embedding write path (résumé
+      upload, `internal/resume`/`internal/handler/resume.go` — grep both for
+      `Embedding`/`EmbedText` and remove what only served this feature; do not
+      touch anything résumé upload needs for other reasons, e.g. skill
+      extraction). Leave `search.Client.RecommendByVector` (Meili-backed) for
+      section 7 to delete alongside the rest of the Meili semantic code — don't
+      duplicate that removal here.
+- [ ] 6.2 Frontend: remove the "Recommended" sort option and all `sort=cv`
+      handling from the standalone jobs feed (`web/src/lib/components/JobsView.svelte`,
+      `web/src/lib/facetModel.ts`, and `web/src/lib/api.ts`'s `recommendations()`
+      call) — the sign-in/no-CV prompts, the URL round-trip, the whole CV-mode
+      branch. A pre-existing `?sort=cv` link should fall back to the default
+      "Newest" feed, not error.
+- [ ] 6.3 Confirm nothing else references the removed endpoint/UI (grep
+      `recommendations`/`sort=cv`/`sort.*cv` across `web/src` and `internal/`)
+      and clean up any now-dead helper left behind.
 
 ## 7. Remove the old Meili semantic path
 
