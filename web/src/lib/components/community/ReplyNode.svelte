@@ -27,8 +27,16 @@
 
   // Direct children of this reply, oldest first (the flat list is already ordered).
   const children = $derived(replies.filter((r) => r.parent_id === reply.id));
+  // A reply chain is a user-controlled parent_id graph with no server-side depth
+  // limit, so recursing through <Self> for every level is unbounded: a thread where
+  // each reply is authored as a child of the previous one would mount one nested
+  // ReplyNode per level. Cap actual recursion at the same depth the indent already
+  // caps — nothing deeper reads any differently anyway, since the indent stops
+  // growing there too.
+  const MAX_DEPTH = 6;
   // Indentation is capped so deep chains don't march off the right edge.
-  const indent = $derived(Math.min(depth, 6) * 16);
+  const indent = $derived(Math.min(depth, MAX_DEPTH) * 16);
+  const atMaxDepth = $derived(depth >= MAX_DEPTH);
 
   let replying = $state(false);
   let body = $state('');
@@ -81,9 +89,15 @@
   {/if}
 </div>
 
-{#each children as child (child.id)}
-  <Self reply={child} {replies} {threadId} {closed} depth={depth + 1} {addReply} />
-{/each}
+{#if !atMaxDepth}
+  {#each children as child (child.id)}
+    <Self reply={child} {replies} {threadId} {closed} depth={depth + 1} {addReply} />
+  {/each}
+{:else if children.length > 0}
+  <p class="node__depth-limit" style={`margin-left:${indent}px`}>
+    {children.length} more {children.length === 1 ? 'reply' : 'replies'} nested deeper — not shown.
+  </p>
+{/if}
 
 <style>
   .node {
@@ -136,5 +150,10 @@
     color: var(--destructive, #dc2626);
     font-size: 0.8rem;
     margin: 0;
+  }
+  .node__depth-limit {
+    color: var(--muted-foreground, #6b7280);
+    font-size: 0.8rem;
+    margin: 0.5rem 0;
   }
 </style>
