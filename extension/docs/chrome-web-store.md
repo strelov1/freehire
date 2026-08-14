@@ -104,3 +104,39 @@ used for creditworthiness or lending.
 The privacy policy at the URL you enter must say the same thing and state
 compliance with the Chrome Web Store limited-use requirements. It has to be
 reachable over HTTPS without a login — the review bot crawls it.
+
+## Automated publishing (after the first manual release)
+
+The Chrome Web Store API only updates an **existing** item — it cannot create the
+first listing, so everything above stays a one-time manual pass. Once that first
+release is live, `.github/workflows/extension.yml` uploads and submits every
+subsequent version bump automatically (gated on the GitHub Release step actually
+having created a new tag, so an unchanged version is never re-uploaded — the
+store rejects that anyway).
+
+It's a no-op until three secrets exist on the repo. One-time setup:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → new (or existing)
+   project → **APIs & Services → Library** → enable the **Chrome Web Store API**.
+2. **APIs & Services → Credentials** → **Create credentials → OAuth client ID**
+   → Application type **Desktop app**. Note the client id and client secret.
+3. Get a refresh token once, from a machine with a browser (this is the only
+   interactive step): run
+   ```
+   npx --yes chrome-webstore-upload-cli@3 refresh-token \
+     --client-id <CLIENT_ID> --client-secret <CLIENT_SECRET>
+   ```
+   sign in with the **same Google account that owns the Developer Dashboard
+   item**, and copy the refresh token it prints.
+4. Add three repo secrets (Settings → Secrets and variables → Actions):
+   `CHROME_WEBSTORE_CLIENT_ID`, `CHROME_WEBSTORE_CLIENT_SECRET`,
+   `CHROME_WEBSTORE_REFRESH_TOKEN`.
+
+`CHROME_WEBSTORE_EXTENSION_ID` is not a secret — it's hardcoded in the workflow
+as the published item's id (`ijfaechijopdlikalojadpojmpilplnj`, from the
+dashboard URL), which is **not** the same id `wxt.config.ts`'s pinned dev key
+produces locally.
+
+Submitting a build this way still enters Google's normal manual review queue —
+`<all_urls>` guarantees that regardless of who uploads it. Automation removes
+the manual dashboard upload step, not the wait.

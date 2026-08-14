@@ -88,15 +88,52 @@ jobs:
 
       - name: Publish GitHub Release
         if: github.event_name == 'push'
+        id: gh_release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: extension-v${{ steps.version.outputs.version }}
         run: |
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists, skipping."
+            echo "created=false" >> "$GITHUB_OUTPUT"
           else
             gh release create "$TAG" .output/*.zip \
               --repo "$GITHUB_REPOSITORY" \
               --title "extension v${{ steps.version.outputs.version }}" \
               --notes "Automated build from commit $GITHUB_SHA."
+            echo "created=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # Uploads the same zip the GitHub Release just published to the Chrome Web
+      # Store and submits it for review. Gated on the version actually being new
+      # (the store rejects a re-upload of a version it already has, same rule as
+      # extension/docs/chrome-web-store.md's manual checklist) and on the
+      # publish-time secrets existing at all, so this step is a no-op until
+      # someone wires up a Google Cloud OAuth client for the Chrome Web Store API
+      # (see extension/docs/chrome-web-store.md for how to obtain them) and adds
+      # CHROME_WEBSTORE_CLIENT_ID / CHROME_WEBSTORE_CLIENT_SECRET /
+      # CHROME_WEBSTORE_REFRESH_TOKEN as repo secrets. Submitting still queues for
+      # Google's manual review — <all_urls> guarantees that regardless of who
+      # uploads the build.
+      - name: Publish to Chrome Web Store
+        if: github.event_name == 'push' && steps.gh_release.outputs.created == 'true' && env.CHROME_WEBSTORE_CLIENT_ID != ''
+        env:
+          CHROME_WEBSTORE_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CHROME_WEBSTORE_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          # The published item's id (chrome.google.com/webstore/devconsole/.../<id>/edit),
+          # not the pinned dev key's id in wxt.config.ts — those are different ids by design.
+          CHROME_WEBSTORE_EXTENSION_ID: ijfaechijopdlikalojadpojmpilplnj
+        run: |
+          zip_path=$(ls .output/*.zip | head -n1)
+          npx --yes chrome-webstore-upload-cli@3 upload \
+            --source "$zip_path" \
+            --extension-id "$CHROME_WEBSTORE_EXTENSION_ID" \
+            --client-id "$CHROME_WEBSTORE_CLIENT_ID" \
+            --client-secret "$CHROME_WEBSTORE_CLIENT_SECRET" \
+            --refresh-token "$CHROME_WEBSTORE_REFRESH_TOKEN"
+          npx --yes chrome-webstore-upload-cli@3 publish \
+            --extension-id "$CHROME_WEBSTORE_EXTENSION_ID" \
+            --client-id "$CHROME_WEBSTORE_CLIENT_ID" \
+            --client-secret "$CHROME_WEBSTORE_CLIENT_SECRET" \
+            --refresh-token "$CHROME_WEBSTORE_REFRESH_TOKEN"
