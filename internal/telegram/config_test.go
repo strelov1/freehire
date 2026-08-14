@@ -73,6 +73,17 @@ channels:
 `,
 			want: "duplicate",
 		},
+		{
+			name: "duplicate channel differing only by case",
+			yml: `
+channels:
+  - channel: hrlunapark
+    kind: authored
+  - channel: HRLunapark
+    kind: authored
+`,
+			want: "duplicate",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

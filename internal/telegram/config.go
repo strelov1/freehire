@@ -6,6 +6,7 @@ package telegram
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -79,6 +80,11 @@ func ParseConfig(data []byte) (Config, error) {
 
 // Validate checks every entry has a channel, a known kind, and no duplicates, so
 // the crawl command can fail fast instead of silently skipping or double-crawling.
+// The duplicate check is case-insensitive, matching t.me username matching
+// elsewhere in the package (see preview.go's postID): "hrlunapark" and
+// "HRLunapark" name the same channel and would otherwise both pass as distinct
+// entries, crawling and extracting the same posts twice under different
+// external_ids.
 func (c Config) Validate() error {
 	seen := make(map[string]bool, len(c.Channels))
 	for _, e := range c.Channels {
@@ -88,10 +94,11 @@ func (c Config) Validate() error {
 		if e.Kind != KindAuthored && e.Kind != KindBoard {
 			return fmt.Errorf("telegram: channel %q has unknown kind %q", e.Channel, e.Kind)
 		}
-		if seen[e.Channel] {
+		key := strings.ToLower(e.Channel)
+		if seen[key] {
 			return fmt.Errorf("telegram: duplicate channel %q", e.Channel)
 		}
-		seen[e.Channel] = true
+		seen[key] = true
 	}
 	return nil
 }
