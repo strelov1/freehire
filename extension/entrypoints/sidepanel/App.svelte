@@ -128,14 +128,24 @@
     }
   }
 
-  async function loadCatalog(slug: string, token: string) {
+  // Bumped at the start of every loadMatch() call; a stale call checks its own
+  // captured id against the current one before writing shared state, so an
+  // earlier in-flight load (e.g. a slow ad-hoc text match) can never clobber a
+  // newer one's result after the user has already tabbed or navigated again.
+  let matchRequestId = 0;
+
+  async function loadCatalog(slug: string, token: string, requestId: number): Promise<boolean> {
     const [job, m] = await Promise.all([getJob(slug, token), getMatch(slug, token)]);
+    if (requestId !== matchRequestId) return false;
     matchJob = job;
     match = m;
+    return true;
   }
 
   async function loadMatch() {
+    const requestId = ++matchRequestId;
     const token = await getToken();
+    if (requestId !== matchRequestId) return;
     if (!token) {
       matchStatus = 'empty';
       matchJob = null;
@@ -143,6 +153,7 @@
       return;
     }
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (requestId !== matchRequestId) return;
     const url = tab?.url ?? '';
 
     matchStatus = 'loading';
@@ -151,7 +162,7 @@
       // Freehire's own job page → curated slug directly.
       const directSlug = freehireSlugFromUrl(url);
       if (directSlug) {
-        await loadCatalog(directSlug, token);
+        if (!(await loadCatalog(directSlug, token, requestId))) return;
         matchStatus = 'ready';
         return;
       }
@@ -159,14 +170,18 @@
       // Any other page: recognise it as a catalog job from its URL (curated
       // card), else read the page and match against the scraped posting text.
       const catalogSlug = await findJob(url, token);
+      if (requestId !== matchRequestId) return;
       const snap = catalogSlug ? null : await readSnapshot();
+      if (requestId !== matchRequestId) return;
       const headline = snap?.headline || snap?.title || '';
 
       if (catalogSlug) {
-        await loadCatalog(catalogSlug, token);
+        if (!(await loadCatalog(catalogSlug, token, requestId))) return;
       } else if (snap?.text) {
         const t = headline || 'This page';
-        match = await getMatchText(t, snap.text, token);
+        const m = await getMatchText(t, snap.text, token);
+        if (requestId !== matchRequestId) return;
+        match = m;
         matchJob = { public_slug: '', title: t, company: hostOf(url), location: '' };
       } else {
         matchStatus = 'empty';
@@ -174,6 +189,7 @@
       }
       matchStatus = 'ready';
     } catch (err) {
+      if (requestId !== matchRequestId) return;
       matchError = err instanceof Error ? err.message : 'Could not load match';
       matchStatus = 'error';
     }
