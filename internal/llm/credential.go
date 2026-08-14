@@ -45,8 +45,18 @@ func (c *Client) As(secret string, onRefused func(), tags ...string) *Client {
 
 	clone := *c
 	if secret != "" {
-		// The client's own credential becomes the fallback the retry uses.
-		clone.fallbackKey = c.apiKey
+		// The fallback the retry uses must always be the real service credential,
+		// never another user's secret. c.apiKey is only that when c is itself the
+		// base client; if c is already bound to a per-user credential (c.fallbackKey
+		// != ""), that field already holds the service credential and must be
+		// carried forward as-is — otherwise chaining As twice (base.As(userA).As(userB))
+		// would leave userB's fallback pointing at userA's key, and a refusal for
+		// userB would silently retry, and keep spending, on userA's credential.
+		fallback := c.apiKey
+		if c.fallbackKey != "" {
+			fallback = c.fallbackKey
+		}
+		clone.fallbackKey = fallback
 		clone.apiKey = secret
 		clone.onRefused = onRefused
 	}

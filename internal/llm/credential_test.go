@@ -237,6 +237,38 @@ func TestARefusedCredentialFallsBackAndReportsItself(t *testing.T) {
 	}
 }
 
+// Chaining As on its own output must not turn a later user's fallback into an
+// earlier user's credential. Nothing calls As twice today (each handler credits the
+// base client held at construction exactly once), but the method has to defend this
+// structurally rather than rely on that discipline holding forever.
+func TestAsChainedTwiceFallsBackToTheServiceCredentialNotAPriorUser(t *testing.T) {
+	proxy := newRefusingProxy(t, "sk-bob")
+	base := proxy.client(t)
+
+	alice := base.As("sk-alice", nil, "feature:tailor")
+	var refused int
+	bob := alice.As("sk-bob", func() { refused++ }, "feature:tailor")
+
+	if _, err := bob.GenerateJSON(context.Background(), "sys", "usr"); err != nil {
+		t.Fatalf("a refused user credential must not fail the call: %v", err)
+	}
+	if refused != 1 {
+		t.Errorf("refusal reported %d times, want once", refused)
+	}
+
+	authz, _ := proxy.seen(t)
+	if len(authz) != 2 {
+		t.Fatalf("proxy served %d requests, want the refused one and the retry", len(authz))
+	}
+	if authz[0] != "Bearer sk-bob" {
+		t.Fatalf("first call carried %q, want bob's credential", authz[0])
+	}
+	if authz[1] != "Bearer sk-service" {
+		t.Errorf("retry carried %q, want the service credential — not alice's, "+
+			"which a double-clone bug would leave as bob's fallback", authz[1])
+	}
+}
+
 // One retry, not a loop: a gateway refusing the service credential too is a
 // misconfiguration, and hammering it would turn one bad key into a request storm.
 func TestARefusalIsRetriedOnlyOnce(t *testing.T) {
