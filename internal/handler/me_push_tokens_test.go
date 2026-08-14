@@ -98,3 +98,46 @@ func TestRegisterPushToken_ValidationRejectsBeforeAnyDBCall(t *testing.T) {
 		})
 	}
 }
+
+// TestPushToken fans out one outbound Expo push call per registered device on every
+// hit, unlike the other push-token routes, so it is the one that needs a rate limit —
+// the same posture as photo uploads, JD resolve, mail recall, and speech
+// transcription. Keyed on the user, like those siblings, so it can't be lifted by a
+// rotating proxy pool.
+func TestPushTokenTestLimiter_IsKeyedOnTheUser(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/test", func(c *fiber.Ctx) error {
+		id := int64(1)
+		if c.Get("X-Test-User") == "2" {
+			id = 2
+		}
+		c.Locals("auth.userID", id)
+		return c.Next()
+	}, testPushTokenLimiter(newTestThrottler(t)), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) })
+
+	post := func(user string) int {
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/test", nil)
+		req.Header.Set("X-Test-User", user)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("Test: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	var refused int
+	for i := 0; i < testPushTokensPerHour+5; i++ {
+		if post("1") == fiber.StatusTooManyRequests {
+			refused++
+		}
+	}
+	if refused == 0 {
+		t.Fatalf("user 1 sent %d test-push requests without being throttled", testPushTokensPerHour+5)
+	}
+
+	// A different user is unaffected by the first one's exhausted budget.
+	if got := post("2"); got == fiber.StatusTooManyRequests {
+		t.Error("a second user was throttled by the first user's budget — the key is not the user")
+	}
+}

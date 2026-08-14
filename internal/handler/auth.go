@@ -128,11 +128,12 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push
 	// notifications to itself. The self-test send only ever targets the
-	// caller's own registered token(s) — see TestPushToken.
+	// caller's own registered token(s) — see TestPushToken — and is rate-limited
+	// since it calls out to Expo's push API once per registered device.
 	meGroup.Post("/push-tokens", mw.cookie, h.RegisterPushToken)
 	meGroup.Get("/push-tokens", mw.cookie, h.ListPushTokens)
 	meGroup.Delete("/push-tokens", mw.cookie, h.UnregisterPushToken)
-	meGroup.Post("/push-tokens/test", mw.cookie, h.TestPushToken)
+	meGroup.Post("/push-tokens/test", mw.cookie, testPushTokenLimiter(h.throttler), h.TestPushToken)
 
 	// The in-app notification center: a durable, channel-independent record of
 	// every delivered subscription digest/reminder/nudge. Cookie-only, same

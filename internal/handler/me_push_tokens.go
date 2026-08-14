@@ -3,12 +3,14 @@ package handler
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pushnotify"
+	"github.com/strelov1/freehire/internal/ratelimit"
 )
 
 // registerPushTokenRequest is the POST /me/push-tokens body: the mobile app's
@@ -141,10 +143,29 @@ type testPushTokenResponse struct {
 	Failed  int `json:"failed"`
 }
 
+// testPushTokensPerHour bounds how many self-test sends one caller may trigger per
+// hour. Unlike the rest of this file, TestPushToken fans out one outbound call to
+// Expo's push API per registered device on every hit, so — like every other handler
+// in this package that triggers a metered third-party call (photo uploads, JD
+// resolve, mail recall, speech transcription) — it needs a ceiling: looped by hand or
+// by replaying a valid session cookie, an unbounded route here would spam the
+// caller's own devices and lean on the shared Expo quota for every other user's push
+// delivery too. Twenty is far past a person checking a device works.
+const testPushTokensPerHour = 20
+
+// testPushTokenLimiter throttles the self-test send per authenticated caller, keyed
+// like the sibling limiters elsewhere in this package: an IP key would be lifted by
+// any rotating proxy pool. Mounted AFTER the cookie middleware so the user id is
+// resolved.
+func testPushTokenLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("pushtokentest"), testPushTokensPerHour, time.Hour)
+}
+
 // TestPushToken sends a test push to every one of the caller's own
 // registered tokens — never another user's, and never a caller-supplied
 // destination, so this cannot become a spam/harassment vector disguised as
-// a diagnostic endpoint. Cookie-only.
+// a diagnostic endpoint. Cookie-only, and rate-limited (testPushTokenLimiter):
+// each call fans out one outbound send per device.
 func (h *authHandlers) TestPushToken(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
