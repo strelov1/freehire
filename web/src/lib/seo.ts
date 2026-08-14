@@ -18,14 +18,20 @@ const SITE_GITHUB = 'https://github.com/strelov1/freehire';
 export type FaqItem = { question: string; answer: string };
 
 /** Plain-text, length-capped description for `<meta name="description">` and OG,
- *  derived from the job's sanitized HTML body. */
-export function metaDescription(html: string, max = 200): string {
+ *  derived from the job's sanitized HTML body. Cuts at the last whole word within
+ *  the budget rather than mid-word, and defaults to ~155-160 chars — Google's own
+ *  typical search-snippet width, beyond which it truncates the snippet itself and
+ *  we lose control of where the cut lands. */
+export function metaDescription(html: string, max = 160): string {
   const text = html
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
+  const cut = text.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  const truncated = lastSpace > 0 ? cut.slice(0, lastSpace) : cut;
+  return `${truncated.trimEnd()}…`;
 }
 
 /** Plain-text, length-capped `<meta name="description">` for a company page.
