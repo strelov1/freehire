@@ -18,10 +18,19 @@ Decisions 3/4/5 — read those before this file, this only covers what they don'
   overlapping manual invocation: a job processed twice just gets the same answer
   written twice.
 - **Worker-pool concurrency (`Concurrency`/`-workers`), not `internal/outbox.RunPool`.**
-  Each job's work is two independent Postgres round trips (the nearest-neighbour query,
-  then a single-row `UPDATE`) — no shared, serially-queued backend (unlike
-  `cmd/embed`'s TEI calls) for concurrent jobs to contend over, so plain parallelism
-  buys real wall-clock throughput.
+  Each job's work is three independent Postgres round trips (`JobGeneration`'s read,
+  the nearest-neighbour query, then a single-row conditional `UPDATE`) — no shared,
+  serially-queued backend (unlike `cmd/embed`'s TEI calls) for concurrent jobs to
+  contend over, so plain parallelism buys real wall-clock throughput.
+- **`SetSimilarJobIDs` is a conditional write, guarded by a chunk-generation value
+  (`JobGeneration`/`jobs.semantic_embedded_hash`), not a plain `UPDATE`.** Between this
+  worker's read (`JobGeneration` + `NearestJobs`) and its write, `cmd/embed` can
+  re-embed the same job — replacing its chunks and nulling `similar_computed_at` itself
+  — in which case the computed neighbour list is already stale. The guard makes that
+  write a no-op (`applied=false`, reported via `Stats.Stale`, not `Stats.Failed`) instead
+  of stamping `similar_computed_at` over data the concurrent re-embed already
+  invalidated; the job's real current chunks get picked up by `PendingJobIDs` on a
+  later run (its `similar_computed_at` is still NULL from `cmd/embed`'s own clear).
 - **In-run failure guard, not a dead-letter.** A failed job's `similar_computed_at`
   stays NULL, so it would resurface at the front of every later batch in the SAME run
   (deterministic ordering) without `Runner.Run`'s `failedThisRun` set — tracked only

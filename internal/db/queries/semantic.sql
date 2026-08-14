@@ -230,6 +230,22 @@ GROUP BY j2.id
 ORDER BY distance
 LIMIT sqlc.arg(limit_count)::int;
 
+-- name: GetJobSemanticGeneration :one
+-- The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
+-- row to carry this on when a job's every candidate gets excluded, so it is its own
+-- query, read in the same round trip as NearestJobsToJob rather than folded into it).
+-- semantic_embedded_hash is stamped from content_hash by StampSemanticEmbeddedBatch in
+-- the same transaction that writes a job's current job_semantic_chunks rows, so it
+-- changes exactly when cmd/embed replaces those rows. cmd/similar-backfill passes the
+-- value read here back to SetSimilarJobIDs as a conditional-write guard: if cmd/embed
+-- re-embeds this job between this read and that write, the source's chunks (and the
+-- NearestJobsToJob result computed from them) are already stale, and the guard drops
+-- the write instead of stamping similar_computed_at over data the concurrent re-embed
+-- already invalidated.
+SELECT semantic_embedded_hash
+FROM jobs
+WHERE id = sqlc.arg(job_id)::bigint;
+
 -- ---------------------------------------------------------------------------
 -- cmd/similar-backfill: the run-once-and-exit worker that populates
 -- jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds
@@ -265,7 +281,7 @@ WHERE j.similar_computed_at IS NULL
 ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
 LIMIT sqlc.arg(limit_count)::int;
 
--- name: SetSimilarJobIDs :exec
+-- name: SetSimilarJobIDs :execrows
 -- Write one job's precomputed similar-jobs list and stamp similar_computed_at
 -- together, so a job is never marked computed without its list landing. A nil/empty
 -- similar_job_ids is a valid, intentional write (a job whose only close matches were
@@ -275,7 +291,17 @@ LIMIT sqlc.arg(limit_count)::int;
 -- every run. One row at a time, not batched like cmd/embed's writes: each job's array
 -- value is unique per row, so there is no shared payload to amortize across a wave the
 -- way a single Meili task amortizes cmd/embed's batch upsert.
+--
+-- The generation guard (IS NOT DISTINCT FROM, since a job with zero chunk rows would
+-- never reach here but the comparison stays NULL-safe) makes this write a no-op — zero
+-- rows affected, reported to the caller via :execrows — if cmd/embed replaced this
+-- job's chunks (and cleared similar_computed_at itself, ClearSimilarComputedAtBatch)
+-- after GetJobSemanticGeneration/NearestJobsToJob read it but before this write lands.
+-- Without the guard this UPDATE would stamp similar_computed_at over a list computed
+-- from chunks that no longer exist, and the job's now-current chunks would never be
+-- backfilled until their NEXT content change.
 UPDATE jobs
 SET similar_job_ids = sqlc.arg(similar_job_ids)::bigint[],
     similar_computed_at = now()
-WHERE id = sqlc.arg(id)::bigint;
+WHERE id = sqlc.arg(id)::bigint
+  AND semantic_embedded_hash IS NOT DISTINCT FROM sqlc.narg(expected_generation);

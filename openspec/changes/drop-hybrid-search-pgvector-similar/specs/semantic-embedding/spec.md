@@ -52,7 +52,7 @@ between the chunk writes and the stamp is safely retried (idempotent re-embed).
 
 - **WHEN** a previously un-embedded open job is processed
 - **THEN** its chunk embeddings are available for the similar-jobs backfill
-  worker and for live recommendation queries without any Meilisearch rebuild
+  worker without any Meilisearch rebuild
 
 ### Requirement: Closed jobs have their embedding chunks cleared
 
@@ -84,9 +84,9 @@ path. Ingest (`UpsertJob`) MUST NOT be coupled to embedding provenance.
 ### Requirement: Pipeline is decoupled from the full rebuild
 
 **Reason**: The `jobs_semantic` Meilisearch index and its `reindex --semantic`
-swap-rebuild reconciler are removed entirely — `jobs.semantic_embedding`/
-`semantic_embedding_vec` in Postgres are now the only representation of job
-embeddings, with no secondary index to reconcile.
+swap-rebuild reconciler are removed entirely — `job_semantic_chunks` in
+Postgres is now the only representation of job embeddings, with no secondary
+index to reconcile.
 
 **Migration**: No user-facing migration. Operationally, any cron/timer that ran
 `reindex --semantic` is removed; the similar-jobs backfill worker

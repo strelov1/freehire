@@ -1,7 +1,7 @@
 // Command embed is the standalone incremental semantic-embedding worker. It enqueues
 // open jobs whose embedding is missing/stale (and closed jobs whose embed state must
 // be cleared), then drains the semantic_outbox queue: each open job is embedded via
-// TEI and its legacy vector + chunk rows persisted to Postgres; each closed job has
+// TEI and its chunk rows persisted to Postgres; each closed job has
 // its embed state cleared. Run it on a schedule (e.g. cron); it drains what is queued
 // and exits. It is the incremental sibling of cmd/enrich. It exits non-zero when the
 // run had any failures or dead-letters, so cron can alert.

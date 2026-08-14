@@ -1164,6 +1164,18 @@ type Querier interface {
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
+	// The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
+	// row to carry this on when a job's every candidate gets excluded, so it is its own
+	// query, read in the same round trip as NearestJobsToJob rather than folded into it).
+	// semantic_embedded_hash is stamped from content_hash by StampSemanticEmbeddedBatch in
+	// the same transaction that writes a job's current job_semantic_chunks rows, so it
+	// changes exactly when cmd/embed replaces those rows. cmd/similar-backfill passes the
+	// value read here back to SetSimilarJobIDs as a conditional-write guard: if cmd/embed
+	// re-embeds this job between this read and that write, the source's chunks (and the
+	// NearestJobsToJob result computed from them) are already stale, and the guard drops
+	// the write instead of stamping similar_computed_at over data the concurrent re-embed
+	// already invalidated.
+	GetJobSemanticGeneration(ctx context.Context, jobID int64) (pgtype.Text, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
 	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
@@ -2966,7 +2978,16 @@ type Querier interface {
 	// every run. One row at a time, not batched like cmd/embed's writes: each job's array
 	// value is unique per row, so there is no shared payload to amortize across a wave the
 	// way a single Meili task amortizes cmd/embed's batch upsert.
-	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) error
+	//
+	// The generation guard (IS NOT DISTINCT FROM, since a job with zero chunk rows would
+	// never reach here but the comparison stays NULL-safe) makes this write a no-op — zero
+	// rows affected, reported to the caller via :execrows — if cmd/embed replaced this
+	// job's chunks (and cleared similar_computed_at itself, ClearSimilarComputedAtBatch)
+	// after GetJobSemanticGeneration/NearestJobsToJob read it but before this write lands.
+	// Without the guard this UPDATE would stamp similar_computed_at over a list computed
+	// from chunks that no longer exist, and the job's now-current chunks would never be
+	// backfilled until their NEXT content change.
+	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error)
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)

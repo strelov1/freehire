@@ -56,6 +56,10 @@ UPDATE jobs
 SET company      = sqlc.arg(company),
     company_slug = sqlc.arg(company_slug),
     content_hash = sqlc.arg(content_hash),
+    -- The company correction invalidates any precomputed similar-jobs list this job
+    -- already has: it was computed excluding the OLD company's postings, so it may
+    -- now wrongly include a same-company match. Force cmd/similar-backfill to redo it.
+    similar_computed_at = NULL,
     updated_at   = now()
 WHERE id = sqlc.arg(id);
 
@@ -307,6 +311,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
+    -- A company correction (rare, but real — e.g. a slug fix on re-ingest) invalidates
+    -- this job's already-precomputed similar-jobs list: it may have been computed
+    -- excluding the OLD company and so now wrongly includes a same-company match.
+    -- Force cmd/similar-backfill to redo it. Unconditional company_slug writes far
+    -- outnumber actual changes (every re-crawl runs this branch), so this must be
+    -- conditional or every re-ingest would invalidate the list for nothing.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -851,6 +863,12 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
+    -- Same reasoning as UpsertJob: a moderator company correction invalidates this
+    -- job's already-precomputed similar-jobs list (it may have been computed
+    -- excluding the OLD company), so force cmd/similar-backfill to redo it —
+    -- conditionally, since every re-create runs this branch, not just company edits.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 RETURNING *;
 
@@ -942,6 +960,12 @@ SET title        = sqlc.arg(title),
     content_hash     = sqlc.arg(content_hash),
     role_fingerprint = sqlc.arg(role_fingerprint),
     updated_by   = sqlc.arg(updated_by)::bigint,
+    -- Same reasoning as UpsertJob: a company correction invalidates this job's
+    -- already-precomputed similar-jobs list (it may have been computed excluding the
+    -- OLD company), so force cmd/similar-backfill to redo it — conditionally, since
+    -- most edits leave the company untouched.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM sqlc.arg(company_slug)
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL
 RETURNING *;

@@ -2750,6 +2750,10 @@ UPDATE jobs
 SET company      = $1,
     company_slug = $2,
     content_hash = $3,
+    -- The company correction invalidates any precomputed similar-jobs list this job
+    -- already has: it was computed excluding the OLD company's postings, so it may
+    -- now wrongly include a same-company match. Force cmd/similar-backfill to redo it.
+    similar_computed_at = NULL,
     updated_at   = now()
 WHERE id = $4
 `
@@ -2927,6 +2931,12 @@ SET title        = $1,
     content_hash     = $21,
     role_fingerprint = $22,
     updated_by   = $23::bigint,
+    -- Same reasoning as UpsertJob: a company correction invalidates this job's
+    -- already-precomputed similar-jobs list (it may have been computed excluding the
+    -- OLD company), so force cmd/similar-backfill to redo it — conditionally, since
+    -- most edits leave the company untouched.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM $3
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = $24 AND created_by IS NOT NULL
 RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source
@@ -3148,6 +3158,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
+    -- A company correction (rare, but real — e.g. a slug fix on re-ingest) invalidates
+    -- this job's already-precomputed similar-jobs list: it may have been computed
+    -- excluding the OLD company and so now wrongly includes a same-company match.
+    -- Force cmd/similar-backfill to redo it. Unconditional company_slug writes far
+    -- outnumber actual changes (every re-crawl runs this branch), so this must be
+    -- conditional or every re-ingest would invalidate the list for nothing.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, jobs.closed_reason, jobs.is_private, jobs.similar_job_ids, jobs.similar_computed_at, jobs.salary_min_source, jobs.salary_max_source, jobs.salary_currency_source, jobs.salary_period_source,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -3403,6 +3421,12 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
+    -- Same reasoning as UpsertJob: a moderator company correction invalidates this
+    -- job's already-precomputed similar-jobs list (it may have been computed
+    -- excluding the OLD company), so force cmd/similar-backfill to redo it —
+    -- conditionally, since every re-create runs this branch, not just company edits.
+    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
+                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source
 `

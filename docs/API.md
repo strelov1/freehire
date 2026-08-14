@@ -1229,6 +1229,7 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
   "data": {
     "applications": 12,
     "stages": {
+      "preparing": 0,
       "applied": 4,
       "screening": 2,
       "responded": 1,
@@ -1236,7 +1237,8 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "withdrawn": 0
+      "withdrawn": 0,
+      "expired": 0
     }
   }
 }

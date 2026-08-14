@@ -220,6 +220,30 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, targetModel st
 	return result.RowsAffected(), nil
 }
 
+const getJobSemanticGeneration = `-- name: GetJobSemanticGeneration :one
+SELECT semantic_embedded_hash
+FROM jobs
+WHERE id = $1::bigint
+`
+
+// The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
+// row to carry this on when a job's every candidate gets excluded, so it is its own
+// query, read in the same round trip as NearestJobsToJob rather than folded into it).
+// semantic_embedded_hash is stamped from content_hash by StampSemanticEmbeddedBatch in
+// the same transaction that writes a job's current job_semantic_chunks rows, so it
+// changes exactly when cmd/embed replaces those rows. cmd/similar-backfill passes the
+// value read here back to SetSimilarJobIDs as a conditional-write guard: if cmd/embed
+// re-embeds this job between this read and that write, the source's chunks (and the
+// NearestJobsToJob result computed from them) are already stale, and the guard drops
+// the write instead of stamping similar_computed_at over data the concurrent re-embed
+// already invalidated.
+func (q *Queries) GetJobSemanticGeneration(ctx context.Context, jobID int64) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getJobSemanticGeneration, jobID)
+	var semantic_embedded_hash pgtype.Text
+	err := row.Scan(&semantic_embedded_hash)
+	return semantic_embedded_hash, err
+}
+
 const getJobsByIDs = `-- name: GetJobsByIDs :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source
 FROM jobs
@@ -490,16 +514,18 @@ func (q *Queries) SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCou
 	return items, nil
 }
 
-const setSimilarJobIDs = `-- name: SetSimilarJobIDs :exec
+const setSimilarJobIDs = `-- name: SetSimilarJobIDs :execrows
 UPDATE jobs
 SET similar_job_ids = $1::bigint[],
     similar_computed_at = now()
 WHERE id = $2::bigint
+  AND semantic_embedded_hash IS NOT DISTINCT FROM $3
 `
 
 type SetSimilarJobIDsParams struct {
-	SimilarJobIds []int64 `json:"similar_job_ids"`
-	ID            int64   `json:"id"`
+	SimilarJobIds      []int64     `json:"similar_job_ids"`
+	ID                 int64       `json:"id"`
+	ExpectedGeneration pgtype.Text `json:"expected_generation"`
 }
 
 // Write one job's precomputed similar-jobs list and stamp similar_computed_at
@@ -511,9 +537,21 @@ type SetSimilarJobIDsParams struct {
 // every run. One row at a time, not batched like cmd/embed's writes: each job's array
 // value is unique per row, so there is no shared payload to amortize across a wave the
 // way a single Meili task amortizes cmd/embed's batch upsert.
-func (q *Queries) SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) error {
-	_, err := q.db.Exec(ctx, setSimilarJobIDs, arg.SimilarJobIds, arg.ID)
-	return err
+//
+// The generation guard (IS NOT DISTINCT FROM, since a job with zero chunk rows would
+// never reach here but the comparison stays NULL-safe) makes this write a no-op — zero
+// rows affected, reported to the caller via :execrows — if cmd/embed replaced this
+// job's chunks (and cleared similar_computed_at itself, ClearSimilarComputedAtBatch)
+// after GetJobSemanticGeneration/NearestJobsToJob read it but before this write lands.
+// Without the guard this UPDATE would stamp similar_computed_at over a list computed
+// from chunks that no longer exist, and the job's now-current chunks would never be
+// backfilled until their NEXT content change.
+func (q *Queries) SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSimilarJobIDs, arg.SimilarJobIds, arg.ID, arg.ExpectedGeneration)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const stampSemanticEmbeddedBatch = `-- name: StampSemanticEmbeddedBatch :exec

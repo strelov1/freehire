@@ -3,6 +3,7 @@ package similarjobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -21,13 +22,18 @@ type fakeStore struct {
 	pendingErr       error
 	pendingErrOnCall int
 
+	genErr   map[int64]error
+	genCalls []int64
+
 	nearest      map[int64][]int64
 	nearestErr   map[int64]error
 	nearestCalls []int64
 
-	setErr   map[int64]error
-	written  map[int64][]int64
-	setCalls []int64
+	setErr    map[int64]error
+	staleIDs  map[int64]bool
+	written   map[int64][]int64
+	setCalls  []int64
+	setGenArg map[int64]string
 
 	// arrived/release let a test synchronize on concurrent NearestJobs calls
 	// (mirrors internal/embed's blockUntilCtxDone-style fixtures).
@@ -37,9 +43,24 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
+		genErr:  map[int64]error{},
 		nearest: map[int64][]int64{}, nearestErr: map[int64]error{},
-		setErr: map[int64]error{}, written: map[int64][]int64{},
+		setErr: map[int64]error{}, staleIDs: map[int64]bool{},
+		written: map[int64][]int64{}, setGenArg: map[int64]string{},
 	}
+}
+
+// JobGeneration returns a deterministic per-job value ("gen-<id>") unless overridden
+// via genErr — good enough for tests that don't specifically exercise the generation
+// guard, and distinct enough per job for the ones that do.
+func (s *fakeStore) JobGeneration(_ context.Context, jobID int64) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.genCalls = append(s.genCalls, jobID)
+	if err := s.genErr[jobID]; err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("gen-%d", jobID), nil
 }
 
 func (s *fakeStore) PendingJobIDs(_ context.Context, limit int) ([]int64, error) {
@@ -78,15 +99,19 @@ func (s *fakeStore) NearestJobs(_ context.Context, jobID int64, _ int) ([]int64,
 	return s.nearest[jobID], nil
 }
 
-func (s *fakeStore) SetSimilarJobIDs(_ context.Context, jobID int64, ids []int64) error {
+func (s *fakeStore) SetSimilarJobIDs(_ context.Context, jobID int64, ids []int64, generation string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.setCalls = append(s.setCalls, jobID)
+	s.setGenArg[jobID] = generation
 	if err := s.setErr[jobID]; err != nil {
-		return err
+		return false, err
+	}
+	if s.staleIDs[jobID] {
+		return false, nil
 	}
 	s.written[jobID] = ids
-	return nil
+	return true, nil
 }
 
 func opt() RunOptions {
@@ -272,6 +297,51 @@ func TestRunnerMaxJobsStopsEarlyAndTruncatesFinalBatch(t *testing.T) {
 	// Must stop BEFORE a third PendingJobIDs call once the budget is spent.
 	if store.pendingCalls != 2 {
 		t.Errorf("pendingCalls = %d, want 2 (must not claim again once MaxJobs is reached)", store.pendingCalls)
+	}
+}
+
+// TestRunnerStaleGenerationWriteNotProcessedNorFailed exercises the fix for the
+// generation race between this worker's read (JobGeneration/NearestJobs) and its write
+// (SetSimilarJobIDs): a concurrent cmd/embed re-embed of job 2 between the two makes
+// the store's SetSimilarJobIDs report applied=false. That must count toward neither
+// Processed (nothing valid was written) nor Failed (it's not an error — cmd/embed's own
+// re-embed already left similar_computed_at NULL for a later run to redo), while still
+// being suppressed from retrying within this same run (mirrors the failed-job guard).
+func TestRunnerStaleGenerationWriteNotProcessedNorFailed(t *testing.T) {
+	store := newFakeStore()
+	store.waves = [][]int64{{1, 2, 3}, {2, 4}} // job 2 reappears — it never got written
+	store.staleIDs[2] = true
+	for _, id := range []int64{1, 2, 3, 4} {
+		store.nearest[id] = []int64{id * 10}
+	}
+
+	stats, err := Runner{Store: store}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stats.Processed != 3 || stats.Failed != 0 || stats.Stale != 1 {
+		t.Fatalf("stats = %+v, want processed=3 failed=0 stale=1", stats)
+	}
+	if _, ok := store.written[2]; ok {
+		t.Errorf("job 2 was written despite losing the generation race")
+	}
+	// job 2's SetSimilarJobIDs must have been attempted exactly once, not twice —
+	// proof the same in-run guard that suppresses failures also suppresses a stale
+	// write's second appearance in wave 2.
+	var setCallsFor2 int
+	for _, id := range store.setCalls {
+		if id == 2 {
+			setCallsFor2++
+		}
+	}
+	if setCallsFor2 != 1 {
+		t.Errorf("SetSimilarJobIDs called for job 2 %d times, want exactly 1", setCallsFor2)
+	}
+	// The generation JobGeneration returned for job 1 must be the exact value passed
+	// to its SetSimilarJobIDs call — proof the read-then-guarded-write plumbing
+	// actually threads the value through, not just that both are called.
+	if got, want := store.setGenArg[1], "gen-1"; got != want {
+		t.Errorf("SetSimilarJobIDs generation arg for job 1 = %q, want %q", got, want)
 	}
 }
 

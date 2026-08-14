@@ -52,10 +52,21 @@ type JobChunkEmbedding struct {
 // since each chunk becomes an independently-scored vector. A job with no description
 // text (or one that strips to nothing) yields no passages at all, not one passage of
 // just the prefix.
+// maxJobChunks caps how many chunks a single job contributes: ChunkIndex is stored as
+// int16 (see JobChunkEmbedding), so a description pathological enough to chunk past
+// math.MaxInt16 would wrap the index negative and collide with the primary key. No real
+// job description approaches this — chunkBudgetRunes is 2000, so the cap alone implies
+// a ~65M-rune description — this exists purely so a well-under-limit description never
+// silently produces corrupt indices.
+const maxJobChunks = 32768
+
 func jobChunkPassages(job db.Job) []string {
 	chunks := chunkText(stripToPlainText(job.Description))
 	if len(chunks) == 0 {
 		return nil
+	}
+	if len(chunks) > maxJobChunks {
+		chunks = chunks[:maxJobChunks]
 	}
 	prefix := "passage: " + job.Title + " at " + job.Company + ". "
 	out := make([]string, len(chunks))

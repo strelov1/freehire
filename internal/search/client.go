@@ -4,8 +4,7 @@
 // read/write helpers, so callers (the search handler and the reindex command) never
 // touch the meilisearch-go SDK directly. It also owns the TEI embedding calls (see
 // embed.go) that feed the pgvector-backed job_semantic_chunks table
-// (internal/embed's open-job path) and the legacy jobs.semantic_embedding column —
-// neither of which is a Meilisearch document; the semantic (jobs_semantic) index
+// (internal/embed's open-job path) — not a Meilisearch document; the semantic (jobs_semantic) index
 // this package used to also build and query was removed in
 // openspec/changes/drop-hybrid-search-pgvector-similar in favor of a precomputed
 // pgvector lookup (cmd/similar-backfill, internal/similarjobs).
@@ -42,11 +41,15 @@ const (
 	// in-engine and NOT OpenAI — reached over TEI's native /embed route (embedderURL).
 	// Multilingual e5 gives far sharper skill matching than the old in-engine MiniLM, and
 	// offloading the compute keeps it off Meilisearch's single task queue.
-	// "-chunked-v1": the passage shape changed (HTML-stripped, full-length, chunked —
-	// see internal/search/plaintext.go/chunk.go) even though the underlying e5 model did
-	// not, so this identity must change too or a job already stamped under the OLD
-	// (truncated, HTML-laden) passage would never be re-enqueued.
-	embedderModel = "intfloat/multilingual-e5-base-chunked-v1"
+	// Deliberately still the pre-chunking identity: the passage shape changed
+	// (HTML-stripped, full-length, chunked — see internal/search/plaintext.go/chunk.go)
+	// even though the underlying e5 model did not, so this string must eventually change
+	// too or a job already stamped under the OLD (truncated, HTML-laden) passage would
+	// never be re-enqueued. But bumping it here would ship the full-catalogue re-embed
+	// bundled into this deploy, not as the scheduled, monitored operation
+	// openspec/changes/drop-hybrid-search-pgvector-similar/tasks.md's task 8.3 requires —
+	// that bump belongs in its own follow-up commit, deployed on its own.
+	embedderModel = "intfloat/multilingual-e5-base"
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
 	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
 	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend

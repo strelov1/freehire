@@ -22,6 +22,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math"
 
 	"github.com/strelov1/freehire/internal/similarjobs"
 	"github.com/strelov1/freehire/internal/worker"
@@ -33,10 +34,28 @@ func main() {
 
 func run() int {
 	batch := flag.Int("batch", 200, "jobs to fetch per PendingJobIDs page")
-	workers := flag.Int("workers", 4, "jobs processed in parallel per batch (each job is two independent Postgres round trips, not a call to a shared external index)")
+	workers := flag.Int("workers", 4, "jobs processed in parallel per batch (each job is three independent Postgres round trips, not a call to a shared external index)")
 	limit := flag.Int("limit", 0, "max jobs to process this run (0 = unlimited, drain until nothing outstanding)")
 	similarCount := flag.Int("similar", 20, "similar job ids to compute and store per job (>= the API's maxSimilarLimit so a future cap increase needs no re-backfill)")
 	flag.Parse()
+
+	// batch/similarCount become int32 Postgres query params (store.go): a value above
+	// math.MaxInt32 would wrap silently. -similar=0 is worse than a no-op — it would
+	// have NearestJobsToJob return zero neighbours per job and SetSimilarJobIDs still
+	// stamp similar_computed_at, permanently marking every processed job "done" with an
+	// empty similar-jobs list until someone notices and manually re-nulls the stamp.
+	if *batch < 1 || *batch > math.MaxInt32 {
+		log.Printf("similar-backfill: -batch must be between 1 and %d, got %d", math.MaxInt32, *batch)
+		return 1
+	}
+	if *similarCount < 1 || *similarCount > math.MaxInt32 {
+		log.Printf("similar-backfill: -similar must be between 1 and %d, got %d", math.MaxInt32, *similarCount)
+		return 1
+	}
+	if *limit < 0 {
+		log.Printf("similar-backfill: -limit must be >= 0, got %d", *limit)
+		return 1
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -57,6 +76,6 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("similar-backfill done: processed=%d failed=%d", stats.Processed, stats.Failed)
+	log.Printf("similar-backfill done: processed=%d stale=%d failed=%d", stats.Processed, stats.Stale, stats.Failed)
 	return worker.ExitCode(stats.Failed, 0)
 }

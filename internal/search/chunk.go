@@ -58,13 +58,32 @@ func chunkText(text string) []string {
 }
 
 // wrapWords greedily packs whitespace-delimited words into lines no longer than budget
-// runes, never splitting a word across two lines.
+// runes, never splitting a word across two lines — except a single word that itself
+// exceeds budget (e.g. a long URL or token with no whitespace to break on), which is
+// split by rune count so it cannot produce an unbounded chunk on its own.
 func wrapWords(s string, budget int) []string {
 	var lines []string
 	var cur strings.Builder
 	curLen := 0
 	for _, w := range strings.Fields(s) {
 		wLen := utf8.RuneCountInString(w)
+		if wLen > budget {
+			if curLen > 0 {
+				lines = append(lines, cur.String())
+				cur.Reset()
+				curLen = 0
+			}
+			runes := []rune(w)
+			for len(runes) > budget {
+				lines = append(lines, string(runes[:budget]))
+				runes = runes[budget:]
+			}
+			if len(runes) > 0 {
+				cur.WriteString(string(runes))
+				curLen = len(runes)
+			}
+			continue
+		}
 		if curLen > 0 && curLen+1+wLen > budget {
 			lines = append(lines, cur.String())
 			cur.Reset()

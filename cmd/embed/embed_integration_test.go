@@ -3,8 +3,8 @@
 // End-to-end test for the incremental semantic-embedding worker: real Postgres
 // (testcontainers, migrations applied) + a stub TEI (bag-of-words) the search client
 // is pointed at via EMBED_URL. It drives the real dbStore + searchIndexer +
-// embed.Runner over seeded open and closed jobs and asserts the open job's legacy
-// vector and pgvector-backed chunk rows are persisted, the closed job's embed state
+// embed.Runner over seeded open and closed jobs and asserts the open job's
+// pgvector-backed chunk rows are persisted, the closed job's embed state
 // is cleared, provenance is stamped/cleared, and the outbox drains. No Meilisearch is
 // involved — cmd/embed no longer writes any search index (see
 // openspec/changes/drop-hybrid-search-pgvector-similar). Run with:
@@ -286,6 +286,23 @@ func TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend(t *testing.T) {
 			t.Fatalf("chunk indices after re-embed = %v, want a clean 0..%d sequence (replace, not append)",
 				indices, len(indices)-1)
 		}
+	}
+
+	// The reverse direction: a re-embed that SHRINKS the chunk set must not leave
+	// trailing rows from the larger prior set behind — a bug that replaced only
+	// indices 0..newCount-1 (instead of deleting the whole prior set first) would pass
+	// the growing-set assertions above but leave stale high-index rows here.
+	if _, err := pool.Exec(ctx,
+		"UPDATE jobs SET description = $1, content_hash = 'h-open-v3' WHERE id = $2", "Short again.", id); err != nil {
+		t.Fatalf("update job content (shrink): %v", err)
+	}
+	if _, err := runner.Run(ctx, opts); err != nil {
+		t.Fatalf("third Run: %v", err)
+	}
+	thirdIndices := jobChunkIndices(t, pool, id)
+	if len(thirdIndices) != 1 || thirdIndices[0] != 0 {
+		t.Fatalf("chunk indices after shrinking re-embed = %v, want exactly [0] (stale trailing rows not removed)",
+			thirdIndices)
 	}
 }
 

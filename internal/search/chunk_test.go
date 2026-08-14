@@ -92,3 +92,24 @@ func TestChunkTextDoesNotSplitMidWord(t *testing.T) {
 		t.Fatalf("chunkText(no-newline long) total words across chunks = %d, want %d (word lost or duplicated)", total, count)
 	}
 }
+
+// A single whitespace-delimited token longer than the budget (e.g. a long URL) has no
+// word boundary to split on — it must still be split by rune count so it cannot produce
+// a chunk TEI silently truncates, rather than passing through unsplit.
+func TestChunkTextSplitsOversizedWord(t *testing.T) {
+	giant := strings.Repeat("a", chunkBudgetRunes*2+500)
+	text := "before\n" + giant + "\nafter"
+	got := chunkText(text)
+	for i, c := range got {
+		if n := utf8.RuneCountInString(c); n > chunkBudgetRunes {
+			t.Errorf("chunk %d = %d runes, exceeds budget %d", i, n, chunkBudgetRunes)
+		}
+	}
+	var rebuilt strings.Builder
+	for _, c := range got {
+		rebuilt.WriteString(strings.ReplaceAll(c, "\n", ""))
+	}
+	if got := rebuilt.String(); !strings.Contains(got, giant) {
+		t.Fatalf("chunkText(oversized word) lost or corrupted the giant token; reassembled = %q", got)
+	}
+}
