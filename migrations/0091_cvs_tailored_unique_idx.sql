@@ -18,13 +18,19 @@
 -- dropped — cv_revisions and assistant_sessions cascade-delete on cvs, so deleting a loser
 -- outright would silently erase real revision history and strand a live chat session, exactly
 -- the harm the underlying race already did once.
-CREATE TEMP TABLE cv_tailor_dupes_ranked ON COMMIT DROP AS
+-- Plain TEMP tables, not ON COMMIT DROP: this file has no explicit BEGIN/COMMIT of its own
+-- (matching every other migration here), and a fresh initdb volume applies it by feeding the
+-- whole file to psql, which autocommits each statement as its own transaction absent one — an
+-- ON COMMIT DROP table would then vanish right after the statement that created it, before the
+-- next statement could read it. Session-scoped is enough: both are gone once this connection
+-- closes, and are dropped explicitly below regardless.
+CREATE TEMP TABLE cv_tailor_dupes_ranked AS
 SELECT id, user_id, job_id,
        row_number() OVER (PARTITION BY user_id, job_id ORDER BY updated_at DESC, id DESC) AS rn
 FROM public.cvs
 WHERE is_tailored AND job_id IS NOT NULL;
 
-CREATE TEMP TABLE cv_tailor_dupes_canonical ON COMMIT DROP AS
+CREATE TEMP TABLE cv_tailor_dupes_canonical AS
 SELECT loser.id AS loser_id, canonical.id AS canonical_id
 FROM cv_tailor_dupes_ranked loser
 JOIN cv_tailor_dupes_ranked canonical
@@ -77,6 +83,9 @@ WHERE t.cv_id = d.loser_id;
 DELETE FROM public.cvs c
 USING cv_tailor_dupes_canonical d
 WHERE c.id = d.loser_id;
+
+DROP TABLE cv_tailor_dupes_canonical;
+DROP TABLE cv_tailor_dupes_ranked;
 
 -- APPLY TO PROD MANUALLY BEFORE DEPLOY (SET ROLE hire), per this repo's convention for a
 -- migration that writes existing rows rather than only adding schema — see 0045/0053's own
