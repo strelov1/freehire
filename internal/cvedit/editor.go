@@ -97,6 +97,10 @@ type Tx interface {
 // or a batch that never edited this CV.
 var ErrNothingToUndo = errors.New("cvedit: nothing to undo")
 
+// ErrCommitDocumentAgentUnsupported is returned when CommitDocument is asked to record a
+// whole-document save on the agent's behalf. See CommitDocument's own comment for why.
+var ErrCommitDocumentAgentUnsupported = errors.New("cvedit: CommitDocument does not support the agent actor")
+
 // ErrCannotUndo is returned when a revision's inverse no longer applies — the place it would
 // restore is gone. Handlers render it as a conflict, because it is a fact about the document
 // now, not a malformed request.
@@ -336,8 +340,21 @@ func samePaths(a, b []Op) bool {
 //
 // A save that changes nothing commits nothing and returns the CV as it stands: autosave
 // fires on a timer, and a revision per timer tick would bury the feed.
+//
+// Unlike Commit, authorize() runs INSIDE the locked transaction here, because the operations
+// it checks do not exist until Diff has compared the incoming document against the state the
+// lock protects — there is nothing to authorize before that. Commit's ordering exists to keep
+// the evidence gate's bank read (a second pooled connection) from running while the CV row is
+// locked, which is the shape of a pool-exhaustion deadlock under load; requireEvidence only
+// ever makes that read for ActorAgent. So this refuses the agent actor outright rather than
+// trusting every future caller to keep passing ActorCandidate/ActorSystem, which is what made
+// today's ordering safe by convention rather than by construction.
 func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int64,
 	actor Actor, origin Origin, next State) (cv.Meta, Revision, error) {
+
+	if actor == ActorAgent {
+		return cv.Meta{}, Revision{}, ErrCommitDocumentAgentUnsupported
+	}
 
 	var (
 		meta cv.Meta
@@ -371,8 +388,8 @@ func (e *Editor) CommitDocument(ctx context.Context, cvID uuid.UUID, userID int6
 		}
 		change := Change{Actor: actor, Origin: origin, Ops: ops}
 		// The operations are derived here, so this is the first moment they can be checked.
-		// The candidate is the only actor that reaches this path and the gate does not apply
-		// to them, so no bank read happens under the lock.
+		// The actor guard above guarantees ActorAgent never reaches this call, and the gate
+		// does not apply to candidate or system, so no bank read ever happens under the lock.
 		if err := e.authorize(ctx, userID, change); err != nil {
 			return err
 		}
