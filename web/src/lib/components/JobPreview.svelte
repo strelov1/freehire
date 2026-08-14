@@ -47,8 +47,16 @@
     descriptionHtml: string;
   } = $props();
 
-  const labelFor = (options: { value: string; label: string }[], value: string) =>
-    options.find((o) => o.value === value)?.label ?? value;
+  // Sentence-cases a code the option list doesn't recognize (e.g. a value the backend
+  // parsed from a source page but the frontend's vocabulary hasn't caught up with) —
+  // the same fallback web/src/lib/enrichment.ts's label() applies for the live job page,
+  // so an unrecognized facet never renders a raw snake_case code here either.
+  const labelFor = (options: { value: string; label: string }[], value: string) => {
+    const known = options.find((o) => o.value === value)?.label;
+    if (known) return known;
+    const spaced = value.replace(/_/g, ' ');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  };
 
   const salary = $derived(
     formatSalary({

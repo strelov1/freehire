@@ -70,9 +70,11 @@
 
   // Prefill state, independent of submit(): a best-effort aid that never blocks or
   // overwrites manual entry. prefilling disables the button while a request is in
-  // flight; prefillMiss shows a one-line "nothing found" note after a genuine no-match.
+  // flight; prefillMissURL names the URL a miss was reported for, so editing the URL
+  // field afterwards clears the note instead of leaving it stuck next to a new link.
   let prefilling = $state(false);
-  let prefillMiss = $state(false);
+  let prefillMissURL = $state<string | null>(null);
+  const prefillMiss = $derived(prefillMissURL !== null && prefillMissURL === url.trim());
 
   let submitting = $state(false);
   let formError = $state<string | null>(null);
@@ -121,12 +123,12 @@
     const target = url.trim();
     if (target === '' || prefilling) return;
     prefilling = true;
-    prefillMiss = false;
+    prefillMissURL = null;
     try {
       const result = await api.prefillSubmission(target);
       const found = Object.values(result).some((v) => v);
       if (!found) {
-        prefillMiss = true;
+        prefillMissURL = target;
         return;
       }
       if (title.trim() === '' && result.title) title = result.title;
@@ -276,13 +278,17 @@
         <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Basics
         </legend>
-        <label class="flex flex-col gap-1">
+        <div class="flex flex-col gap-1">
           <span class="flex items-center gap-1.5 text-sm font-medium">
             <Link2 class="size-3.5 text-muted-foreground" />
             Job URL <span class="text-destructive">*</span>
           </span>
           <div class="flex items-center gap-2">
-            <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+            <!-- The label wraps only the Input, not the Button beside it — nesting both
+                 inside one label would make the implicit label target ambiguous. -->
+            <label class="w-full">
+              <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+            </label>
             <Button
               type="button"
               variant="outline"
@@ -300,7 +306,7 @@
               rest below.
             </p>
           {/if}
-        </label>
+        </div>
         <div class="flex flex-col gap-4 sm:flex-row">
           <label class="flex flex-1 flex-col gap-1">
             <span class="flex items-center gap-1.5 text-sm font-medium">
