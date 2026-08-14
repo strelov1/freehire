@@ -124,6 +124,20 @@ function applicantRegions(regions?: string[]): unknown {
   return named.length === 1 ? named[0] : named;
 }
 
+// schema.org jobLocation from the raw location string: Google accepts a
+// PostalAddress with just locality; add the ISO country code when the geo
+// dictionary pinned one (job.countries is alpha-2), never a made-up street/postal
+// code — mismatched structured data is a ranking liability. Shared by a non-remote
+// posting and a remote one whose region never resolved (see jobPostingJsonLd).
+function jobLocationFromText(location: string, countries?: string[]): Record<string, unknown> {
+  const address: Record<string, unknown> = {
+    '@type': 'PostalAddress',
+    addressLocality: location,
+  };
+  if (countries?.[0]) address.addressCountry = countries[0].toUpperCase();
+  return { '@type': 'Place', address };
+}
+
 // schema.org educationRequirements.credentialCategory, from the enrich
 // education_level vocabulary ("none"/"bachelor"/"master"/"phd"). "none" and any
 // unmapped value carry no requirement and are omitted.
@@ -210,19 +224,24 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   if (empType) ld.employmentType = empType;
 
   if (job.work_mode === 'remote') {
-    ld.jobLocationType = 'TELECOMMUTE';
     const regions = applicantRegions(job.regions);
-    if (regions) ld.applicantLocationRequirements = regions;
+    if (regions) {
+      // Google requires applicantLocationRequirements whenever jobLocationType is
+      // TELECOMMUTE — set them together, never TELECOMMUTE alone.
+      ld.jobLocationType = 'TELECOMMUTE';
+      ld.applicantLocationRequirements = regions;
+    } else if (job.location) {
+      // No resolved region to state a location *requirement* from (the geo
+      // dictionary and the LLM fallback both came up empty — a real, if raw,
+      // location string still reached the posting). Asserting TELECOMMUTE without
+      // its required companion would be worse than not asserting it: fall back to
+      // the same plain jobLocation a non-remote posting gets.
+      ld.jobLocation = jobLocationFromText(job.location, job.countries);
+    }
+    // Neither a resolved region nor any location text at all: nothing honest to
+    // state, so location is omitted rather than guessed.
   } else if (job.location) {
-    // Google accepts a PostalAddress with just locality; add the ISO country code
-    // when the geo dictionary pinned one (job.countries is alpha-2), never a made-up
-    // street/postal code — mismatched structured data is a ranking liability.
-    const address: Record<string, unknown> = {
-      '@type': 'PostalAddress',
-      addressLocality: job.location,
-    };
-    if (job.countries?.[0]) address.addressCountry = job.countries[0].toUpperCase();
-    ld.jobLocation = { '@type': 'Place', address };
+    ld.jobLocation = jobLocationFromText(job.location, job.countries);
   }
 
   if (e.salary_min != null || e.salary_max != null) {
