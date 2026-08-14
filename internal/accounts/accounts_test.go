@@ -32,6 +32,11 @@ type fakeRepo struct {
 	createUserCallIdx int
 	createUserCalls   []createUserCall
 
+	// UpdateTimezone responses and calls
+	updateTimezoneResults []updateTimezoneResult
+	updateTimezoneCallIdx int
+	updateTimezoneCalls   []updateTimezoneCall
+
 	// UserByEmail responses
 	userByEmailResults []userByEmailResult
 	userByEmailCallIdx int
@@ -75,6 +80,17 @@ type createUserCall struct {
 	email         string
 	passwordHash  string
 	emailVerified bool
+	timezone      *string
+}
+
+type updateTimezoneResult struct {
+	user User
+	err  error
+}
+
+type updateTimezoneCall struct {
+	userID   int64
+	timezone *string
 }
 
 type userByEmailResult struct {
@@ -116,15 +132,27 @@ func (f *fakeRepo) LinkOrCreateByEmail(_ context.Context, provider, providerUser
 	return r.id, r.err
 }
 
-func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, emailVerified bool) (User, error) {
+func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash, emailVerified})
+	f.createUserCalls = append(f.createUserCalls, createUserCall{email, passwordHash, emailVerified, timezone})
 	if f.createUserCallIdx >= len(f.createUserResults) {
 		return User{}, errors.New("fakeRepo: unexpected CreateUser call")
 	}
 	r := f.createUserResults[f.createUserCallIdx]
 	f.createUserCallIdx++
+	return r.user, r.err
+}
+
+func (f *fakeRepo) UpdateTimezone(_ context.Context, userID int64, timezone *string) (User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateTimezoneCalls = append(f.updateTimezoneCalls, updateTimezoneCall{userID, timezone})
+	if f.updateTimezoneCallIdx >= len(f.updateTimezoneResults) {
+		return User{}, errors.New("fakeRepo: unexpected UpdateTimezone call")
+	}
+	r := f.updateTimezoneResults[f.updateTimezoneCallIdx]
+	f.updateTimezoneCallIdx++
 	return r.user, r.err
 }
 
@@ -383,7 +411,7 @@ func TestRegister_InvalidEmail(t *testing.T) {
 	hasher := &fakeHasher{}
 	svc := New(repo, hasher)
 
-	_, err := svc.Register(context.Background(), "not-an-email", "password123")
+	_, err := svc.Register(context.Background(), "not-an-email", "password123", nil)
 	if !errors.Is(err, ErrInvalidEmail) {
 		t.Errorf("want ErrInvalidEmail, got %v", err)
 	}
@@ -398,7 +426,7 @@ func TestRegister_ShortPassword(t *testing.T) {
 	hasher := &fakeHasher{}
 	svc := New(repo, hasher)
 
-	_, err := svc.Register(context.Background(), "user@example.com", "short")
+	_, err := svc.Register(context.Background(), "user@example.com", "short", nil)
 	if !errors.Is(err, ErrPasswordTooShort) {
 		t.Errorf("want ErrPasswordTooShort, got %v", err)
 	}
@@ -414,7 +442,7 @@ func TestRegister_LongPassword(t *testing.T) {
 	svc := New(repo, &fakeHasher{})
 
 	long := strings.Repeat("a", 73)
-	_, err := svc.Register(context.Background(), "user@example.com", long)
+	_, err := svc.Register(context.Background(), "user@example.com", long, nil)
 	if !errors.Is(err, ErrPasswordTooLong) {
 		t.Errorf("want ErrPasswordTooLong, got %v", err)
 	}
@@ -432,7 +460,7 @@ func TestRegister_Happy(t *testing.T) {
 	hasher := &fakeHasher{}
 	svc := New(repo, hasher)
 
-	got, err := svc.Register(context.Background(), "USER@Example.COM", "password123")
+	got, err := svc.Register(context.Background(), "USER@Example.COM", "password123", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -458,9 +486,66 @@ func TestRegister_EmailTaken(t *testing.T) {
 	}
 	svc := New(repo, &fakeHasher{})
 
-	_, err := svc.Register(context.Background(), "user@example.com", "password123")
+	_, err := svc.Register(context.Background(), "user@example.com", "password123", nil)
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Errorf("want ErrEmailTaken, got %v", err)
+	}
+}
+
+func TestRegister_ValidTimezonePassedThrough(t *testing.T) {
+	repo := &fakeRepo{
+		createUserResults: []createUserResult{{user: User{ID: 1}, err: nil}},
+	}
+	svc := New(repo, &fakeHasher{})
+
+	tz := "Europe/Moscow"
+	if _, err := svc.Register(context.Background(), "user@example.com", "password123", &tz); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.createUserCalls) != 1 || repo.createUserCalls[0].timezone == nil || *repo.createUserCalls[0].timezone != tz {
+		t.Errorf("createUserCalls = %+v, want timezone %q passed through", repo.createUserCalls, tz)
+	}
+}
+
+func TestRegister_InvalidTimezoneSilentlyDropped(t *testing.T) {
+	repo := &fakeRepo{
+		createUserResults: []createUserResult{{user: User{ID: 1}, err: nil}},
+	}
+	svc := New(repo, &fakeHasher{})
+
+	bogus := "Not/AZone"
+	if _, err := svc.Register(context.Background(), "user@example.com", "password123", &bogus); err != nil {
+		t.Fatalf("unexpected error: %v (an invalid timezone must not fail signup)", err)
+	}
+	if len(repo.createUserCalls) != 1 || repo.createUserCalls[0].timezone != nil {
+		t.Errorf("createUserCalls = %+v, want timezone dropped (nil)", repo.createUserCalls)
+	}
+}
+
+func TestUpdateTimezone_Valid(t *testing.T) {
+	repo := &fakeRepo{
+		updateTimezoneResults: []updateTimezoneResult{{user: User{ID: 1}, err: nil}},
+	}
+	svc := New(repo, &fakeHasher{})
+
+	if _, err := svc.UpdateTimezone(context.Background(), 1, "Europe/Moscow"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(repo.updateTimezoneCalls) != 1 || *repo.updateTimezoneCalls[0].timezone != "Europe/Moscow" {
+		t.Errorf("updateTimezoneCalls = %+v, want [{1 Europe/Moscow}]", repo.updateTimezoneCalls)
+	}
+}
+
+func TestUpdateTimezone_Invalid(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := New(repo, &fakeHasher{})
+
+	_, err := svc.UpdateTimezone(context.Background(), 1, "Not/AZone")
+	if !errors.Is(err, ErrInvalidTimezone) {
+		t.Errorf("want ErrInvalidTimezone, got %v", err)
+	}
+	if len(repo.updateTimezoneCalls) != 0 {
+		t.Errorf("repo must not be called on invalid input, got %d calls", len(repo.updateTimezoneCalls))
 	}
 }
 

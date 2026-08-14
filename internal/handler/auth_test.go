@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -29,7 +30,10 @@ func (fakeRepo) UserIDByIdentity(context.Context, string, string) (int64, error)
 func (fakeRepo) LinkOrCreateByEmail(context.Context, string, string, string) (int64, error) {
 	return 0, nil
 }
-func (fakeRepo) CreateUser(context.Context, string, string, bool) (accounts.User, error) {
+func (fakeRepo) CreateUser(context.Context, string, string, bool, *string) (accounts.User, error) {
+	return accounts.User{}, nil
+}
+func (fakeRepo) UpdateTimezone(context.Context, int64, *string) (accounts.User, error) {
 	return accounts.User{}, nil
 }
 func (fakeRepo) MarkEmailVerified(context.Context, int64) error { return nil }
@@ -163,7 +167,7 @@ type fakeRepoWithErr struct {
 	err error
 }
 
-func (f fakeRepoWithErr) CreateUser(context.Context, string, string, bool) (accounts.User, error) {
+func (f fakeRepoWithErr) CreateUser(context.Context, string, string, bool, *string) (accounts.User, error) {
 	return accounts.User{}, f.err
 }
 
@@ -220,5 +224,61 @@ func TestLogin_DBDown(t *testing.T) {
 
 	if got := postJSON(t, app, "/login", `{"email":"a@b.com","password":"validpassword123"}`); got != fiber.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 Service Unavailable on DB outage", got)
+	}
+}
+
+type fakeRepoTimezone struct {
+	fakeRepo
+	user accounts.User
+	err  error
+}
+
+func (f fakeRepoTimezone) UpdateTimezone(context.Context, int64, *string) (accounts.User, error) {
+	return f.user, f.err
+}
+
+func timezoneApp(repo accounts.Repository) (*fiber.App, *auth.Issuer) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &authHandlers{issuer: iss, accounts: accounts.New(repo, authHasher{})}
+	app := fiber.New()
+	app.Patch("/me/timezone", auth.RequireAuth(iss, testVersions), h.UpdateTimezone)
+	return app, iss
+}
+
+func patchJSON(t *testing.T, app *fiber.App, path, token, body string) int {
+	t.Helper()
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPatch, path, strings.NewReader(body))
+	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	if token != "" {
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	}
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestUpdateTimezone_RequiresAuth(t *testing.T) {
+	app, _ := timezoneApp(fakeRepoTimezone{})
+	if got := patchJSON(t, app, "/me/timezone", "", `{"timezone":"Europe/Moscow"}`); got != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", got)
+	}
+}
+
+func TestUpdateTimezone_Valid(t *testing.T) {
+	app, iss := timezoneApp(fakeRepoTimezone{user: accounts.User{ID: 7}})
+	token, _ := iss.Issue(7, testTokenVersion)
+	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Europe/Moscow"}`); got != fiber.StatusOK {
+		t.Errorf("status = %d, want 200", got)
+	}
+}
+
+func TestUpdateTimezone_RejectsInvalid(t *testing.T) {
+	app, iss := timezoneApp(fakeRepoTimezone{err: accounts.ErrInvalidTimezone})
+	token, _ := iss.Issue(7, testTokenVersion)
+	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Not/AZone"}`); got != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", got)
 	}
 }

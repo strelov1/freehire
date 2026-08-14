@@ -59,10 +59,10 @@ func TestListFollowUpCandidates(t *testing.T) {
 
 	uidEnabled := insertUser(t, pool, "enabled@example.test")
 	uidDisabled := insertUser(t, pool, "disabled@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidEnabled, Enabled: true, Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidEnabled, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings enabled: %v", err)
 	}
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidDisabled, Enabled: false, Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uidDisabled, Enabled: false, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings disabled: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 	resetNudgeTables(t, pool)
 
 	uid := insertUser(t, pool, "interview@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestListJobClosedCandidates(t *testing.T) {
 	resetNudgeTables(t, pool)
 
 	uid := insertUser(t, pool, "closed@example.test")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func TestNudgeClaimAndDelivery(t *testing.T) {
 
 	uid := insertUser(t, pool, "deliver@example.test")
 	jid := insertJob(t, pool, "deliver-job")
-	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, Channels: []string{"email"}}); err != nil {
+	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"}}); err != nil {
 		t.Fatalf("upsert settings: %v", err)
 	}
 	appliedAt := time.Now().Add(-25 * 24 * time.Hour)

@@ -42,6 +42,11 @@ type User struct {
 	// database.
 	HasPassword bool
 	CreatedAt   *time.Time
+	// Timezone is the account's IANA name (e.g. "Europe/Moscow"), nil until set.
+	// Read by internal/deliverywindow (via notification_settings' joins) to
+	// interpret a digest time or quiet-hours window in the account's own local
+	// time; unset reads as UTC there.
+	Timezone *string
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected
@@ -95,9 +100,15 @@ type Repository interface {
 
 	// CreateUser creates a new account with the given email and bcrypt password
 	// hash. emailVerified is false for a password registration and true for an account
-	// born from a provider-verified OAuth sign-in. Returns ErrEmailTaken on a
-	// unique-constraint violation.
-	CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool) (User, error)
+	// born from a provider-verified OAuth sign-in. timezone is the browser-detected
+	// IANA zone captured at signup (nil when unknown/invalid — a password
+	// registration is the only caller that ever supplies one). Returns
+	// ErrEmailTaken on a unique-constraint violation.
+	CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error)
+
+	// UpdateTimezone sets (or clears, with nil) the account's IANA timezone name.
+	// The caller has already validated it.
+	UpdateTimezone(ctx context.Context, userID int64, timezone *string) (User, error)
 
 	// MarkEmailVerified records that control of the account's address was proven.
 	MarkEmailVerified(ctx context.Context, userID int64) error
@@ -194,11 +205,14 @@ func (s *Service) ResolveOAuthAccount(
 	}
 }
 
-// Register creates a new account with the given email and password.
+// Register creates a new account with the given email and password. timezone is
+// the browser-detected IANA zone (if any) — a missing or invalid value is
+// silently dropped (nil) rather than failing the signup; the account simply
+// starts without one, same as before this parameter existed.
 // Returns ErrInvalidEmail for unparseable emails, ErrPasswordTooShort when the
 // password is under minPasswordLen characters, and ErrEmailTaken when the
 // normalised email is already registered.
-func (s *Service) Register(ctx context.Context, email, password string) (User, error) {
+func (s *Service) Register(ctx context.Context, email, password string, timezone *string) (User, error) {
 	addr, err := normalizeEmail(email)
 	if err != nil {
 		return User{}, ErrInvalidEmail
@@ -210,14 +224,36 @@ func (s *Service) Register(ctx context.Context, email, password string) (User, e
 	if err != nil {
 		return User{}, err
 	}
+	if timezone != nil && !validTimezone(*timezone) {
+		timezone = nil
+	}
 	// A password registration proves nothing about the address, so the account starts
 	// unverified — which is what stops it from being a silent OAuth merge target.
-	user, err := s.repo.CreateUser(ctx, addr, hash, false)
+	user, err := s.repo.CreateUser(ctx, addr, hash, false, timezone)
 	if err != nil {
 		return User{}, err
 	}
 	s.sendVerificationOnRegister(ctx, user.ID, user.Email)
 	return user, nil
+}
+
+// ErrInvalidTimezone is a timezone name Go's tzdata does not recognize (mapped to 400).
+var ErrInvalidTimezone = errors.New("accounts: invalid timezone")
+
+// validTimezone reports whether tz is a name time.LoadLocation accepts.
+func validTimezone(tz string) bool {
+	_, err := time.LoadLocation(tz)
+	return err == nil
+}
+
+// UpdateTimezone sets the caller's IANA timezone name. Unlike Register's silent
+// drop, an explicit profile edit with a bad value is a real error the caller
+// should see and correct.
+func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone string) (User, error) {
+	if !validTimezone(timezone) {
+		return User{}, ErrInvalidTimezone
+	}
+	return s.repo.UpdateTimezone(ctx, userID, &timezone)
 }
 
 // Login verifies the email/password pair and returns the matching user.

@@ -28,14 +28,27 @@ var (
 	ErrInvalidChannel = errors.New("reminder: unsupported channel")
 	// ErrNoChannels is an enabled rule with no channels to deliver over (mapped to 400).
 	ErrNoChannels = errors.New("reminder: enabled rule needs at least one channel")
+	// ErrInvalidFrequency is a DigestFrequency outside {instant, daily} (mapped to 400).
+	ErrInvalidFrequency = errors.New("reminder: digest frequency must be instant or daily")
+	// ErrMissingDigestTime is daily frequency without a DigestTime (mapped to 400).
+	ErrMissingDigestTime = errors.New("reminder: daily frequency requires a digest time")
+	// ErrIncompleteQuietHours is exactly one of QuietHoursStart/QuietHoursEnd set
+	// (mapped to 400) — the window is meaningless with only one edge.
+	ErrIncompleteQuietHours = errors.New("reminder: quiet hours needs both a start and an end")
 )
 
 // Settings is the account-level notification rule, shared with the internal/nudge
 // engine (see notification_settings). An absent stored row reads as the
-// opt-out-by-default default: enabled, channel email.
+// opt-out-by-default default: enabled, channel email. DigestFrequency/DigestTime
+// govern only internal/notify's saved-search digests; QuietHoursStart/End defer
+// delivery across all three notification engines — see internal/deliverywindow.
 type Settings struct {
-	Enabled  bool
-	Channels []string
+	Enabled         bool
+	Channels        []string
+	DigestFrequency string // "instant" (default/zero value reads as instant) or "daily"
+	DigestTime      *time.Duration
+	QuietHoursStart *time.Duration
+	QuietHoursEnd   *time.Duration
 }
 
 // Repository is the persistence contract. The adapter maps the generated db rows;
@@ -64,7 +77,9 @@ func (s *Service) GetSettings(ctx context.Context, userID int64) (Settings, erro
 }
 
 // UpdateSettings validates and stores the caller's rule. An enabled rule must have
-// at least one valid channel.
+// at least one valid channel. DigestFrequency (empty reads as "instant") must be
+// "instant" or "daily"; "daily" requires a DigestTime. QuietHoursStart/End must be
+// set together or not at all — a one-sided window has no meaning.
 func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings) (Settings, error) {
 	for _, c := range in.Channels {
 		if !notify.ValidChannel(c) {
@@ -73,6 +88,15 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	}
 	if in.Enabled && len(in.Channels) == 0 {
 		return Settings{}, ErrNoChannels
+	}
+	if in.DigestFrequency != "" && in.DigestFrequency != "instant" && in.DigestFrequency != "daily" {
+		return Settings{}, ErrInvalidFrequency
+	}
+	if in.DigestFrequency == "daily" && in.DigestTime == nil {
+		return Settings{}, ErrMissingDigestTime
+	}
+	if (in.QuietHoursStart == nil) != (in.QuietHoursEnd == nil) {
+		return Settings{}, ErrIncompleteQuietHours
 	}
 	return s.repo.UpsertSettings(ctx, userID, in)
 }

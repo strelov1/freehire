@@ -119,6 +119,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	if h.authV2Enabled {
 		recent = h.requireRecentAuth
 	}
+	meGroup.Patch("/timezone", mw.cookie, h.UpdateTimezone)
 	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
@@ -239,17 +240,48 @@ type userResponse struct {
 	// itself to OAuth-only ones, instead of guessing from "is signed in".
 	HasPassword bool       `json:"has_password"`
 	CreatedAt   *time.Time `json:"created_at"`
+	// Timezone is the account's IANA name (nil until set), read by the profile
+	// page to pre-fill its timezone field and by the notification-settings UI's
+	// missing-timezone hint.
+	Timezone *string `json:"timezone"`
 }
 
 type credentials struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// Timezone is the browser-detected IANA zone, captured at registration only
+	// (Login ignores it — an existing account's timezone is edited on the
+	// profile page, not overwritten silently on every sign-in).
+	Timezone *string `json:"timezone"`
 }
 
 // toUserResponse maps an accounts.User to its public response shape.
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
-		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt}
+		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
+		Timezone: u.Timezone}
+}
+
+// timezoneRequest is the PATCH /me/timezone body.
+type timezoneRequest struct {
+	Timezone string `json:"timezone"`
+}
+
+// UpdateTimezone sets the caller's IANA timezone name. Cookie-only.
+func (h *authHandlers) UpdateTimezone(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in timezoneRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	user, err := h.accounts.UpdateTimezone(c.Context(), userID, in.Timezone)
+	if err != nil {
+		return accountsError(err)
+	}
+	return c.JSON(fiber.Map{"data": toUserResponse(user)})
 }
 
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
@@ -268,6 +300,8 @@ func accountsError(err error) error {
 		return fiber.NewError(fiber.StatusUnauthorized, "invalid credentials")
 	case errors.Is(err, accounts.ErrUserNotFound):
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
+	case errors.Is(err, accounts.ErrInvalidTimezone):
+		return fiber.NewError(fiber.StatusBadRequest, "invalid timezone")
 	default:
 		if isInfraError(err) {
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
@@ -294,7 +328,7 @@ func (h *authHandlers) Register(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	user, err := h.accounts.Register(c.Context(), in.Email, in.Password)
+	user, err := h.accounts.Register(c.Context(), in.Email, in.Password, in.Timezone)
 	if err != nil {
 		return accountsError(err)
 	}

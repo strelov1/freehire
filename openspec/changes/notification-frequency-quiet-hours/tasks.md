@@ -34,11 +34,11 @@
 
 ## 6. Backend API
 
-- [ ] 6.1 `internal/handler/me_reminders.go` (or wherever `/me/notification-settings` lives): extend the request/response shape for `digest_frequency`/`digest_time`/`quiet_hours_start`/`quiet_hours_end`; validate `digest_frequency ∈ {instant, daily}`, `digest_time` required when `daily`, `quiet_hours_start`/`quiet_hours_end` set together or not at all.
-- [ ] 6.2 New `PATCH /me/timezone` (cookie-only, matching this codebase's narrow-single-purpose `/me/*` PATCH endpoints): validates the IANA name via `time.LoadLocation`, 400 on invalid, updates `users.timezone`.
-- [ ] 6.3 Unit tests for both handlers: valid/invalid frequency+time combinations, valid/invalid timezone strings, owner-scoping (implicit via cookie auth).
-- [ ] 6.4 Integration test (`//go:build integration`): round-trip both endpoints against real Postgres.
-- [ ] 6.5 `credentials`/`accounts.Register` gain an optional `timezone` param (an invalid/empty value is silently ignored, never a 400 — a browser quirk must not block signup); the web registration flow sends `Intl.DateTimeFormat().resolvedOptions().timeZone` alongside email/password. OAuth sign-up (`ResolveOAuthAccount`) is out of scope for this change (no existing web-side hook to capture it from) — those accounts get a timezone the first time they visit `/my/profile`, same as any pre-existing account.
+- [x] 6.1 `internal/handler/me_reminders.go` (or wherever `/me/notification-settings` lives): extend the request/response shape for `digest_frequency`/`digest_time`/`quiet_hours_start`/`quiet_hours_end`; validate `digest_frequency ∈ {instant, daily}`, `digest_time` required when `daily`, `quiet_hours_start`/`quiet_hours_end` set together or not at all.
+- [x] 6.2 New `PATCH /me/timezone` (cookie-only, matching this codebase's narrow-single-purpose `/me/*` PATCH endpoints): validates the IANA name via `time.LoadLocation`, 400 on invalid, updates `users.timezone`.
+- [x] 6.3 Unit tests for both handlers: valid/invalid frequency+time combinations, valid/invalid timezone strings, owner-scoping (implicit via cookie auth).
+- [x] 6.4 Integration test (`//go:build integration`): round-trip both endpoints against real Postgres.
+- [x] 6.5 `credentials`/`accounts.Register` gain an optional `timezone` param (an invalid/empty value is silently ignored, never a 400 — a browser quirk must not block signup); the web registration flow sends `Intl.DateTimeFormat().resolvedOptions().timeZone` alongside email/password. OAuth sign-up (`ResolveOAuthAccount`) is out of scope for this change (no existing web-side hook to capture it from) — those accounts get a timezone the first time they visit `/my/profile`, same as any pre-existing account.
 
 ## 7. Web: profile timezone field
 

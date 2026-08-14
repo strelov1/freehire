@@ -109,6 +109,65 @@ func TestUpdateSettings_RejectsUnknownChannel(t *testing.T) {
 	}
 }
 
+func TestUpdateSettings_RejectsUnknownFrequency(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: "weekly"})
+	if !errors.Is(err, ErrInvalidFrequency) {
+		t.Errorf("want ErrInvalidFrequency, got %v", err)
+	}
+}
+
+func TestUpdateSettings_DailyRequiresDigestTime(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: "daily"})
+	if !errors.Is(err, ErrMissingDigestTime) {
+		t.Errorf("want ErrMissingDigestTime, got %v", err)
+	}
+}
+
+func TestUpdateSettings_DailyWithDigestTimeAccepted(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	digestTime := 9 * time.Hour
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: "daily", DigestTime: &digestTime})
+	if err != nil {
+		t.Errorf("want no error, got %v", err)
+	}
+}
+
+func TestUpdateSettings_InstantDefaultAccepted(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{DigestFrequency: "instant"})
+	if err != nil {
+		t.Errorf("want no error, got %v", err)
+	}
+}
+
+func TestUpdateSettings_RejectsPartialQuietHours(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	start := 22 * time.Hour
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{QuietHoursStart: &start})
+	if !errors.Is(err, ErrIncompleteQuietHours) {
+		t.Errorf("want ErrIncompleteQuietHours, got %v", err)
+	}
+}
+
+func TestUpdateSettings_BothQuietHoursAccepted(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	start, end := 22*time.Hour, 8*time.Hour
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{QuietHoursStart: &start, QuietHoursEnd: &end})
+	if err != nil {
+		t.Errorf("want no error, got %v", err)
+	}
+}
+
+func TestUpdateSettings_NeitherQuietHoursAccepted(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	_, err := svc.UpdateSettings(context.Background(), 1, Settings{})
+	if err != nil {
+		t.Errorf("want no error, got %v", err)
+	}
+}
+
 func TestCancel_IsIdempotent(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := newService(repo)

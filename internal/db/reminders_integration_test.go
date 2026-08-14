@@ -34,7 +34,7 @@ func TestNotificationSettings(t *testing.T) {
 	}
 
 	saved, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{
-		UserID: uid, Enabled: true, Channels: []string{"email"},
+		UserID: uid, Enabled: true, DigestFrequency: "instant", Channels: []string{"email"},
 	})
 	if err != nil {
 		t.Fatalf("upsert settings: %v", err)
@@ -45,7 +45,7 @@ func TestNotificationSettings(t *testing.T) {
 
 	// Upsert replaces in place (one row per user).
 	if _, err := q.UpsertNotificationSettings(ctx, UpsertNotificationSettingsParams{
-		UserID: uid, Enabled: false, Channels: []string{"telegram", "email"},
+		UserID: uid, Enabled: false, DigestFrequency: "instant", Channels: []string{"telegram", "email"},
 	}); err != nil {
 		t.Fatalf("re-upsert settings: %v", err)
 	}

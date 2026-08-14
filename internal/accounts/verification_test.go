@@ -152,7 +152,7 @@ func TestRegisterIssuesAndMailsAVerificationCode(t *testing.T) {
 	codes, mailer := newFakeCodes(), &fakeMailer{}
 	s := verifyService(repo, codes, mailer, time.Now())
 
-	if _, err := s.Register(context.Background(), "new@example.test", "password123"); err != nil {
+	if _, err := s.Register(context.Background(), "new@example.test", "password123", nil); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if len(mailer.verification) != 1 {
@@ -173,7 +173,7 @@ func TestRegisterSurvivesAMailFailure(t *testing.T) {
 	repo := &fakeRepo{createUserResults: []createUserResult{{user: User{ID: 5, Email: "new@example.test"}}}}
 	s := verifyService(repo, newFakeCodes(), &fakeMailer{err: errors.New("ses down")}, time.Now())
 
-	user, err := s.Register(context.Background(), "new@example.test", "password123")
+	user, err := s.Register(context.Background(), "new@example.test", "password123", nil)
 	if err != nil {
 		t.Fatalf("Register must not fail when the mail cannot be sent: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestConfirmVerificationAcceptsTheMailedCode(t *testing.T) {
 	now := time.Now()
 	s := verifyService(repo, codes, mailer, now)
 
-	if _, err := s.Register(context.Background(), "new@example.test", "password123"); err != nil {
+	if _, err := s.Register(context.Background(), "new@example.test", "password123", nil); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -372,7 +372,7 @@ func TestRegisterWithoutAMailerStillCreatesTheAccount(t *testing.T) {
 	repo := &fakeRepo{createUserResults: []createUserResult{{user: User{ID: 5}}}}
 	s := New(repo, &fakeHasher{})
 
-	if _, err := s.Register(context.Background(), "new@example.test", "password123"); err != nil {
+	if _, err := s.Register(context.Background(), "new@example.test", "password123", nil); err != nil {
 		t.Errorf("Register must work with mail unconfigured: %v", err)
 	}
 }

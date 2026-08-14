@@ -30,25 +30,47 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	row, err := r.q.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{Enabled: true, Channels: []string{notify.ChannelEmail}}, nil
+		return Settings{Enabled: true, Channels: []string{notify.ChannelEmail}, DigestFrequency: "instant"}, nil
 	}
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{Enabled: row.Enabled, Channels: row.Channels}, nil
+	return Settings{
+		Enabled:         row.Enabled,
+		Channels:        row.Channels,
+		DigestFrequency: row.DigestFrequency,
+		DigestTime:      pgconv.DurationPtr(row.DigestTime),
+		QuietHoursStart: pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:   pgconv.DurationPtr(row.QuietHoursEnd),
+	}, nil
 }
 
 // UpsertSettings creates or replaces the caller's rule.
 func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error) {
+	freq := s.DigestFrequency
+	if freq == "" {
+		freq = "instant"
+	}
 	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
-		UserID:   userID,
-		Enabled:  s.Enabled,
-		Channels: s.Channels,
+		UserID:          userID,
+		Enabled:         s.Enabled,
+		Channels:        s.Channels,
+		DigestFrequency: freq,
+		DigestTime:      pgconv.Duration(s.DigestTime),
+		QuietHoursStart: pgconv.Duration(s.QuietHoursStart),
+		QuietHoursEnd:   pgconv.Duration(s.QuietHoursEnd),
 	})
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{Enabled: row.Enabled, Channels: row.Channels}, nil
+	return Settings{
+		Enabled:         row.Enabled,
+		Channels:        row.Channels,
+		DigestFrequency: row.DigestFrequency,
+		DigestTime:      pgconv.DurationPtr(row.DigestTime),
+		QuietHoursStart: pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:   pgconv.DurationPtr(row.QuietHoursEnd),
+	}, nil
 }
 
 // UpsertReminder schedules or replaces the pending reminder for a (user, job).

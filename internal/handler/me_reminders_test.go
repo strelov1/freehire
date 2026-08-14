@@ -155,9 +155,71 @@ func TestNotificationSettingsResponse_Shape(t *testing.T) {
 	if got := string(fields["channels"]); got != "[]" {
 		t.Errorf("channels = %s, want [] for a nil slice", got)
 	}
-	for _, want := range []string{"enabled", "channels"} {
+	for _, want := range []string{"enabled", "channels", "digest_frequency", "digest_time", "quiet_hours_start", "quiet_hours_end"} {
 		if _, ok := fields[want]; !ok {
 			t.Errorf("response missing %q", want)
 		}
+	}
+}
+
+func TestNotificationSettingsResponse_FormatsTimesAsHHMM(t *testing.T) {
+	digestTime := 9 * time.Hour
+	start, end := 22*time.Hour, 8*time.Hour
+	resp := toNotificationSettingsResponse(reminder.Settings{
+		DigestFrequency: "daily", DigestTime: &digestTime,
+		QuietHoursStart: &start, QuietHoursEnd: &end,
+	})
+	if resp.DigestTime == nil || *resp.DigestTime != "09:00" {
+		t.Errorf("DigestTime = %v, want \"09:00\"", resp.DigestTime)
+	}
+	if resp.QuietHoursStart == nil || *resp.QuietHoursStart != "22:00" {
+		t.Errorf("QuietHoursStart = %v, want \"22:00\"", resp.QuietHoursStart)
+	}
+	if resp.QuietHoursEnd == nil || *resp.QuietHoursEnd != "08:00" {
+		t.Errorf("QuietHoursEnd = %v, want \"08:00\"", resp.QuietHoursEnd)
+	}
+}
+
+func TestNotificationSettingsResponse_NilTimesOmitted(t *testing.T) {
+	resp := toNotificationSettingsResponse(reminder.Settings{})
+	if resp.DigestTime != nil || resp.QuietHoursStart != nil || resp.QuietHoursEnd != nil {
+		t.Errorf("resp = %+v, want all nil times when unset", resp)
+	}
+}
+
+func TestUpdateNotificationSettings_ParsesHHMM(t *testing.T) {
+	app, iss, repo := remindersApp(reminder.Settings{})
+	token, _ := iss.Issue(7, testTokenVersion)
+	body := `{"enabled":false,"digest_frequency":"daily","digest_time":"09:00","quiet_hours_start":"22:00","quiet_hours_end":"08:00"}`
+	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, body)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if repo.settings.DigestTime == nil || *repo.settings.DigestTime != 9*time.Hour {
+		t.Errorf("stored DigestTime = %v, want 9h", repo.settings.DigestTime)
+	}
+	if repo.settings.QuietHoursStart == nil || *repo.settings.QuietHoursStart != 22*time.Hour {
+		t.Errorf("stored QuietHoursStart = %v, want 22h", repo.settings.QuietHoursStart)
+	}
+}
+
+func TestUpdateNotificationSettings_RejectsMalformedTime(t *testing.T) {
+	app, iss, _ := remindersApp(reminder.Settings{})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"digest_frequency":"daily","digest_time":"not-a-time"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateNotificationSettings_RejectsDailyWithoutDigestTime(t *testing.T) {
+	app, iss, _ := remindersApp(reminder.Settings{})
+	token, _ := iss.Issue(7, testTokenVersion)
+	resp := do(t, app, fiber.MethodPut, "/me/notification-settings", token, `{"digest_frequency":"daily"}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }

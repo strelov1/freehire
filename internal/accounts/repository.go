@@ -143,11 +143,16 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 
 // CreateUser inserts a new account and returns it. Returns ErrEmailTaken on a
 // unique-constraint violation.
-func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool) (User, error) {
+func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error) {
+	tz := ""
+	if timezone != nil {
+		tz = *timezone
+	}
 	row, err := r.q.CreateUser(ctx, db.CreateUserParams{
 		Email:         email,
 		PasswordHash:  pgtype.Text{String: passwordHash, Valid: true},
 		EmailVerified: emailVerified,
+		Timezone:      pgconv.Text(tz),
 	})
 	if pgerr.IsUniqueViolation(err) {
 		return User{}, ErrEmailTaken
@@ -157,7 +162,23 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: true,
-		CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
+}
+
+// UpdateTimezone sets the account's IANA timezone name. The caller has already
+// validated it.
+func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, timezone *string) (User, error) {
+	tz := ""
+	if timezone != nil {
+		tz = *timezone
+	}
+	row, err := r.q.UpdateUserTimezone(ctx, db.UpdateUserTimezoneParams{ID: userID, Timezone: pgconv.Text(tz)})
+	if err != nil {
+		return User{}, err
+	}
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
+		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
 }
 
 // MarkEmailVerified records that control of the account's address was proven, by an
@@ -224,5 +245,5 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
-		CreatedAt: pgconv.TimePtr(row.CreatedAt)}, nil
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
 }
