@@ -1080,6 +1080,11 @@ type Querier interface {
 	// the table grows columns (e.g. collections); an explicit subset makes sqlc emit a
 	// distinct row type and breaks the company-detail handler on every new column.
 	GetCompany(ctx context.Context, slug string) (Company, error)
+	// The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
+	// Service.Hide can take LockCompanyForVote before it touches the feedback row —
+	// the same company-then-feedback lock order Upsert/Delete already use, needed to
+	// avoid a lock-order deadlock with those paths. pgx.ErrNoRows on an unknown id.
+	GetCompanyFeedbackSlug(ctx context.Context, id int64) (string, error)
 	// The observable application counts for one company. A company with no row has no
 	// observable applications at all, which the caller must treat as "not enough data"
 	// rather than as a zero response rate.

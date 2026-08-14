@@ -71,6 +71,21 @@ func (q *Queries) DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFe
 	return err
 }
 
+const getCompanyFeedbackSlug = `-- name: GetCompanyFeedbackSlug :one
+SELECT company_slug FROM company_feedback WHERE id = $1
+`
+
+// The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
+// Service.Hide can take LockCompanyForVote before it touches the feedback row —
+// the same company-then-feedback lock order Upsert/Delete already use, needed to
+// avoid a lock-order deadlock with those paths. pgx.ErrNoRows on an unknown id.
+func (q *Queries) GetCompanyFeedbackSlug(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getCompanyFeedbackSlug, id)
+	var company_slug string
+	err := row.Scan(&company_slug)
+	return company_slug, err
+}
+
 const getMyCompanyFeedback = `-- name: GetMyCompanyFeedback :one
 SELECT id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status FROM company_feedback WHERE user_id = $1 AND company_slug = $2
 `

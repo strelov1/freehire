@@ -60,6 +60,13 @@ RETURNING feedback_count, feedback_rating_avg;
 -- grows on genuine new-company writes.
 SELECT count(*) FROM company_feedback WHERE user_id = $1 AND created_at >= $2;
 
+-- name: GetCompanyFeedbackSlug :one
+-- The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
+-- Service.Hide can take LockCompanyForVote before it touches the feedback row —
+-- the same company-then-feedback lock order Upsert/Delete already use, needed to
+-- avoid a lock-order deadlock with those paths. pgx.ErrNoRows on an unknown id.
+SELECT company_slug FROM company_feedback WHERE id = $1;
+
 -- name: HideCompanyFeedback :one
 -- The moderator lever: hide a specific review (idempotent — hiding an already-
 -- hidden row is a no-op). Returns the company_slug so the caller can recompute

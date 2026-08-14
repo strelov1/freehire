@@ -344,7 +344,12 @@ func (s *Service) Hide(ctx context.Context, feedbackID int64) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 
-	slug, err := q.HideCompanyFeedback(ctx, feedbackID)
+	// Read the company slug WITHOUT locking the feedback row (GetCompanyFeedbackSlug
+	// is a plain SELECT), so the company row can be locked BEFORE the feedback row is
+	// touched — the same order Upsert/Delete already use. Locking the feedback row
+	// first, the way HideCompanyFeedback's UPDATE would on its own, risks a deadlock
+	// against those paths' opposite order.
+	slug, err := q.GetCompanyFeedbackSlug(ctx, feedbackID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
@@ -352,6 +357,14 @@ func (s *Service) Hide(ctx context.Context, feedbackID int64) error {
 		return err
 	}
 	if err := q.LockCompanyForVote(ctx, slug); err != nil {
+		return err
+	}
+	if _, err := q.HideCompanyFeedback(ctx, feedbackID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Deleted between the read above and this update — same outcome as
+			// never having existed.
+			return ErrNotFound
+		}
 		return err
 	}
 	if _, err := q.RecountCompanyFeedback(ctx, slug); err != nil {
