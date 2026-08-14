@@ -575,3 +575,61 @@ func TestRecipient_Push_SoftSkipsWithNoRegisteredDevice(t *testing.T) {
 		t.Errorf("dest = %q, want empty", dest)
 	}
 }
+
+// --- DELIVER: quiet hours ------------------------------------------------
+
+func pgTime(hh, mm int) pgtype.Time {
+	return pgtype.Time{Microseconds: int64(hh)*int64(time.Hour/time.Microsecond) + int64(mm)*int64(time.Minute/time.Microsecond), Valid: true}
+}
+
+func TestDeliver_DeferredDuringQuietHours(t *testing.T) {
+	// fixedNow is 12:00 UTC; an 11:00-13:00 window covers it.
+	chat := int64(555)
+	row := deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram"}, &chat, "")
+	row.Timezone = pgtype.Text{String: "UTC", Valid: true}
+	row.QuietHoursStart = pgTime(11, 0)
+	row.QuietHoursEnd = pgTime(13, 0)
+	store := &fakeStore{due: []int64{1}, row: row}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(notifier.sent) != 0 {
+		t.Errorf("must not send during quiet hours, sent %v", notifier.sent)
+	}
+	if len(store.released) != 1 {
+		t.Errorf("must release the claim, released = %v", store.released)
+	}
+	if len(store.delivered) != 0 || len(store.cancelled) != 0 {
+		t.Errorf("must not deliver or cancel, delivered=%v cancelled=%v", store.delivered, store.cancelled)
+	}
+	if stats.Deferred != 1 {
+		t.Errorf("stats.Deferred = %d, want 1", stats.Deferred)
+	}
+}
+
+func TestDeliver_DeliversOutsideQuietHours(t *testing.T) {
+	// fixedNow is 12:00 UTC; a 22:00-08:00 window does not cover it.
+	chat := int64(555)
+	row := deliveryRow(KindFollowUp, "applied", 25, true, true, []string{"telegram"}, &chat, "")
+	row.Timezone = pgtype.Text{String: "UTC", Valid: true}
+	row.QuietHoursStart = pgTime(22, 0)
+	row.QuietHoursEnd = pgTime(8, 0)
+	store := &fakeStore{due: []int64{1}, row: row}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Errorf("sent = %v, want 1 delivery outside quiet hours", notifier.sent)
+	}
+	if stats.Delivered != 1 {
+		t.Errorf("stats.Delivered = %d, want 1", stats.Delivered)
+	}
+}

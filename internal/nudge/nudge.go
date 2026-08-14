@@ -32,6 +32,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/appevent"
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/deliverywindow"
 	"github.com/strelov1/freehire/internal/notify"
 	"github.com/strelov1/freehire/internal/userjob"
 )
@@ -148,6 +149,7 @@ type Stats struct {
 	Delivered int // nudges sent
 	Cancelled int // nudges cancelled at fire (condition no longer holds)
 	SoftSkips int // nudges with no deliverable channel this pass
+	Deferred  int // nudges held back by the account's quiet-hours window
 	Failed    int // nudges whose delivery errored
 }
 
@@ -175,8 +177,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	if err := r.deliver(ctx, &stats); err != nil {
 		return stats, fmt.Errorf("deliver: %w", err)
 	}
-	log.Printf("nudge: matched=%d delivered=%d cancelled=%d soft_skips=%d failed=%d",
-		stats.Matched, stats.Delivered, stats.Cancelled, stats.SoftSkips, stats.Failed)
+	log.Printf("nudge: matched=%d delivered=%d cancelled=%d soft_skips=%d deferred=%d failed=%d",
+		stats.Matched, stats.Delivered, stats.Cancelled, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 
@@ -302,6 +304,13 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 			return
 		}
 		stats.Cancelled++
+		return
+	}
+	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, deliverywindow.FromPgTime(info.QuietHoursStart), deliverywindow.FromPgTime(info.QuietHoursEnd)) {
+		// A transient time-of-day condition, not a lapsed trigger: release (not
+		// cancel) so the nudge fires once quiet hours end.
+		r.release(ctx, id)
+		stats.Deferred++
 		return
 	}
 

@@ -29,8 +29,8 @@
 
 ## 5. `internal/nudge` wiring
 
-- [ ] 5.1 `fire`: after the existing `actionable(info)` re-check (which stays a cancel, not a defer), add the same quiet-hours check as reminder's — release, don't cancel, don't deliver.
-- [ ] 5.2 Unit tests: due nudge deferred during quiet hours (covering at least one of the three kinds), delivered outside quiet hours.
+- [x] 5.1 `fire`: after the existing `actionable(info)` re-check (which stays a cancel, not a defer), add the same quiet-hours check as reminder's — release, don't cancel, don't deliver.
+- [x] 5.2 Unit tests: due nudge deferred during quiet hours (covering at least one of the three kinds), delivered outside quiet hours.
 
 ## 6. Backend API
 
