@@ -71,21 +71,14 @@ func run() int {
 		return 0
 	}
 
-	applied := 0
-	for _, r := range renames {
+	applied, failed := applyRenames(ctx, renames, func(ctx context.Context, r rename) (bool, error) {
 		n, err := queries.RenameSlugCompany(ctx, db.RenameSlugCompanyParams{
 			Name:    r.name,
 			NewSlug: normalize.Slug(r.name),
 			OldSlug: r.oldSlug,
 		})
-		if err != nil {
-			log.Printf("rename %s: %v", r.oldSlug, err)
-			continue
-		}
-		if n > 0 {
-			applied++
-		}
-	}
+		return n > 0, err
+	})
 
 	// jobs now carry the resolved names/slugs; re-key the derived catalogue and
 	// sweep the rows orphaned by the re-key so company pages resolve.
@@ -99,14 +92,34 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("backfill-company-names done: candidates=%d resolved=%d applied=%d no_source=%d rejected=%d companies_orphaned=%d",
-		len(rows), len(renames), applied, stats.noSource, stats.rejected, orphans)
-	return 0
+	log.Printf("backfill-company-names done: candidates=%d resolved=%d applied=%d failed=%d no_source=%d rejected=%d companies_orphaned=%d",
+		len(rows), len(renames), applied, failed, stats.noSource, stats.rejected, orphans)
+	return worker.ExitCode(failed, 0)
 }
 
 type rename struct {
 	oldSlug string
 	name    string
+}
+
+// applyRenames writes each rename via write, counting how many actually
+// changed a row (applied) and how many errored (failed). A single company's
+// write failure (e.g. a unique-constraint collision on the derived slug) must
+// not abort the batch, so the loop always continues; the caller uses failed
+// to decide the process exit code instead.
+func applyRenames(ctx context.Context, renames []rename, write func(context.Context, rename) (bool, error)) (applied, failed int) {
+	for _, r := range renames {
+		ok, err := write(ctx, r)
+		if err != nil {
+			log.Printf("rename %s: %v", r.oldSlug, err)
+			failed++
+			continue
+		}
+		if ok {
+			applied++
+		}
+	}
+	return applied, failed
 }
 
 type resolveStats struct {

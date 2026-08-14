@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/companyname"
@@ -42,5 +43,51 @@ func TestResolveNames(t *testing.T) {
 	}
 	if stats.rejected != 2 {
 		t.Errorf("rejected = %d, want 2 (kempinski, lbresearch)", stats.rejected)
+	}
+}
+
+// TestApplyRenames_CountsFailures guards the worker's exit-code contract: a
+// per-company write failure must be counted, not just logged and dropped, so
+// the caller can turn it into a non-zero exit via worker.ExitCode and cron
+// actually alerts instead of silently succeeding on a partial batch.
+func TestApplyRenames_CountsFailures(t *testing.T) {
+	renames := []rename{
+		{oldSlug: "afcb", name: "AFC Bournemouth"},
+		{oldSlug: "kempinski", name: "Kempinski Hotels"},
+		{oldSlug: "lbresearch", name: "Centellic"},
+	}
+	applied, failed := applyRenames(context.Background(), renames, func(_ context.Context, r rename) (bool, error) {
+		if r.oldSlug == "kempinski" {
+			return false, errors.New("unique constraint violation")
+		}
+		return true, nil
+	})
+	if applied != 2 {
+		t.Errorf("applied = %d, want 2", applied)
+	}
+	if failed != 1 {
+		t.Errorf("failed = %d, want 1", failed)
+	}
+}
+
+// TestApplyRenames_ContinuesPastAFailure guards that one company's write
+// error doesn't abort the rest of the batch — every rename must still be
+// attempted.
+func TestApplyRenames_ContinuesPastAFailure(t *testing.T) {
+	renames := []rename{
+		{oldSlug: "a", name: "A"},
+		{oldSlug: "b", name: "B"},
+		{oldSlug: "c", name: "C"},
+	}
+	var attempted []string
+	applyRenames(context.Background(), renames, func(_ context.Context, r rename) (bool, error) {
+		attempted = append(attempted, r.oldSlug)
+		if r.oldSlug == "a" {
+			return false, errors.New("boom")
+		}
+		return true, nil
+	})
+	if len(attempted) != 3 {
+		t.Errorf("attempted %d renames, want 3 (a failing must not stop b, c)", len(attempted))
 	}
 }
