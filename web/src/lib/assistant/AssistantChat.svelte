@@ -149,7 +149,6 @@
   // events, so scrolling up mid-turn holds position and scrolling back resumes
   // following with no further ceremony.
   let stickToBottom = $state(true);
-  let textareaEl = $state<HTMLTextAreaElement | null>(null);
 
   // Messages typed while a turn is in flight, drained one by one when it ends.
   let queue = $state<{ id: string; text: string }[]>([]);
@@ -213,16 +212,6 @@
   /** The conversation the host is currently being navigated to, or null. Held until the
    *  `session` prop catches up, so a switch we started is never undone by the stale URL. */
   let navigatingTo = $state<string | null>(null);
-
-  // Auto-grow the composer textarea up to a cap (px).
-  const COMPOSER_CAP = 200;
-  $effect(() => {
-    void draft;
-    const el = textareaEl;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_CAP)}px`;
-  });
 
   // --- Streaming spinner / thinking timers ---------------------------------
   const SPINNER_GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽'] as const;
