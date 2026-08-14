@@ -86,6 +86,16 @@ freehire_worker_last_run_success{%[1]s} %[4]d
 func runInstance(args []string) string {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if arg == "--" {
+			// The POSIX end-of-options marker: everything after it is positional,
+			// so it must not be treated as a bare flag whose "value" (the board
+			// path itself) gets skipped by the generic rule below.
+			if i+1 < len(args) {
+				base := filepath.Base(args[i+1])
+				return strings.TrimSuffix(base, filepath.Ext(base))
+			}
+			return ""
+		}
 		if !strings.HasPrefix(arg, "-") {
 			base := filepath.Base(arg)
 			return strings.TrimSuffix(base, filepath.Ext(base))
