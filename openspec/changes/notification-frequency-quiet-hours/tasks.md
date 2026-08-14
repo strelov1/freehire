@@ -11,9 +11,9 @@
 
 ## 2. `internal/deliverywindow` (new leaf package)
 
-- [ ] 2.1 New package `internal/deliverywindow`: `InQuietHours(now time.Time, tz string, start, end *time.Time) bool` — nil `start`/`end` means quiet hours off (always false); handles overnight wraparound (`start > end`); nil/invalid `tz` falls back to UTC.
-- [ ] 2.2 Same package: `DigestDue(now time.Time, tz string, digestTime *time.Time, lastSentAt *time.Time) bool` — true when local time has passed `digestTime` and `lastSentAt` is nil or its local calendar date precedes today's local calendar date.
-- [ ] 2.3 Unit tests: quiet-hours same-day window, overnight-wraparound window (both sides of midnight), quiet-hours-off, invalid/empty timezone falls back to UTC, digest-due before/after the time boundary, digest-due same-day-already-sent vs next-day, digest-due with nil `lastSentAt`.
+- [x] 2.1 New package `internal/deliverywindow`: `InQuietHours(now time.Time, tz string, start, end *time.Time) bool` — nil `start`/`end` means quiet hours off (always false); handles overnight wraparound (`start > end`); nil/invalid `tz` falls back to UTC.
+- [x] 2.2 Same package: `DigestDue(now time.Time, tz string, digestTime *time.Time, lastSentAt *time.Time) bool` — true when local time has passed `digestTime` and `lastSentAt` is nil or its local calendar date precedes today's local calendar date.
+- [x] 2.3 Unit tests: quiet-hours same-day window, overnight-wraparound window (both sides of midnight), quiet-hours-off, invalid/empty timezone falls back to UTC, digest-due before/after the time boundary, digest-due same-day-already-sent vs next-day, digest-due with nil `lastSentAt`.
 
 ## 3. `internal/notify` wiring
 
