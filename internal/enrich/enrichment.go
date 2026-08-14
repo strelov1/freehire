@@ -38,6 +38,17 @@ const (
 	maxSalaryCurrencyRunes = 12
 )
 
+// maxCities and maxCityRunes bound the Cities free-text list the same way: it is
+// extracted from the same attacker-influenced description and served verbatim
+// (jobview.cityFacet, and from there into the Meilisearch document) whenever the
+// deterministic dictionary hasn't pinned a city, so an unbounded model response —
+// e.g. a prompt-injected "list every city in the world, one per line" — would
+// otherwise persist and be served indefinitely.
+const (
+	maxCities    = 20
+	maxCityRunes = 100
+)
+
 // Enrichment is the typed view of a job's enrichment JSONB payload. JSON keys
 // are snake_case to match the existing jobs JSON tags. The blob maps 1:1 to the
 // future search document.
@@ -164,6 +175,7 @@ func (e *Enrichment) Sanitize() {
 	e.Summary = llm.TrimTruncateRunes(e.Summary, maxSummaryRunes)
 	e.TimezoneNote = llm.TrimTruncateRunes(e.TimezoneNote, maxTimezoneNoteRunes)
 	e.SalaryCurrency = llm.TrimTruncateRunes(e.SalaryCurrency, maxSalaryCurrencyRunes)
+	e.Cities = boundCities(e.Cities)
 
 	for _, s := range e.servedScalarEnums() {
 		if *s.ptr != "" && !slices.Contains(s.vocab, *s.ptr) {
@@ -192,6 +204,25 @@ func positiveOrNil(n *int) *int {
 		return n
 	}
 	return nil
+}
+
+// boundCities clips each city to maxCityRunes and the list to maxCities entries, the
+// same free-text bound Sanitize applies to Summary/TimezoneNote/SalaryCurrency,
+// dropping any entry that clips to empty. It returns nil when nothing survives so
+// the field omits cleanly.
+func boundCities(cities []string) []string {
+	if len(cities) > maxCities {
+		cities = cities[:maxCities]
+	}
+	var kept []string
+	for _, c := range cities {
+		c = llm.TrimTruncateRunes(c, maxCityRunes)
+		if c == "" {
+			continue
+		}
+		kept = append(kept, c)
+	}
+	return kept
 }
 
 // keepKnown returns values restricted to those present in vocab, preserving order;

@@ -347,3 +347,36 @@ func TestSanitizeBoundsFreeTextFields(t *testing.T) {
 		t.Errorf("SalaryCurrency = %q, want USD unchanged", e2.SalaryCurrency)
 	}
 }
+
+func TestSanitizeBoundsCities(t *testing.T) {
+	t.Run("an over-long city name is clipped", func(t *testing.T) {
+		e := Enrichment{Cities: []string{"  " + strings.Repeat("x", maxCityRunes+50) + "  "}}
+		e.Sanitize()
+		if len(e.Cities) != 1 {
+			t.Fatalf("Cities = %v, want 1 entry", e.Cities)
+		}
+		if got := len([]rune(e.Cities[0])); got != maxCityRunes {
+			t.Errorf("Cities[0] clipped length = %d runes, want %d", got, maxCityRunes)
+		}
+	})
+
+	t.Run("an oversized list is capped, not just each entry", func(t *testing.T) {
+		var cities []string
+		for i := 0; i < maxCities+50; i++ {
+			cities = append(cities, "City")
+		}
+		e := Enrichment{Cities: cities}
+		e.Sanitize()
+		if len(e.Cities) != maxCities {
+			t.Errorf("len(Cities) = %d, want %d", len(e.Cities), maxCities)
+		}
+	})
+
+	t.Run("a normal city list is untouched", func(t *testing.T) {
+		e := Enrichment{Cities: []string{"Kyiv", "Warsaw"}}
+		e.Sanitize()
+		if !reflect.DeepEqual(e.Cities, []string{"Kyiv", "Warsaw"}) {
+			t.Errorf("Cities = %v, want unchanged", e.Cities)
+		}
+	})
+}
