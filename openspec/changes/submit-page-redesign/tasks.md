@@ -20,7 +20,7 @@
       (`internal/linkimport/linkimport.go:126`) already exists, already does not write
       (proven by `TestResolve_DoesNotWriteAnything`), and is the exact seam
       `internal/jdresolve` already uses for the same purpose. Design updated accordingly.
-- [ ] 2.2 Add `POST /api/v1/submissions/prefill` in `internal/handler/submissions.go`
+- [x] 2.2 Add `POST /api/v1/submissions/prefill` in `internal/handler/submissions.go`
       (`mw.key`, `mw.outboundFetch`), calling `im.Resolve(ctx, url, linkimport.Board{})`
       and projecting `title`/`company`/`location`/`description`/`work_mode`/
       `employment_type`/`seniority`/`source` (from `resolved.Job`/`resolved.Source`)
