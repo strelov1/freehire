@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -13,16 +14,18 @@ import (
 //
 // Two shapes make it unlike its neighbours.
 //
-// **Neither the company nor a posting id is in the payload.** Both are derived from the
-// posting URL, which is `https://landing.jobs/at/<company-slug>/<job-slug>`: the employer from
-// the first segment, humanized, and the external id from both segments joined — the only stable
-// identity the feed offers. A posting whose URL does not have that shape is skipped rather than
-// ingested under a guessed identity, since the id is the dedup key.
+// **The employer is not in the payload.** There is no company field, so it comes from the
+// posting URL, `https://landing.jobs/at/<company-slug>/<job-slug>`, humanized from the first
+// segment. A posting whose URL does not have that shape is skipped rather than ingested under a
+// guessed employer, which would break its company slug. The posting's own numeric `id` is the
+// external id — the slug pair was used for that in the first draft and is not durable enough:
+// live slugs bake in a year (`…-in-lisbon-2025`), so a slug the board regenerates would
+// silently duplicate the posting instead of updating it.
 //
 // **One request, and no pagination.** `?page=N` is ignored by the endpoint — pages 1 and 2 come
-// back byte-for-byte identical (verified 2026-08-08, issue #1627) — so a page walk would
+// back byte-for-byte identical (verified live 2026-08-13, issue #1627) — so a page walk would
 // re-fetch the same postings until its own cap and dedup them all away, paying N requests for
-// one page of data. The single response is therefore taken as the whole feed. Whether the ~50
+// one page of data. The single response is therefore taken as the whole feed. Whether the 50
 // items it returns ARE the whole active catalogue is unconfirmed; if a parameter controlling
 // depth is found, this is where the walk goes, and `internal/sources/AGENTS.md`'s first-page
 // rule applies to it.
@@ -54,17 +57,18 @@ func (landingjobs) aggregator() {}
 
 // landingjobsPosting is one posting, body inline (no detail call).
 //
-// The feed also carries `tags`, `type`, `gross_salary_low`/`gross_salary_high` and
-// `currency_code`, none of which are declared here. Salary has no home on Job (enrichment owns
-// it), and the element shape of `tags` and the vocabulary of `type` are undocumented and were
-// not verified live — declaring a wrong Go type for either would fail the decode of the WHOLE
-// feed, not just that field, so both are left to the pipeline's own dictionaries. Adding them is
-// a small change once the shapes are confirmed against the live endpoint.
+// The feed also carries `tags`, `gross_salary_low`/`gross_salary_high` and `currency_code`,
+// none of which are declared. Salary has no home on Job (enrichment owns it), and the element
+// shape of `tags` was not confirmed — declaring a wrong Go type for it would fail the decode of
+// the WHOLE feed rather than that one field, so the skills dictionary mines the description
+// instead. Adding it is a small change once the shape is verified.
 type landingjobsPosting struct {
+	ID               int64              `json:"id"`
 	Title            string             `json:"title"`
 	URL              string             `json:"url"`
 	Locations        []landingjobsPlace `json:"locations"`
 	Remote           bool               `json:"remote"`
+	Type             string             `json:"type"`
 	PublishedAt      string             `json:"published_at"`
 	CreatedAt        string             `json:"created_at"`
 	RoleDescription  string             `json:"role_description"`
@@ -74,10 +78,16 @@ type landingjobsPosting struct {
 }
 
 // landingjobsPlace is one entry of a posting's locations. The array is null for a fully-remote
-// role, so every read of it goes through the empty check in landingjobsLocation.
+// role, and carries SEVERAL entries for a role open in more than one city — 28% of a live
+// sample — so neither reader may stop at the first.
 type landingjobsPlace struct {
 	City        string `json:"city"`
 	CountryCode string `json:"country_code"`
+}
+
+// label renders one place as "City, CC", or whichever half the entry actually carries.
+func (p landingjobsPlace) label() string {
+	return joinNonEmpty(strings.TrimSpace(p.City), strings.TrimSpace(p.CountryCode))
 }
 
 func (s landingjobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
@@ -94,12 +104,12 @@ func (s landingjobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-// toJob maps a posting to a Job, returning ok=false when the URL does not yield an identity —
-// without it there is no dedup key and no employer, and a posting ingested under a fabricated
-// one would be re-inserted on every crawl.
+// toJob maps a posting to a Job, returning ok=false without a native id, a title, or a
+// URL-derivable employer — the id is the dedup key and the employer backs the company slug, so
+// a posting missing either would be re-inserted or filed under a fabricated company.
 func (p landingjobsPosting) toJob() (Job, bool) {
-	company, id, ok := landingjobsIdentity(p.URL)
-	if !ok || p.Title == "" {
+	company, ok := landingjobsCompanyFromURL(p.URL)
+	if !ok || p.ID == 0 || p.Title == "" {
 		return Job{}, false
 	}
 	// remote is a structured boolean, so it may set WorkMode — but only in the direction the
@@ -110,7 +120,7 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 		mode = "remote"
 	}
 	return Job{
-		ExternalID:  id,
+		ExternalID:  strconv.FormatInt(p.ID, 10),
 		URL:         p.URL,
 		Title:       p.Title,
 		Company:     company,
@@ -119,31 +129,34 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 		Remote:      p.Remote,
 		WorkMode:    mode,
 		Countries:   landingjobsCountries(p.Locations),
-		PostedAt:    parseRFC3339(firstNonEmpty(p.PublishedAt, p.CreatedAt)),
+		// The board states the employment type in a structured field ("Full-time"), which the
+		// shared schema.org mapper resolves once the separator matches its vocabulary — the same
+		// hyphen-to-underscore step remotli applies to the identical case format.
+		EmploymentType: schemaEmploymentType(strings.ReplaceAll(p.Type, "-", "_")),
+		PostedAt:       parseRFC3339(firstNonEmpty(p.PublishedAt, p.CreatedAt)),
 	}, true
 }
 
-// landingjobsIdentity splits a posting URL into its employer and its stable id.
+// landingjobsCompanyFromURL humanizes the employer out of a posting URL.
 //
-// `https://landing.jobs/at/acme-corp/senior-go-engineer` yields ("Acme Corp",
-// "acme-corp/senior-go-engineer"). Both segments go into the id because the job slug alone is
-// not unique across employers — two companies may both post "backend-engineer" — and the id is
-// the dedup key. ok is false for any URL without both segments.
-func landingjobsIdentity(rawURL string) (company, id string, ok bool) {
+// `https://landing.jobs/at/acme-corp/senior-go-engineer` yields "Acme Corp". Both path segments
+// must be present: `/at/acme-corp` alone is the company's own page rather than a posting, and
+// treating it as one would file a job under a URL that never named it. ok is false otherwise.
+func landingjobsCompanyFromURL(rawURL string) (company string, ok bool) {
 	_, after, found := strings.Cut(rawURL, landingjobsPathMarker)
 	if !found {
-		return "", "", false
+		return "", false
 	}
-	// Trim a query/fragment before splitting so neither lands inside the job slug.
+	// Trim a query/fragment before splitting so neither lands inside a path segment.
 	after = strings.TrimSpace(after)
 	if i := strings.IndexAny(after, "?#"); i >= 0 {
 		after = after[:i]
 	}
 	parts := strings.Split(strings.Trim(after, "/"), "/")
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
+		return "", false
 	}
-	return landingjobsCompany(parts[0]), parts[0] + "/" + parts[1], true
+	return landingjobsCompany(parts[0]), true
 }
 
 // landingjobsCompany humanizes a company slug into a display name: hyphens and underscores
@@ -164,32 +177,31 @@ func landingjobsCompany(slug string) string {
 	return strings.Join(words, " ")
 }
 
-// landingjobsLocation renders the posting's place as free text for the location dictionary:
-// the first entry as "City, CC", with "Remote" appended when the posting is flagged remote and
-// standing alone when there is no place at all (the array is null for fully-remote roles).
+// landingjobsLocation renders every place the posting states, not just the first: a role open in
+// Munich, Lisbon and Cologne says so in the feed, and keeping one city would hide it from a
+// search for the others. "Remote" is appended when the posting is flagged remote, and stands
+// alone when there is no place at all (the array is null for fully-remote roles).
 func landingjobsLocation(p landingjobsPosting) string {
-	place := ""
-	if len(p.Locations) > 0 {
-		place = strings.TrimSpace(strings.Trim(
-			p.Locations[0].City+", "+p.Locations[0].CountryCode, " ,"))
-	}
+	places := distinctJoin(p.Locations, "; ", landingjobsPlace.label)
 	if !p.Remote {
-		return place
+		return places
 	}
-	if place == "" {
+	if places == "" {
 		return "Remote"
 	}
-	return place + ", Remote"
+	return places + "; Remote"
 }
 
-// landingjobsCountries normalizes the first location's country code into Job.Countries. It is a
-// structured field rather than a token mined from the location text, which is what licenses
-// setting it at all; an unresolved or absent code yields nil so the dictionary decides instead.
+// landingjobsCountries normalizes EVERY location's country code into Job.Countries. They are
+// structured fields rather than tokens mined from location text, which is what licenses setting
+// them at all; unresolved and duplicate codes drop out, and nothing resolvable yields nil so the
+// dictionary decides instead.
 func landingjobsCountries(places []landingjobsPlace) []string {
-	if len(places) == 0 {
-		return nil
+	codes := make([]string, 0, len(places))
+	for _, p := range places {
+		codes = append(codes, p.CountryCode)
 	}
-	return countryFromCode(places[0].CountryCode)
+	return countriesFromCodes(codes)
 }
 
 // landingjobsDescription stitches the posting's HTML sections into one body, heading each named

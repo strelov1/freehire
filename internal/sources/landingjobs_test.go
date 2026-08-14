@@ -43,12 +43,13 @@ func TestLandingJobsBoardFileValidates(t *testing.T) {
 	}
 }
 
-// The feed is a top-level array with no company and no id, so the mapping rests entirely on
-// the URL. This covers the whole happy path in one posting.
+// The feed is a top-level array carrying a native id but no company, so identity is split: the
+// id is the dedup key and the URL supplies the employer. This covers the whole happy path.
 func TestLandingJobsFetchMapsAPosting(t *testing.T) {
 	feed := `[
-{"title":"Senior Go Engineer",
- "url":"https://landing.jobs/at/acme-corp/senior-go-engineer",
+{"id":48231,
+ "title":"Senior Go Engineer",
+ "url":"https://landing.jobs/at/acme-corp/senior-go-engineer-in-lisbon-2025",
  "locations":[{"city":"Lisbon","country_code":"PT"}],
  "remote":false,
  "published_at":"2026-08-01T09:30:00.000Z",
@@ -58,7 +59,7 @@ func TestLandingJobsFetchMapsAPosting(t *testing.T) {
  "nice_to_have":"<p>Kubernetes.</p>",
  "perks":"<p>Lunch.</p>",
  "tags":["go","docker"],
- "type":"full-time",
+ "type":"Full-time",
  "gross_salary_low":50000,
  "gross_salary_high":70000,
  "currency_code":"EUR"}
@@ -75,15 +76,19 @@ func TestLandingJobsFetchMapsAPosting(t *testing.T) {
 	if j.Company != "Acme Corp" {
 		t.Errorf("Company = %q, want Acme Corp — humanized from the URL slug", j.Company)
 	}
-	// Both slugs, because a job slug alone is not unique across employers.
-	if j.ExternalID != "acme-corp/senior-go-engineer" {
-		t.Errorf("ExternalID = %q, want acme-corp/senior-go-engineer", j.ExternalID)
+	// The native numeric id, not the slug pair: live slugs bake in a year, so a regenerated
+	// slug would duplicate the posting rather than update it.
+	if j.ExternalID != "48231" {
+		t.Errorf("ExternalID = %q, want the posting's own numeric id 48231", j.ExternalID)
 	}
 	if j.Location != "Lisbon, PT" {
 		t.Errorf("Location = %q, want %q", j.Location, "Lisbon, PT")
 	}
 	if !slices.Equal(j.Countries, []string{"pt"}) {
 		t.Errorf("Countries = %v, want [pt] from the structured country_code", j.Countries)
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time from the structured %q", j.EmploymentType, "Full-time")
 	}
 	if j.PostedAt == nil || !j.PostedAt.Equal(time.Date(2026, 8, 1, 9, 30, 0, 0, time.UTC)) {
 		t.Errorf("PostedAt = %v, want published_at 2026-08-01T09:30:00Z", j.PostedAt)
@@ -93,16 +98,43 @@ func TestLandingJobsFetchMapsAPosting(t *testing.T) {
 			t.Errorf("Description missing %q: %s", want, j.Description)
 		}
 	}
-	// tags/type/salary are deliberately undeclared; the decode must ignore them rather than fail.
+	// tags/salary are deliberately undeclared; the decode must ignore them rather than fail.
 	if j.Title != "Senior Go Engineer" {
 		t.Errorf("Title = %q", j.Title)
+	}
+}
+
+// 28% of a live sample carry more than one location. Keeping only the first would hide the
+// posting from a search for any of the other cities or countries it is genuinely open in.
+func TestLandingJobsKeepsEveryLocation(t *testing.T) {
+	feed := `[{"id":9001,"title":"Platform Engineer",
+"url":"https://landing.jobs/at/acme-corp/platform-engineer",
+"locations":[{"city":"Munich","country_code":"DE"},
+             {"city":"Lisbon","country_code":"PT"},
+             {"city":"Cologne","country_code":"DE"}],
+"remote":false,"published_at":"2026-08-02T00:00:00.000Z"}]`
+	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
+	jobs, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	j := jobs[0]
+	if j.Location != "Munich, DE; Lisbon, PT; Cologne, DE" {
+		t.Errorf("Location = %q, want every stated place", j.Location)
+	}
+	// Deduped and in first-seen order: Germany is named twice but is one country.
+	if !slices.Equal(j.Countries, []string{"de", "pt"}) {
+		t.Errorf("Countries = %v, want [de pt] — every country, deduped", j.Countries)
 	}
 }
 
 // locations is null for a fully-remote role, which must not panic and must still produce a
 // usable location string plus the structured work mode.
 func TestLandingJobsRemoteWithNoLocations(t *testing.T) {
-	feed := `[{"title":"Remote Engineer","url":"https://landing.jobs/at/globex/remote-engineer",
+	feed := `[{"id":9002,"title":"Remote Engineer","url":"https://landing.jobs/at/globex/remote-engineer",
 "locations":null,"remote":true,"published_at":"2026-08-02T00:00:00.000Z",
 "role_description":"<p>Anywhere.</p>"}]`
 	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
@@ -125,10 +157,26 @@ func TestLandingJobsRemoteWithNoLocations(t *testing.T) {
 	}
 }
 
+// A remote posting that also names places keeps both: the cities stay searchable and the
+// remote flag is not lost to them.
+func TestLandingJobsRemoteWithLocationsKeepsBoth(t *testing.T) {
+	feed := `[{"id":9005,"title":"Hybrid Engineer","url":"https://landing.jobs/at/acme/hybrid",
+"locations":[{"city":"Porto","country_code":"PT"}],"remote":true,
+"published_at":"2026-08-02T00:00:00.000Z"}]`
+	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
+	jobs, _ := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if jobs[0].Location != "Porto, PT; Remote" {
+		t.Errorf("Location = %q, want the place and the remote marker", jobs[0].Location)
+	}
+}
+
 // remote=false is "not flagged remote", not "onsite": the board carries hybrid roles, so the
 // mode must be left for the pipeline rather than asserted.
 func TestLandingJobsDoesNotAssertOnsite(t *testing.T) {
-	feed := `[{"title":"Engineer","url":"https://landing.jobs/at/acme/engineer",
+	feed := `[{"id":9003,"title":"Engineer","url":"https://landing.jobs/at/acme/engineer",
 "locations":[{"city":"Porto","country_code":"PT"}],"remote":false,
 "published_at":"2026-08-02T00:00:00.000Z"}]`
 	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
@@ -141,14 +189,15 @@ func TestLandingJobsDoesNotAssertOnsite(t *testing.T) {
 	}
 }
 
-// The id is the dedup key and the company rides the same URL, so a posting whose URL has no
-// /at/<company>/<job> pair is dropped rather than ingested under a fabricated identity.
-func TestLandingJobsSkipsPostingsWithoutAResolvableURL(t *testing.T) {
+// The employer backs the company slug and the id is the dedup key, so a posting missing either
+// is dropped rather than ingested under a fabricated identity.
+func TestLandingJobsSkipsPostingsMissingAnIdentity(t *testing.T) {
 	feed := `[
-{"title":"No at-path","url":"https://landing.jobs/jobs/12345","published_at":"2026-08-02T00:00:00.000Z"},
-{"title":"Company only","url":"https://landing.jobs/at/acme-corp","published_at":"2026-08-02T00:00:00.000Z"},
-{"title":"","url":"https://landing.jobs/at/acme-corp/untitled","published_at":"2026-08-02T00:00:00.000Z"},
-{"title":"Good","url":"https://landing.jobs/at/acme-corp/good-role","published_at":"2026-08-02T00:00:00.000Z"}
+{"id":1,"title":"No at-path","url":"https://landing.jobs/jobs/12345","published_at":"2026-08-02T00:00:00.000Z"},
+{"id":2,"title":"Company only","url":"https://landing.jobs/at/acme-corp","published_at":"2026-08-02T00:00:00.000Z"},
+{"id":3,"title":"","url":"https://landing.jobs/at/acme-corp/untitled","published_at":"2026-08-02T00:00:00.000Z"},
+{"id":0,"title":"No id","url":"https://landing.jobs/at/acme-corp/no-id","published_at":"2026-08-02T00:00:00.000Z"},
+{"id":5,"title":"Good","url":"https://landing.jobs/at/acme-corp/good-role","published_at":"2026-08-02T00:00:00.000Z"}
 ]`
 	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
 	jobs, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{})
@@ -156,15 +205,15 @@ func TestLandingJobsSkipsPostingsWithoutAResolvableURL(t *testing.T) {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(jobs) != 1 || jobs[0].Title != "Good" {
-		t.Fatalf("jobs = %+v, want only the posting with a resolvable URL", jobs)
+		t.Fatalf("jobs = %+v, want only the posting carrying both an id and an employer", jobs)
 	}
 }
 
-// One request per crawl. `?page=N` is ignored by the endpoint (identical bodies), so a page
-// walk would re-fetch the same postings; this pins the adapter against someone "fixing"
-// pagination back in without evidence that a depth parameter exists.
+// One request per crawl. `?page=N` is ignored by the endpoint (identical bodies, verified
+// live), so a page walk would re-fetch the same postings; this pins the adapter against someone
+// "fixing" pagination back in without evidence that a depth parameter exists.
 func TestLandingJobsMakesExactlyOneRequest(t *testing.T) {
-	feed := `[{"title":"A","url":"https://landing.jobs/at/acme/a","published_at":"2026-08-02T00:00:00.000Z"}]`
+	feed := `[{"id":9004,"title":"A","url":"https://landing.jobs/at/acme/a","published_at":"2026-08-02T00:00:00.000Z"}]`
 	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
 	if _, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
 		t.Fatalf("Fetch: %v", err)
@@ -197,9 +246,21 @@ func TestLandingJobsCompanyHumanizesSlugs(t *testing.T) {
 	}
 }
 
-func TestLandingJobsIdentityIgnoresQueryAndFragment(t *testing.T) {
-	_, id, ok := landingjobsIdentity("https://landing.jobs/at/acme-corp/go-dev?utm_source=x#apply")
-	if !ok || id != "acme-corp/go-dev" {
-		t.Errorf("id = %q (ok=%v), want acme-corp/go-dev — the query must not enter the dedup key", id, ok)
+func TestLandingJobsCompanyFromURLIgnoresQueryAndFragment(t *testing.T) {
+	company, ok := landingjobsCompanyFromURL("https://landing.jobs/at/acme-corp/go-dev?utm_source=x#apply")
+	if !ok || company != "Acme Corp" {
+		t.Errorf("company = %q (ok=%v), want Acme Corp", company, ok)
+	}
+}
+
+// countriesFromCodes is shared, so its contract is pinned here rather than only through the
+// adapter that first needed it.
+func TestCountriesFromCodesDedupesAndDropsUnresolved(t *testing.T) {
+	got := countriesFromCodes([]string{"DE", "PT", "de", "", "ZZZZ"})
+	if !slices.Equal(got, []string{"de", "pt"}) {
+		t.Errorf("countriesFromCodes = %v, want [de pt]", got)
+	}
+	if countriesFromCodes(nil) != nil {
+		t.Error("countriesFromCodes(nil) should be nil, so it wires straight into Job.Countries")
 	}
 }

@@ -135,6 +135,29 @@ func countryFromCode(code string) []string {
 	return []string{c}
 }
 
+// countriesFromCodes is the multi-place counterpart of countryFromCode: it normalizes a
+// posting's whole set of ATS-supplied country codes, dropping unresolved and duplicate ones and
+// keeping first-seen order. A board that states several locations for one posting states several
+// countries (landing.jobs lists a single role across Munich, Lisbon and Cologne), and keeping
+// only the first would hide that posting from a filter on any of the others. Returns nil when
+// nothing resolves, so an adapter can wire it straight into Job.Countries.
+func countriesFromCodes(codes []string) []string {
+	var out []string
+	seen := make(map[string]struct{}, len(codes))
+	for _, code := range codes {
+		c := location.NormalizeCountry(code)
+		if c == "" {
+			continue
+		}
+		if _, dup := seen[c]; dup {
+			continue
+		}
+		seen[c] = struct{}{}
+		out = append(out, c)
+	}
+	return out
+}
+
 // distinctJoin maps each item to a label, drops blank and duplicate labels (keeping first-seen
 // order), and joins the rest with sep. Adapters that build a location from a list of place
 // objects share it (getmatch, habrcareer) instead of each re-looping.
