@@ -24,15 +24,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/backfillpage"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
-
-// backfillBatchSize bounds how many rows are read per keyset page.
-const backfillBatchSize = 500
 
 // companySlugPath pulls the company slug out of a canonical Himalayas job URL
 // (https://himalayas.app/companies/<slug>/jobs/...), same pattern the adapter's live fallback
@@ -68,57 +66,39 @@ func run() int {
 }
 
 // backfillAll pages every himalayas row and rewrites company/company_slug on rows still
-// carrying HimalayasCompanyNameSentinel. It pages by keyset (id > last seen) so concurrent
-// writes cannot skip or repeat rows. A sentinel row whose url yields no slug is counted
-// (unresolved) and skipped, never aborting the run.
+// carrying HimalayasCompanyNameSentinel. The keyset walk itself (id > last seen, so concurrent
+// writes cannot skip or repeat rows) is shared with the sibling source backfills via
+// backfillpage.Rows. A sentinel row whose url yields no slug is counted (unresolved) and
+// skipped, never aborting the run.
 func backfillAll(ctx context.Context, store jobStore) (total, updated, unresolved int, err error) {
-	var afterID int64
-	for {
-		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
-			Source:    "himalayas",
-			AfterID:   afterID,
-			BatchSize: backfillBatchSize,
-		})
-		if err != nil {
-			return total, updated, unresolved, err
+	err = backfillpage.Rows(ctx, store.ListJobsBySourceAfter, "himalayas", func(j db.Job) error {
+		total++
+		if j.Company != sources.HimalayasCompanyNameSentinel {
+			return nil
 		}
-		if len(jobs) == 0 {
-			break
+		m := companySlugPath.FindStringSubmatch(j.URL)
+		if m == nil {
+			unresolved++
+			return nil
 		}
-		afterID = jobs[len(jobs)-1].ID
+		company := m[1]
+		companySlug := normalize.Slug(company)
 
-		for _, j := range jobs {
-			total++
-			if j.Company != sources.HimalayasCompanyNameSentinel {
-				continue
-			}
-			m := companySlugPath.FindStringSubmatch(j.URL)
-			if m == nil {
-				unresolved++
-				continue
-			}
-			company := m[1]
-			companySlug := normalize.Slug(company)
+		row := j
+		row.Company = company
+		row.CompanySlug = companySlug
+		hash := jobhash.OfRow(row, j.Description)
 
-			row := j
-			row.Company = company
-			row.CompanySlug = companySlug
-			hash := jobhash.OfRow(row, j.Description)
-
-			if _, err := store.UpdateJobCompany(ctx, db.UpdateJobCompanyParams{
-				ID:          j.ID,
-				Company:     company,
-				CompanySlug: companySlug,
-				ContentHash: pgtype.Text{String: hash, Valid: true},
-			}); err != nil {
-				return total, updated, unresolved, err
-			}
-			updated++
+		if _, err := store.UpdateJobCompany(ctx, db.UpdateJobCompanyParams{
+			ID:          j.ID,
+			Company:     company,
+			CompanySlug: companySlug,
+			ContentHash: pgtype.Text{String: hash, Valid: true},
+		}); err != nil {
+			return err
 		}
-
-		if len(jobs) < backfillBatchSize {
-			break
-		}
-	}
-	return total, updated, unresolved, nil
+		updated++
+		return nil
+	})
+	return total, updated, unresolved, err
 }

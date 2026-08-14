@@ -18,14 +18,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/backfillpage"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
-
-// backfillBatchSize bounds how many rows are read per keyset page.
-const backfillBatchSize = 500
 
 // jobStore is the slice of the data layer the backfill needs: page one provider's rows by keyset
 // and rewrite a row's description + content_hash. *db.Queries satisfies it; the test uses a fake.
@@ -65,48 +63,30 @@ func run() int {
 }
 
 // backfillAll pages every justjoin row and rewrites the description of rows whose fetched detail
-// body differs from what is stored. It pages by keyset (id > last seen) so concurrent writes
-// cannot skip or repeat rows. A row whose detail fetch fails is counted (failed) and skipped.
+// body differs from what is stored. The keyset walk itself (id > last seen, so concurrent writes
+// cannot skip or repeat rows) is shared with the sibling source backfills via backfillpage.Rows.
+// A row whose detail fetch fails is counted (failed) and skipped.
 func backfillAll(ctx context.Context, store jobStore, fetch descriptionFetcher) (scanned, updated, failed int, err error) {
-	var afterID int64
-	for {
-		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
-			Source:    "justjoin",
-			AfterID:   afterID,
-			BatchSize: backfillBatchSize,
-		})
-		if err != nil {
-			return scanned, updated, failed, err
+	err = backfillpage.Rows(ctx, store.ListJobsBySourceAfter, "justjoin", func(j db.Job) error {
+		scanned++
+		desc, ok := fetch(ctx, j.URL)
+		if !ok {
+			failed++
+			return nil
 		}
-		if len(jobs) == 0 {
-			break
+		if desc == j.Description {
+			return nil // already current — idempotent skip
 		}
-		afterID = jobs[len(jobs)-1].ID
-
-		for _, j := range jobs {
-			scanned++
-			desc, ok := fetch(ctx, j.URL)
-			if !ok {
-				failed++
-				continue
-			}
-			if desc == j.Description {
-				continue // already current — idempotent skip
-			}
-			hash := jobhash.OfRow(j, desc)
-			if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
-				ID:          j.ID,
-				Description: desc,
-				ContentHash: pgtype.Text{String: hash, Valid: true},
-			}); err != nil {
-				return scanned, updated, failed, err
-			}
-			updated++
+		hash := jobhash.OfRow(j, desc)
+		if _, err := store.UpdateJobDescription(ctx, db.UpdateJobDescriptionParams{
+			ID:          j.ID,
+			Description: desc,
+			ContentHash: pgtype.Text{String: hash, Valid: true},
+		}); err != nil {
+			return err
 		}
-
-		if len(jobs) < backfillBatchSize {
-			break
-		}
-	}
-	return scanned, updated, failed, nil
+		updated++
+		return nil
+	})
+	return scanned, updated, failed, err
 }
