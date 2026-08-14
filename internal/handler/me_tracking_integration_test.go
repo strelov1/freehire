@@ -10,6 +10,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -344,5 +345,104 @@ func TestTrackedBoardKeepsAnApplicationWhosePostingWasPruned(t *testing.T) {
 	}
 	if row.Stage == nil || *row.Stage != "applied" {
 		t.Errorf("stage = %v, want applied — the candidate's own record survives", row.Stage)
+	}
+}
+
+// TestTrackedBoardPagesOrphanedApplicationsWithoutDuplication covers the fix for
+// ListOrphanedApplications' missing OFFSET (it always re-read the same top-N orphans on
+// every page) and for CountUserJobs never counting them (meta.counts under-reported
+// while the merged data could exceed it). Several applications whose postings were
+// pruned, paged one at a time, must come back as distinct rows — never the same one
+// twice — and meta.counts.board/applied/all must include every orphan.
+func TestTrackedBoardPagesOrphanedApplicationsWithoutDuplication(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email) VALUES ('orphan-paging@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	const orphanCount = 3
+	base := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+	for i := 0; i < orphanCount; i++ {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO applications (user_id, company_slug, role_title, job_id, applied_at)
+			 VALUES ($1, $2, 'Orphaned Role', NULL, $3)`,
+			userID, "orphanco", base.Add(-time.Duration(i)*time.Minute)); err != nil {
+			t.Fatalf("seed orphaned application %d: %v", i, err)
+		}
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(userID, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	queries := db.New(pool)
+	h := &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/api/v1/me/tracking", auth.RequireAuth(iss, testVersions), h.ListTrackedJobs)
+
+	type response struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Meta struct {
+			Counts struct {
+				All     int64 `json:"all"`
+				Applied int64 `json:"applied"`
+				Board   int64 `json:"board"`
+			} `json:"counts"`
+		} `json:"meta"`
+	}
+
+	get := func(offset int) response {
+		t.Helper()
+		req := httptest.NewRequest(fiber.MethodGet,
+			fmt.Sprintf("/api/v1/me/tracking?filter=board&limit=1&offset=%d", offset), nil)
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		resp, err := app.Test(req, -1)
+		if err != nil {
+			t.Fatalf("request offset=%d: %v", offset, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("offset=%d status = %d, want 200", offset, resp.StatusCode)
+		}
+		var body response
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("decode offset=%d: %v", offset, err)
+		}
+		return body
+	}
+
+	seen := map[string]bool{}
+	var counts response
+	for offset := 0; offset < orphanCount; offset++ {
+		page := get(offset)
+		counts = page
+		if len(page.Data) != 1 {
+			t.Fatalf("offset=%d returned %d rows, want exactly 1", offset, len(page.Data))
+		}
+		id := page.Data[0].ID
+		if seen[id] {
+			t.Fatalf("offset=%d returned id %q again — paging is re-reading the same orphan", offset, id)
+		}
+		seen[id] = true
+	}
+	if len(seen) != orphanCount {
+		t.Fatalf("saw %d distinct orphaned applications across %d pages, want %d", len(seen), orphanCount, orphanCount)
+	}
+
+	if counts.Meta.Counts.All != orphanCount {
+		t.Errorf("meta.counts.all = %d, want %d — CountInteractions must fold in the orphaned applications", counts.Meta.Counts.All, orphanCount)
+	}
+	if counts.Meta.Counts.Applied != orphanCount {
+		t.Errorf("meta.counts.applied = %d, want %d", counts.Meta.Counts.Applied, orphanCount)
+	}
+	if counts.Meta.Counts.Board != orphanCount {
+		t.Errorf("meta.counts.board = %d, want %d", counts.Meta.Counts.Board, orphanCount)
 	}
 }

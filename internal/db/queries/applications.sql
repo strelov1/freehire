@@ -51,6 +51,12 @@ UPDATE emails e
 --
 -- The board reads these alongside the posting-backed rows and merges the two; they are
 -- few by nature — one appears only when a posting a candidate applied to is pruned.
+--
+-- Takes OFFSET as well as LIMIT so a caller paging the merged board (ListInteractions)
+-- can advance past the first page of orphans instead of re-reading the same top-N rows
+-- on every page — the query alone cannot fix that, since ListInteractions decides how
+-- much of the requested (limit, offset) window belongs to the posting-backed rows
+-- versus the orphaned ones.
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
        (SELECT count(*)
           FROM emails e
@@ -70,7 +76,14 @@ SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.fol
  WHERE a.user_id = $1
    AND a.job_id IS NULL
  ORDER BY a.applied_at DESC NULLS LAST, a.id DESC
- LIMIT $2;
+ LIMIT $2 OFFSET $3;
+
+-- name: CountOrphanedApplications :one
+-- How many of the caller's applications have no posting left — see
+-- ListOrphanedApplications. CountUserJobs is driven entirely FROM user_jobs, which
+-- cmd/prune cascades away for a pruned posting, so it never counts these; this is added
+-- to its "all"/"applied"/"board" totals by the caller.
+SELECT count(*) FROM applications WHERE user_id = $1 AND job_id IS NULL;
 
 -- name: TrackApplicationByID :one
 -- Set an application's stage and/or notes, naming the application itself.

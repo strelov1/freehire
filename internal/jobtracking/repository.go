@@ -361,7 +361,7 @@ func (r *QueriesRepository) ListInteractions(
 	// them: a pruned application was never a view or a bookmark.
 	if filter == FilterBoard || filter == FilterApplied || filter == FilterAll {
 		orphans, err := r.q.ListOrphanedApplications(ctx, db.ListOrphanedApplicationsParams{
-			UserID: userID, Limit: limit,
+			UserID: userID, Limit: limit, Offset: offset,
 		})
 		if err != nil {
 			return nil, err
@@ -386,17 +386,29 @@ func (r *QueriesRepository) ListInteractions(
 }
 
 // CountInteractions returns the per-filter counts for the caller in one pass.
+//
+// CountUserJobs is driven entirely FROM user_jobs, which cmd/prune cascades away when it
+// prunes a posting — so it never counts an orphaned application (see
+// ListOrphanedApplications), even though ListInteractions merges those into the board,
+// applied, and all views. CountOrphanedApplications closes that gap: added into "all",
+// "applied", and "board" (the same three filters ListInteractions merges orphans into),
+// left out of "viewed"/"saved"/"dismissed" (an orphaned application was never a view or a
+// bookmark, and dismissal lives only on user_jobs).
 func (r *QueriesRepository) CountInteractions(ctx context.Context, userID int64) (Counts, error) {
 	row, err := r.q.CountUserJobs(ctx, userID)
 	if err != nil {
 		return Counts{}, err
 	}
+	orphaned, err := r.q.CountOrphanedApplications(ctx, userID)
+	if err != nil {
+		return Counts{}, err
+	}
 	return Counts{
-		All:       row.All,
+		All:       row.All + orphaned,
 		Viewed:    row.Viewed,
 		Saved:     row.Saved,
-		Applied:   row.Applied,
-		Board:     row.Board,
+		Applied:   row.Applied + orphaned,
+		Board:     row.Board + orphaned,
 		Dismissed: row.Dismissed,
 	}, nil
 }

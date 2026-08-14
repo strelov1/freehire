@@ -528,6 +528,11 @@ type Querier interface {
 	// Served by the partial index threads_subject_open_created_idx; scoped to a single
 	// subject so it stays cheap (not the cross-subject count the design rules out).
 	CountOpenThreadsBySubject(ctx context.Context, arg CountOpenThreadsBySubjectParams) (int64, error)
+	// How many of the caller's applications have no posting left — see
+	// ListOrphanedApplications. CountUserJobs is driven entirely FROM user_jobs, which
+	// cmd/prune cascades away for a pruned posting, so it never counts these; this is added
+	// to its "all"/"applied"/"board" totals by the caller.
+	CountOrphanedApplications(ctx context.Context, userID int64) (int64, error)
 	// Read-only counterpart to BackfillPreparingStage, for cmd/backfill-preparing-stage's
 	// --dry-run: how many applications the correction below would touch, without touching them.
 	// Kept in exact lockstep with that query's WHERE clause deliberately — see its comment for
@@ -1981,6 +1986,12 @@ type Querier interface {
 	//
 	// The board reads these alongside the posting-backed rows and merges the two; they are
 	// few by nature — one appears only when a posting a candidate applied to is pruned.
+	//
+	// Takes OFFSET as well as LIMIT so a caller paging the merged board (ListInteractions)
+	// can advance past the first page of orphans instead of re-reading the same top-N rows
+	// on every page — the query alone cannot fix that, since ListInteractions decides how
+	// much of the requested (limit, offset) window belongs to the posting-backed rows
+	// versus the orphaned ones.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
 	// The moderator queue: offers awaiting a decision, oldest first, with display name.
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a
