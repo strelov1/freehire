@@ -20,6 +20,11 @@
   let picked = $state<{ slug: string; name: string } | null>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  // Bumped on every onInput — including the too-short-query dismissal — so a
+  // response for a superseded keystroke can't overwrite a fresher one (mirrors
+  // reqToken in HeaderSearch.svelte / gen in facets/RemoteSearchSelect.svelte).
+  let reqToken = 0;
+
   const DEBOUNCE_MS = 200;
   const LIMIT = 8;
 
@@ -33,19 +38,23 @@
     clearTimeout(timer);
     const q = query.trim();
     if (q.length < 2) {
+      reqToken++;
       results = [];
       loading = false;
       return;
     }
     loading = true;
+    const mine = ++reqToken;
     timer = setTimeout(async () => {
       try {
         const slice = await api.listCompanies(q, LIMIT, 0);
+        if (mine !== reqToken) return; // superseded by a newer query
         results = slice.items;
       } catch {
+        if (mine !== reqToken) return;
         results = [];
       }
-      loading = false;
+      if (mine === reqToken) loading = false;
     }, DEBOUNCE_MS);
   }
 
