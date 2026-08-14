@@ -11,7 +11,8 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ parent, params, url, fetch, request }) => {
   const { user } = await parent();
   if (!user) {
-    redirect(302, `/?auth=required&redirect=${encodeURIComponent(url.pathname)}`);
+    const target = url.pathname + url.search;
+    redirect(302, `/?auth=required&redirect=${encodeURIComponent(target)}`);
   }
   return { id: params.id, board: await loadBoard(fetch, request.headers.get('cookie')) };
 };
