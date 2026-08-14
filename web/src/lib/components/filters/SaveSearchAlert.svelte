@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import { Bell, Bookmark, ChevronRight } from '@lucide/svelte';
   import { ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
@@ -18,8 +19,8 @@
   //
   // `variant`: `quick` = the compact onboarding offer; `full` = the prominent placement
   // (modal / sidebar). `alerts`: `inline` renders the channel toggles in place once
-  // saved; `manage` (the compact sidebar) links out to /my/searches instead of managing
-  // channels inline.
+  // saved; `manage` (the compact sidebar) links out to /my/notifications/searches
+  // instead of managing channels inline.
   let {
     query,
     variant = 'full',
@@ -101,7 +102,7 @@
     <Button
       variant="secondary"
       size="lg"
-      href="/my/searches"
+      href={resolve('/my/notifications/searches')}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       <Bell class="size-4" aria-hidden="true" />

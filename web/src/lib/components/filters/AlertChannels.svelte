@@ -9,8 +9,8 @@
   // channel subscribe/unsubscribe logic — Telegram carries a connect step (link the
   // bot, then recheck once); email and push subscribe/unsubscribe directly, with no
   // linking step (push delivers to whatever device the mobile app has registered).
-  // Shared by the account page (/my/searches), the filter modal, and the sidebar's
-  // post-save state.
+  // Shared by the account page (/my/notifications/searches), the filter modal, and the
+  // sidebar's post-save state.
   //
   // A chip is "on" when a subscription exists for that channel; tapping an on chip turns
   // it off. Telegram hides itself when the feature isn't configured server-side.
