@@ -1495,7 +1495,11 @@ type Querier interface {
 	// Open a thread. The author's handle is filled by the service from the minted
 	// persona, so no join is needed here.
 	InsertThread(ctx context.Context, arg InsertThreadParams) (Thread, error)
-	// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
+	// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it
+	// — constrained to a reply that belongs to the SAME thread_id, since the FK alone only
+	// requires the parent row to exist somewhere in thread_replies, not in this thread. No
+	// row is inserted (pgx.ErrNoRows) when parent_reply_id is set but names a reply outside
+	// this thread.
 	InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.

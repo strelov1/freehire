@@ -42,13 +42,13 @@ func TestDeleteUserKeepsAuthoredCommunityContent(t *testing.T) {
 		t.Fatalf("insert thread: %v", err)
 	}
 	authorReply, err := q.InsertThreadReply(ctx, InsertThreadReplyParams{
-		ThreadID: thread.ID, AuthorUserID: pgtype.Int8{Int64: author, Valid: true}, Body: "Bumping my own question",
+		ThreadID: thread.ID, AuthorUserID: author, Body: "Bumping my own question",
 	})
 	if err != nil {
 		t.Fatalf("insert author reply: %v", err)
 	}
 	responderReply, err := q.InsertThreadReply(ctx, InsertThreadReplyParams{
-		ThreadID: thread.ID, AuthorUserID: pgtype.Int8{Int64: responder, Valid: true}, Body: "Four rounds over two weeks",
+		ThreadID: thread.ID, AuthorUserID: responder, Body: "Four rounds over two weeks",
 	})
 	if err != nil {
 		t.Fatalf("insert responder reply: %v", err)

@@ -95,6 +95,20 @@ func (f *fakeRepo) CloseThread(_ context.Context, id int64) error {
 }
 
 func (f *fakeRepo) InsertReply(_ context.Context, threadID, parentReplyID, author int64, body string) (Reply, error) {
+	// Mirrors InsertThreadReply's SQL guard: a non-zero parentReplyID must name a
+	// reply that belongs to this same threadID, not just any reply anywhere.
+	if parentReplyID != 0 {
+		found := false
+		for _, r := range f.replies[threadID] {
+			if r.ID == parentReplyID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return Reply{}, ErrInvalidParentReply
+		}
+	}
 	f.nextReply++
 	r := Reply{ID: f.nextReply, ThreadID: threadID, ParentID: parentReplyID, Body: body}
 	f.replies[threadID] = append(f.replies[threadID], r)
@@ -250,6 +264,28 @@ func TestReplyFlow(t *testing.T) {
 	}
 	if got := repo.threads[th.ID].ReplyCount; got != 1 {
 		t.Fatalf("reply_count = %d, want 1", got)
+	}
+}
+
+// A reply cannot be nested under a parent from a DIFFERENT thread — the review
+// finding: parentReplyID was passed straight to InsertReply with no check that it
+// belongs to threadID, so a caller could nest a reply under an unrelated thread's
+// reply.
+func TestReplyRejectsParentFromAnotherThread(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newService(repo, "company/acme", "company/other")
+	threadA, _ := svc.CreateThread(context.Background(), CreateThreadInput{
+		UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "acme", Title: "t", Body: "b"})
+	threadB, _ := svc.CreateThread(context.Background(), CreateThreadInput{
+		UserID: 1, SubjectType: SubjectCompany, SubjectSlug: "other", Title: "t2", Body: "b2"})
+
+	parent, err := svc.Reply(context.Background(), threadA.ID, 0, 2, "top level in A")
+	if err != nil {
+		t.Fatalf("Reply: %v", err)
+	}
+
+	if _, err := svc.Reply(context.Background(), threadB.ID, parent.ID, 3, "nested under A's reply"); !errors.Is(err, ErrInvalidParentReply) {
+		t.Fatalf("Reply across threads = %v, want ErrInvalidParentReply", err)
 	}
 }
 

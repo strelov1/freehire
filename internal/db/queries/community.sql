@@ -66,9 +66,23 @@ WHERE subject_type = $1 AND subject_ref = $2 AND status = 'open';
 UPDATE threads SET status = 'closed' WHERE id = $1;
 
 -- name: InsertThreadReply :one
--- parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
+-- parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it
+-- — constrained to a reply that belongs to the SAME thread_id, since the FK alone only
+-- requires the parent row to exist somewhere in thread_replies, not in this thread. No
+-- row is inserted (pgx.ErrNoRows) when parent_reply_id is set but names a reply outside
+-- this thread.
+WITH validated AS (
+    SELECT sqlc.arg(thread_id)::bigint AS thread_id,
+           sqlc.narg(parent_reply_id)::bigint AS parent_reply_id,
+           sqlc.arg(author_user_id)::bigint AS author_user_id,
+           sqlc.arg(body)::text AS body
+    WHERE sqlc.narg(parent_reply_id)::bigint IS NULL OR EXISTS (
+        SELECT 1 FROM thread_replies p
+        WHERE p.id = sqlc.narg(parent_reply_id)::bigint AND p.thread_id = sqlc.arg(thread_id)::bigint
+    )
+)
 INSERT INTO thread_replies (thread_id, parent_reply_id, author_user_id, body)
-VALUES ($1, $2, $3, $4)
+SELECT thread_id, parent_reply_id, author_user_id, body FROM validated
 RETURNING *;
 
 -- name: IncrementThreadReplyCount :exec

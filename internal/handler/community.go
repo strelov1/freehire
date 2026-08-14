@@ -274,6 +274,8 @@ func communityError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "thread not found")
 	case errors.Is(err, community.ErrThreadClosed):
 		return fiber.NewError(fiber.StatusConflict, "thread is closed")
+	case errors.Is(err, community.ErrInvalidParentReply):
+		return fiber.NewError(fiber.StatusBadRequest, "parent reply does not belong to this thread")
 	case errors.Is(err, community.ErrEmptyTitle):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "title is required")
 	case errors.Is(err, community.ErrEmptyBody):

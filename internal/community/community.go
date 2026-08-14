@@ -49,6 +49,9 @@ var (
 	ErrThreadNotFound = errors.New("community: thread not found")
 	// ErrThreadClosed is a reply to a thread a moderator has closed (409).
 	ErrThreadClosed = errors.New("community: thread is closed")
+	// ErrInvalidParentReply is a reply nested under a parentReplyID that does not
+	// belong to the thread being replied to (400).
+	ErrInvalidParentReply = errors.New("community: parent reply does not belong to this thread")
 	// ErrEmptyBody is a thread or reply submitted with no body text (422).
 	ErrEmptyBody = errors.New("community: body is required")
 	// ErrEmptyTitle is a thread submitted with no title (422).

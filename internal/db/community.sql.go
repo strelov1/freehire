@@ -207,19 +207,33 @@ func (q *Queries) InsertThread(ctx context.Context, arg InsertThreadParams) (Thr
 }
 
 const insertThreadReply = `-- name: InsertThreadReply :one
+WITH validated AS (
+    SELECT $1::bigint AS thread_id,
+           $2::bigint AS parent_reply_id,
+           $3::bigint AS author_user_id,
+           $4::text AS body
+    WHERE $2::bigint IS NULL OR EXISTS (
+        SELECT 1 FROM thread_replies p
+        WHERE p.id = $2::bigint AND p.thread_id = $1::bigint
+    )
+)
 INSERT INTO thread_replies (thread_id, parent_reply_id, author_user_id, body)
-VALUES ($1, $2, $3, $4)
+SELECT thread_id, parent_reply_id, author_user_id, body FROM validated
 RETURNING id, thread_id, parent_reply_id, author_user_id, is_ai, body, created_at
 `
 
 type InsertThreadReplyParams struct {
 	ThreadID      int64       `json:"thread_id"`
 	ParentReplyID pgtype.Int8 `json:"parent_reply_id"`
-	AuthorUserID  pgtype.Int8 `json:"author_user_id"`
+	AuthorUserID  int64       `json:"author_user_id"`
 	Body          string      `json:"body"`
 }
 
-// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it.
+// parent_reply_id is NULL for a top-level reply, or another reply's id to nest under it
+// — constrained to a reply that belongs to the SAME thread_id, since the FK alone only
+// requires the parent row to exist somewhere in thread_replies, not in this thread. No
+// row is inserted (pgx.ErrNoRows) when parent_reply_id is set but names a reply outside
+// this thread.
 func (q *Queries) InsertThreadReply(ctx context.Context, arg InsertThreadReplyParams) (ThreadReply, error) {
 	row := q.db.QueryRow(ctx, insertThreadReply,
 		arg.ThreadID,

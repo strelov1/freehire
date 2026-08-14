@@ -143,8 +143,11 @@ func (r *QueriesRepository) InsertReply(ctx context.Context, threadID, parentRep
 	}
 	row, err := r.q.InsertThreadReply(ctx, db.InsertThreadReplyParams{
 		ThreadID: threadID, ParentReplyID: parent,
-		AuthorUserID: pgtype.Int8{Int64: authorUserID, Valid: true}, Body: body,
+		AuthorUserID: authorUserID, Body: body,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Reply{}, ErrInvalidParentReply
+	}
 	if err != nil {
 		return Reply{}, err
 	}
