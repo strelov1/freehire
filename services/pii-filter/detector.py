@@ -66,10 +66,14 @@ class Model:
         from tokenizers import Tokenizer
 
         self._np = np
-        self._max = max_tokens
         cfg = json.load(open(os.path.join(model_dir, "config.json")))
         self._id2label = {int(k): v for k, v in cfg["id2label"].items()}
         self._tok = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+        # Truncate inside the tokenizer itself rather than encoding the whole input and
+        # slicing ids/offsets afterward: encode() then stops at max_tokens tokens instead of
+        # tokenizing text we would only throw away, and the cut is token-aware from the
+        # start rather than an after-the-fact slice.
+        self._tok.enable_truncation(max_length=max_tokens)
         self._sess = ort.InferenceSession(
             os.path.join(model_dir, "onnx", "model_q4.onnx"),
             providers=["CPUExecutionProvider"],
@@ -78,8 +82,8 @@ class Model:
 
     def detect(self, text: str):
         enc = self._tok.encode(text)
-        ids = enc.ids[: self._max]
-        offsets = enc.offsets[: self._max]
+        ids = enc.ids
+        offsets = enc.offsets
         feed = {"input_ids": self._np.array([ids], dtype=self._np.int64)}
         if "attention_mask" in self._inputs:
             feed["attention_mask"] = self._np.ones((1, len(ids)), dtype=self._np.int64)

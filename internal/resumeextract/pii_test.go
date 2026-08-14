@@ -36,6 +36,15 @@ func (failDetector) Detect(context.Context, string) ([]pii.Span, error) {
 	return nil, errors.New("detector down")
 }
 
+// recordingDetector reports no spans but records how much text (in runes) it was asked
+// to detect over, so a test can assert on what actually reached the detector.
+type recordingDetector struct{ textRunes int }
+
+func (d *recordingDetector) Detect(_ context.Context, text string) ([]pii.Span, error) {
+	d.textRunes = len([]rune(text))
+	return nil, nil
+}
+
 // recordingModel captures the user prompt so a test can assert on what reaches the model.
 type recordingModel struct {
 	resp   string
@@ -132,6 +141,22 @@ func TestExtract_NoAddressSpanLeavesLocationEmpty(t *testing.T) {
 	}
 	if got.Location != "" {
 		t.Errorf("Location = %q, want empty when detection found no ADDRESS (model value must not win)", got.Location)
+	}
+}
+
+func TestExtract_BoundsCVTextBeforeReachingTheDetector(t *testing.T) {
+	// Far larger than maxCVRunes. Only the eventual prompt was bounded (via userPrompt's
+	// clip); the detector — an HTTP round trip whose cost scales with input size — used to
+	// see the whole, unclipped text.
+	huge := strings.Repeat("word ", maxCVRunes*2)
+	m := &recordingModel{resp: `{"summary":"ok"}`}
+	det := &recordingDetector{}
+
+	if _, err := NewExtractor(llm.NewWithModel(m), det).Extract(context.Background(), huge); err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if det.textRunes > maxCVRunes {
+		t.Errorf("detector saw %d runes, want <= %d (maxCVRunes): cvText must be bounded before pii.Build, not just before the prompt", det.textRunes, maxCVRunes)
 	}
 }
 

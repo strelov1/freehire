@@ -67,6 +67,11 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if !e.Enabled() {
 		return Structured{}, ErrDisabled
 	}
+	// Bound the CV text before any work runs on it, not just before it reaches the model:
+	// pii.Build calls out to the PII-filter service and its cost scales with input size, and
+	// nothing beyond maxCVRunes will ever reach the prompt anyway (userPrompt clips again,
+	// belt-and-suspenders, since redaction can slightly lengthen text via its placeholders).
+	cvText = clip(cvText, maxCVRunes)
 	// De-identify the CV before it reaches the LLM. Fail-closed: a detector error means no
 	// CV is sent (the caller degrades best-effort, persisting no structured résumé).
 	red, err := pii.Build(ctx, cvText, pii.Contacts{}, e.detector)
