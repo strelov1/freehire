@@ -32,7 +32,7 @@
 
 ## 6. Verification
 
-- [ ] 6.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean.
-- [ ] 6.2 `go test -tags=integration ./...` (full module) clean.
-- [ ] 6.3 Web `eslint`/`svelte-check`/`pnpm test` clean on changed/new files.
-- [ ] 6.4 Manual smoke against a local backend+DB: enable the toggle, confirm a saved search + subscription appear in `/my/notifications/searches`; edit the profile, confirm the search's query changes; disable the toggle, confirm the search disappears.
+- [x] 6.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean.
+- [x] 6.2 `go test -tags=integration ./...` (full module) clean.
+- [x] 6.3 Web `eslint`/`svelte-check`/`pnpm test` clean on changed/new files.
+- [x] 6.4 Manual smoke against a local backend+DB: enable the toggle, confirm a saved search + subscription appear in `/my/notifications/searches`; edit the profile, confirm the search's query changes; disable the toggle, confirm the search disappears.
