@@ -35,11 +35,12 @@ import (
 	"github.com/strelov1/freehire/internal/worker"
 )
 
-// staleAfter is the DEFAULT grace window before an unseen job is closed: many crawl cycles
-// at the hourly per-provider cadence, so a board failing several runs in a row keeps
-// its jobs open. An adapter that crawls only a slice of its catalogue widens it for its own
-// provider — see sweepWindowFor.
-const staleAfter = 48 * time.Hour
+// staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter that
+// crawls only a slice of its catalogue widens it for its own provider — see sweepWindowFor.
+// Shared with cmd/liveness's staleCutoff via sources.DefaultSweepGrace, since liveness's
+// probeDespiteRegistered backstop only picks up what this sweep has already had a chance
+// to close and must not drift out of sync with it.
+const staleAfter = sources.DefaultSweepGrace
 
 func main() {
 	worker.Main(run)

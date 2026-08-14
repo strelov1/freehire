@@ -102,10 +102,11 @@ var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remote
 // here by design, since a GET probe is not guaranteed to work for any given source.
 var probeDespiteRegisteredGET = []string{"jobicy", "remoteok"}
 
-// staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window): a
-// probeDespiteRegistered job only becomes a liveness candidate once the sweep would
-// already have closed it were the company_slug scope not in the way.
-const staleCutoff = 48 * time.Hour
+// staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
+// shared sources.DefaultSweepGrace symbol: a probeDespiteRegistered job only becomes a
+// liveness candidate once the sweep would already have closed it were the company_slug
+// scope not in the way.
+const staleCutoff = sources.DefaultSweepGrace
 
 // expireDespiteRegisteredPrefixes lists registered-ATS-provider FAMILIES with the same
 // company_slug/keyword-scope leak as probeDespiteRegistered's members, but with NO

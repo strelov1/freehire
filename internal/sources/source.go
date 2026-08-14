@@ -10,6 +10,14 @@ import (
 	"github.com/strelov1/freehire/internal/applyform"
 )
 
+// DefaultSweepGrace is the grace window a provider is swept on when it declares no
+// sweepGrace of its own: many crawl cycles at the hourly per-provider cadence, so a board
+// failing several runs in a row keeps its jobs open. cmd/ingest's own unseen sweep and
+// cmd/liveness's probeDespiteRegistered backstop (which only picks up what that sweep has
+// already had a chance to close) both anchor on this single symbol so the two windows
+// cannot drift apart silently.
+const DefaultSweepGrace = 48 * time.Hour
+
 // CompanyEntry is one configured board from a board file (sources/<provider>.yml): the
 // company whose jobs we crawl, the platform it uses (Provider), and the platform-specific
 // board id. Region is an optional per-entry hint for ATS platforms that host tenants on
