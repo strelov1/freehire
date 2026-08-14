@@ -229,6 +229,13 @@ WHERE NOT c.is_reference
 -- upsert itself is blind to which path (insert or update) it took.
 SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1);
 
+-- name: ListCompanySlugs :many
+-- Every company slug, unfiltered. cmd/import-yc loads this once into an
+-- in-memory set to resolve each yc-oss directory entry's current-name and
+-- former-name slug candidates, instead of one CompanyExists round trip per
+-- candidate per entry (the dataset runs several thousand entries deep).
+SELECT slug FROM companies;
+
 -- name: UpsertCompanyInfo :exec
 -- Apply one external-dataset company-info record, matched by slug. A new slug is
 -- inserted as a reference row (is_reference = true) with no jobs; an existing slug

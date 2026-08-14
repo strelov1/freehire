@@ -561,6 +561,34 @@ func (q *Queries) ListCompanySitemap(ctx context.Context, arg ListCompanySitemap
 	return items, nil
 }
 
+const listCompanySlugs = `-- name: ListCompanySlugs :many
+SELECT slug FROM companies
+`
+
+// Every company slug, unfiltered. cmd/import-yc loads this once into an
+// in-memory set to resolve each yc-oss directory entry's current-name and
+// former-name slug candidates, instead of one CompanyExists round trip per
+// candidate per entry (the dataset runs several thousand entries deep).
+func (q *Queries) ListCompanySlugs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listCompanySlugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSlugLikeCompaniesForBackfill = `-- name: ListSlugLikeCompaniesForBackfill :many
 SELECT DISTINCT ON (company_slug)
        company_slug AS slug,

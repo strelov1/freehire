@@ -1695,6 +1695,11 @@ type Querier interface {
 	// (0057), which covers the predicate, the order and updated_at — without it the
 	// predicate alone sends every candidate row to the heap.
 	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
+	// Every company slug, unfiltered. cmd/import-yc loads this once into an
+	// in-memory set to resolve each yc-oss directory entry's current-name and
+	// former-name slug candidates, instead of one CompanyExists round trip per
+	// candidate per entry (the dataset runs several thousand entries deep).
+	ListCompanySlugs(ctx context.Context) ([]string, error)
 	// Drives the sync worker: every connection still authorized AND holding a mailbox.
 	//
 	// The address is the test, and it is not decoration. Since the calendar consent exists,

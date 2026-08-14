@@ -16,8 +16,14 @@ type fakeStore struct {
 	calls     []db.UpsertYCCompanyParams
 }
 
-func (f *fakeStore) CompanyExists(_ context.Context, slug string) (bool, error) {
-	return f.exists[slug], nil
+func (f *fakeStore) ListCompanySlugs(context.Context) ([]string, error) {
+	var slugs []string
+	for slug, ok := range f.exists {
+		if ok {
+			slugs = append(slugs, slug)
+		}
+	}
+	return slugs, nil
 }
 
 func (f *fakeStore) CompanyJobCountBySlug(_ context.Context, slug string) (int32, error) {
@@ -98,5 +104,23 @@ func TestLoad(t *testing.T) {
 	}
 	if newco.Subindustry.Valid {
 		t.Errorf("newco subindustry = %+v, want NULL (no subindustry given)", newco.Subindustry)
+	}
+}
+
+// TestResolveTarget exercises the in-memory slug resolution directly (no store):
+// current-name slug wins first, a former-name slug wins if the current one is
+// absent, and an entry with no match at all resolves to its own current-name
+// slug as a new reference row.
+func TestResolveTarget(t *testing.T) {
+	existing := map[string]bool{"stripe": true, "facebook": true}
+
+	if slug, matched := resolveTarget(existing, ycdir.Record{Slug: "stripe"}); slug != "stripe" || !matched {
+		t.Errorf("resolveTarget(stripe) = %q, %v; want stripe, true", slug, matched)
+	}
+	if slug, matched := resolveTarget(existing, ycdir.Record{Slug: "meta", FormerSlugs: []string{"facebook"}}); slug != "facebook" || !matched {
+		t.Errorf("resolveTarget(meta, former facebook) = %q, %v; want facebook, true", slug, matched)
+	}
+	if slug, matched := resolveTarget(existing, ycdir.Record{Slug: "new-co"}); slug != "new-co" || matched {
+		t.Errorf("resolveTarget(new-co) = %q, %v; want new-co, false", slug, matched)
 	}
 }

@@ -34,7 +34,7 @@ const (
 
 // store is the slice of the data layer the loader needs; *db.Queries satisfies it.
 type store interface {
-	CompanyExists(ctx context.Context, slug string) (bool, error)
+	ListCompanySlugs(ctx context.Context) ([]string, error)
 	CompanyJobCountBySlug(ctx context.Context, slug string) (int32, error)
 	UpsertYCCompany(ctx context.Context, arg db.UpsertYCCompanyParams) error
 }
@@ -109,6 +109,18 @@ type loadStats struct{ matched, inserted, collisions, skipped int }
 // reference vs skipped-collision (a matched company that dwarfs the YC entry — a
 // homonym) vs skipped blank names.
 func load(ctx context.Context, s store, entries []ycdir.Entry) (loadStats, error) {
+	// Load the existing slug set once — a plain SELECT, not one CompanyExists
+	// round trip per (entry × current-plus-former-slug candidate) — the yc-oss
+	// dataset runs several thousand entries deep.
+	slugs, err := s.ListCompanySlugs(ctx)
+	if err != nil {
+		return loadStats{}, err
+	}
+	existing := make(map[string]bool, len(slugs))
+	for _, slug := range slugs {
+		existing[slug] = true
+	}
+
 	var stats loadStats
 	for _, e := range entries {
 		rec, ok := ycdir.Map(e)
@@ -118,10 +130,7 @@ func load(ctx context.Context, s store, entries []ycdir.Entry) (loadStats, error
 		}
 		// Resolve to an existing company by current-name slug or any former-name
 		// slug (first match wins); otherwise insert under the current-name slug.
-		target, matched, err := resolveTarget(ctx, s, rec)
-		if err != nil {
-			return stats, err
-		}
+		target, matched := resolveTarget(existing, rec)
 		if matched {
 			// Homonym guard: a well-known non-YC company can share a normalized name
 			// with a small YC startup. If the matched company holds far more open jobs
@@ -159,18 +168,15 @@ func isCollision(jobCount, teamSize int) bool {
 
 // resolveTarget returns the slug to upsert under and whether it matched an existing
 // company: the current-name slug if it exists, else the first former-name slug that
-// exists, else the current-name slug (a new reference row).
-func resolveTarget(ctx context.Context, s store, rec ycdir.Record) (string, bool, error) {
+// exists, else the current-name slug (a new reference row). existing is the whole
+// companies table's slug set, loaded once by the caller.
+func resolveTarget(existing map[string]bool, rec ycdir.Record) (string, bool) {
 	for _, slug := range append([]string{rec.Slug}, rec.FormerSlugs...) {
-		exists, err := s.CompanyExists(ctx, slug)
-		if err != nil {
-			return "", false, err
-		}
-		if exists {
-			return slug, true, nil
+		if existing[slug] {
+			return slug, true
 		}
 	}
-	return rec.Slug, false, nil
+	return rec.Slug, false
 }
 
 // recordToParams maps a mapped directory record to upsert params: empty scalars
