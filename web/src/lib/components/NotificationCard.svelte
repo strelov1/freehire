@@ -8,7 +8,7 @@
   import type { NotificationItem, NotificationKind } from '$lib/types';
 
   // One notification-center row, shared by the header bell's dropdown and the
-  // full /my/notifications/history list so the two never drift. Renders as a
+  // full /my/notifications history list so the two never drift. Renders as a
   // real `<a href>` when it has somewhere to go (ctrl/cmd-click, middle-click,
   // "open in new tab", and hover-preview all work as a browser expects), or a
   // plain button when it doesn't (a multi-job digest — nothing to open, but the

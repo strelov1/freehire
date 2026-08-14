@@ -178,3 +178,57 @@ func TestRecruiteeFetchAlwaysYieldsAForm(t *testing.T) {
 		t.Fatal("ApplyForm = nil, want the standard fields Recruitee always demands")
 	}
 }
+
+// Live-verified (2026-08-14): a real Recruitee posting carries exactly this shape.
+func TestRecruiteeFetchReadsSalary(t *testing.T) {
+	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Marketing Manager",
+		"salary":{"min":"50000","max":"70000","period":"year","currency":"EUR"}}]}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j := jobs[0]
+	if j.SalaryMin == nil || *j.SalaryMin != 50000 {
+		t.Errorf("SalaryMin = %v, want 50000", j.SalaryMin)
+	}
+	if j.SalaryMax == nil || *j.SalaryMax != 70000 {
+		t.Errorf("SalaryMax = %v, want 70000", j.SalaryMax)
+	}
+	if j.SalaryCurrency != "EUR" || j.SalaryPeriod != "year" {
+		t.Errorf("SalaryCurrency/SalaryPeriod = %q/%q, want EUR/year", j.SalaryCurrency, j.SalaryPeriod)
+	}
+}
+
+// The common case: every field present but null. Confirmed live — most Recruitee
+// offers carry this shape, not an absent "salary" key.
+func TestRecruiteeFetchAllNullSalaryLeavesEmpty(t *testing.T) {
+	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev",
+		"salary":{"min":null,"max":null,"period":null,"currency":null}}]}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if j := jobs[0]; j.SalaryMin != nil || j.SalaryMax != nil {
+		t.Errorf("SalaryMin/Max = %v/%v, want both nil", j.SalaryMin, j.SalaryMax)
+	}
+}
+
+func TestRecruiteeFetchOneSidedSalaryStillCounts(t *testing.T) {
+	// A stated ceiling with no floor ("up to €70k") is still a real, usable salary.
+	fake := &fakeHTTP{body: `{"offers":[{"id":1,"title":"Dev",
+		"salary":{"min":null,"max":"70000","period":"year","currency":"EUR"}}]}`}
+
+	jobs, err := NewRecruitee(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j := jobs[0]
+	if j.SalaryMin != nil {
+		t.Errorf("SalaryMin = %v, want nil", j.SalaryMin)
+	}
+	if j.SalaryMax == nil || *j.SalaryMax != 70000 {
+		t.Errorf("SalaryMax = %v, want 70000", j.SalaryMax)
+	}
+}

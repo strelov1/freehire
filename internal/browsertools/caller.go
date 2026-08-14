@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 )
 
@@ -21,7 +20,6 @@ type Caller struct {
 	user int64
 
 	mu      sync.Mutex
-	seq     int64
 	pending map[string]chan []byte
 	leave   func()
 }
@@ -105,12 +103,11 @@ func (c *Caller) Call(ctx context.Context, tool string, args any) (json.RawMessa
 }
 
 func (c *Caller) register() (string, chan []byte) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.seq++
-	id := strconv.FormatInt(c.seq, 10)
+	id := c.hub.NextCallID()
 	ch := make(chan []byte, 1)
+	c.mu.Lock()
 	c.pending[id] = ch
+	c.mu.Unlock()
 	return id, ch
 }
 

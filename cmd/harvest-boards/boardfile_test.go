@@ -50,6 +50,12 @@ func TestDedupKeyOf(t *testing.T) {
 	if dedupKeyOf(ashbyProber{})("Ramp") != "ramp" {
 		t.Error("ashby key must fold case")
 	}
+	// SmartRecruiters' postings API is case-insensitive too (confirmed live twice, #1884/#1888:
+	// a name-derived candidate slipped past dedup because it only differed in case from an
+	// existing board), so the dedup key folds case like the others.
+	if dedupKeyOf(smartRecruitersProber{})("ArchirodonGroup") != "archirodongroup" {
+		t.Error("smartrecruiters key must fold case")
+	}
 }
 
 func TestWorkdayBoardID(t *testing.T) {

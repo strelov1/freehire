@@ -160,6 +160,29 @@ func TestRunOnceMarksACancelledMeeting(t *testing.T) {
 	}
 }
 
+// Google only guarantees `id` for a cancelled event or occurrence — the iCalUID Resolve
+// keys on may not survive deletion at all. A cancellation like that must still reach
+// CancelInterview, keyed on the provider id, without ever going through the match gate.
+func TestRunOnceMarksACancelledMeetingWithNoUID(t *testing.T) {
+	store := &fakeStore{
+		connections: []Connection{{UserID: 7}},
+		candidates:  map[int64][]calmatch.Candidate{7: {{ApplicationID: 11, UIDs: []string{"derq@ashbyhq.com"}}}},
+	}
+	reader := fakeReader{meetings: []Meeting{
+		{ProviderID: "evt-minimal", Cancelled: true},
+	}}
+
+	if err := newTestWorker(store, reader).RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.cancelled) != 1 || store.cancelled[0] != "evt-minimal" {
+		t.Errorf("cancelled %v, want the provider id alone since Resolve can never key on an empty UID", store.cancelled)
+	}
+	if len(store.stored) != 0 {
+		t.Errorf("a cancelled meeting was also stored as current: %+v", store.stored)
+	}
+}
+
 // One candidate's revoked grant is not the fleet's problem: mark it, carry on, and let
 // the exit code say the run was not wholly clean.
 func TestRunOnceMarksAFailingGrantAndKeepsGoing(t *testing.T) {

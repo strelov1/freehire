@@ -85,7 +85,15 @@ describe('reduceTurnEvent', () => {
     expect(s.messages[1]?.streaming).toBe(true);
   });
 
-  it('ignores a result with no open turn instead of creating a message', () => {
+  it('surfaces an empty errored assistant when a turn fails before any reply', () => {
+    let s = reduceTurnEvent(initChat(), { type: 'user_prompt', text: 'hi' });
+    s = reduceTurnEvent(s, { type: 'result', stop_reason: 'error', is_error: true });
+    expect(s.messages).toHaveLength(2);
+    expect(s.messages[1]?.role).toBe('assistant');
+    expect(s.messages[1]?.errored).toBe(true);
+  });
+
+  it('ignores a successful result with no open turn instead of creating a message', () => {
     const s = reduceTurnEvent(initChat(), {
       type: 'result',
       stop_reason: 'end_turn',

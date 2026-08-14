@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-  <title>Saved searches — freehire</title>
+  <title>Search alerts — freehire</title>
 </svelte:head>
 
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex;

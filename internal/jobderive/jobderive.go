@@ -53,6 +53,14 @@ type Input struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod are the caller's structured
+	// salary signal — an adapter sets them only when the ATS states a salary in its
+	// own structured field (never a description-text guess: unlike the scalars
+	// above, there is no dictionary fallback for salary, so this is pure passthrough).
+	SalaryMin      *int
+	SalaryMax      *int
+	SalaryCurrency string
+	SalaryPeriod   string
 }
 
 // Derived is the set of facets computed from an Input.
@@ -80,6 +88,13 @@ type Derived struct {
 	EducationLevel     string
 	EnglishLevel       string
 	ExperienceYearsMin *int
+	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod pass Input's structured salary
+	// signal through unchanged — see Input's doc for why there is no dictionary
+	// fallback here.
+	SalaryMin      *int
+	SalaryMax      *int
+	SalaryCurrency string
+	SalaryPeriod   string
 }
 
 // Derive computes the slugs and dictionary facets for a job. Geography, skills, and the
@@ -186,6 +201,10 @@ func Derive(in Input) Derived {
 		EducationLevel:     jobfacts.EducationLevel(in.Description),
 		EnglishLevel:       jobfacts.EnglishLevel(in.Description),
 		ExperienceYearsMin: experience,
+		SalaryMin:          in.SalaryMin,
+		SalaryMax:          in.SalaryMax,
+		SalaryCurrency:     in.SalaryCurrency,
+		SalaryPeriod:       in.SalaryPeriod,
 	}
 }
 

@@ -12,8 +12,9 @@
   // subscription-digest/reminder/nudge deliveries (see openspec/changes/
   // add-notification-center). Sits beside HeaderMenu in TopBar, same icon-button
   // treatment. Hidden entirely for signed-out visitors — there is nothing to show.
-  // The full, paginated list lives at /my/notifications/history; this panel is
-  // a recent-first glance, not the only way to reach older notifications.
+  // The full, paginated list lives at /my/notifications (the notification
+  // center's History tab); this panel is a recent-first glance, not the only
+  // way to reach older notifications.
 
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
@@ -121,7 +122,7 @@
 
         <div class="border-t border-border p-2">
           <a
-            href={resolve('/my/notifications/history')}
+            href={resolve('/my/notifications')}
             onclick={() => (open = false)}
             class="block rounded px-2 py-1.5 text-center text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >

@@ -8,6 +8,7 @@ import {
   datasetJsonLd,
   jobListItems,
   jobPostingJsonLd,
+  metaDescription,
   organizationJsonLd,
 } from './seo';
 import { companyLogoUrl } from './logo';
@@ -49,6 +50,27 @@ function company(overrides: Partial<Company> = {}): Company {
 }
 
 const ORIGIN = 'https://freehire.me';
+
+describe('metaDescription', () => {
+  it('strips tags and collapses whitespace without truncating short text', () => {
+    expect(metaDescription('<p>Build  <b>great</b>\nthings.</p>')).toBe('Build great things.');
+  });
+
+  it('defaults to ~160 chars and cuts at the last whole word, not mid-word', () => {
+    const word = 'lorem ';
+    const text = word.repeat(40).trim(); // well past 160 chars, all whole words
+    const got = metaDescription(text);
+    expect(got.length).toBeLessThanOrEqual(160);
+    expect(got.endsWith('…')).toBe(true);
+    expect(got.slice(0, -1).endsWith(' ')).toBe(false); // cut, not a trailing space before the ellipsis
+    expect(text.startsWith(got.slice(0, -1))).toBe(true); // the kept prefix is whole words of the source
+  });
+
+  it('respects an explicit max, e.g. the 220-char list-card budget', () => {
+    const text = 'a'.repeat(300);
+    expect(metaDescription(text, 220)).toBe(`${'a'.repeat(219)}…`); // no spaces to cut at: falls back to a hard cut
+  });
+});
 
 describe('collectionHeading', () => {
   it('includes the exact live count, comma-grouped', () => {
@@ -298,6 +320,44 @@ describe('jobPostingJsonLd', () => {
 
   it('omits validThrough for an open posting with no date evidence at all', () => {
     expect(jobPostingJsonLd(postingJob(), ORIGIN)).not.toHaveProperty('validThrough');
+  });
+
+  it('sets TELECOMMUTE with applicantLocationRequirements when the region resolves', () => {
+    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: ['eu'] }), ORIGIN);
+    expect(ld.jobLocationType).toBe('TELECOMMUTE');
+    expect(ld.applicantLocationRequirements).toBeDefined();
+    expect(ld).not.toHaveProperty('jobLocation');
+  });
+
+  it('falls back to a plain jobLocation when a remote posting has no resolved region but does have a location string', () => {
+    // Google requires applicantLocationRequirements whenever jobLocationType is
+    // TELECOMMUTE — asserting TELECOMMUTE with no region to back it up would be an
+    // invalid combination, worse than the plain-jobLocation fallback.
+    const ld = jobPostingJsonLd(
+      postingJob({ work_mode: 'remote', regions: [], location: 'Farnborough, Hampshire' }),
+      ORIGIN
+    );
+    expect(ld).not.toHaveProperty('jobLocationType');
+    expect(ld).not.toHaveProperty('applicantLocationRequirements');
+    expect(ld.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: 'Farnborough, Hampshire' },
+    });
+  });
+
+  it('omits location entirely for a remote posting with no region and no location text', () => {
+    const ld = jobPostingJsonLd(postingJob({ work_mode: 'remote', regions: [], location: '' }), ORIGIN);
+    expect(ld).not.toHaveProperty('jobLocationType');
+    expect(ld).not.toHaveProperty('applicantLocationRequirements');
+    expect(ld).not.toHaveProperty('jobLocation');
+  });
+
+  it('adds addressCountry to jobLocation when the geo dictionary pinned a country', () => {
+    const ld = jobPostingJsonLd(postingJob({ location: 'Berlin', countries: ['de'] }), ORIGIN);
+    expect(ld.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: 'Berlin', addressCountry: 'DE' },
+    });
   });
 });
 

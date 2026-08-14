@@ -90,6 +90,10 @@ type Fields struct {
 	// ManualSalary is the authoritative manual salary (nil when none). It is a base
 	// field, never derived, and takes precedence over the enriched salary.
 	ManualSalary *Salary
+	// SourceSalary is the ATS's own structured salary (nil when the source stated
+	// none), derived from jobderive's passthrough — see its Input docs. Wins over the
+	// enrichment pass's LLM-derived guess but never over ManualSalary.
+	SourceSalary *Salary
 
 	// lifecycle + enrichment provenance (0 = unenriched)
 	ClosedAt          *time.Time
@@ -162,7 +166,17 @@ func New(d Draft) (Job, error) {
 
 		// Authoritative manual salary is carried verbatim — never derived.
 		ManualSalary: d.ManualSalary,
+		SourceSalary: salaryFromParts(der.SalaryMin, der.SalaryMax, der.SalaryCurrency, der.SalaryPeriod),
 	}}, nil
+}
+
+// salaryFromParts packages a structured salary's parts into a *Salary, or nil when
+// neither bound is present — the shape SourceSalary and manualSalaryFromRow share.
+func salaryFromParts(min, max *int, currency, period string) *Salary {
+	if min == nil && max == nil {
+		return nil
+	}
+	return &Salary{Min: min, Max: max, Currency: currency, Period: period}
 }
 
 // Fields returns the readable projection of the aggregate. Slice and pointer
@@ -205,6 +219,12 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		EducationLevel:     f.EducationLevel,
 		EnglishLevel:       f.EnglishLevel,
 		ExperienceYearsMin: pgconv.Int4(f.ExperienceYearsMin),
+	}
+	if f.SourceSalary != nil {
+		p.SalaryMinSource = pgconv.Int4(f.SourceSalary.Min)
+		p.SalaryMaxSource = pgconv.Int4(f.SourceSalary.Max)
+		p.SalaryCurrencySource = f.SourceSalary.Currency
+		p.SalaryPeriodSource = f.SourceSalary.Period
 	}
 	return withDerived(p)
 }

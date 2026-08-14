@@ -555,6 +555,10 @@ type Job struct {
 	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
 	ClosedReason          string             `json:"closed_reason"`
 	IsPrivate             bool               `json:"is_private"`
+	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
+	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
+	SalaryCurrencySource  string             `json:"salary_currency_source"`
+	SalaryPeriodSource    string             `json:"salary_period_source"`
 }
 
 type JobDailyStat struct {

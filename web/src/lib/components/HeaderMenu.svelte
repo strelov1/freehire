@@ -99,7 +99,7 @@
     // shell, so they are duplicated here beside the inbox rather than left one level deeper.
     { href: '/my/assistant', label: 'Agent', icon: Bot },
     { href: '/my/cvs', label: 'Tailor', icon: ScrollText },
-    { href: '/my/searches', label: 'Search notifications', icon: BellRing },
+    { href: '/my/notifications/searches', label: 'Search alerts', icon: BellRing },
     { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
     { href: '/my/submissions', label: 'My submissions', icon: FileText },
   ] as const;

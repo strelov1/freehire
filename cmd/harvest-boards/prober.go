@@ -429,6 +429,12 @@ func (smartRecruitersProber) probe(ctx context.Context, c httpClient, slug strin
 	return meta.Name, n, nil
 }
 
+// dedupKey folds a SmartRecruiters board id to lower case, like Workday's, Greenhouse's and
+// Ashby's. Without this, a name-derived candidate that only differs in case from an existing
+// entry (e.g. "archirodongroup" vs the stored "ArchirodonGroup") reads as new — confirmed live
+// twice (see #1884, #1888) — even though SmartRecruiters' API treats the two identically.
+func (smartRecruitersProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
+
 // recruiteeProber probes the Recruitee per-subdomain offers API. A non-empty offers array is
 // a live board, and each offer carries the employer's own name, so the board can be gated
 // against the name the seed expected rather than accepted on liveness alone.
@@ -812,7 +818,18 @@ func (p isolvedProber) probe(ctx context.Context, c httpClient, slug string) (st
 // postings means a live board. The employer name comes from the seed.
 type apploiProber struct{}
 
+// apploiNumericSlugRE matches apploi's own employer-id shape: digits only. A name-derived
+// candidate (e.g. "101-edu") is never a valid employer id, but api.apploi.com doesn't error on
+// one — it silently ignores an `employer` value it can't parse and answers with a non-empty,
+// "live" jobs list regardless. Fed a 5,216-candidate name-derived seed, that read as a 100%
+// hit rate (confirmed live — see #1884). Reject non-numeric slugs up front rather than trust
+// the API to say no.
+var apploiNumericSlugRE = regexp.MustCompile(`^\d+$`)
+
 func (apploiProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	if !apploiNumericSlugRE.MatchString(slug) {
+		return "", 0, nil
+	}
 	var resp struct {
 		Data []struct {
 			Published bool `json:"published"`

@@ -102,10 +102,14 @@ func cheapWrite(r db.RefreshUnchangedJobRow) written {
 // distinguish "changed" from "absent", and does not need to: both want the same statement.
 func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (written, error) {
 	cheap, err := qtx.RefreshUnchangedJob(ctx, db.RefreshUnchangedJobParams{
-		Source:      p.Source,
-		ExternalID:  p.ExternalID,
-		ContentHash: p.ContentHash,
-		Cities:      p.Cities,
+		Source:               p.Source,
+		ExternalID:           p.ExternalID,
+		ContentHash:          p.ContentHash,
+		Cities:               p.Cities,
+		SalaryMinSource:      p.SalaryMinSource,
+		SalaryMaxSource:      p.SalaryMaxSource,
+		SalaryCurrencySource: p.SalaryCurrencySource,
+		SalaryPeriodSource:   p.SalaryPeriodSource,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil

@@ -259,7 +259,8 @@ func deliveryRow(kind string, stage string, daysSilent int, notificationsEnabled
 		ID: 1, JobID: 2, Kind: kind,
 		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme", URL: "https://ats/x",
 		JobOpen: jobOpen, NotificationsEnabled: notificationsEnabled, Channels: channels,
-		Stage: pgtype.Text{String: stage, Valid: stage != ""},
+		Stage:             pgtype.Text{String: stage, Valid: stage != ""},
+		ApplicationExists: true,
 		LastActivityAt: pgtype.Timestamptz{
 			Time: fixedNow.Add(-time.Duration(daysSilent) * 24 * time.Hour), Valid: true,
 		},
@@ -412,6 +413,53 @@ func TestDeliver_CancelsWhenJobClosed(t *testing.T) {
 	}
 	if len(store.cancelled) != 1 {
 		t.Errorf("closed job must be cancelled, cancelled = %v", store.cancelled)
+	}
+}
+
+// untrackedRow simulates a nudge whose application row was deleted (by
+// UntrackJob/UntrackApplicationByID) between MATCH and DELIVER: the LEFT JOIN
+// leaves Stage invalid, same as a row that exists with a NULL stage, but
+// ApplicationExists is false only for the former.
+func untrackedRow(kind string) db.GetNudgeForDeliveryRow {
+	chat := int64(555)
+	row := deliveryRow(kind, "", 25, true, true, []string{"telegram"}, &chat, "")
+	row.ApplicationExists = false
+	return row
+}
+
+func TestActionable_FailsClosedWhenApplicationGone(t *testing.T) {
+	for _, kind := range []string{KindFollowUp, KindInterviewPrep, KindJobClosed} {
+		t.Run(kind, func(t *testing.T) {
+			r := newRunner(&fakeStore{}, &fakeNotifier{})
+			row := untrackedRow(kind)
+			if kind == KindInterviewPrep {
+				// Satisfy the pre-existing stage=="interview" check too, so this
+				// case actually exercises the ApplicationExists gate rather than
+				// passing on the stage check alone regardless of it.
+				row.Stage = pgtype.Text{String: "interview", Valid: true}
+			}
+			if r.actionable(row) {
+				t.Errorf("actionable() = true for an untracked application, want false (fail closed)")
+			}
+		})
+	}
+}
+
+func TestDeliver_CancelsWhenApplicationGone(t *testing.T) {
+	// Stage.Valid=false with ApplicationExists=false must not be read as the
+	// active `applied` stage, the way an invalid-but-still-tracked stage is.
+	store := &fakeStore{due: []int64{1}, row: untrackedRow(KindFollowUp)}
+	notifier := &fakeNotifier{}
+	r := newRunner(store, notifier)
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 0 {
+		t.Errorf("must not send once the application is untracked, sent %v", notifier.sent)
+	}
+	if len(store.cancelled) != 1 {
+		t.Errorf("must cancel at fire, cancelled = %v", store.cancelled)
 	}
 }
 
