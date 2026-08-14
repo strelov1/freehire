@@ -192,9 +192,14 @@ func AllOf(gates ...func(Company, Record) bool) func(Company, Record) bool {
 // a register that simply cannot disambiguate would delete its every duplicate,
 // and the geography rules are the real defence in that case.
 func DropAmbiguous(records []Record, identityKey string) []Record {
+	// RegisterSlug does a non-trivial Unicode transliteration; computed once per record
+	// here and reused below instead of recomputed in the filter loop, which matters on
+	// the UK register's ~120k rows.
+	slugs := make([]string, len(records))
 	identities := make(map[string]map[string]struct{}, len(records))
-	for _, r := range records {
+	for i, r := range records {
 		slug := RegisterSlug(r.Name)
+		slugs[i] = slug
 		if slug == "" {
 			continue
 		}
@@ -205,8 +210,8 @@ func DropAmbiguous(records []Record, identityKey string) []Record {
 	}
 
 	out := make([]Record, 0, len(records))
-	for _, r := range records {
-		if len(identities[RegisterSlug(r.Name)]) > 1 {
+	for i, r := range records {
+		if len(identities[slugs[i]]) > 1 {
 			continue
 		}
 		out = append(out, r)
