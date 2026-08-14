@@ -86,6 +86,10 @@ type Repository interface {
 	SetTracerLinks(ctx context.Context, id uuid.UUID, userID int64, enabled bool) (int64, error)
 	ListTailored(ctx context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error)
 	SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error)
+	// MergeAutopilotEntry folds one requirement's outcome into the run report in a single
+	// statement — see MergeCVAutopilotEntry's own comment for why this cannot be a Get then a
+	// SetAutopilotReport.
+	MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error)
 	GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error)
 }
 
@@ -426,6 +430,10 @@ func (r queriesRepository) ListTailored(ctx context.Context, userID int64) ([]db
 
 func (r queriesRepository) SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
 	return r.q.SetCVAutopilotReport(ctx, db.SetCVAutopilotReportParams{ID: id, UserID: userID, AutopilotReport: report})
+}
+
+func (r queriesRepository) MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error) {
+	return r.q.MergeCVAutopilotEntry(ctx, db.MergeCVAutopilotEntryParams{ID: id, UserID: userID, Entry: entry})
 }
 
 func (r queriesRepository) GetTailoredForJob(ctx context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {

@@ -2,6 +2,7 @@ package cv
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -354,6 +355,48 @@ func (f *fakeRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID in
 		return 0, nil
 	}
 	r.report = report
+	f.rows[id] = r
+	return 1, nil
+}
+
+// MergeAutopilotEntry does the read, the match-or-append and the write inside ONE critical
+// section, the same way the real MergeCVAutopilotEntry query does it inside one statement —
+// unlike SetAutopilotReport above, which is safe to call as a separate step only because
+// Store.MergeAutopilotEntry no longer does that; see its own comment.
+func (f *fakeRepo) MergeAutopilotEntry(_ context.Context, id uuid.UUID, userID int64, entry []byte) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.rows[id]
+	if !ok || r.userID != userID {
+		return 0, nil
+	}
+	var incoming AutopilotEntry
+	if err := json.Unmarshal(entry, &incoming); err != nil {
+		return 0, err
+	}
+	var entries []AutopilotEntry
+	if len(r.report) > 0 {
+		if err := json.Unmarshal(r.report, &entries); err != nil {
+			return 0, err
+		}
+	}
+	target := strings.ToLower(strings.TrimSpace(incoming.Requirement))
+	replaced := false
+	for i, e := range entries {
+		if strings.ToLower(strings.TrimSpace(e.Requirement)) == target {
+			entries[i] = incoming
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		entries = append(entries, incoming)
+	}
+	blob, err := json.Marshal(entries)
+	if err != nil {
+		return 0, err
+	}
+	r.report = blob
 	f.rows[id] = r
 	return 1, nil
 }

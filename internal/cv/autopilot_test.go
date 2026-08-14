@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -175,6 +176,59 @@ func TestMergeAutopilotEntryIsOwnerScoped(t *testing.T) {
 		Requirement: "Kafka", Status: AutopilotClosedBank,
 	}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign merge = %v, want ErrNotFound", err)
+	}
+}
+
+// Two concurrent merges for DIFFERENT requirements (a duplicate tool call, or two requests
+// racing during a run) must both land. A read-modify-write built from a plain Get followed by
+// a plain SetAutopilotReport has no lock between the two calls: both would read the same
+// starting report, and whichever commits last would overwrite the column with its own view,
+// silently losing the other's entry. Run with -race to catch a data race in the fake itself.
+func TestMergeAutopilotEntrySurvivesConcurrentMerges(t *testing.T) {
+	repo := newFakeRepo()
+	s := NewStore(repo)
+	ctx := context.Background()
+
+	meta, err := s.Create(ctx, 3, "Tailored", "classic-ats", Document{Summary: "mine"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	requirements := []string{"Kafka in production", "Team leadership"}
+	for i, requirement := range requirements {
+		wg.Add(1)
+		go func(i int, requirement string) {
+			defer wg.Done()
+			errs[i] = s.MergeAutopilotEntry(ctx, meta.ID, 3, AutopilotEntry{
+				Requirement: requirement, Status: AutopilotClosedBank,
+			})
+		}(i, requirement)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("merge %d: %v", i, err)
+		}
+	}
+
+	rec, err := s.Get(ctx, meta.ID, 3)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(rec.AutopilotReport) != 2 {
+		t.Fatalf("report has %d entries, want 2 — a concurrent merge lost the other's entry: %+v",
+			len(rec.AutopilotReport), rec.AutopilotReport)
+	}
+	seen := map[string]bool{}
+	for _, e := range rec.AutopilotReport {
+		seen[e.Requirement] = true
+	}
+	for _, requirement := range requirements {
+		if !seen[requirement] {
+			t.Errorf("report is missing %q: %+v", requirement, rec.AutopilotReport)
+		}
 	}
 }
 

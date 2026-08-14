@@ -2253,6 +2253,15 @@ type Querier interface {
 	// Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
 	// is a no-op, so the file is never double-applied.
 	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
+	// Fold ONE requirement's outcome into the run report: replace the entry whose requirement
+	// matches case- and whitespace-insensitively, or append when none does. Done as one UPDATE
+	// expression rather than a read-modify-write from Go, because a read-modify-write has no lock
+	// between its two calls — two concurrent merges (a duplicate tool call, two requests racing
+	// during a run) can both read the same starting report and each overwrite the other's entry.
+	// The CASE here evaluates against one row snapshot under Postgres's own row-level lock for the
+	// UPDATE, so nothing else can observe or write the row mid-merge. Owner-scoped: 0 rows for a
+	// foreign id.
+	MergeCVAutopilotEntry(ctx context.Context, arg MergeCVAutopilotEntryParams) (int64, error)
 	// Atomically update the keep and delete the loser. The UPDATE is the transaction: the
 	// DELETE only lands when the update did, so a keep that vanished between Store.MergeAtoms'
 	// ownership check and this call (a concurrent delete/merge) yields no row and deletes

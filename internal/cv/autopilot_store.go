@@ -43,21 +43,32 @@ func SanitizeAutopilotReport(entries []AutopilotEntry) ([]AutopilotEntry, error)
 
 	out := make([]AutopilotEntry, 0, len(entries))
 	for i, e := range entries {
-		requirement := strings.TrimSpace(e.Requirement)
-		if requirement == "" {
-			return nil, fmt.Errorf("entry %d names no requirement — copy the requirement text from cv_context", i)
+		clean, err := sanitizeAutopilotEntry(e)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d %w", i, err)
 		}
-		if !validAutopilotStatus(e.Status) {
-			return nil, fmt.Errorf("entry %d has status %q; valid statuses are %s",
-				i, e.Status, strings.Join(AutopilotStatuses, ", "))
-		}
-		out = append(out, AutopilotEntry{
-			Requirement: clip(requirement, maxAutopilotRequirement),
-			Status:      e.Status,
-			Note:        clip(e.Note, maxAutopilotNote),
-		})
+		out = append(out, clean)
 	}
 	return out, nil
+}
+
+// sanitizeAutopilotEntry validates and clips ONE entry — the rule both SanitizeAutopilotReport
+// (a whole report) and MergeAutopilotEntry (the one entry it is about to fold in) apply before
+// anything reaches the database.
+func sanitizeAutopilotEntry(e AutopilotEntry) (AutopilotEntry, error) {
+	requirement := strings.TrimSpace(e.Requirement)
+	if requirement == "" {
+		return AutopilotEntry{}, errors.New("names no requirement — copy the requirement text from cv_context")
+	}
+	if !validAutopilotStatus(e.Status) {
+		return AutopilotEntry{}, fmt.Errorf("has status %q; valid statuses are %s",
+			e.Status, strings.Join(AutopilotStatuses, ", "))
+	}
+	return AutopilotEntry{
+		Requirement: clip(requirement, maxAutopilotRequirement),
+		Status:      e.Status,
+		Note:        clip(e.Note, maxAutopilotNote),
+	}, nil
 }
 
 func validAutopilotStatus(s AutopilotStatus) bool {
@@ -98,25 +109,29 @@ func (s *Store) SetAutopilotReport(ctx context.Context, id uuid.UUID, userID int
 // This is what lets cv_edit report the requirement it just closed in the SAME call as the
 // edit, rather than depending on a separate tailor_report call the model may not remember
 // to make once the requirement is no longer the one it is thinking about.
+//
+// The merge itself runs as a single statement on the repository (MergeCVAutopilotEntry),
+// not as a Get here followed by a SetAutopilotReport: reading the report and writing it back
+// as two separate calls leaves a gap for another merge to land in between, and whichever call
+// commits last would overwrite the whole column with its own stale view — silently dropping
+// the other call's entry rather than just delaying it.
 func (s *Store) MergeAutopilotEntry(ctx context.Context, id uuid.UUID, userID int64, entry AutopilotEntry) error {
-	rec, err := s.Get(ctx, id, userID)
+	clean, err := sanitizeAutopilotEntry(entry)
 	if err != nil {
 		return err
 	}
-	entries := rec.AutopilotReport
-	target := strings.ToLower(strings.TrimSpace(entry.Requirement))
-	replaced := false
-	for i, e := range entries {
-		if strings.ToLower(strings.TrimSpace(e.Requirement)) == target {
-			entries[i] = entry
-			replaced = true
-			break
-		}
+	blob, err := json.Marshal(clean)
+	if err != nil {
+		return err
 	}
-	if !replaced {
-		entries = append(entries, entry)
+	n, err := s.repo.MergeAutopilotEntry(ctx, id, userID, blob)
+	if err != nil {
+		return err
 	}
-	return s.SetAutopilotReport(ctx, id, userID, entries)
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // decodeAutopilotReport reads the stored report, tolerating an absent one. A stored report

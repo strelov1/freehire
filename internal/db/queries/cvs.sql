@@ -96,6 +96,32 @@ UPDATE cvs
 SET autopilot_report = $3
 WHERE id = $1 AND user_id = $2;
 
+-- name: MergeCVAutopilotEntry :execrows
+-- Fold ONE requirement's outcome into the run report: replace the entry whose requirement
+-- matches case- and whitespace-insensitively, or append when none does. Done as one UPDATE
+-- expression rather than a read-modify-write from Go, because a read-modify-write has no lock
+-- between its two calls — two concurrent merges (a duplicate tool call, two requests racing
+-- during a run) can both read the same starting report and each overwrite the other's entry.
+-- The CASE here evaluates against one row snapshot under Postgres's own row-level lock for the
+-- UPDATE, so nothing else can observe or write the row mid-merge. Owner-scoped: 0 rows for a
+-- foreign id.
+UPDATE cvs
+SET autopilot_report = CASE
+    WHEN EXISTS (
+      SELECT 1 FROM jsonb_array_elements(COALESCE(autopilot_report, '[]'::jsonb)) elem
+      WHERE lower(trim(elem ->> 'requirement')) = lower(trim(sqlc.arg(entry)::jsonb ->> 'requirement'))
+    )
+    THEN (
+      SELECT jsonb_agg(
+        CASE WHEN lower(trim(elem ->> 'requirement')) = lower(trim(sqlc.arg(entry)::jsonb ->> 'requirement'))
+             THEN sqlc.arg(entry)::jsonb ELSE elem END
+      )
+      FROM jsonb_array_elements(COALESCE(autopilot_report, '[]'::jsonb)) elem
+    )
+    ELSE COALESCE(autopilot_report, '[]'::jsonb) || jsonb_build_array(sqlc.arg(entry)::jsonb)
+  END
+WHERE id = $1 AND user_id = $2;
+
 -- name: GetTailoredCVForJob :one
 -- The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
 -- reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
