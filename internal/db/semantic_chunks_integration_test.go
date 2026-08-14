@@ -4,11 +4,10 @@
 // storage introduced by migration 0092 (see
 // openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/5). These
 // cover the delete/insert "replace" round trip (DeleteJobSemanticChunks +
-// InsertJobSemanticChunks), the similar-jobs nearest-neighbour-over-chunks rollup
-// (NearestJobsToJob), and the arbitrary-query-vector rollup used by /recommendations
-// (NearestJobsToEmbedding). This is SQL/pgvector behavior and can only be verified
-// against a real Postgres. Run with: go test -tags=integration ./internal/db/ (requires
-// Docker). Reuses startPostgres/truncate from enrichment_integration_test.go.
+// InsertJobSemanticChunks) and the similar-jobs nearest-neighbour-over-chunks rollup
+// (NearestJobsToJob). This is SQL/pgvector behavior and can only be verified against a
+// real Postgres. Run with: go test -tags=integration ./internal/db/ (requires Docker).
+// Reuses startPostgres/truncate from enrichment_integration_test.go.
 package db
 
 import (
@@ -236,71 +235,5 @@ func TestNearestJobsToJob(t *testing.T) {
 	}
 	if d := got[farAway]; d < 0.999 || d > 1.001 {
 		t.Errorf("farAway distance = %v, want ~1 (orthogonal)", d)
-	}
-}
-
-func TestNearestJobsToEmbedding(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-	truncate(t, pool)
-
-	insertChunk := func(t *testing.T, jobID int64, dim int) {
-		t.Helper()
-		if err := q.InsertJobSemanticChunks(ctx, InsertJobSemanticChunksParams{
-			JobID: jobID, ChunkIndices: []int16{0}, Embeddings: []string{unitVector768(dim)},
-		}); err != nil {
-			t.Fatalf("insert chunk for job %d: %v", jobID, err)
-		}
-	}
-
-	// Two open jobs from the SAME company, each an exact match for the query vector.
-	// Unlike NearestJobsToJob there is no source job to exclude a company against, so
-	// both must appear — this query only ever excludes closed jobs.
-	jobA := insertChunkTestJob(t, pool, "cv-match-a", "acme")
-	insertChunk(t, jobA, 0)
-	jobB := insertChunkTestJob(t, pool, "cv-match-b", "acme")
-	insertChunk(t, jobB, 0)
-
-	// Closed job, otherwise an exact match — must be excluded.
-	closedJob := insertChunkTestJob(t, pool, "cv-match-closed", "acme")
-	insertChunk(t, closedJob, 0)
-	closeJob(t, pool, closedJob)
-
-	// Open, different company, orthogonal — a distant background candidate.
-	farJob := insertChunkTestJob(t, pool, "cv-far", "other-co")
-	insertChunk(t, farJob, 9)
-
-	queryVector := pgvector.NewVector(func() []float32 {
-		v := make([]float32, 768)
-		v[0] = 1
-		return v
-	}())
-
-	rows, err := q.NearestJobsToEmbedding(ctx, NearestJobsToEmbeddingParams{
-		QueryVector: queryVector, LimitCount: 10,
-	})
-	if err != nil {
-		t.Fatalf("NearestJobsToEmbedding: %v", err)
-	}
-
-	got := map[int64]float64{}
-	for _, r := range rows {
-		got[r.JobID] = r.Distance
-	}
-
-	if _, ok := got[closedJob]; ok {
-		t.Errorf("closed job %d present in results, want excluded", closedJob)
-	}
-	dA, okA := got[jobA]
-	dB, okB := got[jobB]
-	if !okA || !okB {
-		t.Fatalf("results = %v, want both same-company jobs %d and %d present (no company exclusion here)", got, jobA, jobB)
-	}
-	if dA > 1e-6 || dB > 1e-6 {
-		t.Errorf("jobA/jobB distances = %v/%v, want both ~0 (exact match on the query vector)", dA, dB)
-	}
-	if d, ok := got[farJob]; !ok || d < 0.999 || d > 1.001 {
-		t.Errorf("farJob distance = %v (present=%v), want ~1 (orthogonal)", d, ok)
 	}
 }

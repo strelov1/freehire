@@ -9,7 +9,6 @@ import {
   type FacetState,
   type JobFilters,
   type Sign,
-  type SortField,
   emptyFacet,
   emptyFilters,
   filtersFromParams,
@@ -26,8 +25,8 @@ import {
 export * from './facetModel';
 
 /** Reactive job filters mirrored into the URL. A thin wrapper over the shared
- *  `UrlSyncedState` primitive: it owns the job-specific shape (facets/visa/salary/
- *  sort) and the discrete-vs-continuous policy, while the primitive owns the
+ *  `UrlSyncedState` primitive: it owns the job-specific shape (facets/visa/salary)
+ *  and the discrete-vs-continuous policy, while the primitive owns the
  *  state<->URL transport and the reload debounce. Read `value` to drive inputs and
  *  `applied` (the debounced snapshot) to drive the data reload. */
 export class FilterStore {
@@ -85,10 +84,6 @@ export class FilterStore {
   // Discrete inputs (clicked/toggled): apply immediately via setNow.
   setVisa(on: boolean) {
     this.#url.setNow({ ...this.#url.value, visa: on });
-  }
-
-  setSort(sort: SortField) {
-    this.#url.setNow({ ...this.#url.value, sort });
   }
 
   /** Toggle a facet between match-all (AND) and match-any (OR) of its included values. */

@@ -453,19 +453,6 @@ export function createApi(
     return toSlice(await request<Page<Job>>(`/api/v1/me/tracking/swipe?${params}`), 0);
   }
 
-  /** Personalized job recommendations for the signed-in user: open jobs ranked by
-   *  semantic similarity to their uploaded CV, constrained to `facets` (the same
-   *  facet filter params `searchJobs` accepts, built by the caller). An empty slice
-   *  means either no usable CV vector yet (no CV uploaded, or the embedder was
-   *  superseded) or that the active filter matched nothing — the page tells them
-   *  apart by whether a filter is set. Authenticated. */
-  async function recommendations(facets: URLSearchParams, limit: number, offset: number): Promise<Slice<Job>> {
-    const params = new URLSearchParams(facets);
-    params.set('limit', String(limit));
-    params.set('offset', String(offset));
-    return toSlice(await request<Page<Job>>(`/api/v1/me/recommendations?${params}`), offset);
-  }
-
   /** Facet-distribution counts for the analytics page. `params` carries the same
    *  query text and facet filters as `searchJobs` (built by the caller, e.g. via
    *  `filtersToParams`); the endpoint returns counts instead of a page of jobs.
@@ -1957,7 +1944,6 @@ export function createApi(
     matchAnalysisStreamUrl,
     searchJobs,
     swipeDeck,
-    recommendations,
     facetCounts,
     jobsActivity,
     userGrowth,

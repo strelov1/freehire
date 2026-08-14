@@ -21,18 +21,6 @@ export type Sign = 'off' | 'include' | 'exclude';
  *  shape `FacetSection` reads — one canonical type so the two can't drift. */
 export type FacetState = FacetSelection;
 
-/** The orders the browse list can take. `posted_at` is the source's posting date
- *  (newest-first). `cv` is a frontend-only routing signal: the feed ranks by the
- *  signed-in user's CV vector via the recommendations endpoint — it is never sent
- *  to the keyword search endpoint (whose sort allowlist is posted_at/created_at/
- *  salary_*), only carried in the URL/store for round-trip. */
-export type SortField = 'posted_at' | 'cv';
-
-/** Default browse order: freshest by posting date. Kept out of the URL (see
- *  filtersToParams) so the default reads as a clean, sort-less URL and the
- *  backend's own empty-query default stays the single source of truth. */
-export const DEFAULT_SORT: SortField = 'posted_at';
-
 export interface JobFilters {
   q: string;
   /** Facet state keyed by the facet's query param (see FACETS). */
@@ -43,7 +31,6 @@ export interface JobFilters {
    *  Serialized as `posted_within_days`; the backend turns it into a posted_ts
    *  range filter relative to request time. */
   postedWithinDays: number | null;
-  sort: SortField;
 }
 
 /** Splits every raw query value on comma and flattens the result, dropping
@@ -65,7 +52,7 @@ function emptyFacets(): Record<string, FacetState> {
 }
 
 export function emptyFilters(): JobFilters {
-  return { q: '', facets: emptyFacets(), visa: false, salaryMin: null, postedWithinDays: null, sort: DEFAULT_SORT };
+  return { q: '', facets: emptyFacets(), visa: false, salaryMin: null, postedWithinDays: null };
 }
 
 // ---- URL serialization ----
@@ -85,8 +72,6 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
-  // Omit the default sort: a clean URL leans on the backend's empty-query default.
-  if (f.sort !== DEFAULT_SORT) p.set('sort', f.sort);
   return p;
 }
 
@@ -114,9 +99,6 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // negative, non-numeric) reads as "any age", matching the backend's own guard.
   const days = Number(p.get('posted_within_days'));
   f.postedWithinDays = Number.isInteger(days) && days > 0 ? days : null;
-  // Only `cv` round-trips (posted_at is the default and never written to the URL);
-  // any other value — absent, legacy, malformed — reads as the default.
-  f.sort = p.get('sort') === 'cv' ? 'cv' : DEFAULT_SORT;
   return f;
 }
 
@@ -135,20 +117,17 @@ export function activeFilterCount(f: JobFilters): number {
 
 /** Normalize a search query string to its canonical form (parse → re-serialize),
  *  so two filter sets that differ only in param order or stale/unknown params
- *  compare equal. Used to detect which saved search matches the current filters.
- *  Sort never survives (filtersToParams omits the default and canonicalizing a
- *  saved query drops the view-only `cv` — see savedSearchQuery), so a sort change
- *  never flips which saved search is active. */
+ *  compare equal. Used to detect which saved search matches the current filters. */
 export function canonicalQuery(query: string): string {
   return savedSearchQuery(filtersFromParams(new URLSearchParams(query)));
 }
 
-/** The saved-search / alert target: the filters as a query string with the view-only
- *  sort dropped. Sort is a per-session preference, not an alert criterion — the
- *  server-side digest runs a keyword search that can't honor `sort=cv` — so it must
- *  not be baked into a persisted or shared saved search. */
+/** The saved-search / alert target: the filters as a canonical query string. A thin,
+ *  named wrapper over filtersToParams so the saved-search call sites (SavedSearches,
+ *  FilterSummary, CompanyFollowButton) express intent ("the comparable query for this
+ *  filter set") rather than reaching for the raw serializer. */
 export function savedSearchQuery(f: JobFilters): string {
-  return filtersToParams({ ...f, sort: DEFAULT_SORT }).toString();
+  return filtersToParams(f).toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----

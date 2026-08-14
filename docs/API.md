@@ -96,7 +96,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `regions` | Region | global, north_america, latam, eu, uk, mena, africa, apac, cis, none |
 | `work_mode` | Work format | remote, hybrid, onsite |
 | `role` | Role | Open vocabulary — call /jobs/facets for live values |
-| `category` | Specialization | backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, engineering_design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
+| `category` | Specialization | software_engineering, backend, frontend, fullstack, mobile, devops, sre, network_engineering, data_engineering, data_science, data_analytics, ml_ai, ai_engineering, qa, security, hardware, embedded, blockchain, architecture, design, engineering_design, product, project_management, management, marketing, sales, support, business_analysis, solutions_engineering, developer_relations, technical_writing, recruiting, hr, finance, legal, operations, customer_success, other |
 | `ai_archetype` | AI Specialization | rag_app_builder, agent_builder, cloud_ml_platform_engineer, ml_trainer_researcher, fullstack_ai_engineer, devops_infra_engineer |
 | `seniority` | Seniority | intern, junior, middle, senior, lead, staff, principal, c_level |
 | `skills` | Skills | Open vocabulary — call /jobs/facets for live values |
@@ -527,32 +527,6 @@ data: {"kind":"stage_start","stage":1,"label":"Extracting requirements"}
 data: {"kind":"requirements","requirements":[ { "...": "..." } ]}
 
 data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...":"..."}}
-```
-
-### `GET /me/recommendations`
-
-**Auth:** Session or API key
-
-Open jobs ranked by semantic similarity to your CV.
-
-Ranks jobs by your persisted CV embedding, constrained by the same facet filter params as search. Degrades to a successful empty list (never an error) when you have no usable CV vector or the semantic index is off.
-
-**Query parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
-| `offset` | integer | no | Rows to skip; `offset + limit` ≤ 10000. (e.g. `0`) |
-
-```bash
-curl "https://freehire.me/api/v1/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"
-```
-
-```json
-{
-  "data": [ { "public_slug": "...", "title": "...", "...": "..." } ],
-  "meta": { "total": 40, "limit": 20, "offset": 0 }
-}
 ```
 
 ### `POST /market/coverage`
@@ -1013,7 +987,7 @@ curl -X DELETE "https://freehire.me/api/v1/jobs/<slug>/save" -H "Authorization: 
 
 Set the application stage and/or notes.
 
-A null field is left unchanged. `stage` is a controlled vocabulary: `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an unknown value is a 400). `expired` is the outcome for an application nobody answered; nothing sets it for you.
+A null field is left unchanged. `stage` is a controlled vocabulary: `preparing`, `applied`, `screening`, `responded`, `interview`, `offer`, `accepted`, `rejected`, `withdrawn`, `expired` (an unknown value is a 400). `expired` is the outcome for an application nobody answered; nothing sets it for you.
 
 **Path parameters**
 
@@ -3342,6 +3316,22 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/tailor-session" -b cooki
 
 ```json
 { "data": { "tailor_cv_id": "7d1a…", "base_cv_id": "0f2c…", "session_id": "s_9f…" } }
+```
+
+### `POST /me/cvs/base/reset-from-resume`
+
+**Auth:** Session only
+
+Rebuild your base CV from your résumé.
+
+Replaces the base (non-tailored) document from the current résumé seed (experience bank + structured extract). Preserves template and typography. Does not rewrite tailored copies for specific jobs. 409 when there is no usable résumé seed.
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/base/reset-from-resume" -b cookies.txt
+```
+
+```json
+{ "data": { "id": "0f2c…", "title": "My CV", "template_id": "classic-ats", "document": { … } } }
 ```
 
 ### `POST /me/cvs/{id}/reset-from-resume`

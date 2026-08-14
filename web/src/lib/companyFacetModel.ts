@@ -12,11 +12,11 @@
 import { COMPANY_FACETS } from './facets';
 
 /** 'job_count' is the backend's default order (most active first) and is never
- *  written to the URL — a clean link leans on that default, mirroring
- *  DEFAULT_SORT in facetModel.ts. 'rating' asks for feedback_rating_avg DESC
- *  (see ListCompanies in internal/db/queries/companies.sql); the backend forces
- *  every rating-sorted request onto its Postgres path, since rating isn't a
- *  Meili-sortable attribute yet. */
+ *  written to the URL — a clean link leans on that default, the same convention
+ *  filtersToParams uses for the job feed's own default. 'rating' asks for
+ *  feedback_rating_avg DESC (see ListCompanies in internal/db/queries/companies.sql);
+ *  the backend forces every rating-sorted request onto its Postgres path, since
+ *  rating isn't a Meili-sortable attribute yet. */
 export type CompanySortField = 'job_count' | 'rating';
 export const DEFAULT_COMPANY_SORT: CompanySortField = 'job_count';
 

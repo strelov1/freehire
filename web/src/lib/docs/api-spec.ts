@@ -448,25 +448,6 @@ data: {"kind":"requirements","requirements":[ { "...": "..." } ]}
 data: {"kind":"final","analysis":{"overall_score":82,"verdict":"Strong Fit","...":"..."}}`,
       },
       {
-        method: 'GET',
-        path: '/me/recommendations',
-        auth: 'cookie-or-key',
-        summary: 'Open jobs ranked by semantic similarity to your CV.',
-        description:
-          'Ranks jobs by your persisted CV embedding, constrained by the same facet ' +
-          'filter params as search. Degrades to a successful empty list (never an ' +
-          'error) when you have no usable CV vector or the semantic index is off.',
-        query: [
-          { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
-          { name: 'offset', type: 'integer', description: 'Rows to skip; `offset + limit` ≤ 10000.', example: '0' },
-        ],
-        curl: `curl "${BASE_URL}/me/recommendations" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
-        responseExample: `{
-  "data": [ { "public_slug": "...", "title": "...", "...": "..." } ],
-  "meta": { "total": 40, "limit": 20, "offset": 0 }
-}`,
-      },
-      {
         method: 'POST',
         path: '/market/coverage',
         auth: 'cookie-or-key',

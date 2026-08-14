@@ -729,8 +729,10 @@ type Querier interface {
 	// its own vector(768) row here — replacing the single, doubly-truncated
 	// jobs.semantic_embedding vector as the queryable representation. Consumers:
 	// cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
-	// DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
-	// NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
+	// DeleteJobSemanticChunks alone for a closed job) and cmd/similar-backfill (reads,
+	// via NearestJobsToJob). GET /me/recommendations was removed rather than migrated
+	// to pgvector (see drop-hybrid-search-pgvector-similar's Context: "Mid-implementation
+	// reversal"); it never got a caller.
 	// ---------------------------------------------------------------------------
 	// Remove every chunk row for a BATCH of jobs in one round trip — mirrors every other
 	// batch mutation in this file (StampSemanticEmbeddedBatch, ClearSemanticEmbeddedBatch,
@@ -1158,9 +1160,10 @@ type Querier interface {
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
 	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
-	// Batch-load the persisted rows the embed worker builds documents from. A corrupted
-	// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
-	// at a time to isolate and dead-letter the bad row.
+	// Batch-load persisted rows by id. Two callers: the embed worker builds documents
+	// from them (a corrupted row, SQLSTATE XX001, aborts the whole scan there; the
+	// worker then retries the batch one id at a time to isolate and dead-letter the bad
+	// row), and the /similar handler projects them to the public job wire shape.
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error)
 	// The display fields for the jobs in a digest, freshest first. Salary fields are
 	// projected out of the enrichment JSONB (absent keys → NULL) so a card can render
@@ -1320,10 +1323,6 @@ type Querier interface {
 	// The authenticated user's résumé pointer (object key + upload time), or NULLs when
 	// no résumé is stored. The blob lives in S3 under the key; this is just the pointer.
 	GetUserResume(ctx context.Context, id int64) (GetUserResumeRow, error)
-	// The user's persisted CV embedding and the embedder identity that produced it, or
-	// NULLs when none is stored. The caller ignores a vector whose model no longer matches
-	// the current embedder (stale) — see the cv-recommendations change.
-	GetUserResumeEmbedding(ctx context.Context, id int64) (GetUserResumeEmbeddingRow, error)
 	// The geography derived from the user's structured résumé, alongside the two stamps the
 	// caller needs to judge freshness (the derivation's own stamp and the current résumé
 	// upload time) — the same stamp-and-compare the structure read uses, so a geography
@@ -2226,15 +2225,6 @@ type Querier interface {
 	// yields no row exactly like a concurrent delete already did, and the caller reports both
 	// the same way — reload and retry — rather than pretending a still-present row vanished.
 	MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error)
-	// The same nearest-chunk-per-job rollup as NearestJobsToJob, but for GET
-	// /me/recommendations: the query vector is a specific signed-in user's persisted CV
-	// embedding (a résumé is short enough to embed as one passage, never chunked), not
-	// another job's chunk set, so there is no self-join and no source company to exclude —
-	// "similar to a job" and "matches a CV" are different questions, only the rollup shape
-	// (minimum distance per candidate job across its chunks) is shared. Excludes only
-	// closed jobs; callers layer the existing facet-filter WHERE clause and
-	// LIMIT/OFFSET on top (see design.md Decision 5 / tasks.md 6.1).
-	NearestJobsToEmbedding(ctx context.Context, arg NearestJobsToEmbeddingParams) ([]NearestJobsToEmbeddingRow, error)
 	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
 	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
 	// the source is the MINIMUM cosine distance across every (source chunk, candidate
@@ -3003,9 +2993,6 @@ type Querier interface {
 	// Also clears any cached ATS review so a new CV is never scored with a stale one,
 	// and marks structured extract pending for this upload (background work must catch up).
 	SetUserResume(ctx context.Context, arg SetUserResumeParams) error
-	// Persist the user's derived CV embedding vector plus the identity of the embedder
-	// that produced it (so a model change can mark the vector stale). Never the raw CV text.
-	SetUserResumeEmbedding(ctx context.Context, arg SetUserResumeEmbeddingParams) error
 	// Record that structured extract failed for the current upload. The for-stamp guard
 	// drops the write when a newer upload already superseded this attempt.
 	SetUserResumeExtractFailed(ctx context.Context, arg SetUserResumeExtractFailedParams) error

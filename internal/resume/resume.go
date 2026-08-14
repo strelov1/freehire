@@ -65,11 +65,6 @@ type Repository interface {
 	Get(ctx context.Context, userID int64) (db.GetUserResumeRow, error)
 	Set(ctx context.Context, userID int64, key string) error
 	Clear(ctx context.Context, userID int64) error
-	// SetEmbedding persists the derived CV vector + the embedder identity that produced
-	// it (a nil vector clears it — e.g. when re-embedding a new CV failed, so the new
-	// CV is never matched by the old vector). GetEmbedding reads them back.
-	SetEmbedding(ctx context.Context, userID int64, vec []float64, model string) error
-	GetEmbedding(ctx context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error)
 	// SetStructured persists the derived structured résumé and the geography derived from
 	// it, as one write, guarded by the monotonic `resume_uploaded_at = w.UploadedAt` stamp
 	// check. applied reports whether the guard matched: false means a slow/late write for a
@@ -157,24 +152,6 @@ func (s *Store) Put(ctx context.Context, userID int64, contentType string, data 
 		return Meta{}, err
 	}
 	return s.Status(ctx, userID)
-}
-
-// SetEmbedding persists (or clears, with a nil vector) the user's derived CV embedding
-// and the embedder identity that produced it. Independent of object storage — it only
-// touches the pointer row — so it works whenever a CV was uploadable.
-func (s *Store) SetEmbedding(ctx context.Context, userID int64, vec []float64, model string) error {
-	return s.repo.SetEmbedding(ctx, userID, vec, model)
-}
-
-// Embedding returns the user's persisted CV vector and the embedder identity that
-// produced it (both zero when none is stored). The caller ignores a vector whose model
-// no longer matches the current embedder (stale).
-func (s *Store) Embedding(ctx context.Context, userID int64) (vec []float64, model string, err error) {
-	row, err := s.repo.GetEmbedding(ctx, userID)
-	if err != nil {
-		return nil, "", err
-	}
-	return row.ResumeEmbedding, row.ResumeEmbeddingModel.String, nil
 }
 
 // SetStructured persists the user's derived structured résumé, stamped with the
@@ -577,18 +554,6 @@ func (r *QueriesRepository) Set(ctx context.Context, userID int64, key string) e
 
 func (r *QueriesRepository) Clear(ctx context.Context, userID int64) error {
 	return r.q.ClearUserResume(ctx, userID)
-}
-
-func (r *QueriesRepository) SetEmbedding(ctx context.Context, userID int64, vec []float64, model string) error {
-	return r.q.SetUserResumeEmbedding(ctx, db.SetUserResumeEmbeddingParams{
-		ID:                   userID,
-		ResumeEmbedding:      vec,
-		ResumeEmbeddingModel: pgtype.Text{String: model, Valid: model != ""},
-	})
-}
-
-func (r *QueriesRepository) GetEmbedding(ctx context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error) {
-	return r.q.GetUserResumeEmbedding(ctx, userID)
 }
 
 func (r *QueriesRepository) SetStructured(ctx context.Context, w StructuredWrite) (bool, error) {

@@ -90,7 +90,7 @@
 ## 6. Remove `/me/recommendations` entirely (mid-implementation reversal — see
       design.md Context; NOT migrated to pgvector)
 
-- [ ] 6.1 Backend: delete `internal/handler/recommendations.go`, its route
+- [x] 6.1 Backend: delete `internal/handler/recommendations.go`, its route
       registration, and its tests. Delete the CV-embedding write path (résumé
       upload, `internal/resume`/`internal/handler/resume.go` — grep both for
       `Embedding`/`EmbedText` and remove what only served this feature; do not
@@ -98,13 +98,13 @@
       extraction). Leave `search.Client.RecommendByVector` (Meili-backed) for
       section 7 to delete alongside the rest of the Meili semantic code — don't
       duplicate that removal here.
-- [ ] 6.2 Frontend: remove the "Recommended" sort option and all `sort=cv`
+- [x] 6.2 Frontend: remove the "Recommended" sort option and all `sort=cv`
       handling from the standalone jobs feed (`web/src/lib/components/JobsView.svelte`,
       `web/src/lib/facetModel.ts`, and `web/src/lib/api.ts`'s `recommendations()`
       call) — the sign-in/no-CV prompts, the URL round-trip, the whole CV-mode
       branch. A pre-existing `?sort=cv` link should fall back to the default
       "Newest" feed, not error.
-- [ ] 6.3 Confirm nothing else references the removed endpoint/UI (grep
+- [x] 6.3 Confirm nothing else references the removed endpoint/UI (grep
       `recommendations`/`sort=cv`/`sort.*cv` across `web/src` and `internal/`)
       and clean up any now-dead helper left behind.
 

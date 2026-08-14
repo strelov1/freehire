@@ -14,8 +14,7 @@
   import { ensureDismissedLoaded, isDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
   import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
-  import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery, type SortField } from '$lib/filters';
-  import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery } from '$lib/filters';
   import { loadJobFilters, hasChangedFilters, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
   import {
     bannerVisible,
@@ -89,50 +88,20 @@
   );
   const filters = new FilterStore(seedParams, untrack(() => standalone));
 
-  // CV-similarity sort is offered only on the standalone feed (the company-embedded
-  // list never ranks by the visitor's CV). Read off the debounced `applied` sort so
-  // it changes in lockstep with the data reload below.
-  const cvMode = $derived(standalone && filters.applied.sort === 'cv');
-
-  // CV ranking needs the authenticated recommendations endpoint, so a signed-out
-  // user gets a sign-in prompt instead of a feed: the reload effect skips the fetch
-  // and the template stands the prompt in for the list. Reading auth only in CV mode
-  // means a sign-in there re-triggers the effect while the default feed is untouched.
-  const cvSignInPrompt = $derived(cvMode && !isAuthenticated());
-
-  // An empty CV feed is ambiguous — no usable CV vector and a filter matching
-  // nothing both return []. Disambiguate on whether a facet filter is applied
-  // (keyed on the debounced `applied` set the feed was fetched with, not the live
-  // value, so a mid-drag change can't flash the wrong empty state).
-  const appliedActive = $derived(activeFilterCount(filters.applied));
-
   // The user's (debounced) facet filters plus the fixed `scope` params
-  // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke. In CV
-  // mode two params are dropped so the request matches what the recommendations
-  // endpoint actually honors: `sort=cv` (a frontend routing signal — see
-  // makePaginator) and the free-text `q` (the endpoint ranks by the CV vector and
-  // ignores query text). Dropping `q` also keeps the facet counts consistent with
-  // the ranked feed instead of counting a q-filtered set the feed never uses.
+  // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
-    if (filters.applied.sort === 'cv') {
-      p.delete('sort');
-      p.delete('q');
-    }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
 
-  // In CV-sort mode the feed ranks by the signed-in user's CV vector via the
-  // recommendations endpoint (facet filters still constrain the set); otherwise it
-  // browses via keyword search. Both take the same facet params and return the same
-  // Job shape, so only the fetch fn differs. CV sort is standalone-only.
+  // The feed browses via keyword search, newest-first. Both take the same facet
+  // params and return the same Job shape.
   const makePaginator = () =>
-    new Paginator<Job>(
-      (limit, offset) =>
-        cvMode ? api.recommendations(scopedParams(), limit, offset) : api.searchJobs(scopedParams(), limit, offset),
-      { keyOf: (job) => job.public_slug },
-    );
+    new Paginator<Job>((limit, offset) => api.searchJobs(scopedParams(), limit, offset), {
+      keyOf: (job) => job.public_slug,
+    });
 
   // Seeded with the server-rendered first page (an intentional one-time snapshot
   // of the initial prop); "load more" and filter changes fetch client-side.
@@ -176,8 +145,8 @@
   let modalOpen = $state(false);
   let started = false;
   // Signature of the applied filters last reported as a search, so a re-run that
-  // didn't change the filters (back/forward re-seed, CV sign-in prompt toggle)
-  // doesn't emit a spurious funnel event.
+  // didn't change the filters (a back/forward re-seed) doesn't emit a spurious
+  // funnel event.
   let lastSearchKey = '';
   // The visitor is on our server-seeded first-visit default (remote / worldwide, see
   // +page.server.ts) rather than filters they chose: true only while this browser has
@@ -371,23 +340,19 @@
   // fetch counts on mount since they aren't server-rendered into this view.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
-    const blocked = cvSignInPrompt; // read in the tracked scope so a sign-in refetches
     untrack(() => {
       refreshCounts();
       const firstRun = !started;
       if (firstRun) {
         started = true;
         // Keep the SSR `initial` page unless it was loaded for a different URL than
-        // the address bar (stale shallow-routing restore) or the feed is in CV mode
-        // (the SSR seed is the newest-sorted keyword feed, wrong for CV ranking). The
-        // first-visit default is server-rendered (see +page.server.ts), so `initial`
-        // already matches the URL here — no forced reload needed.
-        if (!initialStale && !cvMode) return;
+        // the address bar (stale shallow-routing restore). The first-visit default is
+        // server-rendered (see +page.server.ts), so `initial` already matches the URL
+        // here — no forced reload needed.
+        if (!initialStale) return;
       }
-      if (blocked) return;
       // Funnel search — only when the applied filters actually changed: not the
-      // initial paint, a back/forward re-seed to the same set, or an unrelated
-      // effect re-run (the CV sign-in prompt toggling reads into this scope too).
+      // initial paint or a back/forward re-seed to the same set.
       const searchKey = filtersToParams(filters.applied).toString();
       if (!firstRun && searchKey !== lastSearchKey) {
         track('search', {
@@ -428,25 +393,6 @@
   }
 </script>
 
-<!-- The feed sort control, handed to ListToolbar so it sits in the shared toolbar
-     (mobile) / above the list (desktop). Offered only to a signed-in user on the
-     standalone feed — "Recommended" needs a CV, so a signed-out visitor has no use
-     for it (a shared ?sort=cv link still shows the sign-in prompt). URL value stays `cv`. -->
-{#snippet sortSelect()}
-  <label class="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-    <span class="hidden sm:inline">Sort</span>
-    <select
-      aria-label="Sort jobs"
-      class="rounded-lg border border-input bg-transparent py-2 pl-2 pr-1 text-sm text-foreground transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 md:py-1 dark:bg-input/30"
-      value={filters.value.sort}
-      onchange={(e) => filters.setSort(e.currentTarget.value as SortField)}
-    >
-      <option value="posted_at">Newest</option>
-      <option value="cv">Recommended</option>
-    </select>
-  </label>
-{/snippet}
-
 <div class="flex gap-6">
   <aside class="hidden w-72 shrink-0 md:block">
     <div class="sticky top-6 flex max-h-[calc(100vh-5rem)] flex-col gap-4 overflow-y-auto">
@@ -472,15 +418,14 @@
 
   <div class="min-w-0 flex-1">
     <ListToolbar
-      total={!cvSignInPrompt && jobs.items.length > 0 ? listTotal : null}
+      total={jobs.items.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}
       onSwipe={standalone ? openSwipe : undefined}
       showDesktopTotal={standalone}
-      sortControl={standalone && isAuthenticated() ? sortSelect : undefined}
     />
 
-    <!-- Onboarding nudges sit UNDER the sort toolbar so the feed controls stay at the
-         top; each shows once (until dismissed or completed), then retires. Never blocks
+    <!-- Onboarding nudges sit UNDER the toolbar so the feed controls stay at the top;
+         each shows once (until dismissed or completed), then retires. Never blocks
          the feed below. -->
     {#if showBanner || alertBanner}
       <div class="mt-3">
@@ -497,56 +442,24 @@
       </div>
     {/if}
 
-    {#if cvSignInPrompt}
-      <!-- CV ranking needs the authenticated recommendations endpoint; the reload
-           effect skips the fetch here, so this prompt stands in for the feed. -->
-      <div class="rounded-xl border border-border bg-card p-6 text-center">
-        <p class="text-sm font-medium text-foreground">Sign in for recommendations</p>
-        <p class="mt-1 text-sm text-muted-foreground">
-          Recommended ranks jobs by similarity to your uploaded résumé.
-          <button
-            type="button"
-            onclick={() => openAuthDialog()}
-            class="font-medium text-foreground underline underline-offset-4 hover:no-underline">Sign in</button
-          >
-          to use it.
-        </p>
-      </div>
-    {:else if jobs.status === 'loading'}
+    {#if jobs.status === 'loading'}
       <States state="loading" />
     {:else if jobs.status === 'error'}
       <States state="error" message="Failed to load jobs." />
     {:else if jobs.items.length === 0}
-      {#if cvMode && appliedActive === 0}
-        <!-- CV mode, no facet filter: an empty feed means no usable CV vector (the
-             recommendations endpoint returns [] for no/stale CV), so prompt an
-             upload rather than showing a bare "no matches". -->
-        <div class="rounded-xl border border-border bg-card p-6 text-center">
-          <p class="text-sm font-medium text-foreground">No recommendations yet</p>
-          <p class="mt-1 text-sm text-muted-foreground">
-            Add or update your CV on your
-            <a
-              href={resolve('/my/profile')}
-              class="font-medium text-foreground underline underline-offset-4 hover:no-underline">profile</a
-            >
-            to get jobs ranked by how well they match your experience.
-          </p>
+      <States state="empty" message="No matching jobs." />
+      {#if standalone && relaxTarget}
+        <!-- No semantic fallback in this slice: offer an honest one-step broaden
+             instead of silently widening the feed. -->
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            onclick={relaxFeed}
+            class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+          >
+            Broaden search
+          </button>
         </div>
-      {:else}
-        <States state="empty" message="No matching jobs." />
-        {#if standalone && relaxTarget}
-          <!-- No semantic fallback in this slice: offer an honest one-step broaden
-               instead of silently widening the feed. -->
-          <div class="mt-4 flex justify-center">
-            <button
-              type="button"
-              onclick={relaxFeed}
-              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-            >
-              Broaden search
-            </button>
-          </div>
-        {/if}
       {/if}
     {:else if visibleJobs.length === 0 && !jobs.hasMore}
       <!-- The server returned jobs but the user has hidden every one on this final

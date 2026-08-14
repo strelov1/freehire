@@ -62,8 +62,6 @@ type fakeResumeRepo struct {
 	mu          sync.Mutex
 	key         string
 	set         bool
-	embVec      []float64
-	embModel    string
 	structured  []byte
 	structModel string
 	structAt    pgtype.Timestamptz
@@ -107,22 +105,6 @@ func (r *fakeResumeRepo) Clear(_ context.Context, _ int64) error {
 	r.structured, r.structModel, r.structAt = nil, "", pgtype.Timestamptz{}
 	r.extractStatus, r.extractDetail, r.extractFor = "", "", pgtype.Timestamptz{}
 	return nil
-}
-
-func (r *fakeResumeRepo) SetEmbedding(_ context.Context, _ int64, vec []float64, model string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.embVec, r.embModel = vec, model
-	return nil
-}
-
-func (r *fakeResumeRepo) GetEmbedding(_ context.Context, _ int64) (db.GetUserResumeEmbeddingRow, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return db.GetUserResumeEmbeddingRow{
-		ResumeEmbedding:      r.embVec,
-		ResumeEmbeddingModel: pgtype.Text{String: r.embModel, Valid: r.embModel != ""},
-	}, nil
 }
 
 func (r *fakeResumeRepo) SetStructured(_ context.Context, w resume.StructuredWrite) (bool, error) {

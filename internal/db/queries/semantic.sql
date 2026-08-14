@@ -153,8 +153,10 @@ RETURNING attempts, failed_at;
 -- its own vector(768) row here — replacing the single, doubly-truncated
 -- jobs.semantic_embedding vector as the queryable representation. Consumers:
 -- cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
--- DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
--- NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
+-- DeleteJobSemanticChunks alone for a closed job) and cmd/similar-backfill (reads,
+-- via NearestJobsToJob). GET /me/recommendations was removed rather than migrated
+-- to pgvector (see drop-hybrid-search-pgvector-similar's Context: "Mid-implementation
+-- reversal"); it never got a caller.
 -- ---------------------------------------------------------------------------
 
 -- name: DeleteJobSemanticChunks :exec
@@ -234,22 +236,6 @@ JOIN jobs j2 ON j2.id = c2.job_id AND j2.closed_at IS NULL
 WHERE c1.job_id = sqlc.arg(job_id)::bigint
   AND (j1.company_slug = '' OR j2.company_slug IS DISTINCT FROM j1.company_slug)
 GROUP BY j2.id
-ORDER BY distance
-LIMIT sqlc.arg(limit_count)::int;
-
--- name: NearestJobsToEmbedding :many
--- The same nearest-chunk-per-job rollup as NearestJobsToJob, but for GET
--- /me/recommendations: the query vector is a specific signed-in user's persisted CV
--- embedding (a résumé is short enough to embed as one passage, never chunked), not
--- another job's chunk set, so there is no self-join and no source company to exclude —
--- "similar to a job" and "matches a CV" are different questions, only the rollup shape
--- (minimum distance per candidate job across its chunks) is shared. Excludes only
--- closed jobs; callers layer the existing facet-filter WHERE clause and
--- LIMIT/OFFSET on top (see design.md Decision 5 / tasks.md 6.1).
-SELECT c.job_id, MIN(c.embedding <=> sqlc.arg(query_vector)::vector(768))::float8 AS distance
-FROM job_semantic_chunks c
-JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL
-GROUP BY c.job_id
 ORDER BY distance
 LIMIT sqlc.arg(limit_count)::int;
 

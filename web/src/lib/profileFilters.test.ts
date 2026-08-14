@@ -43,7 +43,6 @@ describe('filtersFromProfile', () => {
     expect(f.visa).toEqual(empty.visa);
     expect(f.salaryMin).toEqual(empty.salaryMin);
     expect(f.postedWithinDays).toEqual(empty.postedWithinDays);
-    expect(f.sort).toEqual(empty.sort);
   });
 
   it('trims and dedupes seeded values, and drops empties', () => {

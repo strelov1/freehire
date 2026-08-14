@@ -447,7 +447,7 @@ func Register(app *fiber.App, cfg Config) {
 	geoH := newGeoHandlers()
 	trackingH := newTrackingHandlers(queries, cfg.Pool, jobSearch)
 	timelineH := newTimelineHandlers(queries)
-	resumeH := newResumeHandlers(resumeStore, structuredExtractor, jobSearch, facets, profileSvc, atsAnalyzer, queries)
+	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
 	// Same reason as jobSearch above: a nil *speech.Client wrapped in the transcriber
 	// interface would be a non-nil interface, and the handler's "no gateway here"
@@ -647,8 +647,8 @@ func Register(app *fiber.App, cfg Config) {
 	// (see inboxHandlers). Registered after the static /me/tracking/* routes so
 	// /me/tracking/:slug does not shadow them.
 	inboxH.register(api, mw)
-	// Résumé/CV surfaces: verdict, ATS report, extraction, storage, recommendations
-	// (see resumeHandlers).
+	// Résumé/CV surfaces: verdict, ATS report, extraction, storage (see
+	// resumeHandlers).
 	resumeH.register(api, mw)
 	// The headshot the photo-bearing CV templates print (see photoHandlers).
 	photoH.register(api, mw)

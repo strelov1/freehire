@@ -22,18 +22,16 @@ import (
 )
 
 // resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé
-// management (store/status/delete), the profile verdict (live market coverage), the
-// CV ATS-readiness report, and the recommendations read. resume.Store is nil-safe:
-// a nil blob (S3 unconfigured) yields a disabled service whose Enabled() is false,
-// so the upload/verdict paths degrade to in-request parsing.
+// management (store/status/delete), the profile verdict (live market coverage), and
+// the CV ATS-readiness report. resume.Store is nil-safe: a nil blob (S3
+// unconfigured) yields a disabled service whose Enabled() is false, so the
+// upload/verdict paths degrade to in-request parsing.
 type resumeHandlers struct {
 	resume *resume.Store
 	// structuredExtractor derives the read-only structured résumé from an uploaded CV
 	// (best-effort, background). Its client is nil when the LLM is unconfigured;
 	// extraction then no-ops and the profile simply shows no structured section.
 	structuredExtractor *resumeextract.Extractor
-	// search backs the résumé-embedding enqueue and the recommendations read.
-	search searcher
 	// facets backs the market-coverage computations (verdict + ATS report).
 	facets facetCounter
 	// userProfile loads the caller's profile (skills + role the verdict scores against).
@@ -52,11 +50,10 @@ type resumeHandlers struct {
 	bank experienceBank
 }
 
-func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeextract.Extractor, search searcher, facets facetCounter, userProfile *userprofile.Service, atsAnalyzer *atscheck.Analyzer, queries *db.Queries) *resumeHandlers {
+func newResumeHandlers(resumeStore *resume.Store, structuredExtractor *resumeextract.Extractor, facets facetCounter, userProfile *userprofile.Service, atsAnalyzer *atscheck.Analyzer, queries *db.Queries) *resumeHandlers {
 	return &resumeHandlers{
 		resume:              resumeStore,
 		structuredExtractor: structuredExtractor,
-		search:              search,
 		facets:              facets,
 		userProfile:         userProfile,
 		atsAnalyzer:         atsAnalyzer,
@@ -103,9 +100,6 @@ func (h *resumeHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/me/resume/contacts/replace-from-cv", mw.cookie, h.ReplaceResumeContactsFromCV)
 	api.Post("/me/resume/parse", mw.cookie, h.RetryResumeParse)
 	api.Delete("/me/resume", mw.cookie, h.DeleteResume)
-
-	// Recommendations: similar-open-jobs ranked against the caller's stored résumé.
-	api.Get("/me/recommendations", mw.key, h.Recommendations)
 
 	// Stateless market-coverage: score a caller-supplied skill list (request body)
 	// against the facet-filtered market. Cookie or API key — the CLI drives it with
@@ -245,7 +239,7 @@ func (h *resumeHandlers) ExtractResumeProfile(c *fiber.Ctx) error {
 			log.Printf("resume: store on extract failed for user %d: %v", userID, err)
 		} else {
 			// This is the résumé-upload path the app actually uses, so it is where the CV
-			// gets embedded for /my/recommendations and structured for the profile.
+			// gets structured for the profile.
 			h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 		}
 	}
@@ -306,52 +300,23 @@ func (h *resumeHandlers) PutResume(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	// Embed in the background: it must not block the upload response. Embedding is a
-	// Meilisearch round-trip that is seconds normally but MINUTES while a full semantic
-	// rebuild is monopolizing the engine — long enough to time out the proxy/upload.
-	// Derive the CV embedding and the structured résumé in the background (best-effort,
-	// off the response path). The structure is stamped with this upload's time so it is
-	// served only while it describes the current CV.
+	// Derive the structured résumé in the background: it must not block the upload
+	// response (best-effort, off the response path). The structure is stamped with
+	// this upload's time so it is served only while it describes the current CV.
 	h.deriveResumeArtifacts(userID, up.Text, meta.UploadedAt)
 	return c.JSON(fiber.Map{"data": newResumeMeta(true, meta)})
 }
 
-// embedResume computes and persists the user's CV embedding through the same embedder
-// as jobs (so it shares their vector space), best-effort: any failure — no search
-// backend, embed error, or persist error — is logged and swallowed so it never breaks
-// the upload. On an embed failure the prior vector is cleared so the new CV is never
-// matched by a stale one. The scratch id is the user id. It runs on its own timeout
-// context (not the request's, which is already gone once the upload responded).
-func (h *resumeHandlers) embedResume(userID int64, text string) {
-	if h.search == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	vec, model, err := h.search.EmbedText(ctx, text)
-	if err != nil {
-		log.Printf("resume embed: user %d: %v", userID, err)
-		if err := h.resume.SetEmbedding(ctx, userID, nil, ""); err != nil {
-			log.Printf("resume embed clear: user %d: %v", userID, err)
-		}
-		return
-	}
-	if err := h.resume.SetEmbedding(ctx, userID, vec, model); err != nil {
-		log.Printf("resume embed persist: user %d: %v", userID, err)
-	}
-}
-
-// deriveResumeArtifacts kicks the background best-effort derivations a fresh upload feeds:
-// the CV embedding (/my/recommendations) and the structured résumé (profile view + fit
-// context). Both run detached on their own timeout contexts. Defined once so the two
-// upload paths (PutResume, ExtractResumeProfile) can't drift out of sync.
+// deriveResumeArtifacts kicks the background best-effort derivation a fresh upload feeds:
+// the structured résumé (profile view + fit context). Runs detached on its own timeout
+// context. Defined once so the two upload paths (PutResume, ExtractResumeProfile) can't
+// drift out of sync.
 //
 // Intentionally does NOT write cvs rows. Applying the seed into a base or tailored CV is
 // the candidate's explicit Reset from résumé on the tailor workspace — or, for a *new*
 // vacancy bootstrap only, TailorCV's stale-base refresh when base.updated_at predates
 // resume_uploaded_at. Upload itself never mutates cvs.
 func (h *resumeHandlers) deriveResumeArtifacts(userID int64, text string, uploadedAt *time.Time) {
-	go h.embedResume(userID, text)
 	go h.extractStructuredResume(userID, text, uploadedAt)
 }
 

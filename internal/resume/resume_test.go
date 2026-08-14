@@ -46,8 +46,6 @@ func (f *fakeBlobs) Delete(_ context.Context, key string) error {
 type fakeRepo struct {
 	ptr        map[int64]string
 	uploadedAt map[int64]pgtype.Timestamptz // simulates users.resume_uploaded_at
-	embVec     map[int64][]float64
-	embModel   map[int64]string
 	structured map[int64][]byte
 	structMod  map[int64]string
 	structAt   map[int64]pgtype.Timestamptz // simulates users.resume_structured_uploaded_at
@@ -70,8 +68,6 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		ptr:        map[int64]string{},
 		uploadedAt: map[int64]pgtype.Timestamptz{},
-		embVec:     map[int64][]float64{},
-		embModel:   map[int64]string{},
 		structured: map[int64][]byte{},
 		structMod:  map[int64]string{},
 		structAt:   map[int64]pgtype.Timestamptz{},
@@ -112,18 +108,6 @@ func (r *fakeRepo) GetStructured(_ context.Context, userID int64) (db.GetUserRes
 		ResumeExtractStatus:        pgtype.Text{String: r.extractSt[userID], Valid: r.extractSt[userID] != ""},
 		ResumeExtractDetail:        pgtype.Text{String: r.extractDet[userID], Valid: r.extractDet[userID] != ""},
 		ResumeExtractFor:           r.extractFor[userID],
-	}, nil
-}
-
-func (r *fakeRepo) SetEmbedding(_ context.Context, userID int64, vec []float64, model string) error {
-	r.embVec[userID], r.embModel[userID] = vec, model
-	return nil
-}
-
-func (r *fakeRepo) GetEmbedding(_ context.Context, userID int64) (db.GetUserResumeEmbeddingRow, error) {
-	return db.GetUserResumeEmbeddingRow{
-		ResumeEmbedding:      r.embVec[userID],
-		ResumeEmbeddingModel: pgtype.Text{String: r.embModel[userID], Valid: r.embModel[userID] != ""},
 	}, nil
 }
 

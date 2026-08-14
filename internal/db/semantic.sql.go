@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pgvector/pgvector-go"
 )
 
 const claimSemanticBatch = `-- name: ClaimSemanticBatch :many
@@ -134,8 +133,10 @@ WHERE job_id = ANY($1::bigint[])
 // its own vector(768) row here — replacing the single, doubly-truncated
 // jobs.semantic_embedding vector as the queryable representation. Consumers:
 // cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
-// DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
-// NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
+// DeleteJobSemanticChunks alone for a closed job) and cmd/similar-backfill (reads,
+// via NearestJobsToJob). GET /me/recommendations was removed rather than migrated
+// to pgvector (see drop-hybrid-search-pgvector-similar's Context: "Mid-implementation
+// reversal"); it never got a caller.
 // ---------------------------------------------------------------------------
 // Remove every chunk row for a BATCH of jobs in one round trip — mirrors every other
 // batch mutation in this file (StampSemanticEmbeddedBatch, ClearSemanticEmbeddedBatch,
@@ -223,9 +224,10 @@ FROM jobs
 WHERE id = ANY($1::bigint[])
 `
 
-// Batch-load the persisted rows the embed worker builds documents from. A corrupted
-// row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
-// at a time to isolate and dead-letter the bad row.
+// Batch-load persisted rows by id. Two callers: the embed worker builds documents
+// from them (a corrupted row, SQLSTATE XX001, aborts the whole scan there; the
+// worker then retries the batch one id at a time to isolate and dead-letter the bad
+// row), and the /similar handler projects them to the public job wire shape.
 func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) {
 	rows, err := q.db.Query(ctx, getJobsByIDs, ids)
 	if err != nil {
@@ -329,53 +331,6 @@ type InsertJobSemanticChunksParams struct {
 func (q *Queries) InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error {
 	_, err := q.db.Exec(ctx, insertJobSemanticChunks, arg.JobID, arg.ChunkIndices, arg.Embeddings)
 	return err
-}
-
-const nearestJobsToEmbedding = `-- name: NearestJobsToEmbedding :many
-SELECT c.job_id, MIN(c.embedding <=> $1::vector(768))::float8 AS distance
-FROM job_semantic_chunks c
-JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL
-GROUP BY c.job_id
-ORDER BY distance
-LIMIT $2::int
-`
-
-type NearestJobsToEmbeddingParams struct {
-	QueryVector pgvector.Vector `json:"query_vector"`
-	LimitCount  int32           `json:"limit_count"`
-}
-
-type NearestJobsToEmbeddingRow struct {
-	JobID    int64   `json:"job_id"`
-	Distance float64 `json:"distance"`
-}
-
-// The same nearest-chunk-per-job rollup as NearestJobsToJob, but for GET
-// /me/recommendations: the query vector is a specific signed-in user's persisted CV
-// embedding (a résumé is short enough to embed as one passage, never chunked), not
-// another job's chunk set, so there is no self-join and no source company to exclude —
-// "similar to a job" and "matches a CV" are different questions, only the rollup shape
-// (minimum distance per candidate job across its chunks) is shared. Excludes only
-// closed jobs; callers layer the existing facet-filter WHERE clause and
-// LIMIT/OFFSET on top (see design.md Decision 5 / tasks.md 6.1).
-func (q *Queries) NearestJobsToEmbedding(ctx context.Context, arg NearestJobsToEmbeddingParams) ([]NearestJobsToEmbeddingRow, error) {
-	rows, err := q.db.Query(ctx, nearestJobsToEmbedding, arg.QueryVector, arg.LimitCount)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NearestJobsToEmbeddingRow{}
-	for rows.Next() {
-		var i NearestJobsToEmbeddingRow
-		if err := rows.Scan(&i.JobID, &i.Distance); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const nearestJobsToJob = `-- name: NearestJobsToJob :many

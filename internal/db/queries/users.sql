@@ -168,21 +168,6 @@ UPDATE users
 SET photo_object_key = NULL, photo_uploaded_at = NULL
 WHERE id = $1;
 
--- name: SetUserResumeEmbedding :exec
--- Persist the user's derived CV embedding vector plus the identity of the embedder
--- that produced it (so a model change can mark the vector stale). Never the raw CV text.
-UPDATE users
-SET resume_embedding = $2, resume_embedding_model = $3
-WHERE id = $1;
-
--- name: GetUserResumeEmbedding :one
--- The user's persisted CV embedding and the embedder identity that produced it, or
--- NULLs when none is stored. The caller ignores a vector whose model no longer matches
--- the current embedder (stale) — see the cv-recommendations change.
-SELECT resume_embedding, resume_embedding_model
-FROM users
-WHERE id = $1;
-
 -- name: GetUserATSAnalysis :one
 -- The user's cached CV ATS qualitative review (content-quality + findings), or NULL
 -- when none has been computed. Derived only — never the raw CV text.
