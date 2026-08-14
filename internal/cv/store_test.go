@@ -5,17 +5,23 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 )
 
-// fakeRepo is an in-memory owner-scoped Repository for unit-testing Store without a DB.
+// fakeRepo is an in-memory owner-scoped Repository for unit-testing Store without a DB. mu
+// guards every access to rows/writes so it is also safe under the concurrent Tailor() calls
+// TestStoreTailorRacesToOneTailoredCopy makes — that test exists to exercise exactly the
+// race the real cvs_user_id_job_id_tailored_uniq_idx (0091) closes.
 type fakeRepo struct {
+	mu   sync.Mutex
 	rows map[uuid.UUID]fakeRow
 	// writes counts insertions, so a row can record the order it arrived in.
 	writes int
@@ -45,6 +51,8 @@ func newFakeRepo() *fakeRepo { return &fakeRepo{rows: map[uuid.UUID]fakeRow{}} }
 func stamp() pgtype.Timestamptz { return pgtype.Timestamptz{Valid: true} }
 
 func (f *fakeRepo) Create(_ context.Context, userID int64, title, templateID string, data []byte) (db.CreateCVRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	id := uuid.New()
 	f.writes++
 	f.rows[id] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: templateID, data: data}
@@ -52,6 +60,8 @@ func (f *fakeRepo) Create(_ context.Context, userID int64, title, templateID str
 }
 
 func (f *fakeRepo) List(_ context.Context, userID int64) ([]db.ListCVsByUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []db.ListCVsByUserRow
 	for id, r := range f.rows {
 		if r.userID == userID {
@@ -62,6 +72,8 @@ func (f *fakeRepo) List(_ context.Context, userID int64) ([]db.ListCVsByUserRow,
 }
 
 func (f *fakeRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return db.GetCVByIDRow{}, pgx.ErrNoRows
@@ -70,6 +82,8 @@ func (f *fakeRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVB
 }
 
 func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return 0, nil
@@ -80,6 +94,8 @@ func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, ses
 }
 
 func (f *fakeRepo) SetTracerLinks(_ context.Context, id uuid.UUID, userID int64, enabled bool) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return 0, nil
@@ -90,6 +106,8 @@ func (f *fakeRepo) SetTracerLinks(_ context.Context, id uuid.UUID, userID int64,
 }
 
 func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailoredCVsByUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []db.ListTailoredCVsByUserRow
 	for id, r := range f.rows {
 		if r.userID == userID && r.jobID != 0 {
@@ -104,6 +122,8 @@ func (f *fakeRepo) ListTailored(_ context.Context, userID int64) ([]db.ListTailo
 }
 
 func (f *fakeRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, templateID string, data []byte) (db.UpdateCVRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return db.UpdateCVRow{}, pgx.ErrNoRows
@@ -113,6 +133,8 @@ func (f *fakeRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, 
 }
 
 func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID, userID int64) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if r, ok := f.rows[id]; !ok || r.userID != userID {
 		return 0, nil
 	}
@@ -121,6 +143,8 @@ func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID, userID int64) (int64,
 }
 
 func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	// Newest base CV = the most recently written of the user's non-tailored rows.
 	var bestID uuid.UUID
 	best := 0
@@ -136,9 +160,20 @@ func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserR
 	return db.GetBaseCVByUserRow{ID: bestID, Title: r.title, TemplateID: r.templateID, Data: r.data, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
+// CreateTailored mimics cvs_user_id_job_id_tailored_uniq_idx (migrations/0091): a second
+// insert for a (userID, jobID) that already has a tailored row fails exactly as Postgres
+// would, with a 23505 pgconn.PgError, instead of silently minting a duplicate.
 func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.rows {
+		if r.userID == userID && r.jobID == jobID && jobID != 0 {
+			return db.CreateTailoredCVRow{}, &pgconn.PgError{Code: "23505"}
+		}
+	}
 	id := uuid.New()
-	f.rows[id] = fakeRow{userID: userID, title: title, templateID: templateID, data: data, jobID: jobID}
+	f.writes++
+	f.rows[id] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: templateID, data: data, jobID: jobID}
 	return db.CreateTailoredCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
@@ -312,6 +347,8 @@ func TestStoreDeleteThenGetIsNotFound(t *testing.T) {
 }
 
 func (f *fakeRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID int64, report []byte) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	r, ok := f.rows[id]
 	if !ok || r.userID != userID {
 		return 0, nil
@@ -322,6 +359,8 @@ func (f *fakeRepo) SetAutopilotReport(_ context.Context, id uuid.UUID, userID in
 }
 
 func (f *fakeRepo) GetTailoredForJob(_ context.Context, userID, jobID int64) (db.GetTailoredCVForJobRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	// Newest by insertion order, mirroring the query's `updated_at DESC, id DESC`.
 	var bestID uuid.UUID
 	var best *fakeRow
