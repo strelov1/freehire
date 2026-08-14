@@ -746,6 +746,16 @@ func (c *Client) RecommendByVector(ctx context.Context, vector []float64, filter
 		if errors.As(err, &meiliErr) && meiliErr.MeilisearchApiError.Code == semanticIndexMissingCode {
 			return SearchResult{}, nil
 		}
+		// A cancelled/expired context surfaces here wrapped in a Meilisearch
+		// communication error that does NOT chain to context.Canceled (the SDK's
+		// *Error has no Unwrap), so re-raise the context sentinel directly to keep
+		// errors.Is working upstream — mirrors Search (above).
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return SearchResult{}, fmt.Errorf("search: recommend: %w", ctxErr)
+		}
+		if isBadRequest(err) {
+			return SearchResult{}, fmt.Errorf("search: recommend: %w: %v", ErrBadQuery, err)
+		}
 		return SearchResult{}, fmt.Errorf("search: recommend: %w", err)
 	}
 	var hits []JobDocument

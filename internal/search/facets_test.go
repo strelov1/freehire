@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strconv"
 	"sync"
 	"testing"
@@ -70,6 +71,63 @@ func TestDisjunctiveFacetCounts_ErrorPropagates(t *testing.T) {
 	}
 	if _, err := disjunctiveFacetCounts(context.Background(), "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher); err == nil {
 		t.Fatal("expected error to propagate")
+	}
+}
+
+// A cancelled context must re-raise the context sentinel, not the SDK's opaque
+// communication error, so a client disconnect is not misreported upstream as a
+// fault — mirrors Search's classification (client.go).
+func TestDisjunctiveFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
+	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
+		return nil, errors.New("meilisearch: could not perform request: context canceled")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := disjunctiveFacetCounts(ctx, "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+// A Meili 400 (malformed filter) must map to ErrBadQuery so the handler can render
+// it as a client mistake and skip Sentry.
+func TestDisjunctiveFacetCounts_BadRequestMapsToErrBadQuery(t *testing.T) {
+	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
+		return nil, &meilisearch.Error{StatusCode: http.StatusBadRequest}
+	}
+
+	_, err := disjunctiveFacetCounts(context.Background(), "", []FacetReq{{Attr: "a", Filter: "f"}}, "full", searcher)
+	if !errors.Is(err, ErrBadQuery) {
+		t.Fatalf("err = %v, want ErrBadQuery", err)
+	}
+}
+
+// A cancelled context must re-raise the context sentinel — mirrors Search
+// (client.go).
+func TestFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
+	c := &Client{facet: fakeSearchIndex{searchFn: func(context.Context, string, *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+		return nil, errors.New("meilisearch: could not perform request: context canceled")
+	}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := c.FacetCounts(ctx, FacetParams{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+// A Meili 400 (malformed filter) must map to ErrBadQuery so the handler can render
+// it as a client mistake and skip Sentry.
+func TestFacetCounts_BadRequestMapsToErrBadQuery(t *testing.T) {
+	c := &Client{facet: fakeSearchIndex{searchFn: func(context.Context, string, *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+		return nil, &meilisearch.Error{StatusCode: http.StatusBadRequest}
+	}}}
+
+	_, err := c.FacetCounts(context.Background(), FacetParams{})
+	if !errors.Is(err, ErrBadQuery) {
+		t.Fatalf("err = %v, want ErrBadQuery", err)
 	}
 }
 

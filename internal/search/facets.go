@@ -45,6 +45,16 @@ func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, e
 		Limit:  0,
 	})
 	if err != nil {
+		// A cancelled/expired context surfaces here wrapped in a Meilisearch
+		// communication error that does NOT chain to context.Canceled (the SDK's
+		// *Error has no Unwrap), so re-raise the context sentinel directly to keep
+		// errors.Is working upstream — mirrors Search (client.go).
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return FacetResult{}, fmt.Errorf("search: facet query: %w", ctxErr)
+		}
+		if isBadRequest(err) {
+			return FacetResult{}, fmt.Errorf("search: facet query: %w: %v", ErrBadQuery, err)
+		}
 		return FacetResult{}, fmt.Errorf("search: facet query: %w", err)
 	}
 	return buildFacetResult(resp)
@@ -97,6 +107,15 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 	run(func() error {
 		resp, err := search(ctx, query, totalFilter, nil)
 		if err != nil {
+			// Mirrors Search's classification (client.go): a cancelled/expired context
+			// re-raises the sentinel (the SDK's comm error has no Unwrap to it), and a
+			// Meili 400 tags ErrBadQuery so callers can render it as a client mistake.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return fmt.Errorf("search: disjunctive total: %w", ctxErr)
+			}
+			if isBadRequest(err) {
+				return fmt.Errorf("search: disjunctive total: %w: %v", ErrBadQuery, err)
+			}
 			return fmt.Errorf("search: disjunctive total: %w", err)
 		}
 		mu.Lock()
@@ -110,6 +129,12 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 		run(func() error {
 			resp, err := search(ctx, query, r.Filter, []string{r.Attr})
 			if err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return fmt.Errorf("search: disjunctive facet %s: %w", r.Attr, ctxErr)
+				}
+				if isBadRequest(err) {
+					return fmt.Errorf("search: disjunctive facet %s: %w: %v", r.Attr, ErrBadQuery, err)
+				}
 				return fmt.Errorf("search: disjunctive facet %s: %w", r.Attr, err)
 			}
 			fr, err := buildFacetResult(resp)
