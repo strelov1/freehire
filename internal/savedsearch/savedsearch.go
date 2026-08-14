@@ -26,6 +26,8 @@ var (
 	ErrNotFound = errors.New("savedsearch: not found")
 	// ErrInvalidAuthorLabel is an over-long board author label (mapped to 400).
 	ErrInvalidAuthorLabel = errors.New("savedsearch: author label must be at most 60 characters")
+	// ErrQueryTooLong is a query string over maxQueryLen (mapped to 400).
+	ErrQueryTooLong = errors.New("savedsearch: query is too long")
 	// ErrSlugTaken is a public-slug UNIQUE collision on share. It is an internal retry
 	// signal (Share regenerates the suffix and tries again), not a client-facing status.
 	ErrSlugTaken = errors.New("savedsearch: public slug already taken")
@@ -42,6 +44,14 @@ const (
 	maxPerUser = 50
 	// maxAuthorLabelLen bounds a board's optional author label.
 	maxAuthorLabelLen = 60
+	// maxQueryLen bounds the stored query string, the same way maxNameLen bounds name.
+	// query is a URL-encoded SPA filter state (facet params, not prose), so real values
+	// run to a few hundred characters even with many facets selected; 2000 leaves
+	// generous headroom while keeping a stored query far short of the point where
+	// re-parsing it on every internal/notify pass (url.ParseQuery, once per distinct
+	// query per pass) becomes the cost this bound exists to avoid. The migration's
+	// CHECK is the backstop.
+	maxQueryLen = 2000
 )
 
 // SavedSearch is a stored named filter snapshot: the package domain type, decoupled from
@@ -117,6 +127,9 @@ func (s *Service) Create(ctx context.Context, userID int64, name, query string, 
 	if err != nil {
 		return SavedSearch{}, err
 	}
+	if err := validQuery(query); err != nil {
+		return SavedSearch{}, err
+	}
 	count, err := s.repo.Count(ctx, userID)
 	if err != nil {
 		return SavedSearch{}, err
@@ -139,6 +152,11 @@ func (s *Service) Update(ctx context.Context, userID, id int64, name, query *str
 		}
 		name = &valid
 	}
+	if query != nil {
+		if err := validQuery(*query); err != nil {
+			return SavedSearch{}, err
+		}
+	}
 	return s.repo.Update(ctx, id, userID, name, query)
 }
 
@@ -157,4 +175,14 @@ func validName(name string) (string, error) {
 		return "", ErrInvalidName
 	}
 	return name, nil
+}
+
+// validQuery enforces the maxQueryLen bound (counted in runes, matching validName and
+// the DB CHECK's character semantics). Unlike name, an empty query is valid — it is the
+// unfiltered "show all" view — so this only ever rejects an over-long value.
+func validQuery(query string) error {
+	if utf8.RuneCountInString(query) > maxQueryLen {
+		return ErrQueryTooLong
+	}
+	return nil
 }
