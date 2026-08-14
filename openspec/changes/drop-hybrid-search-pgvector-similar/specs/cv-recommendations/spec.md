@@ -37,8 +37,11 @@ blob résumé-storage already keeps).
 
 The system SHALL expose an authenticated endpoint `GET /api/v1/me/recommendations`
 that returns open jobs ranked by pgvector cosine-distance similarity between the
-caller's persisted CV embedding and `jobs.semantic_embedding_vec`, constrained to
-any facet filter carried on the request. It SHALL accept the same facet query
+caller's persisted CV embedding and each candidate job's embedding chunks
+(`job_semantic_chunks`) — a job's rank uses the minimum distance across its own
+chunks (the single nearest passage to the CV, same rollup rule as `/similar`'s
+job-to-job matching), not an average across the whole description. It is
+constrained to any facet filter carried on the request. It SHALL accept the same facet query
 params as the search endpoint (e.g. `regions`, `work_mode`, `seniority`,
 `category`, `skills`, salary and freshness ranges, per-facet `_exclude`/`_mode`),
 translate them through the same shared filter builder into a SQL `WHERE` clause,

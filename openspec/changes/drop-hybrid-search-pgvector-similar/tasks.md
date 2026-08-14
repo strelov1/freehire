@@ -1,50 +1,82 @@
-## 1. Migration and column backfill
+## 1. Migration
 
-- [x] 1.1 New migration (next number off `origin/main`'s `migrations/`, re-check at
-      implementation time — numbers have collided across branches before):
-      `CREATE EXTENSION IF NOT EXISTS vector;` + `ALTER TABLE jobs ADD COLUMN
-      semantic_embedding_vec vector(768)`, `ADD COLUMN similar_job_ids bigint[]`,
-      `ADD COLUMN similar_computed_at timestamptz` — all nullable, no default (instant).
-- [ ] 1.2 One-off batched backfill script/command: convert existing
-      `jobs.semantic_embedding` (`real[]`) rows into `semantic_embedding_vec`
-      (`vector(768)`), batched, resumable, mirroring `cmd/backfill-semantic-vectors`'s
-      shape.
-- [x] 1.3 `internal/db/queries/*.sql`: add/update sqlc queries for the new columns;
-      `make sqlc` (or `~/go/bin/sqlc generate` if Docker unavailable).
+- [ ] 1.1 **Edit migration 0092 in place** (never applied to a real/shared/persistent
+      database yet — only replayed in ephemeral local/CI containers, so amending is
+      safe here and avoids an add-then-drop column in shipped history): drop the
+      `semantic_embedding_vec vector(768)` column from `jobs` (superseded — see
+      design.md Decision 1), keep `CREATE EXTENSION IF NOT EXISTS vector;`, keep
+      `jobs.similar_job_ids bigint[]`/`similar_computed_at timestamptz`. Add a new
+      `CREATE TABLE job_semantic_chunks (job_id bigint NOT NULL REFERENCES
+      jobs(id) ON DELETE CASCADE, chunk_index smallint NOT NULL, embedding
+      vector(768) NOT NULL, PRIMARY KEY (job_id, chunk_index));`.
+- [ ] 1.2 **Delete** `cmd/backfill-semantic-embedding-vec/` and its integration test
+      (`internal/db/semantic_embedding_vec_backfill_integration_test.go`) — the
+      one-off reshape backfill it implemented no longer applies (design.md Decision
+      1b: getting real chunked vectors needs a full re-embed via TEI, not a
+      Postgres-side conversion of already-computed numbers). Remove the
+      `SelectSemanticEmbeddingVecBackfillBatch`/`BackfillSemanticEmbeddingVecBatch`
+      sqlc queries added for it. This is a deliberate reversal, not a bug — note it
+      as such in the commit message.
+- [ ] 1.3 `internal/db/queries/*.sql`: sqlc queries for `job_semantic_chunks`
+      (insert/replace a job's chunk rows, delete a job's chunk rows, the
+      nearest-neighbour-over-chunks query from design.md Decision 5). `make sqlc`.
 
-## 2. `cmd/embed` writes the new column and clears staleness
+## 2. Chunked embedding pipeline
 
-- [ ] 2.1 `cmd/embed`'s open-job stamp transaction also persists
-      `semantic_embedding_vec` and clears `similar_computed_at` (so a re-embedded job
-      is picked back up by the similar-jobs backfill worker).
-- [ ] 2.2 `cmd/embed`'s closed-job path also clears `semantic_embedding_vec`
-      alongside the existing `semantic_embedding` clear.
-- [ ] 2.3 Unit + integration tests for both paths (mirror the existing
-      `semantic_embedding` stamp/clear tests).
+- [ ] 2.1 Port `stripToPlainText` (`internal/search/plaintext.go`) and `chunkText`
+      (`internal/search/chunk.go`) — plus their unit tests — verbatim from
+      `origin/worktree-semantic-embed-full-clean-chunked` into wherever they now
+      belong (likely `internal/embed`, since section 7 removes most of
+      `internal/search`'s semantic code). No Meilisearch dependency in either
+      function — should port with zero logic changes, only the package/import path.
+- [ ] 2.2 `cmd/embed`'s open-job path: build the plain-text chunks for the job's
+      description, embed each chunk (existing TEI embed call, `passage:` prefix +
+      title/company context per chunk — mirror `jobPassages` from the same branch),
+      replace the job's `job_semantic_chunks` rows (delete-then-insert) in the same
+      transaction as the stamp, clear `similar_computed_at`.
+- [ ] 2.3 `cmd/embed`'s closed-job path: delete the job's `job_semantic_chunks` rows
+      alongside the existing stamp-clear.
+- [ ] 2.4 Unit + integration tests for 2.2/2.3 (mirror the existing
+      `semantic_embedding` stamp/clear tests; add a multi-chunk case for a long
+      description and a single-chunk case for a short one).
+- [ ] 2.5 Bump `search.CurrentEmbedderModel()`'s version string (forces the existing
+      staleness check to re-enqueue the whole catalogue through the new pipeline —
+      this is what makes the full re-embed happen, no separate backfill tooling).
+      Actually flipping this on prod is a scheduled ops step (section 8), not bundled
+      into a routine deploy — this task is just making the version bump possible in
+      code (e.g. a version constant), not triggering it.
 
 ## 3. HNSW index
 
-- [ ] 3.1 Build `CREATE INDEX CONCURRENTLY ... USING hnsw (semantic_embedding_vec
-      vector_cosine_ops)` on prod, in a scheduled low-load window, with a raised
-      session-scoped `maintenance_work_mem` — measure actual build time/disk on prod
-      rather than trusting the session's own (contended, bug-affected) local spike
-      numbers; treat this as a monitored operation like a Meili full rebuild.
+- [ ] 3.1 Build `CREATE INDEX CONCURRENTLY ... USING hnsw (embedding
+      vector_cosine_ops)` on `job_semantic_chunks` on prod, in a scheduled low-load
+      window, with a raised session-scoped `maintenance_work_mem`, only once there's
+      real chunked data to index against (after the section 8 re-embed has made
+      meaningful progress) — measure actual build time/disk on prod rather than
+      trusting the session's own (contended, bug-affected) local spike numbers;
+      treat this as a monitored operation like a Meili full rebuild.
 
 ## 4. `cmd/similar-backfill` worker
 
 - [ ] 4.1 New package (e.g. `internal/similarjobs`) with Store/Indexer-style ports,
       unit-tested with fakes, mirroring `internal/embed`'s shape.
-- [ ] 4.2 Query: jobs with `semantic_embedding_vec IS NOT NULL AND
-      similar_computed_at IS NULL` (or stale), batched, ordered sensibly (e.g.
-      freshest-first like the embed claim).
-- [ ] 4.3 Per job: one pgvector nearest-neighbour query
-      (`ORDER BY semantic_embedding_vec <=> $1 LIMIT N`, excluding self and closed
-      jobs), write `similar_job_ids` + stamp `similar_computed_at`.
+- [ ] 4.2 Query: jobs with at least one `job_semantic_chunks` row but
+      `similar_computed_at IS NULL` (or older than the job's newest chunk), batched,
+      ordered sensibly (e.g. freshest-first like the embed claim).
+- [ ] 4.3 Per job: the nearest-neighbour-over-chunks query from design.md
+      Decision 5 — minimum cosine distance per candidate job across all
+      (source chunk, candidate chunk) pairs, excluding the source job itself AND
+      any job sharing its `company_slug`, excluding closed jobs, ordered by
+      distance, limited to N — write `similar_job_ids` + stamp
+      `similar_computed_at`.
 - [ ] 4.4 `cmd/similar-backfill/main.go`: run-once-and-exit worker (this repo's
       standard `internal/worker` Bootstrap convention), flags mirroring telagon's
       (`-batch`, `-workers`, `-limit`) where they make sense here.
-- [ ] 4.5 Integration test: end-to-end, a job with an embedding gets a correct
-      `similar_job_ids` list written.
+- [ ] 4.5 Integration test: end-to-end — a job with embedding chunks gets a correct
+      `similar_job_ids` list written, a same-company candidate that would otherwise
+      be the closest match is excluded and a different-company one appears instead,
+      and a job whose only close matches are same-company yields a short/empty list
+      rather than an error.
 
 ## 5. Switch `/similar` to the precomputed lookup
 
@@ -57,9 +89,11 @@
 
 ## 6. Switch `/me/recommendations` to a live pgvector query
 
-- [ ] 6.1 New query: CV vector (from the caller's persisted embedding) +
-      the existing facet-filter-to-SQL translation, `ORDER BY
-      semantic_embedding_vec <=> $1 LIMIT/OFFSET`, filtered to open jobs.
+- [ ] 6.1 New query: CV vector (from the caller's persisted embedding, still a
+      single vector — a résumé isn't chunked) against `job_semantic_chunks` using
+      the same nearest-chunk-per-job rollup as `/similar` (design.md Decision 5),
+      combined with the existing facet-filter-to-SQL translation, filtered to open
+      jobs, `LIMIT`/`OFFSET`.
 - [ ] 6.2 Wire the handler to the new query instead of `search.Client.RecommendByVector`.
 - [ ] 6.3 Update recommendation tests (unit + integration) for the new path;
       verify facet-filter scenarios from the `cv-recommendations` spec still hold.
@@ -93,8 +127,12 @@
 - [ ] 8.2 Apply the migration (manual apply per this repo's deploy convention —
       new tables need a manual `psql` apply before/with the deploy, see
       `internal/db/AGENTS.md`).
-- [ ] 8.3 Run the `semantic_embedding_vec` backfill on prod.
-- [ ] 8.4 Build the HNSW index on prod (Section 3.1) in a scheduled window.
+- [ ] 8.3 Bump `embedderModel` (task 2.5) to trigger the full-catalogue re-embed
+      through the new chunked pipeline — a scheduled, monitored operation (design.md
+      flags this as a real, possibly multi-hour-to-multi-day TEI cost, not a toggle).
+      Watch it drain via the existing `semantic_outbox` progress signals.
+- [ ] 8.4 Once the re-embed has made meaningful progress, build the HNSW index on
+      `job_semantic_chunks` on prod (Section 3.1) in a scheduled window.
 - [ ] 8.5 Deploy `cmd/similar-backfill`; run its initial full pass; verify
       coverage before flipping `/similar` live (Section 5).
 - [ ] 8.6 After `/similar` and `/recommendations` are verified on the new path:
