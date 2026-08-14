@@ -60,7 +60,7 @@ func TestSystemPromptIncludesRegionVocabulary(t *testing.T) {
 func TestSystemPromptOmitsDictBackedFacets(t *testing.T) {
 	p := buildSystemPrompt(true)
 	for _, f := range []string{
-		"work_mode", "seniority", "category", "skills",
+		"work_mode", "seniority", "category",
 		"employment_type", "education_level", "english_level",
 		"posting_language", "experience_years_min",
 	} {
@@ -82,7 +82,7 @@ func TestSystemPromptKeepsServedAndHybridFields(t *testing.T) {
 		"salary_min", "salary_max", "salary_currency", "salary_period",
 		"visa_sponsorship", "timezone_note",
 		"company_type", "company_size", "domains",
-		"relocation", "countries", "regions",
+		"relocation", "countries", "regions", "skills",
 	} {
 		if !strings.Contains(p, f) {
 			t.Errorf("prompt must still request served/hybrid field %q, got:\n%s", f, p)

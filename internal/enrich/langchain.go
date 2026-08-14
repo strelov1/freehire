@@ -131,7 +131,8 @@ func buildSystemPrompt(askGeo bool) string {
 		b.WriteString("countries (array of ISO 3166-1 alpha-2), ")
 	}
 	b.WriteString("cities (array of strings), timezone_note (string), ")
-	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217).\n")
+	b.WriteString("salary_min (int), salary_max (int), salary_currency (ISO 4217), ")
+	b.WriteString("skills (array of lowercase tokens, e.g. go, postgresql).\n")
 
 	// Salary guard: the model, told the field is an int, otherwise decimal-strips a
 	// fractional hourly rate ($26.08 -> 2608), inflating it 100x. A concrete
