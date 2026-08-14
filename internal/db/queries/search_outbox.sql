@@ -3,29 +3,54 @@
 -- transaction as the job's upsert, only when the write inserted or changed indexed
 -- content (mirrors the gate the old inline SubmitJobs push used). ON CONFLICT keeps
 -- exactly one live entry per job, so a job changed again before it drains is not
--- queued twice.
-INSERT INTO search_outbox (job_id)
-VALUES (sqlc.arg(job_id))
+-- queued twice. job_posted_at denormalizes COALESCE(posted_at, created_at) onto the
+-- outbox row so ClaimSearchOutboxBatch can sort by it without joining jobs on every
+-- claim (see that query's doc comment); the single-row subquery here costs nothing
+-- beyond the jobs PK lookup this call already implies.
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT sqlc.arg(job_id)::bigint, COALESCE(posted_at, created_at)
+FROM jobs
+WHERE id = sqlc.arg(job_id)
 ON CONFLICT (job_id) DO NOTHING;
 
 -- name: ClaimSearchOutboxBatch :many
 -- Claim a batch of live, unleased entries for OPEN canonical jobs, freshest job
--- first, by stamping claimed_at. Mirrors ClaimEnrichmentBatch: the jobs join lets the
--- claim skip a job that closed or became a non-canonical repost after it was queued
--- (that reconciles on the next full reindex, same as before this queue existed) and
--- order by posting freshness. FOR UPDATE OF o locks only outbox rows; SKIP LOCKED
--- lets concurrent workers take disjoint rows; the lease predicate reclaims entries
--- whose worker died (stale claimed_at), so no separate reaper process is needed.
+-- first, by stamping claimed_at.
+--
+-- Orders by the outbox's OWN job_posted_at (denormalized at enqueue time from
+-- COALESCE(jobs.posted_at, jobs.created_at) — see EnqueueSearchOutbox) rather than
+-- joining jobs to compute it. A join-for-ordering here means Postgres cannot push the
+-- LIMIT below the sort — it has to nested-loop-join and sort the ENTIRE claimable set
+-- before taking the batch, independent of batch_size. This is the exact pattern
+-- ClaimSemanticBatch was measured at 109s per claim call on ~906k claimable rows and
+-- fixed the same way (see openspec/changes/prod-semantic-embed-steady-state/design.md
+-- Decision 8, which flagged this query as carrying the identical, unaddressed risk).
+--
+-- The closed/duplicate_of check stays a per-row EXISTS rather than a JOIN: with the
+-- job_posted_at index in place, Postgres can index-scan search_outbox in the exact
+-- claim order and stop as soon as LIMIT rows pass the EXISTS lookup (a cheap jobs PK
+-- probe), instead of materializing and sorting every claimable row up front. A job
+-- that closed or became a non-canonical repost after being queued is simply skipped —
+-- same behavior as before, just reached via an index scan instead of a full join.
+-- NULLS LAST is defensive (EnqueueSearchOutbox always populates the column; this only
+-- guards a row that predates the backfill migration).
+--
+-- FOR UPDATE OF o locks only outbox rows; SKIP LOCKED lets concurrent workers take
+-- disjoint rows; the lease predicate reclaims entries whose worker died (stale
+-- claimed_at), so no separate reaper process is needed.
 WITH claimable AS (
-    SELECT o.id
+    SELECT o.id, o.job_id
     FROM search_outbox o
-    JOIN jobs j ON j.id = o.job_id
     WHERE o.failed_at IS NULL
       AND (o.claimed_at IS NULL
            OR o.claimed_at < now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
-      AND j.closed_at IS NULL
-      AND j.duplicate_of IS NULL
-    ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
+      AND EXISTS (
+          SELECT 1 FROM jobs j
+          WHERE j.id = o.job_id
+            AND j.closed_at IS NULL
+            AND j.duplicate_of IS NULL
+      )
+    ORDER BY o.job_posted_at DESC NULLS LAST, o.job_id DESC
     FOR UPDATE OF o SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
 )

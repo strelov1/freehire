@@ -136,6 +136,159 @@ func TestDeleteSearchOutboxCreatedBefore_SurvivesRepeatChangeUnderConflictDoNoth
 	}
 }
 
+// TestEnqueueSearchOutboxDenormalizesJobPostedAt covers the fix for ClaimSearchOutboxBatch's
+// join-for-ordering cost (see that query's doc comment): EnqueueSearchOutbox must stamp
+// job_posted_at from COALESCE(jobs.posted_at, jobs.created_at) at enqueue time so the claim
+// query can sort without joining jobs.
+func TestEnqueueSearchOutboxDenormalizesJobPostedAt(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	withPostedAt := ingestParams("acme:posted", "Has PostedAt")
+	postedAt := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+	withPostedAt.PostedAt = pgtype.Timestamptz{Time: postedAt, Valid: true}
+	job, err := ingestUpsert(ctx, q, withPostedAt)
+	if err != nil {
+		t.Fatalf("upsert job: %v", err)
+	}
+	if err := q.EnqueueSearchOutbox(ctx, job.ID); err != nil {
+		t.Fatalf("enqueue job: %v", err)
+	}
+
+	got := jobPostedAtOf(ctx, t, pool, job.ID)
+	if !got.Valid || !got.Time.Equal(postedAt) {
+		t.Fatalf("job_posted_at = %+v, want %v", got, postedAt)
+	}
+
+	// No posted_at at all: falls back to jobs.created_at, mirroring the query's COALESCE.
+	noPostedAt, err := ingestUpsert(ctx, q, ingestParams("acme:no-posted", "No PostedAt"))
+	if err != nil {
+		t.Fatalf("upsert job without posted_at: %v", err)
+	}
+	if err := q.EnqueueSearchOutbox(ctx, noPostedAt.ID); err != nil {
+		t.Fatalf("enqueue job without posted_at: %v", err)
+	}
+	got = jobPostedAtOf(ctx, t, pool, noPostedAt.ID)
+	if !got.Valid || !got.Time.Equal(noPostedAt.CreatedAt.Time) {
+		t.Fatalf("job_posted_at = %+v, want fallback to created_at %v", got, noPostedAt.CreatedAt)
+	}
+}
+
+// TestClaimSearchOutboxBatchOrdersByJobPostedAtAndSkipsClosedOrDuplicate covers
+// ClaimSearchOutboxBatch's two load-bearing properties after moving the sort onto the
+// outbox's own denormalized job_posted_at column: it still returns freshest-job-first, and
+// it still skips (without claiming) a job that closed or became a non-canonical repost
+// after being queued — the same behavior the old jobs-join version had, now reached via an
+// index scan plus a per-row EXISTS check instead of a join-then-sort.
+func TestClaimSearchOutboxBatchOrdersByJobPostedAtAndSkipsClosedOrDuplicate(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	older, err := ingestUpsert(ctx, q, ingestParams("acme:older", "Older"))
+	if err != nil {
+		t.Fatalf("upsert older: %v", err)
+	}
+	newer, err := ingestUpsert(ctx, q, ingestParams("acme:newer", "Newer"))
+	if err != nil {
+		t.Fatalf("upsert newer: %v", err)
+	}
+	closedJob, err := ingestUpsert(ctx, q, ingestParams("acme:closed", "Closed"))
+	if err != nil {
+		t.Fatalf("upsert closed: %v", err)
+	}
+	canon, err := ingestUpsert(ctx, q, ingestParams("acme:canon", "Canon"))
+	if err != nil {
+		t.Fatalf("upsert canon: %v", err)
+	}
+	repost, err := ingestUpsert(ctx, q, ingestParams("acme:repost", "Repost"))
+	if err != nil {
+		t.Fatalf("upsert repost: %v", err)
+	}
+
+	for _, id := range []int64{older.ID, newer.ID, closedJob.ID, canon.ID, repost.ID} {
+		if err := q.EnqueueSearchOutbox(ctx, id); err != nil {
+			t.Fatalf("enqueue job %d: %v", id, err)
+		}
+	}
+
+	// Order the three live, open, canonical entries by job_posted_at.
+	olderAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	canonAt := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
+	newerAt := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := pool.Exec(ctx, `UPDATE search_outbox SET job_posted_at = $1 WHERE job_id = $2`, olderAt, older.ID); err != nil {
+		t.Fatalf("pin older job_posted_at: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE search_outbox SET job_posted_at = $1 WHERE job_id = $2`, canonAt, canon.ID); err != nil {
+		t.Fatalf("pin canon job_posted_at: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE search_outbox SET job_posted_at = $1 WHERE job_id = $2`, newerAt, newer.ID); err != nil {
+		t.Fatalf("pin newer job_posted_at: %v", err)
+	}
+
+	// closedJob's outbox entry stays queued, but the job itself is now closed.
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closedJob.ID); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+	// repost's outbox entry stays queued, but the job itself became a non-canonical
+	// repost of canon after being enqueued.
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
+		t.Fatalf("mark repost as duplicate: %v", err)
+	}
+
+	// BatchSize smaller than the claimable set (older/canon/newer) so the ordering
+	// actually determines which entries make the cut, not just which get excluded.
+	rows, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 180, BatchSize: 2})
+	if err != nil {
+		t.Fatalf("ClaimSearchOutboxBatch: %v", err)
+	}
+
+	var claimedJobIDs []int64
+	for _, r := range rows {
+		claimedJobIDs = append(claimedJobIDs, r.JobID)
+	}
+	want := []int64{newer.ID, canon.ID}
+	if len(claimedJobIDs) != 2 {
+		t.Fatalf("claimed job_ids = %v, want exactly 2 entries (newer and canon)", claimedJobIDs)
+	}
+	if containsInt64(claimedJobIDs, closedJob.ID) {
+		t.Fatalf("claimed job_ids = %v, want closed job %d excluded", claimedJobIDs, closedJob.ID)
+	}
+	if containsInt64(claimedJobIDs, repost.ID) {
+		t.Fatalf("claimed job_ids = %v, want non-canonical repost %d excluded", claimedJobIDs, repost.ID)
+	}
+	if !containsInt64(claimedJobIDs, newer.ID) || !containsInt64(claimedJobIDs, canon.ID) {
+		t.Fatalf("claimed job_ids = %v, want %v", claimedJobIDs, want)
+	}
+	if containsInt64(claimedJobIDs, older.ID) {
+		t.Fatalf("claimed job_ids = %v, want older job %d NOT claimed (batch is full before it sorts in)", claimedJobIDs, older.ID)
+	}
+
+	// The two skipped entries (closed, repost) remain unclaimed — claimed_at stays NULL —
+	// so a later reconciliation (a full reindex) is what clears them, not this claim.
+	for _, id := range []int64{closedJob.ID, repost.ID} {
+		var claimedAt pgtype.Timestamptz
+		if err := pool.QueryRow(ctx, `SELECT claimed_at FROM search_outbox WHERE job_id = $1`, id).Scan(&claimedAt); err != nil {
+			t.Fatalf("query claimed_at for job %d: %v", id, err)
+		}
+		if claimedAt.Valid {
+			t.Fatalf("job %d's outbox entry was claimed, want it left unclaimed", id)
+		}
+	}
+}
+
+func jobPostedAtOf(ctx context.Context, t *testing.T, pool *pgxpool.Pool, jobID int64) pgtype.Timestamptz {
+	t.Helper()
+	var v pgtype.Timestamptz
+	if err := pool.QueryRow(ctx, `SELECT job_posted_at FROM search_outbox WHERE job_id = $1`, jobID).Scan(&v); err != nil {
+		t.Fatalf("query job_posted_at for job %d: %v", jobID, err)
+	}
+	return v
+}
+
 func remainingOutboxJobIDs(ctx context.Context, t *testing.T, pool *pgxpool.Pool) []int64 {
 	t.Helper()
 	rows, err := pool.Query(ctx, `SELECT job_id FROM search_outbox ORDER BY job_id`)
