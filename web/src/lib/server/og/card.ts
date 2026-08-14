@@ -17,6 +17,7 @@ import { OG_HEIGHT, OG_WIDTH, brandFooter, chipMarkup, esc, logoBox, type Chip }
 
 const SKILL_LIMIT = 3;
 const LOGO_SIZE = 96;
+const TITLE_LINE_CLAMP = 3;
 
 /** Title font size shrinks as the title grows; a 3-line clamp catches the rest. */
 function titleFontSize(title: string): number {
@@ -59,7 +60,7 @@ export function buildCard(job: Job, opts: { logo: string | null }): string {
     ${logoBox(opts.logo, job.company, LOGO_SIZE)}
     <div style="display:flex;font-size:28px;font-weight:600;color:#404040;overflow:hidden">${esc(job.company)}</div>
   </div>
-  <div style="display:flex;font-size:${titleSize}px;font-weight:700;letter-spacing:-0.03em;line-height:1.05;overflow:hidden">${esc(job.title)}</div>
+  <div style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:${TITLE_LINE_CLAMP};text-overflow:ellipsis;overflow:hidden;font-size:${titleSize}px;font-weight:700;letter-spacing:-0.03em;line-height:1.05">${esc(job.title)}</div>
   <div style="display:flex;flex-wrap:wrap;gap:12px">${chipRow}</div>
   ${brandFooter()}
 </div>`.trim();
