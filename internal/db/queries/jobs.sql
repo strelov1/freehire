@@ -254,6 +254,7 @@ INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
+    salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
     content_hash, role_fingerprint
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
@@ -263,6 +264,7 @@ INSERT INTO jobs (
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
+    sqlc.arg(salary_min_source), sqlc.arg(salary_max_source), sqlc.arg(salary_currency_source), sqlc.arg(salary_period_source),
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint)
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
@@ -299,6 +301,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     education_level      = EXCLUDED.education_level,
     english_level        = EXCLUDED.english_level,
     experience_years_min = EXCLUDED.experience_years_min,
+    salary_min_source      = EXCLUDED.salary_min_source,
+    salary_max_source      = EXCLUDED.salary_max_source,
+    salary_currency_source = EXCLUDED.salary_currency_source,
+    salary_period_source   = EXCLUDED.salary_period_source,
     content_hash = EXCLUDED.content_hash,
     -- role_fingerprint is the repost-identity (internal/jobhash.RoleFingerprint):
     -- refreshed on re-ingest so a title/description edit re-clusters the role.
@@ -337,13 +343,17 @@ RETURNING sqlc.embed(jobs),
 -- and cmd/reindex has no --since flag despite what its comment says), because a column stamped
 -- on every crawl selects the whole catalogue and answers nothing.
 --
--- The match key is (content_hash, cities), not the hash alone. cities is the one column the
--- upsert writes that jobhash.Of does not read — a caller's structured city list overrides the
--- location-derived one, so it can move while every hashed field stands still. Folding it into
--- the hash instead would change every stored content_hash at once and make the first crawl after
--- deploy rewrite and re-index the whole catalogue. Whether the key still covers every written
--- column is enforced by TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites
--- (internal/job); add a derived column outside the hash and it fails there.
+-- The match key is (content_hash, cities, salary_*_source), not the hash alone. cities and the
+-- four salary_*_source columns are what the upsert writes that jobhash.Of does not read — a
+-- caller's structured city list overrides the location-derived one, and a structured salary
+-- (Lever/Ashby/Recruitee) is a base fact, not something Of hashes, so either can move while
+-- every hashed field stands still. Folding them into the hash instead would change every stored
+-- content_hash at once and make the first crawl after deploy rewrite and re-index the whole
+-- catalogue. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
+-- (both NULL) still match — a plain = would push every non-salary-bearing source off the cheap
+-- path forever. Whether the key still covers every written column is enforced by
+-- TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
+-- column outside the hash and it fails there.
 --
 -- A NULL stored content_hash (a legacy row predating the column) compares unequal and so takes
 -- the full path, which is right: nothing is known about what it holds.
@@ -367,6 +377,10 @@ WHERE source = sqlc.arg(source)
   AND external_id = sqlc.arg(external_id)
   AND content_hash = sqlc.arg(content_hash)
   AND cities = COALESCE(sqlc.arg(cities)::text[], '{}')
+  AND salary_min_source IS NOT DISTINCT FROM sqlc.arg(salary_min_source)
+  AND salary_max_source IS NOT DISTINCT FROM sqlc.arg(salary_max_source)
+  AND salary_currency_source = sqlc.arg(salary_currency_source)
+  AND salary_period_source = sqlc.arg(salary_period_source)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of;
 
@@ -1205,22 +1219,39 @@ ON CONFLICT (job_id, target_version) DO NOTHING;
 -- Targeted enrichment write used by the enrichment command: set only the payload
 -- and the provenance stamp, touching no raw source field. Kept separate from
 -- UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
--- An authoritative manual salary (a recruiter/moderator stated it by hand, recorded in
--- the salary_*_manual columns) is coalesced OVER the incoming payload's salary, so the
--- LLM can compute its own figure but never displaces the stated one — the manual keys
--- win via jsonb `||`, and jsonb_strip_nulls drops an unstated bound so it does not blank
--- the payload's. The overlay only fires when a bound is set (the presence signal).
+-- Two salary overlays chain over the incoming LLM payload via jsonb `||` (later wins),
+-- so the effective precedence is manual > source > LLM-guessed:
+--   1. salary_*_source: the ATS's own structured salary (Lever/Ashby/Recruitee — see
+--      migration 0093). The LLM can still compute its own figure for a job without one,
+--      but a structured value is never worse than a guess, so it wins when present.
+--   2. salary_*_manual: an authoritative manual salary a recruiter/moderator stated by
+--      hand (migration 0031) — wins over both, since a human confirmed it.
+-- jsonb_strip_nulls drops an unstated bound so an overlay firing on just one of
+-- min/max does not blank the other's payload value; each overlay only fires at all
+-- when at least one of its own bounds is set (the presence signal).
 UPDATE jobs
-SET enrichment         = CASE
-        WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL
-        THEN sqlc.arg(enrichment)::jsonb || jsonb_strip_nulls(jsonb_build_object(
-            'salary_min', salary_min_manual,
-            'salary_max', salary_max_manual,
-            'salary_currency', NULLIF(salary_currency_manual, ''),
-            'salary_period', NULLIF(salary_period_manual, '')
-        ))
-        ELSE sqlc.arg(enrichment)::jsonb
-    END,
+SET enrichment         =
+        sqlc.arg(enrichment)::jsonb
+        || CASE
+            WHEN salary_min_source IS NOT NULL OR salary_max_source IS NOT NULL
+            THEN jsonb_strip_nulls(jsonb_build_object(
+                'salary_min', salary_min_source,
+                'salary_max', salary_max_source,
+                'salary_currency', NULLIF(salary_currency_source, ''),
+                'salary_period', NULLIF(salary_period_source, '')
+            ))
+            ELSE '{}'::jsonb
+        END
+        || CASE
+            WHEN salary_min_manual IS NOT NULL OR salary_max_manual IS NOT NULL
+            THEN jsonb_strip_nulls(jsonb_build_object(
+                'salary_min', salary_min_manual,
+                'salary_max', salary_max_manual,
+                'salary_currency', NULLIF(salary_currency_manual, ''),
+                'salary_period', NULLIF(salary_period_manual, '')
+            ))
+            ELSE '{}'::jsonb
+        END,
     enriched_at        = sqlc.arg(enriched_at),
     enrichment_version = sqlc.arg(enrichment_version),
     updated_at         = now()

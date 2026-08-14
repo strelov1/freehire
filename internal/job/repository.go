@@ -78,6 +78,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		ExperienceYearsMin: int4Ptr(r.ExperienceYearsMin),
 
 		ManualSalary: manualSalaryFromRow(r),
+		SourceSalary: sourceSalaryFromRow(r),
 
 		ClosedAt:          tsPtr(r.ClosedAt),
 		EnrichmentVersion: r.EnrichmentVersion,
@@ -116,6 +117,18 @@ func manualSalaryFromRow(r db.Job) *Salary {
 		Max:      int4Ptr(r.SalaryMaxManual),
 		Currency: r.SalaryCurrencyManual,
 		Period:   r.SalaryPeriodManual,
+	}
+}
+
+func sourceSalaryFromRow(r db.Job) *Salary {
+	if !r.SalaryMinSource.Valid && !r.SalaryMaxSource.Valid {
+		return nil
+	}
+	return &Salary{
+		Min:      int4Ptr(r.SalaryMinSource),
+		Max:      int4Ptr(r.SalaryMaxSource),
+		Currency: r.SalaryCurrencySource,
+		Period:   r.SalaryPeriodSource,
 	}
 }
 

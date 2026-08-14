@@ -8,6 +8,15 @@ import (
 	"github.com/strelov1/freehire/internal/applyform"
 )
 
+// recruiteeSalary is Recruitee's salary object — every field is present but null when
+// unstated, confirmed live 2026-08-14. min/max are JSON strings, not numbers.
+type recruiteeSalary struct {
+	Min      *string `json:"min"`
+	Max      *string `json:"max"`
+	Period   *string `json:"period"`
+	Currency *string `json:"currency"`
+}
+
 // recruiteeBaseURL templates the Recruitee public offers API; each board is its own
 // subdomain.
 const recruiteeBaseURL = "https://%s.recruitee.com/api/offers/"
@@ -29,15 +38,16 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 
 	var resp struct {
 		Offers []struct {
-			ID           int64  `json:"id"`
-			Title        string `json:"title"`
-			CareersURL   string `json:"careers_url"`
-			Location     string `json:"location"`
-			CreatedAt    string `json:"created_at"`
-			Remote       bool   `json:"remote"`
-			Hybrid       bool   `json:"hybrid"`
-			Description  string `json:"description"`
-			Requirements string `json:"requirements"`
+			ID           int64           `json:"id"`
+			Title        string          `json:"title"`
+			CareersURL   string          `json:"careers_url"`
+			Location     string          `json:"location"`
+			CreatedAt    string          `json:"created_at"`
+			Remote       bool            `json:"remote"`
+			Hybrid       bool            `json:"hybrid"`
+			Description  string          `json:"description"`
+			Requirements string          `json:"requirements"`
+			Salary       recruiteeSalary `json:"salary"`
 			// The same listing also describes the application form, which is why
 			// Recruitee is the one provider whose form costs nothing to capture.
 			applyform.RecruiteeOffer
@@ -51,7 +61,7 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	for _, o := range resp.Offers {
 		form := applyform.FromRecruitee(o.RecruiteeOffer)
 		// Recruitee splits the body across separate description and requirements HTML.
-		jobs = append(jobs, Job{
+		job := Job{
 			ApplyForm:   &form,
 			ExternalID:  strconv.FormatInt(o.ID, 10),
 			URL:         o.CareersURL,
@@ -62,7 +72,32 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Remote:      o.Remote,
 			WorkMode:    workModeFromRemoteHybrid(o.Remote, o.Hybrid),
 			PostedAt:    parseSpaceTime(o.CreatedAt),
-		})
+		}
+		if o.Salary.Period != nil && isSalaryPeriod(*o.Salary.Period) {
+			min, max := recruiteeSalaryPart(o.Salary.Min), recruiteeSalaryPart(o.Salary.Max)
+			if min != nil || max != nil {
+				job.SalaryMin, job.SalaryMax = min, max
+				job.SalaryPeriod = *o.Salary.Period
+				if o.Salary.Currency != nil {
+					job.SalaryCurrency = *o.Salary.Currency
+				}
+			}
+		}
+		jobs = append(jobs, job)
 	}
 	return jobs, nil
+}
+
+// recruiteeSalaryPart parses one salary bound — a JSON string, not a number, on
+// Recruitee's API — into freehire's rounded integer form. nil/unparseable reports
+// absent rather than a guess.
+func recruiteeSalaryPart(s *string) *int {
+	if s == nil {
+		return nil
+	}
+	v, err := strconv.ParseFloat(*s, 64)
+	if err != nil {
+		return nil
+	}
+	return roundSalaryPart(v)
 }

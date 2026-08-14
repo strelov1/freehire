@@ -66,6 +66,17 @@ type Job struct {
 	// pipeline's location dictionary derives it instead — the same fallback WorkMode
 	// and the other structured facets already follow.
 	Countries []string
+	// SalaryMin/SalaryMax/SalaryCurrency/SalaryPeriod mirror the same structured-only
+	// contract for compensation: an adapter sets them only when the platform states a
+	// salary in its own STRUCTURED field (e.g. Lever's salaryRange, Ashby's
+	// compensationTiers, Recruitee's salary), currency as ISO 4217 and period as one of
+	// vocab.SalaryPeriodValues ("year"/"month"/"day"/"hour"), never inferred from the
+	// description. Left nil/empty otherwise, so the enrichment pass's own LLM-derived
+	// guess decides — the pipeline gives a set value precedence over that guess.
+	SalaryMin      *int
+	SalaryMax      *int
+	SalaryCurrency string
+	SalaryPeriod   string
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged
 	// removed in JobStream's incremental feed). A streaming, self-closing source emits
 	// these so the pipeline closes the job by identity instead of upserting it; all other

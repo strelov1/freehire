@@ -2584,13 +2584,17 @@ type Querier interface {
 	// and cmd/reindex has no --since flag despite what its comment says), because a column stamped
 	// on every crawl selects the whole catalogue and answers nothing.
 	//
-	// The match key is (content_hash, cities), not the hash alone. cities is the one column the
-	// upsert writes that jobhash.Of does not read — a caller's structured city list overrides the
-	// location-derived one, so it can move while every hashed field stands still. Folding it into
-	// the hash instead would change every stored content_hash at once and make the first crawl after
-	// deploy rewrite and re-index the whole catalogue. Whether the key still covers every written
-	// column is enforced by TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites
-	// (internal/job); add a derived column outside the hash and it fails there.
+	// The match key is (content_hash, cities, salary_*_source), not the hash alone. cities and the
+	// four salary_*_source columns are what the upsert writes that jobhash.Of does not read — a
+	// caller's structured city list overrides the location-derived one, and a structured salary
+	// (Lever/Ashby/Recruitee) is a base fact, not something Of hashes, so either can move while
+	// every hashed field stands still. Folding them into the hash instead would change every stored
+	// content_hash at once and make the first crawl after deploy rewrite and re-index the whole
+	// catalogue. IS NOT DISTINCT FROM (not =) on the nullable salary bounds so two sourceless jobs
+	// (both NULL) still match — a plain = would push every non-salary-bearing source off the cheap
+	// path forever. Whether the key still covers every written column is enforced by
+	// TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites (internal/job); add a derived
+	// column outside the hash and it fails there.
 	//
 	// A NULL stored content_hash (a legacy row predating the column) compares unequal and so takes
 	// the full path, which is right: nothing is known about what it holds.
@@ -2833,11 +2837,16 @@ type Querier interface {
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
-	// An authoritative manual salary (a recruiter/moderator stated it by hand, recorded in
-	// the salary_*_manual columns) is coalesced OVER the incoming payload's salary, so the
-	// LLM can compute its own figure but never displaces the stated one — the manual keys
-	// win via jsonb `||`, and jsonb_strip_nulls drops an unstated bound so it does not blank
-	// the payload's. The overlay only fires when a bound is set (the presence signal).
+	// Two salary overlays chain over the incoming LLM payload via jsonb `||` (later wins),
+	// so the effective precedence is manual > source > LLM-guessed:
+	//   1. salary_*_source: the ATS's own structured salary (Lever/Ashby/Recruitee — see
+	//      migration 0093). The LLM can still compute its own figure for a job without one,
+	//      but a structured value is never worse than a guess, so it wins when present.
+	//   2. salary_*_manual: an authoritative manual salary a recruiter/moderator stated by
+	//      hand (migration 0031) — wins over both, since a human confirmed it.
+	// jsonb_strip_nulls drops an unstated bound so an overlay firing on just one of
+	// min/max does not blank the other's payload value; each overlay only fires at all
+	// when at least one of its own bounds is set (the presence signal).
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
 	// Publish a saved search as a board: set its public slug and (optional) author label,
 	// owner-scoped, bumping updated_at. The service decides the slug (keeping an existing

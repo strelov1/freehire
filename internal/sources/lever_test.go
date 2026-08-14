@@ -186,6 +186,66 @@ func TestLeverFetchDefaultsToGlobalHost(t *testing.T) {
 	}
 }
 
+// Live-verified (2026-08-14): jobs.lever.co/binance carries exactly this shape for a
+// SGD/month posting.
+func TestLeverFetchReadsSalaryRange(t *testing.T) {
+	fake := &fakeHTTP{body: `[
+		{
+			"id": "abc-123",
+			"text": "AI-powered Platform Engineer",
+			"categories": {"location": "Remote"},
+			"salaryRange": {"min": 3000, "max": 10000, "currency": "SGD", "interval": "per-month-salary"}
+		}
+	]`}
+	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Company: "Binance", Provider: "lever", Board: "binance"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j := jobs[0]
+	if j.SalaryMin == nil || *j.SalaryMin != 3000 {
+		t.Errorf("SalaryMin = %v, want 3000", j.SalaryMin)
+	}
+	if j.SalaryMax == nil || *j.SalaryMax != 10000 {
+		t.Errorf("SalaryMax = %v, want 10000", j.SalaryMax)
+	}
+	if j.SalaryCurrency != "SGD" || j.SalaryPeriod != "month" {
+		t.Errorf("SalaryCurrency/SalaryPeriod = %q/%q, want SGD/month", j.SalaryCurrency, j.SalaryPeriod)
+	}
+}
+
+func TestLeverFetchIgnoresNonWageSalaryRange(t *testing.T) {
+	// "one-time" (a signing bonus/stipend) isn't a recurring wage, and an all-zero range
+	// is the shape Lever emits for "not set" — neither should produce a salary.
+	fake := &fakeHTTP{body: `[
+		{"id": "1", "text": "A", "salaryRange": {"min": 500, "max": 500, "currency": "USD", "interval": "one-time"}},
+		{"id": "2", "text": "B", "salaryRange": {"min": 0, "max": 0, "currency": "CAD", "interval": "per-year-salary"}}
+	]`}
+	jobs, err := NewLever(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "lever", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	for _, j := range jobs {
+		if j.SalaryMin != nil || j.SalaryMax != nil {
+			t.Errorf("%s: SalaryMin/Max = %v/%v, want both nil", j.Title, j.SalaryMin, j.SalaryMax)
+		}
+	}
+}
+
+func TestLeverSalaryPeriod(t *testing.T) {
+	cases := map[string]string{
+		"per-year-salary":  "year",
+		"per-month-salary": "month",
+		"per-hour-wage":    "hour",
+		"one-time":         "",
+		"unknown":          "",
+	}
+	for interval, want := range cases {
+		if got := leverSalaryPeriod(interval); got != want {
+			t.Errorf("leverSalaryPeriod(%q) = %q, want %q", interval, got, want)
+		}
+	}
+}
+
 func TestLeverFetchEURegionUsesEUHost(t *testing.T) {
 	// region: eu selects Lever's EU data-residency host (e.g. XM, Silverfin live there;
 	// their boards 404 on the default host).

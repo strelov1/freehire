@@ -166,3 +166,68 @@ func TestAshbyFetchNoAddressLeavesCountriesEmpty(t *testing.T) {
 		t.Errorf("Countries = %v, want nil", got)
 	}
 }
+
+func TestAshbyFetchRequestsCompensation(t *testing.T) {
+	fake := &fakeHTTP{body: `{"jobs": []}`}
+	if _, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"}); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if !strings.Contains(fake.gotURL, "includeCompensation=true") {
+		t.Errorf("requested URL %q should include includeCompensation=true — omitted, the API drops the field entirely", fake.gotURL)
+	}
+}
+
+// Live-verified (2026-08-14): a real OpenAI posting carries exactly this shape — a
+// Salary component alongside an EquityCashValue one, which must be ignored.
+func TestAshbyFetchReadsSalaryComponent(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"jobs": [{
+			"id": "1", "title": "Research Engineer",
+			"compensation": {
+				"compensationTiers": [{
+					"components": [
+						{"compensationType": "Salary", "interval": "1 YEAR", "currencyCode": "USD", "minValue": 257000, "maxValue": 335000},
+						{"compensationType": "EquityCashValue", "interval": "1 YEAR", "currencyCode": "USD", "minValue": null, "maxValue": null}
+					]
+				}]
+			}
+		}]
+	}`}
+	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "OpenAI", Provider: "ashby", Board: "openai"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	j := jobs[0]
+	if j.SalaryMin == nil || *j.SalaryMin != 257000 {
+		t.Errorf("SalaryMin = %v, want 257000", j.SalaryMin)
+	}
+	if j.SalaryMax == nil || *j.SalaryMax != 335000 {
+		t.Errorf("SalaryMax = %v, want 335000", j.SalaryMax)
+	}
+	if j.SalaryCurrency != "USD" || j.SalaryPeriod != "year" {
+		t.Errorf("SalaryCurrency/SalaryPeriod = %q/%q, want USD/year", j.SalaryCurrency, j.SalaryPeriod)
+	}
+}
+
+func TestAshbyFetchIgnoresNonSalaryComponents(t *testing.T) {
+	fake := &fakeHTTP{body: `{
+		"jobs": [{
+			"id": "1", "title": "Sales Rep",
+			"compensation": {
+				"compensationTiers": [{
+					"components": [
+						{"compensationType": "Commission", "interval": "1 YEAR", "currencyCode": "USD", "minValue": null, "maxValue": null},
+						{"compensationType": "Bonus", "interval": "1 YEAR", "currencyCode": "USD", "minValue": null, "maxValue": null}
+					]
+				}]
+			}
+		}]
+	}`}
+	jobs, err := NewAshby(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Provider: "ashby", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if j := jobs[0]; j.SalaryMin != nil || j.SalaryMax != nil {
+		t.Errorf("SalaryMin/Max = %v/%v, want both nil (no Salary-typed component present)", j.SalaryMin, j.SalaryMax)
+	}
+}
