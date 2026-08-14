@@ -115,10 +115,12 @@ func (e *Enrichment) servedScalarEnums() []scalarEnum {
 // pass — every field is optional. Non-enum fields (ISO codes, free text, numbers,
 // skills) are unconstrained here. The dictionary-covered facets (work_mode,
 // seniority, category, regions, employment_type, education_level, english_level,
-// plus the non-enum countries/skills) are deliberately NOT validated: they are served from
+// plus the non-enum countries) are deliberately NOT validated: they are served from
 // the deterministic dictionaries (dict-only), so the LLM's values for them are
 // unserved discovery material and an out-of-vocabulary value is captured raw
-// rather than rejected.
+// rather than rejected. skills is requested from the LLM too (restore-skills-discovery)
+// but is likewise never validated — it has no closed vocabulary to check against, so
+// whatever the model returns is captured raw, same as countries/regions.
 func (e Enrichment) Validate() error {
 	// Single-value SERVED enum fields. Value receiver, so take the address of the
 	// local copy to reuse the shared field set.
