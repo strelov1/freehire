@@ -392,6 +392,16 @@
   // every later address change, which is Forward appearing to do nothing.
   async function openSession(id: string, fromAddress = false) {
     if (activeId === id && chat.messages.length > 0) return;
+    // A message typed while the current turn was streaming sits in `queue`, waiting
+    // for the turn to finish so endTurn() can drain it — cancelTurn() below stops the
+    // turn but never drains the queue, so switching here would otherwise wipe out
+    // whatever the user just typed with no trace and no way back.
+    if (
+      queue.length > 0 &&
+      !confirm('You have an unsent message waiting in this chat. Switch chats and discard it?')
+    ) {
+      return;
+    }
     switching = true;
     cancelTurn();
     // Navigating away from a session must end its call rather than silently carry it
