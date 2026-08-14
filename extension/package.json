@@ -2,7 +2,7 @@
   "name": "freehire-extension",
   "description": "Browser extension: a job-application agent side panel, on any page.",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",

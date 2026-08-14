@@ -235,6 +235,16 @@ new provider before any code.
 A Svelte SPA lives under `web/` and consumes the API (same-origin; a dev Vite
 proxy forwards `/api` to the backend).
 
+## Browser extension
+
+A Chrome extension puts the job-application agent in a side panel next to
+whatever posting you're on: it reads the page when you ask it something, shows
+a deterministic skill-coverage match against your freehire profile, and can
+fill the application form for you. Source lives under `extension/`
+([extension/AGENTS.md](extension/AGENTS.md)).
+
+**[Install it from the Chrome Web Store →](https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj?hl=en-US&utm_source=ext_sidebar)**
+
 ## Contributing
 
 **Contributions are welcome, and issues and PRs are open to everyone.** No
