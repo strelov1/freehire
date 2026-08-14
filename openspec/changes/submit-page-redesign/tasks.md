@@ -1,15 +1,15 @@
 ## 1. Employment type & seniority — schema and backend wiring
 
-- [ ] 1.1 Add migration `job_submissions.employment_type text DEFAULT '' NOT NULL` and
+- [x] 1.1 Add migration `job_submissions.employment_type text DEFAULT '' NOT NULL` and
       `.seniority text DEFAULT '' NOT NULL` (next migration number after the current
       highest in `migrations/`), mirroring `migrations/0031_submit_structured_facets.sql`.
-- [ ] 1.2 Add `EmploymentType`/`Seniority` to `createJobRequest`
+- [x] 1.2 Add `EmploymentType`/`Seniority` to `createJobRequest`
       (`internal/handler/jobs_moderation.go`) and thread them through `toCreateInput()`.
-- [ ] 1.3 Add `EmploymentType`/`Seniority` to `moderation.CreateInput`, validate both in
+- [x] 1.3 Add `EmploymentType`/`Seniority` to `moderation.CreateInput`, validate both in
       `CreateInput.structured()` via the existing `validEnum` helper against
       `vocab.EmploymentTypeValues`/`vocab.SeniorityValues`, and pass them into
       `jobderive.Input` inside `derive()`.
-- [ ] 1.4 Persist the submitted `employment_type`/`seniority` onto the `job_submissions`
+- [x] 1.4 Persist the submitted `employment_type`/`seniority` onto the `job_submissions`
       row and echo them back on the submission response, matching the existing
       `work_mode`/`regions` echo behavior.
 
