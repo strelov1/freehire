@@ -18,8 +18,10 @@ overrides:
   # arbitrary local .map files. Pulled in transitively by vite/eslint-plugin-svelte.
   postcss@<8.5.23: 8.5.23
   # GHSA-qrpm-p2h7-hrv2: nanoid's custom-alphabet generator can loop forever
-  # when passed size 0. Pulled in transitively by postcss.
-  nanoid@<3.3.17: 3.3.17
+  # when passed size 0. Pulled in transitively by postcss. 3.3.17 (the prior
+  # pin) turned out not to fully close it — the advisory's fixed version is
+  # 3.3.18.
+  nanoid@<3.3.18: 3.3.18
   # GHSA-jjrf-c9pj-88w6: DOMPurify's IN_PLACE hook path leaves a detached DOM
   # subtree with executable content, allowing XSS despite sanitization.
   # isomorphic-dompurify is used directly for XSS sanitization in this app.
