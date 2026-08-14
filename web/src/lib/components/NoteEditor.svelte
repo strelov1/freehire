@@ -51,20 +51,25 @@
     onsave(current);
   };
 
-  // Live-syncs an externally-driven value change (e.g. the submit form's URL
-  // prefill) into an already-constructed editor — no remount needed. A remount
-  // (JobDrawer's old per-job {#key} pattern; the submit form's own resetForm still
-  // uses one) risks racing EasyMDE's async init if it lands too soon after mount,
-  // leaving an orphaned DOM node behind. Guarded against a no-op: persist() already
-  // writes `value` back to what the editor holds on blur, and re-applying an
-  // identical value would reset the cursor/undo history for nothing. Before the
-  // editor exists (its async import still in flight) this is a no-op — construction
-  // below reads `value` fresh at that point, so the pending mount picks up whatever
-  // value ends up current by the time it resolves.
+  // Live-syncs an externally-driven value change (e.g. the submit form's URL prefill
+  // or its post-submit reset) into an already-constructed editor — no remount needed.
+  // A remount (JobDrawer's per-job {#key}, still the right tool there — it is a
+  // genuinely different note, not an update to this one) risks racing EasyMDE's own
+  // async init if it lands too soon after mount, leaving an orphaned DOM node behind;
+  // that is exactly what forcing one for every value change here used to do.
+  // Guarded against a no-op: persist() already writes `value` back to what the editor
+  // holds on blur, and re-applying an identical value would reset the cursor/undo
+  // history for nothing. Before the editor exists (its async import still in flight)
+  // this is a no-op — construction below reads `value` fresh at that point, so the
+  // pending mount picks up whatever value ends up current by the time it resolves.
   $effect(() => {
-    if (editor && value !== editor.value()) {
-      editor.value(value);
-      lastSaved = value;
+    // Read unconditionally, before the `editor` check — a short-circuited `value`
+    // read (skipped while `editor` is still undefined) would never register as this
+    // effect's dependency, and it would then never re-run once `editor` exists.
+    const v = value;
+    if (editor && v !== editor.value()) {
+      editor.value(v);
+      lastSaved = v;
     }
   });
 

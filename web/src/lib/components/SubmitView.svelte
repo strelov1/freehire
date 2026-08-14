@@ -44,11 +44,11 @@
   let location = $state('');
   let source = $state('');
 
-  // The description is authored as markdown in the shared tracker editor and converted to
-  // HTML on submit (the catalogue renders descriptions as sanitized HTML). editorKey
-  // remounts the editor to clear it after a successful submit.
+  // The description is authored as markdown in the shared tracker editor and converted
+  // to HTML on submit (the catalogue renders descriptions as sanitized HTML).
+  // NoteEditor live-syncs this value — including resetForm() clearing it after a
+  // successful submit — so no remount is ever needed here.
   let descriptionMarkdown = $state('');
-  let editorKey = $state(0);
 
   let region = $state('');
   let cities = $state<string[]>([]);
@@ -140,8 +140,7 @@
       if (seniority === '' && result.seniority) seniority = result.seniority;
       if (source.trim() === '' && result.source) source = result.source;
       // The source page's description arrives as sanitized HTML, not the markdown this
-      // editor wants, so it is converted before it lands. No editorKey bump: NoteEditor
-      // live-syncs a value change into its already-mounted editor.
+      // editor wants, so it is converted before it lands.
       if (descriptionMarkdown.trim() === '' && result.description) {
         descriptionMarkdown = htmlToMarkdown(result.description);
       }
@@ -159,7 +158,6 @@
     cities = [];
     skills = [];
     salaryMin = salaryMax = null;
-    editorKey += 1;
   }
 
   async function submit(e: SubmitEvent) {
@@ -473,13 +471,11 @@
             Description
           </span>
         </legend>
-        {#key editorKey}
-          <NoteEditor
-            value={descriptionMarkdown}
-            onsave={(v) => (descriptionMarkdown = v)}
-            placeholder="Paste or write the job description…"
-          />
-        {/key}
+        <NoteEditor
+          value={descriptionMarkdown}
+          onsave={(v) => (descriptionMarkdown = v)}
+          placeholder="Paste or write the job description…"
+        />
       </fieldset>
 
       {#if formError}
