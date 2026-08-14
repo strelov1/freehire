@@ -27,6 +27,9 @@ type fakeQueries struct {
 	gotUserID int64
 	labelSet  string
 	touched   uuid.UUID
+
+	touchedUserID int64
+	labelUserID   int64
 }
 
 func (f *fakeQueries) CreateAssistantSession(_ context.Context, arg db.CreateAssistantSessionParams) (db.CreateAssistantSessionRow, error) {
@@ -61,12 +64,25 @@ func (f *fakeQueries) DeleteAssistantSession(_ context.Context, _ db.DeleteAssis
 	return f.deleted, nil
 }
 
-func (f *fakeQueries) TouchAssistantSession(_ context.Context, id uuid.UUID) error {
-	f.touched = id
+// TouchAssistantSession mimics the real query's WHERE id = $1 AND user_id = $2: a
+// mismatched owner affects nothing, silently — an :exec query has no row count to
+// surface, so the store can't tell "touched" from "matched no row" apart, same as
+// production.
+func (f *fakeQueries) TouchAssistantSession(_ context.Context, arg db.TouchAssistantSessionParams) error {
+	f.touchedUserID = arg.UserID
+	if f.session.ID != arg.ID || f.session.UserID != arg.UserID {
+		return nil
+	}
+	f.touched = arg.ID
 	return nil
 }
 
+// SetAssistantSessionLabel mimics the real query's owner scoping the same way.
 func (f *fakeQueries) SetAssistantSessionLabel(_ context.Context, arg db.SetAssistantSessionLabelParams) error {
+	f.labelUserID = arg.UserID
+	if f.session.ID != arg.ID || f.session.UserID != arg.UserID {
+		return nil
+	}
 	f.labelSet = arg.Label.String
 	return nil
 }
@@ -178,13 +194,51 @@ func TestAppendAndReadTranscript(t *testing.T) {
 }
 
 func TestLabelSessionUsesTheFirstMessage(t *testing.T) {
-	f := &fakeQueries{}
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat}}
 	s := NewStore(f)
-	if err := s.LabelSession(context.Background(), sessionID, "find go jobs"); err != nil {
+	if err := s.LabelSession(context.Background(), sessionID, 3, "find go jobs"); err != nil {
 		t.Fatalf("LabelSession: %v", err)
 	}
 	if f.labelSet != "find go jobs" {
 		t.Errorf("label = %q, want the first user message", f.labelSet)
+	}
+}
+
+// TestLabelSessionAndTouchAreOwnerScoped covers the fix for TouchAssistantSession and
+// SetAssistantSessionLabel: both now carry a user_id predicate (mirroring every other
+// write in this file), so calling either with the wrong owner must affect nothing,
+// exactly the way a mismatched id already does.
+func TestLabelSessionAndTouchAreOwnerScoped(t *testing.T) {
+	f := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat}}
+	s := NewStore(f)
+	ctx := context.Background()
+
+	if err := s.LabelSession(ctx, sessionID, 99, "someone else's session"); err != nil {
+		t.Fatalf("LabelSession: %v", err)
+	}
+	if f.labelUserID != 99 {
+		t.Errorf("the fake did not see the caller's user id (%d)", f.labelUserID)
+	}
+	if f.labelSet != "" {
+		t.Errorf("label = %q, want unset — session %s is not owned by user 99", f.labelSet, sessionID)
+	}
+
+	if err := s.Touch(ctx, sessionID, 99); err != nil {
+		t.Fatalf("Touch: %v", err)
+	}
+	if f.touchedUserID != 99 {
+		t.Errorf("the fake did not see the caller's user id (%d)", f.touchedUserID)
+	}
+	if f.touched == sessionID {
+		t.Errorf("touched = %s, want untouched — session %s is not owned by user 99", f.touched, sessionID)
+	}
+
+	// The real owner still succeeds.
+	if err := s.Touch(ctx, sessionID, 3); err != nil {
+		t.Fatalf("Touch: %v", err)
+	}
+	if f.touched != sessionID {
+		t.Errorf("touched = %s, want %s for the real owner", f.touched, sessionID)
 	}
 }
 

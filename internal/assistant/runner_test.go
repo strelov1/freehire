@@ -9,6 +9,7 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/llm"
 )
 
@@ -525,7 +526,9 @@ func TestHistoryClosesDanglingToolCallsBeforeReplay(t *testing.T) {
 }
 
 func TestTheFirstUserMessageLabelsTheSession(t *testing.T) {
-	q := &fakeQueries{}
+	// The fake now mirrors SetAssistantSessionLabel's owner scoping, so it must know
+	// about a session matching the (id, user_id) the runner labels below.
+	q := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 3, Preset: PresetChat}}
 	m := &scriptedModel{replies: []*llms.ContentChoice{textReply("ok")}}
 	r := testRunner(m, q)
 

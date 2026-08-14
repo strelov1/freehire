@@ -63,7 +63,7 @@ type Queries interface {
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
-	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
+	TouchAssistantSession(ctx context.Context, arg db.TouchAssistantSessionParams) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
 	AppendAssistantMessage(ctx context.Context, arg db.AppendAssistantMessageParams) (db.AssistantMessage, error)
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]db.AssistantMessage, error)
@@ -131,19 +131,23 @@ func (s *Store) DeleteSession(ctx context.Context, id uuid.UUID, userID int64) e
 }
 
 // Touch marks a session as the most recently active, so the rail follows real use.
-func (s *Store) Touch(ctx context.Context, id uuid.UUID) error {
-	if err := s.q.TouchAssistantSession(ctx, id); err != nil {
+// Owner-scoped like every other session write: userID must be the caller who already
+// proved ownership of id (the Session it just read, created, or continued).
+func (s *Store) Touch(ctx context.Context, id uuid.UUID, userID int64) error {
+	if err := s.q.TouchAssistantSession(ctx, db.TouchAssistantSessionParams{ID: id, UserID: userID}); err != nil {
 		return fmt.Errorf("assistant: touch session: %w", err)
 	}
 	return nil
 }
 
 // LabelSession names a session from its first user message. The query applies it
-// only while the label is unset, so this is safe to call on every turn.
-func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, label string) error {
+// only while the label is unset, so this is safe to call on every turn. Owner-scoped
+// like Touch.
+func (s *Store) LabelSession(ctx context.Context, id uuid.UUID, userID int64, label string) error {
 	err := s.q.SetAssistantSessionLabel(ctx, db.SetAssistantSessionLabelParams{
-		ID:    id,
-		Label: pgtype.Text{String: label, Valid: label != ""},
+		ID:     id,
+		UserID: userID,
+		Label:  pgtype.Text{String: label, Valid: label != ""},
 	})
 	if err != nil {
 		return fmt.Errorf("assistant: label session: %w", err)

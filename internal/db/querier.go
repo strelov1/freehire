@@ -2982,7 +2982,8 @@ type Querier interface {
 	// than by fetching the stored url (echojobs: see cmd/liveness/echojobs.go).
 	SelectStaleRegisteredCandidates(ctx context.Context, arg SelectStaleRegisteredCandidatesParams) ([]SelectStaleRegisteredCandidatesRow, error)
 	// Name a session from its first user message. Applied only while the label is still unset,
-	// so a long conversation keeps the name it was born with.
+	// so a long conversation keeps the name it was born with. Owner-scoped for the same
+	// reason TouchAssistantSession is.
 	SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error
 	// Apply the Go-computed cooldown window to a board (called only when the backoff
 	// policy says to cool down).
@@ -3189,7 +3190,11 @@ type Querier interface {
 	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
 	SyncCompaniesFromJobs(ctx context.Context) error
 	// Mark a session as the most recently active, so the rail's order follows real use.
-	TouchAssistantSession(ctx context.Context, id uuid.UUID) error
+	// Owner-scoped like every other write in this file (Get/Delete both require id AND
+	// user_id): a bare id would let any caller who learns another user's session id touch
+	// it, and every call site already has the owner's id in hand (the Session it just
+	// read, created, or otherwise proved ownership of).
+	TouchAssistantSession(ctx context.Context, arg TouchAssistantSessionParams) error
 	// Stamp the CV a click belongs to, for the tracking board's "CV opened" marker. Issued right after
 	// the click insert, as a separate statement rather than in one transaction with it: both writes are
 	// best-effort behind a redirect that must happen regardless, so there is nothing for a rollback to

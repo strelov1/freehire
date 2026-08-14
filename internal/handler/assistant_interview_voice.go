@@ -124,7 +124,7 @@ func (h *assistantHandlers) PostAssistantVoiceTurn(c *fiber.Ctx) error {
 	}
 	// A convenience, not correctness: the session's last-activity stamp should not
 	// cost the candidate their turn if it fails.
-	if err := h.store.Touch(c.Context(), sess.ID); err != nil {
+	if err := h.store.Touch(c.Context(), sess.ID, sess.UserID); err != nil {
 		log.Printf("assistant: touch session %s: %v", sess.ID, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

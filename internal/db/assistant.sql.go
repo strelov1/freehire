@@ -253,30 +253,41 @@ func (q *Queries) ListAssistantMessages(ctx context.Context, sessionID uuid.UUID
 
 const setAssistantSessionLabel = `-- name: SetAssistantSessionLabel :exec
 UPDATE assistant_sessions
-SET label = $2
-WHERE id = $1 AND label IS NULL
+SET label = $3
+WHERE id = $1 AND user_id = $2 AND label IS NULL
 `
 
 type SetAssistantSessionLabelParams struct {
-	ID    uuid.UUID   `json:"id"`
-	Label pgtype.Text `json:"label"`
+	ID     uuid.UUID   `json:"id"`
+	UserID int64       `json:"user_id"`
+	Label  pgtype.Text `json:"label"`
 }
 
 // Name a session from its first user message. Applied only while the label is still unset,
-// so a long conversation keeps the name it was born with.
+// so a long conversation keeps the name it was born with. Owner-scoped for the same
+// reason TouchAssistantSession is.
 func (q *Queries) SetAssistantSessionLabel(ctx context.Context, arg SetAssistantSessionLabelParams) error {
-	_, err := q.db.Exec(ctx, setAssistantSessionLabel, arg.ID, arg.Label)
+	_, err := q.db.Exec(ctx, setAssistantSessionLabel, arg.ID, arg.UserID, arg.Label)
 	return err
 }
 
 const touchAssistantSession = `-- name: TouchAssistantSession :exec
 UPDATE assistant_sessions
 SET updated_at = now()
-WHERE id = $1
+WHERE id = $1 AND user_id = $2
 `
 
+type TouchAssistantSessionParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
 // Mark a session as the most recently active, so the rail's order follows real use.
-func (q *Queries) TouchAssistantSession(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, touchAssistantSession, id)
+// Owner-scoped like every other write in this file (Get/Delete both require id AND
+// user_id): a bare id would let any caller who learns another user's session id touch
+// it, and every call site already has the owner's id in hand (the Session it just
+// read, created, or otherwise proved ownership of).
+func (q *Queries) TouchAssistantSession(ctx context.Context, arg TouchAssistantSessionParams) error {
+	_, err := q.db.Exec(ctx, touchAssistantSession, arg.ID, arg.UserID)
 	return err
 }

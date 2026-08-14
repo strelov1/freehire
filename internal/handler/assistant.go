@@ -255,7 +255,7 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	// identical every time, so every such session in the rail would carry the same string
 	// and none would say which interview it was.
 	if label := applicationSessionLabel(preset, vacancy); label != "" {
-		if err := h.store.LabelSession(c.Context(), sess.ID, label); err != nil {
+		if err := h.store.LabelSession(c.Context(), sess.ID, sess.UserID, label); err != nil {
 			log.Printf("assistant: could not name %s session %s: %v", preset, sess.ID, err)
 		} else {
 			sess.Label = label

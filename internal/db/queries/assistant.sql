@@ -42,16 +42,21 @@ WHERE id = $1 AND user_id = $2;
 
 -- name: TouchAssistantSession :exec
 -- Mark a session as the most recently active, so the rail's order follows real use.
+-- Owner-scoped like every other write in this file (Get/Delete both require id AND
+-- user_id): a bare id would let any caller who learns another user's session id touch
+-- it, and every call site already has the owner's id in hand (the Session it just
+-- read, created, or otherwise proved ownership of).
 UPDATE assistant_sessions
 SET updated_at = now()
-WHERE id = $1;
+WHERE id = $1 AND user_id = $2;
 
 -- name: SetAssistantSessionLabel :exec
 -- Name a session from its first user message. Applied only while the label is still unset,
--- so a long conversation keeps the name it was born with.
+-- so a long conversation keeps the name it was born with. Owner-scoped for the same
+-- reason TouchAssistantSession is.
 UPDATE assistant_sessions
-SET label = $2
-WHERE id = $1 AND label IS NULL;
+SET label = $3
+WHERE id = $1 AND user_id = $2 AND label IS NULL;
 
 -- name: AppendAssistantMessage :one
 -- Append one message to a session's transcript, assigning the next sequence number in the
