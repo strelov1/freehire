@@ -85,8 +85,17 @@
     return () => {
       cancelled = true;
       persist();
-      // toTextArea() reverts the CodeMirror DOM and detaches listeners.
-      editor?.toTextArea();
+      // toTextArea() reverts the CodeMirror DOM and detaches listeners. Wrapped: a
+      // remount that lands moments after mount (editorKey bumped very soon after
+      // EasyMDE's own async init settled, e.g. by an autofill) can hit an EasyMDE
+      // internal null-DOM reference here — harmless, since the whole subtree is
+      // being torn down by the parent {#key} block regardless of whether the
+      // revert itself succeeds.
+      try {
+        editor?.toTextArea();
+      } catch {
+        // See above: the DOM is going away either way.
+      }
       editor = undefined;
     };
   });
