@@ -270,7 +270,7 @@ func valueBoundarySafe(text, v string) bool {
 			return safe
 		}
 		s, e := start+i, start+i+len(v)
-		if !((s == 0 || !isWord(text[s-1])) && (e == len(text) || !isWord(text[e]))) {
+		if (s != 0 && isWord(text[s-1])) || (e != len(text) && isWord(text[e])) {
 			safe = false
 		}
 		start = e
