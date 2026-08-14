@@ -41,10 +41,11 @@ const defaultSource = "manual"
 // origin (e.g. "workatastartup"); empty defaults to "manual".
 //
 // The structured facets are the values a submitter/moderator states explicitly. Regions,
-// Cities, WorkMode, and Skills override the dictionary derivation (see jobderive), and
-// the Salary* fields become an authoritative manual salary on the job. All are optional
-// and sanitized before use (unknown WorkMode/Regions dropped, non-positive salary
-// dropped), so a malformed value degrades to derivation rather than corrupting the job.
+// Cities, WorkMode, Skills, EmploymentType, and Seniority override the dictionary
+// derivation (see jobderive), and the Salary* fields become an authoritative manual
+// salary on the job. All are optional and sanitized before use (unknown enum values
+// dropped, non-positive salary dropped), so a malformed value degrades to derivation
+// rather than corrupting the job.
 type CreateInput struct {
 	URL         string
 	Source      string
@@ -59,6 +60,8 @@ type CreateInput struct {
 	Regions        []string
 	Cities         []string
 	WorkMode       string
+	EmploymentType string
+	Seniority      string
 	SalaryMin      *int
 	SalaryMax      *int
 	SalaryCurrency string
@@ -209,23 +212,28 @@ func (s *Service) Update(ctx context.Context, actorID int64, slug string, p Upda
 // salary becomes the job's authoritative manual salary. The zero value (an edit) carries
 // no overrides, so derivation decides every facet.
 type structuredFacets struct {
-	WorkMode string
-	Regions  []string
-	Cities   []string
-	Skills   []string
-	Salary   *job.Salary
+	WorkMode       string
+	Regions        []string
+	Cities         []string
+	Skills         []string
+	EmploymentType string
+	Seniority      string
+	Salary         *job.Salary
 }
 
-// structured sanitizes the create input's explicit facets: an unknown work-mode or region
-// value is dropped (degrading to derivation), blank cities/skills are trimmed away, and a
-// salary is present only when a positive bound is stated.
+// structured sanitizes the create input's explicit facets: an unknown work-mode, region,
+// employment-type, or seniority value is dropped (degrading to derivation), blank
+// cities/skills are trimmed away, and a salary is present only when a positive bound is
+// stated.
 func (in CreateInput) structured() structuredFacets {
 	return structuredFacets{
-		WorkMode: validEnum(in.WorkMode, vocab.WorkModeValues),
-		Regions:  filterVocab(in.Regions, vocab.RegionValues),
-		Cities:   nonBlank(in.Cities),
-		Skills:   nonBlank(in.Skills),
-		Salary:   manualSalary(in.SalaryMin, in.SalaryMax, in.SalaryCurrency, in.SalaryPeriod),
+		WorkMode:       validEnum(in.WorkMode, vocab.WorkModeValues),
+		Regions:        filterVocab(in.Regions, vocab.RegionValues),
+		Cities:         nonBlank(in.Cities),
+		Skills:         nonBlank(in.Skills),
+		EmploymentType: validEnum(in.EmploymentType, vocab.EmploymentTypeValues),
+		Seniority:      validEnum(in.Seniority, vocab.SeniorityValues),
+		Salary:         manualSalary(in.SalaryMin, in.SalaryMax, in.SalaryCurrency, in.SalaryPeriod),
 	}
 }
 
@@ -243,16 +251,18 @@ func derive(source, externalID, title, company, location, description string, re
 	}
 	j, err := job.New(job.Draft{
 		Input: jobderive.Input{
-			Source:      source,
-			ExternalID:  externalID,
-			Title:       title,
-			Company:     company,
-			Location:    location,
-			Description: description,
-			WorkMode:    workMode,
-			Regions:     s.Regions,
-			Cities:      s.Cities,
-			Skills:      s.Skills,
+			Source:         source,
+			ExternalID:     externalID,
+			Title:          title,
+			Company:        company,
+			Location:       location,
+			Description:    description,
+			WorkMode:       workMode,
+			Regions:        s.Regions,
+			Cities:         s.Cities,
+			Skills:         s.Skills,
+			EmploymentType: s.EmploymentType,
+			Seniority:      s.Seniority,
 		},
 		ManualSalary: s.Salary,
 	})

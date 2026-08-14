@@ -26,10 +26,9 @@
   // A small markdown editor for notes: EasyMDE (the maintained SimpleMDE fork) over a
   // textarea, markdown in and out. EasyMDE touches `window`, so it is dynamically
   // imported on mount (never on the server) and torn down on unmount. `onsave` fires
-  // on blur with the current markdown; the parent persists it. The component is
-  // re-mounted per job by JobDrawer's {#key}, so the initial value never needs to be
-  // pushed reactively. `placeholder` lets a reuse (e.g. the submit form's description)
-  // relabel the empty state; it defaults to the tracker's "Notes…".
+  // on blur with the current markdown; the parent persists it. `placeholder` lets a
+  // reuse (e.g. the submit form's description) relabel the empty state; it defaults
+  // to the tracker's "Notes…".
   let {
     value = '',
     onsave,
@@ -37,21 +36,45 @@
   }: { value?: string; onsave: (v: string) => void; placeholder?: string } = $props();
 
   let el = $state<HTMLTextAreaElement>();
+  // Not $state: nothing needs to re-run when this is reassigned, only to read its
+  // current value when `value` changes (see the $effect below).
+  let editor: EasyMDE | undefined;
+  // Persist on blur AND on teardown — closing via Escape (or any unmount) never
+  // blurs the editor, so a blur-only save would drop the last edit. Dedup against the
+  // last persisted value so an untouched open/close doesn't fire a redundant save.
+  let lastSaved = value;
+  const persist = () => {
+    if (!editor) return;
+    const current = editor.value();
+    if (current === lastSaved) return;
+    lastSaved = current;
+    onsave(current);
+  };
+
+  // Live-syncs an externally-driven value change (e.g. the submit form's URL prefill
+  // or its post-submit reset) into an already-constructed editor — no remount needed.
+  // A remount (JobDrawer's per-job {#key}, still the right tool there — it is a
+  // genuinely different note, not an update to this one) risks racing EasyMDE's own
+  // async init if it lands too soon after mount, leaving an orphaned DOM node behind;
+  // that is exactly what forcing one for every value change here used to do.
+  // Guarded against a no-op: persist() already writes `value` back to what the editor
+  // holds on blur, and re-applying an identical value would reset the cursor/undo
+  // history for nothing. Before the editor exists (its async import still in flight)
+  // this is a no-op — construction below reads `value` fresh at that point, so the
+  // pending mount picks up whatever value ends up current by the time it resolves.
+  $effect(() => {
+    // Read unconditionally, before the `editor` check — a short-circuited `value`
+    // read (skipped while `editor` is still undefined) would never register as this
+    // effect's dependency, and it would then never re-run once `editor` exists.
+    const v = value;
+    if (editor && v !== editor.value()) {
+      editor.value(v);
+      lastSaved = v;
+    }
+  });
 
   onMount(() => {
-    let editor: EasyMDE | undefined;
     let cancelled = false;
-    // Persist on blur AND on teardown — closing via Escape (or any unmount) never
-    // blurs the editor, so a blur-only save would drop the last edit. Dedup against
-    // the last persisted value so an untouched open/close doesn't fire a redundant save.
-    let lastSaved = value;
-    const persist = () => {
-      if (!editor) return;
-      const current = editor.value();
-      if (current === lastSaved) return;
-      lastSaved = current;
-      onsave(current);
-    };
 
     void (async () => {
       const { default: EasyMDECtor } = await import('easymde');
@@ -85,8 +108,17 @@
     return () => {
       cancelled = true;
       persist();
-      // toTextArea() reverts the CodeMirror DOM and detaches listeners.
-      editor?.toTextArea();
+      // toTextArea() reverts the CodeMirror DOM and detaches listeners. Wrapped: a
+      // remount that lands moments after mount (editorKey bumped very soon after
+      // EasyMDE's own async init settled, e.g. by an autofill) can hit an EasyMDE
+      // internal null-DOM reference here — harmless, since the whole subtree is
+      // being torn down by the parent {#key} block regardless of whether the
+      // revert itself succeeds.
+      try {
+        editor?.toTextArea();
+      } catch {
+        // See above: the DOM is going away either way.
+      }
       editor = undefined;
     };
   });

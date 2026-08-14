@@ -233,6 +233,36 @@ func TestRunTreatsAllRejectedStreamProgressAsSuccess(t *testing.T) {
 	}
 }
 
+// A streaming aggregator board that emitted postings before failing made progress even if
+// every one of them was skipped as already covered by a non-aggregator source — the exact
+// same reasoning TestRunTreatsAllRejectedStreamProgressAsSuccess proves for a rejected
+// prefix. Missing ATSCovered from the "no progress" check would cool a board down for hours
+// precisely when the coverage gate is doing its job well (heavily-covered board), so this
+// case gets more likely to fire, not less, as the feature succeeds.
+func TestRunTreatsAllATSCoveredStreamProgressAsSuccess(t *testing.T) {
+	src := fakeStreamingSource{provider: "jobtech", failAfter: 2, jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+		{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme"},
+		{ExternalID: "3", Title: "Data Engineer", Company: "Acme"},
+	}}
+	health := &fakeHealth{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "jobtech", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := stats.Total(); got.ATSCovered != 2 {
+		t.Fatalf("stats = %+v, want ATSCovered=2", got)
+	}
+	if len(health.failures) != 0 {
+		t.Errorf("board recorded as failed (%v) — ATSCovered postings are progress, not an outage", health.failures)
+	}
+}
+
 // The per-board line is the only operator-facing signal that a dictionary term is too
 // broad, and it has to arrive within the crawl hour. Counts alone say how much was
 // dropped but not what, so it carries sample titles too.

@@ -368,6 +368,31 @@ var subdivisionToCountry = map[string]string{
 	"yukon": "ca", "nunavut": "ca",
 }
 
+// collidingSubdivisions is the subset of subdivisionToCountry's two-letter codes
+// that also spell a curated country's ISO 3166-1 alpha-2 code: "il" (Illinois vs
+// Israel), "la" (Louisiana vs Laos), "pa" (Pennsylvania vs Panama), "mn"
+// (Minnesota vs Mongolia), "sk" (Saskatchewan vs Slovakia), and about a dozen
+// more. resolveSubdivision only accepts the US/CA reading for one of these when
+// the neighbouring city token names a recognized US/CA place (subdivisionAccepted
+// in location.go); otherwise the bare-country-code interpretation wins. Computed
+// rather than hand-listed so it can never drift from the two source tables. "ca"
+// is deliberately excluded — see subdivisionToCountry's comment above: "City, CA"
+// stays California.
+var collidingSubdivisions = computeCollidingSubdivisions()
+
+func computeCollidingSubdivisions() map[string]struct{} {
+	out := map[string]struct{}{}
+	for code := range subdivisionToCountry {
+		if len(code) != 2 || code == "ca" {
+			continue
+		}
+		if _, isCountryCode := countryToRegion[code]; isCountryCode {
+			out[code] = struct{}{}
+		}
+	}
+	return out
+}
+
 // cityOverrides pins a curated canonical display name for aliases where the
 // generated GeoNames name (cityDict, from cmd/gen-cities) differs from the clean
 // English form we want in the `cities` facet. It is applied over the generated base

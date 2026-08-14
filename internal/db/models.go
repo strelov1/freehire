@@ -628,6 +628,8 @@ type JobSubmission struct {
 	SalaryMax      pgtype.Int4        `json:"salary_max"`
 	SalaryCurrency string             `json:"salary_currency"`
 	SalaryPeriod   string             `json:"salary_period"`
+	EmploymentType string             `json:"employment_type"`
+	Seniority      string             `json:"seniority"`
 }
 
 type LearnedAtsDomain struct {

@@ -31,6 +31,8 @@ type createJobRequest struct {
 	Regions        []string `json:"regions"`
 	Cities         []string `json:"cities"`
 	WorkMode       string   `json:"work_mode"`
+	EmploymentType string   `json:"employment_type"`
+	Seniority      string   `json:"seniority"`
 	SalaryMin      *int     `json:"salary_min"`
 	SalaryMax      *int     `json:"salary_max"`
 	SalaryCurrency string   `json:"salary_currency"`
@@ -53,6 +55,8 @@ func (r createJobRequest) toCreateInput() moderation.CreateInput {
 		Regions:        r.Regions,
 		Cities:         r.Cities,
 		WorkMode:       r.WorkMode,
+		EmploymentType: r.EmploymentType,
+		Seniority:      r.Seniority,
 		SalaryMin:      r.SalaryMin,
 		SalaryMax:      r.SalaryMax,
 		SalaryCurrency: r.SalaryCurrency,

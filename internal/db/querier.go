@@ -520,6 +520,11 @@ type Querier interface {
 	CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error)
 	// How many requests a seeker has created since a cutoff — the per-day cap check.
 	CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error)
+	// How many reports this account has filed since a cutoff, for the daily cap
+	// (ghost_reports.CountGhostReportsSince's counterpart for this queue). Counts every status,
+	// not just pending: a report already resolved or dismissed still consumed the reporter's
+	// daily allowance, so excluding it would let a decided report be re-filed for free.
+	CountReportsFiledSince(ctx context.Context, arg CountReportsFiledSinceParams) (int64, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
@@ -1157,7 +1162,11 @@ type Querier interface {
 	// internal/deliverywindow before send), and the application's CURRENT
 	// stage/last-activity/pending-suggestion so the worker can recompute the
 	// triggering condition rather than trust what MATCH saw. job_open lets the
-	// worker cancel a nudge for a job that has since closed.
+	// worker cancel a nudge for a job that has since closed. application_exists
+	// distinguishes "no applications row at all" (untracked since MATCH) from "row
+	// exists with a NULL stage" — the LEFT JOIN alone leaves stage NULL in both
+	// cases, which would otherwise be judged as the active `applied` stage by
+	// userjob.SilenceThresholdDays.
 	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug

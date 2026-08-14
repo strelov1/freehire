@@ -5,6 +5,10 @@ on:
     - cron: '23 6 * * *'
   pull_request:
     branches: [main]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
   workflow_dispatch:
 
 permissions:

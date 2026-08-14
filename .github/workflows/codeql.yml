@@ -3,11 +3,23 @@ name: CodeQL
 # First-party static analysis (SQL/command injection, XSS, taint tracking, ...).
 # Dependency vulnerabilities are covered separately: govulncheck.yml (Go),
 # snyk.yml (JS lockfiles).
+# Not a required status check, so a paths filter here is safe (unlike ci.yml's
+# backend/web jobs or perf.yml's pr-smoke — see AGENTS.md / lefthook.yml for
+# why those can't use one without leaving unrelated PRs stuck on "Expected").
 on:
   push:
     branches: [main]
+    paths: &codeql-paths
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "web/**"
+      - "extension/**"
+      - "design-system/**"
+      - ".github/workflows/codeql.yml"
   pull_request:
     branches: [main]
+    paths: *codeql-paths
   schedule:
     - cron: '13 4 * * 1'
   workflow_dispatch:

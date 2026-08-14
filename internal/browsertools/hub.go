@@ -10,7 +10,9 @@ package browsertools
 
 import (
 	"encoding/json"
+	"strconv"
 	"sync"
+	"sync/atomic"
 )
 
 // Role names one end of a user's channel.
@@ -44,10 +46,21 @@ type Socket interface {
 type Hub struct {
 	mu       sync.Mutex
 	channels map[int64]map[Role]Socket
+	callSeq  atomic.Int64
 }
 
 func New() *Hub {
 	return &Hub{channels: make(map[int64]map[Role]Socket)}
+}
+
+// NextCallID returns a call id unique across every Caller this Hub has ever
+// hosted. Callers must draw ids from here rather than a local counter: two
+// Callers for the same user (a retry after Close, say) would otherwise both
+// mint "1" for their first call, and a late answer meant for the first —
+// closed and gone — could then be delivered to the second's pending call of
+// the same id.
+func (h *Hub) NextCallID() string {
+	return strconv.FormatInt(h.callSeq.Add(1), 10)
 }
 
 // Join attaches a socket as one end of a user's channel and returns the function

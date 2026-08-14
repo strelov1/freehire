@@ -28,11 +28,19 @@ var (
 	// ErrInvalid is a content-validation failure (mapped to 400); its message is
 	// user-facing.
 	ErrInvalid = errors.New("report: invalid")
+	// ErrRateLimited is a filing past the daily cap (mapped to 429).
+	ErrRateLimited = errors.New("report: too many reports today")
 )
 
 // maxDetailsLen bounds the free-text explanation so a single report cannot carry an
 // unbounded payload (the content-field convention).
 const maxDetailsLen = 5000
+
+// DailyCap bounds how many reports one account may file per rolling 24h window
+// (ghostreport.DailyCap's counterpart for this queue). A real job seeker does not have more
+// than a handful of postings to flag in a day, so the cap costs them nothing while bounding
+// what one account can do to the moderation queue.
+const DailyCap = 20
 
 // validReasons is the closed reason vocabulary, mirrored by the migration's CHECK and the
 // SPA. The service re-validates against it so an out-of-vocabulary value is a clean 400
@@ -109,6 +117,9 @@ type Repository interface {
 	ListPending(ctx context.Context) ([]ReportDetail, error)
 	MarkResolved(ctx context.Context, id, reviewedBy int64, note string) (Report, error)
 	MarkDismissed(ctx context.Context, id, reviewedBy int64, reviewReason string) (Report, error)
+	// CountFiledSince backs the daily cap: how many reports reportedBy has filed since the
+	// given cutoff.
+	CountFiledSince(ctx context.Context, reportedBy int64, since time.Time) (int, error)
 }
 
 // JobCloser soft-closes one job. The QueriesRepository satisfies it (over CloseJobByID);
@@ -168,11 +179,19 @@ func (s *Service) WithNotifier(n ReporterNotifier) *Service {
 
 // File validates the content and stores a pending report owned by reportedBy against
 // jobID. A second open report of the same job by the same user surfaces ErrDuplicateOpen
-// (the repository maps the unique violation).
+// (the repository maps the unique violation); a reportedBy already at DailyCap for the
+// rolling 24h window surfaces ErrRateLimited.
 func (s *Service) File(ctx context.Context, reportedBy, jobID int64, in FileInput) (Report, error) {
 	v, err := in.validate()
 	if err != nil {
 		return Report{}, err
+	}
+	filed, err := s.repo.CountFiledSince(ctx, reportedBy, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		return Report{}, err
+	}
+	if filed >= DailyCap {
+		return Report{}, ErrRateLimited
 	}
 	return s.repo.Create(ctx, reportedBy, jobID, v.Reason, v.Details, v.ContactTelegram)
 }

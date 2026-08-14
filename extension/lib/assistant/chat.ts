@@ -45,8 +45,23 @@ export function reduceTurnEvent(prev: ChatState, event: TurnEvent): ChatState {
       }));
     case 'tool_result':
       return upsertAssistant(prev, (m) => ({ ...m, tools: attachResult(m.tools, event) }));
-    case 'result':
-      return closeAssistant(prev, event.is_error ?? false);
+    case 'result': {
+      const next = closeAssistant(prev, event.is_error ?? false);
+      // A failure before any assistant frame left only the user prompt — still surface an
+      // errored assistant so the Retry control has somewhere to sit.
+      if (event.is_error) {
+        const last = next.messages[next.messages.length - 1];
+        if (!last || last.role !== 'assistant' || !last.errored) {
+          return {
+            messages: [
+              ...next.messages,
+              { role: 'assistant', text: '', thinking: '', tools: [], streaming: false, errored: true },
+            ],
+          };
+        }
+      }
+      return next;
+    }
     default:
       // usage, and anything not in the union — ignored.
       return prev;

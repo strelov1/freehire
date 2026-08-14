@@ -329,3 +329,51 @@ func TestCreate_DropsUnknownWorkModeAndRegion(t *testing.T) {
 		t.Errorf("WorkMode = %q, want the unknown value dropped (derivation fallback)", got.WorkMode)
 	}
 }
+
+// Explicit employment_type/seniority on the create input win over dictionary derivation,
+// the same override precedence work_mode already gets.
+func TestCreate_AppliesExplicitEmploymentTypeAndSeniority(t *testing.T) {
+	repo := &fakeRepo{}
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:            "https://acme.example/jobs/3",
+		Title:          "Developer", // title dictionary alone would not say "lead"
+		Company:        "Acme",
+		Description:    "Join our team.",
+		EmploymentType: "contract",
+		Seniority:      "lead",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := repo.created
+	if got.EmploymentType != "contract" {
+		t.Errorf("EmploymentType = %q, want contract (explicit wins)", got.EmploymentType)
+	}
+	if got.Seniority != "lead" {
+		t.Errorf("Seniority = %q, want lead (explicit wins)", got.Seniority)
+	}
+}
+
+// An out-of-vocabulary employment_type/seniority is dropped, not persisted verbatim —
+// derivation decides instead, the same fallback an unknown work_mode already gets.
+func TestCreate_DropsUnknownEmploymentTypeAndSeniority(t *testing.T) {
+	repo := &fakeRepo{}
+	_, _, err := moderation.New(repo).Create(context.Background(), 7, moderation.CreateInput{
+		URL:            "https://acme.example/jobs/4",
+		Title:          "Developer",
+		Company:        "Acme",
+		Description:    "Join our team.",
+		EmploymentType: "freelance-ish", // not in vocab.EmploymentTypeValues
+		Seniority:      "wizard",        // not in vocab.SeniorityValues
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got := repo.created
+	if got.EmploymentType == "freelance-ish" {
+		t.Errorf("EmploymentType = %q, want the unknown value dropped", got.EmploymentType)
+	}
+	if got.Seniority == "wizard" {
+		t.Errorf("Seniority = %q, want the unknown value dropped", got.Seniority)
+	}
+}

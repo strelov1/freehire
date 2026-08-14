@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/sources"
@@ -167,6 +168,64 @@ func TestBoardCoverageMatchesAVacancyByAnIDBeforeTheSlug(t *testing.T) {
 	}
 	if job.Title != "Senior Go" {
 		t.Errorf("resolved %q, want Senior Go", job.Title)
+	}
+}
+
+// fakeHydratingBoard is a stand-in for a HydratingSource ingest adapter (e.g. workday): FetchNew
+// hydrates full detail only for the postings its seen predicate reports as new, recording which
+// ones so a test can pin exactly what got hydrated. Fetch is the list-only fallback and records
+// whether it was called at all — ResolveOnBoard must prefer FetchNew.
+type fakeHydratingBoard struct {
+	provider string
+	jobs     []sources.Job
+	fetched  bool
+	hydrated []string
+}
+
+func (f *fakeHydratingBoard) Provider() string { return f.provider }
+
+func (f *fakeHydratingBoard) Fetch(_ context.Context, _ sources.CompanyEntry) ([]sources.Job, error) {
+	f.fetched = true
+	return f.jobs, nil
+}
+
+func (f *fakeHydratingBoard) FetchNew(_ context.Context, _ sources.CompanyEntry, seen func(externalID string) bool) ([]sources.Job, error) {
+	out := make([]sources.Job, 0, len(f.jobs))
+	for _, j := range f.jobs {
+		if seen(j.ExternalID) {
+			out = append(out, sources.Job{ExternalID: j.ExternalID, URL: j.URL, Title: j.Title, SeenRefresh: true})
+			continue
+		}
+		f.hydrated = append(f.hydrated, j.ExternalID)
+		out = append(out, j)
+	}
+	return out, nil
+}
+
+func TestResolveOnBoardHydratesOnlyTheTargetPostingOnAHydratingSource(t *testing.T) {
+	board := &fakeHydratingBoard{
+		provider: "workday",
+		jobs: []sources.Job{
+			{ExternalID: "111", URL: "https://acme.wd1.myworkdayjobs.com/en-US/careers/job/111", Title: "Junior Go", Description: "full detail 111"},
+			{ExternalID: "222", URL: "https://acme.wd1.myworkdayjobs.com/en-US/careers/job/222", Title: "Senior Go", Description: "full detail 222"},
+			{ExternalID: "333", URL: "https://acme.wd1.myworkdayjobs.com/en-US/careers/job/333", Title: "Staff Go", Description: "full detail 333"},
+		},
+	}
+	reg := map[string]sources.Source{"workday": board}
+
+	raw := "https://acme.wd1.myworkdayjobs.com/en-US/careers/job/222"
+	job, ok, err := ResolveOnBoard(context.Background(), reg, "workday", "acme", raw)
+	if err != nil || !ok {
+		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the linked vacancy", ok, err)
+	}
+	if job.Title != "Senior Go" || job.Description != "full detail 222" {
+		t.Errorf("resolved %+v, want the fully hydrated Senior Go posting", job)
+	}
+	if board.fetched {
+		t.Error("Fetch was called — ResolveOnBoard must prefer FetchNew for a HydratingSource, to avoid hydrating the whole board")
+	}
+	if want := []string{"222"}; !slices.Equal(board.hydrated, want) {
+		t.Errorf("hydrated postings = %v, want only %v — resolving one link must not hydrate the rest of the board", board.hydrated, want)
 	}
 }
 

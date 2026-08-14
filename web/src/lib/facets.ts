@@ -390,6 +390,11 @@ const AI_ARCHETYPE: FacetOption[] = options(AI_ARCHETYPE_VALUES, AI_ARCHETYPE_LA
 export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
 export const REGION_OPTIONS: FacetOption[] = REGION;
 
+// Seniority and employment-type options, exported for the submit form so a submitter's
+// choice aligns with the filter panel's vocabulary/order instead of duplicating it.
+export const SENIORITY_OPTIONS: FacetOption[] = SENIORITY;
+export const EMPLOYMENT_TYPE_OPTIONS: FacetOption[] = EMPLOYMENT;
+
 const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
 // The job-reality classes (internal/jobreality) — a small closed set, spelled out

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/pgerr"
 	"github.com/strelov1/freehire/internal/resumeextract"
 )
 
@@ -324,6 +325,16 @@ func (s *Store) Tailor(ctx context.Context, userID, jobID int64, tailoredTitle s
 	doc, _ := Align(base.Document, preferred)
 	tailored, err := s.CreateTailored(ctx, userID, jobID, tailoredTitle, base.TemplateID, doc)
 	if err != nil {
+		// A concurrent call for the same vacancy can win the insert between our SELECT above
+		// and this one: cvs_user_id_job_id_tailored_uniq_idx (0091) turns the loser into a
+		// unique violation instead of a duplicate row. Re-fetch and return the winner's copy.
+		if pgerr.IsUniqueViolation(err) {
+			existing, ferr := s.tailoredForJob(ctx, userID, jobID)
+			if ferr != nil {
+				return Meta{}, Meta{}, false, ferr
+			}
+			return base.Meta, existing, false, nil
+		}
 		return Meta{}, Meta{}, false, err
 	}
 	return base.Meta, tailored, true, nil

@@ -86,6 +86,7 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,
        a.stage,
+       (a.user_id IS NOT NULL)::bool AS application_exists,
        GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
        u.email AS account_email,
@@ -124,6 +125,7 @@ type GetNudgeForDeliveryRow struct {
 	QuietHoursStart      pgtype.Time        `json:"quiet_hours_start"`
 	QuietHoursEnd        pgtype.Time        `json:"quiet_hours_end"`
 	Stage                pgtype.Text        `json:"stage"`
+	ApplicationExists    bool               `json:"application_exists"`
 	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
 	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
 	AccountEmail         string             `json:"account_email"`
@@ -140,7 +142,11 @@ type GetNudgeForDeliveryRow struct {
 // internal/deliverywindow before send), and the application's CURRENT
 // stage/last-activity/pending-suggestion so the worker can recompute the
 // triggering condition rather than trust what MATCH saw. job_open lets the
-// worker cancel a nudge for a job that has since closed.
+// worker cancel a nudge for a job that has since closed. application_exists
+// distinguishes "no applications row at all" (untracked since MATCH) from "row
+// exists with a NULL stage" — the LEFT JOIN alone leaves stage NULL in both
+// cases, which would otherwise be judged as the active `applied` stage by
+// userjob.SilenceThresholdDays.
 func (q *Queries) GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, getNudgeForDelivery, id)
 	var i GetNudgeForDeliveryRow
@@ -159,6 +165,7 @@ func (q *Queries) GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeFo
 		&i.QuietHoursStart,
 		&i.QuietHoursEnd,
 		&i.Stage,
+		&i.ApplicationExists,
 		&i.LastActivityAt,
 		&i.HasPendingSuggestion,
 		&i.AccountEmail,

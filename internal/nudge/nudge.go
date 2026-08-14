@@ -363,7 +363,7 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	}
 	switch info.Kind {
 	case KindFollowUp:
-		if !info.JobOpen {
+		if !info.JobOpen || !info.ApplicationExists {
 			return false
 		}
 		days := 0
@@ -372,8 +372,11 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 		}
 		return userjob.SilenceStateFor(stage, days, info.HasPendingSuggestion) == userjob.SilenceSilent
 	case KindInterviewPrep:
-		return info.JobOpen && stage == "interview"
+		return info.JobOpen && info.ApplicationExists && stage == "interview"
 	case KindJobClosed:
+		if !info.ApplicationExists {
+			return false
+		}
 		_, active := userjob.SilenceThresholdDays(stage)
 		return active
 	default:

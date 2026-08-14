@@ -53,6 +53,8 @@ type Submission struct {
 	Regions        []string
 	Cities         []string
 	WorkMode       string
+	EmploymentType string
+	Seniority      string
 	SalaryMin      *int
 	SalaryMax      *int
 	SalaryCurrency string
@@ -151,6 +153,8 @@ func (s *Service) Approve(ctx context.Context, reviewerID, id int64) (Submission
 		Regions:        sub.Regions,
 		Cities:         sub.Cities,
 		WorkMode:       sub.WorkMode,
+		EmploymentType: sub.EmploymentType,
+		Seniority:      sub.Seniority,
 		SalaryMin:      sub.SalaryMin,
 		SalaryMax:      sub.SalaryMax,
 		SalaryCurrency: sub.SalaryCurrency,

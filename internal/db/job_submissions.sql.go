@@ -14,16 +14,18 @@ import (
 const createSubmission = `-- name: CreateSubmission :one
 INSERT INTO job_submissions (
     submitted_by, url, source, title, company, location, remote, description, posted_at,
-    skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
+    skills, regions, cities, work_mode, employment_type, seniority,
+    salary_min, salary_max, salary_currency, salary_period
 ) VALUES (
     $1::bigint, $2, $3, $4,
     $5, $6, $7, $8,
     $9,
     COALESCE($10::text[], '{}'), COALESCE($11::text[], '{}'),
     COALESCE($12::text[], '{}'), $13,
-    $14, $15, $16, $17
+    $14, $15,
+    $16, $17, $18, $19
 )
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period, employment_type, seniority
 `
 
 type CreateSubmissionParams struct {
@@ -40,6 +42,8 @@ type CreateSubmissionParams struct {
 	Regions        []string           `json:"regions"`
 	Cities         []string           `json:"cities"`
 	WorkMode       string             `json:"work_mode"`
+	EmploymentType string             `json:"employment_type"`
+	Seniority      string             `json:"seniority"`
 	SalaryMin      pgtype.Int4        `json:"salary_min"`
 	SalaryMax      pgtype.Int4        `json:"salary_max"`
 	SalaryCurrency string             `json:"salary_currency"`
@@ -64,6 +68,8 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		arg.Regions,
 		arg.Cities,
 		arg.WorkMode,
+		arg.EmploymentType,
+		arg.Seniority,
 		arg.SalaryMin,
 		arg.SalaryMax,
 		arg.SalaryCurrency,
@@ -95,12 +101,14 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		&i.SalaryMax,
 		&i.SalaryCurrency,
 		&i.SalaryPeriod,
+		&i.EmploymentType,
+		&i.Seniority,
 	)
 	return i, err
 }
 
 const getSubmission = `-- name: GetSubmission :one
-SELECT id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period FROM job_submissions WHERE id = $1
+SELECT id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period, employment_type, seniority FROM job_submissions WHERE id = $1
 `
 
 // Load a single submission by id for the review path. The approve/reject flow guards the
@@ -134,12 +142,14 @@ func (q *Queries) GetSubmission(ctx context.Context, id int64) (JobSubmission, e
 		&i.SalaryMax,
 		&i.SalaryCurrency,
 		&i.SalaryPeriod,
+		&i.EmploymentType,
+		&i.Seniority,
 	)
 	return i, err
 }
 
 const listPendingSubmissions = `-- name: ListPendingSubmissions :many
-SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, u.email AS submitter_email
+SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, s.employment_type, s.seniority, u.email AS submitter_email
 FROM job_submissions s
 JOIN users u ON u.id = s.submitted_by
 WHERE s.status = 'pending'
@@ -172,6 +182,8 @@ type ListPendingSubmissionsRow struct {
 	SalaryMax      pgtype.Int4        `json:"salary_max"`
 	SalaryCurrency string             `json:"salary_currency"`
 	SalaryPeriod   string             `json:"salary_period"`
+	EmploymentType string             `json:"employment_type"`
+	Seniority      string             `json:"seniority"`
 	SubmitterEmail string             `json:"submitter_email"`
 }
 
@@ -213,6 +225,8 @@ func (q *Queries) ListPendingSubmissions(ctx context.Context) ([]ListPendingSubm
 			&i.SalaryMax,
 			&i.SalaryCurrency,
 			&i.SalaryPeriod,
+			&i.EmploymentType,
+			&i.Seniority,
 			&i.SubmitterEmail,
 		); err != nil {
 			return nil, err
@@ -226,7 +240,7 @@ func (q *Queries) ListPendingSubmissions(ctx context.Context) ([]ListPendingSubm
 }
 
 const listSubmissionsByUser = `-- name: ListSubmissionsByUser :many
-SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, j.public_slug AS job_slug
+SELECT s.id, s.submitted_by, s.url, s.source, s.title, s.company, s.location, s.remote, s.description, s.posted_at, s.status, s.review_reason, s.reviewed_by, s.reviewed_at, s.job_id, s.created_at, s.skills, s.regions, s.cities, s.work_mode, s.salary_min, s.salary_max, s.salary_currency, s.salary_period, s.employment_type, s.seniority, j.public_slug AS job_slug
 FROM job_submissions s
 LEFT JOIN jobs j ON j.id = s.job_id
 WHERE s.submitted_by = $1
@@ -258,6 +272,8 @@ type ListSubmissionsByUserRow struct {
 	SalaryMax      pgtype.Int4        `json:"salary_max"`
 	SalaryCurrency string             `json:"salary_currency"`
 	SalaryPeriod   string             `json:"salary_period"`
+	EmploymentType string             `json:"employment_type"`
+	Seniority      string             `json:"seniority"`
 	JobSlug        pgtype.Text        `json:"job_slug"`
 }
 
@@ -298,6 +314,8 @@ func (q *Queries) ListSubmissionsByUser(ctx context.Context, submittedBy int64) 
 			&i.SalaryMax,
 			&i.SalaryCurrency,
 			&i.SalaryPeriod,
+			&i.EmploymentType,
+			&i.Seniority,
 			&i.JobSlug,
 		); err != nil {
 			return nil, err
@@ -317,7 +335,7 @@ SET status      = 'approved',
     reviewed_at = now(),
     job_id      = $2::bigint
 WHERE id = $3 AND status = 'pending'
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period, employment_type, seniority
 `
 
 type MarkSubmissionApprovedParams struct {
@@ -357,6 +375,8 @@ func (q *Queries) MarkSubmissionApproved(ctx context.Context, arg MarkSubmission
 		&i.SalaryMax,
 		&i.SalaryCurrency,
 		&i.SalaryPeriod,
+		&i.EmploymentType,
+		&i.Seniority,
 	)
 	return i, err
 }
@@ -368,7 +388,7 @@ SET status        = 'rejected',
     reviewed_at   = now(),
     review_reason = $2
 WHERE id = $3 AND status = 'pending'
-RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
+RETURNING id, submitted_by, url, source, title, company, location, remote, description, posted_at, status, review_reason, reviewed_by, reviewed_at, job_id, created_at, skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period, employment_type, seniority
 `
 
 type MarkSubmissionRejectedParams struct {
@@ -407,6 +427,8 @@ func (q *Queries) MarkSubmissionRejected(ctx context.Context, arg MarkSubmission
 		&i.SalaryMax,
 		&i.SalaryCurrency,
 		&i.SalaryPeriod,
+		&i.EmploymentType,
+		&i.Seniority,
 	)
 	return i, err
 }

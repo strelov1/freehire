@@ -98,7 +98,7 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, 
 		return sources.Job{}, false, nil
 	}
 
-	jobs, err := adapter.Fetch(ctx, sources.CompanyEntry{Provider: source, Board: board})
+	jobs, err := fetchForResolve(ctx, adapter, sources.CompanyEntry{Provider: source, Board: board}, raw)
 	if err != nil {
 		return sources.Job{}, false, err
 	}
@@ -111,6 +111,26 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, 
 	// board dedups onto the row this import writes instead of adding a second posting.
 	job.ExternalID = sources.NamespaceExternalID(board, job.ExternalID)
 	return job, true, nil
+}
+
+// fetchForResolve fetches a board through the adapter, preferring a HydratingSource's FetchNew
+// over Fetch: for such an adapter Fetch hydrates every posting (e.g. workday.Fetch), so resolving
+// one pasted link would otherwise trigger a full multi-thousand-posting hydration crawl. FetchNew
+// takes a seen predicate; supplying one that reports every posting EXCEPT the one raw points at as
+// already seen limits hydration to just that posting — the mirror image of how
+// pipeline.Runner.fetchBoard uses the same predicate to skip postings the store already has. The
+// target's external id is guessed from raw's path segments, the same heuristic pickPosting's id
+// fallback uses to identify a posting once the board is in hand.
+func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.CompanyEntry, raw string) ([]sources.Job, error) {
+	hs, hydrating := adapter.(sources.HydratingSource)
+	if !hydrating {
+		return adapter.Fetch(ctx, e)
+	}
+	want := pathSegmentsFromEnd(raw)
+	seen := func(externalID string) bool {
+		return !slices.Contains(want, externalID)
+	}
+	return hs.FetchNew(ctx, e, seen)
 }
 
 // pickPosting finds the posting a link refers to among a board's postings. It tries the URL

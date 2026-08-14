@@ -17,6 +17,10 @@ func TestRunInstance(t *testing.T) {
 		{"no args", nil, ""},
 		{"bare board file", []string{"eightfold.yml"}, "eightfold"},
 		{"path-like board file", []string{"/opt/freehire/src/hire-current/sources/eightfold.yml"}, "eightfold"},
+		{"trailing flag after board file", []string{"sources/eightfold.yml", "--shard=1/6"}, "eightfold"},
+		{"flag only", []string{"--posted-within", "168h"}, ""},
+		{"end-of-options marker before board file", []string{"--", "sources/eightfold.yml"}, "eightfold"},
+		{"end-of-options marker alone", []string{"--"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

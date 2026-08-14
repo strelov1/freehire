@@ -93,7 +93,11 @@ RETURNING n.id;
 -- internal/deliverywindow before send), and the application's CURRENT
 -- stage/last-activity/pending-suggestion so the worker can recompute the
 -- triggering condition rather than trust what MATCH saw. job_open lets the
--- worker cancel a nudge for a job that has since closed.
+-- worker cancel a nudge for a job that has since closed. application_exists
+-- distinguishes "no applications row at all" (untracked since MATCH) from "row
+-- exists with a NULL stage" — the LEFT JOIN alone leaves stage NULL in both
+-- cases, which would otherwise be judged as the active `applied` stage by
+-- userjob.SilenceThresholdDays.
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
@@ -102,6 +106,7 @@ SELECT n.id, n.user_id, n.job_id, n.kind,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end,
        a.stage,
+       (a.user_id IS NOT NULL)::bool AS application_exists,
        GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
        u.email AS account_email,

@@ -74,14 +74,35 @@ freehire_worker_last_run_success{%[1]s} %[4]d
 	}
 }
 
-// runInstance derives a metric instance label from a worker's trailing
-// command-line argument, when it looks like a path (cmd/ingest's
-// `sources/<board>.yml`). Returns "" for a worker invoked with no arguments
-// (embed, search-drain, reindex), which then reports under job alone.
+// runInstance derives a metric instance label from a worker's command-line
+// arguments, when one looks like a path (cmd/ingest's `sources/<board>.yml`).
+// It scans for the first non-flag argument rather than assuming the last one,
+// since a flag can trail the path (`ingest sources/eightfold.yml --shard=1/6`).
+// A bare (non-"=") flag's space-separated value (`reindex --posted-within
+// 168h`) is skipped along with the flag itself, so it isn't mistaken for a
+// board path. Returns "" when no non-flag argument is present (embed,
+// search-drain, reindex, or reindex --posted-within 168h), which then reports
+// under job alone.
 func runInstance(args []string) string {
-	if len(args) == 0 {
-		return ""
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			// The POSIX end-of-options marker: everything after it is positional,
+			// so it must not be treated as a bare flag whose "value" (the board
+			// path itself) gets skipped by the generic rule below.
+			if i+1 < len(args) {
+				base := filepath.Base(args[i+1])
+				return strings.TrimSuffix(base, filepath.Ext(base))
+			}
+			return ""
+		}
+		if !strings.HasPrefix(arg, "-") {
+			base := filepath.Base(arg)
+			return strings.TrimSuffix(base, filepath.Ext(base))
+		}
+		if !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			i++
+		}
 	}
-	base := filepath.Base(args[len(args)-1])
-	return strings.TrimSuffix(base, filepath.Ext(base))
+	return ""
 }

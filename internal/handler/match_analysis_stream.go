@@ -16,6 +16,7 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/credits"
+	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/matchanalysis"
 )
@@ -55,8 +56,12 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 
 	// Compute the hard-constraint blockers exactly as the POST path does: the unmet
-	// ones ground the prompt. The served-score cap needs no handling here — the cache
-	// holds the uncapped analysis and GET recomputes the cap on read.
+	// ones ground the prompt, and the same list caps the `final` event below. Unlike
+	// GET, a stream reader never comes back for a recompute-on-read — this event IS
+	// the served response — so the ceiling has to be applied here, not skipped on the
+	// assumption a later GET will do it. The cache still holds the uncapped analysis,
+	// exactly as the POST path leaves it, so a dictionary change still takes effect
+	// on a later GET with no cache invalidation.
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
 	// Bound before the stream opens: minting a credential is a network call, and making
@@ -122,7 +127,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 
 		analysis, err := analyzer.AnalyzeStream(ctx, input, func(e matchanalysis.Event) {
 			events++
-			stream.event(string(e.Kind), e)
+			stream.event(string(e.Kind), capFinalEvent(e, blockers))
 		})
 		stopHeartbeat()
 		if err != nil {
@@ -142,6 +147,27 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil
+}
+
+// capFinalEvent applies the caller's hard-constraint blockers to the audited `final`
+// event's analysis before it goes out over the wire — the same ceiling GetMatchAnalysis
+// (capServedAnalysis) and PostMatchAnalysis (applyBlockers) apply, so a stream reader
+// never sees an uncapped, blocker-free score just because a GET recompute never runs for
+// them. Every other event kind passes through unchanged.
+//
+// It caps a COPY of the analysis rather than the one e.Analysis points to: that pointer
+// is the same object AnalyzeStream returns to the caller, which still feeds
+// h.cacheAnalysis right after and must stay uncapped there, exactly as the POST path's
+// cache write does — so a later dictionary change still takes effect on a GET with no
+// cache invalidation.
+func capFinalEvent(e matchanalysis.Event, blockers []hardconstraint.Blocker) matchanalysis.Event {
+	if e.Kind != matchanalysis.EventFinal || e.Analysis == nil {
+		return e
+	}
+	served := *e.Analysis
+	applyBlockers(&served, blockers)
+	e.Analysis = &served
+	return e
 }
 
 // reportStreamFault sends a fault that surfaced AFTER the response body began streaming

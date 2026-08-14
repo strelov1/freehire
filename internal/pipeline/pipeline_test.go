@@ -72,6 +72,34 @@ func (s *fakeStore) Touch(_ context.Context, source, externalID string) error {
 	return nil
 }
 
+// fakeCoverage answers NonAggregatorCompanies from a canned covered set, and records every
+// batch of company slugs it was asked about — so a test can prove how often (per board vs
+// per distinct company) the pipeline calls it.
+type fakeCoverage struct {
+	mu             sync.Mutex
+	covered        map[string]bool // exact company_slug -> covered
+	calls          [][]string      // each call's companySlugs argument, in order
+	aggregatorArgs [][]string      // each call's aggregators argument, in order
+	err            error
+}
+
+func (f *fakeCoverage) NonAggregatorCompanies(_ context.Context, companySlugs, aggregators []string) (map[string]bool, error) {
+	f.mu.Lock()
+	f.calls = append(f.calls, append([]string(nil), companySlugs...))
+	f.aggregatorArgs = append(f.aggregatorArgs, append([]string(nil), aggregators...))
+	f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := make(map[string]bool)
+	for _, slug := range companySlugs {
+		if f.covered[slug] {
+			out[slug] = true
+		}
+	}
+	return out, nil
+}
+
 // fakeSource returns canned jobs or an error, keyed by provider.
 type fakeSource struct {
 	provider string
@@ -554,6 +582,212 @@ func TestNormalizeJobDerivesClassification(t *testing.T) {
 	}
 	if f.Category != "backend" {
 		t.Errorf("Category = %q, want backend", f.Category)
+	}
+}
+
+// TestRunSkipsAggregatorPostingForATSCoveredCompany proves the ingest-time coverage gate:
+// a posting from an aggregator-classified provider (himalayas) is not saved when its company
+// already has open coverage from a non-aggregator source, per the wired fakeCoverage.
+func TestRunSkipsAggregatorPostingForATSCoveredCompany(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "himalayas", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 0 {
+		t.Fatalf("saved = %+v, want none (company already covered by a non-aggregator source)", store.saved)
+	}
+	if stats.Total().ATSCovered != 1 {
+		t.Errorf("stats.Total().ATSCovered = %d, want 1", stats.Total().ATSCovered)
+	}
+	if stats.Total().Ingested != 0 || stats.Total().Rejected != 0 {
+		t.Errorf("stats = %+v, want Ingested=0 Rejected=0 (a coverage skip is neither)", stats.Total())
+	}
+}
+
+// TestRunSavesAggregatorPostingForUncoveredCompany proves the gate does not fire when the
+// company has no non-aggregator coverage: the posting is saved exactly as before.
+func TestRunSavesAggregatorPostingForUncoveredCompany(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "himalayas", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 {
+		t.Fatalf("saved = %+v, want 1 (no non-aggregator coverage)", store.saved)
+	}
+	if stats.Total().Ingested != 1 || stats.Total().ATSCovered != 0 {
+		t.Errorf("stats = %+v, want Ingested=1 ATSCovered=0", stats.Total())
+	}
+}
+
+// TestRunIgnoresCoverageForATSProvider proves the gate only ever evaluates for a
+// KindAggregator provider: an ATS board (greenhouse) saves every posting even when a
+// configured Coverage port would report the company covered.
+func TestRunIgnoresCoverageForATSProvider(t *testing.T) {
+	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 || stats.Total().Ingested != 1 {
+		t.Fatalf("saved=%d stats=%+v, want 1 saved (ATS boards ignore the coverage gate)", len(store.saved), stats.Total())
+	}
+	if len(coverage.calls) != 0 {
+		t.Errorf("coverage.calls = %v, want none — the gate must not even query for a KindATS provider", coverage.calls)
+	}
+}
+
+// TestRunSavesAggregatorPostingWhenCoverageNotWired proves a nil Coverage port reproduces
+// today's behavior: the gate is simply not applied, no error is raised.
+func TestRunSavesAggregatorPostingWhenCoverageNotWired(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+	}}
+	store := &fakeStore{}
+	r := Runner{Registry: registry(src), Store: store} // Coverage left nil
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "himalayas", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 || stats.Total().Ingested != 1 || stats.Total().ATSCovered != 0 {
+		t.Fatalf("saved=%d stats=%+v, want 1 saved Ingested=1 ATSCovered=0", len(store.saved), stats.Total())
+	}
+}
+
+// TestRunCoverageMatchesExactCompanySlugOnly proves the gate compares company_slug values
+// EXACTLY as computed, with NO folding: a live Meili filter cannot compute the reindex
+// suppression pass's hyphen-stripping fold at query time, and folding the query value
+// before sending it to Meili would break the ordinary, correctly-spelled case too (see
+// design.md's "Coverage definition" — NO folding). A covered-set entry that only agrees
+// with the posting's company_slug after folding must NOT match here; catching that case
+// remains the reindex pass's job.
+func TestRunCoverageMatchesExactCompanySlugOnly(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		// CompanySlug normalizes "CFO Insights" to "cfo-insights". The covered set below
+		// reports the FOLDED spelling ("cfoinsights", no hyphen) — as if a differently
+		// hyphenated ATS posting of the same employer were the only thing covered.
+		{ExternalID: "1", Title: "Backend Engineer", Company: "CFO Insights"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"cfoinsights": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "CFO Insights", Provider: "himalayas", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 || stats.Total().ATSCovered != 0 {
+		t.Fatalf("saved=%d ATSCovered=%d, want 1 saved / 0 covered (exact match only, no folding)", len(store.saved), stats.Total().ATSCovered)
+	}
+}
+
+// TestRunGatesStreamingAggregatorAndMemoizesPerCompany proves the coverage gate also applies
+// to a streaming aggregator source (jobtech is the one today), which never hands the pipeline
+// a full batch to resolve up front: covered postings are skipped, uncovered postings are
+// saved, and the underlying CoverageLookup is asked about each distinct company only once
+// even though "Acme" appears in two postings in this one stream.
+func TestRunGatesStreamingAggregatorAndMemoizesPerCompany(t *testing.T) {
+	src := fakeStreamingSource{provider: "jobtech", failAfter: -1, jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+		{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme"},
+		{ExternalID: "3", Title: "Data Engineer", Company: "Other"},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Multi", Provider: "jobtech", Board: ""},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.saved) != 1 || store.saved[0].Fields().Company != "Other" {
+		t.Fatalf("saved = %+v, want only the Other posting (Acme is covered)", store.saved)
+	}
+	if stats.Total().ATSCovered != 2 || stats.Total().Ingested != 1 {
+		t.Errorf("stats = %+v, want ATSCovered=2 Ingested=1", stats.Total())
+	}
+	if len(coverage.calls) != 2 {
+		t.Fatalf("coverage.calls = %v, want 2 calls (one per distinct company, memoized)", coverage.calls)
+	}
+}
+
+// TestRunPassesAggregatorListToCoverageLookup proves the gate forwards
+// sources.AggregatorProviders(sources.Taxonomy()) as NonAggregatorCompanies' aggregators
+// argument, not an empty or nil list — a wrong list here would silently pass every
+// coverage check on the Meili adapter side (task 3.1), regardless of a company's real
+// coverage, and no other test asserts on this argument.
+func TestRunPassesAggregatorListToCoverageLookup(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+	}}
+	coverage := &fakeCoverage{}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: coverage}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "himalayas", Board: ""},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(coverage.calls) != 1 {
+		t.Fatalf("coverage.calls = %v, want 1 call", coverage.calls)
+	}
+	if len(coverage.aggregatorArgs) != 1 || len(coverage.aggregatorArgs[0]) == 0 {
+		t.Fatalf("aggregators argument = %v, want a non-empty provider list", coverage.aggregatorArgs)
+	}
+	if !slices.Contains(coverage.aggregatorArgs[0], "himalayas") {
+		t.Errorf("aggregators argument %v does not contain %q", coverage.aggregatorArgs[0], "himalayas")
+	}
+}
+
+// TestRunStreamingCoverageSkipsBlankCompany proves the streaming resolver never queries
+// CoverageLookup for a posting with no company name — normalize.Slug("") folds to "", and
+// there is nothing meaningful to ask Meili about.
+func TestRunStreamingCoverageSkipsBlankCompany(t *testing.T) {
+	src := fakeStreamingSource{provider: "jobtech", failAfter: -1, jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: ""},
+	}}
+	coverage := &fakeCoverage{}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: coverage}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Blank", Provider: "jobtech", Board: ""},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(coverage.calls) != 0 {
+		t.Errorf("coverage.calls = %v, want none (blank company slug is never looked up)", coverage.calls)
 	}
 }
 

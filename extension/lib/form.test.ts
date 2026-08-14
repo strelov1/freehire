@@ -4,6 +4,7 @@ import {
   extractUploads,
   matchFieldKey,
   planLabelFills,
+  fillsForFrame,
   fillByLabel,
   looksLikeApplication,
   scopeToApplication,
@@ -218,6 +219,31 @@ describe('planLabelFills', () => {
       { label: 'Email', value: 'ilya@example.com' },
     ]);
   });
+
+  it("carries the field's frame and form onto the fill, so it can be scoped later", () => {
+    expect(planLabelFills([{ label: 'First Name', frame: 18, form: 0 }], values)).toEqual([
+      { label: 'First Name', value: 'Ilya', frame: 18, form: 0 },
+    ]);
+  });
+});
+
+describe('fillsForFrame', () => {
+  const fills = [
+    { label: 'First Name', value: 'Ilya', frame: 18, form: 0 },
+    { label: 'Email', value: 'ilya@example.com', frame: 0, form: 1 },
+    { label: 'Referral code', value: 'ABC' },
+  ];
+
+  it('keeps only the fills addressed to the frame, plus the frame-agnostic ones', () => {
+    expect(fillsForFrame(fills, 18)).toEqual([
+      { label: 'First Name', value: 'Ilya', frame: 18, form: 0 },
+      { label: 'Referral code', value: 'ABC' },
+    ]);
+  });
+
+  it('withholds a frame-addressed fill from every other frame', () => {
+    expect(fillsForFrame(fills, 7)).toEqual([{ label: 'Referral code', value: 'ABC' }]);
+  });
 });
 
 describe('extractForm combo flag', () => {
@@ -369,6 +395,35 @@ describe('fillByLabel', () => {
       { label: 'Favourite colour', status: 'not_found' },
       { label: 'Country', status: 'no_option' },
     ]);
+  });
+
+  it('writes only the target form when two forms share a label', () => {
+    // Roku carries both an application and a job-alert signup, each asking for
+    // an "Email"; a fill scoped to the application form must not spill into
+    // the signup's same-labeled control sitting right next to it.
+    const application = formWith('application', ['Email']);
+    const signup = formWith('signup', ['Email']);
+    const applicationInput = must(application.querySelector<HTMLInputElement>('input'));
+    const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com', form: 0 }]);
+
+    expect(applicationInput.value).toBe('ilya@example.com');
+    expect(signupInput.value).toBe('');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'filled' }]);
+  });
+
+  it('reports not_found rather than fall back to an out-of-form match', () => {
+    // The target form (0) exists, but only the other form (1) carries this
+    // label — the fill must not silently land there.
+    formWith('application', ['First Name']);
+    const signup = formWith('signup', ['Email']);
+    const signupInput = must(signup.querySelector<HTMLInputElement>('input'));
+
+    const outcomes = fillByLabel(document, [{ label: 'Email', value: 'ilya@example.com', form: 0 }]);
+
+    expect(signupInput.value).toBe('');
+    expect(outcomes).toEqual([{ label: 'Email', status: 'not_found' }]);
   });
 });
 
