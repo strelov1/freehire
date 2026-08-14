@@ -309,6 +309,19 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 // fingerprints move.
 func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJobParams {
 	derived := f.UpsertParams()
+	// jobhash.Of hashes p.PublicSlug, and UpsertParams() built derived from f.PublicSlug —
+	// a slug job.New/jobderive.Derive just recomputed from the edited title/company. But
+	// UpdateManualJob's own SQL comment is explicit that "the source identity (url/
+	// external_id/public_slug) is deliberately NOT updatable here": the row's real
+	// public_slug stays `slug`, the value already addressing it below. Hashing f.PublicSlug
+	// would stamp content_hash with a slug value that never lands in the row, so
+	// jobhash.OfRow (what a backfill/reconciliation pass calls, reading the row's ACTUAL
+	// public_slug) could never reproduce it — the row would spuriously report "changed" on
+	// every such pass even though nothing indexed actually moved. Re-derive against the
+	// slug that is actually persisted; RoleFingerprint is unaffected (it deliberately
+	// excludes public_slug, per its own doc comment), so this only changes ContentHash.
+	derived.PublicSlug = slug
+	derived = withDerived(derived)
 	return db.UpdateManualJobParams{
 		Title:       f.Title,
 		Company:     f.Company,

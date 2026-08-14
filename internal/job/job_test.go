@@ -9,6 +9,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/jobhash"
 	"github.com/strelov1/freehire/internal/normalize"
 )
 
@@ -316,11 +317,15 @@ func TestUpdateManualParams_CarriesSlugActorAndDerivedColumns(t *testing.T) {
 	}
 	f := j.Fields()
 
-	params := f.UpdateManualParams("acme-senior-go-developer", 7)
+	// The slug argument names the row's REAL, persisted public_slug — here deliberately
+	// f.PublicSlug itself, so this test isolates "derived columns agree for the same
+	// content" from the persisted-vs-rederived-slug divergence
+	// TestUpdateManualParams_ContentHashUsesThePersistedSlugNotTheRederivedOne covers.
+	params := f.UpdateManualParams(f.PublicSlug, 7)
 	automated := f.UpsertParams()
 
-	if params.PublicSlug != "acme-senior-go-developer" {
-		t.Errorf("PublicSlug = %q", params.PublicSlug)
+	if params.PublicSlug != f.PublicSlug {
+		t.Errorf("PublicSlug = %q, want %q", params.PublicSlug, f.PublicSlug)
 	}
 	if params.UpdatedBy != 7 {
 		t.Errorf("UpdatedBy = %d, want 7", params.UpdatedBy)
@@ -330,6 +335,55 @@ func TestUpdateManualParams_CarriesSlugActorAndDerivedColumns(t *testing.T) {
 	}
 	if params.ContentHash != automated.ContentHash || params.RoleFingerprint != automated.RoleFingerprint {
 		t.Errorf("derived = %v/%v, want %v/%v", params.ContentHash, params.RoleFingerprint, automated.ContentHash, automated.RoleFingerprint)
+	}
+}
+
+// UpdateManualJob's own SQL comment is explicit that public_slug is "deliberately NOT
+// updatable" by that statement — moderation.Service.Update re-derives Fields (and so a
+// fresh PublicSlug) from the edited title/company, but discards the recomputed slug and
+// passes the row's EXISTING one through UpdateManualParams' slug argument instead. The
+// stamped ContentHash must therefore be derived from that existing, actually-persisted
+// slug — not from f.PublicSlug, which job.New just recomputed from the new title and
+// will never be written anywhere for this row.
+func TestUpdateManualParams_ContentHashUsesThePersistedSlugNotTheRederivedOne(t *testing.T) {
+	// A title change moves job.New's derived slug, exactly like an employer/title edit
+	// through the moderation workspace does.
+	j, err := job.New(job.Draft{Input: jobderive.Input{
+		Source:      "manual",
+		ExternalID:  "https://acme.example/jobs/1",
+		Title:       "Staff Go Developer",
+		Company:     "Acme",
+		Description: "We use Golang.",
+	}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	f := j.Fields()
+
+	const existingSlug = "acme-senior-go-developer" // the row's real, pre-edit slug
+	if f.PublicSlug == existingSlug {
+		t.Fatalf("test fixture is not exercising a divergence: f.PublicSlug (%q) already equals existingSlug", f.PublicSlug)
+	}
+
+	params := f.UpdateManualParams(existingSlug, 7)
+
+	wantParams := f.UpsertParams()
+	wantParams.PublicSlug = existingSlug
+	want := jobhash.Of(wantParams)
+
+	if params.ContentHash.String != want {
+		t.Errorf("ContentHash = %q, want %q (derived from the persisted slug %q)", params.ContentHash.String, want, existingSlug)
+	}
+
+	rederived := jobhash.Of(f.UpsertParams()) // f.PublicSlug, the value that never lands in the row
+	if params.ContentHash.String == rederived {
+		t.Error("ContentHash was derived from f.PublicSlug (the freshly re-derived, never-persisted slug), not the row's actual public_slug")
+	}
+
+	// RoleFingerprint deliberately excludes public_slug, so it must be unaffected by
+	// which slug ContentHash used.
+	if params.RoleFingerprint != wantParams.RoleFingerprint {
+		t.Errorf("RoleFingerprint = %q, want %q — it must not move with public_slug", params.RoleFingerprint.String, wantParams.RoleFingerprint.String)
 	}
 }
 
