@@ -28,38 +28,38 @@
 
 ## 3. Frontend contract
 
-- [ ] 3.1 Export `SENIORITY_OPTIONS`/`EMPLOYMENT_TYPE_OPTIONS` from `web/src/lib/facets.ts`
+- [x] 3.1 Export `SENIORITY_OPTIONS`/`EMPLOYMENT_TYPE_OPTIONS` from `web/src/lib/facets.ts`
       (same pattern as the existing `WORK_MODE_OPTIONS` export).
-- [ ] 3.2 Regenerate/extend `web/src/lib/types.ts`: `SubmissionInput` gains
+- [x] 3.2 Regenerate/extend `web/src/lib/types.ts`: `SubmissionInput` gains
       `employment_type`/`seniority`; add a `PrefillResult` type for the new endpoint's
       response.
-- [ ] 3.3 Add `api.prefillSubmission(url)` to `web/src/lib/api.ts` calling
+- [x] 3.3 Add `api.prefillSubmission(url)` to `web/src/lib/api.ts` calling
       `POST /api/v1/submissions/prefill`.
 
 ## 4. Submit form — new fields and prefill
 
-- [ ] 4.1 Add employment-type and seniority selects to `SubmitView.svelte`'s Details
+- [x] 4.1 Add employment-type and seniority selects to `SubmitView.svelte`'s Details
       section, next to Work format, using the new facet options; wire them into the
       `submit()` payload.
-- [ ] 4.2 Add a "Fill in from this link" action next to the URL field: calls
+- [x] 4.2 Add a "Fill in from this link" action next to the URL field: calls
       `api.prefillSubmission`, fills only fields the submitter has not already typed
       into, and no-ops silently when the response comes back empty.
 
 ## 5. Preview tab
 
-- [ ] 5.1 Build `web/src/lib/components/JobPreview.svelte`: presentational-only render
+- [x] 5.1 Build `web/src/lib/components/JobPreview.svelte`: presentational-only render
       of the draft `$state` (company/logo, title, salary via `formatSalary`, facets via
       `summaryFacets`, description via `JobDescription`) — no API calls, no
       apply/save/vote/report/discussion affordances.
-- [ ] 5.2 Add Details/Preview tabs to `SubmitView.svelte`; Preview renders
+- [x] 5.2 Add Details/Preview tabs to `SubmitView.svelte`; Preview renders
       `JobPreview` fed by the current form state.
 
 ## 6. Verification
 
-- [ ] 6.1 Manual browser check: fill the Details tab, confirm Preview matches a real
+- [x] 6.1 Manual browser check: fill the Details tab, confirm Preview matches a real
       `/jobs/[slug]` render for equivalent content.
-- [ ] 6.2 Manual browser check: paste a known recognized job URL, confirm prefill fills
+- [x] 6.2 Manual browser check: paste a known recognized job URL, confirm prefill fills
       empty fields and does not clobber fields already typed; paste an unrecognized URL
       and confirm it degrades to a no-op, not an error toast.
-- [ ] 6.3 `go vet -tags=integration ./...`, `go test ./...`, `gofmt -l .` clean before
+- [x] 6.3 `go vet -tags=integration ./...`, `go test ./...`, `gofmt -l .` clean before
       push.
