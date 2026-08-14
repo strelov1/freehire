@@ -40,6 +40,17 @@ func truncateSubs(t *testing.T, pool *pgxpool.Pool) {
 	}
 }
 
+// recordMatch records a single (subscription, job) match via the batched insert
+// RecordSubscriptionMatches replaced RecordSubscriptionMatch with, returning the
+// affected row count (1 = newly recorded, 0 = already known) for tests exercising the
+// single-pair case.
+func recordMatch(ctx context.Context, q *Queries, sub, job int64) (int64, error) {
+	return q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
+		SubscriptionIds: []int64{sub},
+		JobIds:          []int64{job},
+	})
+}
+
 func TestSubscriptionCreate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -145,13 +156,46 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		sub := seed("ledger@example.test")
 		job := insertJob(t, pool, "j1")
 
-		first, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: job})
+		first, err := recordMatch(ctx, q, sub, job)
 		if err != nil || first != 1 {
 			t.Fatalf("first record: rows=%d err=%v, want 1", first, err)
 		}
-		second, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: job})
+		second, err := recordMatch(ctx, q, sub, job)
 		if err != nil || second != 0 {
 			t.Errorf("second record: rows=%d err=%v, want 0 (already recorded)", second, err)
+		}
+	})
+
+	// The batched insert (RecordSubscriptionMatches) is the actual fix: one round trip
+	// for a whole query's (subscription, job) pairs instead of one INSERT per pair.
+	// This exercises it with more than one pair, a mix of new and already-known ones.
+	t.Run("batched recording inserts new pairs and skips known ones", func(t *testing.T) {
+		truncateSubs(t, pool)
+		subA := seed("batch-a@example.test")
+		subB := seed("batch-b@example.test")
+		j1 := insertJob(t, pool, "b1")
+		j2 := insertJob(t, pool, "b2")
+
+		if _, err := recordMatch(ctx, q, subA, j1); err != nil {
+			t.Fatalf("seed known pair: %v", err)
+		}
+
+		n, err := q.RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
+			SubscriptionIds: []int64{subA, subA, subB},
+			JobIds:          []int64{j1, j2, j1},
+		})
+		if err != nil {
+			t.Fatalf("batched record: %v", err)
+		}
+		if n != 2 {
+			t.Errorf("newly recorded = %d, want 2 (subA/j1 was already known)", n)
+		}
+		var total int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM subscription_matches").Scan(&total); err != nil {
+			t.Fatal(err)
+		}
+		if total != 3 {
+			t.Errorf("total matches = %d, want 3 (1 seeded + 2 newly batched)", total)
 		}
 	})
 
@@ -161,7 +205,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		j1 := insertJob(t, pool, "c1")
 		j2 := insertJob(t, pool, "c2")
 		for _, j := range []int64{j1, j2} {
-			if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: j}); err != nil {
+			if _, err := recordMatch(ctx, q, sub, j); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -186,7 +230,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		truncateSubs(t, pool)
 		sub := seed("stale@example.test")
 		job := insertJob(t, pool, "s1")
-		if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: job}); err != nil {
+		if _, err := recordMatch(ctx, q, sub, job); err != nil {
 			t.Fatal(err)
 		}
 		if c, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil || len(c) != 1 {
@@ -204,7 +248,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		truncateSubs(t, pool)
 		sub := seed("notified@example.test")
 		job := insertJob(t, pool, "n1")
-		if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: job}); err != nil {
+		if _, err := recordMatch(ctx, q, sub, job); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := q.ClaimSubscriptionMatches(ctx, ClaimSubscriptionMatchesParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil {
@@ -224,7 +268,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		truncateSubs(t, pool)
 		sub := seed("dead@example.test")
 		job := insertJob(t, pool, "d1")
-		if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub, JobID: job}); err != nil {
+		if _, err := recordMatch(ctx, q, sub, job); err != nil {
 			t.Fatal(err)
 		}
 		fail := RecordMatchDeliveryFailureParams{SubscriptionID: sub, JobIds: []int64{job}, LastError: "boom", MaxAttempts: 2}
@@ -253,7 +297,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			t.Fatal(err)
 		}
 		job := insertJob(t, pool, "i1")
-		if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub.ID, JobID: job}); err != nil {
+		if _, err := recordMatch(ctx, q, sub.ID, job); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := q.SetSubscriptionActive(ctx, SetSubscriptionActiveParams{Active: false, ID: sub.ID, UserID: uid}); err != nil {
@@ -273,7 +317,7 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 			t.Fatal(err)
 		}
 		job := insertJob(t, pool, "x1")
-		if _, err := q.RecordSubscriptionMatch(ctx, RecordSubscriptionMatchParams{SubscriptionID: sub.ID, JobID: job}); err != nil {
+		if _, err := recordMatch(ctx, q, sub.ID, job); err != nil {
 			t.Fatal(err)
 		}
 		rows, err := q.DeleteSubscription(ctx, DeleteSubscriptionParams{ID: sub.ID, UserID: uid})

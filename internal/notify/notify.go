@@ -87,7 +87,7 @@ type Searcher interface {
 // Store is the persistence the engine needs. *db.Queries satisfies it directly.
 type Store interface {
 	ListActiveSubscriptions(ctx context.Context) ([]db.ListActiveSubscriptionsRow, error)
-	RecordSubscriptionMatch(ctx context.Context, arg db.RecordSubscriptionMatchParams) (int64, error)
+	RecordSubscriptionMatches(ctx context.Context, arg db.RecordSubscriptionMatchesParams) (int64, error)
 	ClaimSubscriptionMatches(ctx context.Context, arg db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error)
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (db.GetSubscriptionForDeliveryRow, error)
 	GetJobsForDigest(ctx context.Context, jobIds []int64) ([]db.GetJobsForDigestRow, error)

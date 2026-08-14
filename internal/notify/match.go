@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/url"
 	"time"
@@ -55,6 +56,11 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 		return err
 	}
 
+	// Collect every (subscription, job) pair this query's hits produced across every
+	// subscription that shares it, then record the whole batch in one round trip —
+	// a popular query with many subscribers no longer costs one sequential INSERT per
+	// (hit, subscription) pair.
+	var subIDs, jobIDs []int64
 	for _, hit := range res.Hits {
 		created, ok := hitCreatedAt(hit)
 		if !ok {
@@ -69,17 +75,21 @@ func (r *Runner) matchQuery(ctx context.Context, query string, subs []db.ListAct
 			if created.Before(s.StartAt.Time) {
 				continue
 			}
-			n, err := r.store.RecordSubscriptionMatch(ctx, db.RecordSubscriptionMatchParams{
-				SubscriptionID: s.ID,
-				JobID:          hit.ID,
-			})
-			if err != nil {
-				log.Printf("notify: record match sub=%d job=%d: %v", s.ID, hit.ID, err)
-				continue
-			}
-			stats.Matched += int(n) // n is 1 for a newly recorded match, 0 if already known
+			subIDs = append(subIDs, s.ID)
+			jobIDs = append(jobIDs, hit.ID)
 		}
 	}
+	if len(subIDs) == 0 {
+		return nil
+	}
+	n, err := r.store.RecordSubscriptionMatches(ctx, db.RecordSubscriptionMatchesParams{
+		SubscriptionIds: subIDs,
+		JobIds:          jobIDs,
+	})
+	if err != nil {
+		return fmt.Errorf("record matches: %w", err)
+	}
+	stats.Matched += int(n) // n is the count of newly recorded pairs; already-known pairs are skipped
 	return nil
 }
 

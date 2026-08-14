@@ -2605,11 +2605,19 @@ type Querier interface {
 	// so a failed entry is never reprocessed within the same run. Mirrors
 	// RecordEnrichmentFailure.
 	RecordSemanticFailure(ctx context.Context, arg RecordSemanticFailureParams) (RecordSemanticFailureRow, error)
-	// Record that a job matched a subscription. The PK (subscription_id, job_id) makes
-	// this idempotent — re-scanning an already-recorded match is a no-op — so the
-	// worker can re-scan recent jobs freely without ever delivering twice. Returns the
-	// affected row count (1 = newly recorded, 0 = already known).
-	RecordSubscriptionMatch(ctx context.Context, arg RecordSubscriptionMatchParams) (int64, error)
+	// Record that a batch of (subscription, job) pairs matched, one round trip for
+	// however many pairs one query's search hits produced across every subscription that
+	// shares it — a popular query with many subscribers no longer costs one sequential
+	// INSERT per (hit, subscription) pair. The PK (subscription_id, job_id) makes this
+	// idempotent — re-scanning an already-recorded match is a no-op — so the worker can
+	// re-scan recent jobs freely without ever delivering twice. Returns the affected row
+	// count (newly recorded pairs; already-known pairs are silently skipped).
+	//
+	// Two same-length unnest calls in the SELECT list, not a two-argument unnest(a, b): the
+	// query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
+	// same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
+	// functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+	RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
 	// left in place — its expiry gates the retry to a later run and doubles as the

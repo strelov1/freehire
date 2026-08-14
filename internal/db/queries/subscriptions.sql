@@ -44,13 +44,22 @@ FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.active;
 
--- name: RecordSubscriptionMatch :execrows
--- Record that a job matched a subscription. The PK (subscription_id, job_id) makes
--- this idempotent — re-scanning an already-recorded match is a no-op — so the
--- worker can re-scan recent jobs freely without ever delivering twice. Returns the
--- affected row count (1 = newly recorded, 0 = already known).
+-- name: RecordSubscriptionMatches :execrows
+-- Record that a batch of (subscription, job) pairs matched, one round trip for
+-- however many pairs one query's search hits produced across every subscription that
+-- shares it — a popular query with many subscribers no longer costs one sequential
+-- INSERT per (hit, subscription) pair. The PK (subscription_id, job_id) makes this
+-- idempotent — re-scanning an already-recorded match is a no-op — so the worker can
+-- re-scan recent jobs freely without ever delivering twice. Returns the affected row
+-- count (newly recorded pairs; already-known pairs are silently skipped).
+--
+-- Two same-length unnest calls in the SELECT list, not a two-argument unnest(a, b): the
+-- query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
+-- same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
+-- functions in lockstep, pairing subscription_ids[i] with job_ids[i].
 INSERT INTO subscription_matches (subscription_id, job_id)
-VALUES ($1, $2)
+SELECT unnest(sqlc.arg(subscription_ids)::bigint[]) AS subscription_id,
+       unnest(sqlc.arg(job_ids)::bigint[]) AS job_id
 ON CONFLICT (subscription_id, job_id) DO NOTHING;
 
 -- name: ClaimSubscriptionMatches :many

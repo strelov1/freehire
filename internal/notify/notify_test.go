@@ -36,11 +36,12 @@ func (f *fakeSearcher) Search(_ context.Context, p search.SearchParams) (search.
 type recordedMatch struct{ sub, job int64 }
 
 type fakeStore struct {
-	active     []db.ListActiveSubscriptionsRow
-	recorded   []recordedMatch
-	claimed    []db.ClaimSubscriptionMatchesRow
-	delivery   map[int64]db.GetSubscriptionForDeliveryRow
-	digestJobs map[int64]db.GetJobsForDigestRow
+	active      []db.ListActiveSubscriptionsRow
+	recorded    []recordedMatch
+	recordCalls int // how many times RecordSubscriptionMatches was called, not how many pairs
+	claimed     []db.ClaimSubscriptionMatchesRow
+	delivery    map[int64]db.GetSubscriptionForDeliveryRow
+	digestJobs  map[int64]db.GetJobsForDigestRow
 
 	notified   []db.MarkMatchesNotifiedParams
 	failures   []db.RecordMatchDeliveryFailureParams
@@ -55,14 +56,25 @@ func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSub
 	return s.active, nil
 }
 
-func (s *fakeStore) RecordSubscriptionMatch(_ context.Context, a db.RecordSubscriptionMatchParams) (int64, error) {
-	for _, m := range s.recorded {
-		if m.sub == a.SubscriptionID && m.job == a.JobID {
-			return 0, nil // already recorded → idempotent no-op
+func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubscriptionMatchesParams) (int64, error) {
+	s.recordCalls++
+	var n int64
+	for i, subID := range a.SubscriptionIds {
+		jobID := a.JobIds[i]
+		known := false
+		for _, m := range s.recorded {
+			if m.sub == subID && m.job == jobID {
+				known = true // already recorded → idempotent no-op
+				break
+			}
 		}
+		if known {
+			continue
+		}
+		s.recorded = append(s.recorded, recordedMatch{subID, jobID})
+		n++
 	}
-	s.recorded = append(s.recorded, recordedMatch{a.SubscriptionID, a.JobID})
-	return 1, nil
+	return n, nil
 }
 
 func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
@@ -155,6 +167,41 @@ func TestMatch_SharedQueryHitsIndexOnce(t *testing.T) {
 	// Both subscriptions on the shared query get the match.
 	if len(store.recorded) != 2 {
 		t.Fatalf("recorded matches = %d, want 2", len(store.recorded))
+	}
+}
+
+// One query, many subscribers, many hits: the review finding was that matchQuery issued
+// one sequential RecordSubscriptionMatch round trip per (hit, subscription) pair. It must
+// now record the whole batch in a single call, regardless of how many pairs that is.
+func TestMatch_BatchesMatchesIntoOneCallPerQuery(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := &fakeStore{
+		active: []db.ListActiveSubscriptionsRow{
+			{ID: 1, Query: "seniority=senior", StartAt: ts(base)},
+			{ID: 2, Query: "seniority=senior", StartAt: ts(base)},
+			{ID: 3, Query: "seniority=senior", StartAt: ts(base)},
+		},
+	}
+	searcher := &fakeSearcher{results: []search.SearchResult{
+		{Hits: []search.JobDocument{
+			hit(100, base.Add(time.Hour)),
+			hit(101, base.Add(2*time.Hour)),
+		}},
+	}}
+	r := New(store, searcher, &fakeNotifier{}, DefaultConfig())
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.recordCalls != 1 {
+		t.Errorf("RecordSubscriptionMatches calls = %d, want 1 for 3 subscribers x 2 hits", store.recordCalls)
+	}
+	if len(store.recorded) != 6 {
+		t.Fatalf("recorded matches = %d, want 6 (3 subscriptions x 2 hits)", len(store.recorded))
+	}
+	if stats.Matched != 6 {
+		t.Errorf("stats.Matched = %d, want 6", stats.Matched)
 	}
 }
 

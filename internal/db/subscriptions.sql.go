@@ -434,23 +434,32 @@ func (q *Queries) RecordMatchDeliveryFailure(ctx context.Context, arg RecordMatc
 	return err
 }
 
-const recordSubscriptionMatch = `-- name: RecordSubscriptionMatch :execrows
+const recordSubscriptionMatches = `-- name: RecordSubscriptionMatches :execrows
 INSERT INTO subscription_matches (subscription_id, job_id)
-VALUES ($1, $2)
+SELECT unnest($1::bigint[]) AS subscription_id,
+       unnest($2::bigint[]) AS job_id
 ON CONFLICT (subscription_id, job_id) DO NOTHING
 `
 
-type RecordSubscriptionMatchParams struct {
-	SubscriptionID int64 `json:"subscription_id"`
-	JobID          int64 `json:"job_id"`
+type RecordSubscriptionMatchesParams struct {
+	SubscriptionIds []int64 `json:"subscription_ids"`
+	JobIds          []int64 `json:"job_ids"`
 }
 
-// Record that a job matched a subscription. The PK (subscription_id, job_id) makes
-// this idempotent — re-scanning an already-recorded match is a no-op — so the
-// worker can re-scan recent jobs freely without ever delivering twice. Returns the
-// affected row count (1 = newly recorded, 0 = already known).
-func (q *Queries) RecordSubscriptionMatch(ctx context.Context, arg RecordSubscriptionMatchParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordSubscriptionMatch, arg.SubscriptionID, arg.JobID)
+// Record that a batch of (subscription, job) pairs matched, one round trip for
+// however many pairs one query's search hits produced across every subscription that
+// shares it — a popular query with many subscribers no longer costs one sequential
+// INSERT per (hit, subscription) pair. The PK (subscription_id, job_id) makes this
+// idempotent — re-scanning an already-recorded match is a no-op — so the worker can
+// re-scan recent jobs freely without ever delivering twice. Returns the affected row
+// count (newly recorded pairs; already-known pairs are silently skipped).
+//
+// Two same-length unnest calls in the SELECT list, not a two-argument unnest(a, b): the
+// query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
+// same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
+// functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+func (q *Queries) RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordSubscriptionMatches, arg.SubscriptionIds, arg.JobIds)
 	if err != nil {
 		return 0, err
 	}
