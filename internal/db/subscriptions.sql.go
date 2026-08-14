@@ -78,7 +78,7 @@ INSERT INTO subscriptions (user_id, saved_search_id, channel, destination)
 SELECT ss.user_id, ss.id, $1, $2
 FROM saved_searches ss
 WHERE ss.id = $3 AND ss.user_id = $4
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
 `
 
 type CreateSubscriptionParams struct {
@@ -110,6 +110,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.Active,
 		&i.StartAt,
 		&i.CreatedAt,
+		&i.LastDigestSentAt,
 	)
 	return i, err
 }
@@ -194,35 +195,50 @@ func (q *Queries) GetJobsForDigest(ctx context.Context, jobIds []int64) ([]GetJo
 }
 
 const getSubscriptionForDelivery = `-- name: GetSubscriptionForDelivery :one
-SELECT s.id, s.user_id, s.channel, s.destination,
+SELECT s.id, s.user_id, s.channel, s.destination, s.last_digest_sent_at,
        ss.name AS saved_search_name,
        u.email AS account_email,
+       u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
+       COALESCE(ns.digest_frequency, 'instant')::text AS digest_frequency,
+       ns.digest_time AS digest_time,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN users u ON u.id = s.user_id
 LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
+LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.id = $1
 `
 
 type GetSubscriptionForDeliveryRow struct {
-	ID              int64       `json:"id"`
-	UserID          int64       `json:"user_id"`
-	Channel         string      `json:"channel"`
-	Destination     pgtype.Text `json:"destination"`
-	SavedSearchName string      `json:"saved_search_name"`
-	AccountEmail    string      `json:"account_email"`
-	TelegramChatID  pgtype.Int8 `json:"telegram_chat_id"`
-	HasPushDevice   bool        `json:"has_push_device"`
+	ID               int64              `json:"id"`
+	UserID           int64              `json:"user_id"`
+	Channel          string             `json:"channel"`
+	Destination      pgtype.Text        `json:"destination"`
+	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	SavedSearchName  string             `json:"saved_search_name"`
+	AccountEmail     string             `json:"account_email"`
+	Timezone         pgtype.Text        `json:"timezone"`
+	TelegramChatID   pgtype.Int8        `json:"telegram_chat_id"`
+	HasPushDevice    bool               `json:"has_push_device"`
+	DigestFrequency  string             `json:"digest_frequency"`
+	DigestTime       pgtype.Time        `json:"digest_time"`
+	QuietHoursStart  pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd    pgtype.Time        `json:"quiet_hours_end"`
 }
 
 // The delivery context for one subscription: channel + destination, the saved
 // search name (for the digest heading), the user's account email (the email
 // channel's live recipient), the user's linked Telegram chat (NULL when unlinked
-// → the worker soft-skips telegram delivery rather than failing it), and whether
+// → the worker soft-skips telegram delivery rather than failing it), whether
 // the user has at least one registered push device (the push channel's live
-// deliverability check, same soft-skip role as the Telegram link).
+// deliverability check, same soft-skip role as the Telegram link), and the
+// delivery-timing context (live, not snapshotted, same as the channel checks
+// above) — the account's timezone and its saved-search digest frequency
+// settings, read via internal/deliverywindow before a digest is sent.
 func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, getSubscriptionForDelivery, id)
 	var i GetSubscriptionForDeliveryRow
@@ -231,10 +247,16 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 		&i.UserID,
 		&i.Channel,
 		&i.Destination,
+		&i.LastDigestSentAt,
 		&i.SavedSearchName,
 		&i.AccountEmail,
+		&i.Timezone,
 		&i.TelegramChatID,
 		&i.HasPushDevice,
+		&i.DigestFrequency,
+		&i.DigestTime,
+		&i.QuietHoursStart,
+		&i.QuietHoursEnd,
 	)
 	return i, err
 }
@@ -287,7 +309,7 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, ss.name AS saved_search_name, ss.query AS saved_search_query
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, s.last_digest_sent_at, ss.name AS saved_search_name, ss.query AS saved_search_query
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
@@ -303,6 +325,7 @@ type ListSubscriptionsRow struct {
 	Active           bool               `json:"active"`
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
 	SavedSearchName  string             `json:"saved_search_name"`
 	SavedSearchQuery string             `json:"saved_search_query"`
 }
@@ -327,6 +350,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]ListSu
 			&i.Active,
 			&i.StartAt,
 			&i.CreatedAt,
+			&i.LastDigestSentAt,
 			&i.SavedSearchName,
 			&i.SavedSearchQuery,
 		); err != nil {
@@ -338,6 +362,21 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]ListSu
 		return nil, err
 	}
 	return items, nil
+}
+
+const markDigestSent = `-- name: MarkDigestSent :exec
+UPDATE subscriptions
+SET last_digest_sent_at = now()
+WHERE id = $1
+`
+
+// Stamp the subscription's last daily-digest send instant, so
+// internal/deliverywindow.DigestDue reads "already sent today" on any later pass
+// within the same local calendar day. Only called after a successful `daily`-mode
+// delivery — `instant`-mode subscriptions never touch this column.
+func (q *Queries) MarkDigestSent(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markDigestSent, id)
+	return err
 }
 
 const markMatchesNotified = `-- name: MarkMatchesNotified :execrows
@@ -442,7 +481,7 @@ const setSubscriptionActive = `-- name: SetSubscriptionActive :one
 UPDATE subscriptions
 SET active = $1
 WHERE id = $2 AND user_id = $3
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
 `
 
 type SetSubscriptionActiveParams struct {
@@ -465,6 +504,7 @@ func (q *Queries) SetSubscriptionActive(ctx context.Context, arg SetSubscription
 		&i.Active,
 		&i.StartAt,
 		&i.CreatedAt,
+		&i.LastDigestSentAt,
 	)
 	return i, err
 }

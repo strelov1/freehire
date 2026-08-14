@@ -24,6 +24,26 @@ SHALL be treated as UTC for every purpose that reads it.
 - **THEN** the system treats it as UTC when evaluating quiet hours or a
   daily digest time
 
+#### Scenario: Captured at password registration
+
+- **WHEN** a new account registers with email/password from the web app
+- **THEN** the browser's detected timezone is stored on the account at
+  creation, without requiring a later profile visit
+
+#### Scenario: Registration timezone is best-effort
+
+- **WHEN** a registration request carries a missing or invalid timezone
+  value
+- **THEN** the account is still created (with no timezone set) rather than
+  the signup failing
+
+#### Scenario: Profile pre-fills the detected zone when unset
+
+- **WHEN** a signed-in user with no stored timezone opens `/my/profile`
+- **THEN** the timezone field shows the browser's detected zone as its
+  selected value, and saving the form (even without touching that field)
+  stores it
+
 ### Requirement: Saved-search digest frequency
 
 A signed-in user SHALL be able to set one account-wide delivery frequency

@@ -65,15 +65,16 @@ func (q *Queries) ClearUserResume(ctx context.Context, id int64) error {
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, email_verified)
-VALUES ($1, $2, $3)
-RETURNING id, email, role, beta_tester, email_verified, created_at
+INSERT INTO users (email, password_hash, email_verified, timezone)
+VALUES ($1, $2, $3, $4)
+RETURNING id, email, role, beta_tester, email_verified, created_at, timezone
 `
 
 type CreateUserParams struct {
 	Email         string      `json:"email"`
 	PasswordHash  pgtype.Text `json:"password_hash"`
 	EmailVerified bool        `json:"email_verified"`
+	Timezone      pgtype.Text `json:"timezone"`
 }
 
 type CreateUserRow struct {
@@ -83,6 +84,7 @@ type CreateUserRow struct {
 	BetaTester    bool               `json:"beta_tester"`
 	EmailVerified bool               `json:"email_verified"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Timezone      pgtype.Text        `json:"timezone"`
 }
 
 // Register a new account. email is stored as given (the handler lowercases it);
@@ -90,9 +92,17 @@ type CreateUserRow struct {
 // returned so the new account's wire shape carries it (always 'user' at creation).
 // email_verified is a parameter, not a default: a password registration starts
 // unverified, while an account created from an OAuth sign-in is verified at birth
-// because the provider already proved the address.
+// because the provider already proved the address. timezone is optional
+// (sqlc.narg) — a password registration passes the browser-detected zone; the
+// OAuth account-creation path (LinkOrCreateByEmail) omits it, same as before
+// this column existed.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash, arg.EmailVerified)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.EmailVerified,
+		arg.Timezone,
+	)
 	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
@@ -101,6 +111,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.BetaTester,
 		&i.EmailVerified,
 		&i.CreatedAt,
+		&i.Timezone,
 	)
 	return i, err
 }
@@ -238,7 +249,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, email, role, beta_tester, email_verified,
        (password_hash IS NOT NULL)::boolean AS has_password,
-       created_at
+       created_at, timezone
 FROM users
 WHERE id = $1
 `
@@ -251,12 +262,14 @@ type GetUserByIDRow struct {
 	EmailVerified bool               `json:"email_verified"`
 	HasPassword   bool               `json:"has_password"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Timezone      pgtype.Text        `json:"timezone"`
 }
 
 // Profile lookup for the authenticated user. role is included so /auth/me can tell a
 // client whether to surface moderator-only UI. The password hash itself never leaves
 // the database — only whether one exists, which is what lets the SPA offer a password
-// change to password accounts and explain itself to OAuth-only ones.
+// change to password accounts and explain itself to OAuth-only ones. timezone is NULL
+// until the user sets one on their profile (internal/deliverywindow reads NULL as UTC).
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
@@ -268,6 +281,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.EmailVerified,
 		&i.HasPassword,
 		&i.CreatedAt,
+		&i.Timezone,
 	)
 	return i, err
 }
@@ -908,6 +922,50 @@ func (q *Queries) SetUserResumeStructured(ctx context.Context, arg SetUserResume
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateUserTimezone = `-- name: UpdateUserTimezone :one
+UPDATE users
+SET timezone = $2
+WHERE id = $1
+RETURNING id, email, role, beta_tester, email_verified,
+          (password_hash IS NOT NULL)::boolean AS has_password,
+          created_at, timezone
+`
+
+type UpdateUserTimezoneParams struct {
+	ID       int64       `json:"id"`
+	Timezone pgtype.Text `json:"timezone"`
+}
+
+type UpdateUserTimezoneRow struct {
+	ID            int64              `json:"id"`
+	Email         string             `json:"email"`
+	Role          string             `json:"role"`
+	BetaTester    bool               `json:"beta_tester"`
+	EmailVerified bool               `json:"email_verified"`
+	HasPassword   bool               `json:"has_password"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Timezone      pgtype.Text        `json:"timezone"`
+}
+
+// Set (or clear, with NULL) the account's IANA timezone name. The handler validates
+// the name against time.LoadLocation before this runs — the query itself trusts its
+// input, same as every other single-column update in this file.
+func (q *Queries) UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error) {
+	row := q.db.QueryRow(ctx, updateUserTimezone, arg.ID, arg.Timezone)
+	var i UpdateUserTimezoneRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.BetaTester,
+		&i.EmailVerified,
+		&i.HasPassword,
+		&i.CreatedAt,
+		&i.Timezone,
+	)
+	return i, err
 }
 
 const userEmail = `-- name: UserEmail :one

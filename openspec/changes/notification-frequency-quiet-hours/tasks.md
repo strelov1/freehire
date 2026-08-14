@@ -1,12 +1,13 @@
 ## 1. Migration & generated queries
 
-- [ ] 1.1 Migration: `users.timezone text` (nullable); `notification_settings` gains `digest_frequency text NOT NULL DEFAULT 'instant'`, `digest_time time`, `quiet_hours_start time`, `quiet_hours_end time`; `subscriptions` gains `last_digest_sent_at timestamptz` (nullable). All additive, no backfill.
-- [ ] 1.2 `internal/db/queries/users.sql`: add `UpdateUserTimezone :one` (validated IANA name comes in pre-validated from the handler; the query just stores the text).
-- [ ] 1.3 `internal/db/queries/reminders.sql`: extend `UpsertNotificationSettings` to also accept/store `digest_frequency`, `digest_time`, `quiet_hours_start`, `quiet_hours_end` in the same upsert as `enabled`/`channels` (one account-level settings row, one write path).
-- [ ] 1.4 `internal/db/queries/subscriptions.sql`: extend `GetSubscriptionForDelivery` with a `LEFT JOIN notification_settings ns ON ns.user_id = s.user_id`, selecting `ns.digest_frequency`, `ns.digest_time`, `ns.quiet_hours_start`, `ns.quiet_hours_end`, `u.timezone`, and `s.last_digest_sent_at`; add `MarkDigestSent :exec` (or fold into `MarkMatchesNotified`) to stamp `last_digest_sent_at = now()`.
-- [ ] 1.5 `internal/db/queries/reminders.sql`: extend `GetReminderForDelivery` with the same `LEFT JOIN notification_settings` + `u.timezone`, selecting `quiet_hours_start`/`quiet_hours_end` (no digest fields — reminders don't read frequency).
-- [ ] 1.6 `internal/db/queries/nudges.sql`: extend the existing `GetNudgeForDelivery` (already joins `notification_settings`) with `ns.quiet_hours_start`, `ns.quiet_hours_end`, `u.timezone`.
-- [ ] 1.7 `make sqlc`; verify generated code compiles.
+- [x] 1.1 Migration: `users.timezone text` (nullable); `notification_settings` gains `digest_frequency text NOT NULL DEFAULT 'instant'`, `digest_time time`, `quiet_hours_start time`, `quiet_hours_end time`; `subscriptions` gains `last_digest_sent_at timestamptz` (nullable). All additive, no backfill.
+- [x] 1.2 `internal/db/queries/users.sql`: add `UpdateUserTimezone :one` (validated IANA name comes in pre-validated from the handler; the query just stores the text).
+- [x] 1.3 `internal/db/queries/reminders.sql`: extend `UpsertNotificationSettings` to also accept/store `digest_frequency`, `digest_time`, `quiet_hours_start`, `quiet_hours_end` in the same upsert as `enabled`/`channels` (one account-level settings row, one write path).
+- [x] 1.4 `internal/db/queries/subscriptions.sql`: extend `GetSubscriptionForDelivery` with a `LEFT JOIN notification_settings ns ON ns.user_id = s.user_id`, selecting `ns.digest_frequency`, `ns.digest_time`, `ns.quiet_hours_start`, `ns.quiet_hours_end`, `u.timezone`, and `s.last_digest_sent_at`; add `MarkDigestSent :exec` (or fold into `MarkMatchesNotified`) to stamp `last_digest_sent_at = now()`.
+- [x] 1.5 `internal/db/queries/reminders.sql`: extend `GetReminderForDelivery` with the same `LEFT JOIN notification_settings` + `u.timezone`, selecting `quiet_hours_start`/`quiet_hours_end` (no digest fields — reminders don't read frequency).
+- [x] 1.6 `internal/db/queries/nudges.sql`: extend the existing `GetNudgeForDelivery` (already joins `notification_settings`) with `ns.quiet_hours_start`, `ns.quiet_hours_end`, `u.timezone`.
+- [x] 1.7 `make sqlc`; verify generated code compiles.
+- [x] 1.8 `internal/db/queries/users.sql`: `CreateUser` gains an optional `timezone` param (nullable) — the browser-detected zone captured at signup (see task 6.5), stored at account creation instead of left NULL until a profile-page visit.
 
 ## 2. `internal/deliverywindow` (new leaf package)
 
@@ -37,11 +38,12 @@
 - [ ] 6.2 New `PATCH /me/timezone` (cookie-only, matching this codebase's narrow-single-purpose `/me/*` PATCH endpoints): validates the IANA name via `time.LoadLocation`, 400 on invalid, updates `users.timezone`.
 - [ ] 6.3 Unit tests for both handlers: valid/invalid frequency+time combinations, valid/invalid timezone strings, owner-scoping (implicit via cookie auth).
 - [ ] 6.4 Integration test (`//go:build integration`): round-trip both endpoints against real Postgres.
+- [ ] 6.5 `credentials`/`accounts.Register` gain an optional `timezone` param (an invalid/empty value is silently ignored, never a 400 — a browser quirk must not block signup); the web registration flow sends `Intl.DateTimeFormat().resolvedOptions().timeZone` alongside email/password. OAuth sign-up (`ResolveOAuthAccount`) is out of scope for this change (no existing web-side hook to capture it from) — those accounts get a timezone the first time they visit `/my/profile`, same as any pre-existing account.
 
 ## 7. Web: profile timezone field
 
 - [ ] 7.1 API client: `api.updateTimezone(tz: string)`.
-- [ ] 7.2 `ProfileForm.svelte`: a timezone field (searchable select over the IANA list) on the Settings tab, autosaving like the rest of the form's fields.
+- [ ] 7.2 `ProfileForm.svelte`: a timezone field (searchable select over the IANA list) on the Settings tab, autosaving like the rest of the form's fields. When the account has no stored timezone yet, the field pre-fills with the browser-detected zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) as its shown/selected value rather than blank — so a plain "Save" on the rest of the form persists the detected zone even if the user never deliberately touches this field.
 
 ## 8. Web: notification settings frequency + quiet hours UI
 

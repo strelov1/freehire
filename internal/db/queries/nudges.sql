@@ -88,19 +88,24 @@ RETURNING n.id;
 -- The re-check-before-send context for one nudge: the job display fields, the
 -- user's live notification rule (enabled + channels — re-read live, not
 -- snapshotted, so a change between MATCH and DELIVER takes effect immediately),
--- live destinations, and the application's CURRENT stage/last-activity/pending-
--- suggestion so the worker can recompute the triggering condition rather than
--- trust what MATCH saw. job_open lets the worker cancel a nudge for a job that
--- has since closed.
+-- live destinations, the account's live quiet-hours window (timezone +
+-- notification_settings' quiet_hours_start/end, checked by
+-- internal/deliverywindow before send), and the application's CURRENT
+-- stage/last-activity/pending-suggestion so the worker can recompute the
+-- triggering condition rather than trust what MATCH saw. job_open lets the
+-- worker cancel a nudge for a job that has since closed.
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end,
        a.stage,
        GREATEST(a.applied_at, mail.newest_mail_at)::timestamptz AS last_activity_at,
        COALESCE(mail.suggestion_pending, false)::boolean AS has_pending_suggestion,
        u.email AS account_email,
+       u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = n.user_id) AS has_push_device
 FROM application_nudges n

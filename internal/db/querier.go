@@ -618,7 +618,10 @@ type Querier interface {
 	// returned so the new account's wire shape carries it (always 'user' at creation).
 	// email_verified is a parameter, not a default: a password registration starts
 	// unverified, while an account created from an OAuth sign-in is verified at birth
-	// because the provider already proved the address.
+	// because the provider already proved the address. timezone is optional
+	// (sqlc.narg) — a password registration passes the browser-detected zone; the
+	// OAuth account-creation path (LinkOrCreateByEmail) omits it, same as before
+	// this column existed.
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// Link a provider identity to an account (first OAuth sign-in). The composite
 	// primary key rejects a duplicate identity.
@@ -1149,10 +1152,12 @@ type Querier interface {
 	// The re-check-before-send context for one nudge: the job display fields, the
 	// user's live notification rule (enabled + channels — re-read live, not
 	// snapshotted, so a change between MATCH and DELIVER takes effect immediately),
-	// live destinations, and the application's CURRENT stage/last-activity/pending-
-	// suggestion so the worker can recompute the triggering condition rather than
-	// trust what MATCH saw. job_open lets the worker cancel a nudge for a job that
-	// has since closed.
+	// live destinations, the account's live quiet-hours window (timezone +
+	// notification_settings' quiet_hours_start/end, checked by
+	// internal/deliverywindow before send), and the application's CURRENT
+	// stage/last-activity/pending-suggestion so the worker can recompute the
+	// triggering condition rather than trust what MATCH saw. job_open lets the
+	// worker cancel a nudge for a job that has since closed.
 	GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeForDeliveryRow, error)
 	// Public read of a shared board by its slug — no auth, no owner-scoping. Exposes only
 	// the board's display fields; owner columns (user_id) are never selected. A NULL slug
@@ -1165,8 +1170,10 @@ type Querier interface {
 	GetReferralRequest(ctx context.Context, id uuid.UUID) (ReferralRequest, error)
 	// The delivery context for one reminder: the job display fields, the channel set,
 	// the user's live destinations (account email; linked Telegram chat, NULL when
-	// unlinked -> that channel soft-skips; whether a push device is registered), and
-	// the fire-time re-check flags. job_open and still_actionable let the worker
+	// unlinked -> that channel soft-skips; whether a push device is registered), the
+	// fire-time re-check flags, and the live quiet-hours window (account timezone +
+	// notification_settings' quiet_hours_start/end) that internal/deliverywindow
+	// checks before delivery. job_open and still_actionable let the worker
 	// cancel-and-skip a reminder whose job has since closed or is no longer
 	// saved-but-unapplied, closing the race between a cancel and the fire.
 	GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error)
@@ -1191,9 +1198,12 @@ type Querier interface {
 	// The delivery context for one subscription: channel + destination, the saved
 	// search name (for the digest heading), the user's account email (the email
 	// channel's live recipient), the user's linked Telegram chat (NULL when unlinked
-	// → the worker soft-skips telegram delivery rather than failing it), and whether
+	// → the worker soft-skips telegram delivery rather than failing it), whether
 	// the user has at least one registered push device (the push channel's live
-	// deliverability check, same soft-skip role as the Telegram link).
+	// deliverability check, same soft-skip role as the Telegram link), and the
+	// delivery-timing context (live, not snapshotted, same as the channel checks
+	// above) — the account's timezone and its saved-search digest frequency
+	// settings, read via internal/deliverywindow before a digest is sent.
 	GetSubscriptionForDelivery(ctx context.Context, id int64) (GetSubscriptionForDeliveryRow, error)
 	// The user's existing tailored copy for one vacancy, newest first. The tailoring bootstrap is
 	// reached by an address (/tailor/<slug>) that carries no CV reference, so a reload runs the
@@ -1236,7 +1246,8 @@ type Querier interface {
 	// Profile lookup for the authenticated user. role is included so /auth/me can tell a
 	// client whether to surface moderator-only UI. The password hash itself never leaves
 	// the database — only whether one exists, which is what lets the SPA offer a password
-	// change to password accounts and explain itself to OAuth-only ones.
+	// change to password accounts and explain itself to OAuth-only ones. timezone is NULL
+	// until the user sets one on their profile (internal/deliverywindow reads NULL as UTC).
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
 	// OAuth sign-in fast path: resolve a provider identity straight to its user.
 	GetUserByIdentity(ctx context.Context, arg GetUserByIdentityParams) (GetUserByIdentityRow, error)
@@ -2070,6 +2081,11 @@ type Querier interface {
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)
+	// Stamp the subscription's last daily-digest send instant, so
+	// internal/deliverywindow.DigestDue reads "already sent today" on any later pass
+	// within the same local calendar day. Only called after a successful `daily`-mode
+	// delivery — `instant`-mode subscriptions never touch this column.
+	MarkDigestSent(ctx context.Context, id int64) error
 	// Stamp read on first open; a no-op once already read.
 	MarkEmailRead(ctx context.Context, arg MarkEmailReadParams) error
 	// Point each fuzzy-clustered posting at its canon. Takes two parallel arrays (ids, canons) so
@@ -3146,6 +3162,10 @@ type Querier interface {
 	// query string is a real value (not NULL), so "save the unfiltered view" is honored.
 	// No matching owner-scoped row returns no row (the handler maps that to 404).
 	UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchParams) (SavedSearch, error)
+	// Set (or clear, with NULL) the account's IANA timezone name. The handler validates
+	// the name against time.LoadLocation before this runs — the query itself trusts its
+	// input, same as every other single-column update in this file.
+	UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error)
 	// Record a meeting the sync attached to an application, or move the one already recorded,
 	// and note in the ledger that the scheduling was observed.
 	//
@@ -3291,7 +3311,10 @@ type Querier interface {
 	// it via SetJobEnrichment's overlay). The conflict reopens a previously closed posting
 	// (closed_at = NULL) since the moderator is re-asserting it.
 	UpsertManualJob(ctx context.Context, arg UpsertManualJobParams) (Job, error)
-	// Create or replace the caller's notification rule in one statement. Returns the stored row.
+	// Create or replace the caller's notification rule in one statement, including the
+	// delivery-timing fields (digest frequency/time, quiet hours) alongside the
+	// enable/channels gate — one account-level settings row, one write path. Returns
+	// the stored row.
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	// Register (or refresh) a device's push token. A token identifies one device
 	// install, not one user, so the conflict target is the token itself: if it

@@ -656,10 +656,14 @@ type Mailbox struct {
 }
 
 type NotificationSetting struct {
-	UserID    int64              `json:"user_id"`
-	Enabled   bool               `json:"enabled"`
-	Channels  []string           `json:"channels"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserID          int64              `json:"user_id"`
+	Enabled         bool               `json:"enabled"`
+	Channels        []string           `json:"channels"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	DigestFrequency string             `json:"digest_frequency"`
+	DigestTime      pgtype.Time        `json:"digest_time"`
+	QuietHoursStart pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd   pgtype.Time        `json:"quiet_hours_end"`
 }
 
 type OauthAuthAttempt struct {
@@ -808,14 +812,15 @@ type SemanticOutbox struct {
 }
 
 type Subscription struct {
-	ID            int64              `json:"id"`
-	UserID        int64              `json:"user_id"`
-	SavedSearchID int64              `json:"saved_search_id"`
-	Channel       string             `json:"channel"`
-	Destination   pgtype.Text        `json:"destination"`
-	Active        bool               `json:"active"`
-	StartAt       pgtype.Timestamptz `json:"start_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID               int64              `json:"id"`
+	UserID           int64              `json:"user_id"`
+	SavedSearchID    int64              `json:"saved_search_id"`
+	Channel          string             `json:"channel"`
+	Destination      pgtype.Text        `json:"destination"`
+	Active           bool               `json:"active"`
+	StartAt          pgtype.Timestamptz `json:"start_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
 }
 
 type SubscriptionMatch struct {
@@ -902,6 +907,7 @@ type User struct {
 	ResumeExtractFor           pgtype.Timestamptz `json:"resume_extract_for"`
 	TalentNetworkVisibility    string             `json:"talent_network_visibility"`
 	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
+	Timezone                   pgtype.Text        `json:"timezone"`
 }
 
 type UserEmailCode struct {

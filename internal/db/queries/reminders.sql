@@ -6,12 +6,25 @@
 SELECT * FROM notification_settings WHERE user_id = $1;
 
 -- name: UpsertNotificationSettings :one
--- Create or replace the caller's notification rule in one statement. Returns the stored row.
-INSERT INTO notification_settings (user_id, enabled, channels, updated_at)
-VALUES (sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(channels), now())
+-- Create or replace the caller's notification rule in one statement, including the
+-- delivery-timing fields (digest frequency/time, quiet hours) alongside the
+-- enable/channels gate — one account-level settings row, one write path. Returns
+-- the stored row.
+INSERT INTO notification_settings (
+    user_id, enabled, channels, digest_frequency, digest_time,
+    quiet_hours_start, quiet_hours_end, updated_at
+)
+VALUES (
+    sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(channels), sqlc.arg(digest_frequency),
+    sqlc.arg(digest_time), sqlc.arg(quiet_hours_start), sqlc.arg(quiet_hours_end), now()
+)
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
       channels           = EXCLUDED.channels,
+      digest_frequency   = EXCLUDED.digest_frequency,
+      digest_time        = EXCLUDED.digest_time,
+      quiet_hours_start  = EXCLUDED.quiet_hours_start,
+      quiet_hours_end    = EXCLUDED.quiet_hours_end,
       updated_at         = now()
 RETURNING *;
 
@@ -68,8 +81,10 @@ RETURNING r.id;
 -- name: GetReminderForDelivery :one
 -- The delivery context for one reminder: the job display fields, the channel set,
 -- the user's live destinations (account email; linked Telegram chat, NULL when
--- unlinked -> that channel soft-skips; whether a push device is registered), and
--- the fire-time re-check flags. job_open and still_actionable let the worker
+-- unlinked -> that channel soft-skips; whether a push device is registered), the
+-- fire-time re-check flags, and the live quiet-hours window (account timezone +
+-- notification_settings' quiet_hours_start/end) that internal/deliverywindow
+-- checks before delivery. job_open and still_actionable let the worker
 -- cancel-and-skip a reminder whose job has since closed or is no longer
 -- saved-but-unapplied, closing the race between a cancel and the fire.
 SELECT r.id, r.user_id, r.job_id, r.channels,
@@ -77,14 +92,18 @@ SELECT r.id, r.user_id, r.job_id, r.channels,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,
+       u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end
 FROM job_reminders r
 JOIN jobs j ON j.id = r.job_id
 JOIN users u ON u.id = r.user_id
 LEFT JOIN user_jobs uj ON uj.user_id = r.user_id AND uj.job_id = r.job_id
 LEFT JOIN applications a ON a.user_id = r.user_id AND a.job_id = r.job_id
 LEFT JOIN telegram_links tl ON tl.user_id = r.user_id
+LEFT JOIN notification_settings ns ON ns.user_id = r.user_id
 WHERE r.id = $1;
 
 -- name: MarkReminderDelivered :execrows

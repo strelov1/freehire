@@ -102,7 +102,7 @@ func (q *Queries) ClaimDueReminders(ctx context.Context, arg ClaimDueRemindersPa
 }
 
 const getNotificationSettings = `-- name: GetNotificationSettings :one
-SELECT user_id, enabled, channels, updated_at FROM notification_settings WHERE user_id = $1
+SELECT user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end FROM notification_settings WHERE user_id = $1
 `
 
 // The caller's notification rule, shared by saved-job reminders and both
@@ -117,6 +117,10 @@ func (q *Queries) GetNotificationSettings(ctx context.Context, userID int64) (No
 		&i.Enabled,
 		&i.Channels,
 		&i.UpdatedAt,
+		&i.DigestFrequency,
+		&i.DigestTime,
+		&i.QuietHoursStart,
+		&i.QuietHoursEnd,
 	)
 	return i, err
 }
@@ -127,14 +131,18 @@ SELECT r.id, r.user_id, r.job_id, r.channels,
        (j.closed_at IS NULL)::bool AS job_open,
        COALESCE(uj.saved_at IS NOT NULL AND a.applied_at IS NULL, false)::bool AS still_actionable,
        u.email AS account_email,
+       u.timezone AS timezone,
        tl.chat_id AS telegram_chat_id,
-       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = r.user_id) AS has_push_device,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end
 FROM job_reminders r
 JOIN jobs j ON j.id = r.job_id
 JOIN users u ON u.id = r.user_id
 LEFT JOIN user_jobs uj ON uj.user_id = r.user_id AND uj.job_id = r.job_id
 LEFT JOIN applications a ON a.user_id = r.user_id AND a.job_id = r.job_id
 LEFT JOIN telegram_links tl ON tl.user_id = r.user_id
+LEFT JOIN notification_settings ns ON ns.user_id = r.user_id
 WHERE r.id = $1
 `
 
@@ -150,14 +158,19 @@ type GetReminderForDeliveryRow struct {
 	JobOpen         bool        `json:"job_open"`
 	StillActionable bool        `json:"still_actionable"`
 	AccountEmail    string      `json:"account_email"`
+	Timezone        pgtype.Text `json:"timezone"`
 	TelegramChatID  pgtype.Int8 `json:"telegram_chat_id"`
 	HasPushDevice   bool        `json:"has_push_device"`
+	QuietHoursStart pgtype.Time `json:"quiet_hours_start"`
+	QuietHoursEnd   pgtype.Time `json:"quiet_hours_end"`
 }
 
 // The delivery context for one reminder: the job display fields, the channel set,
 // the user's live destinations (account email; linked Telegram chat, NULL when
-// unlinked -> that channel soft-skips; whether a push device is registered), and
-// the fire-time re-check flags. job_open and still_actionable let the worker
+// unlinked -> that channel soft-skips; whether a push device is registered), the
+// fire-time re-check flags, and the live quiet-hours window (account timezone +
+// notification_settings' quiet_hours_start/end) that internal/deliverywindow
+// checks before delivery. job_open and still_actionable let the worker
 // cancel-and-skip a reminder whose job has since closed or is no longer
 // saved-but-unapplied, closing the race between a cancel and the fire.
 func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetReminderForDeliveryRow, error) {
@@ -175,8 +188,11 @@ func (q *Queries) GetReminderForDelivery(ctx context.Context, id int64) (GetRemi
 		&i.JobOpen,
 		&i.StillActionable,
 		&i.AccountEmail,
+		&i.Timezone,
 		&i.TelegramChatID,
 		&i.HasPushDevice,
+		&i.QuietHoursStart,
+		&i.QuietHoursEnd,
 	)
 	return i, err
 }
@@ -288,30 +304,59 @@ func (q *Queries) UpsertJobReminder(ctx context.Context, arg UpsertJobReminderPa
 }
 
 const upsertNotificationSettings = `-- name: UpsertNotificationSettings :one
-INSERT INTO notification_settings (user_id, enabled, channels, updated_at)
-VALUES ($1, $2, $3, now())
+INSERT INTO notification_settings (
+    user_id, enabled, channels, digest_frequency, digest_time,
+    quiet_hours_start, quiet_hours_end, updated_at
+)
+VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, now()
+)
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
       channels           = EXCLUDED.channels,
+      digest_frequency   = EXCLUDED.digest_frequency,
+      digest_time        = EXCLUDED.digest_time,
+      quiet_hours_start  = EXCLUDED.quiet_hours_start,
+      quiet_hours_end    = EXCLUDED.quiet_hours_end,
       updated_at         = now()
-RETURNING user_id, enabled, channels, updated_at
+RETURNING user_id, enabled, channels, updated_at, digest_frequency, digest_time, quiet_hours_start, quiet_hours_end
 `
 
 type UpsertNotificationSettingsParams struct {
-	UserID   int64    `json:"user_id"`
-	Enabled  bool     `json:"enabled"`
-	Channels []string `json:"channels"`
+	UserID          int64       `json:"user_id"`
+	Enabled         bool        `json:"enabled"`
+	Channels        []string    `json:"channels"`
+	DigestFrequency string      `json:"digest_frequency"`
+	DigestTime      pgtype.Time `json:"digest_time"`
+	QuietHoursStart pgtype.Time `json:"quiet_hours_start"`
+	QuietHoursEnd   pgtype.Time `json:"quiet_hours_end"`
 }
 
-// Create or replace the caller's notification rule in one statement. Returns the stored row.
+// Create or replace the caller's notification rule in one statement, including the
+// delivery-timing fields (digest frequency/time, quiet hours) alongside the
+// enable/channels gate — one account-level settings row, one write path. Returns
+// the stored row.
 func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error) {
-	row := q.db.QueryRow(ctx, upsertNotificationSettings, arg.UserID, arg.Enabled, arg.Channels)
+	row := q.db.QueryRow(ctx, upsertNotificationSettings,
+		arg.UserID,
+		arg.Enabled,
+		arg.Channels,
+		arg.DigestFrequency,
+		arg.DigestTime,
+		arg.QuietHoursStart,
+		arg.QuietHoursEnd,
+	)
 	var i NotificationSetting
 	err := row.Scan(
 		&i.UserID,
 		&i.Enabled,
 		&i.Channels,
 		&i.UpdatedAt,
+		&i.DigestFrequency,
+		&i.DigestTime,
+		&i.QuietHoursStart,
+		&i.QuietHoursEnd,
 	)
 	return i, err
 }
