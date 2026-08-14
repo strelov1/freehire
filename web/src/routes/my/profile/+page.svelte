@@ -326,6 +326,13 @@
          match the loaded profile tab, whose main column also spans the container (no aside). -->
     <div class="w-full">
       <ProfileForm profile={null} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
+      <!-- Same reasoning as the timezone field's placement below: set-up is the
+           settings tab before there are tabs, so account-level (not
+           candidate-profile) settings live here too rather than waiting on a
+           CV upload. -->
+      <div class="mt-6">
+        <AccountTimezone />
+      </div>
       <!-- Set-up is the settings tab before there are tabs, so leaving is offered here
            too: someone who signed up, filled in nothing and wants out must not have to
            create a profile first to find the way back out. -->

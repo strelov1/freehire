@@ -52,7 +52,7 @@
 
 ## 9. Verification
 
-- [ ] 9.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean.
-- [ ] 9.2 `go test -tags=integration ./...` (full module) clean.
-- [ ] 9.3 Web `eslint`/`svelte-check` clean on changed/new files.
-- [ ] 9.4 Manual smoke against a local backend+DB: set a timezone, switch to daily frequency with a near-future time, confirm a pending match waits and then delivers at that time; set quiet hours spanning the current time, confirm a reminder/nudge defers and delivers once the window ends.
+- [x] 9.1 `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test ./...`, `go vet -tags=integration ./...` clean.
+- [x] 9.2 `go test -tags=integration ./...` (full module) clean.
+- [x] 9.3 Web `eslint`/`svelte-check` clean on changed/new files.
+- [x] 9.4 Manual smoke against a local backend+DB: set a timezone, switch to daily frequency with a near-future time, confirm a pending match waits and then delivers at that time; set quiet hours spanning the current time, confirm a reminder/nudge defers and delivers once the window ends.

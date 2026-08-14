@@ -11,8 +11,15 @@
   // mainly matters for a pre-existing account: if none is stored yet, the field
   // pre-fills with — and silently saves — the browser's detection the first time
   // this section renders, so a user never has to deliberately set it.
-  const ZONES: string[] =
-    typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  // `Intl.supportedValuesOf('timeZone')` omits the bare "UTC" identifier (it only
+  // lists Area/Location names) even though it's a real IANA zone Go's
+  // time.LoadLocation accepts — prepend it so a stored/detected "UTC" has a
+  // matching <option>, since a <select> silently shows nothing selected
+  // otherwise.
+  const ZONES: string[] = [
+    'UTC',
+    ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []),
+  ];
 
   let detected = '';
   try {
