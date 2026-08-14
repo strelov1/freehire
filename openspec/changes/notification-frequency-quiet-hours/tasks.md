@@ -24,8 +24,8 @@
 
 ## 4. `internal/reminder` wiring
 
-- [ ] 4.1 `fire`: after loading `GetReminderForDelivery` and the existing `JobOpen`/`StillActionable` re-check, if `deliverywindow.InQuietHours(...)`, release the claim (same `r.release` already used for the "no usable destination" soft-skip) rather than deliver.
-- [ ] 4.2 Unit tests: due reminder deferred during quiet hours, delivered outside quiet hours, quiet-hours-off unaffected.
+- [x] 4.1 `fire`: after loading `GetReminderForDelivery` and the existing `JobOpen`/`StillActionable` re-check, if `deliverywindow.InQuietHours(...)`, release the claim (same `r.release` already used for the "no usable destination" soft-skip) rather than deliver.
+- [x] 4.2 Unit tests: due reminder deferred during quiet hours, delivered outside quiet hours, quiet-hours-off unaffected.
 
 ## 5. `internal/nudge` wiring
 

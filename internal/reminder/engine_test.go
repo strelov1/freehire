@@ -3,6 +3,7 @@ package reminder
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/strelov1/freehire/internal/db"
@@ -268,5 +269,68 @@ func TestRun_RecordNotificationFailureDoesNotBlockDelivery(t *testing.T) {
 	}
 	if stats.Delivered != 1 {
 		t.Errorf("stats.Delivered = %d, want 1 despite recording failure", stats.Delivered)
+	}
+}
+
+func TestRun_DeferredDuringQuietHours(t *testing.T) {
+	chat := int64(555)
+	row := actionableRow(1, []string{"telegram"}, &chat, "a@b.c")
+	row.Timezone = pgtype.Text{String: "UTC", Valid: true}
+	row.QuietHoursStart = pgtype.Time{Microseconds: int64(22 * 3600 * 1e6), Valid: true}
+	row.QuietHoursEnd = pgtype.Time{Microseconds: int64(8 * 3600 * 1e6), Valid: true}
+	store := &fakeStore{due: []int64{1}, rows: map[int64]db.GetReminderForDeliveryRow{1: row}}
+	notifier := &fakeNotifier{}
+	r := NewRunner(store, notifier, DefaultConfig())
+	r.now = func() time.Time { return time.Date(2026, 8, 14, 23, 0, 0, 0, time.UTC) } // inside 22:00-08:00
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(notifier.sent) != 0 {
+		t.Errorf("must not send during quiet hours, sent %v", notifier.sent)
+	}
+	if len(store.released) != 1 {
+		t.Errorf("must release the claim, released = %v", store.released)
+	}
+	if len(store.delivered) != 0 || len(store.cancelled) != 0 {
+		t.Errorf("must not deliver or cancel, delivered=%v cancelled=%v", store.delivered, store.cancelled)
+	}
+	if stats.Deferred != 1 {
+		t.Errorf("stats.Deferred = %d, want 1", stats.Deferred)
+	}
+}
+
+func TestRun_DeliversOutsideQuietHours(t *testing.T) {
+	chat := int64(555)
+	row := actionableRow(1, []string{"telegram"}, &chat, "a@b.c")
+	row.Timezone = pgtype.Text{String: "UTC", Valid: true}
+	row.QuietHoursStart = pgtype.Time{Microseconds: int64(22 * 3600 * 1e6), Valid: true}
+	row.QuietHoursEnd = pgtype.Time{Microseconds: int64(8 * 3600 * 1e6), Valid: true}
+	store := &fakeStore{due: []int64{1}, rows: map[int64]db.GetReminderForDeliveryRow{1: row}}
+	notifier := &fakeNotifier{}
+	r := NewRunner(store, notifier, DefaultConfig())
+	r.now = func() time.Time { return time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) } // outside 22:00-08:00
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Errorf("sent = %v, want 1 delivery outside quiet hours", notifier.sent)
+	}
+	if stats.Delivered != 1 {
+		t.Errorf("stats.Delivered = %d, want 1", stats.Delivered)
+	}
+}
+
+func TestRun_QuietHoursOffDoesNotDefer(t *testing.T) {
+	chat := int64(555)
+	row := actionableRow(1, []string{"telegram"}, &chat, "a@b.c") // no quiet hours set
+	store := &fakeStore{due: []int64{1}, rows: map[int64]db.GetReminderForDeliveryRow{1: row}}
+	stats := run(t, store, &fakeNotifier{})
+
+	if stats.Delivered != 1 || stats.Deferred != 0 {
+		t.Errorf("stats = %+v, want Delivered=1 Deferred=0 when quiet hours are unset", stats)
 	}
 }

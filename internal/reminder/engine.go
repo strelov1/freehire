@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/deliverywindow"
 	"github.com/strelov1/freehire/internal/notify"
 )
 
@@ -84,6 +86,7 @@ type Stats struct {
 	Delivered int // reminders sent
 	Cancelled int // reminders cancelled at fire (job closed or no longer actionable)
 	SoftSkips int // reminders with no deliverable channel this pass
+	Deferred  int // reminders held back by the account's quiet-hours window
 	Failed    int // reminders whose delivery errored
 }
 
@@ -92,11 +95,12 @@ type Runner struct {
 	store    Store
 	notifier Notifier
 	cfg      Config
+	now      func() time.Time
 }
 
 // NewRunner builds a firing Runner.
 func NewRunner(store Store, notifier Notifier, cfg Config) *Runner {
-	return &Runner{store: store, notifier: notifier, cfg: cfg}
+	return &Runner{store: store, notifier: notifier, cfg: cfg, now: time.Now}
 }
 
 // Run executes one firing pass: lease the due reminders and deliver each. Unfinished
@@ -114,8 +118,8 @@ func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	for _, id := range due {
 		r.fire(ctx, id, &stats)
 	}
-	log.Printf("reminder: delivered=%d cancelled=%d soft_skips=%d failed=%d",
-		stats.Delivered, stats.Cancelled, stats.SoftSkips, stats.Failed)
+	log.Printf("reminder: delivered=%d cancelled=%d soft_skips=%d deferred=%d failed=%d",
+		stats.Delivered, stats.Cancelled, stats.SoftSkips, stats.Deferred, stats.Failed)
 	return stats, nil
 }
 
@@ -138,6 +142,13 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 			return
 		}
 		stats.Cancelled++
+		return
+	}
+	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, deliverywindow.FromPgTime(info.QuietHoursStart), deliverywindow.FromPgTime(info.QuietHoursEnd)) {
+		// A transient time-of-day condition, not a lost intent: release (not
+		// cancel) so the reminder fires once quiet hours end.
+		r.release(ctx, id)
+		stats.Deferred++
 		return
 	}
 
