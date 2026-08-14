@@ -348,6 +348,13 @@ func TestParseSubdivisionCountryCodeCollision(t *testing.T) {
 			location: "Chicago, IL",
 			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Chicago"}},
 		},
+		{
+			// Same collision, dash-delimited instead of comma-delimited: the lead
+			// segment's context is the resolved TAIL, not a preceding comma-token.
+			name:     "IL-Cupertino is California, not Israel",
+			location: "IL-Cupertino",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
+		},
 	}
 
 	for _, tt := range tests {

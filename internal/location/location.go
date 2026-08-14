@@ -133,10 +133,12 @@ func Parse(location string) Geo {
 			}
 			lead := strings.TrimSpace(segs[0])
 			if !resolveGeoName(lead, countrySet, regionSet) && tailResolved {
-				// No preceding comma-token to disambiguate a colliding lead code against
-				// (it's the first dash segment), so "" makes a colliding code fall back to
-				// its country-code reading here rather than risk the wrong subdivision.
-				resolveGeoToken(lead, "", countrySet, regionSet)
+				// The dash-tail is the context that confirms a colliding lead code
+				// ("il" in "IL-Cupertino") as a real US/CA subdivision, the same role
+				// the preceding comma-token plays for "City, XX" — without it, tailResolved
+				// having already added "us" via the tail's own city-name match would leave
+				// the lead's country-code reading (Israel) alongside it, garbling the result.
+				resolveGeoToken(lead, strings.Join(segs[1:], " "), countrySet, regionSet)
 			}
 		}
 	}
