@@ -110,3 +110,24 @@ func Float4Ptr(f pgtype.Float4) *float32 {
 	v := f.Float32
 	return &v
 }
+
+// Duration maps an optional time-of-day to the pgtype a `time` column expects: nil
+// becomes the zero (NULL) value, a non-nil pointer a valid time stored as
+// microseconds since midnight (what the duration already counts from).
+func Duration(d *time.Duration) pgtype.Time {
+	if d == nil {
+		return pgtype.Time{}
+	}
+	return pgtype.Time{Microseconds: int64(*d / time.Microsecond), Valid: true}
+}
+
+// DurationPtr maps a nullable DB `time` column to an optional time-of-day: an
+// invalid (NULL) value becomes nil, a valid one a pointer to its value as a
+// Duration since midnight. The read-side inverse of Duration.
+func DurationPtr(t pgtype.Time) *time.Duration {
+	if !t.Valid {
+		return nil
+	}
+	d := time.Duration(t.Microseconds) * time.Microsecond
+	return &d
+}

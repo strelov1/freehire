@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/deliverywindow"
+	"github.com/strelov1/freehire/internal/pgconv"
 )
 
 // deliver leases a batch of pending matches, groups them by subscription, and
@@ -57,12 +58,12 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, jobIDs []int64, st
 	daily := info.DigestFrequency == "daily"
 	tz := info.Timezone.String
 	if daily {
-		if !deliverywindow.DigestDue(r.now(), tz, deliverywindow.FromPgTime(info.DigestTime), deliverywindow.FromPgTimestamptz(info.LastDigestSentAt)) {
+		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(info.LastDigestSentAt)) {
 			r.release(ctx, subID, jobIDs)
 			stats.Deferred++
 			return
 		}
-	} else if deliverywindow.InQuietHours(r.now(), tz, deliverywindow.FromPgTime(info.QuietHoursStart), deliverywindow.FromPgTime(info.QuietHoursEnd)) {
+	} else if deliverywindow.InQuietHours(r.now(), tz, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
 		r.release(ctx, subID, jobIDs)
 		stats.Deferred++
 		return

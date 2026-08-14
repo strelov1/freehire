@@ -34,6 +34,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/deliverywindow"
 	"github.com/strelov1/freehire/internal/notify"
+	"github.com/strelov1/freehire/internal/pgconv"
 	"github.com/strelov1/freehire/internal/userjob"
 )
 
@@ -306,7 +307,7 @@ func (r *Runner) fire(ctx context.Context, id int64, stats *Stats) {
 		stats.Cancelled++
 		return
 	}
-	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, deliverywindow.FromPgTime(info.QuietHoursStart), deliverywindow.FromPgTime(info.QuietHoursEnd)) {
+	if deliverywindow.InQuietHours(r.now(), info.Timezone.String, pgconv.DurationPtr(info.QuietHoursStart), pgconv.DurationPtr(info.QuietHoursEnd)) {
 		// A transient time-of-day condition, not a lapsed trigger: release (not
 		// cancel) so the nudge fires once quiet hours end.
 		r.release(ctx, id)

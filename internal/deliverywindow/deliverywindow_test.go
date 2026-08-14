@@ -3,8 +3,6 @@ package deliverywindow
 import (
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func dur(hh, mm int) *time.Duration {
@@ -100,25 +98,4 @@ func TestDigestDue(t *testing.T) {
 			t.Error("expected never due with no digest time configured")
 		}
 	})
-}
-
-func TestFromPgTime(t *testing.T) {
-	if got := FromPgTime(pgtype.Time{Valid: false}); got != nil {
-		t.Errorf("FromPgTime(invalid) = %v, want nil", got)
-	}
-	got := FromPgTime(pgtype.Time{Microseconds: int64(9*time.Hour/time.Microsecond) + int64(30*time.Minute/time.Microsecond), Valid: true})
-	if got == nil || *got != 9*time.Hour+30*time.Minute {
-		t.Errorf("FromPgTime(09:30) = %v, want 9h30m", got)
-	}
-}
-
-func TestFromPgTimestamptz(t *testing.T) {
-	if got := FromPgTimestamptz(pgtype.Timestamptz{Valid: false}); got != nil {
-		t.Errorf("FromPgTimestamptz(invalid) = %v, want nil", got)
-	}
-	want := time.Date(2026, 8, 14, 9, 30, 0, 0, time.UTC)
-	got := FromPgTimestamptz(pgtype.Timestamptz{Time: want, Valid: true})
-	if got == nil || !got.Equal(want) {
-		t.Errorf("FromPgTimestamptz(%v) = %v, want %v", want, got, want)
-	}
 }
