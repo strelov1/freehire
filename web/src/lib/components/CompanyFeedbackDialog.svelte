@@ -5,7 +5,7 @@
   import { communityFormError } from '$lib/community';
   import { companyFeedbackTypes, maxFeedbackBodyLength } from '$lib/companyFeedback';
   import type { CompanyFeedbackSummary } from '$lib/types';
-  import { Button, Dialog } from '$lib/ui';
+  import { Button, ConfirmDialog, Dialog } from '$lib/ui';
 
   // Company feedback: a 1-5 star rating + a category + free text, one per
   // (caller, company), editable by resubmitting. The parent owns open/close;
@@ -33,7 +33,7 @@
   let feedbackType = $state('');
   let body = $state('');
   let submitting = $state(false);
-  let deleting = $state(false);
+  let confirmDeleteOpen = $state(false);
   let error = $state<string | null>(null);
 
   onMount(async () => {
@@ -72,16 +72,15 @@
   }
 
   async function remove() {
-    if (!window.confirm('Delete your feedback on this company? This cannot be undone.')) return;
-    deleting = true;
-    error = null;
     try {
       const summary = await api.deleteCompanyFeedback(slug);
       onSaved?.(summary);
       open = false;
     } catch (err) {
-      error = communityFormError(err);
-      deleting = false;
+      // null means a 401 already opened the sign-in dialog — nothing left to say here,
+      // so the confirm dialog just closes and lets that dialog take over.
+      const message = communityFormError(err);
+      if (message) throw new Error(message, { cause: err });
     }
   }
 </script>
@@ -140,8 +139,13 @@
 
       <div class="flex items-center justify-between gap-2">
         {#if mode === 'edit'}
-          <Button type="button" variant="ghost" disabled={deleting || submitting} onclick={remove}>
-            {deleting ? 'Deleting…' : 'Delete my feedback'}
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={submitting}
+            onclick={() => (confirmDeleteOpen = true)}
+          >
+            Delete my feedback
           </Button>
         {:else}
           <span></span>
@@ -153,3 +157,12 @@
     </form>
   {/if}
 </Dialog>
+
+<ConfirmDialog
+  bind:open={confirmDeleteOpen}
+  title="Delete your feedback on this company?"
+  description="This cannot be undone."
+  confirmLabel="Delete"
+  variant="destructive"
+  onConfirm={remove}
+/>

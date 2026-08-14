@@ -14,7 +14,7 @@
     SeekerReferralRequest,
   } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
-  import { Button, EntityLogo, FormField, Table } from '$lib/ui';
+  import { Button, ConfirmDialog, EntityLogo, FormField, Table } from '$lib/ui';
   import { isLinkedInUrl, timeAgo } from '$lib/utils';
   import CompanyPicker from './CompanyPicker.svelte';
   import States from './States.svelte';
@@ -109,10 +109,18 @@
   // Stop being a referrer: delete the offer after a confirm, then drop it optimistically
   // (reloading on failure to resurface it). `withdrawing` disables the acting row's button.
   let withdrawing = $state<string | null>(null);
-  async function withdrawOffer(o: ReferralOffer) {
+  let withdrawTarget = $state<ReferralOffer | null>(null);
+  let confirmWithdrawOpen = $state(false);
+
+  function requestWithdraw(o: ReferralOffer) {
     if (withdrawing !== null) return;
-    const name = o.company_name || o.company_slug;
-    if (!confirm(`Stop being a referrer for ${name}? You can offer again later.`)) return;
+    withdrawTarget = o;
+    confirmWithdrawOpen = true;
+  }
+
+  async function withdrawOffer() {
+    const o = withdrawTarget;
+    if (!o) return;
     withdrawing = o.id;
     try {
       await api.withdrawReferralOffer(o.id);
@@ -284,7 +292,7 @@
             size="sm"
             class="ml-auto text-muted-foreground hover:text-destructive"
             disabled={withdrawing === o.id}
-            onclick={() => withdrawOffer(o)}
+            onclick={() => requestWithdraw(o)}
           >
             {withdrawing === o.id ? 'Removing…' : 'Stop referring'}
           </Button>
@@ -343,3 +351,12 @@
     </p>
   {/if}
 {/if}
+
+<ConfirmDialog
+  bind:open={confirmWithdrawOpen}
+  title={`Stop being a referrer for ${withdrawTarget?.company_name || withdrawTarget?.company_slug || ''}?`}
+  description="You can offer again later."
+  confirmLabel="Stop referring"
+  variant="destructive"
+  onConfirm={withdrawOffer}
+/>

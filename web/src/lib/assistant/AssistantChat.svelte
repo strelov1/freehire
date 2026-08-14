@@ -25,6 +25,7 @@
   import { splitPresentingCalls } from '$lib/assistant/deck';
   import { atBottom } from '$lib/assistant/scrolling';
   import { renderMarkdown } from '$lib/markdown';
+  import { ConfirmDialog } from '$lib/ui';
   import JobDeck from '$lib/assistant/JobDeck.svelte';
   import SessionRail from '$lib/assistant/SessionRail.svelte';
   import ToolGroupList from '$lib/assistant/ToolGroupList.svelte';
@@ -493,11 +494,29 @@
     }
   }
 
-  async function removeChat(id: string) {
+  let removeTargetId = $state<string | null>(null);
+  let confirmRemoveChatOpen = $state(false);
+
+  // A chat that has been named has real history — confirm before deleting. A
+  // still-unnamed one has nothing in it worth confirming.
+  function requestRemoveChat(id: string) {
     if (switching) return;
     const named = sessions.find((s) => s.id === id)?.label !== NEW_CHAT_LABEL;
-    // A chat that has been named has real history — confirm before deleting.
-    if (named && !confirm('Delete this chat? This cannot be undone.')) return;
+    if (named) {
+      removeTargetId = id;
+      confirmRemoveChatOpen = true;
+    } else {
+      void removeChat(id);
+    }
+  }
+
+  function confirmRemoveChat() {
+    if (!removeTargetId) return Promise.resolve();
+    return removeChat(removeTargetId);
+  }
+
+  async function removeChat(id: string) {
+    if (switching) return;
     error = null;
     const wasActive = id === activeId;
     try {
@@ -769,7 +788,7 @@
         ready={phase === 'ready'}
         onNew={newChat}
         onSelect={selectSession}
-        onDelete={removeChat}
+        onDelete={requestRemoveChat}
       />
     {/if}
 
@@ -832,7 +851,7 @@
         {#if activeId}
           <button
             type="button"
-            onclick={() => removeChat(activeId as string)}
+            onclick={() => requestRemoveChat(activeId as string)}
             aria-label="Delete chat"
             title="Delete chat"
             class="ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
@@ -1030,6 +1049,15 @@
   </div>
 {/if}
 </div>
+
+<ConfirmDialog
+  bind:open={confirmRemoveChatOpen}
+  title="Delete this chat?"
+  description="This cannot be undone."
+  confirmLabel="Delete"
+  variant="destructive"
+  onConfirm={confirmRemoveChat}
+/>
 
 <style>
   /* Shimmer over the spinner verb. background-clip masks the text shape onto

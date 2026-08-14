@@ -8,7 +8,7 @@
   import { notifications } from '$lib/notifications.svelte';
   import { profileStore } from '$lib/profile.svelte';
   import type { SavedSearch } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
+  import { Button, ConfirmDialog, Input } from '$lib/ui';
   import { toSearchString } from '$lib/urlSearchString';
   import { ProviderIcon } from '$lib/ui';
   import AlertChannels from './filters/AlertChannels.svelte';
@@ -59,8 +59,9 @@
     }
   }
 
+  let confirmDisconnectOpen = $state(false);
+
   async function disconnect() {
-    if (!window.confirm('Disconnect Telegram? You will stop receiving alerts.')) return;
     connectBusy = true;
     error = null;
     try {
@@ -161,8 +162,17 @@
     }
   }
 
-  async function remove(s: SavedSearch) {
-    if (!window.confirm(`Delete saved search “${s.name}”?`)) return;
+  let removeTarget = $state<SavedSearch | null>(null);
+  let confirmRemoveOpen = $state(false);
+
+  function requestRemove(s: SavedSearch) {
+    removeTarget = s;
+    confirmRemoveOpen = true;
+  }
+
+  async function remove() {
+    const s = removeTarget;
+    if (!s) return;
     error = null;
     try {
       await savedSearches.remove(s.id);
@@ -230,7 +240,13 @@
         </div>
         {#if telegram.enabled}
           {#if telegram.linked}
-            <Button variant="ghost" size="sm" class="shrink-0" onclick={disconnect} disabled={connectBusy}>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="shrink-0"
+              onclick={() => (confirmDisconnectOpen = true)}
+              disabled={connectBusy}
+            >
               Disconnect
             </Button>
           {:else if connecting}
@@ -292,7 +308,7 @@
                   type="button"
                   aria-label="Delete “{s.name}”"
                   title="Delete"
-                  onclick={() => remove(s)}
+                  onclick={() => requestRemove(s)}
                   class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 class="size-4" />
@@ -350,4 +366,20 @@
       {/if}
     {/if}
   </div>
+
+  <ConfirmDialog
+    bind:open={confirmDisconnectOpen}
+    title="Disconnect Telegram?"
+    description="You will stop receiving alerts."
+    confirmLabel="Disconnect"
+    onConfirm={disconnect}
+  />
+
+  <ConfirmDialog
+    bind:open={confirmRemoveOpen}
+    title={`Delete saved search “${removeTarget?.name ?? ''}”?`}
+    confirmLabel="Delete"
+    variant="destructive"
+    onConfirm={remove}
+  />
 {/if}

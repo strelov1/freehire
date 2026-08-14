@@ -4,7 +4,7 @@
   import { FileText, Download, Trash2, ArrowRight } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { companyLogoUrl } from '$lib/logo';
-  import { Button, EntityLogo } from '$lib/ui';
+  import { Button, ConfirmDialog, EntityLogo } from '$lib/ui';
   import JdIntakeDialog from './JdIntakeDialog.svelte';
   import { type CvTailoredItem } from '$lib/cv';
 
@@ -30,8 +30,17 @@
     }
   }
 
-  async function remove(cv: CvTailoredItem) {
-    if (!window.confirm(`Delete your tailored CV for “${cv.job_title}”? This cannot be undone.`)) return;
+  let removeTarget = $state<CvTailoredItem | null>(null);
+  let confirmRemoveOpen = $state(false);
+
+  function requestRemove(cv: CvTailoredItem) {
+    removeTarget = cv;
+    confirmRemoveOpen = true;
+  }
+
+  async function remove() {
+    const cv = removeTarget;
+    if (!cv) return;
     try {
       await api.deleteCv(cv.id);
       items = items.filter((i) => i.id !== cv.id);
@@ -125,7 +134,7 @@
               type="button"
               aria-label="Delete"
               title="Delete"
-              onclick={() => remove(cv)}
+              onclick={() => requestRemove(cv)}
               class="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <Trash2 class="h-4 w-4" />
@@ -140,3 +149,12 @@
 {#if showIntake}
   <JdIntakeDialog onClose={() => (showIntake = false)} />
 {/if}
+
+<ConfirmDialog
+  bind:open={confirmRemoveOpen}
+  title={`Delete your tailored CV for “${removeTarget?.job_title ?? ''}”?`}
+  description="This cannot be undone."
+  confirmLabel="Delete"
+  variant="destructive"
+  onConfirm={remove}
+/>

@@ -5,6 +5,7 @@
   import { page } from '$app/state';
   import { api } from '$lib/api';
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '$lib/cvRefreshOffer';
+  import { askCvRefresh } from '$lib/cvRefreshDialog.svelte';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersFromProfile, filtersToParams } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
@@ -20,7 +21,7 @@
   import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
   import States from '$lib/components/States.svelte';
-  import { TabStrip, tabStripId } from '$lib/ui';
+  import { ConfirmDialog, TabStrip, tabStripId } from '$lib/ui';
   import { profileStore } from '$lib/profile.svelte';
   import type {
     ATSResponse,
@@ -257,6 +258,7 @@
   function offerRefreshAfterBankEdit() {
     void offerCvRefresh({
       message: BASE_REFRESH_MESSAGE,
+      confirm: askCvRefresh,
       apply: async () => {
         // Cleared on the way in, so a failure from one edit does not outlive the next one that
         // succeeds — the banner sits under the page header and nothing else would ever drop it.
@@ -270,8 +272,9 @@
     });
   }
 
+  let confirmRemoveOpen = $state(false);
+
   async function remove() {
-    if (!window.confirm('Delete your profile?')) return;
     actionError = null;
     try {
       await profileStore.clear();
@@ -402,7 +405,7 @@
             <Button
               variant="ghost"
               size="sm"
-              onclick={remove}
+              onclick={() => (confirmRemoveOpen = true)}
               class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 class="size-4" />
@@ -496,3 +499,11 @@
     {/if}
   {/if}
 {/if}
+
+<ConfirmDialog
+  bind:open={confirmRemoveOpen}
+  title="Delete your profile?"
+  confirmLabel="Delete"
+  variant="destructive"
+  onConfirm={remove}
+/>

@@ -33,16 +33,22 @@ function defaultSession(): Storage | null {
 }
 
 /** Ask whether to rebuild a CV from the current seed after a bank edit.
- *  Decline is a no-op on the document and dismisses further offers this tab session. */
+ *  Decline is a no-op on the document and dismisses further offers this tab session.
+ *
+ *  `confirm` is required rather than defaulted to a real dialog on purpose: a default
+ *  would need to import cvRefreshDialog.svelte.ts, which uses runes, and this module
+ *  is exercised by cvRefreshOffer.test.ts under the plain-Node vitest project that
+ *  loads no Svelte plugin — see that config's comment. Real call sites pass
+ *  `confirm: askCvRefresh` themselves. */
 export async function offerCvRefresh(opts: {
   message: string;
   apply: () => Promise<void>;
-  confirm?: (message: string) => boolean;
+  confirm: (message: string) => boolean | Promise<boolean>;
   dismissed?: boolean;
   onDismiss?: () => void;
 }): Promise<'applied' | 'declined' | 'skipped'> {
   if (opts.dismissed ?? isCvRefreshDismissed()) return 'skipped';
-  const ok = (opts.confirm ?? ((m) => window.confirm(m)))(opts.message);
+  const ok = await opts.confirm(opts.message);
   if (!ok) {
     (opts.onDismiss ?? dismissCvRefreshOffer)();
     return 'declined';

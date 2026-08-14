@@ -7,7 +7,7 @@
   import type { StagedFilters } from '$lib/stagedFilters.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import type { SavedSearch } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
+  import { Button, ConfirmDialog, Input } from '$lib/ui';
   import SaveSearchAlert from './filters/SaveSearchAlert.svelte';
 
   // Focus the text input a rename row reveals, so the caret is ready without a second
@@ -103,8 +103,18 @@
     }
   }
 
-  async function remove(set: SavedSearch) {
-    if (busy || !window.confirm(`Delete the saved filter “${set.name}”?`)) return;
+  let removeTarget = $state<SavedSearch | null>(null);
+  let confirmRemoveOpen = $state(false);
+
+  function requestRemove(set: SavedSearch) {
+    if (busy) return;
+    removeTarget = set;
+    confirmRemoveOpen = true;
+  }
+
+  async function remove() {
+    const set = removeTarget;
+    if (!set) return;
     busy = true;
     error = null;
     try {
@@ -187,7 +197,7 @@
                 type="button"
                 aria-label="Delete “{set.name}”"
                 title="Delete"
-                onclick={() => remove(set)}
+                onclick={() => requestRemove(set)}
                 class="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 class="size-4" />
@@ -204,3 +214,11 @@
     {/if}
   {/if}
 </div>
+
+<ConfirmDialog
+  bind:open={confirmRemoveOpen}
+  title={`Delete the saved filter “${removeTarget?.name ?? ''}”?`}
+  confirmLabel="Delete"
+  variant="destructive"
+  onConfirm={remove}
+/>

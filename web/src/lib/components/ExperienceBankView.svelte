@@ -9,7 +9,7 @@
    */
   import { Trash2, Pencil, Check, X } from '@lucide/svelte';
   import { api } from '$lib/api';
-  import { Button } from '$lib/ui';
+  import { Button, ConfirmDialog } from '$lib/ui';
   import ExperienceAssistantPanel from '$lib/components/ExperienceAssistantPanel.svelte';
   import States from '$lib/components/States.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
@@ -285,18 +285,22 @@
     }
   }
 
-  async function mergeSelected() {
-    if (!mergeReady || busy || selected.length !== 2) return;
+  let confirmMergeOpen = $state(false);
+
+  const mergeTitle = $derived.by(() => {
+    if (selected.length !== 2) return '';
     const a = atomById.get(must(selected[0]));
     const b = atomById.get(must(selected[1]));
-    if (!a || !b) return;
-    if (
-      !confirm(
-        `Merge “${a.claim}” and “${b.claim}” into one achievement? The richer one is kept; the other is removed.`,
-      )
-    ) {
-      return;
-    }
+    return a && b ? `Merge “${a.claim}” and “${b.claim}” into one achievement?` : '';
+  });
+
+  function requestMerge() {
+    if (!mergeReady || busy || selected.length !== 2) return;
+    confirmMergeOpen = true;
+  }
+
+  async function mergeSelected() {
+    if (selected.length !== 2) return;
     busy = true;
     try {
       await api.mergeExperienceAtoms([must(selected[0]), must(selected[1])]);
@@ -331,9 +335,18 @@
     }
   }
 
-  async function removeAtom(atom: ExperienceAtom) {
+  let removeTarget = $state<ExperienceAtom | null>(null);
+  let confirmRemoveOpen = $state(false);
+
+  function requestRemove(atom: ExperienceAtom) {
     if (busy) return;
-    if (!confirm(`Remove “${atom.claim}” from your experience?`)) return;
+    removeTarget = atom;
+    confirmRemoveOpen = true;
+  }
+
+  async function removeAtom() {
+    const atom = removeTarget;
+    if (!atom) return;
     busy = true;
     try {
       await api.deleteExperienceAtom(atom.id);
@@ -356,6 +369,22 @@
   onClose={() => (panelOpen = false)}
   onBankChanged={refreshBank}
   onTurnStateChange={(active) => (turnActive = active)}
+/>
+
+<ConfirmDialog
+  bind:open={confirmMergeOpen}
+  title={mergeTitle}
+  description="The richer one is kept; the other is removed."
+  confirmLabel="Merge"
+  onConfirm={mergeSelected}
+/>
+
+<ConfirmDialog
+  bind:open={confirmRemoveOpen}
+  title={`Remove “${removeTarget?.claim ?? ''}” from your experience?`}
+  confirmLabel="Remove"
+  variant="destructive"
+  onConfirm={removeAtom}
 />
 
 <div class="min-w-0">
@@ -446,7 +475,7 @@
             <span class="text-sm text-muted-foreground">
               {selected.length} selected
             </span>
-            <Button size="sm" disabled={!mergeReady || busy} onclick={mergeSelected}>
+            <Button size="sm" disabled={!mergeReady || busy} onclick={requestMerge}>
               Merge
             </Button>
             <Button
@@ -746,7 +775,7 @@
           <Button
             size="icon"
             variant="ghost"
-            onclick={() => removeAtom(atom)}
+            onclick={() => requestRemove(atom)}
             aria-label="Remove achievement"
             class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >

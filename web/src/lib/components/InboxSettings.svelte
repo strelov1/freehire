@@ -9,7 +9,7 @@
   // pager it polls; this component only renders the button and its pending state.
   import { api } from '$lib/api';
   import type { GmailStatus, MailboxStatus, InboxSource } from '$lib/api';
-  import { Badge, Button } from '$lib/ui';
+  import { Badge, Button, ConfirmDialog } from '$lib/ui';
   import { Mail, AtSign, Copy } from '@lucide/svelte';
   import { errorMessage } from '$lib/utils';
 
@@ -44,12 +44,13 @@
   }: Props = $props();
 
   let claiming = $state(false);
+  let confirmDisconnectGmailOpen = $state(false);
+  let confirmReleaseMailboxOpen = $state(false);
 
   const hasGmail = $derived(!!gmail?.connected);
   const hasMailbox = $derived(!!mailbox?.address);
 
   async function disconnectGmail() {
-    if (!confirm('Disconnect Gmail and remove its synced mail?')) return;
     try {
       await api.disconnectGmail();
       gmail = { connected: false, available: gmail?.available };
@@ -73,7 +74,6 @@
   }
 
   async function releaseMailbox() {
-    if (!confirm('Release your freehire mailbox and delete its received mail?')) return;
     try {
       mailbox = await api.releaseMailbox();
       onSourceChanged('hosted');
@@ -106,7 +106,9 @@
         <Button variant="secondary" size="sm" disabled={syncing} onclick={onSync}>
           {syncing ? 'Syncing…' : 'Sync'}
         </Button>
-        <Button variant="outline" size="sm" onclick={disconnectGmail}>Disconnect</Button>
+        <Button variant="outline" size="sm" onclick={() => (confirmDisconnectGmailOpen = true)}>
+          Disconnect
+        </Button>
       </div>
     {:else if gmail?.available}
       <p class="mt-1 text-xs text-muted-foreground">Pull replies from your own Gmail (needs Google sign-in).</p>
@@ -131,7 +133,9 @@
         </button>
       </div>
       <p class="mt-2 text-xs text-muted-foreground">Use this address when you apply — replies land here.</p>
-      <Button variant="outline" size="sm" class="mt-3" onclick={releaseMailbox}>Release</Button>
+      <Button variant="outline" size="sm" class="mt-3" onclick={() => (confirmReleaseMailboxOpen = true)}>
+        Release
+      </Button>
     {:else if mailbox?.available}
       <p class="mt-1 text-xs text-muted-foreground">Get an address on our domain — no Google needed.</p>
       <Button variant="primary" size="sm" class="mt-3" disabled={claiming} onclick={claimMailbox}>
@@ -142,3 +146,20 @@
     {/if}
   </div>
 </div>
+
+<ConfirmDialog
+  bind:open={confirmDisconnectGmailOpen}
+  title="Disconnect Gmail?"
+  description="Its synced mail is removed."
+  confirmLabel="Disconnect"
+  onConfirm={disconnectGmail}
+/>
+
+<ConfirmDialog
+  bind:open={confirmReleaseMailboxOpen}
+  title="Release your freehire mailbox?"
+  description="Its received mail is deleted."
+  confirmLabel="Release"
+  variant="destructive"
+  onConfirm={releaseMailbox}
+/>

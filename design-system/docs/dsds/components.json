@@ -197,6 +197,102 @@
       ]
     },
     {
+      "id": "component.confirm-dialog",
+      "type": "component",
+      "name": "ConfirmDialog",
+      "description": "A Dialog preset for the confirm-then-act flow that used to be window.confirm(): title, optional description, Cancel and confirm buttons. onConfirm may be async and may throw — the dialog holds itself non-dismissible and disables both buttons while it runs, then either closes (resolved) or shows the thrown message in place and re-enables (rejected).",
+      "source": {
+        "file": "../../src/confirm-dialog.svelte"
+      },
+      "props": [
+        {
+          "name": "open",
+          "type": "boolean",
+          "bindable": true,
+          "default": false
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "confirmLabel",
+          "type": "string",
+          "default": "Confirm"
+        },
+        {
+          "name": "cancelLabel",
+          "type": "string",
+          "default": "Cancel"
+        },
+        {
+          "name": "variant",
+          "type": "ButtonVariant",
+          "default": "primary",
+          "description": "Passed straight to the confirm button. Reserve 'destructive' the way Button itself does — the action that destroys something and cannot be undone, not every removal."
+        },
+        {
+          "name": "onConfirm",
+          "type": "() => void | Promise<void>",
+          "required": true
+        },
+        {
+          "name": "children",
+          "type": "Snippet"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/confirm-dialog.stories.ts"
+        }
+      ]
+    },
+    {
+      "id": "component.notice-dialog",
+      "type": "component",
+      "name": "NoticeDialog",
+      "description": "A Dialog preset for the replacement of window.alert(): title, optional description, one OK button. Purely informational — no busy/error handling like ConfirmDialog, since there is nothing to await.",
+      "source": {
+        "file": "../../src/notice-dialog.svelte"
+      },
+      "props": [
+        {
+          "name": "open",
+          "type": "boolean",
+          "bindable": true,
+          "default": false
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "confirmLabel",
+          "type": "string",
+          "default": "OK"
+        },
+        {
+          "name": "children",
+          "type": "Snippet"
+        }
+      ],
+      "stories": [
+        {
+          "file": "../../src/notice-dialog.stories.ts"
+        }
+      ]
+    },
+    {
       "id": "component.tabs",
       "type": "component",
       "name": "Tabs",

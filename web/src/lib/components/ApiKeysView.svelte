@@ -5,7 +5,7 @@
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { beginProviderReauthentication } from '$lib/recentAuth';
   import type { ApiKey, CreatedApiKey } from '$lib/types';
-  import { Button, Input } from '$lib/ui';
+  import { Button, ConfirmDialog, Input } from '$lib/ui';
   import { timeAgo } from '$lib/utils';
   import States from './States.svelte';
 
@@ -105,18 +105,23 @@
     }
   }
 
-  async function revoke(key: ApiKey) {
-    if (!window.confirm(`Revoke "${key.name}"? Any script using it stops working immediately.`)) {
-      return;
+  let revokeTarget = $state<ApiKey | null>(null);
+  let confirmRevokeOpen = $state(false);
+
+  function requestRevoke(key: ApiKey) {
+    revokeTarget = key;
+    confirmRevokeOpen = true;
+  }
+
+  async function revoke() {
+    const key = revokeTarget;
+    if (!key) return;
+    if (hasPassword && !confirmationPassword) {
+      formError = 'Enter your password to confirm this security change.';
+      throw new Error(formError);
     }
     try {
-      if (hasPassword) {
-        if (!confirmationPassword) {
-          formError = 'Enter your password to confirm this security change.';
-          return;
-        }
-        await api.reauthenticatePassword(confirmationPassword);
-      }
+      if (hasPassword) await api.reauthenticatePassword(confirmationPassword);
       await api.revokeApiKey(key.id);
       keysData.value = keysData.value.filter((k) => k.id !== key.id);
       if (revealed?.id === key.id) revealed = null;
@@ -130,6 +135,7 @@
       } else {
         formError = 'Could not revoke the key. Please try again.';
       }
+      throw new Error(formError, { cause: error });
     }
   }
 
@@ -263,10 +269,19 @@
                 {#if key.expires_at}· expires {timeAgo(key.expires_at)}{/if}
               </span>
             </div>
-            <Button variant="ghost" size="sm" onclick={() => revoke(key)}>Revoke</Button>
+            <Button variant="ghost" size="sm" onclick={() => requestRevoke(key)}>Revoke</Button>
           </li>
         {/each}
       </ul>
     {/if}
   </div>
+
+  <ConfirmDialog
+    bind:open={confirmRevokeOpen}
+    title={`Revoke "${revokeTarget?.name ?? ''}"?`}
+    description="Any script using it stops working immediately."
+    confirmLabel="Revoke"
+    variant="destructive"
+    onConfirm={revoke}
+  />
 {/if}

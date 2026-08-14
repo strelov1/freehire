@@ -17,7 +17,9 @@
   import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
+  import CvRefreshDialog from '$lib/components/CvRefreshDialog.svelte';
   import SupportToast from '$lib/components/SupportToast.svelte';
+  import { ConfirmDialog } from '$lib/ui';
   import '../app.css';
   // Country-flag icon sheet (used by $lib/components/Flag.svelte). References its
   // SVGs by URL, so the browser only fetches flags actually rendered.
@@ -52,16 +54,20 @@
   // form, or an assistant chat. `onNeedReload` replaces that unconditional
   // reload with a confirmation, so a new deploy never silently drops unsaved
   // work.
+  let showReloadPrompt = $state(false);
+
   async function registerPwaServiceWorker() {
     const { registerSW } = await import('virtual:pwa-register');
     registerSW({
       immediate: true,
       onNeedReload() {
-        if (confirm('A new version of freehire is available. Reload now?')) {
-          window.location.reload();
-        }
+        showReloadPrompt = true;
       },
     });
+  }
+
+  function reloadForUpdate() {
+    window.location.reload();
   }
 
   // Drop every per-user store the moment the session ends. logout() re-resolves via
@@ -151,6 +157,15 @@
      strip to stop asking, yields this same corner to the consent banner above, and
      retires for good once answered. -->
 <SupportToast />
+
+<CvRefreshDialog />
+
+<ConfirmDialog
+  bind:open={showReloadPrompt}
+  title="A new version of freehire is available"
+  confirmLabel="Reload now"
+  onConfirm={reloadForUpdate}
+/>
 
 <style>
   /* Indeterminate sweep: the segment slides across the track on repeat while a

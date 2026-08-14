@@ -16,6 +16,7 @@
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '$lib/cvRefreshOffer';
+  import { askCvRefresh } from '$lib/cvRefreshDialog.svelte';
   import { track } from '$lib/analytics';
   import { must } from '$lib/utils';
   import AssistantChat from '$lib/assistant/AssistantChat.svelte';
@@ -29,6 +30,7 @@
   import StyleSettings from '$lib/components/cv/StyleSettings.svelte';
   import TemplateGallery from '$lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '$lib/components/AccountNavRail.svelte';
+  import { ConfirmDialog } from '$lib/ui';
   import { clampWidth } from '$lib/tailor/geometry';
   import { undoRun, openingActions } from '$lib/tailor/autopilot';
   import {
@@ -392,15 +394,10 @@
     }
   }
 
+  let confirmResetOpen = $state(false);
+
   async function resetFromResume() {
-    if (
-      !window.confirm(
-        'Reset this tailored CV from your current uploaded résumé? Your template and typography stay; content edits can be undone from History.',
-      )
-    ) {
-      return;
-    }
-    await applyResetFromResume();
+    confirmResetOpen = true;
   }
 
   // A bank edit offers the same whole-document reset the History tab's control offers, so it
@@ -411,6 +408,7 @@
     void offerCvRefresh({
       message: TAILOR_REFRESH_MESSAGE,
       apply: applyResetFromResume,
+      confirm: askCvRefresh,
     });
   }
 
@@ -789,3 +787,11 @@
     <CliEditDialog {cvId} onClose={() => (cliDialogOpen = false)} />
   {/if}
 </div>
+
+<ConfirmDialog
+  bind:open={confirmResetOpen}
+  title="Reset this tailored CV from your current uploaded résumé?"
+  description="Your template and typography stay; content edits can be undone from History."
+  confirmLabel="Reset"
+  onConfirm={applyResetFromResume}
+/>
