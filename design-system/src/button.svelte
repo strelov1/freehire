@@ -47,14 +47,22 @@
     size = 'md',
     class: className,
     href,
+    target,
+    rel,
     children,
     ...rest
   }: Props = $props();
+
+  // A target="_blank" anchor keeps a window.opener handle back to this page unless
+  // rel says otherwise — the reverse-tabnabbing gap. Fill in the safe default once,
+  // here, rather than relying on every call site to remember it; an explicit `rel`
+  // from the caller still wins.
+  const effectiveRel = $derived(target === '_blank' ? (rel ?? 'noopener noreferrer') : rel);
 </script>
 
 {#if href}
   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- generic link primitive; href may be external — e.g. a job's apply URL — so the caller owns resolving internal routes -->
-  <a {href} class={cn(buttonVariants({ variant, size }), className)} {...rest}>
+  <a {href} {target} rel={effectiveRel} class={cn(buttonVariants({ variant, size }), className)} {...rest}>
     {@render children()}
   </a>
 {:else}

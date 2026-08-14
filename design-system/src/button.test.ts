@@ -74,6 +74,44 @@ describe('Button', () => {
     expect(queryByRole('button')).toBeNull();
   });
 
+  // Reverse-tabnabbing guard: a target="_blank" anchor must not keep a window.opener
+  // handle back to this page, and a caller must not have to remember rel by hand.
+  it('adds rel=noopener noreferrer by default when opened in a new tab', () => {
+    // `target` doubles as a testing-library render option, so it — and every prop
+    // alongside it — has to go under `props` explicitly here.
+    const { getByRole } = render(Button, {
+      props: {
+        href: 'https://example.com',
+        target: '_blank',
+        children: slot('Go'),
+      },
+    });
+
+    expect(getByRole('link').getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('lets a caller override the default rel', () => {
+    const { getByRole } = render(Button, {
+      props: {
+        href: 'https://example.com',
+        target: '_blank',
+        rel: 'noopener',
+        children: slot('Go'),
+      },
+    });
+
+    expect(getByRole('link').getAttribute('rel')).toBe('noopener');
+  });
+
+  it('leaves rel unset for a same-tab link', () => {
+    const { getByRole } = render(Button, {
+      href: '/jobs',
+      children: slot('Go'),
+    });
+
+    expect(getByRole('link').getAttribute('rel')).toBeNull();
+  });
+
   // Every call site that passes a class assumes it wins. It only does because cn
   // runs tailwind-merge — plain concatenation would leave both in the list and
   // let source order in the stylesheet decide.
