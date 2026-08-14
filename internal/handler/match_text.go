@@ -1,11 +1,32 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/jobmatch"
+	"github.com/strelov1/freehire/internal/ratelimit"
 	"github.com/strelov1/freehire/internal/skilltag"
 )
+
+// matchTextPerHour bounds how many ad-hoc text matches one user may run per hour. Unlike
+// the LLM fit-analysis routes this costs no model spend, but it still runs a multi-pass
+// skilltag.Parse dictionary/regex scan over a body up to the server's global 8MB limit —
+// and MatchText's own doc comment says it "powers the browser extension's on-any-page
+// card", so it fires automatically on ordinary tab switches/page loads, not just on
+// explicit user action. Sized well above that automatic-trigger rate (loadMatch() has no
+// debounce of its own) so normal browsing never trips it, while still bounding a scripted
+// or compromised-extension-build loop.
+const matchTextPerHour = 120
+
+// matchTextLimiter throttles MatchText per authenticated user, the same
+// KeyByUserOrIP-keyed shape as matchAnalysisLimiter and jdURLLimiter — a dedicated
+// limiter, not a shared one, since this route costs CPU on every page visit rather than
+// AI-credit spend on a new job.
+func matchTextLimiter(throttler ratelimit.Throttler) fiber.Handler {
+	return ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("matchtext"), matchTextPerHour, time.Hour)
+}
 
 // matchTextRequest is a job posting scraped from an arbitrary page: its heading
 // and visible text. No catalog job is required.

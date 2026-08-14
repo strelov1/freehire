@@ -70,7 +70,7 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/jobs/:slug/match", mw.key, h.JobMatch)
 	// Ad-hoc skill match for a job posting scraped off any page (title + text),
 	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", mw.key, h.MatchText)
+	api.Post("/me/match-text", mw.key, matchTextLimiter(mw.throttler), h.MatchText)
 	// The on-demand LLM match analysis (GET cached / POST run / SSE stream). The two routes
 	// that actually drive the prompt chain share ONE limiter instance, so the budget is per
 	// user and not per route — a limiter per mount would hand the stream, the POST, and each
