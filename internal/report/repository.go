@@ -3,8 +3,10 @@ package report
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -131,6 +133,15 @@ func (r *QueriesRepository) MarkDismissed(ctx context.Context, id, reviewedBy in
 func (r *QueriesRepository) Close(ctx context.Context, jobID int64) error {
 	_, err := r.q.CloseJobByID(ctx, jobID)
 	return err
+}
+
+// CountFiledSince backs the daily cap.
+func (r *QueriesRepository) CountFiledSince(ctx context.Context, reportedBy int64, since time.Time) (int, error) {
+	n, err := r.q.CountReportsFiledSince(ctx, db.CountReportsFiledSinceParams{
+		ReportedBy: reportedBy,
+		Since:      pgtype.Timestamptz{Time: since, Valid: true},
+	})
+	return int(n), err
 }
 
 // fromRow maps the generated db row to the package domain type, dropping the internal
