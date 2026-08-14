@@ -41,15 +41,14 @@ const (
 	// in-engine and NOT OpenAI — reached over TEI's native /embed route (embedderURL).
 	// Multilingual e5 gives far sharper skill matching than the old in-engine MiniLM, and
 	// offloading the compute keeps it off Meilisearch's single task queue.
-	// Deliberately still the pre-chunking identity: the passage shape changed
-	// (HTML-stripped, full-length, chunked — see internal/search/plaintext.go/chunk.go)
-	// even though the underlying e5 model did not, so this string must eventually change
-	// too or a job already stamped under the OLD (truncated, HTML-laden) passage would
-	// never be re-enqueued. But bumping it here would ship the full-catalogue re-embed
-	// bundled into this deploy, not as the scheduled, monitored operation
-	// openspec/changes/drop-hybrid-search-pgvector-similar/tasks.md's task 8.3 requires —
-	// that bump belongs in its own follow-up commit, deployed on its own.
-	embedderModel = "intfloat/multilingual-e5-base"
+	// "-chunked-v1": the passage shape changed (HTML-stripped, full-length, chunked —
+	// see internal/search/plaintext.go/chunk.go) even though the underlying e5 model did
+	// not, so this identity must change too or a job already stamped under the OLD
+	// (truncated, HTML-laden) passage would never be re-enqueued. Bumped 2026-08-14 as
+	// its own scheduled deploy (openspec/changes/drop-hybrid-search-pgvector-similar's
+	// ops step 8.3), triggering the full-catalogue re-embed through the chunking
+	// pipeline — not bundled into the deploy that shipped the pipeline itself.
+	embedderModel = "intfloat/multilingual-e5-base-chunked-v1"
 	// embedderURL is the default embedding backend: the host2 TEI's native /embed route
 	// (see embedChunk) — the co-located loopback TEI of the production topology. A worker
 	// can override it (WithEmbedURL, wired from EMBED_URL) to point at a faster backend

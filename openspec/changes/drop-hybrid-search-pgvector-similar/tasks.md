@@ -176,23 +176,42 @@
 
 ## 8. Prod ops
 
-- [ ] 8.1 Install `postgresql-18-pgvector` on prod (host2).
-- [ ] 8.2 Apply the migration (manual apply per this repo's deploy convention —
-      new tables need a manual `psql` apply before/with the deploy, see
-      `internal/db/AGENTS.md`).
-- [ ] 8.3 Bump `embedderModel` (task 2.5) to trigger the full-catalogue re-embed
+- [x] 8.1 Install `postgresql-18-pgvector` on prod (host2). Done 2026-08-14 — apt
+      package installed, but pgvector is not a "trusted" extension, so a
+      superuser-run `CREATE EXTENSION vector` in the `hire` database (once, outside
+      the migration) was required before the `hire` role could use it.
+- [x] 8.2 Apply the migration. Done 2026-08-14 via a normal `release.sh freehire` —
+      `cmd/migrate` now applies migrations automatically before the color flip (this
+      task's "manual psql apply" premise predates that; see `internal/db/AGENTS.md`).
+      Required stopping all prod cron timers/workers first: with ~230 timers touching
+      `jobs` near-continuously, `ADD COLUMN`'s brief lock kept losing the 5s
+      `lock_timeout` race. Migrations applied: 0092 (`job_semantic_chunks`,
+      `jobs.similar_job_ids`/`similar_computed_at`), 0093 (backfill index),
+      plus an unrelated 0095 that had also queued up. Verified: `/jobs/:slug/similar`
+      returns `{"data":[]}` (200) for a real job, `/me/recommendations` is 404,
+      `job_semantic_chunks` is owned by `hire`. All timers/workers restarted after.
+- [x] 8.3 Bump `embedderModel` (task 2.5) to trigger the full-catalogue re-embed
       through the new chunked pipeline — a scheduled, monitored operation (design.md
       flags this as a real, possibly multi-hour-to-multi-day TEI cost, not a toggle).
       Watch it drain via the existing `semantic_outbox` progress signals.
+      Deployed 2026-08-14 (own commit/PR, not bundled with the pipeline's own deploy —
+      see `internal/search/client.go`'s `embedderModel` comment).
 - [ ] 8.4 Once the re-embed has made meaningful progress, build the HNSW index on
       `job_semantic_chunks` on prod (Section 3.1) in a scheduled window.
 - [ ] 8.5 Deploy `cmd/similar-backfill`; run its initial full pass; verify
       coverage before flipping `/similar` live (Section 5).
-- [ ] 8.6 After `/similar` is verified on the new path (`/me/recommendations` was
-      removed outright in this same change, not migrated — nothing to verify there):
-      stop and remove `freehire-reindexw`-adjacent `--semantic` cron/timers, drop
-      the live `jobs_semantic` Meili index, add a `cmd/similar-backfill` cron
-      (cadence: default daily unless implementation reveals otherwise).
+- [ ] 8.6 stop and remove `freehire-reindexw`-adjacent `--semantic` cron/timers
+      (checked 2026-08-14: `freehire-reindexw.service` already invokes plain
+      `reindex` with no flags — `cmd/reindex --semantic` was removed in task 7.2,
+      already live, so there was nothing left to stop here), add a
+      `cmd/similar-backfill` cron (cadence: default daily unless implementation
+      reveals otherwise) — remaining, blocked on 8.5.
+      Dropped the live `jobs_semantic` (1,021,471 docs, ~3.8GB) and the empty
+      `resume_vectors` Meili indexes early, 2026-08-14 (reclaimed ~15GB disk:
+      30GB→15GB) — safe ahead of schedule because every code path that read or
+      wrote either index was already removed and deployed (tasks 5-7), so there
+      was no live fallback depending on them regardless of `cmd/similar-backfill`
+      coverage; verified `/api/v1/jobs/search` and the homepage still 200 after.
 
 ## 9. Documentation
 
