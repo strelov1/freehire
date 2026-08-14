@@ -1774,13 +1774,13 @@ func (q *Queries) MarkJobDuplicateOf(ctx context.Context, arg MarkJobDuplicateOf
 const markLivenessExpired = `-- name: MarkLivenessExpired :one
 UPDATE jobs
 SET liveness_strikes = liveness_strikes + 1,
+    -- AND closed_at IS NULL on both branches below: if another mechanism closed this row
+    -- between candidate selection and this write, its closed_at/closed_reason are the true
+    -- record of when and why, and this probe must not overwrite either.
     closed_at = CASE
-        WHEN liveness_strikes + 1 >= $1 THEN now()
+        WHEN liveness_strikes + 1 >= $1 AND closed_at IS NULL THEN now()
         ELSE closed_at
     END,
-    -- AND closed_at IS NULL: if another mechanism closed this row between candidate
-    -- selection and this write, its label is the true one. closed_at is overwritten
-    -- regardless (pre-existing behaviour), but the audit record must not be.
     closed_reason = CASE
         WHEN liveness_strikes + 1 >= $1 AND closed_at IS NULL THEN 'probe_expired'
         ELSE closed_reason

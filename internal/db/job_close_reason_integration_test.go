@@ -155,6 +155,52 @@ func TestMarkLivenessExpiredRecordsItsReasonOnlyWhenItCloses(t *testing.T) {
 	}
 }
 
+func TestMarkLivenessExpiredPreservesClosedAtFromAnEarlierClose(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:7", "Engineer"))
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// First strike: below the threshold, so nothing is closed yet.
+	if _, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 2}); err != nil {
+		t.Fatalf("first strike: %v", err)
+	}
+
+	// Another mechanism (a moderator resolving a report) closes the job first, between
+	// candidate selection and the probe's second strike.
+	if _, err := q.CloseJobByID(ctx, job.ID); err != nil {
+		t.Fatalf("moderator close: %v", err)
+	}
+	before, err := q.GetJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("get job after moderator close: %v", err)
+	}
+	if !before.ClosedAt.Valid {
+		t.Fatal("moderator close must set closed_at")
+	}
+
+	// Sleep past Postgres's clock resolution so a real overwrite would be observable.
+	time.Sleep(5 * time.Millisecond)
+
+	// Second strike reaches the threshold. It must not touch either closed_at or
+	// closed_reason: the moderator's close already recorded the true story.
+	second, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 2})
+	if err != nil {
+		t.Fatalf("second strike: %v", err)
+	}
+	if !second.ClosedAt.Time.Equal(before.ClosedAt.Time) {
+		t.Errorf("closed_at = %v, want unchanged from moderator close %v", second.ClosedAt.Time, before.ClosedAt.Time)
+	}
+	if got := closeReason(t, pool, job.ID); got != "moderated" {
+		t.Errorf("closed_reason = %q, want %q (moderator's close must survive the probe)", got, "moderated")
+	}
+}
+
 func TestReopeningAJobClearsItsCloseReason(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
