@@ -1,6 +1,6 @@
 ## 1. Migration
 
-- [ ] 1.1 **Edit migration 0092 in place** (never applied to a real/shared/persistent
+- [x] 1.1 **Edit migration 0092 in place** (never applied to a real/shared/persistent
       database yet — only replayed in ephemeral local/CI containers, so amending is
       safe here and avoids an add-then-drop column in shipped history): drop the
       `semantic_embedding_vec vector(768)` column from `jobs` (superseded — see
@@ -9,7 +9,7 @@
       `CREATE TABLE job_semantic_chunks (job_id bigint NOT NULL REFERENCES
       jobs(id) ON DELETE CASCADE, chunk_index smallint NOT NULL, embedding
       vector(768) NOT NULL, PRIMARY KEY (job_id, chunk_index));`.
-- [ ] 1.2 **Delete** `cmd/backfill-semantic-embedding-vec/` and its integration test
+- [x] 1.2 **Delete** `cmd/backfill-semantic-embedding-vec/` and its integration test
       (`internal/db/semantic_embedding_vec_backfill_integration_test.go`) — the
       one-off reshape backfill it implemented no longer applies (design.md Decision
       1b: getting real chunked vectors needs a full re-embed via TEI, not a

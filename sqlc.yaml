@@ -117,16 +117,3 @@ sql:
           # than a bigint that would leak signup order.
           - column: "users.talent_network_public_id"
             go_type: "github.com/google/uuid.UUID"
-          # semantic_embedding_vec is a nullable pgvector column: every existing row
-          # is NULL until the one-off backfill and cmd/embed catch up, and it never
-          # gets one at all for a job whose content was never embedded. pgvector.Vector's
-          # sql.Scanner only handles []byte/string, not a SQL NULL — sqlc's default
-          # (a bare Vector field) would fail to scan any NULL row, which is every row
-          # today, breaking every SELECT * job query (GetJob, ListJobs, ...) the moment
-          # this column exists. Pointer gives pgx's nullable-scan path a nil to land on
-          # instead, same as the uuid pointer overrides above.
-          - column: "jobs.semantic_embedding_vec"
-            go_type:
-              import: "github.com/pgvector/pgvector-go"
-              type: "Vector"
-              pointer: true

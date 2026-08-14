@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	pgvector_go "github.com/pgvector/pgvector-go"
+	"github.com/pgvector/pgvector-go"
 )
 
 type AdzunaDescriptionHydrated struct {
@@ -503,62 +503,61 @@ type InsightsVelocityDaily struct {
 }
 
 type Job struct {
-	ID                    int64               `json:"id"`
-	Source                string              `json:"source"`
-	ExternalID            string              `json:"external_id"`
-	URL                   string              `json:"url"`
-	Title                 string              `json:"title"`
-	Company               string              `json:"company"`
-	Location              string              `json:"location"`
-	Remote                bool                `json:"remote"`
-	Description           string              `json:"description"`
-	PostedAt              pgtype.Timestamptz  `json:"posted_at"`
-	CreatedAt             pgtype.Timestamptz  `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz  `json:"updated_at"`
-	CompanySlug           string              `json:"company_slug"`
-	Enrichment            json.RawMessage     `json:"enrichment"`
-	EnrichedAt            pgtype.Timestamptz  `json:"enriched_at"`
-	EnrichmentVersion     int32               `json:"enrichment_version"`
-	PublicSlug            string              `json:"public_slug"`
-	LastSeenAt            pgtype.Timestamptz  `json:"last_seen_at"`
-	ClosedAt              pgtype.Timestamptz  `json:"closed_at"`
-	Countries             []string            `json:"countries"`
-	Regions               []string            `json:"regions"`
-	WorkMode              string              `json:"work_mode"`
-	LivenessStrikes       int32               `json:"liveness_strikes"`
-	Skills                []string            `json:"skills"`
-	Seniority             string              `json:"seniority"`
-	Category              string              `json:"category"`
-	CreatedBy             pgtype.Int8         `json:"created_by"`
-	UpdatedBy             pgtype.Int8         `json:"updated_by"`
-	PostingLanguage       string              `json:"posting_language"`
-	EmploymentType        string              `json:"employment_type"`
-	EducationLevel        string              `json:"education_level"`
-	ExperienceYearsMin    pgtype.Int4         `json:"experience_years_min"`
-	Collections           []string            `json:"collections"`
-	ContentHash           pgtype.Text         `json:"content_hash"`
-	EnglishLevel          string              `json:"english_level"`
-	Cities                []string            `json:"cities"`
-	ViewCount             int32               `json:"view_count"`
-	AppliedCount          int32               `json:"applied_count"`
-	RoleFingerprint       pgtype.Text         `json:"role_fingerprint"`
-	SemanticEmbeddedModel pgtype.Text         `json:"semantic_embedded_model"`
-	SemanticEmbeddedHash  pgtype.Text         `json:"semantic_embedded_hash"`
-	DuplicateOf           pgtype.Int8         `json:"duplicate_of"`
-	IsTech                pgtype.Bool         `json:"is_tech"`
-	SemanticEmbedding     []float32           `json:"semantic_embedding"`
-	SalaryMinManual       pgtype.Int4         `json:"salary_min_manual"`
-	SalaryMaxManual       pgtype.Int4         `json:"salary_max_manual"`
-	SalaryCurrencyManual  string              `json:"salary_currency_manual"`
-	SalaryPeriodManual    string              `json:"salary_period_manual"`
-	UpvoteCount           int32               `json:"upvote_count"`
-	DownvoteCount         int32               `json:"downvote_count"`
-	AtsAbsentAt           pgtype.Timestamptz  `json:"ats_absent_at"`
-	ClosedReason          string              `json:"closed_reason"`
-	IsPrivate             bool                `json:"is_private"`
-	SemanticEmbeddingVec  *pgvector_go.Vector `json:"semantic_embedding_vec"`
-	SimilarJobIds         []int64             `json:"similar_job_ids"`
-	SimilarComputedAt     pgtype.Timestamptz  `json:"similar_computed_at"`
+	ID                    int64              `json:"id"`
+	Source                string             `json:"source"`
+	ExternalID            string             `json:"external_id"`
+	URL                   string             `json:"url"`
+	Title                 string             `json:"title"`
+	Company               string             `json:"company"`
+	Location              string             `json:"location"`
+	Remote                bool               `json:"remote"`
+	Description           string             `json:"description"`
+	PostedAt              pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	CompanySlug           string             `json:"company_slug"`
+	Enrichment            json.RawMessage    `json:"enrichment"`
+	EnrichedAt            pgtype.Timestamptz `json:"enriched_at"`
+	EnrichmentVersion     int32              `json:"enrichment_version"`
+	PublicSlug            string             `json:"public_slug"`
+	LastSeenAt            pgtype.Timestamptz `json:"last_seen_at"`
+	ClosedAt              pgtype.Timestamptz `json:"closed_at"`
+	Countries             []string           `json:"countries"`
+	Regions               []string           `json:"regions"`
+	WorkMode              string             `json:"work_mode"`
+	LivenessStrikes       int32              `json:"liveness_strikes"`
+	Skills                []string           `json:"skills"`
+	Seniority             string             `json:"seniority"`
+	Category              string             `json:"category"`
+	CreatedBy             pgtype.Int8        `json:"created_by"`
+	UpdatedBy             pgtype.Int8        `json:"updated_by"`
+	PostingLanguage       string             `json:"posting_language"`
+	EmploymentType        string             `json:"employment_type"`
+	EducationLevel        string             `json:"education_level"`
+	ExperienceYearsMin    pgtype.Int4        `json:"experience_years_min"`
+	Collections           []string           `json:"collections"`
+	ContentHash           pgtype.Text        `json:"content_hash"`
+	EnglishLevel          string             `json:"english_level"`
+	Cities                []string           `json:"cities"`
+	ViewCount             int32              `json:"view_count"`
+	AppliedCount          int32              `json:"applied_count"`
+	RoleFingerprint       pgtype.Text        `json:"role_fingerprint"`
+	SemanticEmbeddedModel pgtype.Text        `json:"semantic_embedded_model"`
+	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
+	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
+	IsTech                pgtype.Bool        `json:"is_tech"`
+	SemanticEmbedding     []float32          `json:"semantic_embedding"`
+	SalaryMinManual       pgtype.Int4        `json:"salary_min_manual"`
+	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
+	SalaryCurrencyManual  string             `json:"salary_currency_manual"`
+	SalaryPeriodManual    string             `json:"salary_period_manual"`
+	UpvoteCount           int32              `json:"upvote_count"`
+	DownvoteCount         int32              `json:"downvote_count"`
+	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
+	ClosedReason          string             `json:"closed_reason"`
+	IsPrivate             bool               `json:"is_private"`
+	SimilarJobIds         []int64            `json:"similar_job_ids"`
+	SimilarComputedAt     pgtype.Timestamptz `json:"similar_computed_at"`
 }
 
 type JobDailyStat struct {
@@ -601,6 +600,12 @@ type JobReport struct {
 	ReviewedBy      pgtype.Int8        `json:"reviewed_by"`
 	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type JobSemanticChunk struct {
+	JobID      int64           `json:"job_id"`
+	ChunkIndex int16           `json:"chunk_index"`
+	Embedding  pgvector.Vector `json:"embedding"`
 }
 
 type JobSubmission struct {
