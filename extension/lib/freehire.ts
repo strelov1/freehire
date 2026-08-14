@@ -33,13 +33,23 @@ export function companyLogoUrl(company: string): string | null {
   return c ? `https://logo.freehire.me/${encodeURIComponent(c)}` : null;
 }
 
-/** The slice of a freehire job the card renders. */
+/** The slice of a freehire job the card renders. Facet fields mirror
+ *  internal/jobview.Job's wire shape (see internal/jobview/AGENTS.md) — the
+ *  handler already serves them on GET /jobs/{slug}, so no backend change was
+ *  needed to read them here, only to widen this projection. */
 export interface FreehireJob {
   public_slug: string;
   title: string;
   company: string;
   location: string;
   posted_at?: string | null;
+  work_mode?: string;
+  regions?: string[];
+  countries?: string[];
+  enrichment?: {
+    category?: string;
+    seniority?: string;
+  };
 }
 
 /** Deterministic skill-coverage match against the signed-in user's profile. */
@@ -96,6 +106,14 @@ async function postData<T>(path: string, body: unknown, token: string): Promise<
   return unwrap<T>(path, res);
 }
 
+async function deleteData<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${HIRE_ORIGIN}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return unwrap<T>(path, res);
+}
+
 export function getJob(slug: string, token: string): Promise<FreehireJob> {
   return getData<FreehireJob>(`/api/v1/jobs/${encodeURIComponent(slug)}`, token);
 }
@@ -110,6 +128,43 @@ export function getMatch(slug: string, token: string): Promise<JobMatch> {
  */
 export function getMatchText(title: string, text: string, token: string): Promise<JobMatch> {
   return postData<JobMatch>('/api/v1/me/match-text', { title, text }, token);
+}
+
+/** The signed-in user's interaction with a job — only the field the Save button reads. */
+export interface JobInteraction {
+  saved_at: string | null;
+}
+
+export function saveJob(slug: string, token: string): Promise<JobInteraction> {
+  return postData<JobInteraction>(`/api/v1/jobs/${encodeURIComponent(slug)}/save`, {}, token);
+}
+
+export function unsaveJob(slug: string, token: string): Promise<JobInteraction> {
+  return deleteData<JobInteraction>(`/api/v1/jobs/${encodeURIComponent(slug)}/save`, token);
+}
+
+/** A cached AI fit analysis — only the fields the compact card reads. Never computes
+ *  inline: this is a read of whatever the full-page analysis last cached, same
+ *  contract as web's MatchSummary.svelte. */
+export interface MatchAnalysisSummary {
+  overall_score: number;
+  verdict: string;
+  gaps: string[];
+}
+
+export interface MatchAnalysisCredits {
+  remaining: number;
+  resets_at: string;
+}
+
+export interface MatchAnalysisResponse {
+  has_cv: boolean;
+  analysis: MatchAnalysisSummary | null;
+  credits: MatchAnalysisCredits | null;
+}
+
+export function getMatchAnalysis(slug: string, token: string): Promise<MatchAnalysisResponse> {
+  return getData<MatchAnalysisResponse>(`/api/v1/jobs/${encodeURIComponent(slug)}/match-analysis`, token);
 }
 
 /** Canonical autofill fields freehire assembles from the user's CV + account. */
