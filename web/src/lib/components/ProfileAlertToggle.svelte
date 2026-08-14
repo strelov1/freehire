@@ -4,17 +4,21 @@
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { cn } from '$lib/ui';
-  import type { UserProfile } from '$lib/types';
+  import type { SavedSearch, UserProfile } from '$lib/types';
 
   // The built-in "notify me about jobs matching my profile" toggle: flipping it on
   // creates the exact saved search the modal's "Apply my profile" action would stage
   // (see stagedFilters.svelte.ts's applyProfile / filtersFromProfile), marks it
   // derived_from_profile so at most one exists per user (the server's partial unique
-  // index is the actual invariant), and subscribes it to the account's default
-  // notification channel. Flipping it off deletes that saved search — the ON DELETE
-  // CASCADE on subscriptions.saved_search_id takes the subscription with it, so there
-  // is nothing else to clean up here. On/off is derived from whether such a row
-  // exists, not a separate flag, so this component never drifts from the server.
+  // index is the actual invariant), and subscribes it over email — always deliverable
+  // with no linking step, unlike telegram/push (which the account's notification
+  // settings may list as a preferred channel without the user ever having connected
+  // them — see ReminderSettings.svelte/CompanyFollowButton.svelte's `linked` gate).
+  // The user can add another channel from the Search alerts tab afterward. Flipping
+  // the toggle off deletes the saved search — the ON DELETE CASCADE on
+  // subscriptions.saved_search_id takes the subscription with it, so there is nothing
+  // else to clean up here. On/off is derived from whether such a row exists, not a
+  // separate flag, so this component never drifts from the server.
   let { profile }: { profile: UserProfile } = $props();
 
   const profileSearch = $derived(savedSearches.items.find((s) => s.derived_from_profile) ?? null);
@@ -39,14 +43,22 @@
   async function enable() {
     saveState = 'saving';
     saveError = null;
+    let search: SavedSearch | undefined;
     try {
       const query = filtersToParams(filtersFromProfile(profile)).toString();
-      const search = await savedSearches.create('My profile', query, true);
-      const settings = await api.getNotificationSettings();
-      const channel = settings.channels[0] ?? 'email';
-      await api.createSubscription(search.id, channel);
+      search = await savedSearches.create('My profile', query, true);
+      await api.createSubscription(search.id, 'email');
       flash();
     } catch (e) {
+      // The search may have been created before the subscribe call failed — clean it
+      // up so the toggle doesn't end up "on" (search exists) while showing an error.
+      if (search) {
+        try {
+          await savedSearches.remove(search.id);
+        } catch {
+          // best-effort; the toggle's error state still surfaces the original failure.
+        }
+      }
       saveState = 'error';
       saveError = e instanceof ApiError ? e.message : 'Could not enable the alert.';
     }
