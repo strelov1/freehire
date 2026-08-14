@@ -139,10 +139,12 @@ func TestStaleAnswerForAnEvictedCallerDoesNotResolveASuccessorsCall(t *testing.T
 
 	var mu sync.Mutex
 	var frames [][]byte
+	sent := make(chan struct{}, 2)
 	extension := senderFunc(func(frame []byte) error {
 		mu.Lock()
 		frames = append(frames, frame)
 		mu.Unlock()
+		sent <- struct{}{}
 		return nil // never answers; the caller's call times out
 	})
 	hub.Join(7, browsertools.RoleExtension, extension)
@@ -155,6 +157,7 @@ func TestStaleAnswerForAnEvictedCallerDoesNotResolveASuccessorsCall(t *testing.T
 		t.Fatal("callerA.Call succeeded; want it to time out since the extension never answers")
 	}
 	callerA.Close()
+	<-sent
 
 	mu.Lock()
 	idA := frameID(t, frames[0])
@@ -173,14 +176,14 @@ func TestStaleAnswerForAnEvictedCallerDoesNotResolveASuccessorsCall(t *testing.T
 		res, err := callerB.Call(context.Background(), "fill_simple", nil)
 		done <- callResult{res, err}
 	}()
-	// Let callerB's call register and reach the extension before the stale
-	// answer arrives.
-	time.Sleep(50 * time.Millisecond)
-
-	// A late answer for A's evicted call arrives from the extension. Routed by
-	// role, it lands on whichever Caller currently holds RoleHarness — B — and
-	// must not be mistaken for an answer to B's own pending call.
-	hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+idA+`","result":"stale"}`))
+	// Wait for callerB's request to actually reach the extension (proving it
+	// registered its pending call) before delivering any answer — a bounded
+	// wait rather than a fixed sleep, so this cannot flake under scheduler delay.
+	select {
+	case <-sent:
+	case <-time.After(2 * time.Second):
+		t.Fatal("callerB request did not reach the extension")
+	}
 
 	mu.Lock()
 	idB := frameID(t, frames[len(frames)-1])
@@ -189,6 +192,10 @@ func TestStaleAnswerForAnEvictedCallerDoesNotResolveASuccessorsCall(t *testing.T
 		t.Fatalf("callerA and callerB both minted call id %q; ids must be unique per hub", idA)
 	}
 
+	// A late answer for A's evicted call arrives from the extension. Routed by
+	// role, it lands on whichever Caller currently holds RoleHarness — B — and
+	// must not be mistaken for an answer to B's own pending call.
+	hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+idA+`","result":"stale"}`))
 	hub.Forward(7, browsertools.RoleExtension, []byte(`{"id":"`+idB+`","result":"fresh"}`))
 
 	select {
