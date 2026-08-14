@@ -112,6 +112,23 @@ func TestRequireCountry_SingleTokenNameNeedsAMatchingHeadquarters(t *testing.T) 
 	}
 }
 
+func TestRequireCountry_PunctuatedSingleTokenNameNeedsAMatchingHeadquarters(t *testing.T) {
+	// "T-Mobile Inc" is one token by whitespace, but RegisterSlug's internal-hyphen
+	// collapsing ("t-mobile") must not make it look multi-token and skip the
+	// headquarters check.
+	gate := RequireCountry("GB")
+
+	elsewhere := Company{Slug: "t-mobile", Countries: []string{"GB", "US"}, HQCountry: "US"}
+	if gate(elsewhere, Record{Name: "T-Mobile Inc"}) {
+		t.Error("a punctuated single-token name was admitted on the country facet alone")
+	}
+
+	uk := Company{Slug: "t-mobile", Countries: []string{"GB"}, HQCountry: "GB"}
+	if !gate(uk, Record{Name: "T-Mobile Inc"}) {
+		t.Error("a UK-headquartered punctuated single-token company was rejected")
+	}
+}
+
 func TestRequireCountry_SingleTokenWithNoHeadquartersIsRejected(t *testing.T) {
 	// An unknown hq_country is not evidence of a UK headquarters. Never guess.
 	gate := RequireCountry("GB")
