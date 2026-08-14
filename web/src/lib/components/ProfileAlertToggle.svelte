@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Sparkles } from '@lucide/svelte';
+  import { Check, User } from '@lucide/svelte';
   import { api, ApiError } from '$lib/api';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
@@ -85,7 +85,7 @@
 <section class="rounded-xl border border-border bg-card p-4">
   <div class="flex items-center gap-3">
     <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
-      <Sparkles class="size-4.5" aria-hidden="true" />
+      <User class="size-4.5" aria-hidden="true" />
     </div>
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Jobs matching my profile</h2>

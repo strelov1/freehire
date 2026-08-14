@@ -14,10 +14,13 @@
   // treatment. Hidden entirely for signed-out visitors — there is nothing to show.
   // The full, paginated list lives at /my/notifications (the notification
   // center's History tab); this panel is a recent-first glance, not the only
-  // way to reach older notifications.
+  // way to reach older notifications — capped to 5 rows here so it stays a
+  // glance, with "View all" below for the rest.
+  const DROPDOWN_LIMIT = 5;
 
   let open = $state(false);
   let root = $state<HTMLElement | null>(null);
+  const visibleItems = $derived(notificationCenter.items.slice(0, DROPDOWN_LIMIT));
 
   // Load once the session is confirmed (boot-time /me may still be in flight); drop
   // the cached page on sign-out so the next user on this tab loads their own.
@@ -112,7 +115,7 @@
           </div>
         {:else}
           <ul>
-            {#each notificationCenter.items as item (item.id)}
+            {#each visibleItems as item (item.id)}
               <li>
                 <NotificationCard {item} onactivate={() => (open = false)} />
               </li>
