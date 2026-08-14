@@ -111,10 +111,12 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 
 	// fetch persists one message, deduping by id, tracking the watermark, and
 	// recording its thread for expansion. The user's own in-thread replies are
-	// skipped — the inbox stores inbound mail only. Once any message in the wave
-	// fails, the watermark stops advancing (fetching still proceeds best-effort)
-	// so the next run's cursor-filtered query still surfaces the failed message
-	// instead of it being silently skipped by a watermark that moved past it.
+	// skipped — the inbox stores inbound mail only. newest tracks the highest
+	// ReceivedAt seen regardless of order; once any message in the wave fails,
+	// it is reset to u.Cursor right before SetSynced (below) rather than merely
+	// frozen at whatever it last reached — a newer message can easily succeed
+	// (and advance newest) BEFORE an older sibling in the same wave fails, and
+	// freezing in place would still let the watermark jump past the failed one.
 	fetch := func(id string) {
 		if seen[id] {
 			return
@@ -138,10 +140,8 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 			sawFailure = true
 			return
 		}
-		if !sawFailure {
-			if ts := msg.ReceivedAt.Unix(); ts > newest {
-				newest = ts
-			}
+		if ts := msg.ReceivedAt.Unix(); ts > newest {
+			newest = ts
 		}
 	}
 
@@ -162,6 +162,9 @@ func (w *Worker) syncUser(ctx context.Context, u Connection) {
 		}
 	}
 
+	if sawFailure {
+		newest = u.Cursor
+	}
 	if err := w.store.SetSynced(ctx, u.UserID, newest); err != nil {
 		log.Printf("gmail-sync: user %d: set synced: %v", u.UserID, err)
 	}
