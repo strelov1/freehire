@@ -3,6 +3,8 @@ package cvedit
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -89,6 +91,20 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, err
 	}
 
+	// BaseVersion is journalling, not a lock: nothing stops another actor's edit from landing
+	// between the revision(s) being undone and this moment. Apply's own bound check only
+	// refuses an index past the end of the CURRENT list, which an interleaving insert or
+	// remove on the same list does not trip — it just changes what the stored index now means,
+	// so the inverse would land in range but on the wrong element.
+	feed, err := tx.Feed(ctx, feedLimit)
+	if err != nil {
+		return cv.Meta{}, Revision{}, err
+	}
+	if interleaved(feed, reverted) {
+		return cv.Meta{}, Revision{}, fmt.Errorf(
+			"%w: another edit has changed the same list since; refresh and try again", ErrCannotUndo)
+	}
+
 	applied, applyRedo, err := Apply(before, inverse)
 	if err != nil {
 		// The place the inverse would restore is gone. This is a fact about the document as
@@ -133,4 +149,85 @@ func (e *Editor) undo(ctx context.Context, tx Tx, cvID uuid.UUID, inverse []Op,
 		return cv.Meta{}, Revision{}, err
 	}
 	return meta, rev, nil
+}
+
+// interleaved reports whether some revision NOT among `targets` has reshaped a list any of
+// their operations addresses, since the earliest of them was recorded.
+//
+// A foreign insert, remove or move shifts every later position in its list, which invalidates
+// an index-based inverse computed before the shift without ever taking it out of range — the
+// only thing Apply itself checks. A foreign set does not: it never changes what index a
+// sibling sits at, so it is not counted.
+//
+// A revision that has itself been reverted is excluded, and so is the revision that reverted
+// it, when what it undid also falls inside the window: the pair cancels exactly, leaving the
+// list precisely where it was, which is what lets a run's own edits interleave with its own
+// undo and with each other's reverts.
+func interleaved(feed []Revision, targets []uuid.UUID) bool {
+	byID := make(map[uuid.UUID]Revision, len(feed))
+	for _, rev := range feed {
+		byID[rev.ID] = rev
+	}
+
+	inSet := make(map[uuid.UUID]bool, len(targets))
+	shapes := make(map[string]bool)
+	var earliest time.Time
+	for i, id := range targets {
+		inSet[id] = true
+		rev, ok := byID[id]
+		if !ok {
+			continue
+		}
+		if i == 0 || rev.CreatedAt.Before(earliest) {
+			earliest = rev.CreatedAt
+		}
+		addListShapes(rev.Ops, shapes)
+		addListShapes(rev.Inverse, shapes)
+	}
+	// Nothing being undone addresses a list position, so there is nothing an interleaving
+	// insert or remove could have misaligned.
+	if len(shapes) == 0 {
+		return false
+	}
+
+	for _, rev := range feed {
+		if inSet[rev.ID] || rev.Reverted() || !rev.CreatedAt.After(earliest) {
+			continue
+		}
+		if rev.RevertsID != uuid.Nil {
+			if undone, ok := byID[rev.RevertsID]; ok && undone.CreatedAt.After(earliest) {
+				continue // cancels exactly what it undid; nothing else sat between them
+			}
+		}
+		for _, op := range rev.Ops {
+			if op.Kind != OpInsert && op.Kind != OpRemove && op.Kind != OpMove {
+				continue
+			}
+			if shape, ok := listShape(op.Path); ok && shapes[shape] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// listShape reports the list a path sits in, stripped of its own position —
+// `experience[0].bullets[3]` becomes `experience[0].bullets`. It is what lets an operation on
+// one index be recognised as sharing a list with an operation on another: two operations at
+// different positions can still reshape the same underlying slice.
+func listShape(p Path) (string, bool) {
+	s := string(p)
+	open := strings.LastIndexByte(s, '[')
+	if open < 0 || !strings.HasSuffix(s, "]") {
+		return "", false
+	}
+	return s[:open], true
+}
+
+func addListShapes(ops []Op, shapes map[string]bool) {
+	for _, op := range ops {
+		if shape, ok := listShape(op.Path); ok {
+			shapes[shape] = true
+		}
+	}
 }

@@ -3,6 +3,7 @@ package cvedit
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -251,5 +252,53 @@ func TestUndoingAMoveLeavesLaterEditsAlone(t *testing.T) {
 	}
 	if got := repo.state.Experience[0].Role; got != "Staff Engineer" {
 		t.Fatalf("role = %q, want the later edit to have survived the undo", got)
+	}
+}
+
+// A foreign edit that lands between two calls of the same run and reshapes the list they both
+// address must refuse the run's undo rather than silently misplace what it restores: the
+// batch's stored inverse still names a position in the list as it stood before the foreign
+// insert, and that position is in range for the list's new shape too — just not the same
+// element anymore.
+func TestRevertBatchRefusesWhenAForeignEditReshapedTheSameList(t *testing.T) {
+	repo := newFakeRepo()
+	e, c := newEditor(repo, nil)
+	cvID := repo.cvID
+	batch := uuid.New()
+
+	// The run's first call: drop the second bullet.
+	c.at = c.at.Add(time.Minute)
+	if _, _, err := e.Commit(context.Background(), cvID, 1, Change{
+		Actor: ActorAgent, Origin: OriginTailorAgent, BatchID: batch,
+		Ops: []Op{{Kind: OpRemove, Path: mustParse(t, "experience[0].bullets[1]")}},
+	}); err != nil {
+		t.Fatalf("Commit(remove): %v", err)
+	}
+
+	// A foreign edit lands between the run's two calls, inserting ahead of the position the
+	// run's next call and its own earlier inverse both address.
+	c.at = c.at.Add(time.Minute)
+	if _, _, err := e.Commit(context.Background(), cvID, 1, Change{
+		Actor: ActorCandidate, Origin: OriginEditor,
+		Ops: []Op{{Kind: OpInsert, Path: mustParse(t, "experience[0].bullets[0]"), Value: "Candidate's own line"}},
+	}); err != nil {
+		t.Fatalf("Commit(foreign insert): %v", err)
+	}
+
+	// The run's second call: it reads the fresh state, so this write itself lands correctly.
+	c.at = c.at.Add(time.Minute)
+	if _, _, err := e.Commit(context.Background(), cvID, 1, Change{
+		Actor: ActorAgent, Origin: OriginTailorAgent, BatchID: batch,
+		Ops: []Op{{Kind: OpSet, Path: mustParse(t, "experience[0].bullets[0]"), Value: "Shipped it, tailored"}},
+	}); err != nil {
+		t.Fatalf("Commit(set): %v", err)
+	}
+	before := append([]string(nil), repo.state.Experience[0].Bullets...)
+
+	if _, err := e.RevertBatch(context.Background(), cvID, 1, batch); !errors.Is(err, ErrCannotUndo) {
+		t.Fatalf("RevertBatch = %v, want ErrCannotUndo", err)
+	}
+	if !reflect.DeepEqual(repo.state.Experience[0].Bullets, before) {
+		t.Fatalf("a refused undo changed the document: %v", repo.state.Experience[0].Bullets)
 	}
 }

@@ -186,6 +186,14 @@ func (t *queriesTx) InBatch(ctx context.Context, batchID uuid.UUID) ([]Revision,
 	return revisionsFromRows(rows)
 }
 
+func (t *queriesTx) Feed(ctx context.Context, limit int32) ([]Revision, error) {
+	rows, err := t.q.ListCVRevisions(ctx, db.ListCVRevisionsParams{CvID: t.cvID, UserID: t.userID, Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	return revisionsFromRows(rows)
+}
+
 func (t *queriesTx) Trim(ctx context.Context, keep int32) error {
 	_, err := t.q.TrimCVRevisions(ctx, db.TrimCVRevisionsParams{CvID: t.cvID, Limit: keep})
 	return err

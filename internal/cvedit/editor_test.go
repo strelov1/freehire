@@ -118,6 +118,14 @@ func (r *fakeRepo) InBatch(_ context.Context, batchID uuid.UUID) ([]Revision, er
 	return out, nil
 }
 
+func (r *fakeRepo) Feed(_ context.Context, limit int32) ([]Revision, error) {
+	out := make([]Revision, 0, len(r.revisions))
+	for i := len(r.revisions) - 1; i >= 0 && len(out) < int(limit); i-- {
+		out = append(out, r.revisions[i])
+	}
+	return out, nil
+}
+
 func (r *fakeRepo) Trim(_ context.Context, keep int32) error {
 	if extra := len(r.revisions) - int(keep); extra > 0 {
 		r.revisions = r.revisions[extra:]

@@ -87,6 +87,9 @@ type Tx interface {
 	Amend(ctx context.Context, id uuid.UUID, ops []Op, title, note string) (Revision, error)
 	MarkReverted(ctx context.Context, id uuid.UUID) (bool, error)
 	InBatch(ctx context.Context, batchID uuid.UUID) ([]Revision, error)
+	// Feed is the CV's revision log, newest first, up to limit — what undo reads to check
+	// whether a foreign edit has reshaped a list since the revision(s) it is about to reverse.
+	Feed(ctx context.Context, limit int32) ([]Revision, error)
 	Trim(ctx context.Context, keep int32) error
 }
 

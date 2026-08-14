@@ -228,6 +228,14 @@ func (m *memRevisions) InBatch(_ context.Context, batchID uuid.UUID) ([]cvedit.R
 	return out, nil
 }
 
+func (m *memRevisions) Feed(_ context.Context, limit int32) ([]cvedit.Revision, error) {
+	out := make([]cvedit.Revision, 0, len(m.revisions))
+	for i := len(m.revisions) - 1; i >= 0 && len(out) < int(limit); i-- {
+		out = append(out, m.revisions[i])
+	}
+	return out, nil
+}
+
 func (m *memRevisions) Trim(context.Context, int32) error { return nil }
 
 const oneExperienceCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example.com"},` +
