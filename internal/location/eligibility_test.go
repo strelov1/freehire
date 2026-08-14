@@ -27,6 +27,15 @@ func TestUSOnlyFromDescription(t *testing.T) {
 		{"generic security clearance", "A UK SC security clearance is a plus.", false},
 		{"worldwide", "Open to candidates anywhere in the world.", false},
 		{"empty", "", false},
+
+		// Negated mentions — the phrase is present, but the sentence denies it.
+		{"does not require citizenship", "This role does not require US citizenship; applicants worldwide are welcome.", false},
+		{"no clearance required", "No Secret clearance is required for this position.", false},
+		{"non-us citizens welcome", "We welcome non-US citizens to apply for this fully remote role.", false},
+		{"cannot sponsor but no citizenship needed", "We cannot sponsor visas, and US citizenship is not required.", false},
+
+		// A denial elsewhere must not hide a genuine assertion in a later sentence.
+		{"negation in an earlier unrelated sentence", "This is not a contractor role. US citizenship is required.", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
