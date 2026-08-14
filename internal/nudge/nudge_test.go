@@ -431,7 +431,14 @@ func TestActionable_FailsClosedWhenApplicationGone(t *testing.T) {
 	for _, kind := range []string{KindFollowUp, KindInterviewPrep, KindJobClosed} {
 		t.Run(kind, func(t *testing.T) {
 			r := newRunner(&fakeStore{}, &fakeNotifier{})
-			if r.actionable(untrackedRow(kind)) {
+			row := untrackedRow(kind)
+			if kind == KindInterviewPrep {
+				// Satisfy the pre-existing stage=="interview" check too, so this
+				// case actually exercises the ApplicationExists gate rather than
+				// passing on the stage check alone regardless of it.
+				row.Stage = pgtype.Text{String: "interview", Valid: true}
+			}
+			if r.actionable(row) {
 				t.Errorf("actionable() = true for an untracked application, want false (fail closed)")
 			}
 		})
