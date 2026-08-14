@@ -107,7 +107,8 @@ Each is self-contained and can be read independently.
 | **Telegram** (crawl + LLM vacancy extraction) | [internal/telegram/AGENTS.md](internal/telegram/AGENTS.md) |
 | **Company names** (real display names for slug-named companies) | [internal/companyname/AGENTS.md](internal/companyname/AGENTS.md) |
 | **Enrichment** (Enrichment contract, LLM Provider; enums live in `internal/vocab`) | [internal/enrich/AGENTS.md](internal/enrich/AGENTS.md) |
-| **Semantic embedding** (semantic_outbox, incremental embeds, reconciler) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
+| **Semantic embedding** (semantic_outbox, incremental chunked embeds into pgvector) | [internal/embed/AGENTS.md](internal/embed/AGENTS.md) |
+| **Similar-jobs backfill** (precomputes `/similar`'s data via pgvector, no outbox) | [internal/similarjobs/AGENTS.md](internal/similarjobs/AGENTS.md) |
 | **Facet-search drain** (search_outbox, incremental facet-index pushes, reconciler) | [internal/searchdrain/AGENTS.md](internal/searchdrain/AGENTS.md) |
 | **In-app assistant** (turn loop, tool registry, presets, transcripts) | [internal/assistant/AGENTS.md](internal/assistant/AGENTS.md) |
 | **Speech to text** (dictation into the composer, the filename rule, spend bounds) | [internal/speech/AGENTS.md](internal/speech/AGENTS.md) |

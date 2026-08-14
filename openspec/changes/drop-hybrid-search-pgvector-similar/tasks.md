@@ -195,7 +195,9 @@
 
 ## 9. Documentation
 
-- [ ] 9.1 Update the module table in `AGENTS.md` and `docs/architecture.md` if
-      either references the removed semantic search flow.
+- [x] 9.1 Update the module table in `AGENTS.md` and `docs/architecture.md` if
+      either references the removed semantic search flow. Also added
+      `internal/similarjobs/AGENTS.md` (a new package, per this repo's
+      per-package doc convention) and its module-table row.
 - [ ] 9.2 Offer a changelog entry per this repo's "announce shipped work"
       convention once live.
