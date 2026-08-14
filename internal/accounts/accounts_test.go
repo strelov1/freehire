@@ -549,6 +549,21 @@ func TestUpdateTimezone_Invalid(t *testing.T) {
 	}
 }
 
+func TestUpdateTimezone_RejectsEmptyString(t *testing.T) {
+	// time.LoadLocation("") returns UTC, nil (a Go stdlib quirk for "unset") —
+	// must not let an empty request body through as if it named a real zone.
+	repo := &fakeRepo{}
+	svc := New(repo, &fakeHasher{})
+
+	_, err := svc.UpdateTimezone(context.Background(), 1, "")
+	if !errors.Is(err, ErrInvalidTimezone) {
+		t.Errorf("want ErrInvalidTimezone, got %v", err)
+	}
+	if len(repo.updateTimezoneCalls) != 0 {
+		t.Errorf("repo must not be called on empty input, got %d calls", len(repo.updateTimezoneCalls))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Login tests
 // ---------------------------------------------------------------------------

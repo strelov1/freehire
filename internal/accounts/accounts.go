@@ -240,8 +240,14 @@ func (s *Service) Register(ctx context.Context, email, password string, timezone
 // ErrInvalidTimezone is a timezone name Go's tzdata does not recognize (mapped to 400).
 var ErrInvalidTimezone = errors.New("accounts: invalid timezone")
 
-// validTimezone reports whether tz is a name time.LoadLocation accepts.
+// validTimezone reports whether tz is a name time.LoadLocation accepts. Empty
+// is rejected explicitly: time.LoadLocation("") returns UTC, nil (a Go stdlib
+// quirk for "unset"), which would otherwise let an empty request body through
+// as if it named a real zone.
 func validTimezone(tz string) bool {
+	if tz == "" {
+		return false
+	}
 	_, err := time.LoadLocation(tz)
 	return err == nil
 }
