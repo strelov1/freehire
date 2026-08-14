@@ -11,6 +11,7 @@
     Banknote,
     FileText,
     CheckCircle2,
+    Sparkles,
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { tablist } from '$lib/actions/tablist';
@@ -207,14 +208,17 @@
 {#if !isAuthenticated()}
   <p class="py-12 text-center text-sm text-muted-foreground">Sign in to submit a job.</p>
 {:else}
-  <div class="flex flex-col gap-6">
-    <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Submit a job</h1>
-      <p class="text-sm text-muted-foreground">
-        Hiring? Submit your opening — the skills, location, work format and salary you add help
-        the right candidates find it. A moderator reviews it before it goes live in the catalogue.
+  <div class="flex flex-col gap-8">
+    <header class="flex flex-col gap-2 border-b border-border pb-6">
+      <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
+        <Briefcase class="size-3.5" /> For employers
       </p>
-    </div>
+      <h1 class="text-3xl font-semibold tracking-tight">Post your opening</h1>
+      <p class="max-w-2xl text-sm text-muted-foreground">
+        Add the skills, location, work format and salary — the right candidates find it faster.
+        A moderator reviews every submission before it goes live in the catalogue.
+      </p>
+    </header>
 
     {#if submitted}
       <div
@@ -231,266 +235,269 @@
       </div>
     {/if}
 
-    <!-- use:tablist is what makes role="tablist" true — see ReferralsView for the same
-         pattern. Preview stays mounted-on-demand (an {#if}, not CSS-hidden) since it does
-         no data fetching of its own; there is nothing to lose by remounting it. -->
-    <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={activeTab}>
-      {#each [['details', 'Details'], ['preview', 'Preview']] as [id, label] (id)}
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === id}
-          onclick={() => (activeTab = id as 'details' | 'preview')}
-          class={cn(
-            '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
-            activeTab === id
-              ? 'border-brand text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {label}
-        </button>
-      {/each}
-    </div>
+    <div class="flex flex-col gap-6">
+      <!-- use:tablist is what makes role="tablist" true — see ReferralsView for the
+           same pattern. -->
+      <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={activeTab}>
+        {#each [['details', 'Details'], ['preview', 'Preview']] as [id, label] (id)}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            onclick={() => (activeTab = id as 'details' | 'preview')}
+            class={cn(
+              '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
+              activeTab === id
+                ? 'border-brand text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {label}
+          </button>
+        {/each}
+      </div>
 
-    {#if activeTab === 'preview'}
-      <JobPreview
-        {title}
-        {company}
-        {workMode}
-        {region}
-        {cities}
-        {employmentType}
-        {seniority}
-        {skills}
-        {salaryMin}
-        {salaryMax}
-        salaryCurrency={currency}
-        salaryPeriod={period}
-        descriptionHtml={previewDescriptionHtml}
-      />
-    {/if}
-
-    <form
-      onsubmit={submit}
-      class={cn('flex flex-col gap-6', activeTab !== 'details' && 'hidden')}
-    >
-      <!-- Basics: the required identity of the posting. -->
-      <fieldset class="flex flex-col gap-4 rounded-lg border border-border p-4">
-        <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Basics
-        </legend>
-        <div class="flex flex-col gap-1">
-          <span class="flex items-center gap-1.5 text-sm font-medium">
-            <Link2 class="size-3.5 text-muted-foreground" />
-            Job URL <span class="text-destructive">*</span>
-          </span>
-          <div class="flex items-center gap-2">
-            <!-- The label wraps only the Input, not the Button beside it — nesting both
-                 inside one label would make the implicit label target ambiguous. -->
-            <label class="w-full">
-              <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
-            </label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="shrink-0"
-              disabled={url.trim() === '' || prefilling}
-              onclick={prefillFromURL}
-            >
-              {prefilling ? 'Filling in…' : 'Fill in from this link'}
-            </Button>
-          </div>
-          {#if prefillMiss}
-            <p class="text-xs text-muted-foreground">
-              Couldn't find anything to fill in from that link — no problem, just fill in the
-              rest below.
-            </p>
-          {/if}
-        </div>
-        <div class="flex flex-col gap-4 sm:flex-row">
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="flex items-center gap-1.5 text-sm font-medium">
-              <Briefcase class="size-3.5 text-muted-foreground" />
-              Title <span class="text-destructive">*</span>
-            </span>
-            <Input bind:value={title} placeholder="Senior Go Developer" class="w-full" />
-          </label>
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="flex items-center gap-1.5 text-sm font-medium">
-              <Building2 class="size-3.5 text-muted-foreground" />
-              Company <span class="text-destructive">*</span>
-            </span>
-            <Input bind:value={company} placeholder="Acme" class="w-full" />
-          </label>
-        </div>
-      </fieldset>
-
-      <!-- Details: the structured facets that make the vacancy searchable. -->
-      <fieldset class="flex flex-col gap-4 rounded-lg border border-border p-4">
-        <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Details
-        </legend>
-        <div class="flex flex-col gap-4 sm:flex-row">
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="flex items-center gap-1.5 text-sm font-medium">
-              <MapPin class="size-3.5 text-muted-foreground" />
-              Location
-            </span>
-            <Input bind:value={location} placeholder="Berlin, Germany" class="w-full" />
-          </label>
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="flex items-center gap-1.5 text-sm font-medium">
-              <Globe class="size-3.5 text-muted-foreground" />
-              Region
-            </span>
-            <select bind:value={region} class={cn(selectClass, 'w-full')}>
-              <option value="">Any</option>
-              {#each REGION_OPTIONS as opt (opt.value)}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-
-        <label class="flex flex-col gap-1">
-          <span class="flex items-center gap-1.5 text-sm font-medium">
-            <Building class="size-3.5 text-muted-foreground" />
-            City
-          </span>
-          <TokenInput
-            tokens={cities}
-            onAdd={(v) => (cities = addToken(cities, v))}
-            onRemove={(v) => (cities = cities.filter((c) => c !== v))}
-            placeholder="Add a city and press Enter"
-          />
-        </label>
-
-        <div class="flex flex-col gap-1">
-          <span class="text-sm font-medium">Work format</span>
-          <div class="flex flex-wrap gap-1.5">
-            {#each WORK_MODE_OPTIONS as opt (opt.value)}
-              <button
-                type="button"
-                onclick={() => (workMode = workMode === opt.value ? '' : opt.value)}
-                class={cn(
-                  'rounded-full border px-3 py-1 text-sm transition-colors',
-                  workMode === opt.value
-                    ? 'border-transparent bg-secondary font-medium text-secondary-foreground'
-                    : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-                )}
-              >
-                {opt.label}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-4 sm:flex-row">
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="text-sm font-medium">Employment type</span>
-            <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
-              <option value="">Any</option>
-              {#each EMPLOYMENT_TYPE_OPTIONS as opt (opt.value)}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </label>
-          <label class="flex flex-1 flex-col gap-1">
-            <span class="text-sm font-medium">Seniority</span>
-            <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
-              <option value="">Any</option>
-              {#each SENIORITY_OPTIONS as opt (opt.value)}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-
-        <label class="flex flex-col gap-1">
-          <span class="flex items-center gap-1.5 text-sm font-medium">
-            <Tags class="size-3.5 text-muted-foreground" />
-            Skills
-          </span>
-          <TokenInput
-            tokens={skills}
-            onAdd={(v) => (skills = addToken(skills, v))}
-            onRemove={(v) => (skills = skills.filter((s) => s !== v))}
-            placeholder="e.g. Go, Kubernetes — Enter to add"
-          />
-        </label>
-
-        <div class="flex flex-col gap-1">
-          <span class="flex items-center gap-1.5 text-sm font-medium">
-            <Banknote class="size-3.5 text-muted-foreground" />
-            Salary
-          </span>
-          <div class="flex flex-wrap items-center gap-2">
-            <Input
-              type="number"
-              min="0"
-              placeholder="Min"
-              value={salaryMin != null ? String(salaryMin) : ''}
-              oninput={(e) =>
-                (salaryMin = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-              class="w-24"
-            />
-            <span class="text-muted-foreground">–</span>
-            <Input
-              type="number"
-              min="0"
-              placeholder="Max"
-              value={salaryMax != null ? String(salaryMax) : ''}
-              oninput={(e) =>
-                (salaryMax = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-              class="w-24"
-            />
-            <select bind:value={currency} class={selectClass} aria-label="Currency">
-              <option value="">Currency</option>
-              {#each CURRENCY_OPTIONS as opt (opt.value)}
-                <option value={opt.value}>{opt.label}</option>
-              {/each}
-            </select>
-            <select bind:value={period} class={selectClass} aria-label="Salary period">
-              <option value="">Period</option>
-              {#each PERIODS as p (p.value)}
-                <option value={p.value}>{p.label}</option>
-              {/each}
-            </select>
-          </div>
-        </div>
-
-        <label class="flex flex-col gap-1">
-          <span class="text-sm font-medium">Source</span>
-          <Input bind:value={source} placeholder="e.g. greenhouse (optional)" class="w-full" />
-        </label>
-      </fieldset>
-
-      <!-- Description: the tracker's markdown editor; converted to HTML on submit. -->
-      <fieldset class="flex flex-col gap-2 rounded-lg border border-border p-4">
-        <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <span class="flex items-center gap-1.5">
-            <FileText class="size-3.5" />
-            Description
-          </span>
-        </legend>
-        <NoteEditor
-          value={descriptionMarkdown}
-          onsave={(v) => (descriptionMarkdown = v)}
-          placeholder="Paste or write the job description…"
+      {#if activeTab === 'preview'}
+        <JobPreview
+          {title}
+          {company}
+          {workMode}
+          {region}
+          {cities}
+          {employmentType}
+          {seniority}
+          {skills}
+          {salaryMin}
+          {salaryMax}
+          salaryCurrency={currency}
+          salaryPeriod={period}
+          descriptionHtml={previewDescriptionHtml}
         />
-      </fieldset>
-
-      {#if formError}
-        <p class="text-sm text-destructive">{formError}</p>
       {/if}
 
-      <div>
-        <Button variant="primary" type="submit" disabled={!canSubmit}>
-          {submitting ? 'Submitting…' : 'Submit for review'}
-        </Button>
-      </div>
-    </form>
+      <form
+        onsubmit={submit}
+        class={cn('flex flex-col divide-y divide-border', activeTab !== 'details' && 'hidden')}
+      >
+        <!-- Basics: the required identity of the posting. -->
+        <fieldset class="flex flex-col gap-4 py-6">
+          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Basics
+          </legend>
+          <div class="flex flex-col gap-1">
+            <span class="flex items-center gap-1.5 text-sm font-medium">
+              <Link2 class="size-3.5 text-muted-foreground" />
+              Job URL <span class="text-destructive">*</span>
+            </span>
+            <div class="flex items-center gap-2">
+              <!-- The label wraps only the Input, not the Button beside it — nesting
+                   both inside one label would make the implicit label target ambiguous. -->
+              <label class="w-full">
+                <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                class="shrink-0 gap-1.5"
+                disabled={url.trim() === '' || prefilling}
+                onclick={prefillFromURL}
+              >
+                <Sparkles class="size-3.5" />
+                {prefilling ? 'Filling in…' : 'Fill in from this link'}
+              </Button>
+            </div>
+            {#if prefillMiss}
+              <p class="text-xs text-muted-foreground">
+                Couldn't find anything to fill in from that link — no problem, just fill in the
+                rest below.
+              </p>
+            {/if}
+          </div>
+          <div class="flex flex-col gap-4 sm:flex-row">
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="flex items-center gap-1.5 text-sm font-medium">
+                <Briefcase class="size-3.5 text-muted-foreground" />
+                Title <span class="text-destructive">*</span>
+              </span>
+              <Input bind:value={title} placeholder="Senior Go Developer" class="w-full" />
+            </label>
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="flex items-center gap-1.5 text-sm font-medium">
+                <Building2 class="size-3.5 text-muted-foreground" />
+                Company <span class="text-destructive">*</span>
+              </span>
+              <Input bind:value={company} placeholder="Acme" class="w-full" />
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Details: the structured facets that make the vacancy searchable. -->
+        <fieldset class="flex flex-col gap-4 py-6">
+          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Details
+          </legend>
+          <div class="flex flex-col gap-4 sm:flex-row">
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="flex items-center gap-1.5 text-sm font-medium">
+                <MapPin class="size-3.5 text-muted-foreground" />
+                Location
+              </span>
+              <Input bind:value={location} placeholder="Berlin, Germany" class="w-full" />
+            </label>
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="flex items-center gap-1.5 text-sm font-medium">
+                <Globe class="size-3.5 text-muted-foreground" />
+                Region
+              </span>
+              <select bind:value={region} class={cn(selectClass, 'w-full')}>
+                <option value="">Any</option>
+                {#each REGION_OPTIONS as opt (opt.value)}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+
+          <label class="flex flex-col gap-1">
+            <span class="flex items-center gap-1.5 text-sm font-medium">
+              <Building class="size-3.5 text-muted-foreground" />
+              City
+            </span>
+            <TokenInput
+              tokens={cities}
+              onAdd={(v) => (cities = addToken(cities, v))}
+              onRemove={(v) => (cities = cities.filter((c) => c !== v))}
+              placeholder="Add a city and press Enter"
+            />
+          </label>
+
+          <div class="flex flex-col gap-1">
+            <span class="text-sm font-medium">Work format</span>
+            <div class="flex flex-wrap gap-1.5">
+              {#each WORK_MODE_OPTIONS as opt (opt.value)}
+                <button
+                  type="button"
+                  onclick={() => (workMode = workMode === opt.value ? '' : opt.value)}
+                  class={cn(
+                    'rounded-full border px-3 py-1 text-sm transition-colors',
+                    workMode === opt.value
+                      ? 'border-transparent bg-secondary font-medium text-secondary-foreground'
+                      : 'border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4 sm:flex-row">
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="text-sm font-medium">Employment type</span>
+              <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
+                <option value="">Any</option>
+                {#each EMPLOYMENT_TYPE_OPTIONS as opt (opt.value)}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="flex flex-1 flex-col gap-1">
+              <span class="text-sm font-medium">Seniority</span>
+              <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
+                <option value="">Any</option>
+                {#each SENIORITY_OPTIONS as opt (opt.value)}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+
+          <label class="flex flex-col gap-1">
+            <span class="flex items-center gap-1.5 text-sm font-medium">
+              <Tags class="size-3.5 text-muted-foreground" />
+              Skills
+            </span>
+            <TokenInput
+              tokens={skills}
+              onAdd={(v) => (skills = addToken(skills, v))}
+              onRemove={(v) => (skills = skills.filter((s) => s !== v))}
+              placeholder="e.g. Go, Kubernetes — Enter to add"
+            />
+          </label>
+
+          <div class="flex flex-col gap-1">
+            <span class="flex items-center gap-1.5 text-sm font-medium">
+              <Banknote class="size-3.5 text-muted-foreground" />
+              Salary
+            </span>
+            <div class="flex flex-wrap items-center gap-2">
+              <Input
+                type="number"
+                min="0"
+                placeholder="Min"
+                value={salaryMin != null ? String(salaryMin) : ''}
+                oninput={(e) =>
+                  (salaryMin = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                class="w-24"
+              />
+              <span class="text-muted-foreground">–</span>
+              <Input
+                type="number"
+                min="0"
+                placeholder="Max"
+                value={salaryMax != null ? String(salaryMax) : ''}
+                oninput={(e) =>
+                  (salaryMax = e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                class="w-24"
+              />
+              <select bind:value={currency} class={selectClass} aria-label="Currency">
+                <option value="">Currency</option>
+                {#each CURRENCY_OPTIONS as opt (opt.value)}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+              <select bind:value={period} class={selectClass} aria-label="Salary period">
+                <option value="">Period</option>
+                {#each PERIODS as p (p.value)}
+                  <option value={p.value}>{p.label}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
+          <label class="flex flex-col gap-1">
+            <span class="text-sm font-medium">Source</span>
+            <Input bind:value={source} placeholder="e.g. greenhouse (optional)" class="w-full" />
+          </label>
+        </fieldset>
+
+        <!-- Description: the tracker's markdown editor; converted to HTML on submit. -->
+        <fieldset class="flex flex-col gap-2 py-6">
+          <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span class="flex items-center gap-1.5">
+              <FileText class="size-3.5" />
+              Description
+            </span>
+          </legend>
+          <NoteEditor
+            value={descriptionMarkdown}
+            onsave={(v) => (descriptionMarkdown = v)}
+            placeholder="Paste or write the job description…"
+          />
+        </fieldset>
+
+        <div class="flex flex-col gap-3 py-6">
+          {#if formError}
+            <p class="text-sm text-destructive">{formError}</p>
+          {/if}
+          <div>
+            <Button variant="primary" size="lg" type="submit" disabled={!canSubmit}>
+              {submitting ? 'Submitting…' : 'Submit for review'}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 {/if}
