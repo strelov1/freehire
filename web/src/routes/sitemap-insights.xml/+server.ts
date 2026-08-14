@@ -1,4 +1,4 @@
-import { serverApi } from '$lib/server/api';
+import { loadInsightsGate } from '$lib/server/insights';
 import { coveredCategories } from '$lib/insights';
 import { insightsPaths, urlsetXml, xmlResponse } from '$lib/sitemap';
 import type { RequestHandler } from './$types';
@@ -8,7 +8,7 @@ import type { RequestHandler } from './$types';
 // so a thin/gated-out category never appears — matching what the pages actually
 // serve (uncovered → 404).
 export const GET: RequestHandler = async ({ url, fetch }) => {
-  const roles = await serverApi(fetch).insightsRoles({ limit: 200 });
+  const roles = await loadInsightsGate(fetch);
   const categories = coveredCategories(roles).map((c) => c.category);
   const entries = insightsPaths(categories).map((path) => ({ loc: `${url.origin}${path}` }));
   return xmlResponse(urlsetXml(entries));

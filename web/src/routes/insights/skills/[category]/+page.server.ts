@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { serverApi } from '$lib/server/api';
+import { loadInsightsGate } from '$lib/server/insights';
 import { coveredCategories, isCovered, skillsIntro } from '$lib/insights';
 import { categoryLabel } from '$lib/labels';
 import type { PageServerLoad } from './$types';
@@ -10,7 +11,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const category = params.category;
   const api = serverApi(fetch);
 
-  const globalRoles = await api.insightsRoles({ limit: 200 });
+  const globalRoles = await loadInsightsGate(fetch);
   if (!isCovered(globalRoles, category)) error(404, 'No skill insights for this category yet');
 
   const skills = await api.insightsSkills({ category, sort: 'open', limit: 40 });
