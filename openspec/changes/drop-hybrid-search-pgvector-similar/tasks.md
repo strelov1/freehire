@@ -23,7 +23,7 @@
 
 ## 2. Chunked embedding pipeline
 
-- [ ] 2.1 Port `stripToPlainText` (`internal/search/plaintext.go`) and `chunkText`
+- [x] 2.1 Port `stripToPlainText` (`internal/search/plaintext.go`) and `chunkText`
       (`internal/search/chunk.go`) — plus their unit tests — verbatim from
       `origin/worktree-semantic-embed-full-clean-chunked` into wherever they now
       belong (likely `internal/embed`, since section 7 removes most of
