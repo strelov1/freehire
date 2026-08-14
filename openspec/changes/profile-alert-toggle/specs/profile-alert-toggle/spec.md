@@ -2,21 +2,24 @@
 
 ### Requirement: Profile alert toggle
 
-`/my/profile` SHALL present a toggle, "Notify me about jobs matching my
-profile." Enabling it SHALL create a saved search from the current profile
-(using the same filter-derivation the "Apply my profile" filters control
-already uses) marked as profile-derived, and subscribe it on the account's
-default notification channel. Disabling it SHALL remove that saved search
-(and its subscription with it). The toggle's shown state SHALL reflect
-whether a profile-derived saved search currently exists for the account,
-not a separately stored flag.
+`/my/notifications/searches` (the Search alerts page) SHALL present a
+toggle, "Notify me about jobs matching my profile," shown only for an
+account that has a candidate profile to derive filters from. Enabling it
+SHALL create a saved search from the current profile (using the same
+filter-derivation the "Apply my profile" filters control already uses)
+marked as profile-derived, and subscribe it on the email channel — always
+deliverable, unlike telegram/push, which the account's notification
+settings may list as preferred without the user ever having linked them.
+Disabling it SHALL remove that saved search (and its subscription with it).
+The toggle's shown state SHALL reflect whether a profile-derived saved
+search currently exists for the account, not a separately stored flag.
 
 #### Scenario: Enabling creates a search and subscribes it
 
 - **WHEN** a signed-in user with a candidate profile and no profile-derived
   saved search enables the toggle
 - **THEN** a saved search is created from their current profile's filters,
-  marked profile-derived, and subscribed on the account's default channel
+  marked profile-derived, and subscribed on the email channel
 
 #### Scenario: Disabling removes the search
 
@@ -28,13 +31,21 @@ not a separately stored flag.
 
 - **WHEN** a signed-in user manually deletes their profile-derived saved
   search from the search-alerts list
-- **THEN** the profile page's toggle shows as off
+- **THEN** the toggle on the same page shows as off
 
-#### Scenario: Default channel when none configured
+#### Scenario: Hidden without a candidate profile
 
-- **WHEN** a signed-in user enables the toggle with no notification
-  channels ever configured
-- **THEN** the created search is subscribed on the email channel
+- **WHEN** a signed-in user with no candidate profile visits the Search
+  alerts page
+- **THEN** the toggle is not shown, since there is no profile to derive
+  filters from
+
+#### Scenario: Subscribing over an unlinked preferred channel is avoided
+
+- **WHEN** a signed-in user enables the toggle while their account's
+  notification settings prefer telegram or push
+- **THEN** the created search is still subscribed on the email channel, not
+  the unlinked preferred channel
 
 ### Requirement: Profile-derived search stays in sync
 

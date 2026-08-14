@@ -6,21 +6,26 @@
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { notifications } from '$lib/notifications.svelte';
+  import { profileStore } from '$lib/profile.svelte';
   import type { SavedSearch } from '$lib/types';
   import { Button, Input } from '$lib/ui';
   import { toSearchString } from '$lib/urlSearchString';
   import { ProviderIcon } from '$lib/ui';
   import AlertChannels from './filters/AlertChannels.svelte';
+  import ProfileAlertToggle from './ProfileAlertToggle.svelte';
   import States from './States.svelte';
 
   // The account page for saved searches and their alerts: the Telegram connection at
-  // the top, then each saved search as a card with its actions (open / rename / share /
-  // delete) and its per-channel alert toggles (the shared AlertChannels). Merges the
-  // former separate Notifications page — a subscription is always tied to a saved
-  // search, so it's managed per-row.
+  // the top, then the built-in "notify me about jobs matching my profile" toggle (needs
+  // a candidate profile to derive filters from — hidden for an account with none), then
+  // each saved search as a card with its actions (open / rename / share / delete) and
+  // its per-channel alert toggles (the shared AlertChannels). Merges the former separate
+  // Notifications page — a subscription is always tied to a saved search, so it's
+  // managed per-row.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   const items = $derived(savedSearches.items);
+  const profile = $derived(profileStore.profile);
 
   // Telegram connection (moved here from the standalone notifications page).
   const telegram = $derived(notifications.telegram);
@@ -79,7 +84,11 @@
   async function load() {
     status = 'loading';
     try {
-      await Promise.all([savedSearches.ensureLoaded(), notifications.ensureLoaded()]);
+      await Promise.all([
+        savedSearches.ensureLoaded(),
+        notifications.ensureLoaded(),
+        profileStore.ensureLoaded(),
+      ]);
       status = 'ready';
     } catch {
       status = 'error';
@@ -235,6 +244,10 @@
           {/if}
         {/if}
       </section>
+
+      {#if profile}
+        <ProfileAlertToggle {profile} />
+      {/if}
 
       {#if items.length === 0}
         <States

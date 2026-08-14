@@ -46,11 +46,15 @@ This document nails down the exact API/DB shape against the real code
   violation. The client is expected to check its own already-loaded
   `savedSearches` store before calling create (avoiding the round trip in
   the common case), so this 409 path is a race guard, not the primary flow.
-- **Default channel resolution reuses `internal/reminder`'s existing
-  fallback shape** ("current `notification_settings.channels`, or
-  `['email']` if the row is absent/empty") — read via the same
-  `reminder.Service.GetSettings` the notification-settings endpoint already
-  calls, so the toggle needs no new settings read path.
+- **The subscription always goes out on the email channel, not the
+  account's preferred one.** The original design reused
+  `notification_settings.channels[0]`, but that array can list telegram or
+  push before the user ever links them — a code-review finding caught that
+  this created a silently undeliverable alert with no error surfaced.
+  Email needs no linking step, so it is always deliverable; the user can add
+  another channel from the same Search alerts page afterward. If the
+  subscribe call still fails, the just-created search is deleted so the
+  toggle never ends up "on" for a search nothing is subscribed to.
 - **Deleting the search is the disable path — no soft "paused" state.**
   Matches `saved-searches`' existing `DELETE /me/searches/:id` semantics
   exactly (cascades the subscription via the FK already in place for manual
@@ -58,15 +62,23 @@ This document nails down the exact API/DB shape against the real code
 
 ## Web flow
 
-- `/my/profile`'s Settings tab renders a toggle whose `on` state is
+- `/my/notifications/searches` (`SavedSearchesView.svelte`, right after the
+  Telegram connection card) renders the toggle, gated on the account having
+  a candidate profile (`profileStore.profile`) — nothing to derive filters
+  from otherwise. Its `on` state is
   `savedSearches.items.some(s => s.derived_from_profile)` — no separate
-  fetch, since the store is already loaded for the page's other uses.
-- **Enable**: `filtersFromProfile(profile)` → `toSearchString()` → `api.createSavedSearch(name, query, { derived_from_profile: true })`
-  → `api.subscribe(search.id, defaultChannel)`.
+  fetch, since both stores are already loaded for the page's other uses.
+  (Originally placed on `/my/profile`'s Settings tab; moved here per
+  user feedback post-ship — Search alerts is where every other
+  saved-search/subscription control already lives, and a second copy on the
+  profile page would need to stay in permanent sync with this one.)
+- **Enable**: `filtersFromProfile(profile)` → `filtersToParams(...).toString()` → `api.createSavedSearch(name, query, true)`
+  → `api.createSubscription(search.id, 'email')`.
 - **Disable**: `api.deleteSavedSearch(search.id)`.
-- **Sync**: `ProfileForm`'s existing `onSaved` callback (already fired after
-  a successful profile PUT) additionally recomputes the query and calls
-  `api.updateSavedSearch(search.id, { query })` when the toggle is on.
+- **Sync**: `/my/profile`'s existing `handleSaved` callback (already fired
+  after a successful profile PUT, regardless of where the toggle UI lives)
+  additionally recomputes the query and calls `api.updateSavedSearch(search.id, { query })`
+  when a profile-derived search exists.
 
 ## Risks / Trade-offs
 

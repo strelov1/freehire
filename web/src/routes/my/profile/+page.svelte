@@ -16,7 +16,6 @@
   import FilterSummary from '$lib/components/filters/FilterSummary.svelte';
   import FilterModal from '$lib/components/filters/FilterModal.svelte';
   import FilterEdgeTab from '$lib/components/FilterEdgeTab.svelte';
-  import ProfileAlertToggle from '$lib/components/ProfileAlertToggle.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import ScreeningAnswersForm from '$lib/components/ScreeningAnswersForm.svelte';
   import SkillsView from '$lib/components/SkillsView.svelte';
@@ -229,10 +228,10 @@
   }
 
   // Keep the profile-derived saved search (the "notify me about jobs matching my
-  // profile" toggle, ProfileAlertToggle) in step with a changed role/skills/location —
-  // otherwise it would keep alerting on the profile as it stood when first enabled.
-  // Best-effort: a failure here never blocks or rolls back the profile save itself,
-  // it just leaves the alert stale until the next successful save.
+  // profile" toggle, on the Search alerts page — ProfileAlertToggle) in step with a
+  // changed role/skills/location — otherwise it would keep alerting on the profile as it
+  // stood when first enabled. Best-effort: a failure here never blocks or rolls back the
+  // profile save itself, it just leaves the alert stale until the next successful save.
   async function syncProfileAlert() {
     const p = profileStore.profile;
     if (!p) return;
@@ -392,8 +391,7 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <div class="mt-6 flex flex-col gap-4">
-            <ProfileAlertToggle {profile} />
+          <div class="mt-6">
             <AccountTimezone />
           </div>
           <!-- Destructive actions live at the foot of the settings tab, out of
