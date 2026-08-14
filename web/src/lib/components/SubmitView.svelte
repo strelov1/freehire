@@ -140,11 +140,10 @@
       if (seniority === '' && result.seniority) seniority = result.seniority;
       if (source.trim() === '' && result.source) source = result.source;
       // The source page's description arrives as sanitized HTML, not the markdown this
-      // editor wants, so it is converted before it lands — NoteEditor only reads its
-      // initial value once, so raw tags dropped in directly would render literally.
+      // editor wants, so it is converted before it lands. No editorKey bump: NoteEditor
+      // live-syncs a value change into its already-mounted editor.
       if (descriptionMarkdown.trim() === '' && result.description) {
         descriptionMarkdown = htmlToMarkdown(result.description);
-        editorKey += 1;
       }
     } catch {
       // Best-effort: leave the form exactly as it was.

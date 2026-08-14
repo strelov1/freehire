@@ -26,10 +26,9 @@
   // A small markdown editor for notes: EasyMDE (the maintained SimpleMDE fork) over a
   // textarea, markdown in and out. EasyMDE touches `window`, so it is dynamically
   // imported on mount (never on the server) and torn down on unmount. `onsave` fires
-  // on blur with the current markdown; the parent persists it. The component is
-  // re-mounted per job by JobDrawer's {#key}, so the initial value never needs to be
-  // pushed reactively. `placeholder` lets a reuse (e.g. the submit form's description)
-  // relabel the empty state; it defaults to the tracker's "Notes…".
+  // on blur with the current markdown; the parent persists it. `placeholder` lets a
+  // reuse (e.g. the submit form's description) relabel the empty state; it defaults
+  // to the tracker's "Notes…".
   let {
     value = '',
     onsave,
@@ -37,21 +36,40 @@
   }: { value?: string; onsave: (v: string) => void; placeholder?: string } = $props();
 
   let el = $state<HTMLTextAreaElement>();
+  // Not $state: nothing needs to re-run when this is reassigned, only to read its
+  // current value when `value` changes (see the $effect below).
+  let editor: EasyMDE | undefined;
+  // Persist on blur AND on teardown — closing via Escape (or any unmount) never
+  // blurs the editor, so a blur-only save would drop the last edit. Dedup against the
+  // last persisted value so an untouched open/close doesn't fire a redundant save.
+  let lastSaved = value;
+  const persist = () => {
+    if (!editor) return;
+    const current = editor.value();
+    if (current === lastSaved) return;
+    lastSaved = current;
+    onsave(current);
+  };
+
+  // Live-syncs an externally-driven value change (e.g. the submit form's URL
+  // prefill) into an already-constructed editor — no remount needed. A remount
+  // (JobDrawer's old per-job {#key} pattern; the submit form's own resetForm still
+  // uses one) risks racing EasyMDE's async init if it lands too soon after mount,
+  // leaving an orphaned DOM node behind. Guarded against a no-op: persist() already
+  // writes `value` back to what the editor holds on blur, and re-applying an
+  // identical value would reset the cursor/undo history for nothing. Before the
+  // editor exists (its async import still in flight) this is a no-op — construction
+  // below reads `value` fresh at that point, so the pending mount picks up whatever
+  // value ends up current by the time it resolves.
+  $effect(() => {
+    if (editor && value !== editor.value()) {
+      editor.value(value);
+      lastSaved = value;
+    }
+  });
 
   onMount(() => {
-    let editor: EasyMDE | undefined;
     let cancelled = false;
-    // Persist on blur AND on teardown — closing via Escape (or any unmount) never
-    // blurs the editor, so a blur-only save would drop the last edit. Dedup against
-    // the last persisted value so an untouched open/close doesn't fire a redundant save.
-    let lastSaved = value;
-    const persist = () => {
-      if (!editor) return;
-      const current = editor.value();
-      if (current === lastSaved) return;
-      lastSaved = current;
-      onsave(current);
-    };
 
     void (async () => {
       const { default: EasyMDECtor } = await import('easymde');
