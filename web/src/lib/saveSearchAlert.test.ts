@@ -95,16 +95,23 @@ describe('ensureSaved', () => {
     expect(createCalls).toHaveLength(0);
   });
 
-  it('reuses a concurrently-created same-query set on a 409', async () => {
-    const items = [search(7, 'category=backend')];
+  it('reuses a concurrently-created same-query set discovered only after the 409', async () => {
+    // Empty at call time, so the pre-create check (matchedSavedSearch before create())
+    // finds nothing and ensureSaved proceeds to create() — unlike a items-seeded setup,
+    // which would satisfy the pre-create check and never reach create() or the catch
+    // block at all.
+    const items: SavedSearch[] = [];
     const port: SavedSearchesPort = {
       ensureLoaded: async () => {},
       get items() {
         return items;
       },
-      // Pretend another tab already created it just before us: matchedSavedSearch finds
-      // id 7, so create is never reached — but if a 409 races in, the raced re-check wins.
+      // Simulate another tab's concurrent create landing between our pre-create check
+      // and our own create() call: by the time our create() rejects with 409, the
+      // racing item is already visible in `items`, so it's the catch block's raced
+      // re-check — not the pre-create check — that must find it.
       create: async () => {
+        items.push(search(7, 'category=backend'));
         throw new ApiError(409, 'duplicate name');
       },
     };
