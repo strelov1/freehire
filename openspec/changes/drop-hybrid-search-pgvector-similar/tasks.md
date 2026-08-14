@@ -188,7 +188,8 @@
       `job_semantic_chunks` on prod (Section 3.1) in a scheduled window.
 - [ ] 8.5 Deploy `cmd/similar-backfill`; run its initial full pass; verify
       coverage before flipping `/similar` live (Section 5).
-- [ ] 8.6 After `/similar` and `/recommendations` are verified on the new path:
+- [ ] 8.6 After `/similar` is verified on the new path (`/me/recommendations` was
+      removed outright in this same change, not migrated — nothing to verify there):
       stop and remove `freehire-reindexw`-adjacent `--semantic` cron/timers, drop
       the live `jobs_semantic` Meili index, add a `cmd/similar-backfill` cron
       (cadence: default daily unless implementation reveals otherwise).
