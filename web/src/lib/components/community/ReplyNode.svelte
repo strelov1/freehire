@@ -152,7 +152,7 @@
     margin: 0;
   }
   .node__depth-limit {
-    color: var(--muted-foreground, #6b7280);
+    color: var(--muted-foreground);
     font-size: 0.8rem;
     margin: 0.5rem 0;
   }
