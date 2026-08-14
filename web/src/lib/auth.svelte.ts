@@ -31,6 +31,14 @@ export async function register(email: string, password: string) {
   await invalidateAll();
 }
 
+/** Sets the account's IANA timezone and re-resolves the session so
+ *  `currentUser()` reflects it everywhere (the notification-settings hint,
+ *  a future re-render of this same field). */
+export async function updateTimezone(timezone: string) {
+  await api.updateTimezone(timezone);
+  await invalidateAll();
+}
+
 export async function logout() {
   // Best-effort: still re-resolve (to signed-out) even if the network call fails.
   try {

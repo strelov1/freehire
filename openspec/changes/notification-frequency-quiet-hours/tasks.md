@@ -42,13 +42,13 @@
 
 ## 7. Web: profile timezone field
 
-- [ ] 7.1 API client: `api.updateTimezone(tz: string)`.
-- [ ] 7.2 `ProfileForm.svelte`: a timezone field (searchable select over the IANA list) on the Settings tab, autosaving like the rest of the form's fields. When the account has no stored timezone yet, the field pre-fills with the browser-detected zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) as its shown/selected value rather than blank — so a plain "Save" on the rest of the form persists the detected zone even if the user never deliberately touches this field.
+- [x] 7.1 API client: `api.updateTimezone(tz: string)`.
+- [x] 7.2 `ProfileForm.svelte`: a timezone field (searchable select over the IANA list) on the Settings tab, autosaving like the rest of the form's fields. When the account has no stored timezone yet, the field pre-fills with the browser-detected zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) as its shown/selected value rather than blank — so a plain "Save" on the rest of the form persists the detected zone even if the user never deliberately touches this field.
 
 ## 8. Web: notification settings frequency + quiet hours UI
 
-- [ ] 8.1 API client: extend `getNotificationSettings`/`updateNotificationSettings` types for the four new fields.
-- [ ] 8.2 `ReminderSettings.svelte` (or a new sibling block on `/my/notifications/settings`): frequency control (instant/daily) with a time picker revealed for daily; an optional quiet-hours start/end pair; a hint pointing at `/my/profile` when daily or quiet hours is enabled without a stored timezone.
+- [x] 8.1 API client: extend `getNotificationSettings`/`updateNotificationSettings` types for the four new fields.
+- [x] 8.2 `ReminderSettings.svelte` (or a new sibling block on `/my/notifications/settings`): frequency control (instant/daily) with a time picker revealed for daily; an optional quiet-hours start/end pair; a hint pointing at `/my/profile` when daily or quiet hours is enabled without a stored timezone.
 
 ## 9. Verification
 

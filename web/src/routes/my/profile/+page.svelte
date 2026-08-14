@@ -8,6 +8,7 @@
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { FilterStore, filtersToParams } from '$lib/filters';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import AccountTimezone from '$lib/components/AccountTimezone.svelte';
   import CandidateContactsEditor from '$lib/components/CandidateContactsEditor.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import ExperienceBankView from '$lib/components/ExperienceBankView.svelte';
@@ -359,6 +360,9 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
+          <div class="mt-6">
+            <AccountTimezone />
+          </div>
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and
                off the other tabs, which are readings of the market, not account

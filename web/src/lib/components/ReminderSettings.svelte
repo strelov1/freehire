@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Bell, Check, Mail, Smartphone } from '@lucide/svelte';
+  import { Bell, Check, Mail, Moon, Smartphone } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
-  import { isAuthenticated } from '$lib/auth.svelte';
+  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { cn } from '$lib/ui';
   import { ProviderIcon } from '$lib/ui';
 
@@ -15,10 +15,22 @@
   // keeps the rule valid so an invalid payload never reaches the server: enabling
   // defaults to the email channel, and the last channel can't be removed while
   // notifications are on (an enabled rule requires at least one channel).
+  //
+  // Two more controls ride the same settings row but govern different things:
+  // digest frequency (instant/daily) affects ONLY saved-search alerts
+  // (internal/notify), not the reminder/nudge kinds above; quiet hours defers
+  // ALL of them (plus instant-frequency search alerts) except a `daily` digest,
+  // which fires at its own chosen time regardless.
 
   let enabled = $state(false);
   let channels = $state<string[]>([]);
   let telegramAvailable = $state(false);
+
+  let digestFrequency = $state('instant');
+  let digestTime = $state('09:00');
+  let quietHoursOn = $state(false);
+  let quietHoursStart = $state('22:00');
+  let quietHoursEnd = $state('08:00');
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -26,6 +38,8 @@
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const hasTimezone = $derived(Boolean(currentUser()?.timezone));
 
   $effect(() => {
     if (isAuthenticated()) void load();
@@ -38,6 +52,11 @@
       enabled = settings.enabled;
       channels = settings.channels;
       telegramAvailable = tg.enabled;
+      digestFrequency = settings.digest_frequency || 'instant';
+      digestTime = settings.digest_time ?? '09:00';
+      quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);
+      quietHoursStart = settings.quiet_hours_start ?? '22:00';
+      quietHoursEnd = settings.quiet_hours_end ?? '08:00';
       status = 'ready';
     } catch {
       status = 'error';
@@ -55,7 +74,14 @@
 
   async function doSave() {
     try {
-      await api.updateNotificationSettings({ enabled, channels });
+      await api.updateNotificationSettings({
+        enabled,
+        channels,
+        digest_frequency: digestFrequency,
+        digest_time: digestFrequency === 'daily' ? digestTime : null,
+        quiet_hours_start: quietHoursOn ? quietHoursStart : null,
+        quiet_hours_end: quietHoursOn ? quietHoursEnd : null,
+      });
       saveState = 'saved';
       clearTimeout(savedTimer);
       savedTimer = setTimeout(() => {
@@ -80,6 +106,16 @@
     // Keep at least one channel while notifications are on — the invariant the server enforces.
     if (has && enabled && channels.length === 1) return;
     channels = has ? channels.filter((c) => c !== channel) : [...channels, channel];
+    persist();
+  }
+
+  function setDigestFrequency(freq: string) {
+    digestFrequency = freq;
+    persist();
+  }
+
+  function toggleQuietHours() {
+    quietHoursOn = !quietHoursOn;
     persist();
   }
 
@@ -118,26 +154,7 @@
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      aria-label="Enable notifications"
-      onclick={toggleEnabled}
-      disabled={status !== 'ready'}
-      class={cn(
-        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
-        enabled ? 'bg-brand' : 'bg-muted',
-      )}
-    >
-      <span
-        class={cn(
-          'inline-block size-5 rounded-full bg-white shadow-sm transition-transform',
-          enabled ? 'translate-x-[22px]' : 'translate-x-0.5',
-        )}
-      ></span>
-    </button>
+    {@render toggleSwitch(enabled, 'Enable notifications', toggleEnabled, status !== 'ready')}
   </div>
 
   {#if status === 'error'}
@@ -203,3 +220,116 @@
     </div>
   {/if}
 </section>
+
+<!-- Delivery timing: digest frequency governs only saved-search alerts
+     (internal/notify), independent of the Notifications toggle above — a
+     search-alert subscriber with reminders/nudges off still picks a frequency.
+     Quiet hours defers everything except a `daily` digest, which is exempt by
+     design (a chosen time is itself the preference). Both stay visible/editable
+     regardless of the toggle above, and use the same debounced-autosave PUT. -->
+{#if status === 'ready'}
+  <section class="mt-4 rounded-xl border border-border bg-card p-4">
+    <div class="flex flex-col gap-2">
+      <span class={sectionLabel}>Search alert frequency</span>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onclick={() => setDigestFrequency('instant')}
+          aria-pressed={digestFrequency === 'instant'}
+          class={pill(digestFrequency === 'instant')}
+        >
+          {#if digestFrequency === 'instant'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          Instant
+        </button>
+        <button
+          type="button"
+          onclick={() => setDigestFrequency('daily')}
+          aria-pressed={digestFrequency === 'daily'}
+          class={pill(digestFrequency === 'daily')}
+        >
+          {#if digestFrequency === 'daily'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          Daily digest
+        </button>
+        {#if digestFrequency === 'daily'}
+          <input
+            type="time"
+            bind:value={digestTime}
+            onchange={persist}
+            aria-label="Daily digest time"
+            class="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        {/if}
+      </div>
+      <p class="text-xs text-muted-foreground">
+        Applies only to saved-search alerts — reminders and application nudges above always deliver as they happen.
+      </p>
+      {#if digestFrequency === 'daily' && !hasTimezone}
+        <p class="text-xs text-muted-foreground">
+          Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/profile')}>timezone</a> so the digest time means your own local time — until then it's read as UTC.
+        </p>
+      {/if}
+    </div>
+
+    <div class="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+      <div class="flex items-center gap-3">
+        <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
+          <Moon class="size-4.5" aria-hidden="true" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <span class={sectionLabel}>Quiet hours</span>
+          <p class="text-xs text-muted-foreground">
+            Delay reminders, nudges, and instant search alerts until this window ends. A daily digest still arrives at its own time.
+          </p>
+        </div>
+        {@render toggleSwitch(quietHoursOn, 'Enable quiet hours', toggleQuietHours, false)}
+      </div>
+      {#if quietHoursOn}
+        <div class="flex items-center gap-2 pl-12">
+          <input
+            type="time"
+            bind:value={quietHoursStart}
+            onchange={persist}
+            aria-label="Quiet hours start"
+            class="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <span class="text-xs text-muted-foreground">to</span>
+          <input
+            type="time"
+            bind:value={quietHoursEnd}
+            onchange={persist}
+            aria-label="Quiet hours end"
+            class="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        {#if !hasTimezone}
+          <p class="pl-12 text-xs text-muted-foreground">
+            Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/profile')}>timezone</a> so this means your own local time — until then it's read as UTC.
+          </p>
+        {/if}
+      {/if}
+    </div>
+  </section>
+{/if}
+
+{#snippet toggleSwitch(on: boolean, label: string, onToggle: () => void, disabled: boolean)}
+  <button
+    type="button"
+    role="switch"
+    aria-checked={on}
+    aria-label={label}
+    onclick={onToggle}
+    {disabled}
+    class={cn(
+      'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+      on ? 'bg-brand' : 'bg-muted',
+    )}
+  >
+    <span
+      class={cn(
+        'inline-block size-5 rounded-full bg-white shadow-sm transition-transform',
+        on ? 'translate-x-[22px]' : 'translate-x-0.5',
+      )}
+    ></span>
+  </button>
+{/snippet}

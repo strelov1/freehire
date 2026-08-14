@@ -666,8 +666,18 @@ export function createApi(
     return requestData<User>(path, jsonBody('POST', body));
   }
 
+  /** Registers with the browser's detected IANA timezone attached, so the account
+   *  starts with one set rather than waiting for a profile-page visit. The server
+   *  silently drops an unrecognized value rather than failing the signup, so a
+   *  detection quirk here is harmless. */
   function register(email: string, password: string): Promise<User> {
-    return postAuth('/api/v1/auth/register', { email, password });
+    let timezone: string | undefined;
+    try {
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+      timezone = undefined;
+    }
+    return postAuth('/api/v1/auth/register', { email, password, timezone });
   }
 
   function login(email: string, password: string): Promise<User> {
@@ -954,6 +964,12 @@ export function createApi(
    *  channel, else the server rejects it (400). */
   async function updateNotificationSettings(settings: NotificationSettings): Promise<NotificationSettings> {
     return requestData<NotificationSettings>('/api/v1/me/notification-settings', jsonBody('PUT', settings));
+  }
+
+  /** Sets the account's IANA timezone (e.g. "Europe/Moscow"). 400s on a name Go's
+   *  tzdata does not recognize. Returns the updated user (carries the new value). */
+  async function updateTimezone(timezone: string): Promise<User> {
+    return requestData<User>('/api/v1/me/timezone', jsonBody('PATCH', { timezone }));
   }
 
   /** The public slugs of every job the current user has hidden (dismissed). The
@@ -2036,6 +2052,7 @@ export function createApi(
     listSavedSlugs,
     getNotificationSettings,
     updateNotificationSettings,
+    updateTimezone,
     listDismissedSlugs,
     getNotifications,
     getNotification,

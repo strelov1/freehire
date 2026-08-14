@@ -257,6 +257,9 @@ export interface User {
   // nothing to change and must use the reset flow to set one.
   has_password: boolean;
   created_at: string | null;
+  // IANA timezone name (e.g. "Europe/Moscow"), null until set. Read by the
+  // profile page's timezone field and the notification-settings missing-timezone hint.
+  timezone: string | null;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do
@@ -507,6 +510,14 @@ export interface MyJob {
 export interface NotificationSettings {
   enabled: boolean;
   channels: string[];
+  /** 'instant' (default) or 'daily' — governs only saved-search digests, not
+   *  reminders/nudges. */
+  digest_frequency: string;
+  /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */
+  digest_time: string | null;
+  /** "HH:MM" local time; both null means quiet hours are off (the default). */
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
 }
 
 /** The five notification-center event kinds a `user_notifications` row can carry —
