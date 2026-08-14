@@ -163,3 +163,30 @@ func TestWordBoundaryAvoidsOverRedaction(t *testing.T) {
 		t.Fatalf("standalone name not masked: %s", masked)
 	}
 }
+
+func TestKnownOnlyValueAvoidsOverRedaction(t *testing.T) {
+	// Same shape as TestWordBoundaryAvoidsOverRedaction, but "Mark" arrives only via known
+	// Contacts — never detected as a span. redactor.go:112 never populated boundarySafe for
+	// a known-only value, so it always fell back to plain substring replacement and would
+	// have mangled "benchmark" into a partially-redacted fragment.
+	text := "Mark shipped the benchmark on Mark's branch"
+	r := mustBuild(t, text, Contacts{FullName: "Mark"}, spansDetector{})
+	masked := r.Redact(text)
+	if !strings.Contains(masked, "benchmark") {
+		t.Fatalf("over-redacted 'benchmark' from a known-only value: %s", masked)
+	}
+	if strings.Contains(masked, "Mark shipped") {
+		t.Fatalf("standalone known name not masked: %s", masked)
+	}
+}
+
+func TestKnownContactAbsentFromTextDoesNotFailBuild(t *testing.T) {
+	// "Known contacts are always maskable... even when they do not appear verbatim in the
+	// text Build read" (package doc). A known value with zero occurrences must not trip the
+	// fail-closed self-check, which only makes sense for a value that was actually there.
+	text := "Backend engineer with distributed systems experience"
+	known := Contacts{FullName: "Priya Shah", Location: "Berlin"}
+	if _, err := Build(context.Background(), text, known, spansDetector{}); err != nil {
+		t.Fatalf("Build returned an error for a known contact absent from text: %v", err)
+	}
+}
