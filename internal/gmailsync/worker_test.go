@@ -23,6 +23,7 @@ type fakeStore struct {
 	conns          []Connection
 	encToken       string
 	upserted       []StoredEmail
+	upsertErrIDs   map[string]bool // message ids on which UpsertEmail fails
 	syncedCursor   int64
 	syncedCalled   bool
 	reconsentUsers []int64
@@ -31,6 +32,9 @@ type fakeStore struct {
 func (f *fakeStore) ListConnected(context.Context) ([]Connection, error) { return f.conns, nil }
 func (f *fakeStore) RefreshToken(context.Context, int64) (string, error) { return f.encToken, nil }
 func (f *fakeStore) UpsertEmail(_ context.Context, e StoredEmail) error {
+	if f.upsertErrIDs[e.Message.ID] {
+		return errors.New("store: transient failure")
+	}
 	f.upserted = append(f.upserted, e)
 	return nil
 }
@@ -127,6 +131,44 @@ func TestRunOnceExpandsThread(t *testing.T) {
 	}
 	if len(store.upserted) != 2 {
 		t.Errorf("upserted = %d, want 2 (m1, m3; no dupes)", len(store.upserted))
+	}
+}
+
+// TestRunOnceFreezesWatermarkOnFailure locks in that a transient failure on one
+// message in a wave stops the watermark from advancing past it, even when a
+// later-processed message in the same wave is newer and stores fine — otherwise
+// the failed message's timestamp falls at-or-before the next run's cursor filter
+// and is never retried.
+func TestRunOnceFreezesWatermarkOnFailure(t *testing.T) {
+	c := testCipher(t)
+	enc, _ := c.Encrypt("refresh-token")
+	store := &fakeStore{
+		conns:        []Connection{{UserID: 7, Email: "u@gmail.com", Cursor: 0}},
+		encToken:     enc,
+		upsertErrIDs: map[string]bool{"m1": true},
+	}
+	t1 := time.Unix(1_700_000_100, 0) // older, fails to store
+	t2 := time.Unix(1_700_000_500, 0) // newer, stores fine
+	reader := &fakeReader{
+		ids: []string{"m1", "m2"},
+		byID: map[string]Message{
+			"m1": {ID: "m1", Subject: "Thank you for applying to Acme", ReceivedAt: t1},
+			"m2": {ID: "m2", Subject: "Thank you for applying to Widget Co", ReceivedAt: t2},
+		},
+	}
+	w := NewWorker(store, c, func(context.Context, string, []string) GmailReader { return reader })
+
+	if err := w.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if len(store.upserted) != 1 || store.upserted[0].Message.ID != "m2" {
+		t.Fatalf("upserted = %v, want only m2 (m1 fails)", store.upserted)
+	}
+	if !store.syncedCalled {
+		t.Fatal("SetSynced not called")
+	}
+	if store.syncedCursor >= t1.Unix() {
+		t.Errorf("cursor = %d, want < %d (m1's timestamp) so the failed message is retried next run", store.syncedCursor, t1.Unix())
 	}
 }
 
