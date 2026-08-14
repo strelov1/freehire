@@ -89,12 +89,16 @@
 
 ## 6. Switch `/me/recommendations` to a live pgvector query
 
-- [ ] 6.1 New query: CV vector (from the caller's persisted embedding, still a
+- [ ] 6.1 Two-stage lookup per design.md Decision 5a (mid-implementation revision —
+      no new SQL facet translator, reuse Meili's existing `jobs` index filtering):
+      (a) query the live `jobs` facet index with the request's facet params (via the
+      existing `search.FilterFromValues`/`buildSearchFilter`, unchanged) and no text
+      query, retrieving up to a capped number of matching job IDs, `id`-only; (b) a
+      new pgvector query: CV vector (from the caller's persisted embedding, still a
       single vector — a résumé isn't chunked) against `job_semantic_chunks` using
       the same nearest-chunk-per-job rollup as `/similar` (design.md Decision 5),
-      combined with the existing facet-filter-to-SQL translation, filtered to open
-      jobs, `LIMIT`/`OFFSET`.
-- [ ] 6.2 Wire the handler to the new query instead of `search.Client.RecommendByVector`.
+      restricted to `WHERE job_id = ANY($meili_ids)` and open jobs, `LIMIT`/`OFFSET`.
+- [ ] 6.2 Wire the handler to the two-stage lookup instead of `search.Client.RecommendByVector`.
 - [ ] 6.3 Update recommendation tests (unit + integration) for the new path;
       verify facet-filter scenarios from the `cv-recommendations` spec still hold.
 
