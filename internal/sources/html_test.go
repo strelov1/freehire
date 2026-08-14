@@ -17,7 +17,7 @@ import (
 // job link, so a paging loop never reaches a natural end (an empty page) on its own — only a
 // maxPages cap can stop it. It exists to exercise the cap-exhaustion path of pagedLinks, as
 // opposed to routedHTTP's fixed per-URL routes.
-type pagedFake struct{ pages int }
+type pagedFake struct{}
 
 func (f pagedFake) GetHTML(_ context.Context, rawURL string) (*html.Node, error) {
 	u, err := url.Parse(rawURL)
