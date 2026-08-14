@@ -130,10 +130,7 @@ func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	failedThisRun := map[int64]bool{}
 	var stats Stats
 
-	for {
-		if opt.MaxJobs > 0 && stats.Processed+stats.Failed+stats.Stale >= opt.MaxJobs {
-			break
-		}
+	for opt.MaxJobs <= 0 || stats.Processed+stats.Failed+stats.Stale < opt.MaxJobs {
 		ids, err := r.Store.PendingJobIDs(ctx, opt.BatchSize)
 		if err != nil {
 			return stats, fmt.Errorf("pending job ids: %w", err)
