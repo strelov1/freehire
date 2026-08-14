@@ -379,6 +379,7 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	body := `{"url":"` + url + `","title":"Senior Go Developer","company":"Acme",` +
 		`"location":"Germany","description":"We use Golang.",` +
 		`"skills":["kubernetes"],"regions":["north_america"],"cities":["Austin"],"work_mode":"hybrid",` +
+		`"employment_type":"contract","seniority":"lead",` +
 		`"salary_min":90000,"salary_max":120000,"salary_currency":"EUR","salary_period":"year"}`
 
 	resp, err := app.Test(req(fiber.MethodPost, "/api/v1/submissions", userCookie, body))
@@ -391,10 +392,12 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	}
 	var subOut struct {
 		Data struct {
-			ID        int64    `json:"id"`
-			Regions   []string `json:"regions"`
-			WorkMode  string   `json:"work_mode"`
-			SalaryMin *int     `json:"salary_min"`
+			ID             int64    `json:"id"`
+			Regions        []string `json:"regions"`
+			WorkMode       string   `json:"work_mode"`
+			EmploymentType string   `json:"employment_type"`
+			Seniority      string   `json:"seniority"`
+			SalaryMin      *int     `json:"salary_min"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&subOut); err != nil {
@@ -403,6 +406,9 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 	// The response echoes the structured facets back to the submitter.
 	if len(subOut.Data.Regions) != 1 || subOut.Data.Regions[0] != "north_america" || subOut.Data.WorkMode != "hybrid" {
 		t.Errorf("echoed facets = %v/%q, want [north_america]/hybrid", subOut.Data.Regions, subOut.Data.WorkMode)
+	}
+	if subOut.Data.EmploymentType != "contract" || subOut.Data.Seniority != "lead" {
+		t.Errorf("echoed employment_type/seniority = %q/%q, want contract/lead", subOut.Data.EmploymentType, subOut.Data.Seniority)
 	}
 	if subOut.Data.SalaryMin == nil || *subOut.Data.SalaryMin != 90000 {
 		t.Errorf("echoed salary_min = %v, want 90000", subOut.Data.SalaryMin)
@@ -420,14 +426,20 @@ func TestSubmissionStructuredFacetsEndToEnd(t *testing.T) {
 
 	// The minted job carries the explicit facets and the seeded manual salary.
 	var regions, cities, skills []string
-	var workMode string
+	var workMode, employmentType, seniority string
 	var manualMin int
 	var enrichMin int
 	if err := pool.QueryRow(ctx,
-		`SELECT regions, cities, work_mode, skills, salary_min_manual, (enrichment->>'salary_min')::int
+		`SELECT regions, cities, work_mode, skills, employment_type, seniority, salary_min_manual, (enrichment->>'salary_min')::int
 		 FROM jobs WHERE source = 'manual' AND external_id = $1`, url).
-		Scan(&regions, &cities, &workMode, &skills, &manualMin, &enrichMin); err != nil {
+		Scan(&regions, &cities, &workMode, &skills, &employmentType, &seniority, &manualMin, &enrichMin); err != nil {
 		t.Fatalf("read minted job: %v", err)
+	}
+	if employmentType != "contract" {
+		t.Errorf("minted employment_type = %q, want contract", employmentType)
+	}
+	if seniority != "lead" {
+		t.Errorf("minted seniority = %q, want lead", seniority)
 	}
 	if len(regions) != 1 || regions[0] != "north_america" {
 		t.Errorf("minted regions = %v, want [north_america] (explicit wins over derived eu)", regions)

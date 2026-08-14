@@ -4,13 +4,15 @@
 -- the same URL (the repository maps that unique violation to a 409).
 INSERT INTO job_submissions (
     submitted_by, url, source, title, company, location, remote, description, posted_at,
-    skills, regions, cities, work_mode, salary_min, salary_max, salary_currency, salary_period
+    skills, regions, cities, work_mode, employment_type, seniority,
+    salary_min, salary_max, salary_currency, salary_period
 ) VALUES (
     sqlc.arg(submitted_by)::bigint, sqlc.arg(url), sqlc.arg(source), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(location), sqlc.arg(remote), sqlc.arg(description),
     sqlc.arg(posted_at),
     COALESCE(sqlc.arg(skills)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'),
     COALESCE(sqlc.arg(cities)::text[], '{}'), sqlc.arg(work_mode),
+    sqlc.arg(employment_type), sqlc.arg(seniority),
     sqlc.arg(salary_min), sqlc.arg(salary_max), sqlc.arg(salary_currency), sqlc.arg(salary_period)
 )
 RETURNING *;

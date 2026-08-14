@@ -65,6 +65,8 @@ type submissionResponse struct {
 	Regions        []string `json:"regions,omitempty"`
 	Cities         []string `json:"cities,omitempty"`
 	WorkMode       string   `json:"work_mode,omitempty"`
+	EmploymentType string   `json:"employment_type,omitempty"`
+	Seniority      string   `json:"seniority,omitempty"`
 	SalaryMin      *int     `json:"salary_min,omitempty"`
 	SalaryMax      *int     `json:"salary_max,omitempty"`
 	SalaryCurrency string   `json:"salary_currency,omitempty"`
@@ -78,6 +80,8 @@ func withStructured(resp submissionResponse, s submission.Submission) submission
 	resp.Regions = s.Regions
 	resp.Cities = s.Cities
 	resp.WorkMode = s.WorkMode
+	resp.EmploymentType = s.EmploymentType
+	resp.Seniority = s.Seniority
 	resp.SalaryMin = s.SalaryMin
 	resp.SalaryMax = s.SalaryMax
 	resp.SalaryCurrency = s.SalaryCurrency
