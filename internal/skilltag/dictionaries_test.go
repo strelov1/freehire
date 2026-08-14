@@ -104,6 +104,10 @@ func TestHasEngineering(t *testing.T) {
 		// so they fall outside professionalPhraseAliases; they must still read as
 		// non-engineering, same as every other marketing/business discipline above.
 		{"pure marketing seo", []string{"seo", "ecommerce"}, false},
+		// The exact tag set Parse produces for "SEO Specialist using Ahrefs and SEMrush" —
+		// a purely non-technical marketing posting must not be read as having posted
+		// "something technical".
+		{"seo specialist with tools", []string{"ahrefs", "semrush", "seo"}, false},
 		// One engineering canonical is enough — the board has posted something technical.
 		{"recruiter who also names a stack", []string{"talent-sourcing", "python"}, true},
 		{"plain engineering", []string{"kubernetes"}, true},
