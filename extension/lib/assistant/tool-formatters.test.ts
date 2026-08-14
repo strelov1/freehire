@@ -68,10 +68,15 @@ describe('callLine', () => {
     );
   });
 
-  it('shows the patch op a CV edit applied', () => {
-    expect(callLine(call('cv_edit', { patch: { op: 'add_bullet', experience: 0 } }))).toBe(
-      'Updating your CV: add_bullet',
+  // cv_edit takes a batch, so the useful detail is how much it changed at once — there are no
+  // named ops any more to report.
+  it('shows how many edits a CV change carried', () => {
+    expect(callLine(call('cv_edit', { ops: [{ kind: 'set', path: 'summary' }] }))).toBe(
+      'Updating your CV: 1 edit',
     );
+    expect(
+      callLine(call('cv_edit', { ops: [{ kind: 'set', path: 'summary' }, { kind: 'remove', path: 'skills[0]' }] })),
+    ).toBe('Updating your CV: 2 edits');
   });
 
   it('shows the label alone when there is nothing identifying to add', () => {
