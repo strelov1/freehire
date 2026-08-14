@@ -35,9 +35,15 @@ func (s *Store) ListIdentities(ctx context.Context, userID int64) (IdentityList,
 	if err := s.pool.QueryRow(ctx, `SELECT password_hash IS NOT NULL FROM users WHERE id=$1`, userID).Scan(&out.HasPassword); err != nil {
 		return out, err
 	}
+	// bool_or, not bool_and: unlinkIdentityOnce (store.go) counts a provider as active if
+	// ANY of its identity rows is active, so a provider with one active row and one
+	// revocation_pending row (e.g. mid-drain of an earlier unlink) is a usable sign-in
+	// method there. Aggregating with bool_and instead would report that provider as
+	// non-active here, undercounting active providers and showing CanUnlink=false for a
+	// last-method check the backend would actually pass.
 	rows, err := s.pool.Query(ctx, `
 		SELECT provider,min(created_at),
-		       CASE WHEN bool_and(status='active') THEN 'active' ELSE 'revocation_pending' END
+		       CASE WHEN bool_or(status='active') THEN 'active' ELSE 'revocation_pending' END
 		FROM user_identities WHERE user_id=$1
 		GROUP BY provider ORDER BY provider`, userID)
 	if err != nil {

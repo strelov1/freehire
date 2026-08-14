@@ -112,6 +112,54 @@ func TestUnlinkCountsProviderAsOneUsableMethod(t *testing.T) {
 	}
 }
 
+// TestListIdentitiesActiveAggregationMatchesUnlinkGate reproduces the review finding:
+// ListIdentities used bool_and across a provider's rows to decide "active", while
+// unlinkIdentityOnce counts a provider as active if ANY of its rows is active. A provider
+// with one active identity and one still draining a prior unlink (revocation_pending) is
+// active by the backend's own rule, so the displayed CanUnlink hint must agree with what
+// UnlinkIdentity will actually accept.
+func TestListIdentitiesActiveAggregationMatchesUnlinkGate(t *testing.T) {
+	ctx, userID, store := seedAuthUser(t, false)
+	pool := store.pool
+	if _, err := pool.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id,status) VALUES('apple','apple-active',$1,'active')`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id,status) VALUES('apple','apple-pending',$1,'revocation_pending')`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO user_identities(provider,provider_user_id,user_id) VALUES('google','google-one',$1)`, userID); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := store.ListIdentities(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var google Identity
+	found := false
+	for _, i := range list.Identities {
+		if i.Provider == "google" {
+			google, found = i, true
+		}
+	}
+	if !found {
+		t.Fatal("google identity missing from list")
+	}
+	if !google.CanUnlink {
+		t.Fatal("CanUnlink=false for google, want true: apple has an active row so it counts as a second usable method")
+	}
+
+	// The backend's own gate must agree with the hint just asserted above.
+	sessionHash := bytes.Repeat([]byte{9}, 32)
+	proof, _, err := recentauth.NewStore(pool, 0).Issue(ctx, userID, 1, sessionHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.UnlinkIdentity(ctx, userID, 1, sessionHash, "google", proof); err != nil {
+		t.Fatalf("UnlinkIdentity disagreed with the CanUnlink hint it should match: %v", err)
+	}
+}
+
 func TestFinalizeAppleGrantCannotOverwritePendingUnlink(t *testing.T) {
 	ctx, userID, store := seedAuthUser(t, true)
 	const subject, clientID = "apple-race-subject", "me.freehire.mobile"
