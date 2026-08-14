@@ -93,6 +93,26 @@ var (
 	// ErrNotAuthorized is a referrer acting on / viewing a request for a company they are not
 	// an approved referrer of (403).
 	ErrNotAuthorized = errors.New("referral: not an approved referrer for this company")
+	// ErrNoteTooLong is a request note over maxNoteLen (422).
+	ErrNoteTooLong = errors.New("referral: note is too long")
+	// ErrContactTooLong is a Telegram handle or email over maxContactLen (422).
+	ErrContactTooLong = errors.New("referral: contact is too long")
+)
+
+// Free-text length bounds (the content-field convention: report.maxDetailsLen,
+// companyfeedback.maxBodyRunes), applied where sibling packages already cap their
+// equivalent user-supplied text — this package had been the gap.
+const (
+	// maxNoteLen bounds a request's free-text note.
+	maxNoteLen = 5000
+	// maxContactLen bounds ContactTelegram and ContactEmail — generous for either shape
+	// (a Telegram handle/t.me link or an email address, RFC 5321's own 254-byte cap)
+	// while still bounding what a request can carry.
+	maxContactLen = 254
+	// maxLinkedInURLLen bounds LinkedInURL (on both OfferInput and RequestInput, via
+	// validLinkedInURL below) — generous for a real linkedin.com/in/<handle> URL,
+	// including a country subdomain and a trailing query/fragment, while still bounded.
+	maxLinkedInURLLen = 500
 )
 
 // Offer is a stored referral offer, decoupled from the generated db row. The pointer
@@ -320,6 +340,9 @@ func (s *Service) CreateRequest(ctx context.Context, in RequestInput) (Request, 
 	if !validLinkedInURL(in.LinkedInURL) {
 		return Request{}, ErrInvalidLinkedIn
 	}
+	if len(strings.TrimSpace(in.Note)) > maxNoteLen {
+		return Request{}, ErrNoteTooLong
+	}
 	if err := validateCVChoice(in); err != nil {
 		return Request{}, err
 	}
@@ -433,19 +456,29 @@ func (s *Service) notifyReferrers(ctx context.Context, companySlug string) {
 	}
 }
 
-// validateContact requires at least one non-blank contact channel.
+// validateContact requires at least one non-blank contact channel, and bounds whichever
+// channels are given.
 func validateContact(in RequestInput) error {
-	if strings.TrimSpace(in.ContactTelegram) == "" && strings.TrimSpace(in.ContactEmail) == "" {
+	telegram, email := strings.TrimSpace(in.ContactTelegram), strings.TrimSpace(in.ContactEmail)
+	if telegram == "" && email == "" {
 		return ErrNoContact
+	}
+	if len(telegram) > maxContactLen || len(email) > maxContactLen {
+		return ErrContactTooLong
 	}
 	return nil
 }
 
 // validLinkedInURL reports whether s is a LinkedIn personal-profile URL: an http(s) URL on
-// linkedin.com (optionally a country/www subdomain) whose path is /in/<handle>. This is a
-// shape check, not a liveness check — it only asserts the link is the right kind of thing.
+// linkedin.com (optionally a country/www subdomain) whose path is /in/<handle>, no longer
+// than maxLinkedInURLLen. This is a shape check, not a liveness check — it only asserts the
+// link is the right kind of thing (and not an unbounded payload riding along as one).
 func validLinkedInURL(s string) bool {
-	u, err := url.Parse(strings.TrimSpace(s))
+	s = strings.TrimSpace(s)
+	if len(s) > maxLinkedInURLLen {
+		return false
+	}
+	u, err := url.Parse(s)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return false
 	}

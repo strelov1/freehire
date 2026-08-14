@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,6 +225,9 @@ func TestValidLinkedInURL(t *testing.T) {
 	invalid := []string{
 		"", "   ", "linkedin.com/in/jane", "https://linkedin.com/", "https://linkedin.com/company/acme",
 		"https://notlinkedin.com/in/jane", "https://linkedin.com.evil.com/in/jane", "ftp://linkedin.com/in/jane",
+		// Otherwise well-formed, but past maxLinkedInURLLen — an unbounded payload
+		// riding along inside a field with no explicit length check before this.
+		"https://www.linkedin.com/in/" + strings.Repeat("j", maxLinkedInURLLen),
 	}
 	for _, s := range invalid {
 		if validLinkedInURL(s) {
@@ -334,6 +338,10 @@ func TestCreateRequestValidation(t *testing.T) {
 		{"original with cv id", withCV(base, CVOriginal, cvID(testCVID)), ErrInvalidCVChoice},
 		{"built without cv id", withCV(base, CVBuilt, nil), ErrInvalidCVChoice},
 		{"unknown kind", withCV(base, "weird", nil), ErrInvalidCVChoice},
+		{"note too long", withNote(base, strings.Repeat("n", maxNoteLen+1)), ErrNoteTooLong},
+		{"telegram contact too long", withTelegram(base, strings.Repeat("t", maxContactLen+1)), ErrContactTooLong},
+		{"email contact too long", withEmail(base, strings.Repeat("e", maxContactLen+1)+"@x.test"), ErrContactTooLong},
+		{"linkedin url too long", withLinkedIn(base, "https://www.linkedin.com/in/"+strings.Repeat("j", maxLinkedInURLLen)), ErrInvalidLinkedIn},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -489,5 +497,29 @@ func TestAuthorizeCVAccess(t *testing.T) {
 func withCV(in RequestInput, kind string, id *uuid.UUID) RequestInput {
 	in.CVKind = kind
 	in.CVID = id
+	return in
+}
+
+// withNote returns a copy of in with Note replaced.
+func withNote(in RequestInput, note string) RequestInput {
+	in.Note = note
+	return in
+}
+
+// withTelegram returns a copy of in with ContactTelegram replaced.
+func withTelegram(in RequestInput, telegram string) RequestInput {
+	in.ContactTelegram = telegram
+	return in
+}
+
+// withEmail returns a copy of in with ContactEmail replaced.
+func withEmail(in RequestInput, email string) RequestInput {
+	in.ContactEmail = email
+	return in
+}
+
+// withLinkedIn returns a copy of in with LinkedInURL replaced.
+func withLinkedIn(in RequestInput, url string) RequestInput {
+	in.LinkedInURL = url
 	return in
 }

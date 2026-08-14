@@ -139,6 +139,8 @@ func referralError(err error) error {
 	case errors.Is(err, referral.ErrProofRequired),
 		errors.Is(err, referral.ErrInvalidLinkedIn),
 		errors.Is(err, referral.ErrNoContact),
+		errors.Is(err, referral.ErrContactTooLong),
+		errors.Is(err, referral.ErrNoteTooLong),
 		errors.Is(err, referral.ErrInvalidCVChoice),
 		errors.Is(err, referral.ErrNoResume):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
