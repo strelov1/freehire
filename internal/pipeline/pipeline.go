@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/applyform"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/normalize"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -106,6 +107,37 @@ type BoardHealth interface {
 	ClearCooldowns(ctx context.Context, provider string) (int, error)
 }
 
+// CoverageLookup is the optional Store-adjacent port the ingest-time aggregator coverage gate
+// needs: for a batch of company slugs, which are already covered by an OPEN posting from a
+// non-aggregator source. Backed by the live Meili jobs index (see the aggregator-ats-coverage-
+// skip design doc), not Postgres, so a company's ATS coverage is checked near-real-time
+// without a per-run table scan. Optional: nil disables the gate entirely (ATS board files,
+// test fakes) — the same shape as BoardHealth.
+//
+// companySlugs are EXACT, unfolded company_slug values (normalize.Slug's output, as-is) —
+// deliberately NOT the folded, hyphen-stripped form cmd/reindex's
+// aggregator-ats-dedup suppression pass compares. A live Meili filter cannot compute that
+// fold at query time (it matches a stored field's literal value, with no equivalent of a SQL
+// expression index), and folding the query value instead would break even an exact,
+// correctly-spelled match against the stored value. An implementation MUST compare
+// companySlugs and its own stored company_slug EXACTLY, with no folding on either side; the
+// returned map's keys are expected back in that same unfolded form. A same-employer pair that
+// only agrees after folding (e.g. "cfoinsights" vs "cfo-insights") is coverage this port will
+// miss by design — aggregator-ats-dedup's periodic reindex pass remains the mechanism that
+// catches it.
+type CoverageLookup interface {
+	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error)
+}
+
+// aggregatorCoverage answers whether a company (EXACT company_slug — see CoverageLookup's doc
+// comment for why this is not folded) is already covered by a non-aggregator source, for the
+// board currently being ingested. nil means the gate does not apply — saveOne treats a nil
+// resolver as "never covered". Two callers build one: the buffered path (ingestFetched)
+// resolves the whole board's companies in one batched CoverageLookup call up front; the
+// streaming path (ingestStream) has no such batch, so it resolves — and memoizes — one
+// company at a time as postings are emitted.
+type aggregatorCoverage func(companySlug string) bool
+
 // CooledBoard identifies one board currently in an active cooldown. Region disambiguates a
 // board id that repeats across independent regional slices of one provider (e.g. Adzuna's
 // "it-jobs" once per country) — without it, every region's health/cooldown state would
@@ -127,11 +159,12 @@ type CooledBoard struct {
 // is the filter working as intended, a skip is something broken. Folded together, a board
 // whose every save fails would read as a board full of non-technical postings.
 type Stats struct {
-	Ingested int
-	Failed   int
-	Skipped  int
-	Cooled   int
-	Rejected int
+	Ingested   int
+	Failed     int
+	Skipped    int
+	Cooled     int
+	Rejected   int
+	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
 }
 
 // add accumulates another Stats into s, so the per-board and per-provider merges cannot
@@ -142,6 +175,7 @@ func (s *Stats) add(o Stats) {
 	s.Skipped += o.Skipped
 	s.Cooled += o.Cooled
 	s.Rejected += o.Rejected
+	s.ATSCovered += o.ATSCovered
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -166,6 +200,8 @@ type Runner struct {
 	Store    Store
 	// BoardHealth is optional (nil disables per-board cooldown/health recording).
 	BoardHealth BoardHealth
+	// Coverage is optional (nil disables the aggregator ingest-time coverage gate).
+	Coverage CoverageLookup
 }
 
 // Run ingests every configured board and returns the stats per provider. It returns an
@@ -383,11 +419,15 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	if ss, streaming := src.(sources.StreamingSource); streaming {
 		st := r.ingestStream(ctx, e, ss)
 		// A streaming board that made no progress at all AND failed is a true outage;
-		// partial progress is a success signal, not a board failure. A rejected posting
-		// is progress: the crawl reached it and the filter turned it away. Without that,
-		// a mid-crawl error on an all-rejected board — the normal case on the non-tech-heavy
-		// national feeds — would count as a failure and cool a healthy board for hours.
-		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 {
+		// partial progress is a success signal, not a board failure. A rejected posting is
+		// progress: the crawl reached it and the filter turned it away. Without that, a
+		// mid-crawl error on an all-rejected board — the normal case on the non-tech-heavy
+		// national feeds — would count as a failure and cool a healthy board for hours. An
+		// ATSCovered posting is progress for the same reason: the crawl reached it and
+		// correctly judged its company already covered elsewhere — and omitting it here
+		// would make a heavily-covered aggregator board MORE likely to be misclassified as
+		// failed as the coverage gate does its job better, not less.
+		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
 			r.recordSuccess(ctx, e, st.Ingested)
@@ -418,6 +458,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 		rej      rejections
 		firstErr error
 	)
+	covered := r.aggregatorCoverageForBatch(ctx, e, raw)
 	for _, j := range raw {
 		// A HydratingSource marks an already-ingested posting it re-listed but did not
 		// re-fetch: refresh its liveness by identity instead of re-upserting content-less
@@ -445,7 +486,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 			st.Ingested++
 			continue
 		}
-		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
+		r.saveOne(ctx, e, j, covered, &st, &rej, &firstErr)
 	}
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
@@ -453,6 +494,10 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on construct or save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, len(raw), firstErr)
+	}
+	if st.ATSCovered > 0 {
+		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
+			e.Provider, e.Board, e.Company, st.ATSCovered, len(raw))
 	}
 	rej.log(e)
 	// The board was reachable (Fetch succeeded), so it is healthy regardless of per-job
@@ -468,7 +513,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 // save loops share it so the normalize→filter→save→count step behaves identically; the
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
 // filter's candidate denominator.
-func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, st *Stats, rej *rejections, firstErr *error) {
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, st *Stats, rej *rejections, firstErr *error) {
 	dj, err := normalizeJob(e, j)
 	if err != nil {
 		st.Skipped++
@@ -482,6 +527,10 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		rej.reject(dj.Fields().Title)
 		return
 	}
+	if covered != nil && covered(dj.Fields().CompanySlug) {
+		st.ATSCovered++
+		return
+	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
 		st.Skipped++
 		if *firstErr == nil {
@@ -490,6 +539,97 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		return
 	}
 	st.Ingested++
+}
+
+// aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
+// Coverage port must be wired AND the provider must be a KindAggregator (an ATS or
+// single-company board is never gated, regardless of what Coverage would report — see
+// TestRunIgnoresCoverageForATSProvider). When it applies, it also returns the aggregator
+// provider list both callers need to pass to CoverageLookup. The classification MUST come
+// from sources.Taxonomy(), not r.Registry: a keyed adapter's credential lives only on the
+// crawl host, so a keyless host's classification would wrongly read it as non-aggregator
+// (see the aggregator-ats-coverage-skip design doc).
+func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators []string, applies bool) {
+	if r.Coverage == nil {
+		return nil, false
+	}
+	taxonomy := sources.Taxonomy()
+	if sources.ProviderKind(taxonomy, e.Provider) != sources.KindAggregator {
+		return nil, false
+	}
+	return sources.AggregatorProviders(taxonomy), true
+}
+
+// aggregatorCoverageForBatch resolves the ingest-time coverage gate for a buffered board's
+// whole raw fetch in one batched call, up front.
+func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.CompanyEntry, raw []sources.Job) aggregatorCoverage {
+	aggregators, applies := r.aggregatorGate(e)
+	if !applies {
+		return nil
+	}
+	slugs := distinctCompanySlugs(raw)
+	if len(slugs) == 0 {
+		return nil
+	}
+	covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators)
+	if err != nil {
+		log.Printf("ingest: %s board %q (%s): coverage lookup failed, gate disabled for this board: %v",
+			e.Provider, e.Board, e.Company, err)
+		return nil
+	}
+	return func(companySlug string) bool { return covered[companySlug] }
+}
+
+// distinctCompanySlugs returns the distinct company slugs raw's postings will normalize to,
+// EXACT (no folding -- a live Meili lookup cannot compute the reindex pass's hyphen-stripping
+// fold at query time; see CoverageLookup's doc comment), so the coverage lookup can be asked
+// about exactly the companies this board might skip. normalizeJob itself is not called here
+// (it can fail, and its result would be discarded) -- just normalize.Slug(j.Company), the same
+// derivation jobderive uses for job.Fields().CompanySlug, on the same input (j.Company, with no
+// fallback to the entry's company -- normalizeJob has none either), so the two agree.
+func distinctCompanySlugs(raw []sources.Job) []string {
+	seen := make(map[string]bool)
+	var slugs []string
+	for _, j := range raw {
+		slug := normalize.Slug(j.Company)
+		if slug == "" || seen[slug] {
+			continue
+		}
+		seen[slug] = true
+		slugs = append(slugs, slug)
+	}
+	return slugs
+}
+
+// streamAggregatorCoverage builds the ingest-time coverage gate for a streaming board: unlike
+// aggregatorCoverageForBatch it has no upfront batch to resolve, so it resolves one company at
+// a time as postings are emitted, memoizing each answer so a company with several postings in
+// one stream is only ever looked up once. The returned closure is only ever called from within
+// ingestStream's emit callback, which already serializes access under its own mutex, so the
+// cache needs no locking of its own. See aggregatorGate for the shared applicability check.
+func (r Runner) streamAggregatorCoverage(ctx context.Context, e sources.CompanyEntry) aggregatorCoverage {
+	aggregators, applies := r.aggregatorGate(e)
+	if !applies {
+		return nil
+	}
+	cache := make(map[string]bool)
+	return func(companySlug string) bool {
+		if companySlug == "" {
+			return false // nothing to ask Meili about -- mirrors distinctCompanySlugs's skip
+		}
+		if v, ok := cache[companySlug]; ok {
+			return v
+		}
+		result, err := r.Coverage.NonAggregatorCompanies(ctx, []string{companySlug}, aggregators)
+		if err != nil {
+			log.Printf("ingest: %s board %q (%s): coverage lookup failed for company %q, not gated: %v",
+				e.Provider, e.Board, e.Company, companySlug, err)
+			return false // not cached: a transient failure should not permanently un-gate the company
+		}
+		v := result[companySlug]
+		cache[companySlug] = v
+		return v
+	}
 }
 
 // save writes the posting, taking the form along when the adapter yielded one and the
@@ -598,6 +738,12 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		firstErr error
 		total    int
 	)
+	// The buffered path resolves a whole board's companies in one batched call because it
+	// already has every posting in hand; a streaming source (jobtech is the one aggregator on
+	// this path today) never does, so this resolves — and memoizes — one company at a time as
+	// postings arrive. cache is read/written only from within emit, which already serializes
+	// access via mu, so it needs no locking of its own.
+	covered := r.streamAggregatorCoverage(ctx, e)
 	emit := func(j sources.Job) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -621,7 +767,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		r.saveOne(ctx, e, j, &st, &rej, &firstErr)
+		r.saveOne(ctx, e, j, covered, &st, &rej, &firstErr)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
@@ -629,6 +775,10 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
 			e.Provider, e.Board, e.Company, st.Skipped, total, firstErr)
+	}
+	if st.ATSCovered > 0 {
+		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
+			e.Provider, e.Board, e.Company, st.ATSCovered, total)
 	}
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",

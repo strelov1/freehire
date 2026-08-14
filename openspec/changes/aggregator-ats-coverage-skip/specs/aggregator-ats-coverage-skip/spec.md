@@ -3,11 +3,11 @@
 ### Requirement: An aggregator posting is not saved when its company already has non-aggregator coverage
 
 The system SHALL, when ingesting a posting from a provider `sources.ProviderKind` classifies
-as `KindAggregator`, skip saving that posting when the company (matched by folded
-`company_slug`, i.e. `replace(company_slug, '-', '')`) already has at least one OPEN posting
-from a source that is NOT in `sources.AggregatorProviders(sources.Taxonomy())`. A skipped
-posting SHALL be counted in a dedicated `Stats.ATSCovered` counter, distinct from
-`Stats.Rejected`.
+as `KindAggregator`, skip saving that posting when the company (matched by EXACT
+`company_slug` string equality — no hyphen-folding; see the "exact match only" scenario
+below for why) already has at least one OPEN posting from a source that is NOT in
+`sources.AggregatorProviders(sources.Taxonomy())`. A skipped posting SHALL be counted in a
+dedicated `Stats.ATSCovered` counter, distinct from `Stats.Rejected`.
 
 #### Scenario: Aggregator posting for a covered company is skipped
 
@@ -21,11 +21,23 @@ posting SHALL be counted in a dedicated `Stats.ATSCovered` counter, distinct fro
   from any non-aggregator source
 - **THEN** the posting is saved exactly as it is today, and `Stats.Ingested` is incremented
 
-#### Scenario: Coverage folds company slugs the same way the reindex suppression pass does
+#### Scenario: A streaming aggregator source is gated the same as a buffered one
+
+- **WHEN** an aggregator provider that fetches via a streaming source (postings emitted one at
+  a time rather than as one fetched batch) emits a posting for a covered company
+- **THEN** the posting is not saved, and `Stats.ATSCovered` is incremented — the gate applies
+  regardless of whether the provider's adapter buffers or streams
+
+#### Scenario: Coverage matches EXACT company_slug only, unlike the reindex suppression pass
 
 - **WHEN** an aggregator posting's `company_slug` and an existing non-aggregator posting's
   `company_slug` differ only by hyphenation (e.g. `cfoinsights` vs `cfo-insights`)
-- **THEN** the company is treated as covered and the aggregator posting is skipped
+- **THEN** this gate does NOT treat the company as covered and does NOT skip the aggregator
+  posting — the live lookup compares `company_slug` values exactly as computed, with no
+  folding (a live Meili filter cannot compute the reindex pass's `replace(company_slug, '-',
+  '')` fold at query time, and folding the query value instead would break exact matches
+  too — see design.md's "Coverage definition"). `aggregator-ats-dedup`'s periodic reindex
+  pass remains the mechanism that catches this case, on its own schedule
 
 ### Requirement: The coverage gate only evaluates for aggregator-classified providers
 
@@ -60,7 +72,7 @@ passes the existing catalogue filter) when no coverage lookup is configured for 
 
 #### Scenario: Coverage lookup is not configured
 
-- **WHEN** the ingest `Runner` has no coverage lookup wired (e.g. `MEILI_URL` unset, or a test
-  fake that does not implement it)
+- **WHEN** the ingest `Runner` has no coverage lookup wired (e.g. `MEILI_MASTER_KEY` unset, or
+  a test fake that does not implement it)
 - **THEN** aggregator postings are saved exactly as they were before this change, and no error
   is raised

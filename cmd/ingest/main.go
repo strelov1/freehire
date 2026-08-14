@@ -26,9 +26,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/enrich"
 	"github.com/strelov1/freehire/internal/pipeline"
+	"github.com/strelov1/freehire/internal/search"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/worker"
 )
@@ -41,6 +43,19 @@ const staleAfter = 48 * time.Hour
 
 func main() {
 	worker.Main(run)
+}
+
+// coverageLookup wires the aggregator ingest-time coverage gate's Meili-backed port when
+// search is configured, and nil otherwise — the same "MeiliKey empty ⇒ disabled" convention
+// cmd/server's searchClient wiring already uses. A nil port makes the gate a no-op (write
+// everything, exactly as before this change), never a hard failure: an ingest run must not
+// fail over search being unreachable/unconfigured, since it never needed Meili before. No
+// embed options are wired — the coverage lookup is a plain facet query, not embedding.
+func coverageLookup(cfg config.Settings) pipeline.CoverageLookup {
+	if cfg.MeiliKey == "" {
+		return nil
+	}
+	return search.NewClient(cfg.MeiliURL, cfg.MeiliKey)
 }
 
 func run() int {
@@ -110,7 +125,7 @@ func run() int {
 		log.Printf("ingest: shard %d/%d — crawling %d of %d boards in %s", i, n, len(sourceCfg.Sources), full, path)
 	}
 
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
@@ -127,6 +142,7 @@ func run() int {
 		Registry:    registry,
 		Store:       newDBStore(pool, enrich.Version, crawled, tally),
 		BoardHealth: newBoardHealth(pool),
+		Coverage:    coverageLookup(cfg),
 	}
 
 	runStats, err := runner.Run(ctx, sourceCfg.Sources)
