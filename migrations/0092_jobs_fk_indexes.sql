@@ -15,6 +15,14 @@
 -- Same nullability split as 0043: NOT NULL/CASCADE columns get a plain index; nullable
 -- SET NULL columns get a partial index on IS NOT NULL, which is exactly the set an RI
 -- query can match and keeps the index near-empty on the columns that are barely populated.
+-- A partial index cannot back a foreign-key CONSTRAINT (it isn't the referenced side of
+-- one here — these all sit on the referencing side), and general Postgres guidance is
+-- mixed on whether the planner always picks a partial index for an RI trigger's scan. This
+-- codebase already has the answer for this exact shape: 0043 shipped WHERE ... IS NOT NULL
+-- indexes to fix a real production DELETE-FROM-users timeout, and that fix held — if the
+-- planner were not using them, the timeout would have persisted. Mirrored here rather than
+-- switched to full indexes, which would double their size for coverage the IS NOT NULL
+-- predicate already logically guarantees (job_id = $1 for any real $1 implies NOT NULL).
 --
 -- On a fresh initdb volume these plain CREATE INDEX statements are fine; on the live
 -- prod DB they must be applied manually as CREATE INDEX CONCURRENTLY (this migration
