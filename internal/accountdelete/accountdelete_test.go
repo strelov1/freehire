@@ -237,3 +237,29 @@ func TestDelete_AppleGrantsFailureBlocksDeletion(t *testing.T) {
 		t.Error("rows were deleted despite the FK still being blocked")
 	}
 }
+
+// The blob objects are irrecoverable once deleted; a step that can still hard-fail
+// (Apple grant release) must run before them, so a failure there leaves the objects —
+// and the account — completely untouched rather than stranding dangling object keys
+// on a row that survives because DeleteUser was never reached.
+func TestDelete_AppleGrantsFailureLeavesObjectsUntouched(t *testing.T) {
+	var calls []string
+	repo := &fakeRepo{keys: []string{"resumes/7"}, calls: &calls}
+	blobs := &fakeBlobs{calls: &calls}
+	svc := New(repo, blobs, nil).WithAppleGrants(func(context.Context, int64) error {
+		return errors.New("still has an active apple grant")
+	})
+
+	if err := svc.Delete(context.Background(), 7); err == nil {
+		t.Fatal("Delete succeeded despite a failed apple grant release")
+	}
+	if len(calls) != 0 {
+		t.Errorf("calls = %v, want no object-storage or row calls before the apple grant release fails", calls)
+	}
+	if len(blobs.deleted) != 0 {
+		t.Errorf("deleted objects = %v, want none deleted", blobs.deleted)
+	}
+	if repo.deleteSeen {
+		t.Error("rows were deleted despite the FK still being blocked")
+	}
+}

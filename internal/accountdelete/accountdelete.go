@@ -73,13 +73,27 @@ func New(repo Repository, blobs blobstore.Store, revoke RevokeFunc) *Service {
 
 // Delete erases the account and everything it owns, permanently.
 //
-// The order is deliberate. Object keys are collected first, because the mail and
-// referral-proof keys are only knowable through rows that are about to disappear.
-// Objects are then erased BEFORE the rows: if that fails, nothing has been deleted
-// and the member can retry, whereas the reverse order would strand their CV and raw
-// mail in the bucket with no key left to find them by. Object deletes are idempotent,
-// so a retry after a partial run is safe.
+// The order is deliberate: every step that can still hard-fail runs BEFORE the one
+// irrecoverable step, object deletion. Apple grants go first because a failure there
+// must abort deletion (the row is ON DELETE RESTRICT'd by apple_grants) — and it must
+// abort before anything unrecoverable has happened, not after. Object keys are
+// collected next, because the mail and referral-proof keys are only knowable through
+// rows that are about to disappear. Objects are then erased BEFORE the rows: if that
+// fails, nothing has been deleted and the member can retry, whereas the reverse order
+// would strand their CV and raw mail in the bucket with no key left to find them by.
+// Object deletes are idempotent, so a retry after a partial run is safe.
 func (s *Service) Delete(ctx context.Context, userID int64) error {
+	// Apple grants block the row itself (ON DELETE RESTRICT), so releasing them must
+	// happen before DeleteUser regardless — and, unlike the best-effort steps below, a
+	// failure here stops deletion instead of surfacing as a raw FK violation out of
+	// DeleteUser. It runs first of all so that a hard failure here leaves the account
+	// (and its objects) completely untouched, rather than aborting after the objects —
+	// which cannot be un-deleted — are already gone.
+	if s.appleGrants != nil {
+		if err := s.appleGrants(ctx, userID); err != nil {
+			return fmt.Errorf("accountdelete: release apple grants: %w", err)
+		}
+	}
 	if s.blobs != nil {
 		keys, err := s.repo.BlobKeys(ctx, userID)
 		if err != nil {
@@ -109,14 +123,6 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 	if s.blockKey != nil {
 		if err := s.blockKey(ctx, userID); err != nil {
 			log.Printf("accountdelete: block gateway credential for user %d: %v", userID, err)
-		}
-	}
-	// Apple grants block the row itself (ON DELETE RESTRICT), so releasing them
-	// happens last and, unlike the best-effort steps above, a failure here stops
-	// deletion instead of surfacing as a raw FK violation out of DeleteUser.
-	if s.appleGrants != nil {
-		if err := s.appleGrants(ctx, userID); err != nil {
-			return fmt.Errorf("accountdelete: release apple grants: %w", err)
 		}
 	}
 	return s.repo.DeleteUser(ctx, userID)
