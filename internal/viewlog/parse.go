@@ -1,9 +1,10 @@
 // Package viewlog aggregates nginx access-log lines into per-job view counts. It
 // runs off the request path: a scheduled worker (cmd/rollup-views) feeds it a
-// day's log and it returns per-job unique views, deduplicated by hashed IP+UA so
-// a visitor counts at most once per job per day. Two request shapes are counted —
-// the SSR detail page GET /jobs/<slug> (bot-filtered) and the API read
-// GET /api/v1/jobs/<slug> (not bot-filtered) — every other line is ignored.
+// day's log and it returns per-job unique views, deduplicated by the raw IP+UA
+// tuple (NUL-joined, no hashing) so a visitor counts at most once per job per
+// day. Two request shapes are counted — the SSR detail page GET /jobs/<slug>
+// (bot-filtered) and the API read GET /api/v1/jobs/<slug> (not bot-filtered) —
+// every other line is ignored.
 package viewlog
 
 import (
