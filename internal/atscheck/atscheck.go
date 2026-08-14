@@ -101,12 +101,15 @@ const (
 )
 
 var (
-	emailRE    = regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`)
-	phoneRE    = regexp.MustCompile(`(?:\+\d[\d\s().\-]{7,}\d)|(?:\(\d{3}\)\s?\d{3}[\s.\-]?\d{4})|(?:\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b)`)
-	dateRE     = regexp.MustCompile(`\b(?:19|20)\d{2}\b|\b\d{1,2}[/.\-]\d{4}\b`)
-	bulletRE   = regexp.MustCompile(`(?m)^[ \t]*[-*•‣●·][ \t]+\S`)
-	quantRE    = regexp.MustCompile(`\d+(?:\.\d+)?\s?%|\$\s?\d|\b\d+x\b`)
-	linkedinRE = regexp.MustCompile(`(?i)linkedin\.com/\S+`)
+	emailRE  = regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`)
+	phoneRE  = regexp.MustCompile(`(?:\+\d[\d\s().\-]{7,}\d)|(?:\(\d{3}\)\s?\d{3}[\s.\-]?\d{4})|(?:\b\d{3}[\s.\-]\d{3}[\s.\-]\d{4}\b)`)
+	dateRE   = regexp.MustCompile(`\b(?:19|20)\d{2}\b|\b\d{1,2}[/.\-]\d{4}\b`)
+	bulletRE = regexp.MustCompile(`(?m)^[ \t]*[-*•‣●·][ \t]+\S`)
+	quantRE  = regexp.MustCompile(`\d+(?:\.\d+)?\s?%|\$\s?\d|\b\d+x\b`)
+	// The `(?:^|[^A-Za-z0-9])` boundary keeps a look-alike host like "evillinkedin.com/x"
+	// from counting as a linked profile — without it the vendor domain matches wherever
+	// it appears as a substring.
+	linkedinRE = regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9])linkedin\.com/\S+`)
 	// dateRangeRE matches a role's date range ("2021 - 2026", "Jan 2023 – Present",
 	// "Mar 2020 - Dec 2022") and captures the start year, which is all roleBlocks needs
 	// to order roles and count their bullets. The end side tolerates a leading month

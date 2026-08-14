@@ -76,6 +76,15 @@ func TestDetect(t *testing.T) {
 			html:     `<a href="https://acme.wd1.myworkdayjobs.com/x/y"></a><a href="https://boards.greenhouse.io/acme"></a>`,
 			provider: "greenhouse", slug: "acme", ok: true,
 		},
+		{
+			// "notjobs.lever.co/" contains "jobs.lever.co/" as a plain substring, so an
+			// unanchored regex would misdetect this look-alike host as the real Lever
+			// domain. The matcher regexes anchor on a left boundary specifically to
+			// reject this.
+			name: "look-alike lever host is not matched as lever",
+			html: `<a href="https://evil-notjobs.lever.co/acme">Careers</a>`,
+			ok:   false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

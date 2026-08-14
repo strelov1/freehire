@@ -283,6 +283,20 @@ func TestScore_LinkedInMissing(t *testing.T) {
 	}
 }
 
+func TestScore_LinkedInLookAlikeDomainDoesNotCount(t *testing.T) {
+	// "evillinkedin.com/x" contains "linkedin.com/x" as a plain substring; without a
+	// left boundary the regex would credit this as a real LinkedIn profile link.
+	cv := "Jane Roe\njane@example.com +1 415 555 0134\nhttps://evillinkedin.com/x\n\nExperience\n- Built things"
+	r := Score(cv, nil, nil)
+	it, ok := formatItem(t, r, "linkedin")
+	if !ok {
+		t.Fatal("no linkedin item")
+	}
+	if it.Status == StatusPass {
+		t.Errorf("linkedin = pass, want warn for a look-alike domain")
+	}
+}
+
 func TestScore_BulletsPerRole_WithinRange(t *testing.T) {
 	r := Score(cleanCV, cleanSkills, nil)
 	it, ok := contentItem(t, r, "3 to 5 bullet")

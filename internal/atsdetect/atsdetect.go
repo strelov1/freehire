@@ -14,14 +14,20 @@ import (
 // the embed script (slug in the `for=` query param) and the direct board URL — and
 // the embed is listed first so a `/embed/...` URL never falls through to the direct
 // matcher (which would capture the path word "embed").
+//
+// Every pattern opens with a `(?:^|[^A-Za-z0-9])` boundary: without it, a host is
+// matched wherever it appears as a substring, so a look-alike label like
+// "evil-boards.greenhouse.io" or "notjobs.lever.co" would satisfy the same regex as
+// the real vendor host. The boundary is non-capturing, so it does not shift the slug
+// capture group's index.
 var matchers = []struct {
 	provider string
 	re       *regexp.Regexp
 }{
-	{"greenhouse", regexp.MustCompile(`(?:boards|job-boards)\.greenhouse\.io/embed/job_board(?:/js)?\?for=([a-z0-9][a-z0-9-]*)`)},
-	{"greenhouse", regexp.MustCompile(`(?:boards|job-boards)\.greenhouse\.io/([a-z0-9][a-z0-9-]*)`)},
-	{"lever", regexp.MustCompile(`jobs\.lever\.co/([a-z0-9][a-z0-9-]*)`)},
-	{"ashby", regexp.MustCompile(`jobs\.ashbyhq\.com/([a-z0-9][a-z0-9-]*)`)},
+	{"greenhouse", regexp.MustCompile(`(?:^|[^A-Za-z0-9])(?:boards|job-boards)\.greenhouse\.io/embed/job_board(?:/js)?\?for=([a-z0-9][a-z0-9-]*)`)},
+	{"greenhouse", regexp.MustCompile(`(?:^|[^A-Za-z0-9])(?:boards|job-boards)\.greenhouse\.io/([a-z0-9][a-z0-9-]*)`)},
+	{"lever", regexp.MustCompile(`(?:^|[^A-Za-z0-9])jobs\.lever\.co/([a-z0-9][a-z0-9-]*)`)},
+	{"ashby", regexp.MustCompile(`(?:^|[^A-Za-z0-9])jobs\.ashbyhq\.com/([a-z0-9][a-z0-9-]*)`)},
 }
 
 // reserved are path words a direct-URL matcher can capture that are not real board

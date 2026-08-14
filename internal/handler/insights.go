@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,7 +119,7 @@ func parseMinOpen(s string) (int32, error) {
 		return companiesDefaultMinOpen, nil
 	}
 	n, err := strconv.Atoi(s)
-	if err != nil || n < 0 {
+	if err != nil || n < 0 || n > math.MaxInt32 {
 		return 0, fmt.Errorf("invalid min_open %q (want a non-negative integer)", s)
 	}
 	return int32(n), nil

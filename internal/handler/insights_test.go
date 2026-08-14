@@ -53,6 +53,33 @@ func TestParseInsightsLimit(t *testing.T) {
 	}
 }
 
+func TestParseMinOpen(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    int32
+		wantErr bool
+	}{
+		{"", companiesDefaultMinOpen, false},
+		{"0", 0, false},
+		{"5", 5, false},
+		{"-1", 0, true},
+		{"abc", 0, true},
+		// A value beyond int32 must be rejected, not silently wrapped by the int32
+		// narrowing conversion (it would otherwise pass the n < 0 check as a positive
+		// int and then overflow into a negative int32).
+		{"2147483648", 0, true},
+	}
+	for _, c := range cases {
+		got, err := parseMinOpen(c.in)
+		if (err != nil) != c.wantErr {
+			t.Errorf("parseMinOpen(%q) err = %v, wantErr %v", c.in, err, c.wantErr)
+		}
+		if !c.wantErr && got != c.want {
+			t.Errorf("parseMinOpen(%q) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
 func TestParseCountry(t *testing.T) {
 	cases := []struct {
 		in      string

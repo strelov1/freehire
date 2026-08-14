@@ -17,3 +17,15 @@ func TestNextFlightTextRows(t *testing.T) {
 		t.Errorf("rows[1a] = %q, want %q (byte-length slice keeps embedded commas)", got, want)
 	}
 }
+
+// TestNextFlightTextRows_OversizedLength guards against a malformed or malicious
+// declared length: a row claiming far more bytes than the flight actually has must
+// be clamped to what remains, not overflow int on a 32-bit build or panic on a
+// negative slice range.
+func TestNextFlightTextRows_OversizedLength(t *testing.T) {
+	flight := "0:something\n15:Tffffffff,short"
+	rows := nextFlightTextRows(flight)
+	if got, want := rows["15"], "short"; got != want {
+		t.Errorf("rows[15] = %q, want %q (clamped to remaining bytes)", got, want)
+	}
+}
