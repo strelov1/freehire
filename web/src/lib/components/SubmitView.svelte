@@ -139,6 +139,10 @@
       if (employmentType === '' && result.employment_type) employmentType = result.employment_type;
       if (seniority === '' && result.seniority) seniority = result.seniority;
       if (source.trim() === '' && result.source) source = result.source;
+      // Skills is a list, not a scalar: merge in whatever the platform stated
+      // structurally rather than an all-or-nothing overwrite, same dedup as typing
+      // one in by hand.
+      for (const skill of result.skills ?? []) skills = addToken(skills, skill);
       // The source page's description arrives as sanitized HTML, not the markdown this
       // editor wants, so it is converted before it lands.
       if (descriptionMarkdown.trim() === '' && result.description) {

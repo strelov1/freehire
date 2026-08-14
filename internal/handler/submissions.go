@@ -203,18 +203,21 @@ type prefillRequest struct {
 }
 
 // prefillResponse is what freehire could parse from the URL, for the submitter to review
-// and edit before submitting — never persisted, never awarded a credit. A field freehire's
-// own dictionaries derive better than any source page states it (skills, cities) is not
-// included.
+// and edit before submitting — never persisted, never awarded a credit. Skills is
+// included only when the platform states it in a STRUCTURED field (sources.Job.Skills;
+// most adapters leave it empty, since freehire's own skilltag dictionary over the
+// description usually does better than a source page's own tagging). Cities has no
+// structured source equivalent and is never included.
 type prefillResponse struct {
-	Title          string `json:"title,omitempty"`
-	Company        string `json:"company,omitempty"`
-	Location       string `json:"location,omitempty"`
-	Description    string `json:"description,omitempty"`
-	WorkMode       string `json:"work_mode,omitempty"`
-	EmploymentType string `json:"employment_type,omitempty"`
-	Seniority      string `json:"seniority,omitempty"`
-	Source         string `json:"source,omitempty"`
+	Title          string   `json:"title,omitempty"`
+	Company        string   `json:"company,omitempty"`
+	Location       string   `json:"location,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	WorkMode       string   `json:"work_mode,omitempty"`
+	EmploymentType string   `json:"employment_type,omitempty"`
+	Seniority      string   `json:"seniority,omitempty"`
+	Skills         []string `json:"skills,omitempty"`
+	Source         string   `json:"source,omitempty"`
 }
 
 // PrefillSubmission parses a job URL through the same destination-recognition registry
@@ -244,6 +247,7 @@ func (h *submissionHandlers) PrefillSubmission(c *fiber.Ctx) error {
 		WorkMode:       resolved.Job.WorkMode,
 		EmploymentType: resolved.Job.EmploymentType,
 		Seniority:      resolved.Job.Seniority,
+		Skills:         resolved.Job.Skills,
 		Source:         resolved.Source,
 	}})
 }

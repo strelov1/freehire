@@ -418,6 +418,7 @@ export interface PrefillResult {
   work_mode?: string;
   employment_type?: string;
   seniority?: string;
+  skills?: string[];
   source?: string;
 }
 
