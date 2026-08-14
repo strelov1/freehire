@@ -66,6 +66,11 @@
   $effect(() => {
     const el = strip;
     if (!el) return;
+    // Re-run whenever `tabs` changes, not just on mount: the buttons are DOM
+    // children, which Svelte's dependency tracking can't see, so `tabs` has to be
+    // read explicitly to re-observe the (by then re-rendered) button set — otherwise
+    // a tab added after mount is never watched and the overflow mask can't react to it.
+    void tabs;
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);

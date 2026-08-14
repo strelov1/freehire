@@ -90,6 +90,43 @@ describe('TabStrip', () => {
 
     expect(getByRole('tablist').getAttribute('aria-label')).toBe('Profile sections');
   });
+
+  // The regression: the ResizeObserver effect only tracked `strip`, so a tab added
+  // after mount was never observed and the overflow fade mask could never react to it.
+  it('re-observes a tab added after mount', async () => {
+    const observed: Element[] = [];
+    const originalRO = globalThis.ResizeObserver;
+    class SpyResizeObserver {
+      observe(el: Element) {
+        observed.push(el);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = SpyResizeObserver as unknown as typeof ResizeObserver;
+
+    try {
+      const onSelect = vi.fn();
+      const { getAllByRole, rerender } = render(TabStrip, {
+        tabs: TABS,
+        active: 'one',
+        onSelect,
+        label: 'Demo sections',
+        panelId: 'demo-panel',
+      });
+      // The strip element itself plus one entry per tab button.
+      expect(observed.length).toBe(TABS.length + 1);
+      observed.length = 0;
+
+      const grown = [...TABS, { id: 'four', label: 'Four' }];
+      await rerender({ tabs: grown, active: 'one', onSelect, label: 'Demo sections', panelId: 'demo-panel' });
+
+      const newTab = must(getAllByRole('tab')[3]);
+      expect(observed).toContain(newTab);
+    } finally {
+      globalThis.ResizeObserver = originalRO;
+    }
+  });
 });
 
 async function fireArrow(el: HTMLElement, key: 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End') {
