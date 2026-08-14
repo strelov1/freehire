@@ -224,6 +224,7 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 	}
 
 	processed := make([]int64, 0, len(due))
+	var pruneErrs []error
 	for _, t := range due {
 		r, ok := receipts[t.TicketID]
 		if !ok {
@@ -236,14 +237,26 @@ func (n *ExpoNotifier) CheckReceipts(ctx context.Context) error {
 		}
 		if r.Details.Error == deviceNotRegistered {
 			if err := n.pruner.PruneDeadPushToken(ctx, t.Token); err != nil {
-				return fmt.Errorf("pushnotify: prune dead token: %w", err)
+				// Keep going rather than returning here: an earlier ticket in
+				// this same batch may already be fully resolved, and bailing
+				// out now would discard that work by never reaching the
+				// DeletePushTickets call below. This ticket itself is left
+				// out of processed, so it stays queued and the prune is
+				// retried on the next scheduled pass.
+				pruneErrs = append(pruneErrs, fmt.Errorf("prune dead token: %w", err))
+				continue
 			}
 		}
 		processed = append(processed, t.ID)
 	}
 
-	if err := n.tickets.DeletePushTickets(ctx, processed); err != nil {
-		return fmt.Errorf("pushnotify: delete processed tickets: %w", err)
+	if len(processed) > 0 {
+		if err := n.tickets.DeletePushTickets(ctx, processed); err != nil {
+			return fmt.Errorf("pushnotify: delete processed tickets: %w", err)
+		}
+	}
+	if err := errors.Join(pruneErrs...); err != nil {
+		return fmt.Errorf("pushnotify: %w", err)
 	}
 	return nil
 }

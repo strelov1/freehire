@@ -11,11 +11,17 @@ import (
 
 // fakePruner records which tokens were pruned, so tests can assert the
 // notifier calls it exactly when Expo reports a token permanently dead.
+// errFor lets a test make a specific token's prune call fail, to exercise
+// CheckReceipts' handling of a partial-batch prune failure.
 type fakePruner struct {
 	pruned []string
+	errFor map[string]error
 }
 
 func (p *fakePruner) PruneDeadPushToken(ctx context.Context, token string) error {
+	if err := p.errFor[token]; err != nil {
+		return err
+	}
 	p.pruned = append(p.pruned, token)
 	return nil
 }
@@ -367,5 +373,35 @@ func TestExpoNotifier_CheckReceipts_TicketAbsentFromResponseIsLeftQueued(t *test
 	}
 	if len(store.deleted) != 1 || store.deleted[0] != 1 {
 		t.Errorf("deleted ticket ids = %v, want [1] — only the answered ticket", store.deleted)
+	}
+}
+
+// A PruneDeadPushToken failure partway through a batch must not discard the
+// cleanup already done for tickets processed earlier in the same run: those
+// still get deleted from the outbox, and only the ticket whose prune call
+// failed stays queued for retry on the next scheduled pass.
+func TestExpoNotifier_CheckReceipts_PartialPruneFailureKeepsEarlierProgress(t *testing.T) {
+	srv := stubExpoReceipts(t, map[string]map[string]any{
+		"ticket-ok-first":  {"status": "error", "message": "not delivered", "details": map[string]any{"error": "DeviceNotRegistered"}},
+		"ticket-prune-err": {"status": "error", "message": "not delivered", "details": map[string]any{"error": "DeviceNotRegistered"}},
+	})
+	pruneErr := errors.New("transient db error")
+	pruner := &fakePruner{errFor: map[string]error{"ExponentPushToken[prune-err]": pruneErr}}
+	store := &fakeTicketStore{due: []Ticket{
+		{ID: 1, Token: "ExponentPushToken[ok-first]", TicketID: "ticket-ok-first"},
+		{ID: 2, Token: "ExponentPushToken[prune-err]", TicketID: "ticket-prune-err"},
+	}}
+	n := newTestNotifier(pruner, &fakeQueuer{}, store)
+	n.receiptsURL = srv.URL
+
+	err := n.CheckReceipts(context.Background())
+	if err == nil {
+		t.Fatal("CheckReceipts: want an error surfaced from the failed prune")
+	}
+	if len(pruner.pruned) != 1 || pruner.pruned[0] != "ExponentPushToken[ok-first]" {
+		t.Errorf("pruned = %v, want [ExponentPushToken[ok-first]]", pruner.pruned)
+	}
+	if len(store.deleted) != 1 || store.deleted[0] != 1 {
+		t.Errorf("deleted ticket ids = %v, want [1] — the ticket whose prune failed stays queued for retry", store.deleted)
 	}
 }
