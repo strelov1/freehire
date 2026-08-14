@@ -23,17 +23,37 @@ type Extraction struct {
 	Jobs []ExtractedJob `json:"jobs"`
 }
 
-// Validate rejects a malformed extraction before anything is persisted: every
-// job needs a title and a description. The LLM is not trusted to be correct —
-// an invalid payload is retried and then dead-lettered by the runner.
-func (e Extraction) Validate() error {
+// Validate drops any malformed job — missing title or description — from the
+// extraction and keeps the rest, mutating e.Jobs in place. The LLM is not trusted
+// to be correct, but a KindAuthored post routinely bundles several roles in one
+// message, and Store.Complete already tolerates skipping a single bad draft; an
+// all-or-nothing error here would dead-letter the whole post's well-formed jobs
+// along with the one malformed one. It returns an error only when every job in
+// the extraction was malformed, since a post that named zero jobs to begin with
+// is itself the normal "not a vacancy" outcome.
+func (e *Extraction) Validate() error {
+	if len(e.Jobs) == 0 {
+		return nil
+	}
+	kept := e.Jobs[:0]
+	var firstErr error
 	for i, j := range e.Jobs {
-		if strings.TrimSpace(j.Title) == "" {
-			return fmt.Errorf("telegram: extracted job %d has empty title", i)
+		switch {
+		case strings.TrimSpace(j.Title) == "":
+			if firstErr == nil {
+				firstErr = fmt.Errorf("telegram: extracted job %d has empty title", i)
+			}
+		case strings.TrimSpace(j.Description) == "":
+			if firstErr == nil {
+				firstErr = fmt.Errorf("telegram: extracted job %d (%s) has empty description", i, j.Title)
+			}
+		default:
+			kept = append(kept, j)
 		}
-		if strings.TrimSpace(j.Description) == "" {
-			return fmt.Errorf("telegram: extracted job %d (%s) has empty description", i, j.Title)
-		}
+	}
+	e.Jobs = kept
+	if len(kept) == 0 {
+		return firstErr
 	}
 	return nil
 }
