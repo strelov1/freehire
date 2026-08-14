@@ -89,9 +89,13 @@ func Run(ctx context.Context, tools Tools, planner Planner, profile Profile) (Re
 	if err != nil {
 		return Report{}, err
 	}
+	// driveWidgets returns whatever it drove before a failure, not just on success:
+	// fillSimple's writes above already landed in the browser, and dropping them
+	// from the report on a later widget's failure would tell the user nothing
+	// succeeded when part of the form is, in fact, already filled.
 	driven, err := driveWidgets(ctx, tools, planner, profile, widgets)
 	if err != nil {
-		return Report{}, err
+		return report(fields, outcomes, driven), err
 	}
 	return report(fields, outcomes, driven), nil
 }
@@ -168,12 +172,17 @@ const (
 // it offers, choose, commit, confirm — and reports what became of each. A step
 // that does not do what it should stops that widget rather than pressing on:
 // nothing is written into a widget whose state is not understood.
+//
+// On a widget's failure it returns what it drove so far alongside the error,
+// rather than discarding it: the earlier widgets in questions already committed
+// their choices in the browser, and the caller (Run) reports that real progress
+// instead of losing it behind the error.
 func driveWidgets(ctx context.Context, tools Tools, planner Planner, profile Profile, questions []Field) (map[string]string, error) {
 	driven := make(map[string]string, len(questions))
 	for _, question := range questions {
 		status, err := driveWidget(ctx, tools, planner, profile, question)
 		if err != nil {
-			return nil, err
+			return driven, err
 		}
 		driven[question.Label] = status
 	}

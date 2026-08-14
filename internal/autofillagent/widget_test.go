@@ -17,6 +17,9 @@ type fakeWidgets struct {
 	offers  map[string][]string // label -> the options the widget reveals once open
 	opens   map[string]string   // label -> combobox.open status, default "opened"
 	commits map[string]string   // label -> what the widget commits, default the selected option
+	// errs fails the named "tool label" call outright (a transport-level error, not
+	// a status reply), so a test can exercise a widget that fails partway through.
+	errs map[string]error
 
 	calls     []string
 	selected  map[string]string
@@ -26,6 +29,10 @@ type fakeWidgets struct {
 func (f *fakeWidgets) Call(_ context.Context, tool string, args any) (json.RawMessage, error) {
 	label, value := readArgs(args)
 	f.calls = append(f.calls, tool+" "+label)
+
+	if err, ok := f.errs[tool+" "+label]; ok {
+		return nil, err
+	}
 
 	switch tool {
 	case "read_form":
@@ -340,5 +347,43 @@ func TestRunNamesAGroupedQuestionOnceInTheReport(t *testing.T) {
 	}
 	if len(rep.Unmapped) != 1 || rep.Unmapped[0] != "Which countries do you anticipate working in?" {
 		t.Fatalf("unmapped = %v, want the question named once", rep.Unmapped)
+	}
+}
+
+// Run must not discard a widget loop's earlier successes when a later widget's
+// tool call fails outright: fillSimple's write and the first widget's commit
+// already happened for real in the browser, and the caller needs to know that
+// even though the run as a whole reports an error.
+func TestRunReturnsThePartialReportWhenAWidgetFails(t *testing.T) {
+	tools := &fakeWidgets{
+		fields: []autofillagent.Field{
+			{Label: "Email", Type: "email"},
+			{Label: "Country", Type: "text", Combo: true},
+			{Label: "Degree", Type: "text", Combo: true},
+		},
+		offers: map[string][]string{"Country": {"Germany"}, "Degree": {"BSc"}},
+		errs:   map[string]error{"combobox.open Degree": errors.New("browser-tool socket hiccup")},
+	}
+	planner := &widgetPlanner{
+		fills: []autofillagent.Fill{
+			{Label: "Email", Value: profile()["email"]},
+			{Label: "Country"},
+			{Label: "Degree"},
+		},
+		choices: map[string]string{"Country": "Germany", "Degree": "BSc"},
+	}
+
+	rep, err := autofillagent.Run(context.Background(), tools, planner, profile())
+	if err == nil {
+		t.Fatal("Run succeeded despite the widget failure")
+	}
+	if !contains(rep.Filled, "Email") {
+		t.Errorf("Filled = %v, want the already-written Email field kept despite the later failure", rep.Filled)
+	}
+	if !contains(rep.Filled, "Country") {
+		t.Errorf("Filled = %v, want the widget driven before the failure kept", rep.Filled)
+	}
+	if contains(rep.Filled, "Degree") {
+		t.Errorf("Filled = %v, the widget whose tool call failed must not be reported as filled", rep.Filled)
 	}
 }
