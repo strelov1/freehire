@@ -336,30 +336,39 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 
 const insertJobSemanticChunks = `-- name: InsertJobSemanticChunks :exec
 INSERT INTO job_semantic_chunks (job_id, chunk_index, embedding)
-SELECT $1::bigint, idx.chunk_index, emb.embedding::vector(768)
-FROM unnest($2::smallint[]) WITH ORDINALITY AS idx(chunk_index, n)
+SELECT ids.job_id, idx.chunk_index, emb.embedding::vector(768)
+FROM unnest($1::bigint[]) WITH ORDINALITY AS ids(job_id, n)
+JOIN unnest($2::smallint[]) WITH ORDINALITY AS idx(chunk_index, n) USING (n)
 JOIN unnest($3::text[]) WITH ORDINALITY AS emb(embedding, n) USING (n)
 `
 
 type InsertJobSemanticChunksParams struct {
-	JobID        int64    `json:"job_id"`
+	JobIds       []int64  `json:"job_ids"`
 	ChunkIndices []int16  `json:"chunk_indices"`
 	Embeddings   []string `json:"embeddings"`
 }
 
-// Batch-insert one job's freshly-embedded chunks. chunk_indices and embeddings are
-// positionally paired parallel arrays (element i of one belongs with element i of the
-// other) — unnested separately and rejoined WITH ORDINALITY because sqlc cannot infer
-// the types of a multi-argument unnest over query parameters (same pattern as
-// pruning.sql's bulk job delete/archive). embeddings travels as vector literal TEXT
-// (e.g. "[0.1,0.2,...]"), not a native vector(768)[] array: pgx's driver.Valuer/
-// sql.Scanner fallback for pgvector.Vector (this repo registers no custom OID codec
-// for it) only covers a single scalar column value, not an array of them, so each
-// element casts to vector(768) individually in the SELECT instead. Always run
-// immediately after DeleteJobSemanticChunks in the same transaction as the embed
-// stamp — see that query's comment.
+// Batch-insert EVERY job's freshly-embedded chunks in the wave in one round trip, not
+// one call per job: job_ids/chunk_indices/embeddings are positionally paired parallel
+// arrays FLATTENED across the whole batch (one element per chunk, not per job — a job
+// contributing 3 chunks repeats its id 3 times at the matching offsets) — unnested
+// separately and rejoined WITH ORDINALITY because sqlc cannot infer the types of a
+// multi-argument unnest over query parameters (same pattern as pruning.sql's bulk job
+// delete/archive). embeddings travels as vector literal TEXT (e.g. "[0.1,0.2,...]"),
+// not a native vector(768)[] array: pgx's driver.Valuer/sql.Scanner fallback for
+// pgvector.Vector (this repo registers no custom OID codec for it) only covers a
+// single scalar column value, not an array of them, so each element casts to
+// vector(768) individually in the SELECT instead. Always run immediately after
+// DeleteJobSemanticChunks in the same transaction as the embed stamp — see that
+// query's comment.
+//
+// One call for the whole wave, not one per job, for the same reason
+// DeleteJobSemanticChunks/StampSemanticEmbeddedBatch already are: a per-job round trip
+// here was exactly what made a prior HF GPU bulk-embed Postgres-bound instead of
+// GPU-bound (~19 docs/s against a GPU embedding a wave in ~7s) — see
+// hire-semantic-vectors-in-pg's "THE REAL BOTTLENECK IS POSTGRES, NOT THE GPU" note.
 func (q *Queries) InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error {
-	_, err := q.db.Exec(ctx, insertJobSemanticChunks, arg.JobID, arg.ChunkIndices, arg.Embeddings)
+	_, err := q.db.Exec(ctx, insertJobSemanticChunks, arg.JobIds, arg.ChunkIndices, arg.Embeddings)
 	return err
 }
 

@@ -1434,17 +1434,25 @@ type Querier interface {
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
-	// Batch-insert one job's freshly-embedded chunks. chunk_indices and embeddings are
-	// positionally paired parallel arrays (element i of one belongs with element i of the
-	// other) — unnested separately and rejoined WITH ORDINALITY because sqlc cannot infer
-	// the types of a multi-argument unnest over query parameters (same pattern as
-	// pruning.sql's bulk job delete/archive). embeddings travels as vector literal TEXT
-	// (e.g. "[0.1,0.2,...]"), not a native vector(768)[] array: pgx's driver.Valuer/
-	// sql.Scanner fallback for pgvector.Vector (this repo registers no custom OID codec
-	// for it) only covers a single scalar column value, not an array of them, so each
-	// element casts to vector(768) individually in the SELECT instead. Always run
-	// immediately after DeleteJobSemanticChunks in the same transaction as the embed
-	// stamp — see that query's comment.
+	// Batch-insert EVERY job's freshly-embedded chunks in the wave in one round trip, not
+	// one call per job: job_ids/chunk_indices/embeddings are positionally paired parallel
+	// arrays FLATTENED across the whole batch (one element per chunk, not per job — a job
+	// contributing 3 chunks repeats its id 3 times at the matching offsets) — unnested
+	// separately and rejoined WITH ORDINALITY because sqlc cannot infer the types of a
+	// multi-argument unnest over query parameters (same pattern as pruning.sql's bulk job
+	// delete/archive). embeddings travels as vector literal TEXT (e.g. "[0.1,0.2,...]"),
+	// not a native vector(768)[] array: pgx's driver.Valuer/sql.Scanner fallback for
+	// pgvector.Vector (this repo registers no custom OID codec for it) only covers a
+	// single scalar column value, not an array of them, so each element casts to
+	// vector(768) individually in the SELECT instead. Always run immediately after
+	// DeleteJobSemanticChunks in the same transaction as the embed stamp — see that
+	// query's comment.
+	//
+	// One call for the whole wave, not one per job, for the same reason
+	// DeleteJobSemanticChunks/StampSemanticEmbeddedBatch already are: a per-job round trip
+	// here was exactly what made a prior HF GPU bulk-embed Postgres-bound instead of
+	// GPU-bound (~19 docs/s against a GPU embedding a wave in ~7s) — see
+	// hire-semantic-vectors-in-pg's "THE REAL BOTTLENECK IS POSTGRES, NOT THE GPU" note.
 	InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error
 	// Claim an address for a user. May raise a unique violation on user_id (already
 	// has a mailbox) or address (taken) — the allocation service handles both: it

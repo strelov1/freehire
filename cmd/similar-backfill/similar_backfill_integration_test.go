@@ -53,14 +53,16 @@ func insertTestJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlug str
 
 func insertTestChunks(t *testing.T, q *db.Queries, jobID int64, dims []int) {
 	t.Helper()
+	jobIDs := make([]int64, len(dims))
 	indices := make([]int16, len(dims))
 	embeddings := make([]string, len(dims))
 	for i, d := range dims {
+		jobIDs[i] = jobID
 		indices[i] = int16(i)
 		embeddings[i] = unitVector768(d)
 	}
 	if err := q.InsertJobSemanticChunks(context.Background(), db.InsertJobSemanticChunksParams{
-		JobID: jobID, ChunkIndices: indices, Embeddings: embeddings,
+		JobIds: jobIDs, ChunkIndices: indices, Embeddings: embeddings,
 	}); err != nil {
 		t.Fatalf("insert chunks for job %d: %v", jobID, err)
 	}

@@ -69,24 +69,28 @@ func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, mod
 		if err := qtx.DeleteJobSemanticChunks(ctx, jobIDs); err != nil {
 			return fmt.Errorf("delete chunks: %w", err)
 		}
+		// Flatten every entry's chunks into three parallel arrays across the WHOLE
+		// wave, then insert them all in ONE round trip — not one INSERT per job. A
+		// per-job loop here was exactly what made a prior HF GPU bulk-embed
+		// Postgres-bound instead of GPU-bound (see InsertJobSemanticChunks' comment).
+		var flatJobIDs []int64
+		var flatIndices []int16
+		var flatEmbeddings []string
 		for _, e := range entries {
-			cs := chunks[e.JobID]
-			if len(cs) == 0 {
-				continue
+			for _, c := range chunks[e.JobID] {
+				flatJobIDs = append(flatJobIDs, e.JobID)
+				flatIndices = append(flatIndices, c.ChunkIndex)
+				// Each vector travels as pgvector literal TEXT (e.g. "[0.1,0.2,...]"),
+				// not a native array element — see InsertJobSemanticChunks' comment
+				// for why (no OID codec registered for an array of vectors).
+				flatEmbeddings = append(flatEmbeddings, pgvector.NewVector(c.Vector).String())
 			}
-			indices := make([]int16, len(cs))
-			embeddings := make([]string, len(cs))
-			for i, c := range cs {
-				indices[i] = c.ChunkIndex
-				// InsertJobSemanticChunks takes each vector as pgvector literal TEXT
-				// (e.g. "[0.1,0.2,...]"), not a native array element — see that query's
-				// comment for why (no OID codec registered for an array of vectors).
-				embeddings[i] = pgvector.NewVector(c.Vector).String()
-			}
+		}
+		if len(flatJobIDs) > 0 {
 			if err := qtx.InsertJobSemanticChunks(ctx, db.InsertJobSemanticChunksParams{
-				JobID: e.JobID, ChunkIndices: indices, Embeddings: embeddings,
+				JobIds: flatJobIDs, ChunkIndices: flatIndices, Embeddings: flatEmbeddings,
 			}); err != nil {
-				return fmt.Errorf("insert chunks (job %d): %w", e.JobID, err)
+				return fmt.Errorf("insert chunks: %w", err)
 			}
 		}
 		// A re-embed's fresh chunk set makes any precomputed similar_job_ids stale (or

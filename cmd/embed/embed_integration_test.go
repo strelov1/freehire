@@ -239,6 +239,52 @@ func TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows(t *testing
 	}
 }
 
+// TestIntegration_EmbedWorkerBatchInsertDoesNotCrossContaminateJobs proves the batched
+// InsertJobSemanticChunks call — which flattens every job's chunks in the wave into
+// three parallel arrays and inserts them in ONE round trip rather than one INSERT per
+// job (the fix for a real prior incident where a per-job insert loop made a fast GPU
+// embedder Postgres-bound, not GPU-bound) — assigns each chunk row to the correct job.
+// A flattening bug (e.g. a job-id/chunk-index offset mismatch) would show up here as
+// one job stealing another's chunk rows or ending up with a broken index sequence.
+func TestIntegration_EmbedWorkerBatchInsertDoesNotCrossContaminateJobs(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	client := newTestClient(t)
+
+	para := "<p>We build large-scale distributed systems in Go, Postgres, and Kubernetes. " +
+		"You will own services end to end, from design through on-call.</p>"
+	shortID := seedJobWithDescription(t, pool, "batch-short", "Junior Engineer", para, false, true)
+	mediumID := seedJobWithDescription(t, pool, "batch-medium", "Mid Engineer", strings.Repeat(para, 20), false, true)
+	longID := seedJobWithDescription(t, pool, "batch-long", "Staff Engineer", strings.Repeat(para, 60), false, true)
+
+	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
+	// A single wave covering all three jobs — the scenario that actually exercises the
+	// flattened multi-job insert; three separate one-job waves would prove nothing new.
+	if _, err := runner.Run(ctx, embed.RunOptions{
+		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	shortCount := jobChunkCount(t, pool, shortID)
+	mediumCount := jobChunkCount(t, pool, mediumID)
+	longCount := jobChunkCount(t, pool, longID)
+	if !(shortCount < mediumCount && mediumCount < longCount) {
+		t.Fatalf("chunk counts = short:%d medium:%d long:%d, want strictly increasing with description length",
+			shortCount, mediumCount, longCount)
+	}
+
+	for name, id := range map[string]int64{"short": shortID, "medium": mediumID, "long": longID} {
+		indices := jobChunkIndices(t, pool, id)
+		for i, idx := range indices {
+			if int(idx) != i {
+				t.Fatalf("%s job chunk indices = %v, want a clean 0..%d sequence (cross-contaminated by the flattened batch insert)",
+					name, indices, len(indices)-1)
+			}
+		}
+	}
+}
+
 // TestIntegration_EmbedWorkerReplacesChunksOnReembedNotAppend proves a re-embed (content
 // changed, so semantic_embedded_hash goes stale) REPLACES a job's chunk rows rather than
 // appending to them — a job must never end up with a mix of old and new chunk vectors.
