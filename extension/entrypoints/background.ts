@@ -9,6 +9,7 @@ import {
   type ComboboxReply,
 } from '../lib/protocol';
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
+import { fillsForFrame } from '../lib/form';
 
 /**
  * Service worker. Three jobs, all thin:
@@ -77,15 +78,20 @@ async function readFramedForm(): Promise<RuntimeMessage> {
 }
 
 /**
- * Offers the fills to every frame and folds the answers together. A frame that
- * does not hold the field reports `not_found`, so the merge keeps whichever
- * frame actually did something with it.
+ * Offers each frame only the fills addressed to it (`fillsForFrame`) and folds
+ * the answers together. A fill naming a frame is withheld from every other one,
+ * so a same-labeled control there cannot absorb it the way a page-wide
+ * broadcast would; a fill naming none — a `fill_simple` tool call — still goes
+ * to every frame, and a frame that does not hold it reports `not_found`.
  */
 async function fillAcrossFrames(fills: LabelFill[]): Promise<RuntimeMessage> {
   const perFrame: FillOutcome[][] = [];
-  await eachFrame({ kind: 'FILL_BY_LABEL', fills }, (reply) => {
-    if (reply?.kind === 'FILL_OUTCOMES') perFrame.push(reply.outcomes);
-  });
+  await eachFrame(
+    (frame) => ({ kind: 'FILL_BY_LABEL', fills: fillsForFrame(fills, frame) }),
+    (reply) => {
+      if (reply?.kind === 'FILL_OUTCOMES') perFrame.push(reply.outcomes);
+    },
+  );
   return { kind: 'FILL_OUTCOMES', outcomes: mergeFrameOutcomes(perFrame) };
 }
 
@@ -102,17 +108,23 @@ async function comboboxAcrossFrames(step: ComboboxStep): Promise<RuntimeMessage>
   return { kind: 'COMBOBOX_REPLY', reply: mergeComboboxReplies(replies) };
 }
 
-/** Sends a message to each injectable frame of the active tab, in parallel. */
+/**
+ * Sends a message to each injectable frame of the active tab, in parallel. The
+ * message can be built per frame — `fillAcrossFrames` uses that to withhold a
+ * frame-addressed fill from every frame but its own — or given fixed, for a
+ * request every frame answers the same way.
+ */
 async function eachFrame(
-  message: RuntimeMessage,
+  message: RuntimeMessage | ((frame: number) => RuntimeMessage),
   take: (reply: RuntimeMessage | undefined, frame: number) => void,
 ): Promise<void> {
   const tabId = await activeTabId();
   if (tabId == null) return;
+  const forFrame = typeof message === 'function' ? message : () => message;
   await Promise.all(
     (await frameIds(tabId)).map(async (frameId) => {
       try {
-        take((await browser.tabs.sendMessage(tabId, message, { frameId })) as RuntimeMessage, frameId);
+        take((await browser.tabs.sendMessage(tabId, forFrame(frameId), { frameId })) as RuntimeMessage, frameId);
       } catch {
         // No content script in that frame (about:blank, a restricted origin) —
         // it simply contributes nothing.

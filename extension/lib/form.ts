@@ -424,17 +424,32 @@ export function scopeToApplication<T extends { frame: number; form: number }>(
  * question carrying a label, so the repeats only pad the wire. Pure over its
  * input; the page is not touched here.
  */
-export function planLabelFills(fields: { label: string }[], values: Record<string, string>): LabelFill[] {
+export function planLabelFills(
+  fields: { label: string; frame?: number; form?: number }[],
+  values: Record<string, string>,
+): LabelFill[] {
   const asked = new Set<string>();
   const fills: LabelFill[] = [];
-  for (const { label } of fields) {
+  for (const { label, frame, form } of fields) {
     const key = matchFieldKey(label);
     const value = key ? (values[key] ?? '') : '';
     if (!value || asked.has(normalizeLabel(label))) continue;
     asked.add(normalizeLabel(label));
-    fills.push({ label, value });
+    fills.push({ label, value, frame, form });
   }
   return fills;
+}
+
+/**
+ * The fills a given frame should act on: those addressed to it by
+ * `deterministicAutofill`, plus any fill naming no frame at all — a
+ * `fill_simple` tool call, which is still offered to every frame as before
+ * frame scoping existed. Used by the background relay to stop broadcasting a
+ * frame-addressed fill to frames that do not hold the target control, which is
+ * what let a same-labeled field in another frame's form get filled instead.
+ */
+export function fillsForFrame(fills: LabelFill[], frame: number): LabelFill[] {
+  return fills.filter((f) => f.frame === undefined || f.frame === frame);
 }
 
 /**
@@ -443,17 +458,36 @@ export function planLabelFills(fields: { label: string }[], values: Record<strin
  * between an agent's observation and its fills cannot drift the target the way a
  * positional index does. Every requested fill gets an outcome; custom-widget
  * comboboxes are reported as deferred rather than written into.
+ *
+ * A fill naming a `form` only matches a question inside that form — the frame's
+ * own signup form sharing a label ("Email") with the application form must not
+ * absorb a fill meant for the other. A fill naming none matches the first
+ * question carrying the label, as `fillByLabel` always has.
  */
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);
-  return fills.map(({ label, value }) => {
-    const question = questions.find((q) => normalizeLabel(q.label) === normalizeLabel(label));
+  const forms = Array.from(doc.querySelectorAll('form'));
+  return fills.map(({ label, value, form }) => {
+    const question = findQuestion(questions, forms, label, form);
     if (!question) return { label, status: 'not_found' as const };
     if (question.controls.length === 1 && isComboWidget(question.controls[0])) {
       return { label, status: 'deferred_combobox' as const };
     }
     return { label, status: answerQuestion(question, value) ? ('filled' as const) : ('no_option' as const) };
   });
+}
+
+/** The question a fill addresses, narrowed to `form` when the fill names one. */
+function findQuestion(
+  questions: Question[],
+  forms: HTMLFormElement[],
+  label: string,
+  form: number | undefined,
+): Question | undefined {
+  const target = normalizeLabel(label);
+  const matches = questions.filter((q) => normalizeLabel(q.label) === target);
+  if (form === undefined) return matches[0];
+  return matches.find((q) => formIndex(q.controls[0], forms) === form);
 }
 
 /**
