@@ -97,11 +97,23 @@ func (h *boardHealth) ClearCooldowns(ctx context.Context, provider string) (int,
 	return int(n), err
 }
 
-// logUnhealthyBoards emits one summary line naming every board currently failing or
-// cooled — so an operator sees the ingest fleet's health in the run log without a
-// query. Best-effort: a read error is logged and ignored (it never fails the run).
+// unhealthyBoardsCap bounds how many boards the per-run summary names.
+//
+// The list is FLEET-WIDE — it is not filtered to the provider being crawled — and every one of
+// the ~200 hourly ingest units prints it, so the line's cost is its length times the whole
+// fleet's crawl rate. Uncapped, a 7000-board backlog turned that into ~260KB per run and
+// gigabytes of syslog per day, which filled the host's disk far enough that cmd/reindex hit its
+// REINDEX_MIN_FREE_GB floor and refused to rebuild for a week (2026-08-14). Twenty is enough to
+// see what is worst at a glance; board_health answers the rest in SQL, which is what the summary
+// was always a shortcut for.
+const unhealthyBoardsCap = 20
+
+// logUnhealthyBoards emits one summary line naming the worst boards currently failing or
+// cooled, and how many there are in total — so an operator sees the ingest fleet's health in
+// the run log without a query. Best-effort: a read error is logged and ignored (it never fails
+// the run).
 func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
-	rows, err := q.ListUnhealthyBoards(ctx)
+	rows, err := q.ListUnhealthyBoards(ctx, unhealthyBoardsCap)
 	if err != nil {
 		log.Printf("ingest health: list unhealthy boards: %v", err)
 		return
@@ -109,6 +121,15 @@ func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
 	if len(rows) == 0 {
 		return
 	}
+	// Every row carries the same pre-LIMIT count; the first one is as good as any.
+	log.Printf("ingest health: %s", unhealthyBoardsSummary(rows, rows[0].Total, time.Now()))
+}
+
+// unhealthyBoardsSummary renders the summary line's body: each named board as
+// "provider/board[/region](fails=N[,cooled_until=…])", plus how many the cap left out. The
+// count reported is the FULL one, never len(rows) — a capped list that printed its own length
+// would read as "only 20 boards are broken".
+func unhealthyBoardsSummary(rows []db.ListUnhealthyBoardsRow, total int64, now time.Time) string {
 	parts := make([]string, 0, len(rows))
 	for _, r := range rows {
 		id := r.Provider + "/" + r.Board
@@ -116,10 +137,14 @@ func logUnhealthyBoards(ctx context.Context, q *db.Queries) {
 			id += "/" + r.Region
 		}
 		desc := fmt.Sprintf("%s(fails=%d", id, r.ConsecutiveFailures)
-		if r.CooldownUntil.Valid && r.CooldownUntil.Time.After(time.Now()) {
+		if r.CooldownUntil.Valid && r.CooldownUntil.Time.After(now) {
 			desc += ",cooled_until=" + r.CooldownUntil.Time.UTC().Format(time.RFC3339)
 		}
 		parts = append(parts, desc+")")
 	}
-	log.Printf("ingest health: %d unhealthy board(s): %s", len(rows), strings.Join(parts, " "))
+	if omitted := total - int64(len(rows)); omitted > 0 {
+		return fmt.Sprintf("%d unhealthy board(s), worst %d: %s (%d more)",
+			total, len(rows), strings.Join(parts, " "), omitted)
+	}
+	return fmt.Sprintf("%d unhealthy board(s): %s", total, strings.Join(parts, " "))
 }

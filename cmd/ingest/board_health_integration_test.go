@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func TestBoardHealth_FailureCooldownSelfHeal(t *testing.T) {
 	}
 
 	// And it appears unhealthy no more.
-	rows, err := db.New(pool).ListUnhealthyBoards(ctx)
+	rows, err := db.New(pool).ListUnhealthyBoards(ctx, unhealthyBoardsCap)
 	if err != nil {
 		t.Fatalf("ListUnhealthyBoards: %v", err)
 	}
@@ -168,5 +169,46 @@ func TestBoardHealth_RegionDisambiguates(t *testing.T) {
 	}
 	if _, cooled, err := h.Cooldown(ctx, "adzuna", "it-jobs", "us"); err != nil || cooled {
 		t.Fatalf("us Cooldown after clearing gb = (_, %v, %v), want still eligible", cooled, err)
+	}
+}
+
+// The summary log's query is capped, but the count it reports must not be: count(*) OVER ()
+// is evaluated over the whole filtered set, before the LIMIT. Getting that backwards would
+// make every capped run report "N unhealthy boards" where N is just the cap — the exact
+// misreading the cap was introduced to avoid.
+func TestBoardHealth_ListUnhealthyBoardsCapsRowsNotCount(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	h := newBoardHealth(pool)
+
+	// Five unhealthy boards, descending failure counts so the ordering is unambiguous.
+	for i, board := range []string{"b1", "b2", "b3", "b4", "b5"} {
+		for j := 0; j <= 5-i; j++ {
+			if err := h.RecordFailure(ctx, "greenhouse", board, "", "boom"); err != nil {
+				t.Fatalf("RecordFailure %s: %v", board, err)
+			}
+		}
+	}
+
+	rows, err := db.New(pool).ListUnhealthyBoards(ctx, 2)
+	if err != nil {
+		t.Fatalf("ListUnhealthyBoards: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want the 2 the limit allows", len(rows))
+	}
+	if rows[0].Total != 5 || rows[1].Total != 5 {
+		t.Errorf("Total = (%d, %d), want 5 on every row — the count is pre-LIMIT",
+			rows[0].Total, rows[1].Total)
+	}
+	// Worst first: b1 failed most.
+	if rows[0].Board != "b1" || rows[1].Board != "b2" {
+		t.Errorf("rows = [%s %s], want the two worst [b1 b2]", rows[0].Board, rows[1].Board)
+	}
+
+	// And the summary line built from them names two boards while reporting all five.
+	got := unhealthyBoardsSummary(rows, rows[0].Total, time.Now())
+	if !strings.Contains(got, "5 unhealthy board(s), worst 2") || !strings.Contains(got, "3 more") {
+		t.Errorf("summary = %q, want it to report 5 total, name 2, and admit 3 more", got)
 	}
 }

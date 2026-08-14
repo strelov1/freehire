@@ -94,10 +94,12 @@ func (q *Queries) ListCooledBoards(ctx context.Context, arg ListCooledBoardsPara
 }
 
 const listUnhealthyBoards = `-- name: ListUnhealthyBoards :many
-SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at
+SELECT provider, board, region, consecutive_failures, cooldown_until, last_error, last_error_at,
+       count(*) OVER () AS total
 FROM board_health
 WHERE consecutive_failures > 0 OR (cooldown_until IS NOT NULL AND cooldown_until > now())
 ORDER BY consecutive_failures DESC, provider, board, region
+LIMIT $1
 `
 
 type ListUnhealthyBoardsRow struct {
@@ -108,12 +110,16 @@ type ListUnhealthyBoardsRow struct {
 	CooldownUntil       pgtype.Timestamptz `json:"cooldown_until"`
 	LastError           pgtype.Text        `json:"last_error"`
 	LastErrorAt         pgtype.Timestamptz `json:"last_error_at"`
+	Total               int64              `json:"total"`
 }
 
-// Every board currently failing or cooled down, worst first — the operator's
-// "what's broken" query and the source of the per-run summary log.
-func (q *Queries) ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error) {
-	rows, err := q.db.Query(ctx, listUnhealthyBoards)
+// The worst $1 boards currently failing or cooled down, worst first — the source of the
+// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
+// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
+// boards are broken without a second round trip and without naming them all. Ask this table
+// directly for the rest.
+func (q *Queries) ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listUnhealthyBoards, maxBoards)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +135,7 @@ func (q *Queries) ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoard
 			&i.CooldownUntil,
 			&i.LastError,
 			&i.LastErrorAt,
+			&i.Total,
 		); err != nil {
 			return nil, err
 		}

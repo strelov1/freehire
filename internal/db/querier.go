@@ -2039,9 +2039,12 @@ type Querier interface {
 	// Go type across every query here. Matching the nullable foreign key instead makes sqlc infer a
 	// nullable UUID, and the handler would carry two spellings of one id.
 	ListTracerLinkStats(ctx context.Context, arg ListTracerLinkStatsParams) ([]ListTracerLinkStatsRow, error)
-	// Every board currently failing or cooled down, worst first — the operator's
-	// "what's broken" query and the source of the per-run summary log.
-	ListUnhealthyBoards(ctx context.Context) ([]ListUnhealthyBoardsRow, error)
+	// The worst $1 boards currently failing or cooled down, worst first — the source of the
+	// per-run summary log. Every row also carries the FULL unhealthy count: count(*) OVER () is
+	// evaluated over the whole filtered set, before the LIMIT, so the caller reports how many
+	// boards are broken without a second round trip and without naming them all. Ask this table
+	// directly for the rest.
+	ListUnhealthyBoards(ctx context.Context, maxBoards int32) ([]ListUnhealthyBoardsRow, error)
 	// The caller's open applications offered to the matcher (applied, saved, or staged),
 	// as (job_id, company). Closed postings are excluded.
 	ListUserApplicationsForMatch(ctx context.Context, userID int64) ([]ListUserApplicationsForMatchRow, error)
