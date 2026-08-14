@@ -41,10 +41,11 @@ const defaultSource = "manual"
 // origin (e.g. "workatastartup"); empty defaults to "manual".
 //
 // The structured facets are the values a submitter/moderator states explicitly. Regions,
-// Cities, WorkMode, and Skills override the dictionary derivation (see jobderive), and
-// the Salary* fields become an authoritative manual salary on the job. All are optional
-// and sanitized before use (unknown WorkMode/Regions dropped, non-positive salary
-// dropped), so a malformed value degrades to derivation rather than corrupting the job.
+// Cities, WorkMode, Skills, EmploymentType, and Seniority override the dictionary
+// derivation (see jobderive), and the Salary* fields become an authoritative manual
+// salary on the job. All are optional and sanitized before use (unknown enum values
+// dropped, non-positive salary dropped), so a malformed value degrades to derivation
+// rather than corrupting the job.
 type CreateInput struct {
 	URL         string
 	Source      string
