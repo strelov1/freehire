@@ -197,6 +197,7 @@ func TestLandingJobsSkipsPostingsMissingAnIdentity(t *testing.T) {
 {"id":2,"title":"Company only","url":"https://landing.jobs/at/acme-corp","published_at":"2026-08-02T00:00:00.000Z"},
 {"id":3,"title":"","url":"https://landing.jobs/at/acme-corp/untitled","published_at":"2026-08-02T00:00:00.000Z"},
 {"id":0,"title":"No id","url":"https://landing.jobs/at/acme-corp/no-id","published_at":"2026-08-02T00:00:00.000Z"},
+{"id":4,"title":"Separators only","url":"https://landing.jobs/at/---/a-role","published_at":"2026-08-02T00:00:00.000Z"},
 {"id":5,"title":"Good","url":"https://landing.jobs/at/acme-corp/good-role","published_at":"2026-08-02T00:00:00.000Z"}
 ]`
 	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
@@ -250,6 +251,19 @@ func TestLandingJobsCompanyFromURLIgnoresQueryAndFragment(t *testing.T) {
 	company, ok := landingjobsCompanyFromURL("https://landing.jobs/at/acme-corp/go-dev?utm_source=x#apply")
 	if !ok || company != "Acme Corp" {
 		t.Errorf("company = %q (ok=%v), want Acme Corp", company, ok)
+	}
+}
+
+// A slug of nothing but separators clears every path check and humanizes to "". Reporting ok
+// for that would hand the caller an empty employer, which is the one thing it must not do.
+func TestLandingJobsCompanyFromURLRejectsAnEmptyName(t *testing.T) {
+	for _, url := range []string{
+		"https://landing.jobs/at/---/a-role",
+		"https://landing.jobs/at/___/a-role",
+	} {
+		if company, ok := landingjobsCompanyFromURL(url); ok || company != "" {
+			t.Errorf("landingjobsCompanyFromURL(%q) = %q, %v; want \"\", false", url, company, ok)
+		}
 	}
 }
 

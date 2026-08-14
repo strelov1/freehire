@@ -142,6 +142,11 @@ func (p landingjobsPosting) toJob() (Job, bool) {
 // `https://landing.jobs/at/acme-corp/senior-go-engineer` yields "Acme Corp". Both path segments
 // must be present: `/at/acme-corp` alone is the company's own page rather than a posting, and
 // treating it as one would file a job under a URL that never named it. ok is false otherwise.
+//
+// The last check is on the humanized NAME rather than on the slug it came from. A slug that is
+// all separators ("---") is non-empty and clears every path check, but humanizes to nothing —
+// and ok=true with no name is the one outcome this function exists to prevent, since the caller
+// reads it as "the employer resolved" and would emit a posting with no company to slug.
 func landingjobsCompanyFromURL(rawURL string) (company string, ok bool) {
 	_, after, found := strings.Cut(rawURL, landingjobsPathMarker)
 	if !found {
@@ -156,7 +161,8 @@ func landingjobsCompanyFromURL(rawURL string) (company string, ok bool) {
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	return landingjobsCompany(parts[0]), true
+	company = landingjobsCompany(parts[0])
+	return company, company != ""
 }
 
 // landingjobsCompany humanizes a company slug into a display name: hyphens and underscores
