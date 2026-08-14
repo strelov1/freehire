@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/strelov1/freehire/internal/db"
 )
@@ -47,7 +48,9 @@ func (f *fakeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 	}
 	data, ok := f.objects[key]
 	if !ok {
-		return nil, errors.New("no such object")
+		// Mirrors the shape blobstore.IsNotFound actually recognizes, so this fake
+		// exercises the real translation to ErrNotStored rather than a stand-in error.
+		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
@@ -182,6 +185,16 @@ func TestStore_GetReturnsStoredBytes(t *testing.T) {
 
 func TestStore_GetWithoutAHeadshot(t *testing.T) {
 	s := New(newFakeBlobs(), &fakeRepo{})
+	if _, err := s.Get(context.Background(), 42); !errors.Is(err, ErrNotStored) {
+		t.Errorf("Get error = %v, want ErrNotStored", err)
+	}
+}
+
+func TestStore_GetMissingObjectIsNotStored(t *testing.T) {
+	// Pointer present but the bucket object is gone (e.g. a recreated MinIO volume) — the
+	// blobstore-level not-found error must translate to ErrNotStored, not a raw 500.
+	repo := &fakeRepo{key: "photos/42", uploadedAt: time.Now().UTC()}
+	s := New(newFakeBlobs(), repo)
 	if _, err := s.Get(context.Background(), 42); !errors.Is(err, ErrNotStored) {
 		t.Errorf("Get error = %v, want ErrNotStored", err)
 	}

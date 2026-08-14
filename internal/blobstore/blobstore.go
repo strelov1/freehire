@@ -7,6 +7,7 @@ package blobstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -21,6 +22,18 @@ type Store interface {
 	Put(ctx context.Context, key, contentType string, r io.Reader, size int64) error
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
+}
+
+// IsNotFound reports whether err — from Get, or from reading/stat-ing the io.ReadCloser
+// it returned — means the object does not exist in the bucket, as opposed to a real
+// backend failure (network, auth, bucket gone). Get's read is lazy (see its doc comment),
+// so a missing object can surface from either call site; check both with this helper
+// instead of string-matching the provider's error text. Uses errors.As rather than
+// minio.ToErrorResponse's plain type switch, so it still recognizes the error through a
+// Get/Put/Delete wrapper's %w chain.
+func IsNotFound(err error) bool {
+	var resp minio.ErrorResponse
+	return errors.As(err, &resp) && resp.Code == minio.NoSuchKey
 }
 
 // Config is the generic S3 connection settings, read from the environment. Any

@@ -384,7 +384,7 @@ func (s *Store) Text(ctx context.Context, userID int64) (string, error) {
 	}
 	rc, err := s.blobs.Get(ctx, ptr.ResumeObjectKey.String)
 	if err != nil {
-		if isMissingObject(err) {
+		if blobstore.IsNotFound(err) {
 			return "", ErrNotStored
 		}
 		return "", err
@@ -393,25 +393,12 @@ func (s *Store) Text(ctx context.Context, userID int64) (string, error) {
 	data, err := io.ReadAll(rc)
 	if err != nil {
 		// MinIO/S3 GetObject is lazy: a missing key often surfaces only on the first read.
-		if isMissingObject(err) {
+		if blobstore.IsNotFound(err) {
 			return "", ErrNotStored
 		}
 		return "", fmt.Errorf("resume: read object: %w", err)
 	}
 	return extractText(data)
-}
-
-// isMissingObject reports whether err means the résumé bytes are gone while the
-// pointer may still be present (recreated LocalStack/MinIO volume, bucket wipe, …).
-func isMissingObject(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "nosuchkey") ||
-		strings.Contains(msg, "no such key") ||
-		strings.Contains(msg, "the specified key does not exist") ||
-		strings.Contains(msg, "not found")
 }
 
 // Delete removes the stored object and clears the pointer.

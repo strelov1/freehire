@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/db"
@@ -32,7 +33,9 @@ func (f *fakeBlobs) Put(_ context.Context, key, _ string, r io.Reader, _ int64) 
 func (f *fakeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 	data, ok := f.objs[key]
 	if !ok {
-		return nil, errors.New("not found")
+		// Mirrors the shape blobstore.IsNotFound actually recognizes, so this fake
+		// exercises the real translation to ErrNotStored rather than a stand-in error.
+		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
 }
@@ -242,24 +245,6 @@ func TestStore_TextMissingObjectIsNotStored(t *testing.T) {
 	s := New(newFakeBlobs(), repo)
 	if _, err := s.Text(context.Background(), 7); !errors.Is(err, ErrNotStored) {
 		t.Fatalf("Text err = %v, want ErrNotStored", err)
-	}
-}
-
-func TestIsMissingObject(t *testing.T) {
-	cases := []struct {
-		err  error
-		want bool
-	}{
-		{nil, false},
-		{errors.New("not found"), true},
-		{errors.New("NoSuchKey"), true},
-		{errors.New("The specified key does not exist."), true},
-		{errors.New("timeout waiting for peer"), false},
-	}
-	for _, tc := range cases {
-		if got := isMissingObject(tc.err); got != tc.want {
-			t.Errorf("isMissingObject(%v) = %v, want %v", tc.err, got, tc.want)
-		}
 	}
 }
 

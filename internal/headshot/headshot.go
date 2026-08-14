@@ -116,11 +116,19 @@ func (s *Store) Get(ctx context.Context, userID int64) ([]byte, error) {
 	}
 	rc, err := s.blobs.Get(ctx, ptr.PhotoObjectKey.String)
 	if err != nil {
+		if blobstore.IsNotFound(err) {
+			return nil, ErrNotStored
+		}
 		return nil, err
 	}
 	defer rc.Close()
 	data, err := io.ReadAll(rc)
 	if err != nil {
+		// The S3 client's Get is lazy: a missing object typically surfaces here, on the
+		// first read, rather than from Get itself.
+		if blobstore.IsNotFound(err) {
+			return nil, ErrNotStored
+		}
 		return nil, fmt.Errorf("headshot: read object: %w", err)
 	}
 	return data, nil

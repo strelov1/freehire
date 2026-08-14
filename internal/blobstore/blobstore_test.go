@@ -1,6 +1,12 @@
 package blobstore
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/minio/minio-go/v7"
+)
 
 func TestResumeKey_DerivedFromUserID(t *testing.T) {
 	if got := ResumeKey(7); got != "resumes/7" {
@@ -37,6 +43,31 @@ func TestNew_UnconfiguredReturnsNilStore(t *testing.T) {
 		if store != nil {
 			t.Errorf("case %d: unconfigured New should return nil store, got %T", i, store)
 		}
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"NoSuchKey", minio.ErrorResponse{Code: minio.NoSuchKey}, true},
+		{
+			"NoSuchKey wrapped by Get/Put/Delete's %w",
+			fmt.Errorf("blobstore: get resumes/7: %w", minio.ErrorResponse{Code: minio.NoSuchKey}),
+			true,
+		},
+		{"a different S3 error code", minio.ErrorResponse{Code: "AccessDenied"}, false},
+		{"a non-minio error", errors.New("connection reset"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsNotFound(tc.err); got != tc.want {
+				t.Errorf("IsNotFound(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 
