@@ -58,21 +58,21 @@
 
 ## 4. `cmd/similar-backfill` worker
 
-- [ ] 4.1 New package (e.g. `internal/similarjobs`) with Store/Indexer-style ports,
+- [x] 4.1 New package (e.g. `internal/similarjobs`) with Store/Indexer-style ports,
       unit-tested with fakes, mirroring `internal/embed`'s shape.
-- [ ] 4.2 Query: jobs with at least one `job_semantic_chunks` row but
+- [x] 4.2 Query: jobs with at least one `job_semantic_chunks` row but
       `similar_computed_at IS NULL` (or older than the job's newest chunk), batched,
       ordered sensibly (e.g. freshest-first like the embed claim).
-- [ ] 4.3 Per job: the nearest-neighbour-over-chunks query from design.md
+- [x] 4.3 Per job: the nearest-neighbour-over-chunks query from design.md
       Decision 5 — minimum cosine distance per candidate job across all
       (source chunk, candidate chunk) pairs, excluding the source job itself AND
       any job sharing its `company_slug`, excluding closed jobs, ordered by
       distance, limited to N — write `similar_job_ids` + stamp
       `similar_computed_at`.
-- [ ] 4.4 `cmd/similar-backfill/main.go`: run-once-and-exit worker (this repo's
+- [x] 4.4 `cmd/similar-backfill/main.go`: run-once-and-exit worker (this repo's
       standard `internal/worker` Bootstrap convention), flags mirroring telagon's
       (`-batch`, `-workers`, `-limit`) where they make sense here.
-- [ ] 4.5 Integration test: end-to-end — a job with embedding chunks gets a correct
+- [x] 4.5 Integration test: end-to-end — a job with embedding chunks gets a correct
       `similar_job_ids` list written, a same-company candidate that would otherwise
       be the closest match is excluded and a different-company one appears instead,
       and a job whose only close matches are same-company yields a short/empty list

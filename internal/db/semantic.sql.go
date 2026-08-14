@@ -473,6 +473,62 @@ func (q *Queries) RecordSemanticFailure(ctx context.Context, arg RecordSemanticF
 	return i, err
 }
 
+const selectJobsNeedingSimilarBackfill = `-- name: SelectJobsNeedingSimilarBackfill :many
+
+SELECT j.id AS job_id
+FROM jobs j
+WHERE j.similar_computed_at IS NULL
+  AND EXISTS (SELECT 1 FROM job_semantic_chunks c WHERE c.job_id = j.id)
+ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
+LIMIT $1::int
+`
+
+// ---------------------------------------------------------------------------
+// cmd/similar-backfill: the run-once-and-exit worker that populates
+// jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds
+// outstanding work by direct query, not a claimed/leased outbox table (design.md
+// Decision 4 — telagon's cmd/similar-backfill, the original inspiration, has no
+// outbox table either: the predicate below is idempotent and re-orderable, so a
+// batched full-table scan needs no lease/dead-letter machinery to stay safe under a
+// re-run or an overlapping manual invocation).
+// ---------------------------------------------------------------------------
+// Jobs needing a (re)computed precomputed similar-jobs list: at least one
+// job_semantic_chunks row (so NearestJobsToJob has something to search from) but no
+// current list (similar_computed_at IS NULL). A plain IS NULL check, not "IS NULL OR
+// older than the newest chunk" — cmd/embed's CompleteOpen already nulls
+// similar_computed_at on EVERY chunk replace (ClearSimilarComputedAtBatch, called
+// unconditionally for the whole re-embedded batch, even when the new chunk count
+// happens to match the old one), so "missing" and "stale" already collapse to the same
+// NULL check; there is no case where a job's chunks changed but its
+// similar_computed_at stayed non-NULL. A job with zero chunk rows (never embedded, or
+// its description was too short/empty to chunk) is simply never selected — the EXISTS
+// clause already requires at least one row, no separate guard needed. A closed source
+// job is NOT excluded here (only closed CANDIDATES are, inside NearestJobsToJob) —
+// cmd/embed's own closed-job path deletes a job's chunk rows once its outbox entry
+// drains, which removes it from this predicate on its own; excluding closed_at here
+// too would just duplicate that cleanup with a narrower race window, not add safety.
+// Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
+// jobs get a similar-jobs list before older backlog on a still-draining catalogue.
+func (q *Queries) SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error) {
+	rows, err := q.db.Query(ctx, selectJobsNeedingSimilarBackfill, limitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setSemanticEmbedding = `-- name: SetSemanticEmbedding :exec
 UPDATE jobs
 SET semantic_embedding = $1::real[]
@@ -492,6 +548,32 @@ type SetSemanticEmbeddingParams struct {
 // up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
 func (q *Queries) SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error {
 	_, err := q.db.Exec(ctx, setSemanticEmbedding, arg.Embedding, arg.ID)
+	return err
+}
+
+const setSimilarJobIDs = `-- name: SetSimilarJobIDs :exec
+UPDATE jobs
+SET similar_job_ids = $1::bigint[],
+    similar_computed_at = now()
+WHERE id = $2::bigint
+`
+
+type SetSimilarJobIDsParams struct {
+	SimilarJobIds []int64 `json:"similar_job_ids"`
+	ID            int64   `json:"id"`
+}
+
+// Write one job's precomputed similar-jobs list and stamp similar_computed_at
+// together, so a job is never marked computed without its list landing. A nil/empty
+// similar_job_ids is a valid, intentional write (a job whose only close matches were
+// excluded by NearestJobsToJob's same-company rule ends up with a short or empty
+// list, not an error) — it still stamps the job so
+// SelectJobsNeedingSimilarBackfill's incremental predicate does not pick it up again
+// every run. One row at a time, not batched like cmd/embed's writes: each job's array
+// value is unique per row, so there is no shared payload to amortize across a wave the
+// way a single Meili task amortizes cmd/embed's batch upsert.
+func (q *Queries) SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) error {
+	_, err := q.db.Exec(ctx, setSimilarJobIDs, arg.SimilarJobIds, arg.ID)
 	return err
 }
 

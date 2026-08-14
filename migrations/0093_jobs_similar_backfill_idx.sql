@@ -1,0 +1,35 @@
+-- migrate: no-transaction
+--
+-- Partial index over the outstanding-work predicate cmd/similar-backfill's
+-- SelectJobsNeedingSimilarBackfill scans (internal/db/queries/semantic.sql):
+-- similar_computed_at IS NULL, ordered COALESCE(posted_at, created_at) DESC, id DESC —
+-- mirrors jobs_open_enrich_freshness_idx (0001_init.sql), the same "find outstanding
+-- work, freshest first" shape used for enrichment's claim, and
+-- semantic_outbox_claim_idx (0081) for the embed queue's. Without this index the
+-- worker's LIMIT-bounded query has no covering sort order, and — because it runs on a
+-- recurring cron, not a one-off catch-up — the missing-index cost recurs every
+-- invocation, not just once: as the backlog drains toward zero, each freshest-first
+-- scan walks past an ever-larger prefix of already-stamped (similar_computed_at NOT
+-- NULL) rows before finding its next LIMIT worth of real work, the same class of
+-- degradation this repo has hit before on unindexed jobs-table scans (see
+-- hire-jobs-list-slow-query / hire-companies-page-perf-bloat).
+--
+-- Partial on similar_computed_at IS NULL, so the index self-shrinks as the backfill
+-- (and cmd/embed's ClearSimilarComputedAtBatch re-staling) keep the catalogue moving
+-- through it — it never holds more rows than are actually outstanding.
+--
+-- CONCURRENTLY, and split into its own no-transaction file, for the same reason 0078/
+-- 0081 give: jobs is under continuous prod write traffic and a plain CREATE INDEX
+-- holds a SHARE lock blocking writes for the whole build; Postgres forbids
+-- CONCURRENTLY inside a transaction block, and a migration file's statements sent as
+-- one multi-statement query run in an implicit transaction regardless of the
+-- no-transaction marker (that marker only stops internal/migrate's OWN wrapping
+-- BEGIN/COMMIT) — so this has to be the only statement in its file.
+--
+-- Applied to a fresh volume by initdb after 0092; on an existing prod volume build it
+-- by hand, detached from the SSH session (systemd-run or nohup) — a CONCURRENTLY
+-- build dies with its ssh session and leaves an INVALID index behind, the same
+-- warning 0078/0081/0056 already give.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS jobs_similar_backfill_idx
+    ON public.jobs (COALESCE(posted_at, created_at) DESC, id DESC)
+    WHERE (similar_computed_at IS NULL);

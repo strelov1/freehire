@@ -2856,6 +2856,33 @@ type Querier interface {
 	// ResetUserPassword — the revocation cannot be separated from the seizure.
 	// Returns the new generation for the session the sign-in is about to mint.
 	SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, error)
+	// ---------------------------------------------------------------------------
+	// cmd/similar-backfill: the run-once-and-exit worker that populates
+	// jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds
+	// outstanding work by direct query, not a claimed/leased outbox table (design.md
+	// Decision 4 — telagon's cmd/similar-backfill, the original inspiration, has no
+	// outbox table either: the predicate below is idempotent and re-orderable, so a
+	// batched full-table scan needs no lease/dead-letter machinery to stay safe under a
+	// re-run or an overlapping manual invocation).
+	// ---------------------------------------------------------------------------
+	// Jobs needing a (re)computed precomputed similar-jobs list: at least one
+	// job_semantic_chunks row (so NearestJobsToJob has something to search from) but no
+	// current list (similar_computed_at IS NULL). A plain IS NULL check, not "IS NULL OR
+	// older than the newest chunk" — cmd/embed's CompleteOpen already nulls
+	// similar_computed_at on EVERY chunk replace (ClearSimilarComputedAtBatch, called
+	// unconditionally for the whole re-embedded batch, even when the new chunk count
+	// happens to match the old one), so "missing" and "stale" already collapse to the same
+	// NULL check; there is no case where a job's chunks changed but its
+	// similar_computed_at stayed non-NULL. A job with zero chunk rows (never embedded, or
+	// its description was too short/empty to chunk) is simply never selected — the EXISTS
+	// clause already requires at least one row, no separate guard needed. A closed source
+	// job is NOT excluded here (only closed CANDIDATES are, inside NearestJobsToJob) —
+	// cmd/embed's own closed-job path deletes a job's chunk rows once its outbox entry
+	// drains, which removes it from this predicate on its own; excluding closed_at here
+	// too would just duplicate that cleanup with a narrower race window, not add safety.
+	// Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
+	// jobs get a similar-jobs list before older backlog on a still-draining catalogue.
+	SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error)
 	// Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
 	// registered ATS board provider — the sources no ingest run re-crawls and the sweep
 	// therefore never closes (telegram, habr_career, geekjob, …). The caller passes the
@@ -2926,6 +2953,16 @@ type Querier interface {
 	// Postgres thus becomes the source of truth for the vector: the nightly pg_dump backs it
 	// up and reindex can rehydrate Meili from it without re-embedding. Idempotent by primary key.
 	SetSemanticEmbedding(ctx context.Context, arg SetSemanticEmbeddingParams) error
+	// Write one job's precomputed similar-jobs list and stamp similar_computed_at
+	// together, so a job is never marked computed without its list landing. A nil/empty
+	// similar_job_ids is a valid, intentional write (a job whose only close matches were
+	// excluded by NearestJobsToJob's same-company rule ends up with a short or empty
+	// list, not an error) — it still stamps the job so
+	// SelectJobsNeedingSimilarBackfill's incremental predicate does not pick it up again
+	// every run. One row at a time, not batched like cmd/embed's writes: each job's array
+	// value is unique per row, so there is no shared payload to amortize across a wave the
+	// way a single Meili task amortizes cmd/embed's batch upsert.
+	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) error
 	// Pause/resume a subscription, scoped to its owner. No matching owner-scoped row
 	// returns no row (the handler maps that to 404).
 	SetSubscriptionActive(ctx context.Context, arg SetSubscriptionActiveParams) (Subscription, error)
