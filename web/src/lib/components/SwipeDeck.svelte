@@ -144,6 +144,10 @@
     dragging = false;
     dragX = dir * (window.innerWidth + 200);
     last = { job, kind };
+    // Snapshot the reload generation: a resetDeck() mid-flight bumps `gen` and
+    // replaces `queue` wholesale, so the deferred slice below must not touch a
+    // queue that no longer belongs to this swipe.
+    const myGen = gen;
 
     const send = kind === 'save' ? api.saveJob(job.public_slug) : api.dismissJob(job.public_slug);
     send.catch(() => {
@@ -160,6 +164,7 @@
     // slug), so it mounts centered at dragX 0 — no slide from the edge — and plays
     // the grow-in keyframe on mount.
     setTimeout(() => {
+      if (myGen !== gen) return; // resetDeck() already replaced the queue and its own state
       queue = queue.slice(1);
       dragX = 0;
       exiting = false;
