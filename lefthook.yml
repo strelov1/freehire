@@ -18,6 +18,23 @@ pre-commit:
     golangci-lint:
       glob: "*.go"
       run: golangci-lint run --new-from-rev=HEAD --allow-parallel-runners ./...
+    # Warn-only: govulncheck currently fails against HEAD from Go-toolchain
+    # stdlib CVEs (e.g. GO-2026-6088, fixed only in go1.26.6 — go.mod pins
+    # 1.25.12), not from anything a commit's diff introduces, so it can't
+    # hard-block yet without blocking every Go commit repo-wide. Flip to a
+    # failing command once the toolchain is bumped past the fix. Mirrors the
+    # path scope of .github/workflows/govulncheck.yml's pull_request trigger.
+    govulncheck:
+      glob:
+        - "**/*.go"
+        - "go.mod"
+        - "go.sum"
+      run: |
+        if ! command -v govulncheck >/dev/null 2>&1; then
+          echo "govulncheck not installed (go install golang.org/x/vuln/cmd/govulncheck@latest) - skipping"
+          exit 0
+        fi
+        govulncheck ./... || echo "govulncheck reported findings above (non-blocking for now, see lefthook.yml)"
     web-lint:
       root: "web/"
       glob: "web/**/*.{js,ts,svelte}"
@@ -26,7 +43,54 @@ pre-commit:
       root: "extension/"
       glob: "extension/**/*.{js,ts,svelte}"
       run: pnpm exec eslint {staged_files}
+    # The remaining design-system-* commands mirror the fast checks from the
+    # `design-system` CI job (see .github/workflows/ci.yml) so a broken commit
+    # fails locally instead of burning a CI run. build-storybook and its CSS
+    # assertion are deliberately left out — too slow for pre-commit — so CI
+    # still catches those for anyone who skips hooks.
     design-system-lint:
       root: "design-system/"
       glob: "design-system/**/*.{js,ts,svelte}"
-      run: pnpm exec eslint {staged_files}
+      run: pnpm run lint
+    design-system-check:
+      root: "design-system/"
+      glob: "design-system/**/*.{svelte,ts}"
+      run: pnpm run check
+    design-system-test:
+      root: "design-system/"
+      glob:
+        - "design-system/src/**"
+        - "design-system/scripts/**"
+      run: pnpm run test
+    # check:dist rebuilds tokens/*.json -> dist/ and diffs — catches a token
+    # edited without `pnpm build`, which otherwise ships stale CSS with every
+    # check green.
+    design-system-dist:
+      root: "design-system/"
+      glob:
+        - "design-system/tokens/**"
+        - "design-system/scripts/build-tokens.mjs"
+        - "design-system/dist/**"
+      run: pnpm run check:dist
+    design-system-docs:
+      root: "design-system/"
+      glob:
+        - "design-system/docs/**"
+        - "design-system/src/**/*.svelte"
+        - "design-system/src/*.stories.ts"
+      run: pnpm run validate:docs
+    # check:tokens and check:adoption also have a radius over ../web/src (a
+    # colour literal or an unreachable primitive can be introduced from either
+    # side), so both trigger on web/src changes too, not just design-system/.
+    design-system-tokens:
+      root: "design-system/"
+      glob:
+        - "design-system/src/**/*.svelte"
+        - "web/src/**/*.{svelte,ts,js}"
+      run: pnpm run check:tokens
+    design-system-adoption:
+      root: "design-system/"
+      glob:
+        - "design-system/src/index.ts"
+        - "web/src/**/*.{svelte,ts,js}"
+      run: pnpm run check:adoption
