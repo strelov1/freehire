@@ -143,6 +143,16 @@ export function unsaveJob(slug: string, token: string): Promise<JobInteraction> 
   return deleteData<JobInteraction>(`/api/v1/jobs/${encodeURIComponent(slug)}/save`, token);
 }
 
+/**
+ * Every public job slug the caller has saved. Read-only and side-effect-free —
+ * the same endpoint the web app cross-references client-side to render an
+ * already-filled save toggle, rather than recording a view per job (see
+ * lib/savedJobs.ts).
+ */
+export function listSavedSlugs(token: string): Promise<string[]> {
+  return getData<string[]>('/api/v1/me/tracking/saved', token);
+}
+
 /** A cached AI fit analysis — only the fields the compact card reads. Never computes
  *  inline: this is a read of whatever the full-page analysis last cached, same
  *  contract as web's MatchSummary.svelte. */

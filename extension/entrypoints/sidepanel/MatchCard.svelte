@@ -12,6 +12,7 @@
     type MatchAnalysisResponse,
   } from '../../lib/freehire';
   import { categoryLabel, countryLabel, regionLabel, workModeLabel } from '../../lib/labels';
+  import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '../../lib/savedJobs';
 
   let { job, match }: { job: FreehireJob; match: JobMatch } = $props();
 
@@ -54,11 +55,23 @@
   }
   let facts = $derived(buildFacts(job));
 
-  // Optimistic, local-only: the card never fetches whether this job was saved
-  // before the panel opened it (no proactive "record a view" call, unlike the
-  // web job page) — it only reflects the panel's own save/unsave actions.
+  // The saved set loads once per panel session (lib/savedJobs.ts) and is kept in
+  // sync locally by this card's own save/unsave clicks — the same
+  // cross-reference-instead-of-per-job-read the web app uses, not a proactive
+  // "record a view" call.
   let saved = $state(false);
   let savePending = $state(false);
+
+  $effect(() => {
+    if (!isCatalogJob) return;
+    const slug = job.public_slug;
+    getToken()
+      .then((token) => (token ? ensureSavedLoaded(token) : undefined))
+      .then(() => {
+        if (job.public_slug === slug) saved = isSaved(slug);
+      })
+      .catch(() => {});
+  });
 
   async function toggleSave() {
     if (savePending) return;
@@ -69,6 +82,8 @@
     saved = !wasSaved;
     try {
       await (wasSaved ? unsaveJob(job.public_slug, token) : saveJob(job.public_slug, token));
+      if (wasSaved) markUnsaved(job.public_slug);
+      else markSaved(job.public_slug);
     } catch {
       saved = wasSaved;
     } finally {
