@@ -1191,13 +1191,27 @@ var nonCorroboratingPhrases = map[string]bool{
 	"ticket-resolution":    true,
 }
 
-// nonEngineeringCanonicals is derived from professionalPhraseAliases, never written by
-// hand: a term added to that list is non-engineering by construction, so the two cannot
-// drift apart.
+// nonEngineeringBareCanonicals are non-engineering disciplines whose canonical also has a
+// BARE, single-word alias in wordAliases ("seo", "ecommerce") rather than only a multi-word
+// phrase. professionalPhraseAliases covers the multi-word marketing/business phrases
+// (technical-seo, link-building, content-marketing, …); these two canonicals fall through
+// that derivation entirely and, unlisted, would read as unrecognised — which HasEngineering
+// treats as engineering — for a discipline the dictionary in fact recognises.
+var nonEngineeringBareCanonicals = map[string]bool{
+	"seo":       true,
+	"ecommerce": true,
+}
+
+// nonEngineeringCanonicals is derived from professionalPhraseAliases plus
+// nonEngineeringBareCanonicals, never written by hand beyond those two sources: a term added
+// to either cannot drift out of sync with this set.
 var nonEngineeringCanonicals = func() map[string]bool {
-	out := make(map[string]bool, len(professionalPhraseAliases))
+	out := make(map[string]bool, len(professionalPhraseAliases)+len(nonEngineeringBareCanonicals))
 	for _, p := range professionalPhraseAliases {
 		out[p.canonical] = true
+	}
+	for c := range nonEngineeringBareCanonicals {
+		out[c] = true
 	}
 	return out
 }()
