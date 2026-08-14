@@ -70,7 +70,7 @@ func TestRequestSchema_CarriesTheFieldsThePromptAsksFor(t *testing.T) {
 	for _, field := range []string{
 		"summary", "relocation", "visa_sponsorship", "cities", "timezone_note",
 		"salary_min", "salary_max", "salary_currency", "salary_period",
-		"domains", "company_type", "company_size", "regions", "countries",
+		"domains", "company_type", "company_size", "regions", "countries", "skills",
 	} {
 		if _, ok := props[field]; !ok {
 			t.Errorf("schema is missing %q, so the model would stop returning it", field)

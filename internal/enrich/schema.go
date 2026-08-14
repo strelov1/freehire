@@ -22,7 +22,7 @@ const (
 // dictionaries (`internal/jobderive`), not the LLM.
 var unaskedFields = []string{
 	"work_mode", "employment_type",
-	"seniority", "english_level", "education_level", "skills",
+	"seniority", "english_level", "education_level",
 	"category", "experience_years_min", "posting_language",
 }
 
