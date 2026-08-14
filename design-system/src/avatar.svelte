@@ -43,7 +43,8 @@
   let initials = $derived(
     name
       ? name
-          .split(' ')
+          .trim()
+          .split(/\s+/)
           .slice(0, 2)
           .map((w) => w[0]?.toUpperCase() ?? '')
           .join('')

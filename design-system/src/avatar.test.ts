@@ -89,6 +89,14 @@ describe('Avatar', () => {
     expect(circle('Prince').textContent?.trim()).toBe('P');
   });
 
+  // A pasted résumé/profile field is a common source of stray whitespace; the split
+  // must not turn it into a leading empty "initial".
+  it('ignores leading, trailing, and repeated whitespace when deriving initials', () => {
+    expect(circle(' Ada Lovelace').textContent?.trim()).toBe('AL');
+    expect(circle('Ada Lovelace ').textContent?.trim()).toBe('AL');
+    expect(circle('Ada  Lovelace').textContent?.trim()).toBe('AL');
+  });
+
   it('leaves a photo undescribed when there is no name to describe it with', () => {
     const { container } = render(Avatar, { src: 'https://example.test/a.png' });
 
