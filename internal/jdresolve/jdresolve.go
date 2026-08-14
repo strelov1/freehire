@@ -75,7 +75,7 @@ func New(q Queries, importer Importer, private PrivateWriter) *Resolver {
 func (r *Resolver) Resolve(ctx context.Context, userID int64, req Request) (string, error) {
 	switch {
 	case req.JobSlug != "":
-		return r.resolveSlug(ctx, req.JobSlug)
+		return r.resolveSlug(ctx, userID, req.JobSlug)
 	case req.URL != "":
 		return r.resolveURL(ctx, userID, req.URL)
 	default:
@@ -83,13 +83,23 @@ func (r *Resolver) Resolve(ctx context.Context, userID int64, req Request) (stri
 	}
 }
 
-func (r *Resolver) resolveSlug(ctx context.Context, slug string) (string, error) {
+// resolveSlug is the only JobSlug-passthrough path, and the package doc's claim that a
+// private job is "visible only to its creator, through GetJobBySlug" is otherwise just a
+// comment: GetJobBySlug itself has no is_private predicate (see the query — jobs.sql:106),
+// and other callers rely on it for public jobs, so the ownership check belongs HERE rather
+// than in the shared query. A private job whose slug leaked through some side channel (a
+// screenshot, a log line — its 8-char SHA-256-derived shortcode gives it real entropy, but
+// is not an authorization check) must not resolve for anyone but the user who created it.
+func (r *Resolver) resolveSlug(ctx context.Context, userID int64, slug string) (string, error) {
 	j, err := r.q.GetJobBySlug(ctx, slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrJobNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("jdresolve: get job by slug: %w", err)
+	}
+	if j.IsPrivate && (!j.CreatedBy.Valid || j.CreatedBy.Int64 != userID) {
+		return "", ErrJobNotFound
 	}
 	return j.PublicSlug, nil
 }

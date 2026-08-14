@@ -128,6 +128,43 @@ func TestResolve_UnknownJobSlugIsNotFound(t *testing.T) {
 	}
 }
 
+// The package doc promises a private job is "visible only to its creator, through
+// GetJobBySlug" — this is the test that actually exercises that promise across a user
+// boundary, rather than trusting the public_slug's own entropy to stand in for it.
+func TestResolve_PrivateJobSlugIsRefusedForAnotherUser(t *testing.T) {
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+	ctx := context.Background()
+
+	owner := seedUser(t, pool, "private-owner@example.test")
+	stranger := seedUser(t, pool, "private-stranger@example.test")
+
+	pw := privatejob.NewWriter(q)
+	r := jdresolve.New(q, linkimport.New(pool, q, nil, pageClient{}, nil, nil), pw)
+
+	slug, err := r.Resolve(ctx, owner, jdresolve.Request{
+		Text:  "We are hiring a backend engineer with Go experience.",
+		Title: "Backend Engineer",
+	})
+	if err != nil {
+		t.Fatalf("seed private job: %v", err)
+	}
+
+	if _, err := r.Resolve(ctx, stranger, jdresolve.Request{JobSlug: slug}); !errors.Is(err, jdresolve.ErrJobNotFound) {
+		t.Errorf("resolving another user's private job err = %v, want ErrJobNotFound", err)
+	}
+
+	// The creator themselves must still be able to reopen it — this is the tailoring
+	// workspace's own reload path.
+	got, err := r.Resolve(ctx, owner, jdresolve.Request{JobSlug: slug})
+	if err != nil {
+		t.Fatalf("owner's own Resolve: %v", err)
+	}
+	if got != slug {
+		t.Errorf("Resolve = %q, want the same slug %q", got, slug)
+	}
+}
+
 func TestResolve_RecognizedATSURLBecomesAPublicJob(t *testing.T) {
 	pool := testdb.Pool(t)
 	q := db.New(pool)
