@@ -18,6 +18,7 @@
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { htmlToMarkdown } from '$lib/htmlToMarkdown';
+  import { renderMarkdown } from '$lib/markdown';
   import {
     REGION_OPTIONS,
     WORK_MODE_OPTIONS,
@@ -83,25 +84,12 @@
   // The just-submitted vacancy, shown as a confirmation that it is awaiting review.
   let submitted = $state.raw<Submission | null>(null);
 
-  // The Preview tab's rendered description — converted from the same markdown source
-  // submit() converts, so what a submitter sees in Preview matches what gets sent.
-  // Recomputed whenever the markdown changes (NoteEditor's onsave updates it on blur).
-  let previewDescriptionHtml = $state('');
-  $effect(() => {
-    const md = descriptionMarkdown.trim();
-    if (!md) {
-      previewDescriptionHtml = '';
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const html = await marked.parse(md);
-      if (!cancelled) previewDescriptionHtml = html;
-    })();
-    return () => {
-      cancelled = true;
-    };
-  });
+  // The Preview tab's rendered description. Unlike submit()'s descriptionHtml (which the
+  // server sanitizes on the way in, per moderation.Create), this renders straight to
+  // {@html} client-side — renderMarkdown() (marked + DOMPurify) is required here, not
+  // just marked.parse(), so a submitter pasting raw HTML into the editor can't run script
+  // in their own preview before the submission is ever sanitized server-side.
+  const previewDescriptionHtml = $derived(renderMarkdown(descriptionMarkdown.trim()));
 
   const canSubmit = $derived(
     url.trim() !== '' && title.trim() !== '' && company.trim() !== '' && !submitting,
@@ -128,7 +116,11 @@
     prefillMissURL = null;
     try {
       const result = await api.prefillSubmission(target);
-      const found = Object.values(result).some((v) => v);
+      // Object.values(...).some((v) => v) would treat an empty array (skills: [])
+      // as a hit — an array is truthy regardless of length.
+      const found = Object.values(result).some((v) =>
+        Array.isArray(v) ? v.length > 0 : typeof v === 'string' && v.trim() !== '',
+      );
       if (!found) {
         prefillMissURL = target;
         return;

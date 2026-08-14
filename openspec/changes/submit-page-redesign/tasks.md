@@ -61,5 +61,5 @@
 - [x] 6.2 Manual browser check: paste a known recognized job URL, confirm prefill fills
       empty fields and does not clobber fields already typed; paste an unrecognized URL
       and confirm it degrades to a no-op, not an error toast.
-- [x] 6.3 `go vet -tags=integration ./...`, `go test ./...`, `gofmt -l .` clean before
-      push.
+- [x] 6.3 `go vet ./...` (pre-commit), `go vet -tags=integration ./...` (push-time),
+      `go test ./...`, `gofmt -l .` clean before push.

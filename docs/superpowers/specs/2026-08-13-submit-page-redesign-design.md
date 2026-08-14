@@ -58,7 +58,8 @@ This wires the same path `work_mode`/`regions` already use:
   (`internal/vocab/vocab.go:31,34`) — an out-of-vocabulary value is dropped, degrading to
   dictionary derivation exactly like an unknown `work_mode` does today.
 - `derive()` (`moderation.go:239`) passes both into `jobderive.Input`.
-- A migration (next number, `0093`) adds `employment_type text DEFAULT '' NOT NULL` and
+- A migration (`0094` — `0093` was taken by a parallel PR by the time this shipped) adds
+  `employment_type text DEFAULT '' NOT NULL` and
   `seniority text DEFAULT '' NOT NULL` to `job_submissions`, mirroring
   `migrations/0031_submit_structured_facets.sql`'s pattern — so "My submissions" can echo
   back what the submitter actually stated, not just what got derived.
@@ -85,21 +86,16 @@ an arbitrary careers page, `internal/linksource/registry.go:49–75`). This is m
 broader than hand-writing fetchers for a handful of ATS platforms, and it is already
 built, tested, and running in production behind `/jobs/resolve`.
 
-`linkimport.Importer` gets a sibling method to its existing `Import`
-(`internal/linkimport/linkimport.go:100`):
-
-```go
-// Preview resolves raw the same way Import does, but writes nothing: no dedup check, no
-// enrichment enqueue, no search push. It exists for a caller that wants to show a
-// submitter what freehire would parse from their link before anything is stored.
-func (im *Importer) Preview(ctx context.Context, raw string) (sources.Job, string, bool, error)
-```
-
-It runs `linksource.Find(im.reg, u).Resolve(ctx, raw)` and returns the parsed
-`sources.Job` (title/company/location/description, and — when the platform states them
-structurally — `WorkMode`/`Seniority`/`EmploymentType`, `internal/sources/source.go:33–57`)
-plus the resolved source key; `ok=false` when nothing matched or the page is not a single
-posting.
+No new method was needed: `linkimport.Importer` already exposes
+`Resolve(ctx, raw string, known Board) (linksource.Resolved, bool, error)`
+(`internal/linkimport/linkimport.go:126`) — `Import` is defined as `Resolve` + `Write`,
+and `Resolve` alone is the exact seam `internal/jdresolve` already uses to branch on
+source before deciding how to persist, proven not to write by its own
+`TestResolve_DoesNotWriteAnything`. The prefill handler calls
+`im.Resolve(ctx, url, linkimport.Board{})` directly and reads the parsed `sources.Job`
+(title/company/location/description, and — when the platform states them structurally —
+`WorkMode`/`Seniority`/`EmploymentType`/`Skills`, `internal/sources/source.go:33–57`) off
+`resolved.Job`; `ok=false` when nothing matched or the page is not a single posting.
 
 New handler: `POST /submissions/prefill { url }`, `mw.key` + `mw.outboundFetch` (the same
 throttle `/jobs/resolve` already sits behind — this endpoint makes the same class of
