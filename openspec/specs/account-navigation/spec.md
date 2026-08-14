@@ -33,7 +33,7 @@ column.
 ### Requirement: Section navigation items
 
 The shell SHALL present navigation to the account sections — Profile, Tracking,
-Search notifications, API keys, and My submissions — each linking to its `my/*`
+Notifications, API keys, and My submissions — each linking to its `my/*`
 route. The item matching the current path SHALL be marked active, where a section
 is active when the path equals its route or is a descendant of it. Create actions
 and non-account links (e.g. Submit a job, Moderation) SHALL NOT appear in this
@@ -49,6 +49,12 @@ navigation.
 - **WHEN** a user selects a navigation item
 - **THEN** the app navigates to that section's route without unmounting the shell
   or its navigation
+
+#### Scenario: Notifications item covers all its sub-routes
+
+- **WHEN** a user is on `/my/notifications/searches` or
+  `/my/notifications/settings`
+- **THEN** the Notifications navigation item is marked active
 
 ### Requirement: Responsive navigation form
 
