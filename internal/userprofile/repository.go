@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/pgconv"
@@ -47,6 +49,26 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, specializa
 		ExcludedSkills:      excludedSkills,
 		LocationPreferences: locationPreferences,
 	})
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileFromRow(row), nil
+}
+
+// UpsertIfUnchanged behaves like Upsert but only writes when the row's updated_at still
+// matches expectedUpdatedAt, mapping no matching row to ErrConflict.
+func (r *QueriesRepository) UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error) {
+	row, err := r.q.UpsertUserProfileIfUnchanged(ctx, db.UpsertUserProfileIfUnchangedParams{
+		UserID:              userID,
+		Specializations:     specializations,
+		Skills:              skills,
+		ExcludedSkills:      excludedSkills,
+		LocationPreferences: locationPreferences,
+		UpdatedAt:           pgtype.Timestamptz{Time: expectedUpdatedAt, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Profile{}, ErrConflict
+	}
 	if err != nil {
 		return Profile{}, err
 	}

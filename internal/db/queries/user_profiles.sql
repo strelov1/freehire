@@ -20,6 +20,22 @@ SET specializations      = EXCLUDED.specializations,
     updated_at           = now()
 RETURNING *;
 
+-- name: UpsertUserProfileIfUnchanged :one
+-- Same write as UpsertUserProfile, guarded on the row's updated_at still matching what the
+-- caller read. Used by MergeSkills, whose merge (which fields to keep, which skills to add)
+-- is computed in Go from a prior Get, outside any transaction: a Save() landing in that gap
+-- must not be silently clobbered by a write built from a now-stale snapshot. No matching row
+-- (updated_at moved, or the profile was deleted) returns zero rows; the caller re-reads and
+-- retries rather than overwriting blind.
+UPDATE user_profiles
+SET specializations      = $2,
+    skills               = $3,
+    excluded_skills      = $4,
+    location_preferences = $5,
+    updated_at           = now()
+WHERE user_id = $1 AND updated_at = $6
+RETURNING *;
+
 -- name: DeleteUserProfile :execrows
 -- Remove the caller's profile. Returns the affected row count (0 when none existed); the
 -- handler treats delete as idempotent (204 either way).

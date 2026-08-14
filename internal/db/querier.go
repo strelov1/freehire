@@ -3493,6 +3493,13 @@ type Querier interface {
 	// normalized by the service; excluded_skills may be empty; location_preferences is a
 	// validated JSONB block or NULL (no preferences).
 	UpsertUserProfile(ctx context.Context, arg UpsertUserProfileParams) (UserProfile, error)
+	// Same write as UpsertUserProfile, guarded on the row's updated_at still matching what the
+	// caller read. Used by MergeSkills, whose merge (which fields to keep, which skills to add)
+	// is computed in Go from a prior Get, outside any transaction: a Save() landing in that gap
+	// must not be silently clobbered by a write built from a now-stale snapshot. No matching row
+	// (updated_at moved, or the profile was deleted) returns zero rows; the caller re-reads and
+	// retries rather than overwriting blind.
+	UpsertUserProfileIfUnchanged(ctx context.Context, arg UpsertUserProfileIfUnchangedParams) (UserProfile, error)
 	// Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 	// reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
 	// prior reference) has its company-info columns plus the curated yc_batch/yc_status

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/userprofile"
 )
@@ -21,6 +22,13 @@ type upsertArgs struct {
 	LocationPreferences json.RawMessage
 }
 
+// guardedUpsertArgs is upsertArgs plus the expectedUpdatedAt UpsertIfUnchanged guards
+// its write on.
+type guardedUpsertArgs struct {
+	upsertArgs
+	ExpectedUpdatedAt time.Time
+}
+
 // fakeRepo records the params it is handed and returns canned profiles/errors, so the
 // service tests run without a database (the searchprofile_test.go precedent).
 type fakeRepo struct {
@@ -29,7 +37,16 @@ type fakeRepo struct {
 	upsertErr    error
 	upsertRet    userprofile.Profile
 
+	// guardedUpserted/guardedUpsertCalls record UpsertIfUnchanged's calls; guardedUpsertErrs
+	// lets a test script a different result per call (e.g. ErrConflict then success), so
+	// MergeSkills' retry loop can be exercised deterministically.
+	guardedUpserted    guardedUpsertArgs
+	guardedUpsertCalls int
+	guardedUpsertErrs  []error
+	guardedUpsertRet   userprofile.Profile
+
 	getUserID int64
+	getCalls  int
 	getRet    userprofile.Profile
 	getErr    error
 
@@ -40,6 +57,7 @@ type fakeRepo struct {
 
 func (f *fakeRepo) Get(_ context.Context, userID int64) (userprofile.Profile, error) {
 	f.getUserID = userID
+	f.getCalls++
 	return f.getRet, f.getErr
 }
 
@@ -47,6 +65,19 @@ func (f *fakeRepo) Upsert(_ context.Context, userID int64, specializations, skil
 	f.upserted = upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	f.upsertCalled = true
 	return f.upsertRet, f.upsertErr
+}
+
+func (f *fakeRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (userprofile.Profile, error) {
+	f.guardedUpserted = guardedUpsertArgs{
+		upsertArgs{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences},
+		expectedUpdatedAt,
+	}
+	idx := f.guardedUpsertCalls
+	f.guardedUpsertCalls++
+	if idx < len(f.guardedUpsertErrs) && f.guardedUpsertErrs[idx] != nil {
+		return userprofile.Profile{}, f.guardedUpsertErrs[idx]
+	}
+	return f.guardedUpsertRet, nil
 }
 
 func (f *fakeRepo) Delete(_ context.Context, userID int64) error {
@@ -173,6 +204,72 @@ func TestMergeSkills_NeverExceedsCap(t *testing.T) {
 	}
 	if repo.upserted.Skills[199] != "new-a" {
 		t.Errorf("Skills[199] = %q, want the first skill that fit under the cap", repo.upserted.Skills[199])
+	}
+}
+
+// A profile read WITH a known updated_at must write through the guarded
+// UpsertIfUnchanged, not the unconditional Upsert — this is the fix itself: a merge
+// computed outside a transaction must not blindly clobber a concurrent Save().
+func TestMergeSkills_UsesGuardedWriteWhenUpdatedAtKnown(t *testing.T) {
+	updatedAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{getRet: userprofile.Profile{
+		UserID: 7, Skills: []string{"go"}, Specializations: []string{"backend"}, UpdatedAt: &updatedAt,
+	}}
+	err := userprofile.New(repo).MergeSkills(context.Background(), 7, []string{"docker"})
+	if err != nil {
+		t.Fatalf("MergeSkills: %v", err)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert (unguarded) should not be called when updated_at is known")
+	}
+	if repo.guardedUpsertCalls != 1 {
+		t.Fatalf("guarded upsert calls = %d, want 1", repo.guardedUpsertCalls)
+	}
+	if !repo.guardedUpserted.ExpectedUpdatedAt.Equal(updatedAt) {
+		t.Errorf("guarded write's expectedUpdatedAt = %v, want %v", repo.guardedUpserted.ExpectedUpdatedAt, updatedAt)
+	}
+	wantSkills := []string{"go", "docker"}
+	if strings.Join(repo.guardedUpserted.Skills, ",") != strings.Join(wantSkills, ",") {
+		t.Errorf("Skills = %v, want %v", repo.guardedUpserted.Skills, wantSkills)
+	}
+}
+
+// The race the review flagged: a concurrent Save() commits between MergeSkills' Get and
+// its write, so the guarded write reports ErrConflict once. MergeSkills re-reads and
+// retries rather than giving up or (worse) silently reverting the concurrent Save().
+func TestMergeSkills_RetriesOnConflictThenSucceeds(t *testing.T) {
+	updatedAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{
+		getRet:            userprofile.Profile{UserID: 7, Skills: []string{"go"}, UpdatedAt: &updatedAt},
+		guardedUpsertErrs: []error{userprofile.ErrConflict, nil},
+	}
+	err := userprofile.New(repo).MergeSkills(context.Background(), 7, []string{"docker"})
+	if err != nil {
+		t.Fatalf("MergeSkills: %v", err)
+	}
+	if repo.guardedUpsertCalls != 2 {
+		t.Errorf("guarded upsert calls = %d, want 2 (one conflict, one success)", repo.guardedUpsertCalls)
+	}
+	if repo.getCalls != 2 {
+		t.Errorf("Get calls = %d, want 2 — a retry must re-read the profile, not reuse the stale snapshot", repo.getCalls)
+	}
+}
+
+// A concurrent writer that keeps winning the race exhausts MergeSkills' bounded retry:
+// it gives up and reports ErrConflict rather than retrying forever or, worse, forcing a
+// write that would revert whatever kept winning.
+func TestMergeSkills_GivesUpAfterRepeatedConflicts(t *testing.T) {
+	updatedAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{
+		getRet:            userprofile.Profile{UserID: 7, Skills: []string{"go"}, UpdatedAt: &updatedAt},
+		guardedUpsertErrs: []error{userprofile.ErrConflict, userprofile.ErrConflict, userprofile.ErrConflict},
+	}
+	err := userprofile.New(repo).MergeSkills(context.Background(), 7, []string{"docker"})
+	if !errors.Is(err, userprofile.ErrConflict) {
+		t.Errorf("err = %v, want ErrConflict after exhausting retries", err)
+	}
+	if repo.guardedUpsertCalls != 3 {
+		t.Errorf("guarded upsert calls = %d, want 3 (mergeSkillsMaxAttempts)", repo.guardedUpsertCalls)
 	}
 }
 

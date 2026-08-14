@@ -36,7 +36,17 @@ var (
 	// ErrNotFound is the caller having no profile yet (mapped to a null payload on GET,
 	// 404 on the verdict/ATS sub-resources).
 	ErrNotFound = errors.New("userprofile: not found")
+	// ErrConflict is a guarded write (UpsertIfUnchanged) landing after the row it read
+	// changed underneath it — used internally by MergeSkills' retry loop, never
+	// returned to a Save() caller.
+	ErrConflict = errors.New("userprofile: profile changed concurrently")
 )
+
+// mergeSkillsMaxAttempts bounds MergeSkills' read-merge-write retry when a concurrent
+// Save() keeps winning the race. MergeSkills is a background courtesy sync (see its own
+// doc comment) with no user waiting on it, so giving up quietly after a few attempts is
+// the right failure mode, not an unbounded retry loop.
+const mergeSkillsMaxAttempts = 3
 
 // maxSpecializations caps how many specializations one profile may combine; the
 // migration's cardinality CHECK is the backstop.
@@ -83,6 +93,12 @@ type Profile struct {
 type Repository interface {
 	Get(ctx context.Context, userID int64) (Profile, error)
 	Upsert(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage) (Profile, error)
+	// UpsertIfUnchanged behaves like Upsert but writes only when the row's updated_at
+	// still equals expectedUpdatedAt — the guard MergeSkills needs because its merge is
+	// computed from a prior Get outside any transaction, so a Save() landing in that
+	// gap must not be silently overwritten by a write built from a now-stale snapshot.
+	// No matching row (updated_at moved, or the profile was deleted) maps to ErrConflict.
+	UpsertIfUnchanged(ctx context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, expectedUpdatedAt time.Time) (Profile, error)
 	Delete(ctx context.Context, userID int64) error
 }
 
@@ -143,7 +159,28 @@ func (s *Service) Delete(ctx context.Context, userID int64) error {
 // skill, overwrites specializations, excluded_skills or location preferences, or errors
 // past the skill cap — it silently adds only as many of the new skills as still fit,
 // mirroring how a manual claim behaves when the profile is near the limit.
+//
+// The merge (which skills still fit, what the rest of the profile currently holds) is
+// computed in Go from a Get read outside any transaction, so a concurrent Save() landing
+// in that gap must not be silently reverted by a write built from that now-stale
+// snapshot. The write is guarded on the row's updated_at (UpsertIfUnchanged); a
+// concurrent write in the gap is retried from a fresh read up to mergeSkillsMaxAttempts
+// times before giving up quietly — the same courtesy-update posture as the rest of this
+// method, just extended to the race as well as to the skill cap.
 func (s *Service) MergeSkills(ctx context.Context, userID int64, skills []string) error {
+	var err error
+	for attempt := 0; attempt < mergeSkillsMaxAttempts; attempt++ {
+		err = s.mergeSkillsOnce(ctx, userID, skills)
+		if !errors.Is(err, ErrConflict) {
+			return err
+		}
+	}
+	return err
+}
+
+// mergeSkillsOnce is one read-merge-write attempt of MergeSkills. It returns ErrConflict
+// when the guarded write lost a race to a concurrent Save(), for the caller to retry.
+func (s *Service) mergeSkillsOnce(ctx context.Context, userID int64, skills []string) error {
 	profile, err := s.repo.Get(ctx, userID)
 	if errors.Is(err, ErrNotFound) {
 		return nil
@@ -155,7 +192,15 @@ func (s *Service) MergeSkills(ctx context.Context, userID int64, skills []string
 	if !changed {
 		return nil
 	}
-	_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.ExcludedSkills, profile.LocationPreferences)
+	if profile.UpdatedAt == nil {
+		// No version to guard the write on — write unconditionally, same as before
+		// this fix. A profile read from the real Repository always carries a non-nil
+		// UpdatedAt (updated_at is NOT NULL); this only happens against a Repository
+		// fake that leaves it unset.
+		_, err = s.repo.Upsert(ctx, userID, profile.Specializations, merged, profile.ExcludedSkills, profile.LocationPreferences)
+		return err
+	}
+	_, err = s.repo.UpsertIfUnchanged(ctx, userID, profile.Specializations, merged, profile.ExcludedSkills, profile.LocationPreferences, *profile.UpdatedAt)
 	return err
 }
 

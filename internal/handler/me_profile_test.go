@@ -43,6 +43,13 @@ func (f *fakeProfileRepo) Upsert(_ context.Context, userID int64, specialization
 	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
 	return f.upsertRet, nil
 }
+
+// UpsertIfUnchanged is exercised by userprofile's own tests (MergeSkills' retry loop);
+// no handler here calls MergeSkills, so this fake just satisfies the interface.
+func (f *fakeProfileRepo) UpsertIfUnchanged(_ context.Context, userID int64, specializations, skills, excludedSkills []string, locationPreferences json.RawMessage, _ time.Time) (userprofile.Profile, error) {
+	f.upserted = profileUpsert{UserID: userID, Specializations: specializations, Skills: skills, ExcludedSkills: excludedSkills, LocationPreferences: locationPreferences}
+	return f.upsertRet, nil
+}
 func (f *fakeProfileRepo) Delete(context.Context, int64) error { return f.delErr }
 
 // profileApp mounts the singleton profile endpoints behind RequireAuth on a handler whose

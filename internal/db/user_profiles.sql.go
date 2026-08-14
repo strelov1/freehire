@@ -8,6 +8,8 @@ package db
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteUserProfile = `-- name: DeleteUserProfile :execrows
@@ -79,6 +81,54 @@ func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfilePa
 		arg.Skills,
 		arg.ExcludedSkills,
 		arg.LocationPreferences,
+	)
+	var i UserProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Skills,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Specializations,
+		&i.LocationPreferences,
+		&i.ExcludedSkills,
+	)
+	return i, err
+}
+
+const upsertUserProfileIfUnchanged = `-- name: UpsertUserProfileIfUnchanged :one
+UPDATE user_profiles
+SET specializations      = $2,
+    skills               = $3,
+    excluded_skills      = $4,
+    location_preferences = $5,
+    updated_at           = now()
+WHERE user_id = $1 AND updated_at = $6
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills
+`
+
+type UpsertUserProfileIfUnchangedParams struct {
+	UserID              int64              `json:"user_id"`
+	Specializations     []string           `json:"specializations"`
+	Skills              []string           `json:"skills"`
+	ExcludedSkills      []string           `json:"excluded_skills"`
+	LocationPreferences json.RawMessage    `json:"location_preferences"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Same write as UpsertUserProfile, guarded on the row's updated_at still matching what the
+// caller read. Used by MergeSkills, whose merge (which fields to keep, which skills to add)
+// is computed in Go from a prior Get, outside any transaction: a Save() landing in that gap
+// must not be silently clobbered by a write built from a now-stale snapshot. No matching row
+// (updated_at moved, or the profile was deleted) returns zero rows; the caller re-reads and
+// retries rather than overwriting blind.
+func (q *Queries) UpsertUserProfileIfUnchanged(ctx context.Context, arg UpsertUserProfileIfUnchangedParams) (UserProfile, error) {
+	row := q.db.QueryRow(ctx, upsertUserProfileIfUnchanged,
+		arg.UserID,
+		arg.Specializations,
+		arg.Skills,
+		arg.ExcludedSkills,
+		arg.LocationPreferences,
+		arg.UpdatedAt,
 	)
 	var i UserProfile
 	err := row.Scan(
