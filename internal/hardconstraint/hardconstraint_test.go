@@ -177,6 +177,28 @@ func TestLocationWorkModeCategory(t *testing.T) {
 			t.Error("a remote job should raise no location blocker")
 		}
 	})
+	t.Run("hybrid versus remote preference is a soft blocker", func(t *testing.T) {
+		// A hybrid role needs some on-site presence too — it must not be treated
+		// identically to a fully remote one.
+		bs := Evaluate(JobRequirements{WorkMode: "hybrid"}, CVEvidence{PrefersRemote: true})
+		b, ok := find(bs, CategoryLocationWorkMode)
+		if !ok || b.Met || b.Severity != SeveritySoft {
+			t.Fatalf("want unmet soft location blocker, got %+v ok=%v", b, ok)
+		}
+	})
+	t.Run("hybrid geographic mismatch is a soft blocker", func(t *testing.T) {
+		bs := Evaluate(JobRequirements{WorkMode: "hybrid", Countries: []string{"DE"}}, CVEvidence{CountryCode: "US"})
+		b, ok := find(bs, CategoryLocationWorkMode)
+		if !ok || b.Met || b.Severity != SeveritySoft {
+			t.Fatalf("want unmet soft location blocker, got %+v ok=%v", b, ok)
+		}
+	})
+	t.Run("hybrid job with matching country and no remote preference is skipped", func(t *testing.T) {
+		bs := Evaluate(JobRequirements{WorkMode: "hybrid", Countries: []string{"DE"}}, CVEvidence{CountryCode: "DE"})
+		if _, ok := find(bs, CategoryLocationWorkMode); ok {
+			t.Error("a hybrid job with a matching résumé location should raise no location blocker")
+		}
+	})
 }
 
 func TestOverallCap(t *testing.T) {

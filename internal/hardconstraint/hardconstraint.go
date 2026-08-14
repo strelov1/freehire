@@ -166,16 +166,28 @@ func appendWorkAuth(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker
 	return append(out, blocker(CategoryWorkAuth, false, reason, action))
 }
 
+// requiresOnSitePresence reports whether the job's work mode needs the candidate to
+// physically be somewhere — true for both "onsite" and "hybrid" (vocab.WorkModeValues'
+// third and second values). A fully "remote" job needs neither check below.
+func requiresOnSitePresence(workMode string) bool {
+	return workMode == "onsite" || workMode == "hybrid"
+}
+
 func appendLocationWorkMode(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker {
+	onSite := requiresOnSitePresence(job.WorkMode)
+	label := "On-site"
+	if job.WorkMode == "hybrid" {
+		label = "Hybrid"
+	}
 	// A remote-preference conflict needs no geography.
-	if job.WorkMode == "onsite" && cv.PrefersRemote {
-		reason := "On-site role, but you prefer remote work."
+	if onSite && cv.PrefersRemote {
+		reason := fmt.Sprintf("%s role, but you prefer remote work.", label)
 		action := "Confirm you can work on-site before applying."
 		return append(out, blocker(CategoryLocationWorkMode, false, reason, action))
 	}
 	// A geographic mismatch needs both known country codes.
-	if job.WorkMode == "onsite" && len(job.Countries) > 0 && cv.CountryCode != "" && !containsCountry(job.Countries, cv.CountryCode) {
-		reason := fmt.Sprintf("On-site in %s; your résumé location is elsewhere.", strings.Join(job.Countries, ", "))
+	if onSite && len(job.Countries) > 0 && cv.CountryCode != "" && !containsCountry(job.Countries, cv.CountryCode) {
+		reason := fmt.Sprintf("%s in %s; your résumé location is elsewhere.", label, strings.Join(job.Countries, ", "))
 		action := "Confirm you can be on-site there (relocation or local presence)."
 		return append(out, blocker(CategoryLocationWorkMode, false, reason, action))
 	}
