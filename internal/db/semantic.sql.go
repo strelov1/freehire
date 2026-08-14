@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 const claimSemanticBatch = `-- name: ClaimSemanticBatch :many
@@ -98,6 +99,34 @@ WHERE id = ANY($1::bigint[])
 // the index: a closed job has no vector in either place.
 func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error {
 	_, err := q.db.Exec(ctx, clearSemanticEmbeddedBatch, ids)
+	return err
+}
+
+const deleteJobSemanticChunks = `-- name: DeleteJobSemanticChunks :exec
+
+DELETE FROM job_semantic_chunks
+WHERE job_id = $1::bigint
+`
+
+// ---------------------------------------------------------------------------
+// job_semantic_chunks: pgvector-backed per-chunk embeddings (see migration 0092
+// and openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/5).
+// A job's description is HTML-stripped and split into one or more chunks, each with
+// its own vector(768) row here — replacing the single, doubly-truncated
+// jobs.semantic_embedding vector as the queryable representation. Consumers:
+// cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
+// DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
+// NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
+// ---------------------------------------------------------------------------
+// Remove every chunk row for one job. Two callers: the open-job re-embed path issues
+// this immediately before InsertJobSemanticChunks in the same transaction (a job's
+// chunk COUNT can change between embeds — the source text was re-chunked — so there is
+// no stable per-chunk_index UPDATE target, "replace" has to be delete-then-insert, not
+// an upsert); the closed-job path issues this alone, mirroring the existing
+// ClearSemanticEmbeddedBatch clear. ON DELETE CASCADE from jobs already covers a hard
+// delete (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
+func (q *Queries) DeleteJobSemanticChunks(ctx context.Context, jobID int64) error {
+	_, err := q.db.Exec(ctx, deleteJobSemanticChunks, jobID)
 	return err
 }
 
@@ -234,6 +263,142 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.SimilarJobIds,
 			&i.SimilarComputedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertJobSemanticChunks = `-- name: InsertJobSemanticChunks :exec
+INSERT INTO job_semantic_chunks (job_id, chunk_index, embedding)
+SELECT $1::bigint, idx.chunk_index, emb.embedding::vector(768)
+FROM unnest($2::smallint[]) WITH ORDINALITY AS idx(chunk_index, n)
+JOIN unnest($3::text[]) WITH ORDINALITY AS emb(embedding, n) USING (n)
+`
+
+type InsertJobSemanticChunksParams struct {
+	JobID        int64    `json:"job_id"`
+	ChunkIndices []int16  `json:"chunk_indices"`
+	Embeddings   []string `json:"embeddings"`
+}
+
+// Batch-insert one job's freshly-embedded chunks. chunk_indices and embeddings are
+// positionally paired parallel arrays (element i of one belongs with element i of the
+// other) — unnested separately and rejoined WITH ORDINALITY because sqlc cannot infer
+// the types of a multi-argument unnest over query parameters (same pattern as
+// pruning.sql's bulk job delete/archive). embeddings travels as vector literal TEXT
+// (e.g. "[0.1,0.2,...]"), not a native vector(768)[] array: pgx's driver.Valuer/
+// sql.Scanner fallback for pgvector.Vector (this repo registers no custom OID codec
+// for it) only covers a single scalar column value, not an array of them, so each
+// element casts to vector(768) individually in the SELECT instead. Always run
+// immediately after DeleteJobSemanticChunks in the same transaction as the embed
+// stamp — see that query's comment.
+func (q *Queries) InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error {
+	_, err := q.db.Exec(ctx, insertJobSemanticChunks, arg.JobID, arg.ChunkIndices, arg.Embeddings)
+	return err
+}
+
+const nearestJobsToEmbedding = `-- name: NearestJobsToEmbedding :many
+SELECT c.job_id, MIN(c.embedding <=> $1::vector(768))::float8 AS distance
+FROM job_semantic_chunks c
+JOIN jobs j ON j.id = c.job_id AND j.closed_at IS NULL
+GROUP BY c.job_id
+ORDER BY distance
+LIMIT $2::int
+`
+
+type NearestJobsToEmbeddingParams struct {
+	QueryVector pgvector.Vector `json:"query_vector"`
+	LimitCount  int32           `json:"limit_count"`
+}
+
+type NearestJobsToEmbeddingRow struct {
+	JobID    int64   `json:"job_id"`
+	Distance float64 `json:"distance"`
+}
+
+// The same nearest-chunk-per-job rollup as NearestJobsToJob, but for GET
+// /me/recommendations: the query vector is a specific signed-in user's persisted CV
+// embedding (a résumé is short enough to embed as one passage, never chunked), not
+// another job's chunk set, so there is no self-join and no source company to exclude —
+// "similar to a job" and "matches a CV" are different questions, only the rollup shape
+// (minimum distance per candidate job across its chunks) is shared. Excludes only
+// closed jobs; callers layer the existing facet-filter WHERE clause and
+// LIMIT/OFFSET on top (see design.md Decision 5 / tasks.md 6.1).
+func (q *Queries) NearestJobsToEmbedding(ctx context.Context, arg NearestJobsToEmbeddingParams) ([]NearestJobsToEmbeddingRow, error) {
+	rows, err := q.db.Query(ctx, nearestJobsToEmbedding, arg.QueryVector, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NearestJobsToEmbeddingRow{}
+	for rows.Next() {
+		var i NearestJobsToEmbeddingRow
+		if err := rows.Scan(&i.JobID, &i.Distance); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nearestJobsToJob = `-- name: NearestJobsToJob :many
+SELECT j2.id AS job_id, MIN(c2.embedding <=> c1.embedding)::float8 AS distance
+FROM job_semantic_chunks c1
+JOIN jobs j1 ON j1.id = c1.job_id
+JOIN job_semantic_chunks c2 ON c2.job_id <> c1.job_id
+JOIN jobs j2 ON j2.id = c2.job_id AND j2.closed_at IS NULL
+WHERE c1.job_id = $1::bigint
+  AND (j1.company_slug = '' OR j2.company_slug IS DISTINCT FROM j1.company_slug)
+GROUP BY j2.id
+ORDER BY distance
+LIMIT $2::int
+`
+
+type NearestJobsToJobParams struct {
+	JobID      int64 `json:"job_id"`
+	LimitCount int32 `json:"limit_count"`
+}
+
+type NearestJobsToJobRow struct {
+	JobID    int64   `json:"job_id"`
+	Distance float64 `json:"distance"`
+}
+
+// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
+// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
+// the source is the MINIMUM cosine distance across every (source chunk, candidate
+// chunk) pair — the single nearest passage wins, not an average — so a long job with
+// one perfectly-matching paragraph outranks a job that is merely "somewhat close"
+// everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
+// of a multi-vector document's vectors"), kept intentionally the same across the
+// storage-engine change. j1 (the source job) is joined once, not re-looked-up per c1
+// row via a correlated subquery, to read its company_slug for the exclusion below —
+// functionally identical to design.md's draft (which used
+// `company_slug IS DISTINCT FROM (SELECT company_slug FROM jobs WHERE id = c1.job_id)`)
+// but avoids re-executing a subquery per source-chunk row. Excludes: the source job
+// itself (c2.job_id <> c1.job_id), closed candidates, and — unless the source job has
+// no resolved company (company_slug = ”, this repo's "unknown company" sentinel, see
+// jobs.company_slug NOT NULL DEFAULT ”) — any candidate sharing the source's exact
+// company_slug, so two different companies that both merely lack a resolved slug don't
+// spuriously exclude each other.
+func (q *Queries) NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error) {
+	rows, err := q.db.Query(ctx, nearestJobsToJob, arg.JobID, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NearestJobsToJobRow{}
+	for rows.Next() {
+		var i NearestJobsToJobRow
+		if err := rows.Scan(&i.JobID, &i.Distance); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

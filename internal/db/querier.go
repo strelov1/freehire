@@ -713,6 +713,24 @@ type Querier interface {
 	// aged out.
 	DeleteExpiredTracerClicks(ctx context.Context, maxAge pgtype.Interval) (int64, error)
 	DeleteGmailConnection(ctx context.Context, userID int64) error
+	// ---------------------------------------------------------------------------
+	// job_semantic_chunks: pgvector-backed per-chunk embeddings (see migration 0092
+	// and openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decisions 1/5).
+	// A job's description is HTML-stripped and split into one or more chunks, each with
+	// its own vector(768) row here — replacing the single, doubly-truncated
+	// jobs.semantic_embedding vector as the queryable representation. Consumers:
+	// cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
+	// DeleteJobSemanticChunks alone for a closed job), cmd/similar-backfill (reads, via
+	// NearestJobsToJob), and GET /me/recommendations (reads, via NearestJobsToEmbedding).
+	// ---------------------------------------------------------------------------
+	// Remove every chunk row for one job. Two callers: the open-job re-embed path issues
+	// this immediately before InsertJobSemanticChunks in the same transaction (a job's
+	// chunk COUNT can change between embeds — the source text was re-chunked — so there is
+	// no stable per-chunk_index UPDATE target, "replace" has to be delete-then-insert, not
+	// an upsert); the closed-job path issues this alone, mirroring the existing
+	// ClearSemanticEmbeddedBatch clear. ON DELETE CASCADE from jobs already covers a hard
+	// delete (cmd/prune) — this query is for the two soft paths cascade doesn't reach.
+	DeleteJobSemanticChunks(ctx context.Context, jobID int64) error
 	DeleteMailbox(ctx context.Context, userID int64) error
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
@@ -1348,6 +1366,18 @@ type Querier interface {
 	// Store a message received at a hosted mailbox, idempotent by
 	// (user_id, source, external_id) with source fixed to 'hosted'.
 	InsertHostedMessage(ctx context.Context, arg InsertHostedMessageParams) error
+	// Batch-insert one job's freshly-embedded chunks. chunk_indices and embeddings are
+	// positionally paired parallel arrays (element i of one belongs with element i of the
+	// other) — unnested separately and rejoined WITH ORDINALITY because sqlc cannot infer
+	// the types of a multi-argument unnest over query parameters (same pattern as
+	// pruning.sql's bulk job delete/archive). embeddings travels as vector literal TEXT
+	// (e.g. "[0.1,0.2,...]"), not a native vector(768)[] array: pgx's driver.Valuer/
+	// sql.Scanner fallback for pgvector.Vector (this repo registers no custom OID codec
+	// for it) only covers a single scalar column value, not an array of them, so each
+	// element casts to vector(768) individually in the SELECT instead. Always run
+	// immediately after DeleteJobSemanticChunks in the same transaction as the embed
+	// stamp — see that query's comment.
+	InsertJobSemanticChunks(ctx context.Context, arg InsertJobSemanticChunksParams) error
 	// Claim an address for a user. May raise a unique violation on user_id (already
 	// has a mailbox) or address (taken) — the allocation service handles both: it
 	// reads-back on a user conflict and retries the next suffix on an address conflict.
@@ -2166,6 +2196,33 @@ type Querier interface {
 	// yields no row exactly like a concurrent delete already did, and the caller reports both
 	// the same way — reload and retry — rather than pretending a still-present row vanished.
 	MergeExperienceAtoms(ctx context.Context, arg MergeExperienceAtomsParams) (MergeExperienceAtomsRow, error)
+	// The same nearest-chunk-per-job rollup as NearestJobsToJob, but for GET
+	// /me/recommendations: the query vector is a specific signed-in user's persisted CV
+	// embedding (a résumé is short enough to embed as one passage, never chunked), not
+	// another job's chunk set, so there is no self-join and no source company to exclude —
+	// "similar to a job" and "matches a CV" are different questions, only the rollup shape
+	// (minimum distance per candidate job across its chunks) is shared. Excludes only
+	// closed jobs; callers layer the existing facet-filter WHERE clause and
+	// LIMIT/OFFSET on top (see design.md Decision 5 / tasks.md 6.1).
+	NearestJobsToEmbedding(ctx context.Context, arg NearestJobsToEmbeddingParams) ([]NearestJobsToEmbeddingRow, error)
+	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
+	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
+	// the source is the MINIMUM cosine distance across every (source chunk, candidate
+	// chunk) pair — the single nearest passage wins, not an average — so a long job with
+	// one perfectly-matching paragraph outranks a job that is merely "somewhat close"
+	// everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
+	// of a multi-vector document's vectors"), kept intentionally the same across the
+	// storage-engine change. j1 (the source job) is joined once, not re-looked-up per c1
+	// row via a correlated subquery, to read its company_slug for the exclusion below —
+	// functionally identical to design.md's draft (which used
+	// `company_slug IS DISTINCT FROM (SELECT company_slug FROM jobs WHERE id = c1.job_id)`)
+	// but avoids re-executing a subquery per source-chunk row. Excludes: the source job
+	// itself (c2.job_id <> c1.job_id), closed candidates, and — unless the source job has
+	// no resolved company (company_slug = '', this repo's "unknown company" sentinel, see
+	// jobs.company_slug NOT NULL DEFAULT '') — any candidate sharing the source's exact
+	// company_slug, so two different companies that both merely lack a resolved slug don't
+	// spuriously exclude each other.
+	NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error)
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.
 	NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (CvRevision, error)

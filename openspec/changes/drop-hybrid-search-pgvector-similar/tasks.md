@@ -17,7 +17,7 @@
       `SelectSemanticEmbeddingVecBackfillBatch`/`BackfillSemanticEmbeddingVecBatch`
       sqlc queries added for it. This is a deliberate reversal, not a bug — note it
       as such in the commit message.
-- [ ] 1.3 `internal/db/queries/*.sql`: sqlc queries for `job_semantic_chunks`
+- [x] 1.3 `internal/db/queries/*.sql`: sqlc queries for `job_semantic_chunks`
       (insert/replace a job's chunk rows, delete a job's chunk rows, the
       nearest-neighbour-over-chunks query from design.md Decision 5). `make sqlc`.
 
