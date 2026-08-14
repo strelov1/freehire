@@ -10,16 +10,16 @@
 
 ## 3. `internal/savedsearch`
 
-- [ ] 3.1 `Repository.Create` signature gains `derivedFromProfile bool`; `QueriesRepository.Create` passes it through and uses `pgerr.UniqueViolationConstraint` to map a hit on `saved_searches_derived_from_profile_idx` to a new `ErrProfileSearchExists` (409) instead of the existing `ErrDuplicateName` mapping (which stays for the name-uniqueness constraint).
-- [ ] 3.2 `Service.Create` signature gains `derivedFromProfile bool`, passed through to the repository (no new validation beyond the existing name/cap checks — the constraint does the invariant work).
-- [ ] 3.3 `SavedSearch` domain struct gains `DerivedFromProfile bool`; `fromRow` maps it.
-- [ ] 3.4 Unit tests (fake repository): `Create` with the flag set stores it; a second `Create` with the flag set surfaces `ErrProfileSearchExists`; existing `ErrDuplicateName`/`ErrCapExceeded` paths unaffected.
+- [x] 3.1 `Repository.Create` signature gains `derivedFromProfile bool`; `QueriesRepository.Create` passes it through and uses `pgerr.UniqueViolationConstraint` to map a hit on `saved_searches_derived_from_profile_idx` to a new `ErrProfileSearchExists` (409) instead of the existing `ErrDuplicateName` mapping (which stays for the name-uniqueness constraint).
+- [x] 3.2 `Service.Create` signature gains `derivedFromProfile bool`, passed through to the repository (no new validation beyond the existing name/cap checks — the constraint does the invariant work).
+- [x] 3.3 `SavedSearch` domain struct gains `DerivedFromProfile bool`; `fromRow` maps it.
+- [x] 3.4 Unit tests (fake repository): `Create` with the flag set stores it; a second `Create` with the flag set surfaces `ErrProfileSearchExists`; existing `ErrDuplicateName`/`ErrCapExceeded` paths unaffected.
 
 ## 4. Backend API
 
-- [ ] 4.1 `internal/handler/me_searches.go`: `createSavedSearchRequest` gains `DerivedFromProfile bool` (json `derived_from_profile`, default false — every existing caller unaffected); `savedSearchResponse`/`toSavedSearchResponse` include it; `savedSearchError` maps `ErrProfileSearchExists` to 409.
-- [ ] 4.2 Unit tests: create with the flag round-trips in the response; a second flagged create 409s; existing tests (unflagged create/update/delete) unaffected.
-- [ ] 4.3 Integration test (`//go:build integration`): the partial unique index actually rejects a second `derived_from_profile=true` row for the same user against real Postgres.
+- [x] 4.1 `internal/handler/me_searches.go`: `createSavedSearchRequest` gains `DerivedFromProfile bool` (json `derived_from_profile`, default false — every existing caller unaffected); `savedSearchResponse`/`toSavedSearchResponse` include it; `savedSearchError` maps `ErrProfileSearchExists` to 409.
+- [x] 4.2 Unit tests: create with the flag round-trips in the response; a second flagged create 409s; existing tests (unflagged create/update/delete) unaffected.
+- [x] 4.3 Integration test (`//go:build integration`): the partial unique index actually rejects a second `derived_from_profile=true` row for the same user against real Postgres.
 
 ## 5. Web: toggle + sync
 

@@ -43,26 +43,28 @@ func (h *savedSearchHandlers) register(api fiber.Router, mw middleware) {
 // (ownership, internal); query is the canonical search query string the SPA replays
 // into the filter URL.
 type savedSearchResponse struct {
-	ID          int64      `json:"id"`
-	Name        string     `json:"name"`
-	Query       string     `json:"query"`
-	PublicSlug  string     `json:"public_slug"`  // empty when the set is private (not shared)
-	AuthorLabel string     `json:"author_label"` // empty when the board is anonymous
-	CreatedAt   *time.Time `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at"`
+	ID                 int64      `json:"id"`
+	Name               string     `json:"name"`
+	Query              string     `json:"query"`
+	PublicSlug         string     `json:"public_slug"`  // empty when the set is private (not shared)
+	AuthorLabel        string     `json:"author_label"` // empty when the board is anonymous
+	DerivedFromProfile bool       `json:"derived_from_profile"`
+	CreatedAt          *time.Time `json:"created_at"`
+	UpdatedAt          *time.Time `json:"updated_at"`
 }
 
 // toSavedSearchResponse maps a stored saved search to its wire shape (no user id).
 // PublicSlug/AuthorLabel are empty strings when the board is private / anonymous.
 func toSavedSearchResponse(s savedsearch.SavedSearch) savedSearchResponse {
 	return savedSearchResponse{
-		ID:          s.ID,
-		Name:        s.Name,
-		Query:       s.Query,
-		PublicSlug:  s.PublicSlug,
-		AuthorLabel: s.AuthorLabel,
-		CreatedAt:   s.CreatedAt,
-		UpdatedAt:   s.UpdatedAt,
+		ID:                 s.ID,
+		Name:               s.Name,
+		Query:              s.Query,
+		PublicSlug:         s.PublicSlug,
+		AuthorLabel:        s.AuthorLabel,
+		DerivedFromProfile: s.DerivedFromProfile,
+		CreatedAt:          s.CreatedAt,
+		UpdatedAt:          s.UpdatedAt,
 	}
 }
 
@@ -81,6 +83,8 @@ func savedSearchError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "saved search not found")
 	case errors.Is(err, savedsearch.ErrInvalidAuthorLabel):
 		return fiber.NewError(fiber.StatusBadRequest, "author label must be at most 60 characters")
+	case errors.Is(err, savedsearch.ErrProfileSearchExists):
+		return fiber.NewError(fiber.StatusConflict, "a profile-derived search already exists")
 	default:
 		return err
 	}
@@ -89,8 +93,9 @@ func savedSearchError(err error) error {
 // createSavedSearchRequest is the create body: a required display name and the canonical
 // search query string (an empty query is the valid "show all" snapshot).
 type createSavedSearchRequest struct {
-	Name  string `json:"name"`
-	Query string `json:"query"`
+	Name               string `json:"name"`
+	Query              string `json:"query"`
+	DerivedFromProfile bool   `json:"derived_from_profile"`
 }
 
 // updateSavedSearchRequest is the partial-update body: a nil field is left unchanged, so a
@@ -115,7 +120,7 @@ func (h *savedSearchHandlers) CreateSavedSearch(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	saved, err := h.savedSearch.Create(c.Context(), userID, in.Name, in.Query)
+	saved, err := h.savedSearch.Create(c.Context(), userID, in.Name, in.Query, in.DerivedFromProfile)
 	if err != nil {
 		return savedSearchError(err)
 	}

@@ -46,11 +46,20 @@ func (r *QueriesRepository) Count(ctx context.Context, userID int64) (int64, err
 	return r.q.CountSavedSearches(ctx, userID)
 }
 
-// Create inserts a saved search, mapping the UNIQUE (user_id, name) violation to
-// ErrDuplicateName.
-func (r *QueriesRepository) Create(ctx context.Context, userID int64, name, query string) (SavedSearch, error) {
-	row, err := r.q.CreateSavedSearch(ctx, db.CreateSavedSearchParams{UserID: userID, Name: name, Query: query})
-	if pgerr.IsUniqueViolation(err) {
+// Create inserts a saved search. The UNIQUE (user_id, name) violation maps to
+// ErrDuplicateName; the partial UNIQUE (user_id) WHERE derived_from_profile violation
+// (at most one profile-derived row per user) maps to ErrProfileSearchExists.
+func (r *QueriesRepository) Create(ctx context.Context, userID int64, name, query string, derivedFromProfile bool) (SavedSearch, error) {
+	row, err := r.q.CreateSavedSearch(ctx, db.CreateSavedSearchParams{
+		UserID:             userID,
+		Name:               name,
+		Query:              query,
+		DerivedFromProfile: derivedFromProfile,
+	})
+	if constraint, ok := pgerr.UniqueViolationConstraint(err); ok {
+		if constraint == "saved_searches_derived_from_profile_idx" {
+			return SavedSearch{}, ErrProfileSearchExists
+		}
 		return SavedSearch{}, ErrDuplicateName
 	}
 	if err != nil {
@@ -161,13 +170,14 @@ func (r *QueriesRepository) GetPublicBoard(ctx context.Context, slug string) (Bo
 // column the use case does not need.
 func fromRow(row db.SavedSearch) SavedSearch {
 	return SavedSearch{
-		ID:          row.ID,
-		Name:        row.Name,
-		Query:       row.Query,
-		PublicSlug:  row.PublicSlug.String,
-		AuthorLabel: row.AuthorLabel.String,
-		CreatedAt:   pgconv.TimePtr(row.CreatedAt),
-		UpdatedAt:   pgconv.TimePtr(row.UpdatedAt),
+		ID:                 row.ID,
+		Name:               row.Name,
+		Query:              row.Query,
+		PublicSlug:         row.PublicSlug.String,
+		AuthorLabel:        row.AuthorLabel.String,
+		DerivedFromProfile: row.DerivedFromProfile,
+		CreatedAt:          pgconv.TimePtr(row.CreatedAt),
+		UpdatedAt:          pgconv.TimePtr(row.UpdatedAt),
 	}
 }
 

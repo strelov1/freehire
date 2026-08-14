@@ -12,9 +12,10 @@ import (
 // The *Args structs capture the primitive params the repository is handed, so the service
 // tests can assert them without a db.* params struct.
 type createArgs struct {
-	UserID int64
-	Name   string
-	Query  string
+	UserID             int64
+	Name               string
+	Query              string
+	DerivedFromProfile bool
 }
 
 type updateArgs struct {
@@ -120,8 +121,8 @@ func (f *fakeRepo) Count(_ context.Context, _ int64) (int64, error) {
 	return f.count, f.countErr
 }
 
-func (f *fakeRepo) Create(_ context.Context, userID int64, name, query string) (savedsearch.SavedSearch, error) {
-	f.created, f.createCalled = createArgs{UserID: userID, Name: name, Query: query}, true
+func (f *fakeRepo) Create(_ context.Context, userID int64, name, query string, derivedFromProfile bool) (savedsearch.SavedSearch, error) {
+	f.created, f.createCalled = createArgs{UserID: userID, Name: name, Query: query, DerivedFromProfile: derivedFromProfile}, true
 	return f.createRet, f.createErr
 }
 
@@ -139,7 +140,7 @@ func TestCreate_PersistsWithOwnerAndTrimmedName(t *testing.T) {
 	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
 	svc := savedsearch.New(repo)
 
-	_, err := svc.Create(context.Background(), 7, "  Remote Go  ", "q=go&work_mode=remote")
+	_, err := svc.Create(context.Background(), 7, "  Remote Go  ", "q=go&work_mode=remote", false)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -159,7 +160,7 @@ func TestCreate_PersistsWithOwnerAndTrimmedName(t *testing.T) {
 
 func TestCreate_EmptyQueryAllowed(t *testing.T) {
 	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
-	_, err := savedsearch.New(repo).Create(context.Background(), 7, "All jobs", "")
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "All jobs", "", false)
 	if err != nil {
 		t.Fatalf("Create with empty query: %v", err)
 	}
@@ -180,7 +181,7 @@ func TestCreate_RejectsInvalidName(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
-			_, err := savedsearch.New(repo).Create(context.Background(), 7, tc.in, "")
+			_, err := savedsearch.New(repo).Create(context.Background(), 7, tc.in, "", false)
 			if !errors.Is(err, savedsearch.ErrInvalidName) {
 				t.Errorf("err = %v, want ErrInvalidName", err)
 			}
@@ -196,7 +197,7 @@ func TestCreate_NameLengthCountsRunes(t *testing.T) {
 	// so the name limit must count runes, not bytes — a 100-rune Cyrillic name (200
 	// bytes) is valid; 101 runes is not.
 	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1}}
-	if _, err := savedsearch.New(repo).Create(context.Background(), 7, strings.Repeat("я", 100), ""); err != nil {
+	if _, err := savedsearch.New(repo).Create(context.Background(), 7, strings.Repeat("я", 100), "", false); err != nil {
 		t.Errorf("100-rune name: err = %v, want nil", err)
 	}
 	if !repo.createCalled {
@@ -204,14 +205,14 @@ func TestCreate_NameLengthCountsRunes(t *testing.T) {
 	}
 
 	repo = &fakeRepo{}
-	if _, err := savedsearch.New(repo).Create(context.Background(), 7, strings.Repeat("я", 101), ""); !errors.Is(err, savedsearch.ErrInvalidName) {
+	if _, err := savedsearch.New(repo).Create(context.Background(), 7, strings.Repeat("я", 101), "", false); !errors.Is(err, savedsearch.ErrInvalidName) {
 		t.Errorf("101-rune name: err = %v, want ErrInvalidName", err)
 	}
 }
 
 func TestCreate_EnforcesCap(t *testing.T) {
 	repo := &fakeRepo{count: 50} // already at the cap
-	_, err := savedsearch.New(repo).Create(context.Background(), 7, "One more", "")
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "One more", "", false)
 	if !errors.Is(err, savedsearch.ErrCapExceeded) {
 		t.Errorf("err = %v, want ErrCapExceeded", err)
 	}
@@ -222,9 +223,31 @@ func TestCreate_EnforcesCap(t *testing.T) {
 
 func TestCreate_PropagatesDuplicateName(t *testing.T) {
 	repo := &fakeRepo{createErr: savedsearch.ErrDuplicateName}
-	_, err := savedsearch.New(repo).Create(context.Background(), 7, "Dup", "")
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "Dup", "", false)
 	if !errors.Is(err, savedsearch.ErrDuplicateName) {
 		t.Errorf("err = %v, want ErrDuplicateName", err)
+	}
+}
+
+func TestCreate_DerivedFromProfilePassedThrough(t *testing.T) {
+	repo := &fakeRepo{createRet: savedsearch.SavedSearch{ID: 1, DerivedFromProfile: true}}
+	got, err := savedsearch.New(repo).Create(context.Background(), 7, "My profile", "q=go", true)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if !repo.created.DerivedFromProfile {
+		t.Error("repo.Create was not told derivedFromProfile=true")
+	}
+	if !got.DerivedFromProfile {
+		t.Error("returned SavedSearch.DerivedFromProfile = false, want true")
+	}
+}
+
+func TestCreate_PropagatesProfileSearchExists(t *testing.T) {
+	repo := &fakeRepo{createErr: savedsearch.ErrProfileSearchExists}
+	_, err := savedsearch.New(repo).Create(context.Background(), 7, "My profile", "", true)
+	if !errors.Is(err, savedsearch.ErrProfileSearchExists) {
+		t.Errorf("err = %v, want ErrProfileSearchExists", err)
 	}
 }
 

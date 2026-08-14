@@ -151,6 +151,65 @@ func TestSavedSearchesEndToEnd(t *testing.T) {
 	}
 }
 
+func TestSavedSearchesProfileDerived(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ('profile-derived@example.test') RETURNING id`).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	cookie, _ := iss.Issue(userID, testTokenVersion)
+	queries := db.New(pool)
+	h := &savedSearchHandlers{savedSearch: savedsearch.New(savedsearch.NewQueriesRepository(queries))}
+
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/api/v1/me/searches", auth.RequireAuth(iss, testVersions), h.CreateSavedSearch)
+
+	do := func(body string) (*http.Response, map[string]any) {
+		rq := httptest.NewRequest(http.MethodPost, "/api/v1/me/searches", bytes.NewBufferString(body))
+		rq.Header.Set("Content-Type", "application/json")
+		rq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: cookie})
+		res, err := app.Test(rq, -1)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		var env map[string]any
+		b, _ := io.ReadAll(res.Body)
+		if len(b) > 0 {
+			_ = json.Unmarshal(b, &env)
+		}
+		return res, env
+	}
+
+	// An ordinary create round-trips derived_from_profile as false.
+	res, env := do(`{"name":"Manual filter","query":"q=go"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201", res.StatusCode)
+	}
+	if got := env["data"].(map[string]any)["derived_from_profile"]; got != false {
+		t.Errorf("derived_from_profile = %v, want false", got)
+	}
+
+	// A profile-derived create round-trips derived_from_profile as true.
+	res, env = do(`{"name":"My profile","query":"q=go&work_mode=remote","derived_from_profile":true}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("profile-derived create status = %d, want 201", res.StatusCode)
+	}
+	if got := env["data"].(map[string]any)["derived_from_profile"]; got != true {
+		t.Errorf("derived_from_profile = %v, want true", got)
+	}
+
+	// The partial unique index rejects a second profile-derived row for the same user,
+	// surfaced through the handler as a 409 — even under a distinct name (the collision
+	// is on the flag, not the name).
+	if res, _ := do(`{"name":"My profile again","query":"q=rust","derived_from_profile":true}`); res.StatusCode != http.StatusConflict {
+		t.Errorf("second profile-derived create status = %d, want 409", res.StatusCode)
+	}
+}
+
 func TestSavedSearchBoardsEndToEnd(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()

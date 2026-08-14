@@ -29,6 +29,10 @@ var (
 	// ErrSlugTaken is a public-slug UNIQUE collision on share. It is an internal retry
 	// signal (Share regenerates the suffix and tries again), not a client-facing status.
 	ErrSlugTaken = errors.New("savedsearch: public slug already taken")
+	// ErrProfileSearchExists is a create with derivedFromProfile=true when the user
+	// already has one (the partial UNIQUE (user_id) WHERE derived_from_profile;
+	// mapped to 409).
+	ErrProfileSearchExists = errors.New("savedsearch: a profile-derived search already exists")
 )
 
 const (
@@ -47,13 +51,14 @@ const (
 // the board is private / anonymous (a shared board always carries a non-empty slug, so an
 // empty PublicSlug is an unambiguous "not shared").
 type SavedSearch struct {
-	ID          int64
-	Name        string
-	Query       string
-	PublicSlug  string
-	AuthorLabel string
-	CreatedAt   *time.Time
-	UpdatedAt   *time.Time
+	ID                 int64
+	Name               string
+	Query              string
+	PublicSlug         string
+	AuthorLabel        string
+	DerivedFromProfile bool
+	CreatedAt          *time.Time
+	UpdatedAt          *time.Time
 }
 
 // Board is the public read of a shared board: only its display fields (no owner columns).
@@ -72,7 +77,7 @@ type Board struct {
 type Repository interface {
 	List(ctx context.Context, userID int64) ([]SavedSearch, error)
 	Count(ctx context.Context, userID int64) (int64, error)
-	Create(ctx context.Context, userID int64, name, query string) (SavedSearch, error)
+	Create(ctx context.Context, userID int64, name, query string, derivedFromProfile bool) (SavedSearch, error)
 	// Update overwrites the name and/or query (a nil field is left unchanged), owner-scoped.
 	Update(ctx context.Context, id, userID int64, name, query *string) (SavedSearch, error)
 	Delete(ctx context.Context, id, userID int64) error
@@ -107,7 +112,7 @@ func (s *Service) List(ctx context.Context, userID int64) ([]SavedSearch, error)
 // bounded; the per-user cap is checked before the insert; a duplicate name surfaces as
 // ErrDuplicateName (mapped by the repository). An empty query is valid — it is the
 // unfiltered "show all" view.
-func (s *Service) Create(ctx context.Context, userID int64, name, query string) (SavedSearch, error) {
+func (s *Service) Create(ctx context.Context, userID int64, name, query string, derivedFromProfile bool) (SavedSearch, error) {
 	name, err := validName(name)
 	if err != nil {
 		return SavedSearch{}, err
@@ -119,7 +124,7 @@ func (s *Service) Create(ctx context.Context, userID int64, name, query string) 
 	if count >= maxPerUser {
 		return SavedSearch{}, ErrCapExceeded
 	}
-	return s.repo.Create(ctx, userID, name, query)
+	return s.repo.Create(ctx, userID, name, query, derivedFromProfile)
 }
 
 // Update overwrites a saved search's name and/or query, scoped to its owner. A nil field
