@@ -1218,6 +1218,17 @@ type Querier interface {
 	// or mint a new one. No matching row (wrong id or another user's) returns no row (the
 	// service maps that to ErrNotFound).
 	GetSavedSearch(ctx context.Context, arg GetSavedSearchParams) (SavedSearch, error)
+	// Narrow read for GET /jobs/:slug/similar (internal/handler/similar.go): only the
+	// precomputed neighbour-id list (jobs.similar_job_ids, populated by
+	// cmd/similar-backfill — see semantic.sql's job_semantic_chunks section), not the
+	// whole wide job row. Mirrors GetJobDescriptionsByIDs's "narrow projection for a
+	// hot read path" precedent above. The list is nearest-first and, as of writing,
+	// capped at cmd/similar-backfill's -similar flag (default 20, matching the API's
+	// maxSimilarLimit) — the handler still re-filters it to open jobs at read time,
+	// since a neighbour can close after it was computed. A job with no precomputed
+	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
+	// error — the handler treats "not backfilled yet" and "computed empty" the same.
+	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
 	// Load a single submission by id for the review path. The approve/reject flow guards the
 	// status in the service; the Mark* queries are additionally scoped to status='pending' as
 	// defense-in-depth against a concurrent second decision.

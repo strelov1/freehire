@@ -80,12 +80,12 @@
 
 ## 5. Switch `/similar` to the precomputed lookup
 
-- [ ] 5.1 `internal/handler/similar.go`: read `jobs.similar_job_ids` for the
+- [x] 5.1 `internal/handler/similar.go`: read `jobs.similar_job_ids` for the
       resolved job id, fetch + filter to open jobs, project to `jobview.Job`, keep
       the same response envelope and `limit` clamping behavior.
 - [ ] 5.2 Update/replace `internal/search/client.go`'s `SimilarJobs` Meili
       implementation — remove once the handler no longer calls it (see Section 7).
-- [ ] 5.3 Update `similar_integration_test.go` and unit tests for the new data path.
+- [x] 5.3 Update `similar_integration_test.go` and unit tests for the new data path.
 
 ## 6. Switch `/me/recommendations` to a live pgvector query
 

@@ -78,9 +78,10 @@ WHERE o.id = c.id
 RETURNING o.id, o.job_id, (j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)::boolean AS closed;
 
 -- name: GetJobsByIDs :many
--- Batch-load the persisted rows the embed worker builds documents from. A corrupted
--- row (SQLSTATE XX001) aborts the whole scan; the worker then retries the batch one id
--- at a time to isolate and dead-letter the bad row.
+-- Batch-load persisted rows by id. Two callers: the embed worker builds documents
+-- from them (a corrupted row, SQLSTATE XX001, aborts the whole scan there; the
+-- worker then retries the batch one id at a time to isolate and dead-letter the bad
+-- row), and the /similar handler projects them to the public job wire shape.
 SELECT *
 FROM jobs
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);

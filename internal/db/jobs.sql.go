@@ -847,6 +847,29 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 	return id, err
 }
 
+const getSimilarJobIDs = `-- name: GetSimilarJobIDs :one
+SELECT similar_job_ids
+FROM jobs
+WHERE id = $1::bigint
+`
+
+// Narrow read for GET /jobs/:slug/similar (internal/handler/similar.go): only the
+// precomputed neighbour-id list (jobs.similar_job_ids, populated by
+// cmd/similar-backfill — see semantic.sql's job_semantic_chunks section), not the
+// whole wide job row. Mirrors GetJobDescriptionsByIDs's "narrow projection for a
+// hot read path" precedent above. The list is nearest-first and, as of writing,
+// capped at cmd/similar-backfill's -similar flag (default 20, matching the API's
+// maxSimilarLimit) — the handler still re-filters it to open jobs at read time,
+// since a neighbour can close after it was computed. A job with no precomputed
+// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
+// error — the handler treats "not backfilled yet" and "computed empty" the same.
+func (q *Queries) GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error) {
+	row := q.db.QueryRow(ctx, getSimilarJobIDs, id)
+	var similar_job_ids []int64
+	err := row.Scan(&similar_job_ids)
+	return similar_job_ids, err
+}
+
 const insertPrivateJob = `-- name: InsertPrivateJob :one
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, location, remote, description,
