@@ -54,6 +54,7 @@ import type {
   DiscordLinkResult,
   Submission,
   SubmissionInput,
+  PrefillResult,
   Contribution,
   ResolvedLink,
   ReferralOffer,
@@ -1371,6 +1372,13 @@ export function createApi(
     return requestData<Submission[]>('/api/v1/me/submissions');
   }
 
+  /** Parse a job URL into draft field values for the submit form to prefill — never
+   *  persisted. An unrecognized or non-vacancy URL comes back with every field empty,
+   *  not an error. */
+  async function prefillSubmission(url: string): Promise<PrefillResult> {
+    return requestData<PrefillResult>('/api/v1/submissions/prefill', jsonBody('POST', { url }));
+  }
+
   /** Hand a job link to freehire. One sequence serves every surface: the catalog is checked,
    *  the vacancy imported when anything can read it, and the board behind it recorded for
    *  onboarding either way. The outcome says which of those happened (422 for a non-URL). */
@@ -2087,6 +2095,7 @@ export function createApi(
     discordUnlink,
     submitJob,
     listMySubmissions,
+    prefillSubmission,
     resolveJobLink,
     listMyContributions,
     createReferralRequest,

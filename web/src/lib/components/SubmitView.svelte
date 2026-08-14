@@ -13,13 +13,26 @@
     CheckCircle2,
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
+  import { tablist } from '$lib/actions/tablist';
   import { api, ApiError } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
-  import { REGION_OPTIONS, WORK_MODE_OPTIONS, CURRENCY_OPTIONS } from '$lib/facets';
+  import {
+    REGION_OPTIONS,
+    WORK_MODE_OPTIONS,
+    CURRENCY_OPTIONS,
+    SENIORITY_OPTIONS,
+    EMPLOYMENT_TYPE_OPTIONS,
+  } from '$lib/facets';
   import type { Submission } from '$lib/types';
   import { Button, Input, cn } from '$lib/ui';
+  import JobPreview from './JobPreview.svelte';
   import NoteEditor from './NoteEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
+
+  // Details/Preview tabs, hand-rolled with the shared tablist action rather than a
+  // generic Tabs primitive — the pattern this codebase already uses (ReferralsView,
+  // the tracking/activity layouts).
+  let activeTab = $state<'details' | 'preview'>('details');
 
   // Form state. url/title/company are required (the server validates too); the rest are
   // optional. The structured facets (region/city/work-mode/skills) override the server's
@@ -39,6 +52,8 @@
   let region = $state('');
   let cities = $state<string[]>([]);
   let workMode = $state('');
+  let employmentType = $state('');
+  let seniority = $state('');
   let skills = $state<string[]>([]);
   let salaryMin = $state<number | null>(null);
   let salaryMax = $state<number | null>(null);
@@ -53,10 +68,36 @@
     { value: 'hour', label: 'per hour' },
   ];
 
+  // Prefill state, independent of submit(): a best-effort aid that never blocks or
+  // overwrites manual entry. prefilling disables the button while a request is in
+  // flight; prefillMiss shows a one-line "nothing found" note after a genuine no-match.
+  let prefilling = $state(false);
+  let prefillMiss = $state(false);
+
   let submitting = $state(false);
   let formError = $state<string | null>(null);
   // The just-submitted vacancy, shown as a confirmation that it is awaiting review.
   let submitted = $state.raw<Submission | null>(null);
+
+  // The Preview tab's rendered description — converted from the same markdown source
+  // submit() converts, so what a submitter sees in Preview matches what gets sent.
+  // Recomputed whenever the markdown changes (NoteEditor's onsave updates it on blur).
+  let previewDescriptionHtml = $state('');
+  $effect(() => {
+    const md = descriptionMarkdown.trim();
+    if (!md) {
+      previewDescriptionHtml = '';
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const html = await marked.parse(md);
+      if (!cancelled) previewDescriptionHtml = html;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  });
 
   const canSubmit = $derived(
     url.trim() !== '' && title.trim() !== '' && company.trim() !== '' && !submitting,
@@ -72,10 +113,47 @@
     return [...list, v];
   }
 
+  // Fills in whatever the URL parsed to, but only into fields the submitter has not
+  // already typed into — a late-arriving prefill must never clobber manual entry.
+  // Silent on a miss or a network failure: the button is a best-effort aid, not a
+  // required step, and the submitter can always keep typing.
+  async function prefillFromURL() {
+    const target = url.trim();
+    if (target === '' || prefilling) return;
+    prefilling = true;
+    prefillMiss = false;
+    try {
+      const result = await api.prefillSubmission(target);
+      const found = Object.values(result).some((v) => v);
+      if (!found) {
+        prefillMiss = true;
+        return;
+      }
+      if (title.trim() === '' && result.title) title = result.title;
+      if (company.trim() === '' && result.company) company = result.company;
+      if (location.trim() === '' && result.location) location = result.location;
+      if (workMode === '' && result.work_mode) workMode = result.work_mode;
+      if (employmentType === '' && result.employment_type) employmentType = result.employment_type;
+      if (seniority === '' && result.seniority) seniority = result.seniority;
+      if (source.trim() === '' && result.source) source = result.source;
+      // The source page's description arrives as sanitized HTML, not the markdown this
+      // editor wants — dropped straight in for the submitter to clean up on review
+      // rather than left blank, since NoteEditor only reads its initial value once.
+      if (descriptionMarkdown.trim() === '' && result.description) {
+        descriptionMarkdown = result.description;
+        editorKey += 1;
+      }
+    } catch {
+      // Best-effort: leave the form exactly as it was.
+    } finally {
+      prefilling = false;
+    }
+  }
+
   function resetForm() {
     url = title = company = location = source = '';
     descriptionMarkdown = '';
-    region = workMode = currency = period = '';
+    region = workMode = employmentType = seniority = currency = period = '';
     cities = [];
     skills = [];
     salaryMin = salaryMax = null;
@@ -104,6 +182,8 @@
         regions: region ? [region] : undefined,
         cities: cities.length ? cities : undefined,
         work_mode: workMode || undefined,
+        employment_type: employmentType || undefined,
+        seniority: seniority || undefined,
         salary_min: salaryMin ?? undefined,
         salary_max: salaryMax ?? undefined,
         salary_currency: currency || undefined,
@@ -147,7 +227,50 @@
       </div>
     {/if}
 
-    <form onsubmit={submit} class="flex flex-col gap-6">
+    <!-- use:tablist is what makes role="tablist" true — see ReferralsView for the same
+         pattern. Preview stays mounted-on-demand (an {#if}, not CSS-hidden) since it does
+         no data fetching of its own; there is nothing to lose by remounting it. -->
+    <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={activeTab}>
+      {#each [['details', 'Details'], ['preview', 'Preview']] as [id, label] (id)}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === id}
+          onclick={() => (activeTab = id as 'details' | 'preview')}
+          class={cn(
+            '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
+            activeTab === id
+              ? 'border-brand text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {label}
+        </button>
+      {/each}
+    </div>
+
+    {#if activeTab === 'preview'}
+      <JobPreview
+        {title}
+        {company}
+        {workMode}
+        {region}
+        {cities}
+        {employmentType}
+        {seniority}
+        {skills}
+        {salaryMin}
+        {salaryMax}
+        salaryCurrency={currency}
+        salaryPeriod={period}
+        descriptionHtml={previewDescriptionHtml}
+      />
+    {/if}
+
+    <form
+      onsubmit={submit}
+      class={cn('flex flex-col gap-6', activeTab !== 'details' && 'hidden')}
+    >
       <!-- Basics: the required identity of the posting. -->
       <fieldset class="flex flex-col gap-4 rounded-lg border border-border p-4">
         <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -158,7 +281,25 @@
             <Link2 class="size-3.5 text-muted-foreground" />
             Job URL <span class="text-destructive">*</span>
           </span>
-          <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+          <div class="flex items-center gap-2">
+            <Input bind:value={url} type="url" placeholder="https://…" class="w-full" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              disabled={url.trim() === '' || prefilling}
+              onclick={prefillFromURL}
+            >
+              {prefilling ? 'Filling in…' : 'Fill in from this link'}
+            </Button>
+          </div>
+          {#if prefillMiss}
+            <p class="text-xs text-muted-foreground">
+              Couldn't find anything to fill in from that link — no problem, just fill in the
+              rest below.
+            </p>
+          {/if}
         </label>
         <div class="flex flex-col gap-4 sm:flex-row">
           <label class="flex flex-1 flex-col gap-1">
@@ -236,6 +377,27 @@
               </button>
             {/each}
           </div>
+        </div>
+
+        <div class="flex flex-col gap-4 sm:flex-row">
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">Employment type</span>
+            <select bind:value={employmentType} class={cn(selectClass, 'w-full')}>
+              <option value="">Any</option>
+              {#each EMPLOYMENT_TYPE_OPTIONS as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="flex flex-1 flex-col gap-1">
+            <span class="text-sm font-medium">Seniority</span>
+            <select bind:value={seniority} class={cn(selectClass, 'w-full')}>
+              <option value="">Any</option>
+              {#each SENIORITY_OPTIONS as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </label>
         </div>
 
         <label class="flex flex-col gap-1">
