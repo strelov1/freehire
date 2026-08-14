@@ -113,9 +113,10 @@ func TestRequireCountry_SingleTokenNameNeedsAMatchingHeadquarters(t *testing.T) 
 }
 
 func TestRequireCountry_PunctuatedSingleTokenNameNeedsAMatchingHeadquarters(t *testing.T) {
-	// "T-Mobile Inc" is one token by whitespace, but RegisterSlug's internal-hyphen
-	// collapsing ("t-mobile") must not make it look multi-token and skip the
-	// headquarters check.
+	// "T-Mobile Inc" has two whitespace tokens. After significantFields strips the
+	// trailing legal form, "T-Mobile" is the one significant token left; its
+	// internal hyphen must not make RequireCountry treat it as multi-token and
+	// skip the headquarters check.
 	gate := RequireCountry("GB")
 
 	elsewhere := Company{Slug: "t-mobile", Countries: []string{"GB", "US"}, HQCountry: "US"}
