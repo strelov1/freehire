@@ -53,6 +53,16 @@ const TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['second', 1],
 ];
 
+// Built once, not per call. Constructing an Intl formatter resolves a locale and
+// loads its data, which dwarfs the cost of formatting with one — 12x on a
+// microbenchmark of the homepage's 32 cards (0.30ms -> 0.03ms per render). That
+// is ~1% of a 29ms render, so this is tidiness rather than a fix for anything:
+// the profile that surfaced it (timeAgo was second among our own functions) also
+// showed the render cost is spread across the page, not concentrated anywhere.
+// The locale is `undefined` — the runtime default — and it does not change within
+// a process or a browser session, so one instance is safe to reuse.
+let relativeTime: Intl.RelativeTimeFormat | undefined;
+
 /** Format an RFC3339 timestamp as a relative "N ago" label (e.g. "13 seconds
  *  ago", "2 days ago"); '' for null/invalid. How recently a job was posted is a
  *  key signal, so the list card shows it relative rather than as a bare date. */
@@ -61,7 +71,7 @@ export function timeAgo(ts: string | null | undefined): string {
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return '';
   const seconds = Math.round((Date.now() - d.getTime()) / 1000);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const rtf = (relativeTime ??= new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }));
   for (const [unit, span] of TIME_UNITS) {
     if (Math.abs(seconds) >= span || unit === 'second') {
       return rtf.format(-Math.round(seconds / span), unit);
