@@ -58,6 +58,33 @@ export function markAnswered(plan: ApplyPlan, at: FieldAddress): ApplyPlan {
   return recount(plan.items.map((i) => (isTarget(i) ? { ...i, answered: true } : i)));
 }
 
+/**
+ * How many questions a page has to ask before it counts as an application on the
+ * strength of the questions alone. Below it sit the forms every site has — a
+ * sign-in, a search box, a newsletter field.
+ */
+const QUESTIONNAIRE_SIZE = 4;
+
+/**
+ * Whether the page is showing an application worth accounting for.
+ *
+ * A CV upload settles it: that is what `looksLikeApplication` keys on, and it is
+ * what lets the FILLER tell an application from a job-alert signup before writing
+ * anything. But the upload sits on the FIRST step of a multi-step ATS form, and
+ * the steps after it — the ones full of screening questions the candidate most
+ * needs an account of — offer no file field at all. Requiring one there is why a
+ * form full of questions showed no checklist.
+ *
+ * So a long questionnaire that requires answers counts too. This decides only
+ * what to SHOW; nothing is written on the strength of it, which is what makes the
+ * looser test safe here and wrong in the filler.
+ */
+export function showsApplicationForm(fields: FramedField[], uploads: unknown[]): boolean {
+  if (uploads.length > 0) return true;
+  const questions = fields.filter((f) => f.label.trim() !== '');
+  return questions.length >= QUESTIONNAIRE_SIZE && questions.some((f) => f.required);
+}
+
 /** The plan for the questions the page reported, in the order it asks them. */
 export function buildPlan(fields: FramedField[]): ApplyPlan {
   const items: PlanItem[] = fields

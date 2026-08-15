@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Loader, MapPin } from '@lucide/svelte';
+  import { Check, Loader, Minus } from '@lucide/svelte';
   import { Card } from 'freehire-design-system';
   import type { ApplyPlan, PlanItem } from '../../lib/applyPlan';
 
@@ -15,11 +15,17 @@
     plan,
     /** The question being filled right now, by label — the walk's cursor. */
     filling = null,
+    /** True while a walk is running: the card's own heading takes over, since
+     *  that is where the user is looking while the page scrolls past. */
+    walking = false,
     onReveal,
+    onCancel,
   }: {
     plan: ApplyPlan;
     filling?: string | null;
+    walking?: boolean;
     onReveal: (item: PlanItem) => void;
+    onCancel: () => void;
   } = $props();
 
   /** What the icon says, for a reader that cannot see it — the icon itself is
@@ -52,7 +58,7 @@
               {:else if item.answered}
                 <Check class="size-3" />
               {:else}
-                <MapPin class="size-3" />
+                <Minus class="size-3" />
               {/if}
             </span>
             <span class="label">{item.label}</span>
@@ -65,9 +71,15 @@
 
 <Card class="apply-plan">
   <div class="head">
-    <span class="title">Application form</span>
+    <span class="title">{walking ? 'Autofilling…' : 'Application form'}</span>
     {#if plan.required}
       <span class="count">{plan.required.answered}/{plan.required.total} · {plan.required.percent}%</span>
+    {/if}
+    {#if walking}
+      <!-- Cancel belongs beside the progress it cancels, not pinned at the far
+           end of the panel: while a walk runs, this card is what the user is
+           watching. -->
+      <button type="button" class="cancel" onclick={onCancel}>Cancel</button>
     {/if}
   </div>
 
@@ -101,6 +113,21 @@
   .title {
     font-size: 13px;
     font-weight: 600;
+  }
+
+  .cancel {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .cancel:hover {
+    color: var(--foreground);
   }
 
   .count {
@@ -145,7 +172,7 @@
   .item {
     width: 100%;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     padding: 4px 6px;
     border: 0;
@@ -168,6 +195,7 @@
 
   .mark {
     flex: none;
+    margin-top: 1px;
     display: flex;
     width: 16px;
     height: 16px;
@@ -185,9 +213,7 @@
   }
 
   .label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 0;
   }
 
   :global(.spin) {

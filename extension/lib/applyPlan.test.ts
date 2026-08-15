@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPlan, markAnswered } from './applyPlan';
+import { buildPlan, markAnswered, showsApplicationForm } from './applyPlan';
 import type { FramedField } from './protocol';
 
 /** A question as the page reported it. Overrides say what the case is about. */
@@ -144,5 +144,50 @@ describe('markAnswered', () => {
     const after = markAnswered(plan, { label: 'Website', frame: 0, form: 0 });
 
     expect(after.required).toEqual({ answered: 0, total: 1, percent: 0 });
+  });
+});
+
+describe('showsApplicationForm', () => {
+  const upload = { frame: 0, form: 0 };
+
+  it('is true for a form offering a CV upload, however short', () => {
+    expect(showsApplicationForm([field('Email', { required: true })], [upload])).toBe(true);
+  });
+
+  // The upload is what marks an application for the FILLER, and it is gone by the
+  // second step of a multi-step ATS form — where the questions the panel most
+  // needs to account for are. A questionnaire that long is an application whether
+  // or not it still offers a file field.
+  it('is true for a long questionnaire with no upload', () => {
+    const questions = [
+      field('First name', { required: true }),
+      field('Email', { required: true }),
+      field('Years of experience', { required: true }),
+      field('Notice period'),
+      field('Expected compensation', { required: true }),
+    ];
+
+    expect(showsApplicationForm(questions, [])).toBe(true);
+  });
+
+  it('is false for a sign-in form', () => {
+    const login = [field('Email', { required: true }), field('Password', { required: true })];
+
+    expect(showsApplicationForm(login, [])).toBe(false);
+  });
+
+  // A search box, a newsletter field, a cookie preference: pages ask short
+  // questions everywhere, and a checklist over them is noise.
+  it('is false for a page asking nothing in particular', () => {
+    expect(showsApplicationForm([field('Search jobs')], [])).toBe(false);
+    expect(showsApplicationForm([], [])).toBe(false);
+  });
+
+  // Required is the signal that something is being submitted. A long page of
+  // optional fields is a settings screen, not an application.
+  it('is false for a long form that requires nothing', () => {
+    const optional = ['One', 'Two', 'Three', 'Four', 'Five'].map((l) => field(l));
+
+    expect(showsApplicationForm(optional, [])).toBe(false);
   });
 });

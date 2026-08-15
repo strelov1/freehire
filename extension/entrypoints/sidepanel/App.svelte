@@ -27,7 +27,7 @@
     scopeToApplication,
     formatAuthorizedCountries,
   } from '../../lib/form';
-  import { buildPlan, markAnswered, type ApplyPlan, type PlanItem } from '../../lib/applyPlan';
+  import { buildPlan, markAnswered, showsApplicationForm, type ApplyPlan, type PlanItem } from '../../lib/applyPlan';
   import { startWalk, nextStep, applyStep, skipStep, stopWalk, type Walk } from '../../lib/walk';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
@@ -469,13 +469,17 @@
       kind: 'GET_FRAMED_FORM',
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (requestId !== planRequestId) return;
-    if (reply?.kind !== 'FRAMED_FORM' || !looksLikeApplication(reply.uploads)) {
+    if (reply?.kind !== 'FRAMED_FORM' || !showsApplicationForm(reply.fields, reply.uploads)) {
       plan = null;
       return;
     }
-    // One form, not every question on the page: an application and a job-alert
-    // signup each have their own "Email" — the same scoping the filler uses.
-    plan = buildPlan(scopeToApplication(reply.fields, reply.uploads));
+    // Scoped to the one form the upload identifies, where there is one: an
+    // application and a job-alert signup each have their own "Email". With no
+    // upload to scope by — every step of an ATS form after the first — the page's
+    // questions ARE the form.
+    plan = buildPlan(
+      reply.uploads.length > 0 ? scopeToApplication(reply.fields, reply.uploads) : reply.fields,
+    );
   }
 
   /** Sends the user to one question: the page scrolls there and takes the cursor. */
@@ -616,6 +620,10 @@
     autofilling = true;
     walkStop = false;
     try {
+      // Read the form first: the walk ticks questions off the plan, and a page
+      // whose form arrived after the last read (an ATS step change, which fires
+      // no page load) would otherwise be walked with nothing to tick.
+      await refreshPlan();
       const report = await runAgentAutofill(token);
       // The agent filled the page itself, server-side. Play its report back so
       // the user watches what changed rather than finding it later.
@@ -628,9 +636,6 @@
       );
       if (report.deferred.length > 0) {
         notices.push(`Not fillable yet (custom dropdowns): ${nameSome(report.deferred)}.`);
-      }
-      if (report.unmapped.length > 0) {
-        notices.push(`Left for you: ${nameSome(report.unmapped)}.`);
       }
     } catch (err) {
       // The server's own sentence, not just the status: /me/autofill/run answers
@@ -705,19 +710,14 @@
       }
       const walk = await walkFills(fills);
       const n = walk.done.length;
+      // What was left unanswered is not listed here: the checklist above shows
+      // exactly which questions those are, and naming thirty of them in a notice
+      // is the wall of text this feature replaced.
       notices.push(
         walk.stopped
           ? `Stopped after ${n} field${n === 1 ? '' : 's'} — what was filled stays.`
           : `✓ Autofilled ${n} field${n === 1 ? '' : 's'} — review before submitting.`,
       );
-
-      // A question the walk could not write: a custom-widget combobox (which
-      // commits whatever its own listbox highlights, so the simple filler
-      // declines it rather than writing a wrong value), or one the form dropped
-      // while the walk was running.
-      if (walk.skipped.length > 0) {
-        notices.push(`Left for you: ${nameSome(walk.skipped.map((f) => f.label))}.`);
-      }
     } catch (err) {
       notices.push(`Autofill failed: ${err instanceof Error ? err.message : 'error'}`);
     }
@@ -808,7 +808,13 @@
                  does not carry a posting for, and the checklist is just as useful
                  there. -->
             {#if plan}
-              <ApplyPlanCard {plan} filling={fillingLabel} onReveal={revealItem} />
+              <ApplyPlanCard
+                {plan}
+                filling={fillingLabel}
+                walking={autofilling}
+                onReveal={revealItem}
+                onCancel={() => (walkStop = true)}
+              />
             {/if}
 
             {#each notices as notice, i (i)}

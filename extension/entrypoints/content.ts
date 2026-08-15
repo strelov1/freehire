@@ -8,6 +8,14 @@ import type { RuntimeMessage } from '../lib/protocol';
  *  changed. One re-read when the user pauses, not one per keystroke. */
 const FORM_CHANGE_QUIET_MS = 400;
 
+/** Whether a node is, or contains, something the panel would ask about. Keeps the
+ *  observer below from waking the panel for every unrelated re-render — an ATS
+ *  page swaps nodes constantly. */
+function holdsControl(node: Node): boolean {
+  if (!(node instanceof Element)) return false;
+  return node.matches('input, select, textarea') || node.querySelector('input, select, textarea') !== null;
+}
+
 /**
  * Injected into every page, and into every frame of it — apply forms are
  * routinely served from an ATS iframe, so a top-document-only script would see
@@ -79,5 +87,20 @@ export default defineContentScript({
     }, FORM_CHANGE_QUIET_MS);
     document.addEventListener('input', announce, true);
     document.addEventListener('change', announce, true);
+
+    // A form the page renders later — the next step of an ATS application, an
+    // "Apply" button expanding one in place — arrives with no page load and no
+    // typing, so neither the panel's tab listeners nor the two above would ever
+    // notice it. Watching for controls entering or leaving the document covers
+    // both, through the same debounce, so a burst of DOM churn is one notice.
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const touched = [...record.addedNodes, ...record.removedNodes];
+        if (touched.some(holdsControl)) {
+          announce();
+          return;
+        }
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
   },
 });
