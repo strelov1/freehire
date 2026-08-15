@@ -24,9 +24,14 @@ var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 // collapsed to a single hyphen. So "Food & Beverage", "Food-and-Beverage" and
 // "food and beverage" all share one key, and the dictionary needs one entry
 // rather than one per spelling.
+//
+// "&" becomes " and " with spaces, not "and": scraped labels write it unspaced
+// ("Food&Beverage", "Oil&Gas"), and substituting without separators would yield
+// "foodandbeverage" — a key no canonical can ever match. The added spaces cost
+// nothing, since the hyphen collapse below removes them.
 func normalize(label string) string {
 	s := strings.ToLower(strings.TrimSpace(label))
-	s = strings.ReplaceAll(s, "&", "and")
+	s = strings.ReplaceAll(s, "&", " and ")
 	return strings.Trim(nonAlnum.ReplaceAllString(s, "-"), "-")
 }
 
@@ -44,11 +49,13 @@ func Canonicalize(labels []string) []string {
 			continue
 		}
 		if canonical, ok := aliases[key]; ok {
-			seen[canonical] = struct{}{}
-			continue
+			key = canonical
 		}
-		// An already-canonical value passes through, which is what makes running
-		// the normalization worker over its own output a no-op.
+		// displayNames is the canonical set, and this lookup is the only way a value
+		// leaves this function. It admits an already-canonical input — which is what
+		// makes running the normalization worker over its own output a no-op — and it
+		// refuses an alias whose target is not a canonical, so one typo in the
+		// dictionary cannot write a value the facet could never offer.
 		if _, ok := displayNames[key]; ok {
 			seen[key] = struct{}{}
 		}

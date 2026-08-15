@@ -42,6 +42,11 @@ func TestCanonicalize(t *testing.T) {
 			want: []string{"ai", "retail"},
 		},
 		{
+			name: "an ampersand with no surrounding spaces is still a separator",
+			in:   []string{"Food&Beverage"},
+			want: []string{"food-and-beverage"},
+		},
+		{
 			name: "blank input yields an empty result",
 			in:   []string{"", "   "},
 			want: []string{},
@@ -60,5 +65,28 @@ func TestCanonicalize(t *testing.T) {
 				t.Errorf("Canonicalize(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// A mistyped alias target must not become a stored value. Such a value would be
+// absent from Canonicals() — so the facet could never offer it — would render as a
+// raw slug, and would be silently deleted by the next normalization pass, which is
+// exactly the "no canonical value is invented" rule the dictionary exists to keep.
+func TestCanonicalizeRejectsAliasPointingAtUnknownCanonical(t *testing.T) {
+	const bogus = "not-a-real-canonical"
+	aliases["probe-broken-alias"] = bogus
+	t.Cleanup(func() { delete(aliases, "probe-broken-alias") })
+
+	if got := Canonicalize([]string{"probe broken alias"}); len(got) != 0 {
+		t.Errorf("Canonicalize resolved an alias whose target is not canonical: got %q, want none", got)
+	}
+}
+
+// Every canonical value must survive a round trip, or the dictionary holds entries
+// the resolver can never produce — dead options in the facet list.
+func TestEveryCanonicalRoundTrips(t *testing.T) {
+	canonicals := Canonicals()
+	if got := Canonicalize(canonicals); !reflect.DeepEqual(got, canonicals) {
+		t.Errorf("Canonicalize(Canonicals()) = %q, want %q", got, canonicals)
 	}
 }
