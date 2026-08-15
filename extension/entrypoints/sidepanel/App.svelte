@@ -108,12 +108,20 @@
     };
     browser.runtime.onMessage.addListener(onPageMessage);
 
+    // The panel regaining focus is the other moment worth re-reading on: the user
+    // has just been on the page, quite possibly answering a question there.
+    const onFocus = () => {
+      if (user) void refreshPlan();
+    };
+    window.addEventListener('focus', onFocus);
+
     return () => {
       turn?.cancel();
       tools.stop();
       browser.tabs.onActivated.removeListener(refresh);
       browser.tabs.onUpdated.removeListener(onUpdated);
       browser.runtime.onMessage.removeListener(onPageMessage);
+      window.removeEventListener('focus', onFocus);
     };
   });
 
@@ -460,6 +468,10 @@
    *  otherwise replace the current form's plan with the previous one's. Same
    *  pattern as `matchRequestId`. */
   let planRequestId = 0;
+  /** How many labelled questions the last read found, whether or not they added
+   *  up to an application. It is what the panel says when it shows no checklist,
+   *  so "nothing appeared" can be told from "nothing was found". */
+  let questionsSeen = $state(0);
   /** True once a walk has written into this page's form. It outranks every guess
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
@@ -474,6 +486,7 @@
       kind: 'GET_FRAMED_FORM',
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (requestId !== planRequestId) return;
+    questionsSeen = reply?.kind === 'FRAMED_FORM' ? reply.fields.filter((f) => f.label.trim() !== '').length : 0;
     if (
       reply?.kind !== 'FRAMED_FORM' ||
       !showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })
@@ -744,6 +757,10 @@
       <span class="brand">
         <img src="/icon/32.png" alt="" class="brand-mark" width="18" height="18" />
         <strong>freehire</strong>
+        <!-- The build, in the one place both of us can see it: a side panel keeps
+             its script until it is closed, so "did the reload take?" is otherwise
+             unanswerable from a screenshot. -->
+        <span class="build">v{browser.runtime.getManifest().version}</span>
       </span>
       <Badge variant={sending ? 'brand' : 'outline'}>
         {sending ? 'working…' : user ? 'ready' : 'offline'}
@@ -771,7 +788,13 @@
       { id: 'chat', label: 'Chat' },
     ]}
     active={activeTab}
-    onSelect={(id) => (activeTab = id)}
+    onSelect={(id) => {
+      activeTab = id;
+      // Coming back to Match is a moment the user expects the panel to be current:
+      // the form may have moved on (a step, an expanded Apply) while they were in
+      // the chat, and nothing else would have told us.
+      if (id === 'match') void refreshPlan();
+    }}
     label="Panel sections"
     panelId={PANEL_ID}
   />
@@ -820,6 +843,15 @@
                  independent of the match: a page can show an application freehire
                  does not carry a posting for, and the checklist is just as useful
                  there. -->
+            {#if !plan && questionsSeen > 0}
+              <!-- The page asks questions but they did not add up to an
+                   application. Saying so beats an empty space the user has to
+                   guess about. -->
+              <p class="no-plan">
+                {questionsSeen} field{questionsSeen === 1 ? '' : 's'} on this page — not enough to
+                read as an application form.
+              </p>
+            {/if}
             {#if plan}
               <ApplyPlanCard
                 {plan}
@@ -1127,6 +1159,17 @@
    * would squash individual messages instead of just scrolling past them. */
   .messages > :global(*) {
     flex-shrink: 0;
+  }
+
+  .build {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+
+  .no-plan {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    padding: 0 2px;
   }
 
   .empty {
