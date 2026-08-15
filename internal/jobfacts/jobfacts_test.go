@@ -31,6 +31,11 @@ func TestEmploymentType(t *testing.T) {
 		{"c2c marketplace is not contract", "Engineer", "We run a C2C marketplace for hobbyists.", ""},
 		{"full time", "Engineer", "Full-time, permanent position.", "full_time"},
 		{"internship beats full-time", "Intern", "A full-time internship for students.", "internship"},
+		{"fellowship", "Postdoctoral Fellowship, Applied Data Science", "Join our research team as a fellow.", "fellowship"},
+		{"fellowship beats contract", "PhD Fellowship", "A 3-year fixed-term fellowship position.", "fellowship"},
+		{"fellowship manager is staff, not fellowship", "Fellowship Manager, Anywhere", "Runs our fellowship program full-time.", "full_time"},
+		{"fellowship program coordinator is staff", "Fellowship Program Coordinator", "Coordinates the fellowship program.", ""},
+		{"fellowship mention far from staff word still counts", "AI Policy Fellowship", strings.Repeat("Research the impact of AI governance policy. ", 20) + "Reports to the Program Manager.", "fellowship"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -101,7 +106,7 @@ func TestExperienceYearsMin(t *testing.T) {
 // member of the enrichment contract's controlled vocabulary, so jobfacts and the
 // served enum never drift apart.
 func TestValuesAreInVocabulary(t *testing.T) {
-	for _, v := range []string{"internship", "part_time", "contract", "full_time"} {
+	for _, v := range []string{"internship", "part_time", "contract", "full_time", "fellowship"} {
 		if !slices.Contains(vocab.EmploymentTypeValues, v) {
 			t.Errorf("employment_type %q not in vocab.EmploymentTypeValues", v)
 		}

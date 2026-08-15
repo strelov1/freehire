@@ -28,7 +28,7 @@ var (
 		"global", "north_america", "latam", "eu", "uk",
 		"mena", "africa", "apac", "cis",
 	}
-	EmploymentTypeValues = []string{"full_time", "part_time", "contract", "internship"}
+	EmploymentTypeValues = []string{"full_time", "part_time", "contract", "internship", "fellowship"}
 	RelocationValues     = []string{"not_supported", "supported", "required"}
 	SalaryPeriodValues   = []string{"year", "month", "day", "hour"}
 	SeniorityValues      = []string{"intern", "junior", "middle", "senior", "lead", "staff", "principal", "c_level"}
