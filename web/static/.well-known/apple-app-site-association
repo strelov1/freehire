@@ -10,5 +10,8 @@
         ]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": ["25U9HN34VM.me.freehire.mobile"]
   }
 }
