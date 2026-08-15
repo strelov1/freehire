@@ -713,6 +713,15 @@ type OauthExchangeCode struct {
 	ConsumedAt           pgtype.Timestamptz `json:"consumed_at"`
 }
 
+// Send ledger for the founder signup sequence. PK (user_id, step) = one send per pair, ever.
+type OnboardingEmail struct {
+	UserID int64              `json:"user_id"`
+	Step   string             `json:"step"`
+	SentAt pgtype.Timestamptz `json:"sent_at"`
+	// Transport error if the send failed. The row still blocks a retry; re-arm by deleting it.
+	Error string `json:"error"`
+}
+
 type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`

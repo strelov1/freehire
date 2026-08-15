@@ -24,6 +24,7 @@ import (
 	"github.com/strelov1/freehire/internal/mailtpl"
 	"github.com/strelov1/freehire/internal/notify"
 	"github.com/strelov1/freehire/internal/nudge"
+	"github.com/strelov1/freehire/internal/onboarding"
 	"github.com/strelov1/freehire/internal/referral"
 	"github.com/strelov1/freehire/internal/reminder"
 	"github.com/strelov1/freehire/internal/report"
@@ -78,6 +79,9 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
+	welcomeSample,
+	noAlertSample,
+	openSourceSample,
 	verificationSample,
 	passwordResetSample,
 	digestSample,
@@ -101,6 +105,13 @@ func (c *capture) Send(_ context.Context, _, _, subject, htmlBody, textBody stri
 	return nil
 }
 
+// SendWithReplyTo satisfies onboarding.Sender. The Reply-To is discarded here — a
+// preview shows the mail, and the header is asserted by the runner's own tests.
+func (c *capture) SendWithReplyTo(_ context.Context, _, _, _, subject, htmlBody, textBody string) error {
+	c.subject, c.html, c.text = subject, htmlBody, textBody
+	return nil
+}
+
 // sample runs send against a fresh capture and packages what it produced, together
 // with the two pinned-scheme variants the contact sheet toggles between.
 func sample(name, title string, send func(*capture) error) (Sample, error) {
@@ -120,6 +131,27 @@ func sample(name, title string, send func(*capture) error) (Sample, error) {
 		Name: name, Title: title, Subject: c.subject,
 		HTML: c.html, LightHTML: light, DarkHTML: dark, Text: c.text,
 	}, nil
+}
+
+// The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —
+// these are the only mails that ask for an answer.
+func onboardingSample(name, title string, step onboarding.Step, baseURL string) (Sample, error) {
+	return sample(name, title, func(c *capture) error {
+		return onboarding.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL).
+			Send(context.Background(), step, "someone@example.com")
+	})
+}
+
+func welcomeSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-welcome", "Onboarding / 1 · Welcome", onboarding.StepWelcome, baseURL)
+}
+
+func noAlertSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-no-alert", "Onboarding / 2 · No alert yet", onboarding.StepNoAlert, baseURL)
+}
+
+func openSourceSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-open-source", "Onboarding / 3 · Open source", onboarding.StepOpenSource, baseURL)
 }
 
 func verificationSample(baseURL string) (Sample, error) {

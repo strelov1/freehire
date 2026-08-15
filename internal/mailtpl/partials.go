@@ -55,6 +55,10 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 
 {{define "quote"}}<blockquote class="m-quote" style="margin:0 0 14px 0;padding:2px 0 2px 14px;border-left:3px solid ` + colorBorder + `;font-size:15px;line-height:1.6;color:` + colorMuted + `;">{{.}}</blockquote>{{end}}
 
+{{define "lead"}}<p class="m-ink" style="margin:0 0 14px 0;font-size:17px;line-height:1.5;font-weight:600;color:` + colorInk + `;">{{.}}</p>{{end}}
+
+{{define "icon-button"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 14px 0;"><tr><td class="m-btn" style="background:` + colorBrand + `;border-radius:8px;"><a href="{{.URL}}" class="m-btn-a" style="display:inline-block;padding:11px 20px;font-size:15px;font-weight:600;color:` + colorBrandFg + `;text-decoration:none;"><img src="{{.IconURL}}" width="18" height="18" alt="" class="m-logo" style="vertical-align:-3px;border:0;padding-right:9px;">{{.Label}}</a></td></tr></table>{{end}}
+
 {{define "job-row"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
 {{if .LogoURL}}<td width="44" valign="top" style="width:44px;padding-right:12px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="40" style="width:40px;">
@@ -74,6 +78,19 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 type Link struct {
 	URL   string
 	Label string
+}
+
+// IconLink is the argument to "icon-button": a call to action wearing a brand mark.
+//
+// The icon must be a light-on-transparent PNG, because the partial tags it with
+// m-logo — the class the dark stylesheet inverts. That inversion is not decoration:
+// in dark mode the button fill lightens and its label darkens, so a mark that
+// stayed light would disappear. One asset, tracking the label, instead of two that
+// can drift.
+type IconLink struct {
+	URL     string
+	Label   string
+	IconURL string
 }
 
 // Job is the argument to the "job-row" partial: one vacancy as every mail shows it.
@@ -116,4 +133,7 @@ func NewJob(title, company, salary, url string) Job {
 // threading it through its data struct just to reach a partial.
 var funcs = template.FuncMap{
 	"mailLink": func(url, label string) Link { return Link{URL: url, Label: label} },
+	"mailIconLink": func(url, label, iconURL string) IconLink {
+		return IconLink{URL: url, Label: label, IconURL: iconURL}
+	},
 }

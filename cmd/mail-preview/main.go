@@ -34,9 +34,7 @@ func main() {
 	if err := os.MkdirAll(*dir, 0o755); err != nil {
 		log.Fatalf("mail-preview: %v", err)
 	}
-	// The logo travels with the previews so a relative -base resolves it, and so the
-	// Storybook copies do not depend on the production host being reachable.
-	if err := copyLogo(*dir); err != nil {
+	if err := copyAssets(*dir); err != nil {
 		log.Fatalf("mail-preview: %v", err)
 	}
 
@@ -66,13 +64,24 @@ func main() {
 	fmt.Printf("wrote %d previews to %s\nopen %s\n", len(samples), *dir, index)
 }
 
-// copyLogo places the mail logo beside the previews. Source and destination are both
-// repo paths, so this runs from the module root like the rest of cmd/.
-func copyLogo(dir string) error {
-	const src = "web/static/email-logo.png"
-	b, err := os.ReadFile(src)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", src, err)
+// copyAssets places every image the mails reference beside the previews, so a
+// relative -base resolves them and the Storybook copies do not depend on the
+// production host being reachable.
+func copyAssets(dir string) error {
+	for _, name := range []string{
+		"email-logo.png",
+		"email-icon-github.png",
+		"email-icon-discord.png",
+		"email-icon-linkedin.png",
+		"ilya.jpg",
+	} {
+		b, err := os.ReadFile(filepath.Join("web/static", name))
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o644); err != nil {
+			return err
+		}
 	}
-	return os.WriteFile(filepath.Join(dir, "email-logo.png"), b, 0o644)
+	return nil
 }

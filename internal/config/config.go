@@ -230,6 +230,12 @@ type Settings struct {
 	AWSRegion       string
 	NotifyEmailFrom string
 
+	// OnboardingReplyTo is the human inbox that answers the founder signup sequence
+	// (internal/onboarding). Those mails ask a question, so an unset value disables
+	// the sequence rather than sending letters whose replies reach nobody — the send
+	// address is a no-reply feeding the application-mail parser.
+	OnboardingReplyTo string
+
 	// ServedHosts are the exact hostnames this deployment answers on (e.g.
 	// "freehire.me,apply.freehire.me"). Only these are honoured as an OAuth redirect
 	// origin; anything else falls back to FrontendOrigin. Empty defaults to the
@@ -371,6 +377,8 @@ func Load() Settings {
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
+
+		OnboardingReplyTo: os.Getenv("ONBOARDING_REPLY_TO"),
 
 		ServedHosts:                splitCSV(os.Getenv("SERVED_HOSTS")),
 		TracerLinkSalt:             os.Getenv("TRACER_LINK_SALT"),

@@ -1985,6 +1985,16 @@ type Querier interface {
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
 	ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error)
+	// Accounts old enough to have settled in, greeted already, and still without an
+	// active alert — the one action the product is built around.
+	//
+	// It requires the welcome row rather than only the age: a person whose greeting
+	// never went out should not receive a follow-up referring to a mail they never saw.
+	ListNoAlertCandidates(ctx context.Context, arg ListNoAlertCandidatesParams) ([]ListNoAlertCandidatesRow, error)
+	// Everyone greeted and past the wait, whether or not they set up an alert: this
+	// step asks for a star and a Discord visit, which is worth asking of a browser as
+	// much as of a regular.
+	ListOpenSourceCandidates(ctx context.Context, arg ListOpenSourceCandidatesParams) ([]ListOpenSourceCandidatesRow, error)
 	// Keyset continuation: rows strictly older than the cursor (created_at, id). No
 	// OFFSET, so deep pages never scan skipped rows.
 	ListOpenThreadsAfter(ctx context.Context, arg ListOpenThreadsAfterParams) ([]ListOpenThreadsAfterRow, error)
@@ -2188,6 +2198,22 @@ type Querier interface {
 	// Closed jobs are included: dimming a closed posting that still shows in a
 	// history surface is correct, and the browse list filters closed jobs itself.
 	ListViewedJobSlugs(ctx context.Context, userID int64) ([]string, error)
+	// Candidate readers for the founder signup sequence (internal/onboarding).
+	//
+	// Three rules hold across all of them, and each is load-bearing:
+	//
+	//   * `email_verified` — an unverified address is one nobody proved they own.
+	//     Mailing it is how a sending domain collects bounces and spam complaints for
+	//     addresses that were typos to begin with.
+	//   * The `window_days` bound — without it the first deploy mails the entire
+	//     historical user table at once. It also caps the blast radius of any future
+	//     mistake to two weeks of signups.
+	//   * The LEFT JOIN on notification_settings — a missing row means the account
+	//     never touched the setting, which is not the same as opting out, so it still
+	//     gets the sequence. An explicit `enabled = false` stops it.
+	// Verified accounts inside the window that have not been greeted yet. This is the
+	// only step with no waiting period: it goes out on the next pass after signup.
+	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
@@ -2668,6 +2694,10 @@ type Querier interface {
 	// Count a failed send: bump attempts, record the error, and dead-letter
 	// (failed_at) once attempts reach the max. Mirrors RecordReminderDeliveryFailure.
 	RecordNudgeDeliveryFailure(ctx context.Context, arg RecordNudgeDeliveryFailureParams) error
+	// Closes out one (user, step) whether or not the send worked; `error` carries the
+	// transport failure when it did not. ON CONFLICT DO NOTHING makes a double run
+	// harmless: the first row stands and the send is never repeated.
+	RecordOnboardingEmail(ctx context.Context, arg RecordOnboardingEmailParams) error
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.

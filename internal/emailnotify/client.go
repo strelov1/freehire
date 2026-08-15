@@ -40,7 +40,19 @@ func NewClient(ctx context.Context, region string) (*Client, error) {
 // SendEmail. A send error is returned so the caller (the notify delivery loop)
 // retries and eventually dead-letters rather than dropping the notification.
 func (c *Client) Send(ctx context.Context, from, to, subject, htmlBody, textBody string) error {
-	_, err := c.ses.SendEmail(ctx, &sesv2.SendEmailInput{
+	return c.SendWithReplyTo(ctx, from, "", to, subject, htmlBody, textBody)
+}
+
+// SendWithReplyTo is Send with replies routed somewhere other than the sending
+// address. An empty replyTo sends no header at all, which is what every automated
+// mail wants: replies to a digest belong nowhere.
+//
+// The founder sequence is the one caller that sets it. Those mails ask a question
+// and are worthless without an inbox that answers, and the send address is a
+// no-reply that feeds the application-mail parser — an actual reply landing there
+// would be read by a robot looking for interview invitations.
+func (c *Client) SendWithReplyTo(ctx context.Context, from, replyTo, to, subject, htmlBody, textBody string) error {
+	in := &sesv2.SendEmailInput{
 		FromEmailAddress: aws.String(from),
 		Destination:      &types.Destination{ToAddresses: []string{to}},
 		Content: &types.EmailContent{
@@ -52,8 +64,11 @@ func (c *Client) Send(ctx context.Context, from, to, subject, htmlBody, textBody
 				},
 			},
 		},
-	})
-	if err != nil {
+	}
+	if replyTo != "" {
+		in.ReplyToAddresses = []string{replyTo}
+	}
+	if _, err := c.ses.SendEmail(ctx, in); err != nil {
 		return fmt.Errorf("emailnotify: ses send to %s: %w", to, err)
 	}
 	return nil
