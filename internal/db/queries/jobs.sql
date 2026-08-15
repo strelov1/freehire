@@ -26,8 +26,9 @@ ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
 -- name: ListJobsBySourceAfter :many
--- Keyset scan over one provider's rows, for cmd/backfill-justjoin: pages by the immutable
--- primary key (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
+-- Keyset scan over one provider's rows, for the per-source repair workers (e.g.
+-- cmd/backfill-echojobs, cmd/backfill-descriptions): pages by the immutable primary key
+-- (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
 -- closed rows too — a one-time backfill of a missing description fills open and closed alike.
 SELECT *
 FROM jobs
@@ -36,30 +37,14 @@ ORDER BY id
 LIMIT sqlc.arg(batch_size);
 
 -- name: UpdateJobDescription :execrows
--- Targeted description rewrite for cmd/backfill-justjoin: sets the description and the refreshed
+-- Targeted description rewrite shared by the per-source description-repair workers (e.g.
+-- cmd/backfill-echojobs, cmd/backfill-descriptions): sets the description and the refreshed
 -- content_hash (recomputed in Go from the row's indexed fields with the new description) so the
 -- row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description
 -- and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.
 UPDATE jobs
 SET description  = sqlc.arg(description),
     content_hash = sqlc.arg(content_hash),
-    updated_at   = now()
-WHERE id = sqlc.arg(id);
-
--- name: UpdateJobCompany :execrows
--- Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
--- ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
--- sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
--- company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
--- picks the row back up.
-UPDATE jobs
-SET company      = sqlc.arg(company),
-    company_slug = sqlc.arg(company_slug),
-    content_hash = sqlc.arg(content_hash),
-    -- The company correction invalidates any precomputed similar-jobs list this job
-    -- already has: it was computed excluding the OLD company's postings, so it may
-    -- now wrongly include a same-company match. Force cmd/similar-backfill to redo it.
-    similar_computed_at = NULL,
     updated_at   = now()
 WHERE id = sqlc.arg(id);
 

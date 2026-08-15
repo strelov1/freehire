@@ -1,8 +1,7 @@
 // Package backfillpage holds the keyset-pagination walk shared by the one-off
-// per-source repair workers (cmd/backfill-echojobs, cmd/backfill-justjoin,
-// cmd/backfill-himalayas-companyname, ...): page every row for one source (id
-// > last seen, so concurrent writes cannot skip or repeat rows), stopping once
-// a page comes back short of the batch size. Only that walk is shared — each
+// per-source repair workers (cmd/backfill-echojobs, ...): page every row for one
+// source (id > last seen, so concurrent writes cannot skip or repeat rows), stopping
+// once a page comes back short of the batch size. Only that walk is shared — each
 // worker's actual repair (re-fetch a detail body, parse a stored URL, ...)
 // differs enough that factoring it in too would cost more clarity than it
 // saves.

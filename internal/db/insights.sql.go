@@ -11,38 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const backfillInsightsSkillHistoryWeek = `-- name: BackfillInsightsSkillHistoryWeek :execrows
-INSERT INTO insights_skill_history (skill, week_start, open_count)
-SELECT skill, $1::date, count(*)::int
-FROM jobs, unnest(skills) AS skill
-WHERE created_at <= $2::timestamptz
-  AND (closed_at IS NULL OR closed_at > $2::timestamptz)
-GROUP BY skill
-ON CONFLICT (skill, week_start) DO NOTHING
-`
-
-type BackfillInsightsSkillHistoryWeekParams struct {
-	WeekStart pgtype.Date        `json:"week_start"`
-	AsOf      pgtype.Timestamptz `json:"as_of"`
-}
-
-// Retroactively snapshots one past ISO week, computing each skill's open-job
-// count "as of" @as_of (that week's Monday, midnight UTC) directly from
-// jobs.created_at/closed_at — the same open_at(D) formula
-// RebuildInsightsSkillStatsGlobal already trusts for its 30-day-back
-// comparison, just evaluated at an arbitrary past instant instead of "now -
-// 30d". A skill absent from the GROUP BY output was open in zero jobs as of
-// that date, so it correctly contributes no row. ON CONFLICT DO NOTHING is
-// what makes this safe to run over a week the live weekly writer already
-// recorded: the real snapshot is never overwritten by a backfilled one.
-func (q *Queries) BackfillInsightsSkillHistoryWeek(ctx context.Context, arg BackfillInsightsSkillHistoryWeekParams) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillInsightsSkillHistoryWeek, arg.WeekStart, arg.AsOf)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteAllInsightsCompanyGrowth = `-- name: DeleteAllInsightsCompanyGrowth :exec
 
 DELETE FROM insights_company_growth

@@ -1467,8 +1467,9 @@ type ListJobsBySourceAfterParams struct {
 	BatchSize int32  `json:"batch_size"`
 }
 
-// Keyset scan over one provider's rows, for cmd/backfill-justjoin: pages by the immutable
-// primary key (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
+// Keyset scan over one provider's rows, for the per-source repair workers (e.g.
+// cmd/backfill-echojobs, cmd/backfill-descriptions): pages by the immutable primary key
+// (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
 // closed rows too — a one-time backfill of a missing description fills open and closed alike.
 func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourceAfterParams) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsBySourceAfter, arg.Source, arg.AfterID, arg.BatchSize)
@@ -2817,44 +2818,6 @@ func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySo
 	return items, nil
 }
 
-const updateJobCompany = `-- name: UpdateJobCompany :execrows
-UPDATE jobs
-SET company      = $1,
-    company_slug = $2,
-    content_hash = $3,
-    -- The company correction invalidates any precomputed similar-jobs list this job
-    -- already has: it was computed excluding the OLD company's postings, so it may
-    -- now wrongly include a same-company match. Force cmd/similar-backfill to redo it.
-    similar_computed_at = NULL,
-    updated_at   = now()
-WHERE id = $4
-`
-
-type UpdateJobCompanyParams struct {
-	Company     string      `json:"company"`
-	CompanySlug string      `json:"company_slug"`
-	ContentHash pgtype.Text `json:"content_hash"`
-	ID          int64       `json:"id"`
-}
-
-// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
-// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
-// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
-// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
-// picks the row back up.
-func (q *Queries) UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateJobCompany,
-		arg.Company,
-		arg.CompanySlug,
-		arg.ContentHash,
-		arg.ID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const updateJobDerived = `-- name: UpdateJobDerived :exec
 UPDATE jobs
 SET countries = COALESCE($1::text[], '{}'),
@@ -2954,7 +2917,8 @@ type UpdateJobDescriptionParams struct {
 	ID          int64       `json:"id"`
 }
 
-// Targeted description rewrite for cmd/backfill-justjoin: sets the description and the refreshed
+// Targeted description rewrite shared by the per-source description-repair workers (e.g.
+// cmd/backfill-echojobs, cmd/backfill-descriptions): sets the description and the refreshed
 // content_hash (recomputed in Go from the row's indexed fields with the new description) so the
 // row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description
 // and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.

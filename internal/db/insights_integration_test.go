@@ -337,68 +337,6 @@ func TestInsightsSkillHistorySnapshotIdempotentAndPruned(t *testing.T) {
 	}
 }
 
-// TestBackfillInsightsSkillHistoryWeek exercises the open_at(D) reconstruction:
-// a job open across the "as of" instant counts, one not yet created or already
-// closed by then does not — and a week the live writer already recorded is never
-// clobbered by a backfilled one.
-func TestBackfillInsightsSkillHistoryWeek(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-
-	closedAgo10 := 10
-	// Open across day -40: created day -60, closed day -10.
-	seedInsightsJob(t, ctx, q, pool, "b1", insightSeed{createdAgo: 60, closedAgo: &closedAgo10, skills: []string{"go"}})
-	// Not created yet as of day -40 (created day -5).
-	seedInsightsJob(t, ctx, q, pool, "b2", insightSeed{createdAgo: 5, skills: []string{"go"}})
-
-	asOf := time.Now().UTC().AddDate(0, 0, -40)
-	weekStart := pgtype.Date{Time: asOf.Truncate(24 * time.Hour), Valid: true}
-
-	n, err := q.BackfillInsightsSkillHistoryWeek(ctx, BackfillInsightsSkillHistoryWeekParams{
-		WeekStart: weekStart,
-		AsOf:      pgtype.Timestamptz{Time: asOf, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("backfill: %v", err)
-	}
-	if n != 1 {
-		t.Fatalf("backfill rows = %d, want 1 (only b1 was open as of day -40)", n)
-	}
-
-	rows, err := q.ListInsightsSkillHistory(ctx, []string{"go"})
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(rows) != 1 || rows[0].OpenCount != 1 {
-		t.Fatalf("history = %+v, want one row with open_count 1", rows)
-	}
-
-	// Re-running the same week must not overwrite an existing (e.g. live-written) row.
-	if _, err := pool.Exec(ctx,
-		`UPDATE insights_skill_history SET open_count = 99 WHERE skill = 'go' AND week_start = $1`,
-		weekStart.Time); err != nil {
-		t.Fatalf("seed live-authoritative row: %v", err)
-	}
-	n, err = q.BackfillInsightsSkillHistoryWeek(ctx, BackfillInsightsSkillHistoryWeekParams{
-		WeekStart: weekStart,
-		AsOf:      pgtype.Timestamptz{Time: asOf, Valid: true},
-	})
-	if err != nil {
-		t.Fatalf("backfill again: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("re-backfill rows = %d, want 0 (must not overwrite the live row)", n)
-	}
-	rows, err = q.ListInsightsSkillHistory(ctx, []string{"go"})
-	if err != nil {
-		t.Fatalf("list after re-backfill: %v", err)
-	}
-	if len(rows) != 1 || rows[0].OpenCount != 99 {
-		t.Fatalf("history after re-backfill = %+v, want open_count still 99 (untouched)", rows)
-	}
-}
-
 // --- helpers ---
 
 func findSkillHistory(t *testing.T, rows []InsightsSkillHistory, skill string) InsightsSkillHistory {

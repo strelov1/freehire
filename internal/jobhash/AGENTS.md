@@ -50,6 +50,5 @@ Pure functions over `db.UpsertJobParams` / `db.Job`; no I/O.
 - `internal/ghost` (crosscheck.go) — `RoleKey` matches aggregator postings against the
   employer's own board titles.
 - `cmd/reindex` (fuzzy.go) — description-signature similarity for fuzzy role matching.
-- `cmd/hydrate-adzuna-description`, `cmd/backfill-descriptions`, `cmd/backfill-echojobs`,
-  `cmd/backfill-justjoin`, `cmd/backfill-himalayas-companyname` — `OfRow`/`RoleKey` for
-  rewriting stored rows without breaking the change signal.
+- `cmd/hydrate-adzuna-description`, `cmd/backfill-descriptions`, `cmd/backfill-echojobs` —
+  `OfRow`/`RoleKey` for rewriting stored rows without breaking the change signal.

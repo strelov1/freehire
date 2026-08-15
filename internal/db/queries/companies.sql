@@ -157,8 +157,8 @@ WHERE slug = $1;
 -- countries and hq_country ride along for the credential gates: a register entry is
 -- only granted to a company demonstrably present in that register's country, and a
 -- single-token name additionally needs its headquarters there. Both are already
--- maintained (countries by RefreshCompanyFacets, hq_country by the company-info
--- importers), so this widens the read rather than adding a source of truth.
+-- maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
+-- this widens the read rather than adding a source of truth.
 SELECT slug, collections, countries, hq_country
 FROM companies
 ORDER BY slug;
@@ -235,31 +235,6 @@ SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1);
 -- former-name slug candidates, instead of one CompanyExists round trip per
 -- candidate per entry (the dataset runs several thousand entries deep).
 SELECT slug FROM companies;
-
--- name: UpsertCompanyInfo :exec
--- Apply one external-dataset company-info record, matched by slug. A new slug is
--- inserted as a reference row (is_reference = true) with no jobs; an existing slug
--- (job-backed or a prior reference) has only its company-info columns refreshed —
--- name, job_count, collections, is_reference, and the job-derived facet arrays are
--- left untouched. Idempotent: re-running the same record rewrites the same values.
-INSERT INTO companies (
-    slug, name, industries, year_founded, employee_count, hq_country,
-    organization_type, tagline, company_info, is_reference, company_info_at
-) VALUES (
-    sqlc.arg(slug), sqlc.arg(name), sqlc.arg(industries), sqlc.arg(year_founded),
-    sqlc.arg(employee_count), sqlc.arg(hq_country), sqlc.arg(organization_type),
-    sqlc.arg(tagline), sqlc.arg(company_info), true, now()
-)
-ON CONFLICT (slug) DO UPDATE SET
-    industries        = EXCLUDED.industries,
-    year_founded      = EXCLUDED.year_founded,
-    employee_count    = EXCLUDED.employee_count,
-    hq_country        = EXCLUDED.hq_country,
-    organization_type = EXCLUDED.organization_type,
-    tagline           = EXCLUDED.tagline,
-    company_info      = EXCLUDED.company_info,
-    company_info_at   = now(),
-    updated_at        = now();
 
 -- name: UpsertYCCompany :exec
 -- Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a

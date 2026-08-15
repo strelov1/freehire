@@ -155,27 +155,6 @@ type justJoinSkill struct {
 	Name string `json:"name"`
 }
 
-// JustJoinDescription fetches the sanitized description for a stored justjoin job URL, deriving
-// the offer slug from the URL. It returns ok=false when the URL is not a justjoin offer URL, the
-// detail request fails, or the offer has no body. It exists for cmd/backfill-justjoin, which
-// fills the description of rows ingested before detail hydration existed; the crawl path uses
-// (justjoin).detail directly.
-func JustJoinDescription(ctx context.Context, c JSONGetter, jobURL string) (string, bool) {
-	slug, ok := strings.CutPrefix(jobURL, "https://justjoin.it/job-offer/")
-	if !ok || slug == "" {
-		return "", false
-	}
-	d, ok := justjoin{http: c}.detail(ctx, slug)
-	if !ok {
-		return "", false
-	}
-	body := sanitizeHTML(d.Body)
-	if body == "" {
-		return "", false
-	}
-	return body, true
-}
-
 // detail fetches an offer's detail, returning ok=false on a failed request so the caller
 // falls back to the list-only job — an offer is never dropped over a missing detail.
 func (s justjoin) detail(ctx context.Context, slug string) (justJoinDetail, bool) {

@@ -156,24 +156,6 @@ FROM insights_skill_history
 WHERE skill = ANY(sqlc.arg('skills')::text[])
 ORDER BY skill, week_start DESC;
 
--- name: BackfillInsightsSkillHistoryWeek :execrows
--- Retroactively snapshots one past ISO week, computing each skill's open-job
--- count "as of" @as_of (that week's Monday, midnight UTC) directly from
--- jobs.created_at/closed_at — the same open_at(D) formula
--- RebuildInsightsSkillStatsGlobal already trusts for its 30-day-back
--- comparison, just evaluated at an arbitrary past instant instead of "now -
--- 30d". A skill absent from the GROUP BY output was open in zero jobs as of
--- that date, so it correctly contributes no row. ON CONFLICT DO NOTHING is
--- what makes this safe to run over a week the live weekly writer already
--- recorded: the real snapshot is never overwritten by a backfilled one.
-INSERT INTO insights_skill_history (skill, week_start, open_count)
-SELECT skill, sqlc.arg('week_start')::date, count(*)::int
-FROM jobs, unnest(skills) AS skill
-WHERE created_at <= sqlc.arg('as_of')::timestamptz
-  AND (closed_at IS NULL OR closed_at > sqlc.arg('as_of')::timestamptz)
-GROUP BY skill
-ON CONFLICT (skill, week_start) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- Salary bands
 -- ---------------------------------------------------------------------------

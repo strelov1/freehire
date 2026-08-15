@@ -32,10 +32,9 @@ const (
 	himalayasListURL  = "https://himalayas.app/jobs/api?limit=%d&offset=%d"
 )
 
-// HimalayasCompanyNameSentinel is the literal value Himalayas' feed sends as companyName for
-// a subset of postings, instead of the real company — see toJob. Exported for
-// cmd/backfill-himalayas-companyname, which repairs rows ingested before this was handled.
-const HimalayasCompanyNameSentinel = "name"
+// himalayasCompanyNameSentinel is the literal value Himalayas' feed sends as companyName for
+// a subset of postings, instead of the real company — see toJob.
+const himalayasCompanyNameSentinel = "name"
 
 // NewHimalayas builds the Himalayas adapter over the given HTTP client.
 func NewHimalayas(c JSONGetter) Source { return himalayas{http: c} }
@@ -108,7 +107,7 @@ func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // already resolves for other slug-only boards; Himalayas has no resolver registered there yet.
 func (p himalayasPosting) toJob() (Job, bool) {
 	company := p.CompanyName
-	if strings.EqualFold(strings.TrimSpace(company), HimalayasCompanyNameSentinel) {
+	if strings.EqualFold(strings.TrimSpace(company), himalayasCompanyNameSentinel) {
 		company = p.CompanySlug
 	}
 	if p.GUID == "" || company == "" {

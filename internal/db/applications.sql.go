@@ -72,50 +72,6 @@ func (q *Queries) BackfillEmailApplicationLinks(ctx context.Context, batchSize i
 	return result.RowsAffected(), nil
 }
 
-const backfillPreparingStage = `-- name: BackfillPreparingStage :one
-WITH upd AS (
-    UPDATE applications a
-       SET stage = 'preparing'
-     WHERE a.stage = 'applied'
-       AND a.applied_at IS NULL
-       AND EXISTS (
-         SELECT 1 FROM cvs c
-          WHERE c.user_id = a.user_id AND c.job_id = a.job_id AND c.job_id IS NOT NULL
-       )
-    RETURNING a.id, a.user_id, a.job_id, a.company_slug
-), event AS (
-    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
-    SELECT u.user_id, u.id, u.job_id, u.company_slug, 'stage_set', 'preparing', now(), 'system'
-      FROM upd u
-)
-SELECT count(*) AS count FROM upd
-`
-
-// One-time correction for applications the pre-preparing-stage EnsureOnBoard wrote as
-// stage='applied' with no applied_at (see cv-tailoring's board placement in
-// internal/handler/cv.go, which now writes 'preparing' directly — this repairs what it wrote
-// before that changed).
-//
-// The WHERE clause alone cannot tell tailoring's placement apart from a candidate's own
-// manual, undated drag into the Applied column, which produces the identical
-// stage='applied'/applied_at=NULL shape (see JobBoard.svelte's persistMove) and must NOT be
-// relabeled. A tailored CV on record for the same (user, job) is the strongest available
-// corroborating evidence of the former; the EXISTS join is that evidence, not a performance
-// detail.
-//
-// Idempotent: a second run matches nothing, because a row this statement (or the current
-// EnsureOnBoard) already moved to 'preparing' no longer reads stage='applied'.
-//
-// Writes a stage_set ledger event per corrected row, source='system': the platform is
-// correcting its own past write, not the candidate doing anything (see appevent.SourceSystem).
-// Returns the count of applications corrected.
-func (q *Queries) BackfillPreparingStage(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, backfillPreparingStage)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const clearApplicationProgressByID = `-- name: ClearApplicationProgressByID :one
 UPDATE applications
    SET stage = NULL, applied_at = NULL
@@ -162,28 +118,6 @@ SELECT count(*) FROM applications WHERE user_id = $1 AND job_id IS NULL
 // to its "all"/"applied"/"board" totals by the caller.
 func (q *Queries) CountOrphanedApplications(ctx context.Context, userID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countOrphanedApplications, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countPreparingBackfillCandidates = `-- name: CountPreparingBackfillCandidates :one
-SELECT count(*) AS count
-  FROM applications a
- WHERE a.stage = 'applied'
-   AND a.applied_at IS NULL
-   AND EXISTS (
-     SELECT 1 FROM cvs c
-      WHERE c.user_id = a.user_id AND c.job_id = a.job_id AND c.job_id IS NOT NULL
-   )
-`
-
-// Read-only counterpart to BackfillPreparingStage, for cmd/backfill-preparing-stage's
-// --dry-run: how many applications the correction below would touch, without touching them.
-// Kept in exact lockstep with that query's WHERE clause deliberately — see its comment for
-// what the shape means and why the EXISTS join is the evidence, not the WHERE alone.
-func (q *Queries) CountPreparingBackfillCandidates(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countPreparingBackfillCandidates)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

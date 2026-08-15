@@ -487,8 +487,8 @@ type ListCompanyCollectionsRow struct {
 // countries and hq_country ride along for the credential gates: a register entry is
 // only granted to a company demonstrably present in that register's country, and a
 // single-token name additionally needs its headquarters there. Both are already
-// maintained (countries by RefreshCompanyFacets, hq_country by the company-info
-// importers), so this widens the read rather than adding a source of truth.
+// maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
+// this widens the read rather than adding a source of truth.
 func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error) {
 	rows, err := q.db.Query(ctx, listCompanyCollections)
 	if err != nil {
@@ -850,59 +850,6 @@ ON CONFLICT (slug) DO UPDATE SET
 // name variants; ON CONFLICT folds collisions and refreshes existing rows.
 func (q *Queries) SyncCompaniesFromJobs(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, syncCompaniesFromJobs)
-	return err
-}
-
-const upsertCompanyInfo = `-- name: UpsertCompanyInfo :exec
-INSERT INTO companies (
-    slug, name, industries, year_founded, employee_count, hq_country,
-    organization_type, tagline, company_info, is_reference, company_info_at
-) VALUES (
-    $1, $2, $3, $4,
-    $5, $6, $7,
-    $8, $9, true, now()
-)
-ON CONFLICT (slug) DO UPDATE SET
-    industries        = EXCLUDED.industries,
-    year_founded      = EXCLUDED.year_founded,
-    employee_count    = EXCLUDED.employee_count,
-    hq_country        = EXCLUDED.hq_country,
-    organization_type = EXCLUDED.organization_type,
-    tagline           = EXCLUDED.tagline,
-    company_info      = EXCLUDED.company_info,
-    company_info_at   = now(),
-    updated_at        = now()
-`
-
-type UpsertCompanyInfoParams struct {
-	Slug             string          `json:"slug"`
-	Name             string          `json:"name"`
-	Industries       []string        `json:"industries"`
-	YearFounded      pgtype.Int4     `json:"year_founded"`
-	EmployeeCount    pgtype.Int4     `json:"employee_count"`
-	HqCountry        pgtype.Text     `json:"hq_country"`
-	OrganizationType pgtype.Text     `json:"organization_type"`
-	Tagline          pgtype.Text     `json:"tagline"`
-	CompanyInfo      json.RawMessage `json:"company_info"`
-}
-
-// Apply one external-dataset company-info record, matched by slug. A new slug is
-// inserted as a reference row (is_reference = true) with no jobs; an existing slug
-// (job-backed or a prior reference) has only its company-info columns refreshed —
-// name, job_count, collections, is_reference, and the job-derived facet arrays are
-// left untouched. Idempotent: re-running the same record rewrites the same values.
-func (q *Queries) UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error {
-	_, err := q.db.Exec(ctx, upsertCompanyInfo,
-		arg.Slug,
-		arg.Name,
-		arg.Industries,
-		arg.YearFounded,
-		arg.EmployeeCount,
-		arg.HqCountry,
-		arg.OrganizationType,
-		arg.Tagline,
-		arg.CompanyInfo,
-	)
 	return err
 }
 

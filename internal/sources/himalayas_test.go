@@ -94,7 +94,7 @@ func TestHimalayasCompanyNameSentinelFallsBackToCompanySlug(t *testing.T) {
 	// is the fallback.
 	p := himalayasPosting{
 		Title:       "Channel Sales Manager (East)",
-		CompanyName: HimalayasCompanyNameSentinel,
+		CompanyName: himalayasCompanyNameSentinel,
 		CompanySlug: "freshworks",
 		GUID:        ":https://himalayas.app/companies/freshworks/jobs/channel-sales-manager-east-9054304068",
 	}
@@ -112,7 +112,7 @@ func TestHimalayasCompanyNameSentinelDropsWhenCompanySlugAlsoMissing(t *testing.
 	// posting rather than store the literal "name" as the company.
 	p := himalayasPosting{
 		Title:       "Operations Manager",
-		CompanyName: HimalayasCompanyNameSentinel,
+		CompanyName: himalayasCompanyNameSentinel,
 		GUID:        "https://himalayas.app/companies/somewhere/jobs/operations-manager",
 	}
 	if _, ok := p.toJob(); ok {

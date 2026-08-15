@@ -28,11 +28,12 @@ are matched; `cmd/import-collections` writes `companies.collections`, and the se
   ("Apple", "Spark") additionally requires HQ there, or a multinational with a local office
   inherits a licence from a same-named local business. Unknown HQ is not a match — absence
   of evidence is not evidence.
-- **`countryAliases` exists because `hq_country` has two writers and only one normalizes**
-  (register.go:103-117): `cmd/import-yc` parses, `cmd/backfill-company-info` writes its
-  upstream's value verbatim. The failure mode is silent — a company simply never earns a
-  credential it qualifies for. Whole-value comparison only: "New Great Britain Holdings" is
-  a company name, not a country.
+- **`countryAliases` exists because a retired one-time importer left `hq_country` rows
+  its upstream's writer never normalized** (register.go:103-117): `cmd/import-yc`, the
+  column's live writer, parses through `location.Parse`, but those legacy rows still carry
+  the upstream's spelled-out value verbatim. The failure mode is silent — a company simply
+  never earns a credential it qualifies for. Whole-value comparison only: "New Great
+  Britain Holdings" is a company name, not a country.
 - **`DropAmbiguous` drops register rows whose name identifies more than one organisation**
   (register.go:180-201), using `Dataset.IdentityKey` (UK town, NL kvk, US tin4). Rows
   sharing a name AND an identity are one body listed once per route — they must survive for

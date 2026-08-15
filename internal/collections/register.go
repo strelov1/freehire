@@ -115,12 +115,13 @@ func RequireCountry(code string) func(Company, Record) bool {
 }
 
 // countryAliases are the spellings a country may appear under in companies.hq_country,
-// beyond its ISO code. The column has two writers and only one normalizes:
-// cmd/import-yc runs values through location.Parse, while cmd/backfill-company-info
-// writes its upstream's `country` field verbatim. That upstream currently emits ISO
-// codes, so a bare code comparison happens to work today — but the gate must not
-// depend on a third party's formatting, because the failure is silent: a company
-// simply never earns a credential it qualifies for, and nothing logs it.
+// beyond its ISO code. cmd/import-yc, the column's writer, runs values through
+// location.Parse, which already emits ISO codes — but a retired one-time importer
+// wrote a small number of rows with its upstream's `country` field verbatim, and
+// those rows outlive the tool that wrote them. A bare code comparison happens to
+// work for what's left today, but the gate must not depend on a third party's
+// formatting, because the failure is silent: a company simply never earns a
+// credential it qualifies for, and nothing logs it.
 //
 // Whole-value comparison only, never a substring: "New Great Britain Holdings" is a
 // company name, not a country.

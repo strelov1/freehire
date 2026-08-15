@@ -47,26 +47,6 @@ func TestJustJoinSkillsResolvesALoneAmbiguousSkill(t *testing.T) {
 	}
 }
 
-// TestJustJoinDescription covers the exported backfill helper: it derives the slug from a stored
-// job URL, fetches the detail, and returns the sanitized body — or ok=false when the URL is not a
-// justjoin offer URL, the fetch fails, or the body is empty.
-func TestJustJoinDescription(t *testing.T) {
-	detail := `{"body":"<p>Real body.</p><script>x()</script>"}`
-	fake := (&routedHTTP{}).route("/v1/offers/acme-go-dev--krakow", detail)
-
-	got, ok := JustJoinDescription(context.Background(), fake, "https://justjoin.it/job-offer/acme-go-dev--krakow")
-	if !ok {
-		t.Fatal("ok=false, want a fetched description")
-	}
-	if !strings.Contains(got, "Real body.") || strings.Contains(got, "<script>") {
-		t.Errorf("description not sanitized: %q", got)
-	}
-
-	if _, ok := JustJoinDescription(context.Background(), fake, "https://example.com/not-justjoin"); ok {
-		t.Error("ok=true for a non-justjoin URL, want false")
-	}
-}
-
 func TestJustJoinProvider(t *testing.T) {
 	if got := NewJustJoin(nil).Provider(); got != "justjoin" {
 		t.Errorf("Provider() = %q, want justjoin", got)

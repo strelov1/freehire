@@ -1,7 +1,7 @@
 // Package isoweek has one function: the Monday (ISO 8601 week start) of a given
-// time, at midnight UTC. Shared by every writer of insights_skill_history
-// (cmd/rollup-stats, cmd/backfill-skill-history) and its reader
-// (internal/handler), which all need to agree on what "this week" means.
+// time, at midnight UTC. Shared by insights_skill_history's writer
+// (cmd/rollup-stats) and its reader (internal/handler), which both need to
+// agree on what "this week" means.
 package isoweek
 
 import "time"

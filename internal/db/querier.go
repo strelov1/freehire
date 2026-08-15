@@ -76,35 +76,6 @@ type Querier interface {
 	// the vocabulary stays in Go where a pin test guards it. Mail from an unrecognised store
 	// is skipped rather than defaulted: an unknown provenance must not read as observed.
 	BackfillEmployerReplyEvents(ctx context.Context, arg BackfillEmployerReplyEventsParams) (BackfillEmployerReplyEventsRow, error)
-	// Retroactively snapshots one past ISO week, computing each skill's open-job
-	// count "as of" @as_of (that week's Monday, midnight UTC) directly from
-	// jobs.created_at/closed_at — the same open_at(D) formula
-	// RebuildInsightsSkillStatsGlobal already trusts for its 30-day-back
-	// comparison, just evaluated at an arbitrary past instant instead of "now -
-	// 30d". A skill absent from the GROUP BY output was open in zero jobs as of
-	// that date, so it correctly contributes no row. ON CONFLICT DO NOTHING is
-	// what makes this safe to run over a week the live weekly writer already
-	// recorded: the real snapshot is never overwritten by a backfilled one.
-	BackfillInsightsSkillHistoryWeek(ctx context.Context, arg BackfillInsightsSkillHistoryWeekParams) (int64, error)
-	// One-time correction for applications the pre-preparing-stage EnsureOnBoard wrote as
-	// stage='applied' with no applied_at (see cv-tailoring's board placement in
-	// internal/handler/cv.go, which now writes 'preparing' directly — this repairs what it wrote
-	// before that changed).
-	//
-	// The WHERE clause alone cannot tell tailoring's placement apart from a candidate's own
-	// manual, undated drag into the Applied column, which produces the identical
-	// stage='applied'/applied_at=NULL shape (see JobBoard.svelte's persistMove) and must NOT be
-	// relabeled. A tailored CV on record for the same (user, job) is the strongest available
-	// corroborating evidence of the former; the EXISTS join is that evidence, not a performance
-	// detail.
-	//
-	// Idempotent: a second run matches nothing, because a row this statement (or the current
-	// EnsureOnBoard) already moved to 'preparing' no longer reads stage='applied'.
-	//
-	// Writes a stage_set ledger event per corrected row, source='system': the platform is
-	// correcting its own past write, not the candidate doing anything (see appevent.SourceSystem).
-	// Returns the count of applications corrected.
-	BackfillPreparingStage(ctx context.Context) (int64, error)
 	// Find the ashby board already carrying a job with this Ashby job id — for company careers
 	// pages that embed Ashby via the ashby_jid widget param (the board slug is JS-rendered, absent
 	// from the URL/markup). external_id is "<board>:<uuid>"; served by the
@@ -533,11 +504,6 @@ type Querier interface {
 	// cmd/prune cascades away for a pruned posting, so it never counts these; this is added
 	// to its "all"/"applied"/"board" totals by the caller.
 	CountOrphanedApplications(ctx context.Context, userID int64) (int64, error)
-	// Read-only counterpart to BackfillPreparingStage, for cmd/backfill-preparing-stage's
-	// --dry-run: how many applications the correction below would touch, without touching them.
-	// Kept in exact lockstep with that query's WHERE clause deliberately — see its comment for
-	// what the shape means and why the EXISTS join is the evidence, not the WHERE alone.
-	CountPreparingBackfillCandidates(ctx context.Context) (int64, error)
 	// How many companies this user has newly reviewed since `since` — the rate-limit
 	// check backing companyfeedback.Service.checkRate (mirrors
 	// community.CountRecentThreads). An edit-by-resubmit never inserts a new row
@@ -1713,8 +1679,8 @@ type Querier interface {
 	// countries and hq_country ride along for the credential gates: a register entry is
 	// only granted to a company demonstrably present in that register's country, and a
 	// single-token name additionally needs its headquarters there. Both are already
-	// maintained (countries by RefreshCompanyFacets, hq_country by the company-info
-	// importers), so this widens the read rather than adding a source of truth.
+	// maintained (countries by RefreshCompanyFacets, hq_country by cmd/import-yc), so
+	// this widens the read rather than adding a source of truth.
 	ListCompanyCollections(ctx context.Context) ([]ListCompanyCollectionsRow, error)
 	// A company's feedback, newest first, offset-paginated — the volume per company
 	// is small (bounded by distinct reviewers), so unlike the discussion threads this
@@ -1973,8 +1939,9 @@ type Querier interface {
 	// concurrent inserts/updates (which shift posted_at ordering) cannot make the
 	// scan skip or repeat rows the way OFFSET pagination would.
 	ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterParams) ([]Job, error)
-	// Keyset scan over one provider's rows, for cmd/backfill-justjoin: pages by the immutable
-	// primary key (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
+	// Keyset scan over one provider's rows, for the per-source repair workers (e.g.
+	// cmd/backfill-echojobs, cmd/backfill-descriptions): pages by the immutable primary key
+	// (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
 	// closed rows too — a one-time backfill of a missing description fills open and closed alike.
 	ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourceAfterParams) ([]Job, error)
 	// Incremental keyset scan for `reindex --since`: like ListJobsByIDAfter but only
@@ -3342,12 +3309,6 @@ type Querier interface {
 	// A full owner-scoped replacement, used by the profile UI where the user is editing the
 	// fields directly and means what they typed — including blanking one.
 	UpdateExperienceEmployment(ctx context.Context, arg UpdateExperienceEmploymentParams) (ExperienceEmployment, error)
-	// Targeted company/company_slug rewrite for cmd/backfill-himalayas-companyname: repairs rows
-	// ingested while the adapter stored Himalayas' companyName sentinel verbatim (see
-	// sources.HimalayasCompanyNameSentinel). Same shape as UpdateJobDescription: only the two
-	// company columns and the refreshed content_hash move, stamping updated_at so `reindex --since`
-	// picks the row back up.
-	UpdateJobCompany(ctx context.Context, arg UpdateJobCompanyParams) (int64, error)
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
@@ -3366,7 +3327,8 @@ type Querier interface {
 	// facet/slug-only rewrite deliberately leaves the timestamp untouched so a big backfill
 	// does not churn every row's updated_at.
 	UpdateJobDerived(ctx context.Context, arg UpdateJobDerivedParams) error
-	// Targeted description rewrite for cmd/backfill-justjoin: sets the description and the refreshed
+	// Targeted description rewrite shared by the per-source description-repair workers (e.g.
+	// cmd/backfill-echojobs, cmd/backfill-descriptions): sets the description and the refreshed
 	// content_hash (recomputed in Go from the row's indexed fields with the new description) so the
 	// row re-indexes. Stamps updated_at so `reindex --since` also captures it. Only the description
 	// and hash move; the deterministic facets are re-derived separately by cmd/backfill-derive.
@@ -3456,12 +3418,6 @@ type Querier interface {
 	// upsert-in-place shape as UpsertCompanyVote, but ON CONFLICT names the target
 	// partial index directly since the unique index excludes NULL user_id.
 	UpsertCompanyFeedback(ctx context.Context, arg UpsertCompanyFeedbackParams) (CompanyFeedback, error)
-	// Apply one external-dataset company-info record, matched by slug. A new slug is
-	// inserted as a reference row (is_reference = true) with no jobs; an existing slug
-	// (job-backed or a prior reference) has only its company-info columns refreshed —
-	// name, job_count, collections, is_reference, and the job-derived facet arrays are
-	// left untouched. Idempotent: re-running the same record rewrites the same values.
-	UpsertCompanyInfo(ctx context.Context, arg UpsertCompanyInfoParams) error
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
 	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
 	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error

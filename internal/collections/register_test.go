@@ -235,12 +235,11 @@ func TestDropAmbiguous_KeepsAnEmptyInputEmpty(t *testing.T) {
 }
 
 func TestRequireCountry_AcceptsSpelledOutCountryNames(t *testing.T) {
-	// hq_country has two writers and only one of them normalizes: cmd/import-yc runs
-	// values through location.Parse, while cmd/backfill-company-info writes the
-	// upstream `country` field verbatim. Today that upstream happens to emit ISO
-	// codes, so a bare code comparison works — but the gate must not depend on a
-	// third party's formatting choice, because the failure is silent: a company
-	// simply never earns a credential it qualifies for.
+	// cmd/import-yc, hq_country's writer, runs values through location.Parse, which
+	// already emits ISO codes — but a retired one-time importer left a small number
+	// of rows with a spelled-out country verbatim, and those rows outlive it. The
+	// gate must not depend on a third party's formatting choice, because the
+	// failure is silent: a company simply never earns a credential it qualifies for.
 	gate := RequireCountry("GB")
 	for _, hq := range []string{"GB", "gb", "uk", "UK", "United Kingdom", "united kingdom", "Great Britain"} {
 		co := Company{Slug: "monzo", Countries: []string{"GB"}, HQCountry: hq}
