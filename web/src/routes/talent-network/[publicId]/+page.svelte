@@ -229,15 +229,18 @@
                     <p class="text-sm leading-relaxed">{job.summary}</p>
                   {/if}
                   {#if job.highlights?.length}
+                    <!-- Index-keyed, like the enclosing list and for the same reason: these come
+                         straight out of the résumé parser, which has no uniqueness contract —
+                         a CV that repeats a bullet verbatim would throw each_key_duplicate. -->
                     <ul class="mt-1 flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
-                      {#each job.highlights as highlight (highlight)}
+                      {#each job.highlights as highlight, hi (hi)}
                         <li>{highlight}</li>
                       {/each}
                     </ul>
                   {/if}
                   {#if job.stack?.length}
                     <div class="mt-1 flex flex-wrap gap-1.5">
-                      {#each job.stack as tech (tech)}
+                      {#each job.stack as tech, ti (ti)}
                         <span class="rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
                           >{tech}</span
                         >
@@ -278,7 +281,10 @@
         <section class="flex flex-col gap-3">
           <h2 class="flex items-center gap-2 text-sm font-semibold"><FolderKanban class="size-4" />Projects</h2>
           <ul class="flex flex-col gap-2">
-            {#each projects as project (project.name ?? project.link ?? '')}
+            <!-- Index-keyed: the previous key fell back to `''` when a project had neither a
+                 name nor a link, so two such projects collided outright — and two projects
+                 sharing a name (a parser reading "Internal tools" twice) collided too. -->
+            {#each projects as project, pi (pi)}
               <li class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
                 {#if project.link}
                   <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- a project's own portfolio/repo link, not an internal route -->
@@ -288,7 +294,7 @@
                 {/if}
                 {#if project.highlights?.length}
                   <ul class="flex list-disc flex-col gap-0.5 pl-4 text-sm leading-relaxed">
-                    {#each project.highlights as highlight (highlight)}
+                    {#each project.highlights as highlight, phi (phi)}
                       <li>{highlight}</li>
                     {/each}
                   </ul>
@@ -303,7 +309,9 @@
         <section class="flex flex-col gap-2">
           <h2 class="flex items-center gap-2 text-sm font-semibold"><Languages class="size-4" />Languages</h2>
           <div class="flex flex-wrap gap-2">
-            {#each languages as lang (lang)}
+            <!-- Index-keyed for the same reason as the lists above: résumé-parsed free text
+                 carries no uniqueness guarantee. -->
+            {#each languages as lang, li (li)}
               <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{lang}</span>
             {/each}
           </div>
@@ -314,7 +322,7 @@
         <section class="flex flex-col gap-2">
           <h2 class="flex items-center gap-2 text-sm font-semibold"><Award class="size-4" />Certifications</h2>
           <div class="flex flex-wrap gap-2">
-            {#each certifications as cert (cert)}
+            {#each certifications as cert, ci (ci)}
               <span class="rounded-full border border-border bg-secondary px-3 py-1 text-xs">{cert}</span>
             {/each}
           </div>

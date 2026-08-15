@@ -32,8 +32,14 @@
       <!-- The hint follows the question rather than being pinned to the right edge. On a
            wide viewport that pinning left ~900px of empty space between a question and the
            word describing its answer, which is a long way to travel to read one line. -->
+      <!-- Keyed on index, not on the question text. The text is the employer's, verbatim, and
+           real ATS forms repeat it — Greenhouse and Workable both publish the same screening
+           question twice on some postings. A duplicate key throws each_key_duplicate during
+           Svelte 5 hydration rather than warning, which took the whole job page down. The list
+           is inert (replaced wholesale when `form` changes, never reordered or filtered), so
+           position is a sound identity here. -->
       <ul class="flex max-w-3xl flex-col gap-2">
-        {#each form.questions as question (question.text)}
+        {#each form.questions as question, i (i)}
           <li class="text-sm">
             <span>{question.text}</span>
             {#if question.answer || !question.required}
