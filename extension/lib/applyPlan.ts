@@ -75,14 +75,24 @@ const QUESTIONNAIRE_SIZE = 4;
  * needs an account of — offer no file field at all. Requiring one there is why a
  * form full of questions showed no checklist.
  *
- * So a long questionnaire that requires answers counts too. This decides only
- * what to SHOW; nothing is written on the strength of it, which is what makes the
- * looser test safe here and wrong in the filler.
+ * So the length of the questionnaire counts too — on its own, without asking for
+ * `required` in the markup. Plenty of ATS forms mark a question required with an
+ * asterisk in its label and nothing a parser can read, and demanding the
+ * attribute is why a real application of eleven fields, filled successfully,
+ * showed no checklist at all.
+ *
+ * This decides only what to SHOW; nothing is written on the strength of it, which
+ * is what makes the looser test safe here and wrong in the filler.
  */
-export function showsApplicationForm(fields: FramedField[], uploads: unknown[]): boolean {
-  if (uploads.length > 0) return true;
-  const questions = fields.filter((f) => f.label.trim() !== '');
-  return questions.length >= QUESTIONNAIRE_SIZE && questions.some((f) => f.required);
+export function showsApplicationForm(
+  fields: FramedField[],
+  uploads: unknown[],
+  /** `filled` says the panel has just written into this form. Whatever its markup
+   *  claims, a page that accepted an autofill is asking an application. */
+  evidence: { filled?: boolean } = {},
+): boolean {
+  if (uploads.length > 0 || evidence.filled) return true;
+  return fields.filter((f) => f.label.trim() !== '').length >= QUESTIONNAIRE_SIZE;
 }
 
 /** The plan for the questions the page reported, in the order it asks them. */

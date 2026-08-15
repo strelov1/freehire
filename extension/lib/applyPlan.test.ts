@@ -176,6 +176,12 @@ describe('showsApplicationForm', () => {
     expect(showsApplicationForm(login, [])).toBe(false);
   });
 
+  // The walk has just written into it: whatever the markup says, this page is
+  // asking an application's worth of questions.
+  it('is true for a form the panel has just filled', () => {
+    expect(showsApplicationForm([field('Email')], [], { filled: true })).toBe(true);
+  });
+
   // A search box, a newsletter field, a cookie preference: pages ask short
   // questions everywhere, and a checklist over them is noise.
   it('is false for a page asking nothing in particular', () => {
@@ -183,11 +189,19 @@ describe('showsApplicationForm', () => {
     expect(showsApplicationForm([], [])).toBe(false);
   });
 
-  // Required is the signal that something is being submitted. A long page of
-  // optional fields is a settings screen, not an application.
-  it('is false for a long form that requires nothing', () => {
-    const optional = ['One', 'Two', 'Three', 'Four', 'Five'].map((l) => field(l));
+  // Plenty of ATS forms mark a question required with an asterisk in its label
+  // and nothing in the markup. Demanding `required` in the DOM is why a real
+  // application — eleven fields, filled successfully — showed no checklist at all.
+  it('is true for a long questionnaire that marks nothing required in the markup', () => {
+    const questions = ['One', 'Two', 'Three', 'Four', 'Five'].map((l) => field(l));
 
-    expect(showsApplicationForm(optional, [])).toBe(false);
+    expect(showsApplicationForm(questions, [])).toBe(true);
+  });
+
+  // Three fields is a sign-in, a search box with a filter, a newsletter row.
+  it('is false just below the questionnaire threshold', () => {
+    const few = ['One', 'Two', 'Three'].map((l) => field(l));
+
+    expect(showsApplicationForm(few, [])).toBe(false);
   });
 });

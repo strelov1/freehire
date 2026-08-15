@@ -166,6 +166,7 @@
    */
   async function handlePageChange() {
     const key = await currentPageKey();
+    formFilled = false;
     if (chatPageKey !== null && key !== chatPageKey) {
       resetChat();
       const token = await getToken();
@@ -459,6 +460,10 @@
    *  otherwise replace the current form's plan with the previous one's. Same
    *  pattern as `matchRequestId`. */
   let planRequestId = 0;
+  /** True once a walk has written into this page's form. It outranks every guess
+   *  about whether the page is showing an application: it accepted values. Reset
+   *  by a page change, with the plan. */
+  let formFilled = $state(false);
 
   /** Reads the page's form and rebuilds the plan, or clears it for a page that
    *  is not showing an application. */
@@ -469,7 +474,10 @@
       kind: 'GET_FRAMED_FORM',
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (requestId !== planRequestId) return;
-    if (reply?.kind !== 'FRAMED_FORM' || !showsApplicationForm(reply.fields, reply.uploads)) {
+    if (
+      reply?.kind !== 'FRAMED_FORM' ||
+      !showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })
+    ) {
       plan = null;
       return;
     }
@@ -577,6 +585,7 @@
         const outcome = applied?.kind === 'FILL_OUTCOMES' ? applied.outcomes[0] : undefined;
         if (outcome?.status === 'filled') {
           walk = applyStep(walk, fill);
+          formFilled = true;
           // Ticked off from what was just written, not from a fresh read: the
           // page's own change notice is debounced, so re-reading here would leave
           // the counter a step behind the value on screen.
@@ -627,6 +636,7 @@
       const report = await runAgentAutofill(token);
       // The agent filled the page itself, server-side. Play its report back so
       // the user watches what changed rather than finding it later.
+      if (report.filled.length > 0) formFilled = true;
       await walkReported(report.filled);
       const filled = report.filled.length;
       notices.push(
@@ -709,6 +719,9 @@
         return;
       }
       const walk = await walkFills(fills);
+      // The form has now accepted values, which is stronger evidence than
+      // anything its markup says — so read it again and let the checklist appear.
+      await refreshPlan();
       const n = walk.done.length;
       // What was left unanswered is not listed here: the checklist above shows
       // exactly which questions those are, and naming thirty of them in a notice
