@@ -36,6 +36,9 @@ func (fakeRepo) CreateUser(context.Context, string, string, bool, *string) (acco
 func (fakeRepo) UpdateTimezone(context.Context, int64, *string) (accounts.User, error) {
 	return accounts.User{}, nil
 }
+func (fakeRepo) UpdateLanguage(context.Context, int64, string) (accounts.User, error) {
+	return accounts.User{}, nil
+}
 func (fakeRepo) MarkEmailVerified(context.Context, int64) error { return nil }
 func (fakeRepo) PasswordHash(context.Context, int64) (string, bool, error) {
 	return "", false, nil
@@ -279,6 +282,47 @@ func TestUpdateTimezone_RejectsInvalid(t *testing.T) {
 	app, iss := timezoneApp(fakeRepoTimezone{err: accounts.ErrInvalidTimezone})
 	token, _ := iss.Issue(7, testTokenVersion)
 	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Not/AZone"}`); got != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", got)
+	}
+}
+
+type fakeRepoLanguage struct {
+	fakeRepo
+	user accounts.User
+	err  error
+}
+
+func (f fakeRepoLanguage) UpdateLanguage(context.Context, int64, string) (accounts.User, error) {
+	return f.user, f.err
+}
+
+func languageApp(repo accounts.Repository) (*fiber.App, *auth.Issuer) {
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	h := &authHandlers{issuer: iss, accounts: accounts.New(repo, authHasher{})}
+	app := fiber.New()
+	app.Patch("/me/language", auth.RequireAuth(iss, testVersions), h.UpdateLanguage)
+	return app, iss
+}
+
+func TestUpdateLanguage_RequiresAuth(t *testing.T) {
+	app, _ := languageApp(fakeRepoLanguage{})
+	if got := patchJSON(t, app, "/me/language", "", `{"language":"ru"}`); got != fiber.StatusUnauthorized {
+		t.Errorf("status = %d, want 401", got)
+	}
+}
+
+func TestUpdateLanguage_Valid(t *testing.T) {
+	app, iss := languageApp(fakeRepoLanguage{user: accounts.User{ID: 7, Language: "ru"}})
+	token, _ := iss.Issue(7, testTokenVersion)
+	if got := patchJSON(t, app, "/me/language", token, `{"language":"ru"}`); got != fiber.StatusOK {
+		t.Errorf("status = %d, want 200", got)
+	}
+}
+
+func TestUpdateLanguage_RejectsInvalid(t *testing.T) {
+	app, iss := languageApp(fakeRepoLanguage{err: accounts.ErrInvalidLanguage})
+	token, _ := iss.Issue(7, testTokenVersion)
+	if got := patchJSON(t, app, "/me/language", token, `{"language":"xx"}`); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
 	}
 }

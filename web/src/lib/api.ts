@@ -969,6 +969,12 @@ export function createApi(
     return requestData<User>('/api/v1/me/timezone', jsonBody('PATCH', { timezone }));
   }
 
+  /** Sets the account's preferred interface language (e.g. "ru"). 400s on a code
+   *  outside the curated set. Returns the updated user (carries the new value). */
+  async function updateLanguage(language: string): Promise<User> {
+    return requestData<User>('/api/v1/me/language', jsonBody('PATCH', { language }));
+  }
+
   /** The public slugs of every job the current user has hidden (dismissed). The
    *  browse UI cross-references this set to exclude hidden jobs from the feed
    *  without authenticating the public job list. */
@@ -2065,6 +2071,7 @@ export function createApi(
     getNotificationSettings,
     updateNotificationSettings,
     updateTimezone,
+    updateLanguage,
     listDismissedSlugs,
     getNotifications,
     getNotification,

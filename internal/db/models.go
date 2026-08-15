@@ -921,6 +921,7 @@ type User struct {
 	TalentNetworkVisibility    string             `json:"talent_network_visibility"`
 	TalentNetworkPublicID      uuid.UUID          `json:"talent_network_public_id"`
 	Timezone                   pgtype.Text        `json:"timezone"`
+	Language                   string             `json:"language"`
 }
 
 type UserEmailCode struct {

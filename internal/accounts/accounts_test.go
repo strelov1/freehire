@@ -37,6 +37,11 @@ type fakeRepo struct {
 	updateTimezoneCallIdx int
 	updateTimezoneCalls   []updateTimezoneCall
 
+	// UpdateLanguage responses and calls
+	updateLanguageResults []updateLanguageResult
+	updateLanguageCallIdx int
+	updateLanguageCalls   []updateLanguageCall
+
 	// UserByEmail responses
 	userByEmailResults []userByEmailResult
 	userByEmailCallIdx int
@@ -91,6 +96,16 @@ type updateTimezoneResult struct {
 type updateTimezoneCall struct {
 	userID   int64
 	timezone *string
+}
+
+type updateLanguageResult struct {
+	user User
+	err  error
+}
+
+type updateLanguageCall struct {
+	userID   int64
+	language string
 }
 
 type userByEmailResult struct {
@@ -153,6 +168,18 @@ func (f *fakeRepo) UpdateTimezone(_ context.Context, userID int64, timezone *str
 	}
 	r := f.updateTimezoneResults[f.updateTimezoneCallIdx]
 	f.updateTimezoneCallIdx++
+	return r.user, r.err
+}
+
+func (f *fakeRepo) UpdateLanguage(_ context.Context, userID int64, language string) (User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateLanguageCalls = append(f.updateLanguageCalls, updateLanguageCall{userID, language})
+	if f.updateLanguageCallIdx >= len(f.updateLanguageResults) {
+		return User{}, errors.New("fakeRepo: unexpected UpdateLanguage call")
+	}
+	r := f.updateLanguageResults[f.updateLanguageCallIdx]
+	f.updateLanguageCallIdx++
 	return r.user, r.err
 }
 
@@ -561,6 +588,50 @@ func TestUpdateTimezone_RejectsEmptyString(t *testing.T) {
 	}
 	if len(repo.updateTimezoneCalls) != 0 {
 		t.Errorf("repo must not be called on empty input, got %d calls", len(repo.updateTimezoneCalls))
+	}
+}
+
+func TestUpdateLanguage_Valid(t *testing.T) {
+	repo := &fakeRepo{
+		updateLanguageResults: []updateLanguageResult{{user: User{ID: 1, Language: "ru"}, err: nil}},
+	}
+	svc := New(repo, &fakeHasher{})
+
+	user, err := svc.UpdateLanguage(context.Background(), 1, "ru")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.Language != "ru" {
+		t.Errorf("user.Language = %q, want ru", user.Language)
+	}
+	if len(repo.updateLanguageCalls) != 1 || repo.updateLanguageCalls[0].language != "ru" {
+		t.Errorf("updateLanguageCalls = %+v, want [{1 ru}]", repo.updateLanguageCalls)
+	}
+}
+
+func TestUpdateLanguage_Invalid(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := New(repo, &fakeHasher{})
+
+	_, err := svc.UpdateLanguage(context.Background(), 1, "xx")
+	if !errors.Is(err, ErrInvalidLanguage) {
+		t.Errorf("want ErrInvalidLanguage, got %v", err)
+	}
+	if len(repo.updateLanguageCalls) != 0 {
+		t.Errorf("repo must not be called on invalid input, got %d calls", len(repo.updateLanguageCalls))
+	}
+}
+
+func TestUpdateLanguage_RejectsEmptyString(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := New(repo, &fakeHasher{})
+
+	_, err := svc.UpdateLanguage(context.Background(), 1, "")
+	if !errors.Is(err, ErrInvalidLanguage) {
+		t.Errorf("want ErrInvalidLanguage, got %v", err)
+	}
+	if len(repo.updateLanguageCalls) != 0 {
+		t.Errorf("repo must not be called on empty input, got %d calls", len(repo.updateLanguageCalls))
 	}
 }
 

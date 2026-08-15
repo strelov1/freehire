@@ -47,6 +47,12 @@ type User struct {
 	// interpret a digest time or quiet-hours window in the account's own local
 	// time; unset reads as UTC there.
 	Timezone *string
+	// Language is the account's preferred interface language, one of
+	// supportedLanguages. Never empty — the column defaults to "en" — so unlike
+	// Timezone there is no unset state to represent. First step toward interface
+	// i18n: no UI translation ships yet, this just records the preference (see
+	// freehire#1836).
+	Language string
 }
 
 // PasswordHasher hashes and verifies passwords (bcrypt in production). Injected
@@ -109,6 +115,10 @@ type Repository interface {
 	// UpdateTimezone sets (or clears, with nil) the account's IANA timezone name.
 	// The caller has already validated it.
 	UpdateTimezone(ctx context.Context, userID int64, timezone *string) (User, error)
+
+	// UpdateLanguage sets the account's preferred interface language. The caller
+	// has already validated it against supportedLanguages.
+	UpdateLanguage(ctx context.Context, userID int64, language string) (User, error)
 
 	// MarkEmailVerified records that control of the account's address was proven.
 	MarkEmailVerified(ctx context.Context, userID int64) error
@@ -260,6 +270,33 @@ func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone str
 		return User{}, ErrInvalidTimezone
 	}
 	return s.repo.UpdateTimezone(ctx, userID, &timezone)
+}
+
+// ErrInvalidLanguage is a language code outside supportedLanguages (mapped to 400).
+var ErrInvalidLanguage = errors.New("accounts: invalid language")
+
+// supportedLanguages is the curated set a profile can select — the same list the
+// DB CHECK constraint on users.language enforces. No UI translation exists for
+// any of these yet (freehire#1836); this only records the preference for later.
+var supportedLanguages = map[string]bool{
+	"en": true,
+	"ru": true,
+	"es": true,
+	"pt": true,
+	"de": true,
+	"fr": true,
+}
+
+func validLanguage(lang string) bool {
+	return supportedLanguages[lang]
+}
+
+// UpdateLanguage sets the caller's preferred interface language.
+func (s *Service) UpdateLanguage(ctx context.Context, userID int64, language string) (User, error) {
+	if !validLanguage(language) {
+		return User{}, ErrInvalidLanguage
+	}
+	return s.repo.UpdateLanguage(ctx, userID, language)
 }
 
 // Login verifies the email/password pair and returns the matching user.

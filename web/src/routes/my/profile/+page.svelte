@@ -10,6 +10,7 @@
   import { FilterStore, filtersFromProfile, filtersToParams } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import ATSReportView from '$lib/components/ATSReportView.svelte';
+  import AccountLanguage from '$lib/components/AccountLanguage.svelte';
   import AccountTimezone from '$lib/components/AccountTimezone.svelte';
   import CandidateContactsEditor from '$lib/components/CandidateContactsEditor.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
@@ -357,8 +358,9 @@
            settings tab before there are tabs, so account-level (not
            candidate-profile) settings live here too rather than waiting on a
            CV upload. -->
-      <div class="mt-6">
+      <div class="mt-6 flex flex-col gap-4">
         <AccountTimezone />
+        <AccountLanguage />
       </div>
       <!-- Set-up is the settings tab before there are tabs, so leaving is offered here
            too: someone who signed up, filled in nothing and wants out must not have to
@@ -394,8 +396,9 @@
           {#key profile.updated_at}
             <ProfileForm {profile} {hasCv} onSaved={handleSaved} onCvUploaded={handleCvUploaded} />
           {/key}
-          <div class="mt-6">
+          <div class="mt-6 flex flex-col gap-4">
             <AccountTimezone />
+            <AccountLanguage />
           </div>
           <!-- Destructive actions live at the foot of the settings tab, out of
                the page header (where they crowded the title on narrow viewports) and

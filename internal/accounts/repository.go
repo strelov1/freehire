@@ -162,7 +162,8 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: true,
-		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
+		Language: row.Language}, nil
 }
 
 // UpdateTimezone sets the account's IANA timezone name. The caller has already
@@ -178,7 +179,21 @@ func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, ti
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
-		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
+		Language: row.Language}, nil
+}
+
+// UpdateLanguage sets the account's preferred interface language. The caller has
+// already validated it against supportedLanguages.
+func (r *QueriesRepository) UpdateLanguage(ctx context.Context, userID int64, language string) (User, error) {
+	row, err := r.q.UpdateUserLanguage(ctx, db.UpdateUserLanguageParams{ID: userID, Language: language})
+	if err != nil {
+		return User{}, err
+	}
+	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
+		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
+		Language: row.Language}, nil
 }
 
 // MarkEmailVerified records that control of the account's address was proven, by an
@@ -245,5 +260,6 @@ func (r *QueriesRepository) UserByID(ctx context.Context, id int64) (User, error
 	}
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: row.HasPassword,
-		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone)}, nil
+		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
+		Language: row.Language}, nil
 }

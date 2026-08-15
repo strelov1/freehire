@@ -39,6 +39,13 @@ export async function updateTimezone(timezone: string) {
   await invalidateAll();
 }
 
+/** Sets the account's preferred interface language and re-resolves the session
+ *  so `currentUser()` reflects it everywhere. */
+export async function updateLanguage(language: string) {
+  await api.updateLanguage(language);
+  await invalidateAll();
+}
+
 export async function logout() {
   // Best-effort: still re-resolve (to signed-out) even if the network call fails.
   try {

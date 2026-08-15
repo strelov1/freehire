@@ -260,6 +260,10 @@ export interface User {
   // IANA timezone name (e.g. "Europe/Moscow"), null until set. Read by the
   // profile page's timezone field and the notification-settings missing-timezone hint.
   timezone: string | null;
+  // Preferred interface language, one of 'en' | 'ru' | 'es' | 'pt' | 'de' | 'fr'.
+  // Never empty ('en' until changed). No UI translation ships yet — this only
+  // records the preference for the profile page's language field.
+  language: string;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do

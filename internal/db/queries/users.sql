@@ -10,7 +10,7 @@
 -- this column existed.
 INSERT INTO users (email, password_hash, email_verified, timezone)
 VALUES ($1, $2, $3, sqlc.narg(timezone))
-RETURNING id, email, role, beta_tester, email_verified, created_at, timezone;
+RETURNING id, email, role, beta_tester, email_verified, created_at, timezone, language;
 
 -- name: GetUserByEmail :one
 -- Login lookup. Case-insensitive on email; returns password_hash so the handler
@@ -27,9 +27,11 @@ WHERE lower(email) = lower($1);
 -- the database — only whether one exists, which is what lets the SPA offer a password
 -- change to password accounts and explain itself to OAuth-only ones. timezone is NULL
 -- until the user sets one on their profile (internal/deliverywindow reads NULL as UTC).
+-- language is never NULL — it has a NOT NULL DEFAULT, so every account has one from
+-- creation.
 SELECT id, email, role, beta_tester, email_verified,
        (password_hash IS NOT NULL)::boolean AS has_password,
-       created_at, timezone
+       created_at, timezone, language
 FROM users
 WHERE id = $1;
 
@@ -42,7 +44,19 @@ SET timezone = $2
 WHERE id = $1
 RETURNING id, email, role, beta_tester, email_verified,
           (password_hash IS NOT NULL)::boolean AS has_password,
-          created_at, timezone;
+          created_at, timezone, language;
+
+-- name: UpdateUserLanguage :one
+-- Set the account's preferred interface language. The handler validates the code
+-- against the curated set before this runs (also enforced by the DB CHECK
+-- constraint as a second line of defense) — the query itself trusts its input,
+-- same as every other single-column update in this file.
+UPDATE users
+SET language = $2
+WHERE id = $1
+RETURNING id, email, role, beta_tester, email_verified,
+          (password_hash IS NOT NULL)::boolean AS has_password,
+          created_at, timezone, language;
 
 -- name: GetUserPasswordHash :one
 -- The account's stored password hash, for verifying a current password on change.

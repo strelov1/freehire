@@ -120,6 +120,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 		recent = h.requireRecentAuth
 	}
 	meGroup.Patch("/timezone", mw.cookie, h.UpdateTimezone)
+	meGroup.Patch("/language", mw.cookie, h.UpdateLanguage)
 	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
@@ -245,6 +246,10 @@ type userResponse struct {
 	// page to pre-fill its timezone field and by the notification-settings UI's
 	// missing-timezone hint.
 	Timezone *string `json:"timezone"`
+	// Language is the account's preferred interface language (one of
+	// supportedLanguages, "en" until changed). No UI translation exists yet —
+	// this only records the preference for later (freehire#1836).
+	Language string `json:"language"`
 }
 
 type credentials struct {
@@ -260,7 +265,7 @@ type credentials struct {
 func toUserResponse(u accounts.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Role: u.Role, BetaTester: u.BetaTester,
 		EmailVerified: u.EmailVerified, HasPassword: u.HasPassword, CreatedAt: u.CreatedAt,
-		Timezone: u.Timezone}
+		Timezone: u.Timezone, Language: u.Language}
 }
 
 // timezoneRequest is the PATCH /me/timezone body.
@@ -285,6 +290,28 @@ func (h *authHandlers) UpdateTimezone(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": toUserResponse(user)})
 }
 
+// languageRequest is the PATCH /me/language body.
+type languageRequest struct {
+	Language string `json:"language"`
+}
+
+// UpdateLanguage sets the caller's preferred interface language. Cookie-only.
+func (h *authHandlers) UpdateLanguage(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in languageRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	user, err := h.accounts.UpdateLanguage(c.Context(), userID, in.Language)
+	if err != nil {
+		return accountsError(err)
+	}
+	return c.JSON(fiber.Map{"data": toUserResponse(user)})
+}
+
 // accountsError maps the accounts service sentinels to HTTP errors, preserving
 // the statuses and generic messages the handlers used before delegation.
 func accountsError(err error) error {
@@ -303,6 +330,8 @@ func accountsError(err error) error {
 		return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")
 	case errors.Is(err, accounts.ErrInvalidTimezone):
 		return fiber.NewError(fiber.StatusBadRequest, "invalid timezone")
+	case errors.Is(err, accounts.ErrInvalidLanguage):
+		return fiber.NewError(fiber.StatusBadRequest, "invalid language")
 	default:
 		if isInfraError(err) {
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
