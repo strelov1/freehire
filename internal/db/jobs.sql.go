@@ -1045,6 +1045,48 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 	return i, err
 }
 
+const jobSitemapBoundaries = `-- name: JobSitemapBoundaries :many
+SELECT id FROM (
+  SELECT id,
+         row_number() OVER (ORDER BY id DESC) AS rn
+  FROM jobs
+  WHERE closed_at IS NULL AND duplicate_of IS NULL
+) t
+WHERE rn % $1::bigint = 0
+  AND id > (SELECT min(id) FROM jobs WHERE closed_at IS NULL AND duplicate_of IS NULL)
+ORDER BY id DESC
+`
+
+// The id ending every full chunk of `chunk_size` sitemap-eligible jobs (newest
+// first), excluding the last row, so the sitemap index can list each chunk's cursor.
+// Same scope as ListJobSitemapChunk, or the cursors would not line up with the
+// chunks they open.
+//
+// The last-row guard is a min(id) probe rather than a count: over ~1.1M rows an
+// exact `count(*) OVER ()` has to materialize the whole walk in a tuplestore, while
+// min(id) over the same partial index is one forward probe. Both exclude exactly the
+// row whose rank is the total — the smallest id — whose cursor would open an empty
+// trailing chunk.
+func (q *Queries) JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, jobSitemapBoundaries, chunkSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobIDsAfter = `-- name: ListJobIDsAfter :many
 SELECT id
 FROM jobs
@@ -1119,34 +1161,42 @@ func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpda
 	return items, nil
 }
 
-const listJobSitemapFreshest = `-- name: ListJobSitemapFreshest :many
+const listJobSitemapChunk = `-- name: ListJobSitemapChunk :many
 SELECT public_slug, updated_at
 FROM jobs
-WHERE closed_at IS NULL AND duplicate_of IS NULL
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND id < $1
 ORDER BY id DESC
-LIMIT $1
+LIMIT $2
 `
 
-type ListJobSitemapFreshestRow struct {
+type ListJobSitemapChunkParams struct {
+	AfterID  int64 `json:"after_id"`
+	RowLimit int32 `json:"row_limit"`
+}
+
+type ListJobSitemapChunkRow struct {
 	PublicSlug string             `json:"public_slug"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
-// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
-// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
-// scan. Enumerating the whole 2.5M-row catalogue per request is heap-bound and far
-// too slow (and pollutes the buffer cache), so the sitemap ships the freshest slice;
-// fuller coverage needs a precomputed narrow table, not a live scan.
-func (q *Queries) ListJobSitemapFreshest(ctx context.Context, rowLimit int32) ([]ListJobSitemapFreshestRow, error) {
-	rows, err := q.db.Query(ctx, listJobSitemapFreshest, rowLimit)
+// One keyset page of open, non-duplicate jobs for the sitemap, newest id first and
+// cursored by id (the caller passes the largest possible id for the first chunk, so
+// the comparison stays a plain index bound rather than an OR over NULL).
+//
+// Rides jobs_sitemap_idx (0107), which covers the order, both predicate columns and
+// the two payload columns — so a chunk is an index-only range scan and never visits
+// the 2.5M-row heap. That is what makes paging the whole open catalogue affordable;
+// before it, the sitemap could only ship its freshest slice (see 0107 for the
+// measurements that forced that cap).
+func (q *Queries) ListJobSitemapChunk(ctx context.Context, arg ListJobSitemapChunkParams) ([]ListJobSitemapChunkRow, error) {
+	rows, err := q.db.Query(ctx, listJobSitemapChunk, arg.AfterID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListJobSitemapFreshestRow{}
+	items := []ListJobSitemapChunkRow{}
 	for rows.Next() {
-		var i ListJobSitemapFreshestRow
+		var i ListJobSitemapChunkRow
 		if err := rows.Scan(&i.PublicSlug, &i.UpdatedAt); err != nil {
 			return nil, err
 		}

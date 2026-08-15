@@ -635,9 +635,16 @@ export function createApi(
   // slice (one file); companies are keyset-paginated across chunks, with a boundary
   // endpoint returning the cursor ending each chunk so the index can enumerate them.
 
-  /** The freshest open-job sitemap entries (newest first), one file. */
-  async function sitemapJobs(): Promise<SitemapEntry[]> {
-    return requestData<SitemapEntry[]>('/api/v1/jobs/sitemap');
+  /** One chunk of job sitemap entries with id < `after` ('' for the first). */
+  async function sitemapJobs(after: string, limit: number): Promise<SitemapEntry[]> {
+    return requestData<SitemapEntry[]>(
+      `/api/v1/jobs/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
+    );
+  }
+
+  /** The id ending each chunk of sitemap-eligible jobs — the sitemap index's cursors. */
+  async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
+    return requestData<number[]>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
   }
 
   /** One chunk of company sitemap entries with slug > `after` ('' for the first). */
@@ -2031,6 +2038,7 @@ export function createApi(
     insightsCompanies,
     marketPulse,
     sitemapJobs,
+    sitemapJobBoundaries,
     sitemapCompanies,
     sitemapCompanyBoundaries,
     register,

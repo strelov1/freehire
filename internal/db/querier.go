@@ -1537,6 +1537,17 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
+	// The id ending every full chunk of `chunk_size` sitemap-eligible jobs (newest
+	// first), excluding the last row, so the sitemap index can list each chunk's cursor.
+	// Same scope as ListJobSitemapChunk, or the cursors would not line up with the
+	// chunks they open.
+	//
+	// The last-row guard is a min(id) probe rather than a count: over ~1.1M rows an
+	// exact `count(*) OVER ()` has to materialize the whole walk in a tuplestore, while
+	// min(id) over the same partial index is one forward probe. Both exclude exactly the
+	// row whose rank is the total — the smallest id — whose cursor would open an empty
+	// trailing chunk.
+	JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error)
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -1961,13 +1972,16 @@ type Querier interface {
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
-	// The freshest open jobs for the sitemap: only the fields a URL needs, newest id
-	// first. Ordering by id DESC (served by jobs_open_id_idx) reads the most recently
-	// inserted rows, which sit at the physical end of the heap — a sequential, cache-warm
-	// scan. Enumerating the whole 2.5M-row catalogue per request is heap-bound and far
-	// too slow (and pollutes the buffer cache), so the sitemap ships the freshest slice;
-	// fuller coverage needs a precomputed narrow table, not a live scan.
-	ListJobSitemapFreshest(ctx context.Context, rowLimit int32) ([]ListJobSitemapFreshestRow, error)
+	// One keyset page of open, non-duplicate jobs for the sitemap, newest id first and
+	// cursored by id (the caller passes the largest possible id for the first chunk, so
+	// the comparison stays a plain index bound rather than an OR over NULL).
+	//
+	// Rides jobs_sitemap_idx (0107), which covers the order, both predicate columns and
+	// the two payload columns — so a chunk is an index-only range scan and never visits
+	// the 2.5M-row heap. That is what makes paging the whole open catalogue affordable;
+	// before it, the sitemap could only ship its freshest slice (see 0107 for the
+	// measurements that forced that cap).
+	ListJobSitemapChunk(ctx context.Context, arg ListJobSitemapChunkParams) ([]ListJobSitemapChunkRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.

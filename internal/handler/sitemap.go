@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,6 +24,7 @@ func newSitemapHandlers(queries *db.Queries) *sitemapHandlers {
 
 func (h *sitemapHandlers) register(api fiber.Router) {
 	api.Get("/jobs/sitemap", h.JobSitemap)
+	api.Get("/jobs/sitemap/boundaries", h.JobSitemapBoundaries)
 	api.Get("/companies/sitemap", h.CompanySitemap)
 	api.Get("/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
 }
@@ -43,15 +46,23 @@ const sitemapMaxURLs = 50000
 // ~5, which a sitemap index carries for free (its own cap is 50k entries).
 const companySitemapChunk = 10000
 
-// jobSitemapFreshest is how many of the newest open jobs the sitemap ships. The
-// jobs table is far too large (millions of rows) to enumerate per request without
-// a heap-bound scan that also evicts the buffer cache, so the sitemap covers the
-// freshest slice (ordered by id DESC, a cache-warm scan); fuller coverage would
-// need a precomputed narrow table. Held below the 50k protocol cap so the one file
-// builds under the 60s proxy timeout even against I/O contention — 50k measured
-// ~30-40s under load, and 25k still measured 29s and 57s on two prod probes minutes
-// apart, so this is the margin that band needs, not the row count we'd prefer.
-const jobSitemapFreshest = 15000
+// jobSitemapChunk is how many jobs one sub-sitemap holds: the default for both
+// ?limit= and ?chunk=, and the value web/src/lib/sitemap.ts JOB_SITEMAP_CHUNK must
+// equal so each boundary cursor opens exactly one file's worth.
+//
+// The sitemap used to ship only the freshest 15k of the catalogue, because the read
+// was heap-bound: 50k measured 30-40s on prod and 25k twice hit 57s against nginx's
+// 60s ceiling. jobs_sitemap_idx (0107) makes a chunk an index-only range scan, so
+// the whole open set can be paged by cursor instead. Sized above the company chunk
+// because that index covers everything these queries read, and kept below the
+// protocol's 50k so a chunk is never near either ceiling.
+const jobSitemapChunk = 25000
+
+// firstChunkCursor opens the first keyset chunk: ids are read newest-first with a
+// plain `id < cursor`, so the opening cursor has to be larger than any real id.
+// Keeping it a bound (rather than a nullable comparison) is what keeps the scan
+// index-only.
+const firstChunkCursor = int64(math.MaxInt64)
 
 // sitemapEntry is the slim wire shape a sitemap URL needs — the public slug and a
 // lastmod. Nothing wider (no full job row, no search engine) crosses the wire.
@@ -61,19 +72,38 @@ type sitemapEntry struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// sitemapLimit clamps ?limit= to [1, sitemapMaxURLs], defaulting to the chunk size.
-func sitemapLimit(c *fiber.Ctx) int32 {
-	return int32(min(max(c.QueryInt("limit", companySitemapChunk), 1), sitemapMaxURLs))
+// sitemapLimit clamps ?limit= to [1, sitemapMaxURLs], defaulting to `fallback`.
+func sitemapLimit(c *fiber.Ctx, fallback int) int32 {
+	return int32(min(max(c.QueryInt("limit", fallback), 1), sitemapMaxURLs))
 }
 
-// sitemapChunk clamps ?chunk= to [1, sitemapMaxURLs], defaulting to the chunk size.
-func sitemapChunk(c *fiber.Ctx) int64 {
-	return int64(min(max(c.QueryInt("chunk", companySitemapChunk), 1), sitemapMaxURLs))
+// sitemapChunk clamps ?chunk= to [1, sitemapMaxURLs], defaulting to `fallback`.
+func sitemapChunk(c *fiber.Ctx, fallback int) int64 {
+	return int64(min(max(c.QueryInt("chunk", fallback), 1), sitemapMaxURLs))
 }
 
-// JobSitemap serves the freshest open-job sitemap entries (newest id first).
+// sitemapAfterID reads the ?after= keyset cursor. Absent or unparseable means the
+// first chunk, which starts above every id — a crawler following a stale index can
+// only ever get a valid page, never an error.
+func sitemapAfterID(c *fiber.Ctx) int64 {
+	raw := c.Query("after")
+	if raw == "" {
+		return firstChunkCursor
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return firstChunkCursor
+	}
+	return id
+}
+
+// JobSitemap serves one keyset page of open-job sitemap entries after ?after=<id>,
+// newest id first.
 func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
-	rows, err := h.queries.ListJobSitemapFreshest(c.Context(), jobSitemapFreshest)
+	rows, err := h.queries.ListJobSitemapChunk(c.Context(), db.ListJobSitemapChunkParams{
+		AfterID:  sitemapAfterID(c),
+		RowLimit: sitemapLimit(c, jobSitemapChunk),
+	})
 	if err != nil {
 		return err
 	}
@@ -84,12 +114,23 @@ func (h *sitemapHandlers) JobSitemap(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": entries})
 }
 
+// JobSitemapBoundaries returns the keyset cursor (id) ending each ?chunk=<n> of
+// sitemap-eligible jobs, for building the sitemap index. Same scope as JobSitemap,
+// so a cursor always opens a chunk that has URLs in it.
+func (h *sitemapHandlers) JobSitemapBoundaries(c *fiber.Ctx) error {
+	cursors, err := h.queries.JobSitemapBoundaries(c.Context(), sitemapChunk(c, jobSitemapChunk))
+	if err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": cursors})
+}
+
 // CompanySitemap serves one keyset page of company sitemap entries after ?after=<slug>,
 // covering the hiring companies the /companies catalog lists (see ListCompanySitemap).
 func (h *sitemapHandlers) CompanySitemap(c *fiber.Ctx) error {
 	rows, err := h.queries.ListCompanySitemap(c.Context(), db.ListCompanySitemapParams{
 		AfterSlug: c.Query("after"),
-		BatchSize: sitemapLimit(c),
+		BatchSize: sitemapLimit(c, companySitemapChunk),
 	})
 	if err != nil {
 		return err
@@ -105,7 +146,7 @@ func (h *sitemapHandlers) CompanySitemap(c *fiber.Ctx) error {
 // hiring companies, for building the sitemap index. Same scope as CompanySitemap, so a
 // cursor always opens a chunk that has URLs in it.
 func (h *sitemapHandlers) CompanySitemapBoundaries(c *fiber.Ctx) error {
-	cursors, err := h.queries.CompanySitemapBoundaries(c.Context(), sitemapChunk(c))
+	cursors, err := h.queries.CompanySitemapBoundaries(c.Context(), sitemapChunk(c, companySitemapChunk))
 	if err != nil {
 		return err
 	}

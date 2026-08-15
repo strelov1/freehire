@@ -57,6 +57,7 @@ func TestSitemapEndpoints(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// Sitemap routes are registered BEFORE the :slug catch-alls, mirroring wiring.
 	app.Get("/api/v1/jobs/sitemap", h.JobSitemap)
+	app.Get("/api/v1/jobs/sitemap/boundaries", h.JobSitemapBoundaries)
 	app.Get("/api/v1/companies/sitemap", h.CompanySitemap)
 	app.Get("/api/v1/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
 	app.Get("/api/v1/jobs/:slug", jh.GetJob)
@@ -99,6 +100,33 @@ func TestSitemapEndpoints(t *testing.T) {
 		}
 		if got[0].UpdatedAt == "" {
 			t.Fatalf("entry missing updated_at: %+v", got[0])
+		}
+	})
+
+	t.Run("job slice pages by id cursor", func(t *testing.T) {
+		var ids struct {
+			Data []int64 `json:"data"`
+		}
+		if err := json.Unmarshal(get(t, "/api/v1/jobs/sitemap/boundaries?chunk=2"), &ids); err != nil {
+			t.Fatalf("decode boundaries: %v", err)
+		}
+		if len(ids.Data) != 2 {
+			t.Fatalf("boundaries = %v, want two cursors for 5 jobs in chunks of 2", ids.Data)
+		}
+		// Following the first cursor must resume exactly after the first chunk.
+		got := decodeEntries(t, get(t, fmt.Sprintf("/api/v1/jobs/sitemap?after=%d&limit=2", ids.Data[0])))
+		if len(got) != 2 || got[0].Slug != "job-03" || got[1].Slug != "job-02" {
+			t.Fatalf("second chunk = %+v, want [job-03 job-02]", got)
+		}
+	})
+
+	// A crawler holding a stale sitemap index asks with a cursor we no longer know.
+	// It must get a valid page rather than an error, or a whole chunk drops out of
+	// the crawl until the index is refetched.
+	t.Run("an unparseable cursor serves the first chunk", func(t *testing.T) {
+		got := decodeEntries(t, get(t, "/api/v1/jobs/sitemap?after=not-a-number&limit=2"))
+		if len(got) != 2 || got[0].Slug != "job-05" {
+			t.Fatalf("page = %+v, want the first chunk (job-05 first)", got)
 		}
 	})
 
