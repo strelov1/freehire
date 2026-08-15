@@ -131,6 +131,24 @@ someone else's alert rule.
 incident, not a baseline. Re-tuning after a week of collected data is a required step
 there, not here.
 
+### A failed collection leaves the last file in place
+
+The worker returns 1 on a query failure, which `worker.Main` records as
+`freehire_worker_last_run_success = 0`. It does NOT delete its own
+`freehire-pipeline.prom`.
+
+Deleting would turn a one-minute database blip into a vanished series and, under the
+consumers' `noDataState: Alerting`, into a page — while discarding the last known-good
+reading, which is exactly what a human looking at the graph during an incident wants.
+The honest split is that the `success` gauge reports the numbers are stale while the
+numbers stay readable.
+
+The consequence for `freehire-ops`: the alert set needs BOTH a run-age rule and a
+run-success rule. A stopped timer refreshes nothing, so run age catches it. A firing
+timer whose collection keeps failing DOES refresh the run-outcome file with a current
+timestamp, so run age stays quiet while the queue gauges sit frozen — only the `success`
+gauge catches that one.
+
 ## Migration Plan
 
 The worker is additive and writes nothing. Deployment order: merge and deploy the binary

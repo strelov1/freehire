@@ -57,7 +57,7 @@ func run() int {
 		return 1
 	}
 
-	log.Printf("queue-metrics: published %s boards=%d healthy/%d failing/%d cooled",
+	log.Printf("queue-metrics: published %s boards=healthy:%d/failing:%d/cooled:%d",
 		strings.Join(depths(snap), " "), snap.healthyBoards, snap.failingBoards, snap.cooledBoards)
 	return 0
 }

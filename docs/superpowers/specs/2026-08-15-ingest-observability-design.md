@@ -170,7 +170,8 @@ New group `freehire-pipeline` in folder `Pipeline Alerts`, all routed to `telegr
 | 4 | embed / enrich stalled | `time() - freehire_worker_last_run_timestamp_seconds{exported_job=~"embed\|enrich"} > 14400` | 15m | warning |
 | 5 | search backlog not draining | `freehire_queue_depth{queue="search_outbox"} > 20000` | 30m | warning |
 | 6 | board fleet degrading | `freehire_boards_total{state="cooled"} > 1.5 * (freehire_boards_total{state="cooled"} offset 24h)` | 1h | warning |
-| 7 | exporter itself dead | `time() - freehire_worker_last_run_timestamp_seconds{exported_job="queue-metrics"} > 600` | 5m | warning |
+| 7 | exporter stopped running | `time() - freehire_worker_last_run_timestamp_seconds{exported_job="queue-metrics"} > 600` | 5m | warning |
+| 8 | exporter running but failing | `freehire_worker_last_run_success{exported_job="queue-metrics"} == 0` | 10m | warning |
 
 Rules 1-3 each catch the 2026-08-15 incident independently. Rule 1 would have fired at
 14:30, fifteen minutes after the timer stopped.
@@ -181,7 +182,23 @@ completion, so last-run age covers "hung" and "not scheduled" with one expressio
 
 Every rule on a queue metric sets `noDataState: Alerting`, not `NoData`. If the exporter
 stops writing its file the series disappears, and a `NoData` rule would fall silent
-exactly when it should shout. Rule 7 is the second layer on the same failure.
+exactly when it should shout.
+
+Rules 7 and 8 cover the two distinct ways the exporter can stop being trustworthy, and
+only together. If the timer stops, the file goes stale and no `.prom` is refreshed — rule
+7. But if the timer keeps firing while the collection itself fails (an unreachable
+database), the worker exits non-zero every minute, so its run-outcome file IS refreshed
+with a current timestamp and rule 7 stays quiet — while `freehire-pipeline.prom` keeps
+its last good content and Prometheus scrapes a flat line of stale gauges indefinitely.
+Rule 8 is what catches that, reading the `success` gauge the failed run already
+publishes.
+
+The worker deliberately does NOT delete its file when a collection fails. Doing so would
+turn a one-minute database blip into a vanished series and, via `noDataState: Alerting`,
+into a page — while also discarding the last known-good reading, which is exactly what a
+human looking at the graph during an incident wants to see. Reporting the failure and
+leaving the last measurement in place is the honest split: the `success` gauge says the
+number is stale, and the number itself stays readable.
 
 ### Deliberately not alerted
 
@@ -220,10 +237,12 @@ Per `CLAUDE.md`, run `go vet -tags=integration ./...` before pushing.
 ## Failure behaviour
 
 A failed metrics collection must never be silent and must never be fatal to anything
-else. The worker exits non-zero via `worker.ExitCode`, which surfaces through its own
-`freehire_worker_last_run_success` gauge; a stale or absent file trips rule 7 and, via
-`noDataState: Alerting`, rules 5 and 6 as well. The worker holds no locks and writes
-nothing to the database, so a hung run cannot block ingest, drain, or reindex.
+else. The worker returns 1, which `worker.Main` records as
+`freehire_worker_last_run_success = 0` for this binary — the gauge rule 8 reads.
+
+It deliberately leaves its own `freehire-pipeline.prom` in place on failure rather than
+deleting it, for the reasons under "Alert rules" above. The worker holds no locks and
+writes nothing to the database, so a hung run cannot block ingest, drain, or reindex.
 
 ## Known defect, out of scope
 

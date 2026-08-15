@@ -4,6 +4,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 )
 
 // fullSnapshot is a populated collection pass, deliberately using distinct numbers per
@@ -98,6 +102,42 @@ func TestRenderPublishesExplicitZeroesForADrainedQueue(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("render() missing %q for a drained queue:\n%s", want, got)
 		}
+	}
+}
+
+func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
+	// Parsed by Prometheus's own text parser, not by inspection: this is the format
+	// node_exporter's textfile collector will hand to Prometheus, and a collector
+	// silently SKIPS a file it cannot parse — so a malformed exposition looks
+	// exactly like a worker that never ran.
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(render(fullSnapshot())))
+	if err != nil {
+		t.Fatalf("rendered exposition does not parse: %v", err)
+	}
+
+	want := map[string]int{
+		"freehire_queue_depth":                            3,
+		"freehire_queue_dead_letters":                     3,
+		"freehire_queue_oldest_age_seconds":               3,
+		"freehire_boards_total":                           3,
+		"freehire_catalogue_newest_job_timestamp_seconds": 1,
+	}
+	for name, wantSamples := range want {
+		family, ok := families[name]
+		if !ok {
+			t.Errorf("parsed exposition is missing family %s", name)
+			continue
+		}
+		if got := len(family.GetMetric()); got != wantSamples {
+			t.Errorf("family %s has %d samples, want %d", name, got, wantSamples)
+		}
+		if family.GetType() != dto.MetricType_GAUGE {
+			t.Errorf("family %s parsed as %v, want GAUGE", name, family.GetType())
+		}
+	}
+	if len(families) != len(want) {
+		t.Errorf("parsed %d families, want %d", len(families), len(want))
 	}
 }
 

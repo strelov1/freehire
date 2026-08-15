@@ -36,16 +36,20 @@ func queueJob(t *testing.T, pool *pgxpool.Pool, externalID string) int64 {
 // queueSearchEntry adds a search_outbox row aged `age` old, dead-lettered or not.
 // created_at is set explicitly because the column defaults to now() and these tests are
 // entirely about how old an entry is.
+//
+// The age is subtracted from Postgres's own now(), never from Go's clock. The query under
+// test measures age as now() - created_at inside the database, and the container's clock
+// runs independently of this process's: seeding from time.Now() made the computed age
+// land a few hundred milliseconds either side of the intended value, which is enough to
+// fail a bound.
 func queueSearchEntry(t *testing.T, pool *pgxpool.Pool, externalID string, age time.Duration, dead bool) {
 	t.Helper()
 	jobID := queueJob(t, pool, externalID)
-	var failedAt any
-	if dead {
-		failedAt = time.Now().Add(-age)
-	}
 	_, err := pool.Exec(context.Background(),
-		`INSERT INTO search_outbox (job_id, created_at, failed_at) VALUES ($1, $2, $3)`,
-		jobID, time.Now().Add(-age), failedAt)
+		`INSERT INTO search_outbox (job_id, created_at, failed_at)
+		 VALUES ($1, now() - make_interval(secs => $2::float8),
+		         CASE WHEN $3::bool THEN now() ELSE NULL END)`,
+		jobID, age.Seconds(), dead)
 	if err != nil {
 		t.Fatalf("insert search_outbox entry %s: %v", externalID, err)
 	}
@@ -219,13 +223,16 @@ func TestNewestOpenJobCreatedAtReportsNoRowsForAnEmptyCatalogue(t *testing.T) {
 	}
 }
 
+// assertRoughlyAgo checks a returned timestamp is about `want` old. The tolerance is
+// symmetric because this comparison straddles two clocks — the row was aged by Postgres's
+// now(), and time.Since reads this process's — so the difference can land on either side
+// of the intended age regardless of how fast the test runs.
 func assertRoughlyAgo(t *testing.T, ts pgtype.Timestamptz, want time.Duration) {
 	t.Helper()
 	if !ts.Valid {
 		t.Fatal("timestamp is not valid, want a real value")
 	}
-	got := time.Since(ts.Time)
-	if got < want || got > want+time.Minute {
+	if got := time.Since(ts.Time); got < want-time.Minute || got > want+time.Minute {
 		t.Errorf("timestamp is %v old, want ~%v", got, want)
 	}
 }
