@@ -9,42 +9,17 @@ The system SHALL provide a pure mapping from a yc-oss directory entry
 (`yc-oss.github.io/api/companies/all.json`) to company-info fields: `one_liner` →
 tagline, `long_description` → a `company_info.description`, the union of `industry`,
 `industries`, `subindustry`, and `tags` (de-duplicated) → industries, `team_size` →
-employee count, `launched_at` → founding year, and `all_locations` → an HQ country
-resolved via `internal/location` (the first resolved country, or none). The mapping
-SHALL also carry `batch`, `status`, and `stage` through, expose the normalized slug
-of each `former_names` entry (for matching), and derive a `flags` set holding
-`top_company` when the entry is a YC top company and `hiring` when it is hiring. It
-SHALL place `website`, the YC profile url, and the logo into `company_info`. An entry
-with a blank name SHALL be skipped.
+employee count, `launched_at` → founding year, and `all_locations` → an HQ country.
 
-#### Scenario: A directory entry maps to the expected fields
+The industries produced by this mapping SHALL be resolved through the curated
+industry dictionary, so entries outside the vocabulary contribute nothing rather
+than a directory-specific spelling.
 
-- **WHEN** the mapper is given an entry with `name`, `one_liner`, `long_description`,
-  `team_size`, `launched_at`, `industry`, `industries`, `subindustry`, `tags`,
-  `all_locations`, `batch`, `status`, `stage`
-- **THEN** it yields a record whose tagline is the `one_liner`, whose industries are
-  the de-duplicated union of `industry`/`industries`/`subindustry`/`tags`, whose
-  employee count is `team_size`, whose founding year is derived from `launched_at`,
-  whose HQ country is resolved from `all_locations`, and whose `batch`/`status`/
-  `stage` are carried through
+#### Scenario: Directory industry fields resolve to canonical values
 
-#### Scenario: Former names are exposed as slugs
-
-- **WHEN** the mapper is given an entry whose `former_names` contains `Facebook`
-- **THEN** the record's former-name slugs include `facebook` (normalized)
-
-#### Scenario: Flags reflect top-company and hiring
-
-- **WHEN** the mapper is given an entry with `top_company = true` and `isHiring = true`
-- **THEN** the record's flags are `{hiring, top_company}`, and an entry with neither
-  has empty flags
-
-#### Scenario: Missing optional fields become absent, not empty sentinels
-
-- **WHEN** the mapper is given an entry with an empty `long_description`, unknown
-  `all_locations`, and zero `team_size`
-- **THEN** the record omits the description, leaves HQ country unset, and leaves
-  employee count unset (no zero/empty placeholder)
+- **WHEN** an entry's industry fields are mapped
+- **THEN** the resulting industries are canonical values of the curated vocabulary,
+  and fields outside it contribute nothing
 
 ### Requirement: The YC directory importer enriches existing companies and adds the rest
 
@@ -54,7 +29,16 @@ slug **or any former-name slug** — the first that matches an existing company 
 upserts there: an existing company has its company-info columns and curated YC
 facets refreshed, and an entry matching no existing company (by any name) is inserted
 as a reference row (`is_reference = true`) with no jobs under its current-name slug,
-so the full YC directory is held. To avoid homonym collisions (a well-known
+so the full YC directory is held.
+
+The upsert SHALL NOT overwrite company-info values another source has already
+stored: it SHALL write `tagline` only when the stored one is NULL or empty, merge
+`company_info` JSONB key-wise with the stored value winning collisions, and union
+`industries` with the stored values rather than replacing them. The industries it
+contributes SHALL be resolved through the curated industry dictionary first, so the
+importer cannot introduce a second spelling of an industry.
+
+To avoid homonym collisions (a well-known
 non-YC company sharing a normalized name with a small YC startup), the worker SHALL
 NOT enrich a matched **existing** company when that company plainly dwarfs the YC
 entry — specifically when the company's open-job count exceeds the YC entry's team
@@ -68,9 +52,15 @@ skipped-collision counts.
 
 - **WHEN** the worker processes an entry whose normalized name matches a company row
   whose open-job count does not exceed the YC entry's team size
-- **THEN** that company's tagline, industries, employee count, founding year, HQ
-  country, `company_info.description`, and curated YC facets are set, and its
-  `job_count`/`collections`/job-derived facets are unchanged
+- **THEN** that company's employee count, founding year, HQ country,
+  `company_info.description`, and curated YC facets are set; its industries gain the
+  entry's canonical industries; and its `job_count`/`collections`/job-derived facets
+  are unchanged
+
+#### Scenario: An existing tagline outranks the YC one-liner
+
+- **WHEN** the worker enriches a company that already stores a non-empty tagline
+- **THEN** the stored tagline is unchanged and the entry's `one_liner` is discarded
 
 #### Scenario: A former name matches an existing company instead of inserting a duplicate
 
