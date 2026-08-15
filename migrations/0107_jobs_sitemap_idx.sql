@@ -18,18 +18,24 @@
 -- INCLUDE rather than a composite key: public_slug and updated_at are payload, never
 -- searched or ordered by, so they ride in the leaf pages without widening the tree.
 --
--- release.sh applies migrations before restarting the new color, so this builds on
--- deploy: a plain CREATE INDEX holds a SHARE lock on jobs (blocking the ingest's
--- upserts, not reads) for as long as a ~1.1M-row partial index takes — longer than
--- 0057's, and the ingest is the thing being blocked. If a deploy can't afford that,
--- build it out of band first and this migration is a no-op:
+-- HOW THIS GETS APPLIED: host-2 has no migration runner — numbered migrations are
+-- applied BY HAND before the blue/green flip, as the `hire` role (see freehire-ops
+-- README, "Schema migrations"; connecting as postgres leaves objects postgres-owned
+-- and the API 500s on them).
 --
---   CREATE INDEX CONCURRENTLY jobs_sitemap_idx
+-- Build it CONCURRENTLY. A plain CREATE INDEX holds a SHARE lock on jobs for as long
+-- as a ~1.1M-row partial index takes, and what that blocks is the ingest's upserts —
+-- the one workload on this box that must not stall. IF NOT EXISTS then makes the
+-- migration file a no-op afterwards:
+--
+--   CREATE INDEX CONCURRENTLY IF NOT EXISTS jobs_sitemap_idx
 --       ON public.jobs (id DESC) INCLUDE (public_slug, updated_at)
 --       WHERE closed_at IS NULL AND duplicate_of IS NULL;
 --
--- Run that from a file via psql -f under systemd-run, never `psql -c` over ssh: a
--- dropped connection aborts CONCURRENTLY and leaves an INVALID index behind.
+-- Run it from a file (psql -f) under systemd-run, never `psql -c` over ssh: a dropped
+-- connection aborts CONCURRENTLY and leaves an INVALID index behind, which the planner
+-- ignores while it still costs writes. Check with:
+--   SELECT indisvalid FROM pg_index WHERE indexrelid = 'jobs_sitemap_idx'::regclass;
 CREATE INDEX IF NOT EXISTS jobs_sitemap_idx
     ON public.jobs (id DESC) INCLUDE (public_slug, updated_at)
     WHERE closed_at IS NULL AND duplicate_of IS NULL;
