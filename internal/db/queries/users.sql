@@ -17,7 +17,9 @@ RETURNING id, email, role, beta_tester, email_verified, created_at, timezone, la
 -- can verify the password (and reject accounts that have none). role feeds the
 -- post-login wire shape. email_verified drives both the "confirm your email" prompt
 -- and the OAuth merge policy (an unverified account is seized, not silently joined).
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at
+-- language is included so a password login's response carries the account's
+-- preference the same as /auth/me, rather than reporting the zero value.
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
 FROM users
 WHERE lower(email) = lower($1);
 

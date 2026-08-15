@@ -245,7 +245,8 @@ func (r *QueriesRepository) UserByEmail(ctx context.Context, email string) (User
 		return User{}, "", false, err
 	}
 	u := User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
-		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt)}
+		EmailVerified: row.EmailVerified, CreatedAt: pgconv.TimePtr(row.CreatedAt),
+		Language: row.Language}
 	return u, row.PasswordHash.String, row.PasswordHash.Valid, nil
 }
 

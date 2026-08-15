@@ -123,6 +123,20 @@
     return pageKey(tab?.url ?? '');
   }
 
+  /** Strips the fragment and any embedded credentials from a URL before it goes to
+   *  the server for a catalog lookup — neither affects which job a page is, and a
+   *  fragment can carry an SSO token on some ATS redirects. Query parameters are
+   *  kept: Greenhouse's embedded application form encodes the board and job id
+   *  there (`for`, `token`), which `sources.RefFromURL` depends on. */
+  function sanitizeForLookup(url: string): string {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}${u.search}`;
+    } catch {
+      return url;
+    }
+  }
+
   /**
    * Runs on every tab switch and page load. A genuine change of page clears
    * whatever conversation is on screen — there is nothing on the new page for it
@@ -246,7 +260,7 @@
       // job posting or not, which is both wasted work and a wasted LLM call for
       // the vast majority of pages. `contributePage` (the "Add vacancy" action on
       // the empty state) is the explicit, on-demand equivalent.
-      const catalogSlug = await findJob(url, token);
+      const catalogSlug = await findJob(sanitizeForLookup(url), token);
       if (requestId !== matchRequestId) return;
       if (catalogSlug) {
         if (!(await loadCatalog(catalogSlug, token, requestId))) return;

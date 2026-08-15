@@ -1348,6 +1348,8 @@ type Querier interface {
 	// can verify the password (and reject accounts that have none). role feeds the
 	// post-login wire shape. email_verified drives both the "confirm your email" prompt
 	// and the OAuth merge policy (an unverified account is seized, not silently joined).
+	// language is included so a password login's response carries the account's
+	// preference the same as /auth/me, rather than reporting the zero value.
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	// Profile lookup for the authenticated user. role is included so /auth/me can tell a
 	// client whether to surface moderator-only UI. The password hash itself never leaves

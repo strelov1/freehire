@@ -214,7 +214,7 @@ func (q *Queries) GetUserATSAnalysis(ctx context.Context, id int64) ([]byte, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, role, beta_tester, email_verified, password_hash, created_at
+SELECT id, email, role, beta_tester, email_verified, password_hash, created_at, language
 FROM users
 WHERE lower(email) = lower($1)
 `
@@ -227,12 +227,15 @@ type GetUserByEmailRow struct {
 	EmailVerified bool               `json:"email_verified"`
 	PasswordHash  pgtype.Text        `json:"password_hash"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	Language      string             `json:"language"`
 }
 
 // Login lookup. Case-insensitive on email; returns password_hash so the handler
 // can verify the password (and reject accounts that have none). role feeds the
 // post-login wire shape. email_verified drives both the "confirm your email" prompt
 // and the OAuth merge policy (an unverified account is seized, not silently joined).
+// language is included so a password login's response carries the account's
+// preference the same as /auth/me, rather than reporting the zero value.
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i GetUserByEmailRow
@@ -244,6 +247,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEm
 		&i.EmailVerified,
 		&i.PasswordHash,
 		&i.CreatedAt,
+		&i.Language,
 	)
 	return i, err
 }

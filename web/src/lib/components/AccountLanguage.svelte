@@ -13,12 +13,12 @@
   // type-to-filter combobox reads better here than a plain <select> with six
   // options — flags make each entry recognizable at a glance.
   const LANGUAGES = [
-    { code: 'en', label: 'English', native: 'English', flag: 'gb' },
-    { code: 'ru', label: 'Russian', native: 'Русский', flag: 'ru' },
-    { code: 'es', label: 'Spanish', native: 'Español', flag: 'es' },
-    { code: 'pt', label: 'Portuguese', native: 'Português', flag: 'pt' },
-    { code: 'de', label: 'German', native: 'Deutsch', flag: 'de' },
-    { code: 'fr', label: 'French', native: 'Français', flag: 'fr' },
+    { code: 'en', label: 'English', flag: 'gb' },
+    { code: 'ru', label: 'Russian', flag: 'ru' },
+    { code: 'es', label: 'Spanish', flag: 'es' },
+    { code: 'pt', label: 'Portuguese', flag: 'pt' },
+    { code: 'de', label: 'German', flag: 'de' },
+    { code: 'fr', label: 'French', flag: 'fr' },
   ] as const;
 
   type LanguageOption = (typeof LANGUAGES)[number];
@@ -27,22 +27,10 @@
     return LANGUAGES.find((l) => l.code === code) ?? must(LANGUAGES[0], 'default language');
   }
 
-  // Diacritic-insensitive substring match, so typing "espanol" still finds
-  // "Español" — strips the combining marks NFD decomposition leaves behind.
-  const COMBINING_MARKS = /[\u0300-\u036f]/g;
-
-  function normalize(s: string): string {
-    return s.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase();
-  }
-
   function matches(lang: LanguageOption, q: string): boolean {
-    const needle = normalize(q.trim());
+    const needle = q.trim().toLowerCase();
     if (!needle) return true;
-    return (
-      normalize(lang.label).includes(needle) ||
-      normalize(lang.native).includes(needle) ||
-      lang.code.includes(needle)
-    );
+    return lang.label.toLowerCase().includes(needle) || lang.code.includes(needle);
   }
 
   let selected = $state(byCode(currentUser()?.language ?? 'en'));
@@ -83,7 +71,7 @@
 
   async function pick(lang: LanguageOption) {
     closeList();
-    if (lang.code === selected.code) return;
+    if (lang.code === selected.code || saveState === 'saving') return;
     const previous = selected;
     selected = lang;
     saveState = 'saving';
@@ -167,6 +155,7 @@
         onkeydown={onKeydown}
         placeholder="Search a language…"
         autocomplete="off"
+        disabled={saveState === 'saving'}
         role="combobox"
         aria-expanded={open}
         aria-controls="language-picker-list"
@@ -195,10 +184,7 @@
               class="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent {i === activeIndex ? 'bg-accent' : ''}"
             >
               <CountryFlag code={lang.flag} label={lang.label} class="text-base" />
-              <span class="flex min-w-0 flex-col">
-                <span class="truncate text-sm font-medium">{lang.label}</span>
-                <span class="truncate text-xs text-muted-foreground">{lang.native}</span>
-              </span>
+              <span class="truncate text-sm font-medium">{lang.label}</span>
               {#if lang.code === selected.code}
                 <Check class="ml-auto size-4 shrink-0 text-brand-strong" aria-hidden="true" />
               {/if}
