@@ -144,8 +144,12 @@ the thing to fix:
    entry; time since the last `search-drain` and `reindex` run.
 2. **Queues** — depth of all three outboxes on a log scale, dead letters, oldest-entry
    age.
-3. **Board fleet** — healthy / failing / cooled over time, plus a table of the twenty
-   worst boards.
+3. **Board fleet** — healthy / failing / cooled over time, stacked.
+
+   No per-board table, though an earlier draft of this design assumed one. Naming the
+   worst boards from Prometheus would mean a series per board, and the fleet holds ~84k
+   of them — a cardinality disaster for data that is only ever read as a top-N list. The
+   panel beside the graph carries the `board_health` SQL to run instead.
 4. **Workers** — a table of worker → time since last run → last exit status, sorted by
    staleness. Built entirely on the 229 series that already exist.
 
