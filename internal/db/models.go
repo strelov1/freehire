@@ -959,6 +959,7 @@ type UserJobAnalysis struct {
 	CvUploadedAt   pgtype.Timestamptz `json:"cv_uploaded_at"`
 	JobContentHash pgtype.Text        `json:"job_content_hash"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Language       string             `json:"language"`
 }
 
 type UserNotification struct {

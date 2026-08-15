@@ -23,25 +23,25 @@ func TestBuildAnalysisItems(t *testing.T) {
 	rows := []db.ListUserJobAnalysesRow{
 		{ // fresh, open
 			PublicSlug: "go-role", Title: "Senior Go", Company: "Acme",
-			Analysis: blob(80, "Strong Fit"), Model: "model-a",
+			Analysis: blob(80, "Strong Fit"), Model: "model-a", Language: "en",
 			CvUploadedAt: ts(now), JobContentHash: txt("h1"), ContentHash: txt("h1"), CreatedAt: ts(now),
 		},
 		{ // closed job → Closed true
 			PublicSlug: "closed-role", Title: "Backend", Company: "Beta",
-			ClosedAt: ts(now), Analysis: blob(55, "Moderate Fit"), Model: "model-a",
+			ClosedAt: ts(now), Analysis: blob(55, "Moderate Fit"), Model: "model-a", Language: "en",
 			CvUploadedAt: ts(now), JobContentHash: txt("h2"), ContentHash: txt("h2"), CreatedAt: ts(now),
 		},
 		{ // model changed since analysis → stale
 			PublicSlug: "stale-role", Title: "Platform", Company: "Gamma",
-			Analysis: blob(60, "Good Fit"), Model: "model-OLD",
+			Analysis: blob(60, "Good Fit"), Model: "model-OLD", Language: "en",
 			CvUploadedAt: ts(now), JobContentHash: txt("h3"), ContentHash: txt("h3"), CreatedAt: ts(now),
 		},
 		{ // corrupt blob → skipped
-			PublicSlug: "bad", Title: "X", Company: "Y", Analysis: []byte("{not json"), Model: "model-a", CreatedAt: ts(now),
+			PublicSlug: "bad", Title: "X", Company: "Y", Analysis: []byte("{not json"), Model: "model-a", Language: "en", CreatedAt: ts(now),
 		},
 	}
 
-	items := buildAnalysisItems(rows, &now, "model-a")
+	items := buildAnalysisItems(rows, &now, "model-a", "en")
 	if len(items) != 3 {
 		t.Fatalf("got %d items, want 3 (corrupt row skipped)", len(items))
 	}

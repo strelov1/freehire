@@ -6,9 +6,9 @@ import (
 )
 
 func TestEachPresetHasItsOwnPrompt(t *testing.T) {
-	chat := SystemPrompt(PresetChat)
-	tailor := SystemPrompt(PresetTailor)
-	browse := SystemPrompt(PresetBrowse)
+	chat := SystemPrompt(PresetChat, "en")
+	tailor := SystemPrompt(PresetTailor, "en")
+	browse := SystemPrompt(PresetBrowse, "en")
 
 	if chat == "" || tailor == "" || browse == "" {
 		t.Fatal("every preset needs a system prompt; an unprompted agent has no job to do")
@@ -23,7 +23,7 @@ func TestEachPresetHasItsOwnPrompt(t *testing.T) {
 // alignment already ran: a tailored copy minted before the prepass existed, or one for a
 // vacancy that names no interchangeable skill, reaches this prompt unaligned.
 func TestTailorPromptTellsTheAgentNotToSpendEditsOnWording(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 	if !strings.Contains(p, "handled outside this conversation") {
 		t.Error("tailor prompt never says skill wording is handled elsewhere")
 	}
@@ -39,7 +39,7 @@ func TestTailorPromptTellsTheAgentNotToSpendEditsOnWording(t *testing.T) {
 // produces an agent that asks the candidate to paste the vacancy it could have
 // read itself.
 func TestBrowsePromptTellsTheAgentToReadThePage(t *testing.T) {
-	p := SystemPrompt(PresetBrowse)
+	p := SystemPrompt(PresetBrowse, "en")
 
 	if !strings.Contains(p, "read_current_page") {
 		t.Error("the browse prompt never names read_current_page, so the agent will not know it can see the page")
@@ -50,7 +50,7 @@ func TestBrowsePromptTellsTheAgentToReadThePage(t *testing.T) {
 // the profile page. A prompt that does not say to read it produces an agent that
 // opens every conversation with a questionnaire.
 func TestChatPromptReadsTheProfileBeforeInterrogating(t *testing.T) {
-	p := SystemPrompt(PresetChat)
+	p := SystemPrompt(PresetChat, "en")
 
 	if !strings.Contains(p, "get_profile") {
 		t.Error("the chat prompt never mentions get_profile, so the agent will ask for what the profile already answers")
@@ -58,7 +58,7 @@ func TestChatPromptReadsTheProfileBeforeInterrogating(t *testing.T) {
 }
 
 func TestChatPromptCarriesTheSearchPlaybook(t *testing.T) {
-	p := SystemPrompt(PresetChat)
+	p := SystemPrompt(PresetChat, "en")
 
 	// Read the vocabulary before filtering — otherwise the model invents facet
 	// values and gets a confidently unfiltered result set.
@@ -68,7 +68,7 @@ func TestChatPromptCarriesTheSearchPlaybook(t *testing.T) {
 }
 
 func TestChatPromptShowsVacanciesOnlyThroughTheTool(t *testing.T) {
-	p := SystemPrompt(PresetChat)
+	p := SystemPrompt(PresetChat, "en")
 
 	if !strings.Contains(p, "present_jobs") {
 		t.Error("the chat prompt does not tell the agent to show vacancies through present_jobs")
@@ -81,7 +81,7 @@ func TestChatPromptShowsVacanciesOnlyThroughTheTool(t *testing.T) {
 }
 
 func TestTailorPromptCarriesTheHonestyRule(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	for _, want := range []string{"missing_have", "missing_gap"} {
 		if !strings.Contains(p, want) {
@@ -94,7 +94,7 @@ func TestTailorPromptCarriesTheHonestyRule(t *testing.T) {
 }
 
 func TestTailorPromptStatesTheBulletCeilingRule(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 	lower := strings.ToLower(p)
 	if !strings.Contains(lower, "bullet ceiling") && !strings.Contains(lower, "at most") {
 		t.Error("the tailor prompt must tell the model each experience has a bullet ceiling")
@@ -110,7 +110,7 @@ func TestTailorPromptStatesTheBulletCeilingRule(t *testing.T) {
 // Agents kept inventing a PROJECTS heading field and parking portfolio work under experience.
 // Templates already emit section titles from non-empty arrays; the prompt must say so.
 func TestTailorPromptOwnsSectionHeadingsAndProjectsPlacement(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 	lower := strings.ToLower(p)
 	if !strings.Contains(lower, "section headings") || !strings.Contains(lower, "template") {
 		t.Error("the tailor prompt must say section headings are template-owned")
@@ -133,7 +133,7 @@ func TestTailorPromptOwnsSectionHeadingsAndProjectsPlacement(t *testing.T) {
 // nothing on that point". The agent concluded that four achievements the candidate was
 // looking at did not exist, and answered about a different set instead.
 func TestProfilePromptReadsIdsRatherThanSearchingThem(t *testing.T) {
-	p := SystemPrompt(PresetProfile)
+	p := SystemPrompt(PresetProfile, "en")
 
 	if !strings.Contains(p, "experience_get") {
 		t.Fatal("the profile prompt never names experience_get, so nothing turns an id into the achievement it names")
@@ -152,7 +152,7 @@ func TestProfilePromptReadsIdsRatherThanSearchingThem(t *testing.T) {
 // work. Updating is narrower and just as destructive, because metrics and skills are set as
 // whole lists rather than appended to.
 func TestProfilePromptReadsBeforeMergingOrUpdating(t *testing.T) {
-	p := SystemPrompt(PresetProfile)
+	p := SystemPrompt(PresetProfile, "en")
 	lower := strings.ToLower(p)
 
 	if !strings.Contains(lower, "never merge or update an achievement you have not read") {
@@ -164,7 +164,7 @@ func TestProfilePromptReadsBeforeMergingOrUpdating(t *testing.T) {
 }
 
 func TestAnUnknownPresetFallsBackToTheChatPrompt(t *testing.T) {
-	if SystemPrompt("wizard") != SystemPrompt(PresetChat) {
+	if SystemPrompt("wizard", "en") != SystemPrompt(PresetChat, "en") {
 		t.Error("an unknown preset must still get a prompt; a session with none would answer unguided")
 	}
 }
@@ -175,7 +175,7 @@ func TestAnUnknownPresetFallsBackToTheChatPrompt(t *testing.T) {
 // The extension must say so explicitly, because it is appended AFTER that
 // instruction and the model follows what it read.
 func TestBrowsePromptOpensOnThePageNotTheProfile(t *testing.T) {
-	p := SystemPrompt(PresetBrowse)
+	p := SystemPrompt(PresetBrowse, "en")
 
 	if !strings.Contains(p, "FIRST thing you do") {
 		t.Error("the browse prompt does not override how the conversation opens, so the agent will run the chat playbook's opening and ask what the candidate is looking for")
@@ -192,7 +192,7 @@ func TestBrowsePromptOpensOnThePageNotTheProfile(t *testing.T) {
 // is exactly what a run would otherwise get wrong: keep going, do not ask mid-pass, and
 // account for every requirement at the end — including the ones nothing could close.
 func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	for _, want := range []string{"tailor_report", "closed_bank", "closed_candidate", "open", "not_reached"} {
 		if !strings.Contains(p, want) {
@@ -213,7 +213,7 @@ func TestTailorPromptDescribesTheUnattendedRun(t *testing.T) {
 // cannot be trusted to know whether an edit actually reads as closing a requirement (see
 // openspec/changes/fit-analysis-post-autopilot-verify/design.md).
 func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	unattendedIdx := strings.Index(p, "UNATTENDED RUNS")
 	if unattendedIdx == -1 {
@@ -236,7 +236,7 @@ func TestTailorPromptSelfChecksWithJobMatchBeforeReporting(t *testing.T) {
 // instruction to check that itself has to sit beside the honesty rule it backs up — not
 // merely exist somewhere in the prompt — and has to say what to do about a bad result.
 func TestTailorPromptChecksItsOwnWordingAgainstTheEvidence(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	honestyIdx := strings.Index(p, "Never invent, inflate or imply")
 	if honestyIdx == -1 {
@@ -260,7 +260,7 @@ func TestTailorPromptChecksItsOwnWordingAgainstTheEvidence(t *testing.T) {
 // the check matters just as much there, and the section states its other self-checks
 // (job_match) explicitly rather than leaving them implied by "the method does not change".
 func TestTailorPromptChecksFidelityDuringUnattendedRuns(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	unattendedIdx := strings.Index(p, "UNATTENDED RUNS")
 	if unattendedIdx == -1 {
@@ -278,7 +278,7 @@ func TestTailorPromptChecksFidelityDuringUnattendedRuns(t *testing.T) {
 // a time — and edited nothing. The prompt now says where the evidence already is, and to spend
 // rounds on edits rather than on a summary.
 func TestTailorPromptSpendsRoundsOnEditsNotSummaries(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 
 	if !strings.Contains(p, "cv_context") || !strings.Contains(p, "evidence") {
 		t.Error("the prompt must point the agent at the evidence cv_context already carries")
@@ -289,5 +289,76 @@ func TestTailorPromptSpendsRoundsOnEditsNotSummaries(t *testing.T) {
 	}
 	if !strings.Contains(lower, "as you go") && !strings.Contains(lower, "one requirement at a time") {
 		t.Error("the prompt must ask for edits as each requirement is closed, not after all the research")
+	}
+}
+
+// freehire#1837: the assistant must follow the candidate's saved profile language for
+// its own words rather than defaulting to English or mirroring whatever language they
+// happen to type in.
+func TestSystemPromptNamesTheRequestedLanguage(t *testing.T) {
+	for _, tc := range []struct {
+		code, want string
+	}{
+		{"ru", "Russian"},
+		{"es", "Spanish"},
+		{"en", "English"},
+		{"xx", "English"}, // unrecognised code falls back rather than dropping the directive
+		{"", "English"},
+	} {
+		p := SystemPrompt(PresetChat, tc.code)
+		if !strings.Contains(p, "Reply to the candidate in "+tc.want) {
+			t.Errorf("SystemPrompt(PresetChat, %q) does not tell the model to reply in %s\n%s", tc.code, tc.want, p)
+		}
+	}
+}
+
+// Every preset must carry the directive — a candidate should not lose their saved
+// language preference just because their session is an interview or a debrief rather
+// than the general chat.
+func TestEveryPresetCarriesTheLanguageDirective(t *testing.T) {
+	for _, preset := range []string{PresetChat, PresetTailor, PresetProfile, PresetBrowse, PresetInterview, PresetDebrief, "unknown"} {
+		p := SystemPrompt(preset, "ru")
+		if !strings.Contains(p, "Reply to the candidate in Russian") {
+			t.Errorf("preset %q does not carry the language directive", preset)
+		}
+	}
+}
+
+// The honest wall in tailorPrompt already tells the agent to write CV bullets in the
+// vacancy's own language (see the "reframe it into a bullet in the vacancy's language"
+// instruction). The candidate's profile language must govern the assistant's own words
+// ONLY — a candidate reading freehire in Russian must not get Russian bullets on an
+// English-language CV, so the tailor preset's directive has to state the exception
+// explicitly rather than leaving the model to reconcile two separate instructions.
+func TestTailorLanguageDirectiveExemptsCVContent(t *testing.T) {
+	p := SystemPrompt(PresetTailor, "ru")
+	if !strings.Contains(p, "vacancy's own language instead") {
+		t.Error("the tailor preset's language directive does not carve out an exception for cv_edit bullets")
+	}
+	if !strings.Contains(p, "in the vacancy's language") {
+		t.Error("the tailor prompt lost its own instruction to write bullets in the vacancy's language")
+	}
+}
+
+// Every other preset has nothing to exempt — a chat reply and an interview critique are
+// both entirely the assistant's own words, so the directive must not carry the tailor
+// preset's cv_edit carve-out where there is no cv_edit tool to carve out.
+func TestOnlyTailorLanguageDirectiveCarvesOutCVContent(t *testing.T) {
+	for _, preset := range []string{PresetChat, PresetProfile, PresetBrowse, PresetInterview, PresetDebrief} {
+		p := SystemPrompt(preset, "ru")
+		if strings.Contains(p, "cv_edit` follows the vacancy's own language instead") {
+			t.Errorf("preset %q carries the tailor-only CV-content exception", preset)
+		}
+	}
+}
+
+func TestLanguageNameFallsBackToEnglish(t *testing.T) {
+	for _, code := range []string{"xx", "", "EN", "ru "} {
+		if got := LanguageName(code); got != "English" {
+			t.Errorf("LanguageName(%q) = %q, want %q", code, got, "English")
+		}
+	}
+	if got := LanguageName("ru"); got != "Russian" {
+		t.Errorf(`LanguageName("ru") = %q, want "Russian"`, got)
 	}
 }

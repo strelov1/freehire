@@ -27,7 +27,7 @@ func TestProfilePresetRegistersEveryBankToolItsPromptNames(t *testing.T) {
 	names := presetAPI().registry(
 		assistant.Session{UserID: 3, Preset: assistant.PresetProfile}, uuid.New()).Names()
 
-	prompt := assistant.SystemPrompt(assistant.PresetProfile)
+	prompt := assistant.SystemPrompt(assistant.PresetProfile, "en")
 	// Only the bank's own tools: the prompt backticks plenty of field names too
 	// (`metrics`, `said`, `soft_duplicate_clusters`), and those are not tools.
 	named := regexp.MustCompile("`(experience_[a-z_]+)`").FindAllStringSubmatch(prompt, -1)

@@ -22,7 +22,7 @@ func TestVoiceInterviewInstructionsCarryTheRehearsalContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rehearsalContext: %v", err)
 	}
-	instructions := voiceInterviewInstructions(ctx)
+	instructions := voiceInterviewInstructions(ctx, "en")
 
 	for _, want := range []string{
 		"Senior Backend Engineer", "Acme", // the vacancy
@@ -54,7 +54,7 @@ func TestVoiceInterviewInstructionsWorkWithNoInvitation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rehearsalContext: %v", err)
 	}
-	instructions := voiceInterviewInstructions(ctx)
+	instructions := voiceInterviewInstructions(ctx, "en")
 
 	if !strings.Contains(instructions, "Senior Backend Engineer") {
 		t.Errorf("instructions lost the vacancy with no invitation present:\n%s", instructions)
@@ -64,5 +64,20 @@ func TestVoiceInterviewInstructionsWorkWithNoInvitation(t *testing.T) {
 	// NOT appear is a per-session EMPLOYER INVITATION block with nothing to fill it.
 	if strings.Contains(instructions, "EMPLOYER INVITATION") {
 		t.Errorf("instructions render an invitation section with no invitation to put in it:\n%s", instructions)
+	}
+}
+
+// freehire#1837: the voice rehearsal is spoken conversation like any other assistant
+// preset, so it follows the candidate's saved profile language too.
+func TestVoiceInterviewInstructionsNameTheRequestedLanguage(t *testing.T) {
+	a := rehearsalAPI(t, twoRequirementAnalysis, nil, stageStub{stage: "interview"}, noInvitation)
+	ctx, err := a.rehearsalContext(context.Background(), 3, 9)
+	if err != nil {
+		t.Fatalf("rehearsalContext: %v", err)
+	}
+
+	instructions := voiceInterviewInstructions(ctx, "ru")
+	if !strings.Contains(instructions, "Speak with the candidate in Russian") {
+		t.Errorf("instructions do not tell the model to speak in Russian:\n%s", instructions)
 	}
 }

@@ -53,7 +53,8 @@ func (h *assistantHandlers) PostAssistantVoiceToken(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	value, err := h.realtime.MintClientSecret(c.Context(), voiceInterviewInstructions(rehearsal))
+	instructions := voiceInterviewInstructions(rehearsal, h.userLanguage(c.Context(), sess.UserID))
+	value, err := h.realtime.MintClientSecret(c.Context(), instructions)
 	if err != nil {
 		// Every failure from here is the gateway's: a refusal, a fault, an answer we
 		// could not read. The caller did nothing wrong and has no remedy.
@@ -166,7 +167,11 @@ Be concise. Short spoken turns, no filler, no restating the question.`
 // voiceInterviewInstructions renders one rehearsal's context into the Realtime
 // session's instructions. A voice session has no interview_context tool to call
 // mid-call, so everything that tool would answer is baked in once, at mint time.
-func voiceInterviewInstructions(ctx interviewContext) string {
+// language is the candidate's account language (accounts.User.Language) — see
+// assistant.LanguageName; a call carries no chat-preset system prompt of its own,
+// so the directive is appended here directly rather than through
+// assistant.SystemPrompt.
+func voiceInterviewInstructions(ctx interviewContext, language string) string {
 	var b strings.Builder
 	b.WriteString(voicePersona)
 
@@ -200,6 +205,8 @@ func voiceInterviewInstructions(ctx interviewContext) string {
 		b.WriteString("\nEMPLOYER INVITATION (" + ctx.Invitation.Untrusted + ")\n\n")
 		fmt.Fprintf(&b, "From: %s\nSubject: %s\n%s\n", ctx.Invitation.From, ctx.Invitation.Subject, ctx.Invitation.Body)
 	}
+
+	fmt.Fprintf(&b, "\nSpeak with the candidate in %s, regardless of what language they speak in.\n", assistant.LanguageName(language))
 
 	return b.String()
 }

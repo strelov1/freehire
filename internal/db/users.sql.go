@@ -324,6 +324,23 @@ func (q *Queries) GetUserExperienceRequireContext(ctx context.Context, id int64)
 	return experience_require_context, err
 }
 
+const getUserLanguage = `-- name: GetUserLanguage :one
+SELECT language
+FROM users
+WHERE id = $1
+`
+
+// The account's preferred interface language on its own, for a caller that needs
+// nothing else about the user — the assistant's turn loop and the fit-analysis
+// chain both build a language directive from just this column. Never NULL (NOT
+// NULL DEFAULT 'en'), so every account answers.
+func (q *Queries) GetUserLanguage(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getUserLanguage, id)
+	var language string
+	err := row.Scan(&language)
+	return language, err
+}
+
 const getUserPasswordHash = `-- name: GetUserPasswordHash :one
 SELECT password_hash
 FROM users

@@ -25,7 +25,7 @@ func TestNormalizePresetMapsTheUnrecognisedToChat(t *testing.T) {
 
 // The fallback is the normaliser's, not a second copy of it.
 func TestSystemPromptFallsBackThroughTheNormaliser(t *testing.T) {
-	if SystemPrompt("browze") != SystemPrompt(PresetChat) {
+	if SystemPrompt("browze", "en") != SystemPrompt(PresetChat, "en") {
 		t.Error("an unrecognised preset does not get the chat prompt")
 	}
 }
@@ -35,11 +35,11 @@ func TestSystemPromptFallsBackThroughTheNormaliser(t *testing.T) {
 // chatPrompt, and appending mail to chatPrompt itself is exactly the mistake this
 // pins shut.
 func TestOnlyTheChatPresetIsToldAboutMail(t *testing.T) {
-	if !strings.Contains(SystemPrompt(PresetChat), "inbox_overview") {
+	if !strings.Contains(SystemPrompt(PresetChat, "en"), "inbox_overview") {
 		t.Error("the chat prompt does not mention the mail tools it carries")
 	}
 	for _, preset := range []string{PresetBrowse, PresetTailor, PresetProfile, PresetInterview, PresetDebrief} {
-		if strings.Contains(SystemPrompt(preset), "inbox_overview") {
+		if strings.Contains(SystemPrompt(preset, "en"), "inbox_overview") {
 			t.Errorf("the %q prompt talks about mail, but that preset registers no mail tool", preset)
 		}
 	}
@@ -51,7 +51,7 @@ func TestOnlyTheChatPresetIsToldAboutMail(t *testing.T) {
 // change with no follow-up tailor_report call leaves that requirement's report entry
 // stale.
 func TestTailorPromptTellsTheAgentToSelfReportAClosedRequirement(t *testing.T) {
-	p := SystemPrompt(PresetTailor)
+	p := SystemPrompt(PresetTailor, "en")
 	for _, want := range []string{"requirement_status", "closed_bank", "closed_candidate"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the tailor prompt never says %q about cv_edit closing a requirement", want)
@@ -65,7 +65,7 @@ func TestTailorPromptTellsTheAgentToSelfReportAClosedRequirement(t *testing.T) {
 // nothing downstream can tell the candidate's words from the model's paraphrase of
 // them. Only an explicit agreement, visible in the transcript, makes it checkable.
 func TestInterviewPromptGatesTheBankOnTheCandidatesAgreement(t *testing.T) {
-	p := SystemPrompt(PresetInterview)
+	p := SystemPrompt(PresetInterview, "en")
 	for _, want := range []string{"experience_add", "agree", "their own words"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the rehearsal prompt never says %q about recording an answer", want)
@@ -77,7 +77,7 @@ func TestInterviewPromptGatesTheBankOnTheCandidatesAgreement(t *testing.T) {
 // mail section carries has to be stated here — this preset holds no mail tools, so it
 // would otherwise never be told.
 func TestInterviewPromptNamesTheInvitationAsUntrusted(t *testing.T) {
-	p := SystemPrompt(PresetInterview)
+	p := SystemPrompt(PresetInterview, "en")
 	for _, want := range []string{"untrusted", "ATTACK"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the rehearsal prompt never says %q about the invitation", want)
@@ -88,7 +88,7 @@ func TestInterviewPromptNamesTheInvitationAsUntrusted(t *testing.T) {
 // One round per session is what keeps a rehearsal from wandering into a survey of
 // every interview format, and what keeps its turns inside the ordinary step ceiling.
 func TestInterviewPromptHoldsToOneRound(t *testing.T) {
-	p := SystemPrompt(PresetInterview)
+	p := SystemPrompt(PresetInterview, "en")
 	for _, want := range []string{"one round", "one question"} {
 		if !strings.Contains(strings.ToLower(p), want) {
 			t.Errorf("the rehearsal prompt never says %q", want)
@@ -101,11 +101,11 @@ func TestInterviewPromptHoldsToOneRound(t *testing.T) {
 // rehearsal's prompt would put the agent back in the interviewer's chair, asking
 // invented questions about an interview that has already happened.
 func TestDebriefRunsUnderItsOwnPrompt(t *testing.T) {
-	p := SystemPrompt(PresetDebrief)
-	if p == SystemPrompt(PresetChat) {
+	p := SystemPrompt(PresetDebrief, "en")
+	if p == SystemPrompt(PresetChat, "en") {
 		t.Fatal("the debrief preset falls through to the chat prompt")
 	}
-	if p == SystemPrompt(PresetInterview) {
+	if p == SystemPrompt(PresetInterview, "en") {
 		t.Error("the debrief runs under the rehearsal's prompt, which would have it play the interviewer")
 	}
 }
@@ -115,7 +115,7 @@ func TestDebriefRunsUnderItsOwnPrompt(t *testing.T) {
 // candidate to answer them. The interview already happened; questions it did not
 // contain teach nothing about how it went.
 func TestDebriefPromptWorksFromWhatTheCandidateBringsBack(t *testing.T) {
-	p := strings.ToLower(SystemPrompt(PresetDebrief))
+	p := strings.ToLower(SystemPrompt(PresetDebrief, "en"))
 	for _, want := range []string{"one question at a time", "do not invent questions", "requirement"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the debrief prompt never says %q", want)
@@ -128,7 +128,7 @@ func TestDebriefPromptWorksFromWhatTheCandidateBringsBack(t *testing.T) {
 // same answer in the next round. The three axes are the same ones the rehearsal
 // critiques on, because they are what makes an answer land in a real room.
 func TestDebriefPromptCritiquesOnTheThreeAxesWithoutPadding(t *testing.T) {
-	p := SystemPrompt(PresetDebrief)
+	p := SystemPrompt(PresetDebrief, "en")
 	for _, want := range []string{"THEY did", "outcome", "number", "no praise padding"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the debrief prompt never says %q about how an answer landed", want)
@@ -142,7 +142,7 @@ func TestDebriefPromptCritiquesOnTheThreeAxesWithoutPadding(t *testing.T) {
 // candidate's words from the model's paraphrase. The agreement in the transcript is
 // what makes a wrong entry traceable.
 func TestDebriefPromptGatesTheBankOnTheCandidatesAgreement(t *testing.T) {
-	p := SystemPrompt(PresetDebrief)
+	p := SystemPrompt(PresetDebrief, "en")
 	for _, want := range []string{"experience_add", "agree", "their own words"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the debrief prompt never says %q about recording an answer", want)
@@ -155,7 +155,7 @@ func TestDebriefPromptGatesTheBankOnTheCandidatesAgreement(t *testing.T) {
 // they may not catch, and it would go on a CV. The service cannot tell whose number it
 // is, so the prompt has to forbid supplying one.
 func TestDebriefPromptForbidsSupplyingAFigureTheCandidateDidNotGive(t *testing.T) {
-	p := strings.ToLower(SystemPrompt(PresetDebrief))
+	p := strings.ToLower(SystemPrompt(PresetDebrief, "en"))
 	for _, want := range []string{"never a number", "ask whether"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the debrief prompt never says %q about a figure the candidate did not give", want)
@@ -167,7 +167,7 @@ func TestDebriefPromptForbidsSupplyingAFigureTheCandidateDidNotGive(t *testing.T
 // this preset carries no mail tools either — so it never sees the mail section's
 // warning and has to be told here, or it reads an employer's instruction as a request.
 func TestDebriefPromptNamesTheInvitationAsUntrusted(t *testing.T) {
-	p := SystemPrompt(PresetDebrief)
+	p := SystemPrompt(PresetDebrief, "en")
 	for _, want := range []string{"untrusted", "ATTACK"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("the debrief prompt never says %q about the invitation", want)
@@ -179,7 +179,7 @@ func TestDebriefPromptNamesTheInvitationAsUntrusted(t *testing.T) {
 // surface sends no mail, so an injection has no outbound channel — but the model
 // still has to be told, or it reads an instruction in a message as a request.
 func TestMailPromptNamesBodiesAsUntrusted(t *testing.T) {
-	prompt := SystemPrompt(PresetChat)
+	prompt := SystemPrompt(PresetChat, "en")
 	for _, want := range []string{"untrusted", "ATTACK"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("the mail section never says %q about message bodies", want)

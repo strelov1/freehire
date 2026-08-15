@@ -1,5 +1,7 @@
 package assistant
 
+import "strings"
+
 // NormalizePreset maps an unrecognised preset onto the general chat one, because
 // a session with no preset should answer unguided rather than fail loudly.
 //
@@ -17,21 +19,79 @@ func NormalizePreset(preset string) string {
 	}
 }
 
-// SystemPrompt returns the instruction a session runs under.
-func SystemPrompt(preset string) string {
-	switch NormalizePreset(preset) {
+// SystemPrompt returns the instruction a session runs under. language is the
+// caller's account language (accounts.User.Language, e.g. "en"/"ru") — it drives
+// only the LANGUAGE directive appended at the end (see languageDirective);
+// nothing above depends on it, which is why every preset can be answered from
+// the one switch below and the directive is layered on afterwards.
+func SystemPrompt(preset, language string) string {
+	norm := NormalizePreset(preset)
+	var base string
+	switch norm {
 	case PresetTailor:
-		return tailorPrompt
+		base = tailorPrompt
 	case PresetProfile:
-		return profilePrompt
+		base = profilePrompt
 	case PresetBrowse:
-		return chatPrompt + browsePrompt
+		base = chatPrompt + browsePrompt
 	case PresetInterview:
-		return interviewPrompt
+		base = interviewPrompt
 	case PresetDebrief:
-		return debriefPrompt
+		base = debriefPrompt
+	default:
+		base = chatPrompt + mailPrompt
 	}
-	return chatPrompt + mailPrompt
+	return base + languageDirective(norm, language)
+}
+
+// languageNames maps a supported account-language code (accounts.supportedLanguages)
+// to the English name a prompt names it by. Kept here rather than imported: there is
+// no shared vocabulary package for it, and the DB CHECK constraint is the actual
+// source of truth for which codes exist — this map only has to cover them, and
+// LanguageName falls back safely for anything it does not recognise.
+var languageNames = map[string]string{
+	"en": "English",
+	"ru": "Russian",
+	"es": "Spanish",
+	"pt": "Portuguese",
+	"de": "German",
+	"fr": "French",
+}
+
+// LanguageName maps an account language code to the English name a prompt should
+// name it by. An unrecognised or empty code answers "English" — the column's own
+// default — rather than silently omitting the directive; exported so the voice-mode
+// instructions (built in internal/handler, outside SystemPrompt) name the same
+// languages by the same words.
+func LanguageName(code string) string {
+	if name, ok := languageNames[code]; ok {
+		return name
+	}
+	return "English"
+}
+
+// languageDirective tells the model which language to answer the candidate in,
+// following their saved profile preference rather than guessing from whatever
+// language they happen to type in this message (freehire#1837) or defaulting to
+// English. It governs the assistant's OWN words only — never material it reads
+// (an employer's mail, a job posting) or repeats verbatim.
+//
+// The tailor preset carries one deliberate exception: a bullet written with
+// `cv_edit` follows the VACANCY's language instead (tailorPrompt already says so
+// in its own words) — a CV aimed at an employer is written for that employer, not
+// for the candidate reading the chat beside it. Naming the split here, rather
+// than trusting the model to reconcile two separately-stated instructions on its
+// own, is what keeps a candidate reading freehire in Russian from getting
+// Russian bullets on an English-language CV.
+func languageDirective(preset, language string) string {
+	var b strings.Builder
+	b.WriteString("\n\nLANGUAGE\n\nReply to the candidate in ")
+	b.WriteString(LanguageName(language))
+	b.WriteString(", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in.")
+	if preset == PresetTailor {
+		b.WriteString(" This governs your own words to the candidate only — a bullet you write onto the CV with `cv_edit` follows the vacancy's own language instead, as instructed above.")
+	}
+	return b.String()
 }
 
 // chatPrompt is the general job-search assistant. It carries the playbook the CLI

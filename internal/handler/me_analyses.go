@@ -23,10 +23,10 @@ type myAnalysisItem struct {
 }
 
 // buildAnalysisItems projects the caller's analysed-job rows into list items, flagging
-// staleness against the caller's live CV upload time and the current model. Rows whose
-// stored analysis blob is empty or corrupt are skipped (nothing to show). Order is
-// preserved (the query returns newest-first).
-func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, cvUploadedAt *time.Time, model string) []myAnalysisItem {
+// staleness against the caller's live CV upload time, current model, and profile
+// language. Rows whose stored analysis blob is empty or corrupt are skipped (nothing to
+// show). Order is preserved (the query returns newest-first).
+func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, cvUploadedAt *time.Time, model, language string) []myAnalysisItem {
 	items := make([]myAnalysisItem, 0, len(rows))
 	for _, r := range rows {
 		analysis := decodeAnalysis(r.Analysis)
@@ -41,7 +41,7 @@ func buildAnalysisItems(rows []db.ListUserJobAnalysesRow, cvUploadedAt *time.Tim
 			OverallScore: analysis.OverallScore,
 			Verdict:      analysis.Verdict,
 			AnalysedAt:   r.CreatedAt.Time,
-			Stale:        !stampsMatch(r.Model, r.CvUploadedAt, r.JobContentHash, cvUploadedAt, r.ContentHash, model),
+			Stale:        !stampsMatch(r.Model, r.CvUploadedAt, r.JobContentHash, r.Language, cvUploadedAt, r.ContentHash, model, language),
 		})
 	}
 	return items
@@ -59,6 +59,6 @@ func (h *matchHandlers) ListMyAnalyses(c *fiber.Ctx) error {
 		return err
 	}
 	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
-	items := buildAnalysisItems(rows, cvUploadedAt, h.matchAnalysis.ModelID())
+	items := buildAnalysisItems(rows, cvUploadedAt, h.matchAnalysis.ModelID(), h.callerLanguage(c.Context(), userID))
 	return c.JSON(fiber.Map{"data": items, "meta": fiber.Map{"credits": h.creditsBalance(c.Context(), userID)}})
 }

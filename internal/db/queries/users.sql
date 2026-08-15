@@ -68,6 +68,15 @@ SELECT password_hash
 FROM users
 WHERE id = $1;
 
+-- name: GetUserLanguage :one
+-- The account's preferred interface language on its own, for a caller that needs
+-- nothing else about the user — the assistant's turn loop and the fit-analysis
+-- chain both build a language directive from just this column. Never NULL (NOT
+-- NULL DEFAULT 'en'), so every account answers.
+SELECT language
+FROM users
+WHERE id = $1;
+
 -- name: GetUserTokenVersion :one
 -- The account's current session generation, read on every authenticated request to
 -- decide whether a correctly-signed token was revoked. One primary-key lookup; this

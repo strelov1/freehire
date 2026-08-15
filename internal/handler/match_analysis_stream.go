@@ -68,6 +68,11 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// it after the headers are out would stall a stream the client is already reading.
 	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
 
+	// Captured up front, same as cvUploadedAt above: the cache write happens after the
+	// stream's own goroutine outlives this request, so the language it stamps must be
+	// the one the chain actually ran under, not whatever a profile edit changes it to
+	// mid-stream.
+	language := h.callerLanguage(c.Context(), userID)
 	input := matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
@@ -81,6 +86,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		JobCountries:        job.Countries,
 		LocationPreferences: string(profile.LocationPreferences),
 		Blockers:            blockers,
+		Language:            language,
 	}
 
 	sseHeaders(c)
@@ -140,7 +146,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
 			return
 		}
-		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, language, analysis)
 		if isNew {
 			h.debitMatch(ctx, userID, job.ID)
 		}

@@ -95,7 +95,7 @@ func TestPromptOnlyNamesToolsThePresetHas(t *testing.T) {
 		// is no preset's tool is an argument or a filter value, not a broken promise.
 		everywhere := allRegisteredToolNames(t)
 
-		for _, m := range toolNameInPrompt.FindAllStringSubmatch(assistant.SystemPrompt(sess.Preset), -1) {
+		for _, m := range toolNameInPrompt.FindAllStringSubmatch(assistant.SystemPrompt(sess.Preset, "en"), -1) {
 			name := m[1]
 			if slices.Contains(everywhere, name) && !slices.Contains(registered, name) {
 				t.Errorf("the %q prompt tells the model to call %q, which that preset does not register",

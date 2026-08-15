@@ -49,6 +49,19 @@ built from the same services the HTTP handlers use.
   change the bytes the model saw.
 - **Ownership is a `WHERE user_id = $1`.** A session the caller does not own is
   reported as missing, never as forbidden.
+- **Every system prompt carries a LANGUAGE directive** (`SystemPrompt(preset, language)`,
+  `prompt.go`), naming the candidate's saved profile language (freehire#1837) rather than
+  guessing from whatever language they type in this message or defaulting to English. It
+  governs the assistant's own conversational words only. The tailor preset's directive
+  carves out the one exception: a `cv_edit` bullet follows the VACANCY's language instead
+  (the honest wall's own instruction to reframe evidence "in the vacancy's language"), since
+  a CV is written for the employer reading it, not for the candidate reading the chat beside
+  it. Voice mode (`assistant_interview_voice.go`) is outside `SystemPrompt` — its Realtime
+  `instructions` are a one-shot rendering, so it appends its own short directive via the same
+  `LanguageName` map. `internal/matchanalysis` has an equivalent directive of its own
+  (`freeTextLanguageDirective`) for the fit-analysis chain's free-text commentary, which
+  follows the SAME rule (profile language, not the vacancy's) since it is the candidate's own
+  reading of their fit, not CV content.
 
 ## How it works
 

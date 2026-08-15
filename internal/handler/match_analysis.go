@@ -88,6 +88,19 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/tracking/analyses", mw.key, h.ListMyAnalyses)
 }
 
+// callerLanguage reads the caller's preferred interface language for the fit-analysis
+// prompt chain (see matchanalysis.Input.Language) and for comparing against a cached
+// row's stamp. Best-effort: a lookup failure falls back to "en" rather than failing the
+// request.
+func (h *matchHandlers) callerLanguage(ctx context.Context, userID int64) string {
+	lang, err := h.queries.GetUserLanguage(ctx, userID)
+	if err != nil {
+		log.Printf("matchanalysis: language for user %d: %v", userID, err)
+		return "en"
+	}
+	return lang
+}
+
 // creditsError writes the 402 Payment Required body when a metered action can't be
 // afforded: a message plus the caller's remaining points and the date the monthly grant
 // resets, so the SPA can render an out-of-credits state.
@@ -154,7 +167,7 @@ func (h *matchHandlers) GetMatchAnalysis(c *fiber.Ctx) error {
 	// apply it to the cached analysis on read — the cap is never stored, so a dictionary
 	// change takes effect without marking the cache stale.
 	h.capServedAnalysis(c.Context(), userID, job, analysis)
-	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, h.matchAnalysis.ModelID())
+	stale := !stampsFresh(row, cvUploadedAt, job.ContentHash, h.matchAnalysis.ModelID(), h.callerLanguage(c.Context(), userID))
 	return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true, Stale: stale, Analysis: analysis, Credits: bal}})
 }
 
@@ -178,7 +191,9 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// The upload time above doubles as the cache stamp, captured up front so the cache
 	// is stamped with the CV that was actually analyzed even if the user re-uploads
 	// mid-analysis (the three-stage chain takes seconds); re-reading it afterwards would
-	// risk stamping a newer CV's time on an older CV's analysis.
+	// risk stamping a newer CV's time on an older CV's analysis. language is captured the
+	// same way, for the same reason.
+	language := h.callerLanguage(c.Context(), userID)
 	// Gate on points before touching the LLM: a new job needs at least the match cost, a
 	// recompute of an already-analyzed job is always free. Only new analyses are charged,
 	// and only after they persist (below), so a legacy cached job re-runs for free.
@@ -201,7 +216,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 	// (below) and the same list caps the served score (applyBlockers, after caching).
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	analysis, err := h.runAnalysis(c, userID, job, profile, blockers)
+	analysis, err := h.runAnalysis(c, userID, job, profile, blockers, language)
 	if err != nil {
 		// Best-effort: log (never the CV/job text) and serve no analysis.
 		log.Printf("matchanalysis: analyze failed for user %d job %d: %v", userID, job.ID, err)
@@ -211,7 +226,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 		// LLM unconfigured — nothing to cache.
 		return c.JSON(fiber.Map{"data": matchAnalysisResponse{HasCV: true}})
 	}
-	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
+	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, language, analysis)
 	if isNew {
 		h.debitMatch(c.Context(), userID, job.ID)
 	}
@@ -226,7 +241,7 @@ func (h *matchHandlers) PostMatchAnalysis(c *fiber.Ctx) error {
 // context — the autopilot's post-run refresh, which runs from the SSE writer's detached
 // goroutine after the fiber ctx is gone — can build the Input once, while c is still
 // valid, and carry only the plain value into that goroutine.
-func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker) matchanalysis.Input {
+func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int64, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) matchanalysis.Input {
 	return matchanalysis.Input{
 		JobTitle:            job.Title,
 		JobDescription:      job.Description,
@@ -240,6 +255,7 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 		JobCountries:        job.Countries,
 		LocationPreferences: string(profile.LocationPreferences),
 		Blockers:            blockers,
+		Language:            language,
 	}
 }
 
@@ -248,9 +264,9 @@ func (h *matchHandlers) buildAnalysisInput(c *fiber.Ctx, job db.Job, userID int6
 // autopilot's inline precondition (ensureCachedAnalysis) — both assemble the exact same
 // input the exact same way; only what happens to the RESULT (credits, response shape,
 // whether the caller even asked for one) differs between them.
-func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker) (*matchanalysis.Analysis, error) {
+func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, profile userprofile.Profile, blockers []hardconstraint.Blocker, language string) (*matchanalysis.Analysis, error) {
 	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
-	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers))
+	return analyzer.Analyze(c.Context(), h.buildAnalysisInput(c, job, userID, profile, blockers, language))
 }
 
 // ensureCachedAnalysis computes and caches the fit analysis for (user, job) when none is cached
@@ -272,7 +288,8 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 	}
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
-	analysis, err := h.runAnalysis(c, userID, job, profile, blockers)
+	language := h.callerLanguage(c.Context(), userID)
+	analysis, err := h.runAnalysis(c, userID, job, profile, blockers, language)
 	if err != nil {
 		log.Printf("matchanalysis: inline compute before an autopilot run, user %d job %d: %v", userID, job.ID, err)
 		return
@@ -281,7 +298,7 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 		return // LLM unconfigured — nothing to cache
 	}
 	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
-	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, analysis)
+	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, language, analysis)
 }
 
 // prepareAutopilotRun ensures the fit analysis is cached before an autopilot run starts —
@@ -304,8 +321,9 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
+	language := h.callerLanguage(c.Context(), userID)
 	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
-	input := h.buildAnalysisInput(c, job, userID, profile, blockers)
+	input := h.buildAnalysisInput(c, job, userID, profile, blockers, language)
 	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
 
 	return func(ctx context.Context) {
@@ -317,7 +335,7 @@ func (h *matchHandlers) prepareAutopilotRun(c *fiber.Ctx, userID int64, job db.J
 		if analysis == nil {
 			return // LLM unconfigured — nothing to cache
 		}
-		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, analysis)
+		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, language, analysis)
 	}
 }
 
@@ -358,10 +376,10 @@ func (h *matchHandlers) debitMatch(ctx context.Context, userID, jobID int64) {
 }
 
 // cacheAnalysis upserts the analysis stamped with the analyzed CV's upload time, the job
-// content hash, and the model that produced it. It takes a plain context (not the fiber
-// ctx) so the SSE stream can cache after the request handler has returned. Best-effort:
-// a cache failure is logged, not surfaced.
-func (h *matchHandlers) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, analysis *matchanalysis.Analysis) {
+// content hash, the language it was written in, and the model that produced it. It takes
+// a plain context (not the fiber ctx) so the SSE stream can cache after the request
+// handler has returned. Best-effort: a cache failure is logged, not surfaced.
+func (h *matchHandlers) cacheAnalysis(ctx context.Context, userID int64, job db.Job, cvUploadedAt *time.Time, language string, analysis *matchanalysis.Analysis) {
 	blob, err := json.Marshal(analysis)
 	if err != nil {
 		return
@@ -373,6 +391,7 @@ func (h *matchHandlers) cacheAnalysis(ctx context.Context, userID int64, job db.
 		Model:          h.matchAnalysis.ModelID(),
 		CvUploadedAt:   pgconv.Timestamptz(cvUploadedAt),
 		JobContentHash: job.ContentHash,
+		Language:       language,
 	}); err != nil {
 		log.Printf("matchanalysis: cache analysis for user %d job %d: %v", userID, job.ID, err)
 	}
@@ -464,20 +483,24 @@ func (h *matchHandlers) companyInfo(c *fiber.Ctx, companySlug string) string {
 }
 
 // stampsFresh reports whether a cached row still matches the live CV upload time, job
-// content hash, and current model. A model change (LLM_MODEL upgrade) invalidates the
-// cache so the improved model re-analyzes — the analogue of the enrichment version and
-// semantic-embedder staleness guards. Absent-on-both-sides stamps count as unchanged
-// (a non-board job with no content_hash is never re-crawled, so its text is stable and
-// a NULL stamp must not force an endless recompute); a stamp appearing on one side only
-// is a change.
-func stampsFresh(row db.GetUserJobAnalysisRow, cvUploadedAt *time.Time, jobHash pgtype.Text, model string) bool {
-	return stampsMatch(row.Model, row.CvUploadedAt, row.JobContentHash, cvUploadedAt, jobHash, model)
+// content hash, profile language, and current model. A model change (LLM_MODEL upgrade)
+// invalidates the cache so the improved model re-analyzes — the analogue of the
+// enrichment version and semantic-embedder staleness guards. A language change
+// (freehire#1837) invalidates it the same way, so switching the profile language re-runs
+// the free-text commentary rather than leaving it in the old language until the CV or
+// job text happens to change too. Absent-on-both-sides hash stamps count as unchanged
+// (a non-board job with no content_hash is never re-crawled, so its text is stable and a
+// NULL stamp must not force an endless recompute); a stamp appearing on one side only is
+// a change.
+func stampsFresh(row db.GetUserJobAnalysisRow, cvUploadedAt *time.Time, jobHash pgtype.Text, model, language string) bool {
+	return stampsMatch(row.Model, row.CvUploadedAt, row.JobContentHash, row.Language, cvUploadedAt, jobHash, model, language)
 }
 
 // stampsMatch is stampsFresh over the raw stored stamps, so callers holding a different
 // row type (e.g. the analysed-jobs list) can reuse the same freshness rule.
-func stampsMatch(storedModel string, storedCV pgtype.Timestamptz, storedHash pgtype.Text, liveCV *time.Time, liveHash pgtype.Text, liveModel string) bool {
+func stampsMatch(storedModel string, storedCV pgtype.Timestamptz, storedHash pgtype.Text, storedLanguage string, liveCV *time.Time, liveHash pgtype.Text, liveModel, liveLanguage string) bool {
 	return storedModel == liveModel &&
+		storedLanguage == liveLanguage &&
 		sameTime(storedCV, liveCV) &&
 		sameText(storedHash, liveHash)
 }

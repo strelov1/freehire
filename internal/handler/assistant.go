@@ -536,6 +536,19 @@ func (h *assistantHandlers) streamContinue(c *fiber.Ctx, sess assistant.Session,
 	})
 }
 
+// userLanguage reads the caller's preferred interface language for the turn's system
+// prompt (see assistant.SystemPrompt). Best-effort: a lookup failure falls back to
+// "en" rather than failing the turn — the language directive is worth getting right,
+// not worth a 500 over.
+func (h *assistantHandlers) userLanguage(ctx context.Context, userID int64) string {
+	lang, err := h.queries.GetUserLanguage(ctx, userID)
+	if err != nil {
+		log.Printf("assistant: language for user %d: %v", userID, err)
+		return "en"
+	}
+	return lang
+}
+
 // streamSSE owns the SSE headers, turn claim/queue, keepalive and writer. start is the
 // one difference between a fresh message and a retry.
 func (h *assistantHandlers) streamSSE(
@@ -547,7 +560,7 @@ func (h *assistantHandlers) streamSSE(
 	// the history can group them and "undo the run" is undoing a batch — which is what
 	// retires the single pre-run snapshot and the edge two concurrent runs used to create.
 	registry := h.registry(sess, uuid.New())
-	system := assistant.SystemPrompt(sess.Preset)
+	system := assistant.SystemPrompt(sess.Preset, h.userLanguage(c.Context(), sess.UserID))
 
 	turnRunner := h.boundRunner(c.Context(), sess)
 

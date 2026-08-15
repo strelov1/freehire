@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/assistant"
 	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/llm"
@@ -87,6 +88,15 @@ type Input struct {
 	// (accepted work modes, remote reach, base, relocation); empty when unset.
 	LocationPreferences string
 
+	// Language is the caller's account language (accounts.User.Language, e.g. "en"/"ru"),
+	// naming the language every free-text field in the analysis — dimension comments,
+	// strengths, gaps, the recommendation, hidden-signal insights — is written in. It is
+	// the candidate's own reading of their fit, not part of the CV, so it follows their
+	// profile language rather than the vacancy's (freehire#1837; contrast the tailoring
+	// flow, whose CV bullets follow the vacancy's language instead). Empty falls back to
+	// English, same as assistant.LanguageName.
+	Language string
+
 	// Blockers are the deterministic hard-constraint results (hardconstraint.Evaluate).
 	// The unmet ones are fed into the prompt as established constraints so the model
 	// respects rather than re-derives them; the same list caps the served overall_score.
@@ -152,7 +162,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// Stage 1 — Extract & Match (the ATS lens).
 	emit(Event{Kind: EventStageStart, Stage: 1, Label: stageLabels[1]})
 	var s1 stage1Out
-	if err := a.streamStage(ctx, 1, stage1SystemPrompt(), stage1UserPrompt(in, candidate), emit, &s1); err != nil {
+	if err := a.streamStage(ctx, 1, stage1SystemPrompt(in.Language), stage1UserPrompt(in, candidate), emit, &s1); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 1: %w", err)
 	}
 	reqs := sanitizeRequirements(s1.Requirements)
@@ -163,7 +173,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// Stage 2 — Recruiter verdict (the human lens).
 	emit(Event{Kind: EventStageStart, Stage: 2, Label: stageLabels[2]})
 	var verdict recruiterVerdict
-	if err := a.streamStage(ctx, 2, stage2SystemPrompt(), stage2UserPrompt(in, reqs, candidate), emit, &verdict); err != nil {
+	if err := a.streamStage(ctx, 2, stage2SystemPrompt(in.Language), stage2UserPrompt(in, reqs, candidate), emit, &verdict); err != nil {
 		return nil, fmt.Errorf("matchanalysis: stage 2: %w", err)
 	}
 	sanitizeVerdict(&verdict)
@@ -178,7 +188,7 @@ func (a *Analyzer) AnalyzeStream(ctx context.Context, in Input, emit func(Event)
 	// zeros. Best-effort: on a parse/transport failure keep the un-audited verdict.
 	emit(Event{Kind: EventStageStart, Stage: 3, Label: stageLabels[3]})
 	audited := verdict
-	if err := a.streamStage(ctx, 3, stage3SystemPrompt(), stage3UserPrompt(in, reqs, verdict, candidate), emit, &audited); err != nil {
+	if err := a.streamStage(ctx, 3, stage3SystemPrompt(in.Language), stage3UserPrompt(in, reqs, verdict, candidate), emit, &audited); err != nil {
 		log.Printf("matchanalysis: stage 3 audit failed, serving un-audited verdict: %v", err)
 	} else {
 		// An explicit JSON null ("strengths": null) unmarshals to a nil slice, overriding
@@ -254,8 +264,19 @@ func (a *Analyzer) streamStage(ctx context.Context, stage int, system, user stri
 	return parseErr
 }
 
+// freeTextLanguageDirective tells the model which language to write every free-text
+// field of a stage's output in — the requirement/evidence text, the hidden-signal
+// insights, the dimension comments, the strengths/gaps and the recommendation. These
+// are the candidate's own reading of their fit against a vacancy, not text that goes
+// onto a CV, so they follow the caller's profile language rather than the vacancy's
+// (freehire#1837; contrast internal/assistant's tailoring prompt, whose cv_edit
+// bullets follow the vacancy's language instead).
+func freeTextLanguageDirective(language string) string {
+	return "\n\nWrite every free-text value in " + assistant.LanguageName(language) + ", regardless of what language the job posting or the candidate's CV is in.\n"
+}
+
 // stage1SystemPrompt pins the ATS extract-and-match contract.
-func stage1SystemPrompt() string {
+func stage1SystemPrompt(language string) string {
 	var b strings.Builder
 	b.WriteString("You are an ATS (applicant tracking system) parser. Return ONLY a JSON object.\n\n")
 	b.WriteString("From the job posting, extract the explicit requirements (skills, tools, experience, ")
@@ -284,11 +305,12 @@ func stage1SystemPrompt() string {
 	b.WriteString("spec). Base every signal on wording actually present in the posting; if the posting is ")
 	b.WriteString("short or generic and carries no distinctive wording, return an empty array — never invent ")
 	b.WriteString("a signal to fill it.\n")
+	b.WriteString(freeTextLanguageDirective(language))
 	return b.String()
 }
 
 // stage2SystemPrompt pins the recruiter six-dimension scoring contract.
-func stage2SystemPrompt() string {
+func stage2SystemPrompt(language string) string {
 	var b strings.Builder
 	b.WriteString("You are a senior technical recruiter judging how well a candidate fits ONE role. ")
 	b.WriteString("Return ONLY a JSON object. Base every judgement on the CV and the requirement match ")
@@ -315,11 +337,12 @@ func stage2SystemPrompt() string {
 	b.WriteString("\"recommendation\" string: two or three short prose paragraphs of hiring judgement ")
 	b.WriteString("(no headings, no lists). Do not recap per-requirement statuses or evidence strengths ")
 	b.WriteString("— those are already on the page. Do NOT return an overall score — it is computed separately.\n")
+	b.WriteString(freeTextLanguageDirective(language))
 	return b.String()
 }
 
 // stage3SystemPrompt pins the adversarial-audit contract (same output shape as Stage 2).
-func stage3SystemPrompt() string {
+func stage3SystemPrompt(language string) string {
 	var b strings.Builder
 	b.WriteString("You are a skeptical hiring manager auditing a recruiter's fit verdict. ")
 	b.WriteString("Return ONLY a JSON object in the SAME shape as the verdict you are given.\n\n")
@@ -336,6 +359,7 @@ func stage3SystemPrompt() string {
 	b.WriteString("The recommendation remains two or three short prose paragraphs of hiring judgement ")
 	b.WriteString("(no headings, no lists); do not recap per-requirement statuses or evidence strengths. ")
 	b.WriteString("Do NOT fabricate anything.\n")
+	b.WriteString(freeTextLanguageDirective(language))
 	return b.String()
 }
 
