@@ -16,16 +16,62 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 
+	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/onboarding"
 	"github.com/strelov1/freehire/internal/worker"
 )
 
+// The -to flag sends one mail to one address and exits, touching neither the
+// candidate queries nor the ledger. It exists because the copy is the part of this
+// feature most likely to change, and there is otherwise no way to see a change land
+// in a real inbox: the previews render the markup, but they cannot show what a
+// client does with it, and the sequence itself only mails people who qualify.
+//
+//	./onboarding -to you@example.com            # the welcome mail
+//	./onboarding -to you@example.com -step open_source
+var (
+	sendTo   = flag.String("to", "", "send one mail to this address and exit (no database, no ledger)")
+	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | no_alert | open_source")
+)
+
 func main() {
+	flag.Parse()
+	if *sendTo != "" {
+		worker.Main(sendOne)
+		return
+	}
 	worker.Main(run)
+}
+
+// sendOne delivers a single mail for inspection. It shares the transport and the
+// refusal-to-run checks with the real pass, so what lands in the inbox is what the
+// sequence would have sent — a preview built any other way would be a different mail.
+func sendOne() int {
+	ctx := context.Background()
+	cfg := config.Load()
+	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" || cfg.OnboardingReplyTo == "" {
+		log.Print("onboarding: AWS_REGION / NOTIFY_EMAIL_FROM / ONBOARDING_REPLY_TO must all be set")
+		return 1
+	}
+
+	ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion)
+	if err != nil {
+		log.Printf("onboarding: ses: %v", err)
+		return 1
+	}
+
+	mailer := onboarding.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin)
+	if err := mailer.Send(ctx, onboarding.Step(*sendStep), *sendTo); err != nil {
+		log.Printf("onboarding: %v", err)
+		return 1
+	}
+	log.Printf("onboarding: sent %s to %s", *sendStep, *sendTo)
+	return 0
 }
 
 func run() int {
