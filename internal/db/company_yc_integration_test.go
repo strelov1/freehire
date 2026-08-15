@@ -147,3 +147,82 @@ func TestRefreshCompanyFacetsLeavesYCFacets(t *testing.T) {
 		t.Errorf("yc facets disturbed by recompute: %v/%v/%v/%v", c.YcBatch, c.YcStatus, c.YcStage, c.YcFlags)
 	}
 }
+
+// The YC importer is no longer the only writer of tagline/company_info/industries,
+// so it must fill gaps rather than replace. Before this test the upsert wrote all
+// three by replacement, which erased whatever another source had stored on the
+// importer's next scheduled run.
+func TestUpsertYCCompanyPreservesValuesFromOtherSources(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, tagline, company_info, industries)
+		 VALUES ('acme', 'Acme',
+		         'Tagline written by another source',
+		         '{"website":"https://acme.example","employee_range":"51-200"}'::jsonb,
+		         ARRAY['logistics'])`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	p := ycParams("acme", "Acme", "Winter 2020", "Active")
+	p.Industries = []string{"fintech"}
+	p.Tagline = pgtype.Text{String: "Tagline from the YC directory", Valid: true}
+	p.CompanyInfo = json.RawMessage(`{"website":"https://from-yc.example","yc_url":"https://ycombinator.com/acme"}`)
+	if err := q.UpsertYCCompany(ctx, p); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	c, err := q.GetCompany(ctx, "acme")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	if c.Tagline.String != "Tagline written by another source" {
+		t.Errorf("tagline = %q, want the stored one preserved", c.Tagline.String)
+	}
+	if got := companyInfoString(t, c.CompanyInfo, "website"); got != "https://acme.example" {
+		t.Errorf("company_info.website = %q, want the stored one preserved", got)
+	}
+	if got := companyInfoString(t, c.CompanyInfo, "employee_range"); got != "51-200" {
+		t.Errorf("company_info.employee_range = %q, want it left alone", got)
+	}
+	if got := companyInfoString(t, c.CompanyInfo, "yc_url"); got == "" {
+		t.Error("company_info.yc_url missing: the YC keys should still be merged in")
+	}
+	if len(c.Industries) != 2 || c.Industries[0] != "fintech" || c.Industries[1] != "logistics" {
+		t.Errorf("industries = %v, want the sorted union [fintech logistics]", c.Industries)
+	}
+}
+
+// An empty stored tagline is absent, not a value worth protecting.
+func TestUpsertYCCompanyFillsAnEmptyTagline(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE companies RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name, tagline) VALUES ('blank', 'Blank', '')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	p := ycParams("blank", "Blank", "Winter 2020", "Active")
+	p.Tagline = pgtype.Text{String: "From the directory", Valid: true}
+	if err := q.UpsertYCCompany(ctx, p); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	c, err := q.GetCompany(ctx, "blank")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if c.Tagline.String != "From the directory" {
+		t.Errorf("tagline = %q, want the directory value to fill the blank", c.Tagline.String)
+	}
+}

@@ -239,10 +239,14 @@ SELECT slug FROM companies;
 -- name: UpsertYCCompany :exec
 -- Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 -- reference row (is_reference = true) with no jobs; an existing slug (job-backed or a
--- prior reference) has its company-info columns plus the curated yc_batch/yc_status
--- facets refreshed — name, job_count, collections, is_reference, and the job-derived
--- facet arrays (regions/remote_regions/countries/domains/company_types/company_sizes)
--- are left untouched. Idempotent: re-running the same entry rewrites the same values.
+-- prior reference) has the YC-owned columns refreshed — name, job_count, collections,
+-- is_reference, and the job-derived facet arrays (regions/remote_regions/countries/
+-- domains/company_types/company_sizes) are left untouched. Idempotent: re-running
+-- the same entry rewrites the same values.
+--
+-- Three columns are NOT YC-owned, because this is no longer their only writer, and
+-- replacing them would erase another source's work on the importer's next run:
+-- tagline fills only a blank, company_info merges key-wise, and industries union.
 INSERT INTO companies (
     slug, name, industries, subindustry, year_founded, employee_count, hq_country,
     tagline, company_info, yc_batch, yc_status, yc_stage, yc_flags,
@@ -254,13 +258,25 @@ INSERT INTO companies (
     sqlc.arg(yc_stage), sqlc.arg(yc_flags), true, now()
 )
 ON CONFLICT (slug) DO UPDATE SET
-    industries      = EXCLUDED.industries,
+    -- Union, sorted and de-duplicated, so two sources accumulate instead of
+    -- overwriting. Sorted because the stored order is compared for equality by the
+    -- normalization worker's no-op guard.
+    industries      = ARRAY(
+        SELECT DISTINCT x
+        FROM unnest(companies.industries || EXCLUDED.industries) AS x
+        WHERE x <> ''
+        ORDER BY x
+    ),
     subindustry     = EXCLUDED.subindustry,
     year_founded    = EXCLUDED.year_founded,
     employee_count  = EXCLUDED.employee_count,
     hq_country      = EXCLUDED.hq_country,
-    tagline         = EXCLUDED.tagline,
-    company_info    = EXCLUDED.company_info,
+    -- NULLIF folds '' into NULL so an empty string counts as absent, not as a value
+    -- worth protecting.
+    tagline         = COALESCE(NULLIF(companies.tagline, ''), EXCLUDED.tagline),
+    -- Operand order is load-bearing: a || b keeps b on key collision, so the YC keys
+    -- fill gaps while anything already stored wins. Reversed, this is the bug above.
+    company_info    = EXCLUDED.company_info || companies.company_info,
     yc_batch        = EXCLUDED.yc_batch,
     yc_status       = EXCLUDED.yc_status,
     yc_stage        = EXCLUDED.yc_stage,

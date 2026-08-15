@@ -2,9 +2,14 @@
 // yc-oss directory (yc-oss.github.io/api/companies/all.json — the same source the
 // yc collection tag uses, but here we read the full record). Each entry is mapped
 // (internal/ycdir) and upserted by normalized-name slug: an existing company has
-// its company-info columns plus the curated yc_batch/yc_status facets refreshed,
-// and an unmatched entry is inserted as a reference row (is_reference=true) so we
-// hold the full YC directory. Idempotent.
+// its YC-owned columns and the curated yc_batch/yc_status facets refreshed, and an
+// unmatched entry is inserted as a reference row (is_reference=true) so we hold the
+// full YC directory. Idempotent.
+//
+// Three columns this worker writes are shared with other sources and are therefore
+// merged, not replaced — tagline fills only a blank, company_info merges key-wise,
+// and industries union. Industries also pass through internal/industrytag, so the
+// directory cannot add a second spelling of an industry we already name.
 //
 //	import-yc            # needs DATABASE_URL; YC_DATASET_URL overrides the source
 package main
@@ -23,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/industrytag"
 	"github.com/strelov1/freehire/internal/worker"
 	"github.com/strelov1/freehire/internal/ycdir"
 )
@@ -190,9 +196,12 @@ func recordToParams(r ycdir.Record) db.UpsertYCCompanyParams {
 		}
 	}
 	return db.UpsertYCCompanyParams{
-		Slug:          r.Slug,
-		Name:          r.Name,
-		Industries:    nonNil(r.Industries),
+		Slug: r.Slug,
+		Name: r.Name,
+		// Through the dictionary, so the directory cannot introduce a second
+		// spelling of an industry the vocabulary already names. Canonicalize
+		// returns a non-nil slice, so nonNil is not needed here.
+		Industries:    industrytag.Canonicalize(r.Industries),
 		Subindustry:   text(r.Subindustry),
 		YearFounded:   int4(r.YearFounded),
 		EmployeeCount: int4(r.EmployeeCount),

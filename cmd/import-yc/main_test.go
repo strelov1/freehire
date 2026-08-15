@@ -10,6 +10,23 @@ import (
 	"github.com/strelov1/freehire/internal/ycdir"
 )
 
+// The directory's own industry words must not reach the column: they are a second
+// vocabulary, and mixing two is the defect internal/industrytag exists to end.
+func TestRecordToParamsCanonicalizesIndustries(t *testing.T) {
+	got := recordToParams(ycdir.Record{
+		Slug: "acme",
+		Name: "Acme",
+		// "Artificial Intelligence" merges into "ai", "B2B" is not an industry and
+		// is dropped, and the two spellings of fintech collapse to one value.
+		Industries: []string{"Artificial Intelligence", "B2B", "FinTech", "Fintech"},
+	})
+
+	want := []string{"ai", "fintech"}
+	if !reflect.DeepEqual(got.Industries, want) {
+		t.Errorf("Industries = %q, want %q", got.Industries, want)
+	}
+}
+
 type fakeStore struct {
 	exists    map[string]bool
 	jobCounts map[string]int32
