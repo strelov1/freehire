@@ -24,8 +24,13 @@ func TestEmailNotifier_RendersSubjectAndOnPlatformLink(t *testing.T) {
 	if err := n.Send(context.Background(), "email", "u@x.com", msg); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	if sender.to != "u@x.com" || sender.from != "jobs@freehire.me" {
-		t.Errorf("envelope from=%q to=%q", sender.from, sender.to)
+	// From carries a display name over the configured address, so a message list
+	// shows "freehire" rather than the address's local part.
+	if sender.to != "u@x.com" {
+		t.Errorf("to = %q, want the recipient", sender.to)
+	}
+	if !strings.Contains(sender.from, "jobs@freehire.me") || !strings.Contains(sender.from, "freehire") {
+		t.Errorf("from = %q, want the configured address behind a readable name", sender.from)
 	}
 	if !strings.Contains(sender.subject, "Go Dev") || !strings.Contains(sender.subject, "Acme") {
 		t.Errorf("subject = %q, want job + company", sender.subject)

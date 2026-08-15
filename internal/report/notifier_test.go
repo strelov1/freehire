@@ -54,8 +54,12 @@ func TestNotice_ResolvedWithTheJobClosed(t *testing.T) {
 	d.Note = "You were right, we took it down"
 	got := notice(t, d)
 
-	if got.to != "lina@example.test" || got.from != "hi@freehire.me" {
-		t.Errorf("envelope = %q -> %q", got.from, got.to)
+	// From carries a display name over the configured address — see senderFrom.
+	if got.to != "lina@example.test" {
+		t.Errorf("to = %q, want the reporter's address", got.to)
+	}
+	if !strings.Contains(got.from, "hi@freehire.me") || !strings.Contains(got.from, "freehire") {
+		t.Errorf("from = %q, want the configured address behind a readable name", got.from)
 	}
 	if !strings.Contains(strings.ToLower(got.subject), "removed") {
 		t.Errorf("subject = %q, want it to say the job was removed", got.subject)
