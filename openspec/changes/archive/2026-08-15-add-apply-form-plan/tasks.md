@@ -28,5 +28,5 @@
 ## 5. Verification
 
 - [x] 5.1 `npm run test` (extension), `npx svelte-check`, `npm run lint`, `npm run build` — all clean.
-- [ ] 5.2 Load the built extension and walk a real ATS application form end to end (Greenhouse or Ashby): checklist appears, walk scrolls and ticks, stop works, an unanswered item scrolls and focuses, typing on the page moves the counter.
+- [x] 5.2 Load the built extension and walk a real ATS application form end to end (Greenhouse or Ashby): checklist appears, walk scrolls and ticks, stop works, an unanswered item scrolls and focuses, typing on the page moves the counter.
 - [x] 5.3 Update `extension/AGENTS.md` — the panel's layout list and the wire contract now include the plan, the walk and the three new messages.
