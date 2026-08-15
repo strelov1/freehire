@@ -1,7 +1,5 @@
 package assistant
 
-import "strings"
-
 // NormalizePreset maps an unrecognised preset onto the general chat one, because
 // a session with no preset should answer unguided rather than fail loudly.
 //
@@ -84,14 +82,12 @@ func LanguageName(code string) string {
 // own, is what keeps a candidate reading freehire in Russian from getting
 // Russian bullets on an English-language CV.
 func languageDirective(preset, language string) string {
-	var b strings.Builder
-	b.WriteString("\n\nLANGUAGE\n\nReply to the candidate in ")
-	b.WriteString(LanguageName(language))
-	b.WriteString(", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in.")
+	directive := "\n\nLANGUAGE\n\nReply to the candidate in " + LanguageName(language) +
+		", regardless of what language they write in or what language any source material (a job posting, a CV, an employer's message) is in."
 	if preset == PresetTailor {
-		b.WriteString(" This governs your own words to the candidate only — a bullet you write onto the CV with `cv_edit` follows the vacancy's own language instead, as instructed above.")
+		directive += " This governs your own words to the candidate only — a bullet you write onto the CV with `cv_edit` follows the vacancy's own language instead, as instructed above."
 	}
-	return b.String()
+	return directive
 }
 
 // chatPrompt is the general job-search assistant. It carries the playbook the CLI
