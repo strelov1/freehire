@@ -162,30 +162,39 @@ func ExperienceYearsMin(description string) *int {
 }
 
 // English-level detection. Precision-first like the matchers above: it resolves an
-// explicit CEFR code or a well-known level phrase (EN + RU, since the Telegram
-// sources are Russian-heavy) and emits "" when nothing is stated. Every signal must
-// sit near an English keyword, so a bare "B2"/"advanced"/"native" is not misread out
-// of context ("B2B SaaS", "advanced degree", "native macOS app"). Values are members
-// of vocab.EnglishLevelValues.
+// explicit CEFR code or a well-known level phrase (EN + RU + PL — the Telegram
+// sources are Russian-heavy, and Polish boards like NoFluffJobs/JustJoinIT state the
+// requirement in Polish, e.g. "Angielski na poziomie min. B2+") and emits "" when
+// nothing is stated. Every signal must sit near an English keyword, so a bare
+// "B2"/"advanced"/"native" is not misread out of context ("B2B SaaS", "advanced
+// degree", "native macOS app"). Values are members of vocab.EnglishLevelValues.
 var (
 	// reEnglishKw gates the whole parse and anchors every phrase: english_level is
 	// about English, so a description that never names it yields nothing.
-	reEnglishKw = regexp.MustCompile(`english|английск`)
+	reEnglishKw = regexp.MustCompile(`english|английск|angielsk`)
 	// A CEFR code counts only adjacent (either order) to an English keyword.
 	reCEFRForward = regexp.MustCompile(`(?:english|английск\w*)[^.\n]{0,20}\b([abc][12])\b`)
 	reCEFRBack    = regexp.MustCompile(`\b([abc][12])\b[^.\n]{0,20}(?:english|английск\w*)`)
+	// Polish CEFR proximity tolerates one interior "." that the EN/RU gap above
+	// disallows: Polish postings near-universally phrase the requirement as "na
+	// poziomie min. B2" — the abbreviation dot in "min." would otherwise break the
+	// EN/RU-style no-period gap and hide an otherwise unambiguous, adjacent CEFR code.
+	reCEFRForwardPl = regexp.MustCompile(`angielsk\w*[^.\n]{0,20}\.?[^.\n]{0,10}\b([abc][12])\b`)
+	reCEFRBackPl    = regexp.MustCompile(`\b([abc][12])\b[^.\n]{0,10}\.?[^.\n]{0,20}angielsk\w*`)
 
 	// Level phrases (checked for English proximity via near). The intermediate family
 	// carries its prefix so "upper-intermediate"→b2 and "pre-intermediate"→a2 resolve
-	// without a lookbehind (RE2 has none); the Russian "средн" family mirrors it.
+	// without a lookbehind (RE2 has none); the Russian "средн" and Polish "średni"
+	// families mirror it via their own "above this level" prefix.
 	reNative     = regexp.MustCompile(`\bnative\b|родн\w*|носител\w*`)
-	reFluentAdv  = regexp.MustCompile(`fluen\w*|\badvanced\b|свободн\w*|продвинут\w*`)
+	reFluentAdv  = regexp.MustCompile(`fluen\w*|\badvanced\b|свободн\w*|продвинут\w*|biegł\w*|zaawansowan\w*`)
 	reInterFam   = regexp.MustCompile(`\b(upper[\s-]?|pre[\s-]?)?intermediate\b`)
 	reRuMidFam   = regexp.MustCompile(`(выше\s+)?средн\w*`)
-	reConvers    = regexp.MustCompile(`\bconversational\b|разговорн\w*`)
-	reElementary = regexp.MustCompile(`\belementary\b|\bbeginner\b|начальн\w*`)
-	reBasic      = regexp.MustCompile(`\bbasic\b|базов\w*`)
-	reNoEnglish  = regexp.MustCompile(`no english|english (?:is )?not required|without english|без английск\w*`)
+	rePlMidFam   = regexp.MustCompile(`(wyższy\s+)?średni\w*`)
+	reConvers    = regexp.MustCompile(`\bconversational\b|разговорн\w*|komunikatywn\w*`)
+	reElementary = regexp.MustCompile(`\belementary\b|\bbeginner\b|начальн\w*|początkując\w*`)
+	reBasic      = regexp.MustCompile(`\bbasic\b|базов\w*|podstawow\w*`)
+	reNoEnglish  = regexp.MustCompile(`no english|english (?:is )?not required|without english|без английск\w*|bez angielsk\w*`)
 )
 
 // englishRank orders the vocabulary lowest→highest so the minimum named level is
@@ -229,6 +238,12 @@ func EnglishLevel(description string) string {
 	for _, m := range reCEFRBack.FindAllStringSubmatch(s, -1) {
 		levels[m[1]] = true
 	}
+	for _, m := range reCEFRForwardPl.FindAllStringSubmatch(s, -1) {
+		levels[m[1]] = true
+	}
+	for _, m := range reCEFRBackPl.FindAllStringSubmatch(s, -1) {
+		levels[m[1]] = true
+	}
 	if near(s, kws, reNative) {
 		levels["native"] = true
 	}
@@ -264,6 +279,16 @@ func EnglishLevel(description string) string {
 			continue
 		}
 		if m[2] >= 0 { // "выше средн..." — above intermediate
+			levels["b2"] = true
+		} else {
+			levels["b1"] = true
+		}
+	}
+	for _, m := range rePlMidFam.FindAllStringSubmatchIndex(s, -1) {
+		if !spanNear(s, kws, m[0], m[1]) {
+			continue
+		}
+		if m[2] >= 0 { // "wyższy średni..." — upper-intermediate
 			levels["b2"] = true
 		} else {
 			levels["b1"] = true

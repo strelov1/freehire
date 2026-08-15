@@ -152,6 +152,17 @@ func TestEnglishLevel(t *testing.T) {
 		{"russian above-average -> b2", "Английский выше среднего.", "b2"},
 		{"russian average -> b1", "Английский на среднем уровне.", "b1"},
 		{"russian basic -> a2", "Базовый английский достаточно.", "a2"},
+		// Phrase levels (PL) — Polish boards (NoFluffJobs, JustJoinIT) state English
+		// requirements in Polish; "angielski" is Polish for "English".
+		{"polish cefr b2", "Angielski na poziomie min. B2+ -> międzynarodowa współpraca", "b2"},
+		{"polish fluent -> c1", "Biegły angielski jest wymagany.", "c1"},
+		{"polish advanced -> c1", "Zaawansowana znajomość języka angielskiego.", "c1"},
+		{"polish upper-intermediate -> b2", "Wyższy średniozaawansowany angielski.", "b2"},
+		{"polish intermediate -> b1", "Średniozaawansowany angielski wystarczy.", "b1"},
+		{"polish conversational -> b1", "Komunikatywny angielski.", "b1"},
+		{"polish beginner -> a1", "Początkujący angielski jest ok.", "a1"},
+		{"polish basic -> a2", "Podstawowa znajomość angielskiego.", "a2"},
+		{"polish no english -> none", "Bez angielskiego.", "none"},
 		// Minimum-of-several and explicit none.
 		{"range takes the floor", "English from intermediate to advanced.", "b1"},
 		{"explicit no english -> none", "No English required for this role.", "none"},
