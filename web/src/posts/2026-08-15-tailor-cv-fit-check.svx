@@ -1,0 +1,25 @@
+---
+title: Tailor CV now shows your fit before it spends a credit
+date: 2026-08-15
+summary: Clicking Tailor CV first shows your skill match and any location/work-authorization gaps for that job — a free check, no AI involved, before you commit.
+type: changelog
+tags:
+  - cv
+  - tailor
+  - job-seekers
+draft: false
+---
+
+Clicking **Tailor CV** used to jump straight into the tailoring workspace. It now shows a
+quick check first: which of the job's required skills your profile already covers, which
+are missing, and whether anything about the role — location, work mode, work authorization —
+doesn't line up with your profile.
+
+None of it calls a model. It's the same deterministic match the job page already computes,
+just shown one more time as an explicit "are you sure" before you spend a credit on a role
+your own profile might already flag. If everything lines up, the check says so and gets out
+of the way. If it doesn't, you can still tailor anyway — nothing is blocked, you just see it
+first.
+
+This shows up everywhere **Tailor CV** does: the job page, your applications list, and the
+[browser extension](/extension)'s side panel.
