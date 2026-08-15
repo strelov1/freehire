@@ -27,7 +27,7 @@ state, PKCE verifier, or session cookie in Git, CI output, logs, or PR text.
 | Variable | Meaning |
 |---|---|
 | `AUTH_V2_ENABLED` | Registers `/api/v2/auth/*`; default `false`. |
-| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth`; add `ios=` and/or `android=` only when each verified-link target is live. |
+| `MOBILE_AUTH_CALLBACKS` | Comma-separated `platform=https://verified/path` allowlist. Include `web=https://<host>/my/reauth`; add `ios=https://<host>/auth/mobile-callback` and `android=` likewise once the verified-link target is live. Browser providers stay hidden from `/api/v2/auth/providers` until one of them is set, so the mobile app shows only Apple. |
 | `RECENT_AUTH_TTL` | Recent-auth proof lifetime; default `10m`, allowed `1m` to `1h`. |
 | `APPLE_NATIVE_CLIENT_ID` | Native iOS bundle/client ID, separate from the web Services ID. |
 | `OAUTH_APPLE_TEAM_ID` | Existing Apple developer Team ID. |
@@ -46,6 +46,21 @@ reauthentication, add `/api/v2/auth/oauth/apple/callback` to the Services ID's
 return URLs alongside the existing v1 callback. These provider-console redirect
 URIs are separate from `MOBILE_AUTH_CALLBACKS`, which contains only FreeHire's
 final completion targets.
+
+## Mobile verified links
+
+The app's completion target is `/auth/mobile-callback`, served by `web/` and
+claimed by the app through `/.well-known/apple-app-site-association` (iOS) and
+`/.well-known/assetlinks.json` (Android). Both files must list the path before
+`ios=`/`android=` goes into `MOBILE_AUTH_CALLBACKS`, or the browser will land on
+the web page instead of handing the code to the app.
+
+The client sends `callback_target=ios|android` — the platform name, never a URL.
+The server appends `?code=` to the URL it holds for that key, so the mobile app
+cannot influence where the code is delivered.
+
+Apple caches the association file, so a device may keep an old copy for hours.
+Reinstalling the app forces a refresh during testing.
 
 ## Key rotation
 
