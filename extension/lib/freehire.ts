@@ -67,24 +67,28 @@ export interface Blocker {
 }
 
 /** Deterministic skill-coverage match against the signed-in user's profile,
- *  plus the deterministic hard-constraint blockers for the same job — both
- *  computed without any LLM call. */
+ *  plus — for a catalog job (`getMatch`) — the deterministic hard-constraint
+ *  blockers for the same job, both computed without any LLM call. `blockers`
+ *  is absent on an ad-hoc match (`getMatchText`, for a page with no catalog
+ *  slug): that endpoint answers straight from `jobmatch.Compute`, which never
+ *  carries blockers. */
 export interface JobMatch {
   coverage_percent: number;
   total: number;
   matched: string[];
   adjacent: { skill: string }[];
   missing: string[];
-  blockers: Blocker[];
+  blockers?: Blocker[];
 }
 
 /** Split blockers for display: unmet first (hardest — lowest score_cap —
  *  first), then met. Pure, mirrors web's partitionBlockers (web/src/lib/jobMatch.ts)
  *  — duplicated rather than imported since the extension has no shared
  *  import path into the web app's source. */
-export function partitionBlockers(blockers: Blocker[]): { unmet: Blocker[]; met: Blocker[] } {
-  const unmet = blockers.filter((b) => !b.met).sort((a, b) => a.score_cap - b.score_cap);
-  const met = blockers.filter((b) => b.met);
+export function partitionBlockers(blockers: Blocker[] | undefined): { unmet: Blocker[]; met: Blocker[] } {
+  const all = blockers ?? [];
+  const unmet = all.filter((b) => !b.met).sort((a, b) => a.score_cap - b.score_cap);
+  const met = all.filter((b) => b.met);
   return { unmet, met };
 }
 

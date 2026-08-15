@@ -114,4 +114,8 @@ describe('partitionBlockers', () => {
   it('is empty for an empty list', () => {
     expect(partitionBlockers([])).toEqual({ unmet: [], met: [] });
   });
+
+  it('is empty when blockers is undefined, as POST /me/match-text sends (no blockers field at all)', () => {
+    expect(partitionBlockers(undefined)).toEqual({ unmet: [], met: [] });
+  });
 });
