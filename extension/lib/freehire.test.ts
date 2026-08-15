@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { freehireSlugFromUrl, resolveNotice, apiErrorMessage } from './freehire';
+import { freehireSlugFromUrl, resolveNotice, apiErrorMessage, partitionBlockers, type Blocker } from './freehire';
 
 describe('freehireSlugFromUrl', () => {
   it('extracts the slug from a freehire job URL', () => {
@@ -88,5 +88,30 @@ describe('resolveNotice', () => {
 
   it('stays generic for a status it does not know', () => {
     expect(resolveNotice('something-new' as never)).toBeTruthy();
+  });
+});
+
+describe('partitionBlockers', () => {
+  const b = (category: string, severity: Blocker['severity'], score_cap: number, met: boolean): Blocker => ({
+    category,
+    severity,
+    score_cap,
+    reason: `${category} reason`,
+    action: '',
+    met,
+  });
+
+  it('splits unmet from met and orders unmet hardest-first', () => {
+    const { unmet, met } = partitionBlockers([
+      b('location_work_mode', 'soft', 75, false),
+      b('certification', 'hard', 60, false),
+      b('education', 'medium', 65, true),
+    ]);
+    expect(unmet.map((x) => x.category)).toEqual(['certification', 'location_work_mode']);
+    expect(met.map((x) => x.category)).toEqual(['education']);
+  });
+
+  it('is empty for an empty list', () => {
+    expect(partitionBlockers([])).toEqual({ unmet: [], met: [] });
   });
 });

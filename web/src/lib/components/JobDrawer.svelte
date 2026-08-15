@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { Badge, Button, cn, EntityLogo } from '$lib/ui';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen } from '@lucide/svelte';
+  import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { groupedStages, humanizeStage, offersDebrief } from '$lib/stages';
   import { canFollowUp } from '$lib/followup';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '$lib/board';
@@ -82,6 +83,11 @@
   async function startTailoring() {
     if (!item.job || tailoring) return;
     tailoring = true;
+    const ok = await askConfirmTailor(item.job.public_slug, `${item.job.title} at ${item.job.company}`);
+    if (!ok) {
+      tailoring = false;
+      return;
+    }
     await goto(resolve('/tailor/[slug]', { slug: item.job.public_slug }));
   }
 

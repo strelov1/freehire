@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Bookmark, FileText, SquarePen } from '@lucide/svelte';
-  import { Button, Card, CountryFlag } from 'freehire-design-system';
+  import { Bookmark, Check, FileText, SquarePen, TriangleAlert } from '@lucide/svelte';
+  import { Button, Card, ConfirmDialog, CountryFlag } from 'freehire-design-system';
   import { getToken, HIRE_ORIGIN } from '../../lib/auth';
   import {
     companyLogoUrl,
     getMatchAnalysis,
+    partitionBlockers,
     saveJob,
     unsaveJob,
     type FreehireJob,
@@ -113,6 +114,15 @@
   let credits = $derived(analysisData?.credits ?? null);
   let creditsSpent = $derived(!!credits && credits.remaining <= 0);
   let analysisTone = $derived(analysis ? scoreTone(analysis.overall_score) : 'good');
+
+  // Pre-flight confirmation before spending an AI credit: the deterministic
+  // (no-LLM) skill/requirement check the card already has data for, shown one
+  // more time as an explicit "are you sure" — see AGENTS.md for why this
+  // gate exists. Always shown, even for a full match, just with different copy.
+  let confirmOpen = $state(false);
+  let blockers = $derived(partitionBlockers(match.blockers));
+  let hasGaps = $derived(match.missing.length > 0 || blockers.unmet.length > 0);
+  let tailorConfirmLabel = $derived(hasGaps ? 'Tailor anyway' : 'Tailor my CV');
 </script>
 
 <Card class="card">
@@ -185,7 +195,7 @@
         </p>
       {:else}
         <p class="hint">How your CV reads against this role — fit, gaps, and ATS flags.</p>
-        <Button class="tailor" variant="primary" size="sm" href={tailorUrl} target="_blank" rel="noreferrer">
+        <Button class="tailor" variant="primary" size="sm" onclick={() => (confirmOpen = true)}>
           Tailor my CV
           <SquarePen class="icon-sm" />
         </Button>
@@ -227,6 +237,51 @@
     {/if}
   {/if}
 </Card>
+
+<ConfirmDialog
+  bind:open={confirmOpen}
+  title={`Tailor your CV for ${job.title}?`}
+  confirmLabel={tailorConfirmLabel}
+  onConfirm={() => {
+    window.open(tailorUrl, '_blank', 'noopener,noreferrer');
+  }}
+>
+    <div class="confirm-body">
+      <div class="confirm-section">
+        <div class="confirm-label">Skills coverage</div>
+        {#if match.missing.length > 0}
+          <div class="confirm-row">
+            <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
+            <span class="confirm-pct {tone}">{pct}%</span>
+          </div>
+          <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
+          <div class="chips">
+            {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
+          </div>
+        {:else}
+          <p class="confirm-clear"><Check class="icon-sm" />You match all {match.total} required skills</p>
+        {/if}
+      </div>
+
+      {#if blockers.unmet.length > 0 || blockers.met.length > 0}
+        <div class="confirm-section">
+          <div class="confirm-label">Requirements</div>
+          <ul class="confirm-checklist">
+            {#each blockers.unmet as b (b.category + b.reason)}
+              <li class="confirm-check warn"><TriangleAlert class="icon-sm" /><span>{b.reason}</span></li>
+            {/each}
+            {#each blockers.met as b (b.category + b.reason)}
+              <li class="confirm-check good"><Check class="icon-sm" /><span>{b.reason}</span></li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      <p class="confirm-footnote">
+        Deterministic check against your CV and profile — no AI used, no credit spent yet.
+      </p>
+    </div>
+</ConfirmDialog>
 
 <style>
   /* No margin here: the card's outer inset comes from the sidepanel's own
@@ -516,5 +571,84 @@
   }
   :global(.flag) {
     font-size: 16px;
+  }
+  .confirm-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .confirm-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .confirm-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    font-weight: 600;
+  }
+  .confirm-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .confirm-count {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .confirm-pct {
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .confirm-pct.good {
+    color: var(--brand-strong);
+  }
+  .confirm-pct.warn {
+    color: var(--warning-strong);
+  }
+  .confirm-pct.bad {
+    color: var(--destructive);
+  }
+  .confirm-clear {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand-strong);
+    margin: 0;
+  }
+  .confirm-checklist {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .confirm-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  .confirm-check.warn {
+    color: var(--warning-strong);
+  }
+  .confirm-check.good {
+    color: var(--muted-foreground);
+  }
+  .confirm-check.good :global(.icon-sm) {
+    color: var(--brand-strong);
+  }
+  .confirm-footnote {
+    font-size: 11px;
+    color: var(--muted-foreground);
+    margin: 0;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
   }
 </style>

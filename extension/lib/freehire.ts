@@ -52,13 +52,40 @@ export interface FreehireJob {
   };
 }
 
-/** Deterministic skill-coverage match against the signed-in user's profile. */
+/** One evaluated hard-constraint requirement (location/work-mode, work
+ *  authorization, experience, education, language, certification) — mirrors
+ *  internal/hardconstraint.Blocker's wire shape. `reason` is already a
+ *  complete, human-readable sentence; `met` is true when the CV/profile
+ *  satisfies it (kept so the UI can show a checkmark, not just warnings). */
+export interface Blocker {
+  category: string;
+  severity: 'hard' | 'medium' | 'soft';
+  score_cap: number;
+  reason: string;
+  action: string;
+  met: boolean;
+}
+
+/** Deterministic skill-coverage match against the signed-in user's profile,
+ *  plus the deterministic hard-constraint blockers for the same job — both
+ *  computed without any LLM call. */
 export interface JobMatch {
   coverage_percent: number;
   total: number;
   matched: string[];
   adjacent: { skill: string }[];
   missing: string[];
+  blockers: Blocker[];
+}
+
+/** Split blockers for display: unmet first (hardest — lowest score_cap —
+ *  first), then met. Pure, mirrors web's partitionBlockers (web/src/lib/jobMatch.ts)
+ *  — duplicated rather than imported since the extension has no shared
+ *  import path into the web app's source. */
+export function partitionBlockers(blockers: Blocker[]): { unmet: Blocker[]; met: Blocker[] } {
+  const unmet = blockers.filter((b) => !b.met).sort((a, b) => a.score_cap - b.score_cap);
+  const met = blockers.filter((b) => b.met);
+  return { unmet, met };
 }
 
 /**

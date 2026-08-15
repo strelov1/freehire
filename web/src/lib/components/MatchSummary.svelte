@@ -1,9 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { goto } from '$app/navigation';
   import { ArrowRight, FileText, SquarePen } from '@lucide/svelte';
   import { api } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { askConfirmTailor } from '$lib/confirmTailorDialog.svelte';
   import { verdictTone, type Tone } from '$lib/matchAnalysis';
   import type { MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
@@ -50,6 +52,21 @@
     weak: 'text-warning-strong',
     poor: 'text-destructive',
   };
+
+  // Tailoring navigates away; the confirmation dialog owns its own fetch of the
+  // deterministic skill/requirement check, so this only needs to await the yes/no.
+  let tailoring = $state(false);
+
+  async function startTailoring() {
+    if (tailoring) return;
+    tailoring = true;
+    const ok = await askConfirmTailor(slug);
+    if (!ok) {
+      tailoring = false;
+      return;
+    }
+    await goto(resolve('/tailor/[slug]', { slug }));
+  }
 </script>
 
 <section class="flex flex-col gap-3 border-t border-border pt-4" aria-label="Analyze match">
@@ -81,8 +98,8 @@
     <Button
       variant="primary"
       size="lg"
-      href={guest ? undefined : resolve('/tailor/[slug]', { slug })}
-      onclick={guest ? () => openAuthDialog('login') : undefined}
+      disabled={tailoring}
+      onclick={guest ? () => openAuthDialog('login') : startTailoring}
       class="w-full justify-center gap-2 rounded-xl font-semibold"
     >
       Tailor my CV

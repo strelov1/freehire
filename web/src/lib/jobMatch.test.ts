@@ -7,6 +7,7 @@ import {
   teaserChips,
   partitionBlockers,
   claimSkill,
+  toneText,
 } from './jobMatch';
 import { must } from './utils';
 
@@ -296,5 +297,19 @@ describe('partitionBlockers', () => {
   it('handles null/undefined as empty', () => {
     expect(partitionBlockers(null)).toEqual({ unmet: [], met: [] });
     expect(partitionBlockers(undefined)).toEqual({ unmet: [], met: [] });
+  });
+});
+
+describe('toneText', () => {
+  it('reads hard severity as the destructive tone', () => {
+    expect(toneText('hard')).toBe('text-destructive');
+  });
+
+  it('reads medium severity as the warning tone', () => {
+    expect(toneText('medium')).toBe('text-warning-strong');
+  });
+
+  it('reads soft severity as the muted tone', () => {
+    expect(toneText('soft')).toBe('text-muted-foreground');
   });
 });

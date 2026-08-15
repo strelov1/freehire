@@ -11,9 +11,13 @@
     teaserChips,
     partitionBlockers,
     claimSkill,
+    toneText,
+    haveChipClass,
+    adjacentChipClass,
+    missingChipClass,
   } from '$lib/jobMatch';
   import { profileStore } from '$lib/profile.svelte';
-  import type { BlockerSeverity, Job, JobMatchResult } from '$lib/types';
+  import type { Job, JobMatchResult } from '$lib/types';
   import { Button } from '$lib/ui';
   import MatchSummary from './MatchSummary.svelte';
 
@@ -185,14 +189,6 @@
   const segments = $derived(view ? matchBarSegments(view) : { exact: 0, adjacent: 0 });
   const blockers = $derived(partitionBlockers(view?.blockers));
 
-  // Warning tone by severity: hard constraints (work auth, certs) read as blocking,
-  // fit constraints (location, language) as softer cautions.
-  function toneText(severity: BlockerSeverity): string {
-    if (severity === 'hard') return 'text-destructive';
-    if (severity === 'medium') return 'text-warning-strong';
-    return 'text-muted-foreground';
-  }
-
   // The locked states' teaser — deliberately not a real score, but built from this job's
   // own skills and seeded from its slug, so it agrees with the same job's card in the
   // feed instead of naming skills the posting never mentioned.
@@ -212,10 +208,9 @@
     teaser ? teaserChips(jobSkills, teaser.missing, TEASER_CHIPS) : [],
   );
 
-  const chip = 'rounded-full border px-2 py-0.5 text-xs font-medium';
-  const haveChip = `${chip} border-brand/30 bg-brand-muted text-brand-strong`;
-  const adjChip = `${chip} border-warning/30 bg-warning/10 text-warning-strong`;
-  const missChip = `${chip} border-destructive/30 bg-destructive/10 text-destructive`;
+  const haveChip = haveChipClass;
+  const adjChip = adjacentChipClass;
+  const missChip = missingChipClass;
   // A not-held chip is a control: pressing it asks whether the viewer holds the skill after
   // all, or wants to be shown less of it. The ring marks which one the open row belongs to.
   // An avoided skill keeps its place in the group — the job still asks for it and the score

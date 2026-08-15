@@ -17,6 +17,7 @@
   import EmailVerificationBanner from '$lib/components/EmailVerificationBanner.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import CookieConsent from '$lib/components/CookieConsent.svelte';
+  import ConfirmTailorDialog from '$lib/components/ConfirmTailorDialog.svelte';
   import CvRefreshDialog from '$lib/components/CvRefreshDialog.svelte';
   import SupportToast from '$lib/components/SupportToast.svelte';
   import { ConfirmDialog } from '$lib/ui';
@@ -159,6 +160,8 @@
 <SupportToast />
 
 <CvRefreshDialog />
+
+<ConfirmTailorDialog />
 
 <ConfirmDialog
   bind:open={showReloadPrompt}

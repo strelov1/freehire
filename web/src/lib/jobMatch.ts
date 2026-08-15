@@ -2,7 +2,7 @@
 // component so it is unit-testable (vitest) without a DOM: which of the four block
 // states to render, and how to size the two-colour progress bar.
 
-import type { Blocker, JobMatch } from './types';
+import type { Blocker, BlockerSeverity, JobMatch } from './types';
 
 /** Split the hard-constraint blockers for display: the unmet ones (shown as warnings,
  *  hardest first — a lower score_cap is a harder blocker) and the met ones (shown as
@@ -16,6 +16,22 @@ export function partitionBlockers(blockers: Blocker[] | null | undefined): {
   const met = all.filter((b) => b.met);
   return { unmet, met };
 }
+
+/** Warning tone by severity: hard constraints (work auth, certs) read as
+ *  blocking, fit constraints (location, language) as softer cautions. Shared
+ *  by JobMatch.svelte's own requirements list and ConfirmTailorDialog. */
+export function toneText(severity: BlockerSeverity): string {
+  if (severity === 'hard') return 'text-destructive';
+  if (severity === 'medium') return 'text-warning-strong';
+  return 'text-muted-foreground';
+}
+
+/** Skill-chip Tailwind classes by match kind — held, adjacent, or missing.
+ *  Shared by JobMatch.svelte's skill rows and ConfirmTailorDialog. */
+const CHIP_BASE = 'rounded-full border px-2 py-0.5 text-xs font-medium';
+export const haveChipClass = `${CHIP_BASE} border-brand/30 bg-brand-muted text-brand-strong`;
+export const adjacentChipClass = `${CHIP_BASE} border-warning/30 bg-warning/10 text-warning-strong`;
+export const missingChipClass = `${CHIP_BASE} border-destructive/30 bg-destructive/10 text-destructive`;
 
 /** Which state the match block renders. `loading` is the brief window while an
  *  authenticated viewer's profile is still being fetched — shown before we know
