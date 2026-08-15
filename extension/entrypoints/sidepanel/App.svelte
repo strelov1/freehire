@@ -538,21 +538,32 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /** Ticks one question off the plan, narrowed by whatever address the caller
+   *  has: a fill knows its frame and form, the agent's report knows the label
+   *  alone. An address that matches nothing leaves the plan as it was. */
+  function tickOff(label: string, frame?: number, form?: number) {
+    if (!plan) return;
+    const item = plan.items.find(
+      (i) =>
+        i.label === label &&
+        (frame === undefined || i.frame === frame) &&
+        (form === undefined || i.form === form),
+    );
+    if (item) plan = markAnswered(plan, item);
+  }
+
   /**
    * Works through `fills` one question at a time, each one revealed as its value
    * lands, ticking the plan off as it goes. Returns what it managed — the caller
    * owns the closing sentence, because the two callers reach the walk from
    * different places (its own plan, or the agent's report).
    */
-  async function walkFills(fills: LabelFill[]): Promise<Walk> {
-    let walk = startWalk(fills.map((f) => f.label));
+  async function walkFills(fills: LabelFill[]): Promise<Walk<LabelFill>> {
+    let walk = startWalk(fills);
     try {
-      // `nextStep` is the continuation test — it ends the walk both when the list
-      // runs out and when Stop has been pressed. The fill for the step is the one
-      // at the walk's own position, since the walk was started from these fills.
-      while (nextStep(walk) !== null) {
-        const fill = fills[walk.at];
-        if (!fill) break;
+      // `nextStep` is the continuation test: it ends the walk both when the list
+      // runs out and when Stop has been pressed.
+      for (let fill = nextStep(walk); fill !== null; fill = nextStep(walk)) {
         fillingLabel = fill.label;
         const applied = (await browser.runtime.sendMessage({
           kind: 'FILL_BY_LABEL',
@@ -561,17 +572,13 @@
         } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
         const outcome = applied?.kind === 'FILL_OUTCOMES' ? applied.outcomes[0] : undefined;
         if (outcome?.status === 'filled') {
-          walk = applyStep(walk, fill.label);
-          // Ticked off from what we just wrote, not from a fresh read: the page's
-          // own change notice is debounced, so re-reading here would move the
-          // counter a step behind the value the user is looking at.
-          // By address, not by label alone: two forms on one page can each ask
-          // "Email", and ticking both would report progress that is not there.
-          if (plan && fill.frame !== undefined && fill.form !== undefined) {
-            plan = markAnswered(plan, { label: fill.label, frame: fill.frame, form: fill.form });
-          }
+          walk = applyStep(walk, fill);
+          // Ticked off from what was just written, not from a fresh read: the
+          // page's own change notice is debounced, so re-reading here would leave
+          // the counter a step behind the value on screen.
+          tickOff(fill.label, fill.frame, fill.form);
         } else {
-          walk = skipStep(walk, fill.label);
+          walk = skipStep(walk, fill);
         }
         if (walkStop) return stopWalk(walk);
         await pause(WALK_STEP_MS);
@@ -593,10 +600,7 @@
           kind: 'REVEAL_FIELD',
           request: { label },
         } satisfies RuntimeMessage);
-        // The agent's report carries labels only, so this ticks off the item at
-        // that label — there is no address to be more precise with.
-        const item = plan?.items.find((i) => i.label === label);
-        if (plan && item) plan = markAnswered(plan, item);
+        tickOff(label);
         await pause(WALK_STEP_MS);
       }
     } finally {
@@ -712,7 +716,7 @@
       // declines it rather than writing a wrong value), or one the form dropped
       // while the walk was running.
       if (walk.skipped.length > 0) {
-        notices.push(`Left for you: ${nameSome(walk.skipped)}.`);
+        notices.push(`Left for you: ${nameSome(walk.skipped.map((f) => f.label))}.`);
       }
     } catch (err) {
       notices.push(`Autofill failed: ${err instanceof Error ? err.message : 'error'}`);
