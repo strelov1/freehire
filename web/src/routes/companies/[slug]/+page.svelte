@@ -2,7 +2,13 @@
   import { page } from '$app/state';
   import CompanyView from '$lib/components/CompanyView.svelte';
   import Seo from '$lib/components/Seo.svelte';
-  import { breadcrumbJsonLd, companyMetaDescription, jsonLdScript, organizationJsonLd } from '$lib/seo';
+  import {
+    breadcrumbJsonLd,
+    companyMetaDescription,
+    companyPageTitle,
+    jsonLdScript,
+    organizationJsonLd,
+  } from '$lib/seo';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -23,7 +29,7 @@
 </script>
 
 <Seo
-  title={`${data.company.name} · freehire`}
+  title={companyPageTitle(data.company.name, data.initial?.total)}
   {description}
   {canonical}
   image={`${origin}/companies/${data.slug}/og.png`}

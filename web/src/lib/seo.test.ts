@@ -5,6 +5,7 @@ import {
   collectionPageJsonLd,
   companyListItems,
   companyMetaDescription,
+  companyPageTitle,
   datasetJsonLd,
   jobListItems,
   jobPostingJsonLd,
@@ -405,6 +406,23 @@ describe('jobPostingJsonLd', () => {
       '@type': 'Place',
       address: { '@type': 'PostalAddress', addressLocality: 'Berlin', addressCountry: 'DE' },
     });
+  });
+});
+
+describe('companyPageTitle', () => {
+  it('states the open-role count, comma-grouped', () => {
+    expect(companyPageTitle('Amazon', 6531)).toBe('Amazon — 6,531 open jobs · freehire');
+  });
+
+  it('uses the singular for a lone opening', () => {
+    expect(companyPageTitle('Agiliway', 1)).toBe('Agiliway — 1 open job · freehire');
+  });
+
+  // A company with nothing open, or whose count never arrived (the search call
+  // failed), gets the plain title rather than a "0 open jobs" boast.
+  it('falls back to the bare name without a usable count', () => {
+    expect(companyPageTitle('Acme', 0)).toBe('Acme · freehire');
+    expect(companyPageTitle('Acme', undefined)).toBe('Acme · freehire');
   });
 });
 

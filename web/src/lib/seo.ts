@@ -72,6 +72,24 @@ export function jobPageTitle(job: Job): string {
   return `${lead} · ${SITE}`;
 }
 
+/** "<name> — <n> open jobs · freehire" for a company page's document title.
+ *
+ *  The bare "<name> · freehire" it replaces ran as short as 18 characters, which
+ *  left most of the SERP title width unused and read identically whether the
+ *  company had one opening or six thousand. The count is the fact a searcher is
+ *  actually weighing, and it is the same live total the page's own heading shows.
+ *
+ *  No count (search failed) or a zero one falls back to the bare name: a company
+ *  page still exists when nothing is open, and "0 open jobs" in a search result
+ *  is an argument against clicking. */
+export function companyPageTitle(name: string, total: number | undefined): string {
+  if (!total) return `${name} · ${SITE}`;
+  // Pinned locale, like collectionHeading: this is crawler-visible metadata, so
+  // SSR and the client recompute must group digits identically.
+  const roles = `${total.toLocaleString('en-US')} open ${total === 1 ? 'job' : 'jobs'}`;
+  return `${name} — ${roles} · ${SITE}`;
+}
+
 /** "<total> <title> jobs" — a collection's heading with its live open-job
  *  count, comma-grouped. Falls back to the plain "<title> jobs" when no count
  *  is available (the count is optional on the underlying job-search response). */
