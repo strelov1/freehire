@@ -1,20 +1,18 @@
 package industrytag
 
-// aliases maps a normalized label (see normalize) to its canonical slug.
+// aliases maps a normalized label (see normalize) to a canonical slug it is NOT
+// equal to. Canonical values are not listed here: Canonicalize already accepts one
+// by looking it up in displayNames, so a self-mapping would be dead weight that
+// doubles the dictionary for nothing.
 //
 // Keys are stored in normal form, which an invariant test enforces — a key the
 // normalizer can never produce would silently never match, which is the exact
 // failure mode this dictionary exists to prevent.
 //
-// Entries fall into two kinds. Most are spelling variants that normalize already
-// folds, kept here only because their source writes them that way. The valuable
-// ones are the semantic merges: different words for one industry, which no amount
-// of string normalization would ever join.
+// What earns an entry here is a semantic merge: different words for one industry,
+// which no amount of string normalization would ever join. Pure spelling variants
+// ("Financial Services" against "Financial-Services") need no entry at all —
+// normalize folds them before the lookup.
 var aliases = map[string]string{
-	"ai":                      "ai",
 	"artificial-intelligence": "ai",
-	"financial-services":      "financial-services",
-	"food-and-beverage":       "food-and-beverage",
-	"medical-devices":         "medical-devices",
-	"retail":                  "retail",
 }
