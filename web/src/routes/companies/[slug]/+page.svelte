@@ -14,22 +14,33 @@
   let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
-  const canonical = $derived(`${origin}/companies/${data.slug}`);
+  const base = $derived(`${origin}/companies/${data.slug}`);
+  // Each paginated page is canonical to itself; pointing them all at page one
+  // would declare the later postings duplicates of the first twenty.
+  const canonical = $derived(data.pageNumber > 1 ? `${base}?page=${data.pageNumber}` : base);
   const description = $derived(companyMetaDescription(data.company));
+  // Page 2 onward says so, or every page of a large employer's postings competes
+  // for one SERP entry under an identical title.
+  const listingTitle = $derived(companyPageTitle(data.company.name, data.initial?.total));
+  const pageTitle = $derived(
+    data.pageNumber > 1
+      ? `${data.company.name} — page ${data.pageNumber} · freehire`
+      : listingTitle,
+  );
   const jsonLd = $derived(
     jsonLdScript([
       organizationJsonLd(data.company, origin),
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Companies', url: `${origin}/companies` },
-        { name: data.company.name, url: canonical },
+        { name: data.company.name, url: base },
       ]),
     ])
   );
 </script>
 
 <Seo
-  title={companyPageTitle(data.company.name, data.initial?.total)}
+  title={pageTitle}
   {description}
   {canonical}
   image={`${origin}/companies/${data.slug}/og.png`}
@@ -47,6 +58,7 @@
       company={data.company}
       initial={data.initial}
       slug={data.slug}
+      currentPage={data.pageNumber}
       referralAvailable={data.referralAvailable}
     />
   {/key}

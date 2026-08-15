@@ -19,11 +19,13 @@
     company,
     initial,
     slug,
+    currentPage,
     referralAvailable = false,
   }: {
     company: Company;
     initial: Slice<Job> | null;
     slug: string;
+    currentPage?: number;
     referralAvailable?: boolean;
   } = $props();
 </script>
@@ -46,7 +48,7 @@
 
 <div class="mt-4">
   {#if initial}
-    <JobsView {initial} scope={{ company_slug: slug }} excludeFacets={['source']}>
+    <JobsView {initial} {currentPage} scope={{ company_slug: slug }} excludeFacets={['source']}>
       {#snippet sidebarTop()}
         <CompanyFacts {company} />
         <CompanyAbout {company} />

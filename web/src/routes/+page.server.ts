@@ -1,6 +1,7 @@
 import { serverApi } from '$lib/server/api';
 import { FILTERS_TOUCHED_COOKIE, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
 import { defaultFilterTarget, isCrawler } from '$lib/firstVisit';
+import { pageOffset, parsePage } from '$lib/pagination';
 import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
@@ -25,7 +26,18 @@ export const load: PageServerLoad = async ({ url, fetch, cookies, request }) => 
       crawler: isCrawler(request.headers.get('user-agent')),
     }) !== null;
 
-  const params = useDefault ? new URLSearchParams(DEFAULT_JOB_FILTERS) : url.searchParams;
-  const initial = await serverApi(fetch).searchJobs(params, LIMIT, 0);
-  return { initial, filterParams: params.toString() };
+  const params = new URLSearchParams(
+    useDefault ? DEFAULT_JOB_FILTERS : url.searchParams,
+  );
+  // `page` addresses the feed rather than filtering it; the API would ignore it,
+  // and leaving it in would make it part of what the client seeds its filters from.
+  params.delete('page');
+
+  // Serve the page the URL asks for, so the <a href> pagination under the feed
+  // leads somewhere: each of those links has to render its own rows. Note that a
+  // ?page= URL is never the first-visit default case — defaultFilterTarget only
+  // fires on a param-less homepage — so the two never contend.
+  const pageNumber = parsePage(url.searchParams);
+  const initial = await serverApi(fetch).searchJobs(params, LIMIT, pageOffset(pageNumber));
+  return { initial, filterParams: params.toString(), pageNumber };
 };

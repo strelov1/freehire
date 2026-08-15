@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { ApiError } from '$lib/api';
+import { pageOffset, parsePage } from '$lib/pagination';
 import { serverApi } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
@@ -26,9 +27,14 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
   const client = serverApi(fetch);
   const facets = new URLSearchParams(url.searchParams);
   facets.set('company_slug', params.slug);
+  // `page` addresses the feed, it is not a search facet.
+  facets.delete('page');
 
+  // Serve the page the URL asks for: the <a href> pagination under the feed is
+  // what makes a large employer's later postings reachable by link at all.
+  const pageNumber = parsePage(url.searchParams);
   // Start the search first so it overlaps the company fetch below.
-  const search = client.searchJobs(facets, LIMIT, 0).catch(() => null);
+  const search = client.searchJobs(facets, LIMIT, pageOffset(pageNumber)).catch(() => null);
 
   try {
     // Only `company` is used (the list comes from `search`), so the returned job
@@ -40,6 +46,7 @@ export const load: PageServerLoad = async ({ params, url, fetch }) => {
       company,
       initial: await search,
       slug: params.slug,
+      pageNumber,
       referralAvailable: referral_available,
     };
   } catch (e) {
