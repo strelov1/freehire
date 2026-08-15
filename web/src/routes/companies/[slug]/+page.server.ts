@@ -11,13 +11,12 @@ const LIMIT = 20;
 // company entity is fetched separately because search returns only jobs.
 //
 // Both are awaited, so the rows — and the /jobs/<slug> links on them — are in the
-// initial HTML. This list used to stream as an unresolved promise, which kept the
-// header fast but left the markup with no job links at all: the data arrived as a
-// trailing JSON chunk that only client-side JS turns into anchors. Link discovery
-// happens when a crawler parses HTML, so ~200k company pages advertised none of
-// their vacancies, and these pages exist mainly to be found in search. The two
-// calls still run concurrently, so the cost is the slower of the two rather than
-// their sum (measured: +0.64s median TTFB, +1.28s worst).
+// initial HTML. The list used to stream as an unresolved promise, which arrived as
+// a trailing JSON chunk only client-side JS turns into anchors; since crawlers
+// discover links by parsing HTML, ~200k company pages advertised none of their
+// vacancies, and these pages exist mainly to be found in search. The two calls
+// still start together, so this costs the slower of the two rather than their sum
+// (measured: +0.64s median TTFB, +1.28s worst).
 //
 // A 404 (unknown company) becomes a SvelteKit 404; other company failures bubble
 // to the 500 page. A failed SEARCH must not take the page down with it — the

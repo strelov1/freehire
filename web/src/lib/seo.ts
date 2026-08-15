@@ -136,14 +136,17 @@ const COUNTRY_DISPLAY = new Intl.DisplayNames(['en'], { type: 'region' });
 
 function countryName(iso: string): string | undefined {
   const code = iso.toUpperCase();
-  let name: string | undefined;
   try {
-    name = COUNTRY_DISPLAY.of(code);
+    const name = COUNTRY_DISPLAY.of(code);
+    // `of` echoes an unknown code back rather than failing; that is not a name.
+    return !name || name === code ? undefined : name;
   } catch {
+    // Malformed input (not a region code at all) — Intl throws rather than echoes.
     return undefined;
   }
-  return name && name !== code ? name : undefined;
 }
+
+type CountryRef = { '@type': 'Country'; name: string };
 
 // Google resolves applicantLocationRequirements at Country or State level and
 // geocodes the name, so a supranational bloc ("North America", "APAC") is a value
@@ -152,7 +155,10 @@ function countryName(iso: string): string | undefined {
 // them (the precise fact), else the countries its region groups. A worldwide
 // reach ('global') groups none and states no requirement, which is correct — it
 // restricts nobody.
-function applicantRegions(regions?: string[], countries?: string[]): unknown {
+function applicantRegions(
+  regions?: string[],
+  countries?: string[]
+): CountryRef | CountryRef[] | undefined {
   const iso = countries?.length
     ? countries
     : (regions ?? []).flatMap((r) => REGION_COUNTRIES[r] ?? []);
@@ -160,7 +166,9 @@ function applicantRegions(regions?: string[], countries?: string[]): unknown {
     ...new Set(iso.map(countryName).filter((n): n is string => Boolean(n))),
   ].toSorted();
   if (named.length === 0) return undefined;
-  const entries = named.map((name) => ({ '@type': 'Country', name }));
+  const entries: CountryRef[] = named.map((name) => ({ '@type': 'Country', name }));
+  // schema.org reads a lone object and a one-element array alike; emit the object
+  // so the common single-country case stays readable in the page source.
   return entries.length === 1 ? entries[0] : entries;
 }
 
