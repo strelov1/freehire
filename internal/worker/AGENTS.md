@@ -62,6 +62,14 @@ These names are a contract with the dashboard and alert rules in `freehire-ops`,
 cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
 exposition text so a rename is a visible edit rather than a silent breakage.
 
+**One worker, one filename — and the run file is written LAST.** `Main` writes the run
+outcome to `<binary>.prom` *after* `run()` returns (main.go:29-30). A worker that also
+publishes its own textfile must therefore own a DIFFERENT name, or every run will emit
+its payload and then overwrite it, leaving the collector with only the run outcome while
+the setup still looks correct. `RunMetricsFilename()` exposes the name to compare
+against; `cmd/queue-metrics` publishes as `freehire-pipeline.prom` and asserts the two
+cannot converge.
+
 **The `exported_job` trap.** node_exporter's textfile collector does not set
 `honor_labels`, so Prometheus keeps its own `job="host2-node"` and renames a worker's
 `job` label to `exported_job`. Any query against the per-run metrics must use

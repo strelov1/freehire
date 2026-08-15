@@ -64,8 +64,10 @@ func TestWriteTextfileReplacesPreviousContentWholesale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read written file: %v", err)
 	}
-	// A truncating in-place write would leave a tail of the longer previous body;
-	// the rename must swap the whole file.
+	// The published file must hold the new body and nothing else. (Atomicity itself
+	// is not observable from here — a single-threaded read after the call cannot
+	// distinguish a rename from a truncating overwrite; what this pins is that a
+	// republish fully replaces rather than appends.)
 	if got := string(data); got != "new\n" {
 		t.Errorf("file body = %q, want %q", got, "new\n")
 	}

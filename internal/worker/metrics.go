@@ -36,10 +36,8 @@ func writeRunMetrics(runDuration time.Duration, exitCode int) {
 	instance := runInstance(os.Args[1:])
 
 	labels := fmt.Sprintf(`job=%q`, job)
-	name := job
 	if instance != "" {
 		labels = fmt.Sprintf(`job=%q,instance=%q`, job, instance)
-		name += "_" + instance
 	}
 
 	success := 0
@@ -58,9 +56,25 @@ freehire_worker_last_run_duration_seconds{%[1]s} %[3]f
 freehire_worker_last_run_success{%[1]s} %[4]d
 `, labels, time.Now().Unix(), runDuration.Seconds(), success)
 
-	if err := WriteTextfile(dir, name+".prom", content); err != nil {
+	if err := WriteTextfile(dir, RunMetricsFilename(), content); err != nil {
 		log.Printf("worker: %v", err)
 	}
+}
+
+// RunMetricsFilename reports the textfile-collector file this process's run
+// outcome lands in: the binary's name, plus any board instance, plus ".prom".
+//
+// Exported because Main writes that file AFTER run() returns (main.go:29-30), so
+// a worker that ALSO publishes a textfile of its own would have its payload
+// silently overwritten on every single run if it picked the same name. A worker
+// in that position must own a distinct filename and assert it — see
+// cmd/queue-metrics.
+func RunMetricsFilename() string {
+	name := filepath.Base(os.Args[0])
+	if instance := runInstance(os.Args[1:]); instance != "" {
+		name += "_" + instance
+	}
+	return name + ".prom"
 }
 
 // WriteTextfile publishes body as the textfile-collector file dir/name, the

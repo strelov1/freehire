@@ -20,9 +20,13 @@ import (
 	"github.com/strelov1/freehire/internal/worker"
 )
 
-// textfileName is the collector file this worker owns. One file per worker, named after
-// it, is the convention writeRunMetrics established.
-const textfileName = "queue-metrics.prom"
+// textfileName is the collector file this worker owns. It deliberately does NOT follow
+// the name-after-the-binary convention writeRunMetrics uses: worker.Main writes the run
+// outcome to <binary>.prom AFTER run() returns, so publishing here under "queue-metrics"
+// would have every run emit the queue gauges and then immediately overwrite them. The
+// prefix marks the file as a pipeline measurement rather than one worker's run outcome;
+// main_test.go holds the two apart.
+const textfileName = "freehire-pipeline.prom"
 
 func main() { worker.Main(run) }
 
