@@ -454,14 +454,21 @@
   let plan = $state<ApplyPlan | null>(null);
   /** The question a walk is filling right now, by label. */
   let fillingLabel = $state<string | null>(null);
+  /** Guards against an older read landing after a newer one — a page change and
+   *  the page's own FORM_CHANGED both start a read, and the slower answer would
+   *  otherwise replace the current form's plan with the previous one's. Same
+   *  pattern as `matchRequestId`. */
+  let planRequestId = 0;
 
   /** Reads the page's form and rebuilds the plan, or clears it for a page that
    *  is not showing an application. */
   async function refreshPlan() {
     if (!user) return;
+    const requestId = ++planRequestId;
     const reply = (await browser.runtime.sendMessage({
       kind: 'GET_FRAMED_FORM',
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+    if (requestId !== planRequestId) return;
     if (reply?.kind !== 'FRAMED_FORM' || !looksLikeApplication(reply.uploads)) {
       plan = null;
       return;
@@ -475,7 +482,7 @@
   async function revealItem(item: PlanItem) {
     const reply = (await browser.runtime.sendMessage({
       kind: 'REVEAL_FIELD',
-      request: { label: item.label, form: item.form, focus: true },
+      request: { label: item.label, frame: item.frame, form: item.form, focus: true },
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (reply?.kind === 'REVEAL_RESULT' && !reply.found) {
       notices.push(`"${item.label}" is no longer on this page — the form may have moved on.`);
@@ -558,7 +565,11 @@
           // Ticked off from what we just wrote, not from a fresh read: the page's
           // own change notice is debounced, so re-reading here would move the
           // counter a step behind the value the user is looking at.
-          if (plan) plan = markAnswered(plan, fill.label);
+          // By address, not by label alone: two forms on one page can each ask
+          // "Email", and ticking both would report progress that is not there.
+          if (plan && fill.frame !== undefined && fill.form !== undefined) {
+            plan = markAnswered(plan, { label: fill.label, frame: fill.frame, form: fill.form });
+          }
         } else {
           walk = skipStep(walk, fill.label);
         }
@@ -582,7 +593,10 @@
           kind: 'REVEAL_FIELD',
           request: { label },
         } satisfies RuntimeMessage);
-        if (plan) plan = markAnswered(plan, label);
+        // The agent's report carries labels only, so this ticks off the item at
+        // that label — there is no address to be more precise with.
+        const item = plan?.items.find((i) => i.label === label);
+        if (plan && item) plan = markAnswered(plan, item);
         await pause(WALK_STEP_MS);
       }
     } finally {

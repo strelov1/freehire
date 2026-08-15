@@ -12,15 +12,21 @@
 
 import type { FramedField } from './protocol';
 
-/** One question in the checklist, addressed the way a fill addresses it. */
-export interface PlanItem {
+/**
+ * Which question, exactly. The label alone does not say: an application and a
+ * job-alert signup on the same page each have their own "Email", and an ATS
+ * serves the application from its own frame — so both narrowings travel with it.
+ */
+export interface FieldAddress {
   label: string;
-  required: boolean;
-  answered: boolean;
-  /** The frame and form the question was read from — a fill and a reveal need both
-   *  to reach the same question when a page carries more than one form. */
   frame: number;
   form: number;
+}
+
+/** One question in the checklist, addressed the way a fill addresses it. */
+export interface PlanItem extends FieldAddress {
+  required: boolean;
+  answered: boolean;
 }
 
 /** How far along the questions that gate submission are. */
@@ -46,9 +52,10 @@ export interface ApplyPlan {
  * when the page's own change notice arrives. A label the plan does not carry
  * changes nothing.
  */
-export function markAnswered(plan: ApplyPlan, label: string): ApplyPlan {
-  if (!plan.items.some((i) => i.label === label && !i.answered)) return plan;
-  return recount(plan.items.map((i) => (i.label === label ? { ...i, answered: true } : i)));
+export function markAnswered(plan: ApplyPlan, at: FieldAddress): ApplyPlan {
+  const isTarget = (i: PlanItem) => i.label === at.label && i.frame === at.frame && i.form === at.form;
+  if (!plan.items.some((i) => isTarget(i) && !i.answered)) return plan;
+  return recount(plan.items.map((i) => (isTarget(i) ? { ...i, answered: true } : i)));
 }
 
 /** The plan for the questions the page reported, in the order it asks them. */

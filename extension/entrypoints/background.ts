@@ -99,16 +99,21 @@ async function fillAcrossFrames(fills: LabelFill[], reveal?: boolean): Promise<R
 }
 
 /**
- * Offers one reveal to every frame. Like a widget step, the question lives in
- * exactly one of them; a frame that does not hold it answers `found: false`, and
- * the panel needs to hear a yes from ANY frame — so the answers are folded with
- * "some frame found it", not by whichever replied first.
+ * Reveals one question. A request naming its frame goes to that frame alone —
+ * two frames carrying the same label would otherwise both scroll and both take
+ * the cursor. A request naming none (the agent's report carries labels only) is
+ * offered to every frame, and the answers are folded with "some frame found it"
+ * rather than by whichever replied first.
  */
 async function revealAcrossFrames(request: RevealRequest): Promise<RuntimeMessage> {
   let found = false;
-  await eachFrame({ kind: 'REVEAL_FIELD', request }, (reply) => {
-    if (reply?.kind === 'REVEAL_RESULT' && reply.found) found = true;
-  });
+  await eachFrame(
+    { kind: 'REVEAL_FIELD', request },
+    (reply) => {
+      if (reply?.kind === 'REVEAL_RESULT' && reply.found) found = true;
+    },
+    request.frame,
+  );
   return { kind: 'REVEAL_RESULT', found };
 }
 
@@ -134,12 +139,16 @@ async function comboboxAcrossFrames(step: ComboboxStep): Promise<RuntimeMessage>
 async function eachFrame(
   message: RuntimeMessage | ((frame: number) => RuntimeMessage),
   take: (reply: RuntimeMessage | undefined, frame: number) => void,
+  /** Restricts the fan-out to one frame, for a request that names the frame it
+   *  belongs to. Everything else still reaches every frame. */
+  onlyFrame?: number,
 ): Promise<void> {
   const tabId = await activeTabId();
   if (tabId == null) return;
   const forFrame = typeof message === 'function' ? message : () => message;
+  const frames = onlyFrame === undefined ? await frameIds(tabId) : [onlyFrame];
   await Promise.all(
-    (await frameIds(tabId)).map(async (frameId) => {
+    frames.map(async (frameId) => {
       try {
         take((await browser.tabs.sendMessage(tabId, forFrame(frameId), { frameId })) as RuntimeMessage, frameId);
       } catch {

@@ -553,16 +553,30 @@ export function revealField(
 
   const el = question.controls[0];
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  const borrowed = el.getAttribute('style');
+
+  // Revealing the same control twice inside the outline's lifetime must not make
+  // the outline the style we give back: the first reveal's record wins, and its
+  // timer is replaced rather than left to fire against a control the second
+  // reveal is still outlining.
+  const open = outlined.get(el);
+  if (open) clearTimeout(open.timer);
+  const borrowed = open ? open.borrowed : el.getAttribute('style');
   el.style.outline = '2px solid #4f46e5';
   el.style.outlineOffset = '2px';
-  setTimeout(() => {
+  const timer = setTimeout(() => {
+    outlined.delete(el);
     if (borrowed === null) el.removeAttribute('style');
     else el.setAttribute('style', borrowed);
   }, outlineMs);
+  outlined.set(el, { borrowed, timer });
+
   if (focus) el.focus({ preventScroll: true });
   return true;
 }
+
+/** Controls currently wearing a borrowed outline, and the style each one had
+ *  before it. Weak so a control the page discards is not held alive by it. */
+const outlined = new WeakMap<Element, { borrowed: string | null; timer: ReturnType<typeof setTimeout> }>();
 
 export function fillByLabel(doc: Document, fills: LabelFill[]): FillOutcome[] {
   const questions = collectQuestions(doc);

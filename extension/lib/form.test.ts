@@ -864,3 +864,30 @@ describe('revealField', () => {
     expect(document.activeElement).toBe(el);
   });
 });
+
+describe('revealField, revealed twice', () => {
+  beforeEach(reset);
+
+  // Two reveals of the same control inside the outline's lifetime: without a
+  // per-control record of what was borrowed, the second call saves the FIRST
+  // call's outline as the original and restores it for good.
+  it('still gives the page its own style back', async () => {
+    const form = document.createElement('form');
+    const el = document.createElement('input');
+    el.type = 'text';
+    el.id = 'twice';
+    el.setAttribute('style', 'color: rebeccapurple');
+    const lab = document.createElement('label');
+    lab.setAttribute('for', el.id);
+    lab.textContent = 'Email';
+    form.append(lab, el);
+    document.body.append(form);
+    el.scrollIntoView = () => {};
+
+    revealField(document, { label: 'Email', outlineMs: 30 });
+    revealField(document, { label: 'Email', outlineMs: 30 });
+
+    await new Promise((r) => setTimeout(r, 80));
+    expect(el.getAttribute('style')).toBe('color: rebeccapurple');
+  });
+});

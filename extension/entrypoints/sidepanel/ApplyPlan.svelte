@@ -22,6 +22,13 @@
     onReveal: (item: PlanItem) => void;
   } = $props();
 
+  /** What the icon says, for a reader that cannot see it — the icon itself is
+   *  aria-hidden, so without this the state never reaches a screen reader. */
+  function itemState(item: PlanItem): string {
+    if (filling === item.label) return 'filling now';
+    return item.answered ? 'answered' : 'not answered';
+  }
+
   let required = $derived(plan.items.filter((i) => i.required));
   let optional = $derived(plan.items.filter((i) => !i.required));
 </script>
@@ -32,7 +39,13 @@
     <ul>
       {#each items as item (`${item.frame}:${item.form}:${item.label}`)}
         <li>
-          <button type="button" class="item" class:answered={item.answered} onclick={() => onReveal(item)}>
+          <button
+            type="button"
+            class="item"
+            class:answered={item.answered}
+            aria-label="{item.label}: {itemState(item)}"
+            onclick={() => onReveal(item)}
+          >
             <span class="mark" aria-hidden="true">
               {#if filling === item.label}
                 <Loader class="size-3 spin" />

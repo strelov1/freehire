@@ -107,7 +107,7 @@ describe('markAnswered', () => {
       field('Email', { required: true }),
     ]);
 
-    const after = markAnswered(plan, 'Email');
+    const after = markAnswered(plan, { label: 'Email', frame: 0, form: 0 });
 
     expect(after.items.map((i) => i.answered)).toEqual([true, true]);
     expect(after.required).toEqual({ answered: 2, total: 2, percent: 100 });
@@ -119,13 +119,29 @@ describe('markAnswered', () => {
   it('leaves a plan that does not carry the label alone', () => {
     const plan = buildPlan([field('Email', { required: true })]);
 
-    expect(markAnswered(plan, 'Gone')).toEqual(plan);
+    expect(markAnswered(plan, { label: 'Gone', frame: 0, form: 0 })).toEqual(plan);
+  });
+
+  // Two questions can carry the same label in different forms or frames — an
+  // application and a job-alert signup each have their own "Email". Ticking one
+  // off must not tick the other, or the counter reports progress that is not
+  // there.
+  it('ticks off the question at that address only', () => {
+    const plan = buildPlan([
+      field('Email', { required: true, frame: 0, form: 0 }),
+      field('Email', { required: true, frame: 1, form: 0 }),
+    ]);
+
+    const after = markAnswered(plan, { label: 'Email', frame: 1, form: 0 });
+
+    expect(after.items.map((i) => i.answered)).toEqual([false, true]);
+    expect(after.required).toEqual({ answered: 1, total: 2, percent: 50 });
   });
 
   it('does not touch the optional side of the counter', () => {
     const plan = buildPlan([field('Email', { required: true }), field('Website')]);
 
-    const after = markAnswered(plan, 'Website');
+    const after = markAnswered(plan, { label: 'Website', frame: 0, form: 0 });
 
     expect(after.required).toEqual({ answered: 0, total: 1, percent: 0 });
   });

@@ -146,6 +146,11 @@ export interface ComboboxReply {
  */
 export interface RevealRequest {
   label: string;
+  /** The frame the question was read from. Without it the reveal is offered to
+   *  every frame, and two frames carrying the same label would both scroll — and
+   *  both take the cursor. Undefined only where the caller has no frame to name
+   *  (the agent's report carries labels alone). */
+  frame?: number;
   form?: number;
   focus?: boolean;
   outlineMs?: number;
