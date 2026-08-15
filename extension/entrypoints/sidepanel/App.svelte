@@ -284,10 +284,15 @@
    * card replaces the ad-hoc one.
    */
   async function contributePage() {
-    const token = await getToken();
-    if (!token || contributing) return;
+    // Claimed before the first await: `disabled` only follows the flag, so a second
+    // activation landing while the token is being read would otherwise pass the guard
+    // too and post the page twice — two imports, and two charges against the rate limit
+    // the endpoint carries.
+    if (contributing) return;
     contributing = true;
     try {
+      const token = await getToken();
+      if (!token) return;
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       const url = tab?.url ?? '';
       if (!url) {
