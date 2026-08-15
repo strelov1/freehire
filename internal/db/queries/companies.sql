@@ -25,6 +25,10 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
+  -- industries is the finer level beneath domains, filtered the same way. It must
+  -- exist on THIS path too: when only industries is set the request never reaches
+  -- Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0 OR industries && sqlc.arg('industries')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])
@@ -62,6 +66,10 @@ WHERE job_count > 0
   AND (coalesce(cardinality(sqlc.arg('regions')::text[]), 0) = 0 OR regions && sqlc.arg('regions')::text[])
   AND (coalesce(cardinality(sqlc.arg('countries')::text[]), 0) = 0 OR countries && sqlc.arg('countries')::text[])
   AND (coalesce(cardinality(sqlc.arg('domains')::text[]), 0) = 0 OR domains && sqlc.arg('domains')::text[])
+  -- industries is the finer level beneath domains, filtered the same way. It must
+  -- exist on THIS path too: when only industries is set the request never reaches
+  -- Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality(sqlc.arg('industries')::text[]), 0) = 0 OR industries && sqlc.arg('industries')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_types')::text[]), 0) = 0 OR company_types && sqlc.arg('company_types')::text[])
   AND (coalesce(cardinality(sqlc.arg('company_sizes')::text[]), 0) = 0 OR company_sizes && sqlc.arg('company_sizes')::text[])
   AND (coalesce(cardinality(sqlc.arg('remote_regions')::text[]), 0) = 0 OR remote_regions && sqlc.arg('remote_regions')::text[])

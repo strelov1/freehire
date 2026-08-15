@@ -60,9 +60,19 @@ passes report what they dropped — distinct count, occurrences, most frequent �
 the vocabulary grows from production evidence. Without the report, dict-only and
 silent data loss look identical from the outside.
 
-**Start at 100 canonical values, not 500.** 100 covers 86.5% of companies; 500
-covers 95.9%. A facet list nobody scrolls is worse than a short one, and the
-dictionary grows by adding a line whereas an over-large facet is painful to shrink.
+**The canonical vocabulary is written out, not cut from a frequency ranking.**
+The first attempt took the top 100 labels by frequency. It failed twice in review:
+whatever N is, the tail of the ranking is simply whatever was marginally frequent,
+so the list arrived carrying duplicates (`aerospace` beside `aerospace-and-defense`)
+and non-industries (`saas`, `digital-transformation`, `mobile-application-developer`).
+Removing a batch of junk only promoted the next batch — `Hvac`, `R and D`,
+`Lead Generation` — because the cut refilled from below.
+
+The vocabulary is therefore an explicit list of 74 values, each a thing a company
+can BE rather than a function it performs, a technology it uses, or a business model
+it sells under. The observed data still drives the ALIASES, which is where volume
+belongs. 74 values reach 92.4% of companies in the dump; the rejected 100-value
+frequency cut reached 93.2%, so the curation costs 0.8% of coverage.
 
 **Merge semantics in the YC upsert.** `UpsertYCCompany` writes `tagline`,
 `company_info` and `industries` by replacement, which was correct while it was the

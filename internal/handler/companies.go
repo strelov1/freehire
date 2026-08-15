@@ -164,6 +164,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	regions := facetValues(vals, "regions")
 	countries := facetValues(vals, "countries")
 	domains := facetValues(vals, "domains")
+	industries := facetValues(vals, "industries")
 	companyTypes := facetValues(vals, "company_type")
 	companySizes := facetValues(vals, "company_size")
 	remoteRegions := facetValues(vals, "remote_regions")
@@ -185,7 +186,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 	// Meili-sortable attribute yet (see companySettings), so routing there would
 	// silently ignore the caller's requested order instead of honouring it.
 	if h.companySearch != nil && sort != "rating" && isCompanyFilter(search, collections, regions, countries,
-		domains, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
+		domains, industries, companyTypes, companySizes, remoteRegions, ycBatch, ycStatus, ycStage, ycFlags, maturity, subindustries) {
 		items, total, err := h.companyHitsViaMeili(c.Context(), search, vals, limit, offset)
 		if err == nil {
 			return listResponse(c, items, total, limit, offset)
@@ -199,6 +200,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 		Regions:       regions,
 		Countries:     countries,
 		Domains:       domains,
+		Industries:    industries,
 		CompanyTypes:  companyTypes,
 		CompanySizes:  companySizes,
 		RemoteRegions: remoteRegions,
@@ -229,6 +231,7 @@ func (h *companiesHandlers) ListCompanies(c *fiber.Ctx) error {
 			Regions:       regions,
 			Countries:     countries,
 			Domains:       domains,
+			Industries:    industries,
 			CompanyTypes:  companyTypes,
 			CompanySizes:  companySizes,
 			RemoteRegions: remoteRegions,

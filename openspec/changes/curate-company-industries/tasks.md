@@ -5,7 +5,7 @@ breakdown; that plan is the how.
 ## 1. The industry dictionary
 
 - [x] 1.1 Create `internal/industrytag` with `Canonicalize([]string) []string`: normalize case, separators and `&`/`and` to one lookup key, resolve through the alias map, pass already-canonical values through, return sorted and de-duplicated
-- [x] 1.2 Populate `dictionaries.go` and `labels.go` from the generated seed (100 canonical values, 155 aliases), hand-checking acronym casing
+- [x] 1.2 Write out the canonical vocabulary explicitly (74 values) and generate its aliases from observed labels (213), hand-checking acronym casing
 - [x] 1.3 Add dictionary invariant tests: every canonical is a well-formed slug, every alias target exists, every alias key is in normal form, every canonical has a non-empty label
 - [x] 1.4 Add resolution tests: separator variants collapse, curated synonyms collapse, unknown labels emit nothing, canonical values are idempotent, blank input is safe
 
@@ -26,9 +26,9 @@ breakdown; that plan is the how.
 
 ## 4. The facet
 
-- [ ] 4.1 Add failing tests asserting `industries` appears in the company index's filterable attributes and in the facet param map
-- [ ] 4.2 Add `industries` to `FilterableAttributes` and `companyFacets`, and accept the `industries` query parameter on `/companies`
-- [ ] 4.3 Emit `INDUSTRY_VALUES`/`INDUSTRY_LABELS` from `cmd/gen-contracts` and regenerate the web contracts, so the UI options derive from the Go dictionary rather than a hand-typed copy
+- [x] 4.1 Add failing tests asserting `industries` appears in the company index's filterable attributes and in the facet param map
+- [x] 4.2 Add `industries` to `FilterableAttributes` and `companyFacets`, and accept the `industries` query parameter on `/companies`
+- [x] 4.3 Emit `INDUSTRY_VALUES`/`INDUSTRY_LABELS` from `cmd/gen-contracts` and regenerate the web contracts, so the UI options derive from the Go dictionary rather than a hand-typed copy
 - [ ] 4.4 Add the detailed-industry filter to the companies page, labelled distinctly from the coarse domain filter
 - [ ] 4.5 Verify in a browser that selecting an industry puts it in the URL and changes the result count
 

@@ -376,7 +376,7 @@ In `cmd/import-yc/main.go`, inside `recordToParams`, replace
 		Industries:    industrytag.Canonicalize(r.Industries),
 ```
 
-Add `"github.com/strelov1/hire/internal/industrytag"` to the imports. Check the
+Add `"github.com/strelov1/freehire/internal/industrytag"` to the imports. Check the
 module path against the top of `go.mod` before writing it.
 
 `Canonicalize` already returns a non-nil slice, so `nonNil` is no longer needed
@@ -515,10 +515,10 @@ import (
 	"os"
 	"slices"
 
-	"github.com/strelov1/hire/internal/db"
-	"github.com/strelov1/hire/internal/industrytag"
-	"github.com/strelov1/hire/internal/normalize"
-	"github.com/strelov1/hire/internal/worker"
+	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/industrytag"
+	"github.com/strelov1/freehire/internal/normalize"
+	"github.com/strelov1/freehire/internal/worker"
 )
 
 const pageSize = 1000

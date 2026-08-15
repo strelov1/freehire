@@ -49,8 +49,12 @@ func TestNoAliasMapsToItself(t *testing.T) {
 // iterates the maps, so all of them stay vacuously green if the dictionary is
 // truncated — deleting ninety canonicals would break nothing else in this file.
 func TestDictionaryIsNotTruncated(t *testing.T) {
+	// A floor against truncation, not a target size. The vocabulary is a hand-written
+	// list that shrinks whenever curation merges two entries, so the floor sits well
+	// below the current count — it must catch "the file got clobbered", not veto a
+	// merge.
 	const (
-		minCanonicals = 100
+		minCanonicals = 60
 		minAliases    = 150
 	)
 	if len(displayNames) < minCanonicals {

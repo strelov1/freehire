@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/classify"
 	"github.com/strelov1/freehire/internal/collections"
 	"github.com/strelov1/freehire/internal/ghost"
+	"github.com/strelov1/freehire/internal/industrytag"
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/mailclassify"
 	"github.com/strelov1/freehire/internal/roletag"
@@ -340,6 +341,11 @@ func genVocab() string {
 	// so the report picker can't drift from the DB CHECK constraint.
 	b.WriteString(emitVocab("CompanyFeedbackReportReason", "COMPANY_FEEDBACK_REPORT_REASON_VALUES", vocab.CompanyFeedbackReportReasonValues))
 	b.WriteString(emitVocab("Domain", "DOMAIN_VALUES", vocab.DomainValues))
+	// The curated company-industry vocabulary (internal/industrytag) — the level
+	// beneath domains. Generated in both halves, values and labels, so the filter's
+	// options cannot drift from the dictionary the column is written through.
+	b.WriteString(emitVocab("Industry", "INDUSTRY_VALUES", industrytag.Canonicals()))
+	b.WriteString(emitMap("IndustryLabels", "INDUSTRY_LABELS", industrytag.Labels()))
 	// The six AI skill-signature archetype slugs (internal/aiarchetype), generated
 	// so the AI Specialization filter's valid values can't drift from the rule table.
 	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))

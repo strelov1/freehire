@@ -114,7 +114,7 @@ func companySettings() *meilisearch.Settings {
 	return &meilisearch.Settings{
 		SearchableAttributes: []string{"name", "slug", "tagline"},
 		FilterableAttributes: []string{
-			"collections", "regions", "countries", "domains",
+			"collections", "regions", "countries", "domains", "industries",
 			"company_types", "company_sizes", "remote_regions",
 			"yc_batch", "yc_status", "yc_stage", "yc_flags",
 			"maturity", "subindustry",
@@ -137,6 +137,9 @@ var companyFacets = []struct{ param, attr string }{
 	{"regions", "regions"},
 	{"countries", "countries"},
 	{"domains", "domains"},
+	// The finer level beneath domains: domains names ~20 coarse verticals from job
+	// enrichment, industries names what a company does when that lands in "other".
+	{"industries", "industries"},
 	{"company_type", "company_types"},
 	{"company_size", "company_sizes"},
 	{"remote_regions", "remote_regions"},

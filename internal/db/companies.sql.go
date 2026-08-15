@@ -127,15 +127,19 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
-  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR remote_regions && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR yc_batch && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_stage && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_flags && $12::text[])
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR subindustry = ANY($14::text[]))
+  -- industries is the finer level beneath domains, filtered the same way. It must
+  -- exist on THIS path too: when only industries is set the request never reaches
+  -- Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality($6::text[]), 0) = 0 OR industries && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
 `
 
 type CountCompaniesParams struct {
@@ -144,6 +148,7 @@ type CountCompaniesParams struct {
 	Regions       []string `json:"regions"`
 	Countries     []string `json:"countries"`
 	Domains       []string `json:"domains"`
+	Industries    []string `json:"industries"`
 	CompanyTypes  []string `json:"company_types"`
 	CompanySizes  []string `json:"company_sizes"`
 	RemoteRegions []string `json:"remote_regions"`
@@ -165,6 +170,7 @@ func (q *Queries) CountCompanies(ctx context.Context, arg CountCompaniesParams) 
 		arg.Regions,
 		arg.Countries,
 		arg.Domains,
+		arg.Industries,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
@@ -272,22 +278,26 @@ WHERE job_count > 0
   AND (coalesce(cardinality($3::text[]), 0) = 0 OR regions && $3::text[])
   AND (coalesce(cardinality($4::text[]), 0) = 0 OR countries && $4::text[])
   AND (coalesce(cardinality($5::text[]), 0) = 0 OR domains && $5::text[])
-  AND (coalesce(cardinality($6::text[]), 0) = 0 OR company_types && $6::text[])
-  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_sizes && $7::text[])
-  AND (coalesce(cardinality($8::text[]), 0) = 0 OR remote_regions && $8::text[])
-  AND (coalesce(cardinality($9::text[]), 0) = 0 OR yc_batch && $9::text[])
-  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_status && $10::text[])
-  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_stage && $11::text[])
-  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_flags && $12::text[])
+  -- industries is the finer level beneath domains, filtered the same way. It must
+  -- exist on THIS path too: when only industries is set the request never reaches
+  -- Meili, and a facet the fallback does not know is silently ignored.
+  AND (coalesce(cardinality($6::text[]), 0) = 0 OR industries && $6::text[])
+  AND (coalesce(cardinality($7::text[]), 0) = 0 OR company_types && $7::text[])
+  AND (coalesce(cardinality($8::text[]), 0) = 0 OR company_sizes && $8::text[])
+  AND (coalesce(cardinality($9::text[]), 0) = 0 OR remote_regions && $9::text[])
+  AND (coalesce(cardinality($10::text[]), 0) = 0 OR yc_batch && $10::text[])
+  AND (coalesce(cardinality($11::text[]), 0) = 0 OR yc_status && $11::text[])
+  AND (coalesce(cardinality($12::text[]), 0) = 0 OR yc_stage && $12::text[])
+  AND (coalesce(cardinality($13::text[]), 0) = 0 OR yc_flags && $13::text[])
   -- maturity is a SCALAR column (not an array): membership, not overlap. A NULL
   -- (unknown) maturity matches no requested value, so ` + "`" + `NULL = ANY(...)` + "`" + ` excludes it.
-  AND (coalesce(cardinality($13::text[]), 0) = 0 OR maturity = ANY($13::text[]))
+  AND (coalesce(cardinality($14::text[]), 0) = 0 OR maturity = ANY($14::text[]))
   -- subindustry is likewise a NULLABLE SCALAR: membership, not overlap; NULL matches none.
-  AND (coalesce(cardinality($14::text[]), 0) = 0 OR subindustry = ANY($14::text[]))
+  AND (coalesce(cardinality($15::text[]), 0) = 0 OR subindustry = ANY($15::text[]))
 ORDER BY
-  CASE WHEN $15::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
+  CASE WHEN $16::text = 'rating' THEN feedback_rating_avg END DESC NULLS LAST,
   job_count DESC, name
-LIMIT $17 OFFSET $16
+LIMIT $18 OFFSET $17
 `
 
 type ListCompaniesParams struct {
@@ -296,6 +306,7 @@ type ListCompaniesParams struct {
 	Regions       []string `json:"regions"`
 	Countries     []string `json:"countries"`
 	Domains       []string `json:"domains"`
+	Industries    []string `json:"industries"`
 	CompanyTypes  []string `json:"company_types"`
 	CompanySizes  []string `json:"company_sizes"`
 	RemoteRegions []string `json:"remote_regions"`
@@ -354,6 +365,7 @@ func (q *Queries) ListCompanies(ctx context.Context, arg ListCompaniesParams) ([
 		arg.Regions,
 		arg.Countries,
 		arg.Domains,
+		arg.Industries,
 		arg.CompanyTypes,
 		arg.CompanySizes,
 		arg.RemoteRegions,
