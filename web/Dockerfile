@@ -47,7 +47,11 @@ RUN pnpm prune --prod
 
 # --- runtime stage ---
 FROM node:22-alpine
-RUN apk add --no-cache nginx
+# nginx-mod-http-brotli brings ngx_brotli (filter + static). Alpine's nginx.conf
+# includes /etc/nginx/modules/*.conf, so installing the package is all the wiring
+# the load_module lines need. Without it, `brotli`/`brotli_static` in nginx.conf
+# are unknown directives and nginx refuses to start.
+RUN apk add --no-cache nginx nginx-mod-http-brotli
 WORKDIR /app
 COPY --from=build /src/build ./build
 COPY --from=build /src/node_modules ./node_modules
