@@ -57,9 +57,9 @@ type renderedEmail struct {
 	subject, html, text string
 }
 
-// htmlData is the data the HTML template renders. Every string field is emitted in
-// an escaping context by html/template, which is the injection guard for the
-// user/source-derived title, company, and saved-search name.
+// htmlData is the data the HTML template renders. Every field is emitted in an
+// escaping context by html/template, which is the injection guard for the
+// user/source-derived job titles and company names.
 type htmlData struct {
 	Jobs      []mailtpl.Job
 	More      int
@@ -67,9 +67,9 @@ type htmlData struct {
 }
 
 func (n *Notifier) render(d notify.Digest) renderedEmail {
-	lines := make([]mailtpl.Job, 0, len(d.Jobs))
+	rows := make([]mailtpl.Job, 0, len(d.Jobs))
 	for _, j := range d.Jobs {
-		lines = append(lines, mailtpl.NewJob(j.Title, j.Company, j.SalaryString(), n.jobURL(j)))
+		rows = append(rows, mailtpl.NewJob(j.Title, j.Company, j.SalaryString(), n.jobURL(j)))
 	}
 	// Digest.Jobs is already capped by the engine (Config.DigestCap); Total is the
 	// true count, so the remainder becomes the "and N more" tail.
@@ -79,12 +79,11 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 	}
 
 	subject := fmt.Sprintf(`%d new job%s for "%s"`, d.Total, notify.Plural(d.Total), d.SavedSearchName)
-	manageURL := n.jobBaseURL + "/my/notifications"
 
 	var b bytes.Buffer
 	// The template is a trusted constant and the data is escaped in context, so
 	// Execute can only fail on a template bug — surfaced by the render tests.
-	_ = htmlTemplate.Execute(&b, htmlData{Jobs: lines, More: more, ManageURL: manageURL})
+	_ = htmlTemplate.Execute(&b, htmlData{Jobs: rows, More: more, ManageURL: n.manageURL()})
 
 	html := n.layout.Render(mailtpl.Body{
 		Preheader: fmt.Sprintf("%d new job%s matching your %q alert", d.Total, notify.Plural(d.Total), d.SavedSearchName),
@@ -96,15 +95,15 @@ func (n *Notifier) render(d notify.Digest) renderedEmail {
 		Footer: "You’re getting this because you set up a job alert on freehire.",
 	})
 
-	return renderedEmail{subject: subject, html: html, text: n.renderText(d, lines, more)}
+	return renderedEmail{subject: subject, html: html, text: n.renderText(d, rows, more)}
 }
 
 // renderText builds the plain-text alternative, mirroring the HTML body so
 // non-HTML clients (and spam scorers) see the same content.
-func (n *Notifier) renderText(d notify.Digest, lines []mailtpl.Job, more int) string {
+func (n *Notifier) renderText(d notify.Digest, rows []mailtpl.Job, more int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d new job%s for %q\n\n", d.Total, notify.Plural(d.Total), d.SavedSearchName)
-	for _, l := range lines {
+	for _, l := range rows {
 		b.WriteString("- " + l.Title)
 		if l.Company != "" {
 			b.WriteString(" — " + l.Company)
@@ -115,11 +114,15 @@ func (n *Notifier) renderText(d notify.Digest, lines []mailtpl.Job, more int) st
 		b.WriteString("\n  " + l.URL + "\n")
 	}
 	if more > 0 {
-		fmt.Fprintf(&b, "\n+ %d more at %s/my/notifications\n", more, n.jobBaseURL)
+		fmt.Fprintf(&b, "\n+ %d more at %s\n", more, n.manageURL())
 	}
-	b.WriteString("\nManage your alerts: " + n.jobBaseURL + "/my/notifications\n")
+	b.WriteString("\nManage your alerts: " + n.manageURL() + "\n")
 	return b.String()
 }
+
+// manageURL is the saved-search settings page, where the digest sends anyone who
+// wants more results or fewer mails.
+func (n *Notifier) manageURL() string { return n.jobBaseURL + "/my/notifications" }
 
 // jobURL is the on-platform freehire job page for a digest job, tagged with an
 // email UTM source so the channel's traffic is attributable. Slugs are our own

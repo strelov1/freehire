@@ -69,21 +69,17 @@ func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string) *Email
 	return &EmailNotifier{sender: sender, from: from, jobBaseURL: base, layout: mailtpl.New(base)}
 }
 
-// emailBody is what the reminder body template renders from. Job carries the source
-// data, escaped in context by html/template — the reason this notifier no longer
-// calls html.EscapeString by hand.
-type emailBody struct {
-	Job mailtpl.Job
-}
-
-// The saved job leads, rendered by the shared row so it looks the same here as in a
-// digest, with the company's logo; the sentence underneath only says why the mail
-// arrived.
+// emailTemplate renders the body from a mailtpl.Job. The saved job leads, drawn by
+// the shared row so it looks the same here as in a digest, logo and all; the
+// sentence underneath only says why the mail arrived.
+//
+// The job's fields are source data and are escaped in context by html/template —
+// the reason this notifier no longer calls html.EscapeString by hand.
 var emailTemplate = template.Must(mailtpl.Partials().New("reminder").Parse(`
-{{template "job-row" .Job}}
+{{template "job-row" .}}
 <div style="height:18px;"></div>
 {{template "p" "You saved this job and haven’t applied yet."}}
-{{template "button" (mailLink .Job.URL "Open the job and apply")}}`))
+{{template "button" (mailLink .URL "Open the job and apply")}}`))
 
 // Send renders the reminder and delivers it to the address in dest.
 func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, m ReminderMessage) error {
@@ -91,8 +87,7 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, m Remin
 	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
 
 	var content bytes.Buffer
-	job := mailtpl.NewJob(m.JobTitle, m.Company, "", url)
-	if err := emailTemplate.Execute(&content, emailBody{Job: job}); err != nil {
+	if err := emailTemplate.Execute(&content, mailtpl.NewJob(m.JobTitle, m.Company, "", url)); err != nil {
 		return err
 	}
 	htmlBody := n.layout.Render(mailtpl.Body{

@@ -11,7 +11,9 @@
 // template change that nobody re-previews fails the build rather than quietly
 // leaving Storybook showing last month's design.
 //
-// Adding a mail: add a Sample here. Nothing else references the list.
+// Adding a mail: write a renderer and list it in `renderers`. Nothing else needs
+// to change — the contact sheet, the Storybook gallery and the staleness test all
+// read that list.
 package mailpreview
 
 import (

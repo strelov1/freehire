@@ -134,23 +134,24 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	// block names the body template; head and pre are the shell's heading and the
 	// inbox preview line.
 	var block, head, pre string
+	// Most nudges are about the application, so the tracking board is the default
+	// destination; job-closed overrides it, having nothing left to track.
 	data := nudgeBody{
 		Job:        mailtpl.NewJob(m.JobTitle, m.Company, "", jobURL),
 		DaysSilent: m.DaysSilent,
 		URL:        trackingURL,
+		CTA:        "Open your tracking board",
 	}
 
 	switch m.Kind {
 	case KindFollowUp:
 		block, head, pre = "followup", "Worth a follow-up?", "Nothing has moved on this application"
 		subject = fmt.Sprintf("Time to follow up: %s at %s", m.JobTitle, m.Company)
-		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("It's been %d days since anything moved on %s at %s.\n\nOpen your tracking board: %s\n",
 			m.DaysSilent, m.JobTitle, m.Company, trackingURL)
 	case KindInterviewPrep:
 		block, head, pre = "interview", "Ready to rehearse?", "Your interview is coming up"
 		subject = fmt.Sprintf("Prepare for your interview: %s at %s", m.JobTitle, m.Company)
-		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("You're interviewing for %s at %s.\n\nOpen your tracking board: %s\n",
 			m.JobTitle, m.Company, trackingURL)
 	case KindJobClosed:
@@ -161,7 +162,6 @@ func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
 	default:
 		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"
 		subject = fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
-		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("Open your tracking board: %s\n", trackingURL)
 	}
 

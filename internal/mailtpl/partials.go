@@ -35,8 +35,8 @@ func Partials() *template.Template {
 // partials holds the block definitions. Cloned, never executed.
 //
 // Each block takes the dot as its whole argument, so a call site reads
-// {{template "code" .Code}} rather than needing a wrapper struct — except "button",
-// "button-right" and "link", which need two values and take a Link.
+// {{template "code" .Code}} rather than needing a wrapper struct — except the two
+// button blocks, which need two values and take a Link.
 //
 // "button-right" nests a second table inside a right-aligned cell rather than
 // setting text-align on one: a table sized to its content is what keeps the button
@@ -53,11 +53,7 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 
 {{define "button-right"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 14px 0;"><tr><td align="right"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="m-btn" style="background:` + colorBrand + `;border-radius:8px;"><a href="{{.URL}}" class="m-btn-a" style="display:inline-block;padding:11px 20px;font-size:15px;font-weight:600;color:` + colorBrandFg + `;text-decoration:none;">{{.Label}}</a></td></tr></table></td></tr></table>{{end}}
 
-{{define "link"}}<a href="{{.URL}}" class="m-link" style="color:` + colorBrandStrong + `;text-decoration:underline;">{{.Label}}</a>{{end}}
-
 {{define "quote"}}<blockquote class="m-quote" style="margin:0 0 14px 0;padding:2px 0 2px 14px;border-left:3px solid ` + colorBorder + `;font-size:15px;line-height:1.6;color:` + colorMuted + `;">{{.}}</blockquote>{{end}}
-
-{{define "rule"}}<div class="m-rule" style="height:1px;background:` + colorBorder + `;margin:20px 0;"></div>{{end}}
 
 {{define "job-row"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
 {{if .LogoURL}}<td width="44" valign="top" style="width:44px;padding-right:12px;">
@@ -74,7 +70,7 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 </tr></table>{{end}}
 `))
 
-// Link is the argument to the "button" and "link" partials.
+// Link is the argument to the button partials.
 type Link struct {
 	URL   string
 	Label string

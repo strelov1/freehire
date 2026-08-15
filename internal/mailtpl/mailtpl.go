@@ -34,12 +34,11 @@ import (
 // build-time conversion would buy nothing, because the palette changes about once
 // a year and a silent drift is caught by the golden previews.
 const (
-	colorPage    = "#f0f0f0" // --muted: the canvas behind the card
-	colorCard    = "#ffffff" // --card
-	colorInk     = "#070707" // --foreground
-	colorMuted   = "#505050" // --muted-foreground
-	colorBorder  = "#e4e4e4" // --border
-	colorSurface = "#f0f0f0" // --secondary: fill for quotes
+	colorPage   = "#f0f0f0" // --muted: the canvas behind the card
+	colorCard   = "#ffffff" // --card
+	colorInk    = "#070707" // --foreground
+	colorMuted  = "#505050" // --muted-foreground
+	colorBorder = "#e4e4e4" // --border
 
 	// The brand tokens are authored in hex already — they are a named palette
 	// (oats green), not a computed scale — so these are copies, not conversions.
@@ -81,10 +80,6 @@ type Layout struct {
 func New(baseURL string) *Layout {
 	return &Layout{baseURL: strings.TrimRight(baseURL, "/")}
 }
-
-// BaseURL is the site origin this layout links to, exposed so callers can build
-// their own in-body links against the same origin instead of storing a second copy.
-func (l *Layout) BaseURL() string { return l.baseURL }
 
 // Body is the per-mail content the shell wraps.
 //
@@ -206,7 +201,7 @@ var colorSchemeMeta = map[Scheme]string{
 // written. A shell that ended an attribute early — a double quote inside a
 // style="..." value, say — would therefore mail every recipient a blank page while
 // every send call reported success.
-var _ = func() struct{} {
+func init() {
 	probe := shellData{
 		Body:        Body{Heading: "h", Content: "<p></p>", Footer: "f"},
 		ColorScheme: colorSchemeMeta[SchemeAuto],
@@ -215,8 +210,7 @@ var _ = func() struct{} {
 	if err := shell.Execute(io.Discard, probe); err != nil {
 		panic("mailtpl: shell template is malformed: " + err.Error())
 	}
-	return struct{}{}
-}()
+}
 
 // logoPath is the mark served for mail. It is a copy rather than a reuse of
 // /pwa-192x192.png because a PWA icon is free to gain a maskable safe-area or
@@ -269,14 +263,12 @@ const darkRules = `
   .m-card   { background: ` + darkCard + ` !important; border-color: ` + darkBorder + ` !important; }
   .m-ink    { color: ` + darkInk + ` !important; }
   .m-muted  { color: ` + darkMuted + ` !important; }
-  .m-rule   { background: ` + darkBorder + ` !important; }
   .m-row    { border-top-color: ` + darkBorder + ` !important; }
   .m-quote  { color: ` + darkMuted + ` !important; border-left-color: ` + darkBorder + ` !important; }
   .m-code   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
   .m-tile   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
   .m-btn    { background: ` + darkBrand + ` !important; }
   .m-btn-a  { color: ` + darkBrandFg + ` !important; }
-  .m-link   { color: ` + darkBrandStrong + ` !important; }
   .m-logo   { filter: invert(1); }
 `
 
