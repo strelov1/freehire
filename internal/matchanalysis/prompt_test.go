@@ -21,6 +21,34 @@ func TestStageSystemPrompts_CarryTheLanguageDirective(t *testing.T) {
 	}
 }
 
+// Stage 1's "quote" field is defined as "a short verbatim excerpt from the job
+// description" — a blanket translation instruction would break that contract, so the
+// directive must carve it out explicitly rather than leave the model to notice the
+// conflict on its own.
+func TestStage1SystemPrompt_LanguageDirectiveExemptsQuote(t *testing.T) {
+	sp := stage1SystemPrompt("ru")
+	if !strings.Contains(sp, `Exception: "quote" must stay a verbatim excerpt`) {
+		t.Errorf("stage1 system prompt does not exempt \"quote\" from the language directive:\n%s", sp)
+	}
+	if !strings.Contains(sp, "never translate it") {
+		t.Errorf("stage1 system prompt does not explicitly forbid translating \"quote\":\n%s", sp)
+	}
+}
+
+// Stage 2 and Stage 3 have no verbatim-excerpt field to protect — every value they
+// return is the model's own prose — so their directive must stay the plain one rather
+// than carrying stage1's exception where it names nothing that exists in their output.
+func TestStage2And3SystemPrompt_LanguageDirectiveHasNoQuoteException(t *testing.T) {
+	for name, sp := range map[string]string{
+		"stage2": stage2SystemPrompt("ru"),
+		"stage3": stage3SystemPrompt("ru"),
+	} {
+		if strings.Contains(sp, "Exception:") {
+			t.Errorf("%s system prompt carries stage1's quote exception, which names a field it does not return:\n%s", name, sp)
+		}
+	}
+}
+
 func TestStage1Prompt_SendsDeIdentifiedStructured(t *testing.T) {
 	// The caller projects; the chain cannot be handed the contact-bearing structure at all.
 	structured := resumeextract.Structured{

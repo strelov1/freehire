@@ -275,6 +275,17 @@ func freeTextLanguageDirective(language string) string {
 	return "\n\nWrite every free-text value in " + assistant.LanguageName(language) + ", regardless of what language the job posting or the candidate's CV is in.\n"
 }
 
+// stage1LanguageDirective is freeTextLanguageDirective plus one exception: Stage 1's
+// "quote" field is defined as "a short verbatim excerpt from the job description" — a
+// blanket translation instruction would contradict that and stop it from being
+// verifiable against the posting. Every other Stage 1 field (the requirement text, the
+// evidence explanation, the hidden-signal insight) is the model's own prose and follows
+// the directive as normal.
+func stage1LanguageDirective(language string) string {
+	return freeTextLanguageDirective(language) +
+		"Exception: \"quote\" must stay a verbatim excerpt copied from the job posting, in the posting's own language — never translate it.\n"
+}
+
 // stage1SystemPrompt pins the ATS extract-and-match contract.
 func stage1SystemPrompt(language string) string {
 	var b strings.Builder
@@ -305,7 +316,7 @@ func stage1SystemPrompt(language string) string {
 	b.WriteString("spec). Base every signal on wording actually present in the posting; if the posting is ")
 	b.WriteString("short or generic and carries no distinctive wording, return an empty array — never invent ")
 	b.WriteString("a signal to fill it.\n")
-	b.WriteString(freeTextLanguageDirective(language))
+	b.WriteString(stage1LanguageDirective(language))
 	return b.String()
 }
 
