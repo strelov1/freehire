@@ -22,7 +22,12 @@
     type JobMatch,
     type AutofillProfile,
   } from '../../lib/freehire';
-  import { planLabelFills, looksLikeApplication, scopeToApplication } from '../../lib/form';
+  import {
+    planLabelFills,
+    looksLikeApplication,
+    scopeToApplication,
+    formatAuthorizedCountries,
+  } from '../../lib/form';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
   import MatchCard from './MatchCard.svelte';
@@ -369,6 +374,12 @@
       linkedin: p.linkedin,
       github: p.github,
       portfolio: p.portfolio,
+      authorizedCountries: formatAuthorizedCountries(p.authorized_countries),
+      visaSponsorshipNeeded: p.visa_sponsorship_needed,
+      desiredSalary: p.desired_salary,
+      noticePeriod: p.notice_period,
+      willingToRelocate: p.willing_to_relocate,
+      age18OrOlder: p.age_18_or_older,
     };
   }
 

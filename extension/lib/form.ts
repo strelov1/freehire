@@ -10,6 +10,7 @@
  */
 
 import type { FieldTag, FormField, LabelFill, FillOutcome, Upload } from './protocol';
+import { countryLabel } from './labels';
 
 type Fillable = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
@@ -342,7 +343,72 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   linkedin: ['linkedin'],
   github: ['github'],
   portfolio: ['portfolio', 'website', 'personal site'],
+  // The candidate's own screening answers (internal/screeninganswers), not a
+  // boolean "are you authorized to work" question — that asks something the
+  // profile does not carry an answer to, so it stays unmatched rather than
+  // being fed a country list where a Yes/No answer belongs.
+  authorizedCountries: [
+    'which countries are you authorized to work in',
+    'in which countries are you authorized to work',
+    'in which countries are you legally authorized to work',
+    'countries you are authorized to work in',
+    'list the countries you are authorized to work in',
+  ],
+  visaSponsorshipNeeded: [
+    'will you now or in the future require sponsorship',
+    'do you now or will you in the future require sponsorship',
+    'will you require sponsorship',
+    'do you require visa sponsorship',
+    'do you need visa sponsorship',
+    'will you need visa sponsorship',
+  ],
+  desiredSalary: [
+    'desired salary',
+    'desired compensation',
+    'expected salary',
+    'salary expectation',
+    'salary expectations',
+    'what are your salary expectations',
+    'compensation expectations',
+  ],
+  noticePeriod: [
+    'notice period',
+    'current notice period',
+    'what is your notice period',
+    'how much notice',
+  ],
+  willingToRelocate: [
+    'are you willing to relocate',
+    'would you be willing to relocate',
+    'willing to relocate',
+    'are you open to relocating',
+    'open to relocation',
+  ],
+  age18OrOlder: [
+    'are you at least 18 years',
+    'are you 18 years of age or older',
+    'are you over the age of 18',
+    'are you 18 or older',
+    'will you be 18 years of age',
+  ],
 };
+
+/**
+ * The profile's authorized-countries field arrives as comma-joined ISO codes ("US, DE" —
+ * screeninganswers.AutofillFields' wire format), but the question it answers is almost
+ * always a checkbox group whose options are full country names ("United States"), matched
+ * option-by-option against this value by `chosenOptions` below. Left as codes, the value
+ * would never match any option and the group would silently stay unchecked.
+ */
+export function formatAuthorizedCountries(codes: string): string {
+  if (!codes) return '';
+  return codes
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map(countryLabel)
+    .join(', ');
+}
 
 /**
  * Comparison form of a label: case-, whitespace- and required-marker-insensitive,

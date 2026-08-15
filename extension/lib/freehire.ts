@@ -177,7 +177,9 @@ export function getMatchAnalysis(slug: string, token: string): Promise<MatchAnal
   return getData<MatchAnalysisResponse>(`/api/v1/jobs/${encodeURIComponent(slug)}/match-analysis`, token);
 }
 
-/** Canonical autofill fields freehire assembles from the user's CV + account. */
+/** Canonical autofill fields freehire assembles from the user's CV + account,
+ *  plus the candidate's own screening answers (internal/screeninganswers) —
+ *  empty when the caller has stated nothing, never guessed. */
 export interface AutofillProfile {
   full_name: string;
   first_name: string;
@@ -188,6 +190,12 @@ export interface AutofillProfile {
   linkedin: string;
   github: string;
   portfolio: string;
+  authorized_countries: string;
+  visa_sponsorship_needed: string;
+  desired_salary: string;
+  notice_period: string;
+  willing_to_relocate: string;
+  age_18_or_older: string;
 }
 
 export function getAutofillProfile(token: string): Promise<AutofillProfile> {

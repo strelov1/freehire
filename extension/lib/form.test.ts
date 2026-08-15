@@ -8,6 +8,7 @@ import {
   fillByLabel,
   looksLikeApplication,
   scopeToApplication,
+  formatAuthorizedCountries,
 } from './form';
 import { must } from './test-utils';
 
@@ -712,6 +713,42 @@ describe('fillByLabel on a group', () => {
     expect(inputs.some((i) => i.checked)).toBe(false);
     expect(outcomes).toEqual([{ label: 'Which countries?', status: 'no_option' }]);
   });
+
+  it('fills a country checkbox group from the profile ISO-code value once formatted', () => {
+    // screeninganswers.AutofillFields serves "US, DE" — the group's own options are
+    // full country names, so the raw codes must go through formatAuthorizedCountries
+    // first or nothing would ever match.
+    const countries = checkboxGroup('Which countries are you authorized to work in?', [
+      'United States',
+      'Germany',
+      'Canada',
+    ]);
+    const us = must(countries[0]);
+    const de = must(countries[1]);
+    const ca = must(countries[2]);
+
+    const outcomes = fillByLabel(document, [
+      {
+        label: 'Which countries are you authorized to work in?',
+        value: formatAuthorizedCountries('US, DE'),
+      },
+    ]);
+
+    expect([us.checked, de.checked, ca.checked]).toEqual([true, true, false]);
+    expect(outcomes).toEqual([
+      { label: 'Which countries are you authorized to work in?', status: 'filled' },
+    ]);
+  });
+});
+
+describe('formatAuthorizedCountries', () => {
+  it('turns ISO codes into the country names a checkbox group carries as options', () => {
+    expect(formatAuthorizedCountries('US, DE')).toBe('United States, Germany');
+  });
+
+  it('is empty for an empty value, rather than an empty-string entry', () => {
+    expect(formatAuthorizedCountries('')).toBe('');
+  });
 });
 
 describe('matchFieldKey', () => {
@@ -745,5 +782,23 @@ describe('matchFieldKey', () => {
 
   it('does not match a longer word that merely starts the same way', () => {
     expect(matchFieldKey('Citywide preference')).toBeNull();
+  });
+
+  it('maps screening-answer questions to their canonical keys', () => {
+    expect(matchFieldKey('Which countries are you authorized to work in?')).toBe('authorizedCountries');
+    expect(
+      matchFieldKey('Will you now or in the future require sponsorship to work in this country?'),
+    ).toBe('visaSponsorshipNeeded');
+    expect(matchFieldKey('Desired salary')).toBe('desiredSalary');
+    expect(matchFieldKey('What is your notice period?')).toBe('noticePeriod');
+    expect(matchFieldKey('Are you willing to relocate?')).toBe('willingToRelocate');
+    expect(matchFieldKey('Are you at least 18 years of age?')).toBe('age18OrOlder');
+  });
+
+  it('leaves a plain work-authorization Yes/No question unmatched', () => {
+    // That question has no boolean field in the profile — only a list of
+    // authorized countries — so answering it would put the wrong shape of
+    // value into a Yes/No control. See the Roku case above.
+    expect(matchFieldKey('Are you authorized to work in this country?')).toBeNull();
   });
 });
