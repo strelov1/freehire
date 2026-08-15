@@ -200,3 +200,26 @@ func TestRun_EachStepHasItsOwnSubjectAndBothBodies(t *testing.T) {
 		seen[m.subject] = true
 	}
 }
+
+// The delay for later steps is measured from the previous mail, not from signup.
+// Measured from signup, the first ever run would fire the whole sequence at any
+// account older than ten days within the same hour — the query enforces this, and
+// this test states the intent the query is expected to keep.
+func TestRun_LaterStepsArePacedFromTheGreeting(t *testing.T) {
+	store := &fakeStore{}
+	if _, err := newRunner(store, &fakeSender{}).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	cfg := onboarding.DefaultConfig()
+	if store.noAlertParams.AfterDays != cfg.NoAlertAfterDays {
+		t.Fatalf("no_alert delay = %d, want %d", store.noAlertParams.AfterDays, cfg.NoAlertAfterDays)
+	}
+	if cfg.NoAlertAfterDays >= cfg.OpenSourceAfterDays {
+		t.Errorf("step delays must increase: no_alert %d, open_source %d",
+			cfg.NoAlertAfterDays, cfg.OpenSourceAfterDays)
+	}
+	if cfg.OpenSourceAfterDays >= cfg.WindowDays {
+		t.Errorf("open_source at day %d never fires inside a %d-day window",
+			cfg.OpenSourceAfterDays, cfg.WindowDays)
+	}
+}

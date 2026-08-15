@@ -16,7 +16,7 @@ JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
-  AND u.created_at < now() - make_interval(days => $2::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
   AND COALESCE(ns.enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.active
@@ -40,11 +40,14 @@ type ListNoAlertCandidatesRow struct {
 	Email string `json:"email"`
 }
 
-// Accounts old enough to have settled in, greeted already, and still without an
-// active alert — the one action the product is built around.
+// Greeted a while ago, and still without an active alert — the one action the
+// product is built around.
 //
-// It requires the welcome row rather than only the age: a person whose greeting
-// never went out should not receive a follow-up referring to a mail they never saw.
+// The wait is measured from the greeting (w.sent_at), not from signup. Measuring it
+// from signup breaks on the very first run: every account older than the delay is
+// instantly eligible for both steps, so the same person gets "hi, I'm Ilya" and then
+// "you signed up a few days ago and still have no alert" an hour apart. From two
+// mails in an hour, a stranger is indistinguishable from a spammer.
 func (q *Queries) ListNoAlertCandidates(ctx context.Context, arg ListNoAlertCandidatesParams) ([]ListNoAlertCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listNoAlertCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
 	if err != nil {
@@ -72,7 +75,7 @@ JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => $1::int)
-  AND u.created_at < now() - make_interval(days => $2::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
   AND COALESCE(ns.enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
@@ -96,6 +99,9 @@ type ListOpenSourceCandidatesRow struct {
 // Everyone greeted and past the wait, whether or not they set up an alert: this
 // step asks for a star and a Discord visit, which is worth asking of a browser as
 // much as of a regular.
+//
+// The wait runs from the greeting, for the same reason it does above: paced from
+// signup, a two-week-old account would receive the whole sequence in one afternoon.
 func (q *Queries) ListOpenSourceCandidates(ctx context.Context, arg ListOpenSourceCandidatesParams) ([]ListOpenSourceCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listOpenSourceCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
 	if err != nil {

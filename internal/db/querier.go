@@ -1985,15 +1985,21 @@ type Querier interface {
 	// reviewed it under — the write dialog's "which categories have I already
 	// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
 	ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error)
-	// Accounts old enough to have settled in, greeted already, and still without an
-	// active alert — the one action the product is built around.
+	// Greeted a while ago, and still without an active alert — the one action the
+	// product is built around.
 	//
-	// It requires the welcome row rather than only the age: a person whose greeting
-	// never went out should not receive a follow-up referring to a mail they never saw.
+	// The wait is measured from the greeting (w.sent_at), not from signup. Measuring it
+	// from signup breaks on the very first run: every account older than the delay is
+	// instantly eligible for both steps, so the same person gets "hi, I'm Ilya" and then
+	// "you signed up a few days ago and still have no alert" an hour apart. From two
+	// mails in an hour, a stranger is indistinguishable from a spammer.
 	ListNoAlertCandidates(ctx context.Context, arg ListNoAlertCandidatesParams) ([]ListNoAlertCandidatesRow, error)
 	// Everyone greeted and past the wait, whether or not they set up an alert: this
 	// step asks for a star and a Discord visit, which is worth asking of a browser as
 	// much as of a regular.
+	//
+	// The wait runs from the greeting, for the same reason it does above: paced from
+	// signup, a two-week-old account would receive the whole sequence in one afternoon.
 	ListOpenSourceCandidates(ctx context.Context, arg ListOpenSourceCandidatesParams) ([]ListOpenSourceCandidatesRow, error)
 	// Keyset continuation: rows strictly older than the cursor (created_at, id). No
 	// OFFSET, so deep pages never scan skipped rows.

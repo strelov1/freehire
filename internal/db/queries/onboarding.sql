@@ -29,18 +29,21 @@ ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
 -- name: ListNoAlertCandidates :many
--- Accounts old enough to have settled in, greeted already, and still without an
--- active alert — the one action the product is built around.
+-- Greeted a while ago, and still without an active alert — the one action the
+-- product is built around.
 --
--- It requires the welcome row rather than only the age: a person whose greeting
--- never went out should not receive a follow-up referring to a mail they never saw.
+-- The wait is measured from the greeting (w.sent_at), not from signup. Measuring it
+-- from signup breaks on the very first run: every account older than the delay is
+-- instantly eligible for both steps, so the same person gets "hi, I'm Ilya" and then
+-- "you signed up a few days ago and still have no alert" an hour apart. From two
+-- mails in an hour, a stranger is indistinguishable from a spammer.
 SELECT u.id, u.email
 FROM users u
 JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => sqlc.arg(window_days)::int)
-  AND u.created_at < now() - make_interval(days => sqlc.arg(after_days)::int)
+  AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
   AND COALESCE(ns.enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.active
@@ -56,13 +59,16 @@ LIMIT sqlc.arg(max_rows)::int;
 -- Everyone greeted and past the wait, whether or not they set up an alert: this
 -- step asks for a star and a Discord visit, which is worth asking of a browser as
 -- much as of a regular.
+--
+-- The wait runs from the greeting, for the same reason it does above: paced from
+-- signup, a two-week-old account would receive the whole sequence in one afternoon.
 SELECT u.id, u.email
 FROM users u
 JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 WHERE u.email_verified
   AND u.created_at > now() - make_interval(days => sqlc.arg(window_days)::int)
-  AND u.created_at < now() - make_interval(days => sqlc.arg(after_days)::int)
+  AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
   AND COALESCE(ns.enabled, true)
   AND NOT EXISTS (
       SELECT 1 FROM onboarding_emails oe
