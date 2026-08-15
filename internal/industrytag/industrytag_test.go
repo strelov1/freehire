@@ -72,13 +72,35 @@ func TestCanonicalize(t *testing.T) {
 // absent from Canonicals() — so the facet could never offer it — would render as a
 // raw slug, and would be silently deleted by the next normalization pass, which is
 // exactly the "no canonical value is invented" rule the dictionary exists to keep.
-func TestCanonicalizeRejectsAliasPointingAtUnknownCanonical(t *testing.T) {
-	const bogus = "not-a-real-canonical"
-	aliases["probe-broken-alias"] = bogus
-	t.Cleanup(func() { delete(aliases, "probe-broken-alias") })
+//
+// Driven through resolve rather than by mutating the package's alias table: a test
+// that writes into shared state cannot run in parallel and blocks ever freezing
+// those maps.
+func TestResolveRejectsAliasPointingAtUnknownCanonical(t *testing.T) {
+	broken := map[string]string{"probe-broken-alias": "not-a-real-canonical"}
 
-	if got := Canonicalize([]string{"probe broken alias"}); len(got) != 0 {
-		t.Errorf("Canonicalize resolved an alias whose target is not canonical: got %q, want none", got)
+	got := resolve([]string{"probe broken alias"}, broken, displayNames)
+
+	if len(got) != 0 {
+		t.Errorf("resolve returned an alias target that is not canonical: got %q, want none", got)
+	}
+}
+
+// Pinned end-to-end cases over the real dictionary. The invariants check shape;
+// these check content, so a truncated or mis-generated dictionary fails loudly.
+func TestRealDictionaryResolvesKnownLabels(t *testing.T) {
+	cases := map[string]string{
+		"FinTech":            "fintech",
+		"Oil & Gas":          "oil-and-gas",
+		"Cyber-    Security": "cybersecurity",
+		"SaaS":               "enterprise-software",
+		"Machine Learning":   "ai",
+		"E-Learning":         "edtech",
+	}
+	for label, want := range cases {
+		if got := Canonicalize([]string{label}); len(got) != 1 || got[0] != want {
+			t.Errorf("Canonicalize(%q) = %q, want [%q]", label, got, want)
+		}
 	}
 }
 

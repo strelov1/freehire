@@ -42,6 +42,13 @@ func normalize(label string) string {
 // It never returns nil: an empty result is an empty slice, so a caller storing the
 // result into a NOT NULL array column does not have to special-case it.
 func Canonicalize(labels []string) []string {
+	return resolve(labels, aliases, displayNames)
+}
+
+// resolve is Canonicalize with its two tables injected, so a test can drive a
+// deliberately broken dictionary through the real code path without mutating the
+// package's own maps.
+func resolve(labels []string, aliases, canonical map[string]string) []string {
 	seen := make(map[string]struct{}, len(labels))
 	for _, label := range labels {
 		key := normalize(label)
@@ -56,7 +63,7 @@ func Canonicalize(labels []string) []string {
 		// makes running the normalization worker over its own output a no-op — and it
 		// refuses an alias whose target is not a canonical, so one typo in the
 		// dictionary cannot write a value the facet could never offer.
-		if _, ok := displayNames[key]; ok {
+		if _, ok := canonical[key]; ok {
 			seen[key] = struct{}{}
 		}
 	}

@@ -45,6 +45,34 @@ func TestNoAliasMapsToItself(t *testing.T) {
 	}
 }
 
+// A floor on the dictionary's size, mirroring skilltag's. Every other invariant
+// iterates the maps, so all of them stay vacuously green if the dictionary is
+// truncated — deleting ninety canonicals would break nothing else in this file.
+func TestDictionaryIsNotTruncated(t *testing.T) {
+	const (
+		minCanonicals = 100
+		minAliases    = 150
+	)
+	if len(displayNames) < minCanonicals {
+		t.Errorf("dictionary has %d canonical values, want at least %d", len(displayNames), minCanonicals)
+	}
+	if len(aliases) < minAliases {
+		t.Errorf("dictionary has %d aliases, want at least %d", len(aliases), minAliases)
+	}
+}
+
+// Two canonicals sharing display text render as two identical dropdown options,
+// which is indistinguishable from a bug to whoever is using the filter.
+func TestDisplayNamesAreUnique(t *testing.T) {
+	seen := make(map[string]string, len(displayNames))
+	for canonical, name := range displayNames {
+		if other, ok := seen[name]; ok {
+			t.Errorf("canonicals %q and %q both display as %q", other, canonical, name)
+		}
+		seen[name] = canonical
+	}
+}
+
 func TestEveryCanonicalHasANonEmptyLabel(t *testing.T) {
 	for canonical, name := range displayNames {
 		if name == "" {
