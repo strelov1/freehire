@@ -41,7 +41,7 @@ type Notifier struct {
 // rooted at jobBaseURL (the frontend origin).
 func NewNotifier(sender Sender, from, jobBaseURL string) *Notifier {
 	base := strings.TrimRight(jobBaseURL, "/")
-	return &Notifier{sender: sender, from: from, jobBaseURL: base, layout: mailtpl.New(base)}
+	return &Notifier{sender: sender, from: From(productName, from), jobBaseURL: base, layout: mailtpl.New(base)}
 }
 
 // Send renders the digest and delivers it to the email address in dest. The

@@ -110,8 +110,12 @@ func TestNotifier_Send(t *testing.T) {
 	if fs.calls != 1 {
 		t.Fatalf("sender calls = %d, want 1", fs.calls)
 	}
-	if fs.from != "notifications@freehire.me" || fs.to != "user@acme.com" {
-		t.Errorf("from/to = %q/%q, want notifications@freehire.me/user@acme.com", fs.from, fs.to)
+	// From carries a display name over the configured address — see emailnotify.From.
+	if !strings.Contains(fs.from, "notifications@freehire.me") || !strings.Contains(fs.from, "freehire") {
+		t.Errorf("from = %q, want the configured address behind a readable name", fs.from)
+	}
+	if fs.to != "user@acme.com" {
+		t.Errorf("to = %q, want the subscriber's address", fs.to)
 	}
 	if !strings.HasPrefix(fs.subject, "3 new jobs for") {
 		t.Errorf("subject = %q", fs.subject)

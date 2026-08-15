@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"html/template"
+	"net/mail"
 	"strings"
 	"unicode/utf8"
 
@@ -35,7 +36,19 @@ type MailNotifier struct {
 // site origin the reported job is linked under.
 func NewMailNotifier(sender EmailSender, from, baseURL string) *MailNotifier {
 	base := strings.TrimRight(baseURL, "/")
-	return &MailNotifier{sender: sender, from: from, baseURL: base, layout: mailtpl.New(base)}
+	return &MailNotifier{sender: sender, from: senderFrom(from), baseURL: base, layout: mailtpl.New(base)}
+}
+
+// senderFrom puts the product's name on the From header. It is spelled out here
+// rather than imported from emailnotify because this package deliberately does not
+// depend on that one (see EmailSender above) — one duplicated word is cheaper than
+// dragging the AWS dependency graph into moderation.
+func senderFrom(address string) string {
+	parsed, err := mail.ParseAddress(address)
+	if err != nil {
+		return address
+	}
+	return (&mail.Address{Name: "freehire", Address: parsed.Address}).String()
 }
 
 // maxQuotedDetails bounds how much of the original report is quoted back. The reporter wrote

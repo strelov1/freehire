@@ -14,6 +14,10 @@ import (
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
 
+// senderName is the display name on these mails: they are the product speaking,
+// not a person, so a message list should say so.
+const senderName = "freehire"
+
 // Compile-time proof the transports satisfy the engine's Notifier seam.
 var (
 	_ Notifier = (*TelegramNotifier)(nil)
@@ -81,7 +85,7 @@ type EmailNotifier struct {
 // links rooted at origin.
 func NewEmailNotifier(sender emailnotify.Sender, from, origin string) *EmailNotifier {
 	base := strings.TrimRight(origin, "/")
-	return &EmailNotifier{sender: sender, from: from, origin: base, layout: mailtpl.New(base)}
+	return &EmailNotifier{sender: sender, from: emailnotify.From(senderName, from), origin: base, layout: mailtpl.New(base)}
 }
 
 // Send renders the nudge and delivers it to the address in dest.

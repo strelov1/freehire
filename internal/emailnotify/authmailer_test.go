@@ -36,8 +36,10 @@ func TestAuthMailer_SendsTheVerificationCode(t *testing.T) {
 	if sender.to != "user@example.test" {
 		t.Errorf("to = %q, want the account's address", sender.to)
 	}
-	if sender.from != "no-reply@freehire.me" {
-		t.Errorf("from = %q, want the configured sender", sender.from)
+	// The header carries a display name over the configured address: a message list
+	// showing a bare address renders it as "no-reply", which identifies nobody.
+	if !strings.Contains(sender.from, "no-reply@freehire.me") || !strings.Contains(sender.from, "freehire") {
+		t.Errorf("from = %q, want the configured address behind a readable name", sender.from)
 	}
 	if !strings.Contains(sender.text, "123456") {
 		t.Errorf("plain-text body does not carry the code: %q", sender.text)

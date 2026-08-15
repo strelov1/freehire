@@ -22,6 +22,7 @@ import (
 	"html/template"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/mailtpl"
 )
 
@@ -67,8 +68,19 @@ type Mailer struct {
 // caller is expected to catch, not something this type papers over.
 func NewMailer(sender Sender, from, replyTo, baseURL string) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
-	return &Mailer{sender: sender, from: from, replyTo: replyTo, baseURL: base, layout: mailtpl.New(base)}
+	return &Mailer{
+		sender:  sender,
+		from:    emailnotify.From(senderName, from),
+		replyTo: replyTo,
+		baseURL: base,
+		layout:  mailtpl.New(base),
+	}
 }
+
+// senderName is what the recipient's message list shows. These letters are from a
+// person and say so in the first line, so the sender reads as one too — "freehire"
+// would set up a reply to a company that no one intends to answer.
+const senderName = "Ilya from freehire"
 
 // Send delivers one step to one address.
 func (m *Mailer) Send(ctx context.Context, step Step, to string) error {

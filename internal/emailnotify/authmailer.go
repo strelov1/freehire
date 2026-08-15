@@ -26,7 +26,7 @@ type AuthMailer struct {
 // site origin the branded shell links back to, so a recipient can tell which product
 // mailed them.
 func NewAuthMailer(sender Sender, from, baseURL string) *AuthMailer {
-	return &AuthMailer{sender: sender, from: from, layout: mailtpl.New(baseURL)}
+	return &AuthMailer{sender: sender, from: From(productName, from), layout: mailtpl.New(baseURL)}
 }
 
 // codeMail is the data both templates render from.
