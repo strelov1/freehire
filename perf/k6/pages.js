@@ -33,6 +33,19 @@ export function setup() {
 // and dispatch — no per-scenario boilerplate.
 export function run(data) {
   const name = exec.scenario.name;
+
+  // saturation scenarios are named by rate, not by page: the profile measures how
+  // many requests per second the deployment accepts, and pinning that to one page
+  // would measure that page's render cost instead. Each iteration picks a page in
+  // round-robin so the mix stays even and reproducible — a random pick would make
+  // two runs incomparable, which defeats a before/after capacity test.
+  if (name.startsWith('saturation_')) {
+    const keys = Object.keys(PAGES);
+    const page = keys[exec.scenario.iterationInTest % keys.length];
+    visit(page, PAGES[page].path, 'anon', data);
+    return;
+  }
+
   const sep = name.lastIndexOf('_');
   const page = name.slice(0, sep);
   const auth = name.slice(sep + 1);

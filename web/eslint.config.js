@@ -35,8 +35,10 @@ export default ts.config(
   },
 
   // Standalone scripts (codegen, smoke tests) run in Node, not the browser.
+  // cluster.js is the production entry point systemd starts — same Node globals,
+  // but it belongs beside build/ rather than under scripts/.
   {
-    files: ['scripts/**/*.{js,mjs}'],
+    files: ['scripts/**/*.{js,mjs}', 'cluster.js'],
     languageOptions: { globals: { ...globals.node } },
   },
 

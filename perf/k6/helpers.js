@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
-import { BASE_URL, USER_AGENT, AUTH_COOKIE, CREDS, THINK } from './config.js';
+import { BASE_URL, USER_AGENT, AUTH_COOKIE, CREDS, THINK, COMPANY_SLUG } from './config.js';
 
 // Body size of every rendered page, tagged by {page, auth}. This makes the
 // "authed pulls more data" claim measurable: in the summary, authed body bytes
@@ -60,6 +60,14 @@ export function resolveSession() {
 // scenario is never hardcoded/brittle. It prefers a company with open jobs so
 // the streamed job list actually does work (the interesting latency path).
 export function pickCompanySlug() {
+  // An explicit slug skips the lookup entirely. That matters when the target is
+  // an SSR process addressed directly (http://127.0.0.1:<port>, the idle colour
+  // during a capacity run) rather than an origin that fronts both SSR and /api:
+  // the lookup 404s there, and the company-card scenario would then be silently
+  // skipped — quietly dropping the heaviest page from a capacity measurement and
+  // overstating the ceiling.
+  if (COMPANY_SLUG) return COMPANY_SLUG;
+
   let res;
   for (let i = 0; i < 3; i++) {
     res = http.get(`${BASE_URL}/api/v1/companies?limit=50`, { headers: { 'User-Agent': USER_AGENT } });
