@@ -15,15 +15,24 @@
   let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
+  const base = $derived(`${origin}/collections/${data.slug}`);
   // Self-canonical: the landing page is the collection's canonical home, never the
-  // bare /jobs the raw ?collections= filter would resolve to.
-  const canonical = $derived(`${origin}/collections/${data.slug}`);
+  // bare /jobs the raw ?collections= filter would resolve to. Each paginated page
+  // is canonical to ITSELF, not to page one — pointing them all at the first page
+  // tells Google the deeper rows are duplicates of it, which is how the rows those
+  // pages exist to expose stop being indexed.
+  const canonical = $derived(data.pageNumber > 1 ? `${base}?page=${data.pageNumber}` : base);
   // Template copy from the collection's display title, with its live open-job
   // count (see design): "<total> <title> jobs".
   const heading = $derived(collectionHeading(data.collection.title, data.initial.total));
   // The backing brand's mark, where this collection names one. A filter collection
   // or an editorial theme has none, and then the heading stands alone.
   const mark = $derived(backerBadges([data.slug])[0]?.mark ?? null);
+  // Page 2 onward says so in the title: without it every page of a collection
+  // competes for the same SERP entry under one identical title.
+  const pageTitle = $derived(
+    data.pageNumber > 1 ? `${heading} — page ${data.pageNumber} · freehire` : `${heading} · freehire`,
+  );
   // Request hiding the facets the collection pins via `scope`. Note: this only
   // hides standalone facets; the collection facets that live in composite panes
   // (collections/work_mode/regions) stay visible in the filter UI for now, but
@@ -46,13 +55,13 @@
       breadcrumbJsonLd([
         { name: 'freehire', url: `${origin}/` },
         { name: 'Collections', url: `${origin}/collections` },
-        { name: heading, url: canonical },
+        { name: heading, url: base },
       ]),
     ])
   );
 </script>
 
-<Seo title={`${heading} · freehire`} description={data.collection.description} {canonical} />
+<Seo title={pageTitle} description={data.collection.description} {canonical} />
 
 <svelte:head>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- non-executable JSON-LD built by jsonLdScript, which escapes `<`; raw injection is the only way to emit a structured-data <script> -->
@@ -77,6 +86,11 @@
   <!-- Remount on slug change so the seeded paginator/filters start fresh per
        collection (mirrors the company page). -->
   {#key data.slug}
-    <JobsView initial={data.initial} scope={data.collection.params} {excludeFacets} />
+    <JobsView
+      initial={data.initial}
+      scope={data.collection.params}
+      {excludeFacets}
+      currentPage={data.pageNumber}
+    />
   {/key}
 </div>

@@ -66,6 +66,11 @@ export class Paginator<T> {
 
   #fetch: FetchSlice<T>;
   #limit: number;
+  // Where the loaded window starts in the full result set. Zero unless the view
+  // was seeded from a later page (`?page=3` server-renders rows 40-59), in which
+  // case `items.length` alone would put the next fetch back at row 20 and replay
+  // pages the visitor has already scrolled past.
+  #baseOffset = 0;
   // Only set when the caller has a stable identity for T; see `dedupeByKey`.
   #keyOf?: (item: T) => unknown;
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
@@ -81,27 +86,38 @@ export class Paginator<T> {
     return this.#keyOf ? dedupeByKey(slice, this.#keyOf, this.#seen) : slice;
   }
 
-  /** Seed the first page from data already fetched (e.g. server-rendered) so the
-   *  view renders it immediately and only fetches on `loadMore`. Use instead of
-   *  `start()` when the route's `load` has already produced page one. */
-  seed(slice: Slice<T>) {
+  /** Seed from data already fetched (e.g. server-rendered) so the view renders it
+   *  immediately and only fetches on `loadMore`. Use instead of `start()` when the
+   *  route's `load` has already produced a page.
+   *
+   *  `offset` is where that page starts in the result set — non-zero when the route
+   *  served `?page=N`, so paging continues after the seeded window instead of
+   *  refetching from the top. */
+  seed(slice: Slice<T>, offset = 0) {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
     this.#seen = new Set();
+    this.#baseOffset = offset;
     this.items = this.#dedupe(slice.items);
     this.total = slice.total ?? 0;
     this.hasMore = slice.hasMore;
     this.status = 'ready';
   }
 
-  /** Load the first page. Call once from the view's onMount (or an effect). A
-   *  request cancelled by a navigation (or a transient network drop) isn't a real
-   *  failure — retry a couple of times so the feed just reloads rather than showing
-   *  an error; only a genuine server error (or exhausted retries) flips to 'error'. */
-  async start() {
+  /** Load a page and make it the whole list. Call once from the view's onMount (or
+   *  an effect). A request cancelled by a navigation (or a transient network drop)
+   *  isn't a real failure — retry a couple of times so the feed just reloads rather
+   *  than showing an error; only a genuine server error (or exhausted retries) flips
+   *  to 'error'.
+   *
+   *  `offset` starts the list somewhere other than the top — a reload that must stay
+   *  on the `?page=N` the visitor is reading, rather than yanking them back to page
+   *  one. A changed query passes 0, because its results are a different set. */
+  async start(offset = 0) {
     try {
-      const slice = await loadWithRetry(() => this.#fetch(this.#limit, 0));
+      const slice = await loadWithRetry(() => this.#fetch(this.#limit, offset));
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- deliberately non-reactive dedup registry; never read in a reactive context
       this.#seen = new Set();
+      this.#baseOffset = offset;
       this.items = this.#dedupe(slice.items);
       this.total = slice.total ?? 0;
       this.hasMore = slice.hasMore;
@@ -117,7 +133,7 @@ export class Paginator<T> {
     this.loadingMore = true;
     this.loadMoreError = false;
     try {
-      const slice = await this.#fetch(this.#limit, this.items.length);
+      const slice = await this.#fetch(this.#limit, this.#baseOffset + this.items.length);
       this.items = [...this.items, ...this.#dedupe(slice.items)];
       this.total = slice.total ?? 0;
       this.hasMore = slice.hasMore;

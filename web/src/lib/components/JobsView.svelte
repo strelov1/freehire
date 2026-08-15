@@ -14,6 +14,8 @@
   import { ensureDismissedLoaded, isDismissed, markUndismissed } from '$lib/dismissedJobs.svelte';
   import { latestOnly } from '$lib/latestOnly';
   import { Paginator } from '$lib/paginated.svelte';
+  import { canFetchMore, pageCount, pageOffset } from '$lib/pagination';
+  import Pagination from './Pagination.svelte';
   import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery } from '$lib/filters';
   import { loadJobFilters, hasChangedFilters, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
   import {
@@ -60,18 +62,26 @@
   // +page.server.ts): `initial` was searched with it, so the client must seed
   // off the same string, not the (bare) URL, or the two would disagree and the
   // mount effect would immediately discard the SSR page and refetch.
+  //
+  // `currentPage` is set by a route whose `load` honours `?page=N` — it both seeds
+  // the paginator at the right offset (so scrolling on continues the result set
+  // instead of replaying earlier pages) and turns on the <a href> page nav under
+  // the feed. Routes that always serve page one leave it unset and render no nav:
+  // links there would every one of them lead back to the same first page.
   let {
     initial,
     scope = {},
     excludeFacets = [],
     sidebarTop,
     initialParams,
+    currentPage,
   }: {
     initial: Slice<Job>;
     scope?: Record<string, string>;
     excludeFacets?: string[];
     sidebarTop?: Snippet;
     initialParams?: string;
+    currentPage?: number;
   } = $props();
 
   // Standalone /jobs (no fixed scope) hands its text search to the header; an
@@ -105,8 +115,14 @@
 
   // Seeded with the server-rendered first page (an intentional one-time snapshot
   // of the initial prop); "load more" and filter changes fetch client-side.
+  // The page being read. Starts at the route's `?page=N` and survives a reload that
+  // didn't change the query; a changed query resets it to 1, because the visitor is
+  // now looking at a different result set (and FilterStore has already dropped
+  // `page` from the URL — it only ever writes facet params).
+  let activePage = $state(untrack(() => currentPage) ?? 1);
+
   const seeded = makePaginator();
-  seeded.seed(untrack(() => initial));
+  seeded.seed(untrack(() => initial), pageOffset(untrack(() => currentPage) ?? 1));
   let jobs = $state.raw(seeded);
 
   // The live facet distribution (value → count per facet), feeding the dynamic
@@ -270,9 +286,9 @@
     };
   });
 
-  function reloadList() {
+  function reloadList(offset = 0) {
     const next = makePaginator();
-    next.start();
+    next.start(offset);
     jobs = next;
   }
 
@@ -284,6 +300,11 @@
   // a hidden or filtered-out card drops (and an undone one returns) instantly. A job
   // with no skills has no percent to test (see computeClientMatch) and stays, matching
   // the card's own `no-skills` state, which shows no match at all rather than a false 0%.
+  // The search API only serves the first SEARCH_WINDOW rows, however many matches it
+  // reports. Past that, asking for another page returns 400 and the feed would show
+  // "Couldn't load more" — an error for what is just the end of what's reachable.
+  const moreReachable = $derived(canFetchMore(pageOffset(activePage), jobs.items.length));
+
   const visibleJobs = $derived(
     jobs.items.filter((j) => {
       if (isDismissed(j.public_slug)) return false;
@@ -360,8 +381,12 @@
           facets: activeFilterCount(filters.applied),
         });
       }
+      // Same query: this is a re-seed (initial navigation, back/forward), not a new
+      // search — reload the page being read instead of snapping back to the first.
+      const sameQuery = searchKey === lastSearchKey;
       lastSearchKey = searchKey;
-      reloadList();
+      if (!sameQuery) activePage = 1;
+      reloadList(sameQuery ? pageOffset(activePage) : 0);
     });
   });
 
@@ -473,11 +498,20 @@
         {/each}
       </div>
 
-      {#if jobs.hasMore}
+      {#if jobs.hasMore && moreReachable}
         <!-- Scroll-to-bottom auto-load; the button stays as the accessible
              fallback (keyboard/screen-reader, and retry on a failed load). -->
         <InfiniteScroll onLoad={() => jobs.loadMore()} enabled={!jobs.loadingMore && !jobs.loadMoreError} />
         <LoadMore loading={jobs.loadingMore} error={jobs.loadMoreError} onclick={() => jobs.loadMore()} />
+      {/if}
+
+      {#if currentPage !== undefined}
+        <Pagination
+          current={activePage}
+          total={pageCount(jobs.total)}
+          pathname={page.url.pathname}
+          params={page.url.searchParams}
+        />
       {/if}
     {/if}
   </div>
