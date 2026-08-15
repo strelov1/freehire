@@ -1,0 +1,37 @@
+---
+title: Filter companies by industry
+date: 2026-08-15
+summary: The companies page has a real industry filter — 74 industries across 105 212 companies — and 16 601 companies gained a website link along the way.
+type: changelog
+tags:
+  - companies
+  - filters
+  - job-seekers
+draft: false
+---
+
+The [companies page](/companies) now filters by industry. Pick **Fintech** and you get
+2 016 companies; **Healthcare** gives 7 423. Before today that filter existed only for
+companies in the Y Combinator directory, which is a small slice of the catalogue.
+
+### Why it took a rewrite rather than a checkbox
+
+The industry field was already there. The problem was what it held: two different
+vocabularies stacked on top of each other, so `AI` and `Artificial Intelligence` sat
+side by side as separate values, along with `FinTech` against `Fintech` and leftovers
+from an old import like `Tech, Software & IT Services`. A filter built on that would
+have split every industry across several entries and quietly missed companies under
+whichever spelling you did not click.
+
+So the field now runs through one curated list of 74 industries. Anything outside it
+is not stored — no guessing, no inventing a category from a label nobody agreed on.
+105 212 companies carry at least one industry today.
+
+### Also on company pages
+
+While the catalogue was open we filled two gaps that had nothing to do with filtering:
+
+- **16 601 companies** gained a link to their actual website, where there was none before.
+- **9 858 companies** gained a short description.
+
+Existing descriptions and links were left alone — the new data only filled blanks.
