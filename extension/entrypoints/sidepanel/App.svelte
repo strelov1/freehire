@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage, type PageSnapshot } from '../../lib/protocol';
+  import { type RuntimeMessage } from '../../lib/protocol';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '../../lib/assistant/chat';
@@ -13,7 +13,6 @@
     findJob,
     getJob,
     getMatch,
-    getMatchText,
     getAutofillProfile,
     runAgentAutofill,
     resolveJob,
@@ -35,7 +34,7 @@
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
   import { Alert, Badge, Button, EmptyState, Input, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
-  import { ArrowUp, Square } from '@lucide/svelte';
+  import { ArrowUp, Square, RectangleEllipsis } from '@lucide/svelte';
 
   let chat = $state<ChatState>(initChat());
   // Local action feedback (autofill results, errors) — not part of a turn.
@@ -241,27 +240,20 @@
         return;
       }
 
-      // Any other page: recognise it as a catalog job from its URL (curated
-      // card), else read the page and match against the scraped posting text.
+      // Any other page: recognise it as a catalog job from its URL (curated card),
+      // else there is nothing to show. No ad-hoc scrape-and-match call here — that
+      // used to run automatically on every tab the panel happened to be open on,
+      // job posting or not, which is both wasted work and a wasted LLM call for
+      // the vast majority of pages. `contributePage` (the "Add vacancy" action on
+      // the empty state) is the explicit, on-demand equivalent.
       const catalogSlug = await findJob(url, token);
       if (requestId !== matchRequestId) return;
-      const snap = catalogSlug ? null : await readSnapshot();
-      if (requestId !== matchRequestId) return;
-      const headline = snap?.headline || snap?.title || '';
-
       if (catalogSlug) {
         if (!(await loadCatalog(catalogSlug, token, requestId))) return;
-      } else if (snap?.text) {
-        const t = headline || 'This page';
-        const m = await getMatchText(t, snap.text, token);
-        if (requestId !== matchRequestId) return;
-        match = m;
-        matchJob = { public_slug: '', title: t, company: hostOf(url), location: '' };
-      } else {
-        matchStatus = 'empty';
+        matchStatus = 'ready';
         return;
       }
-      matchStatus = 'ready';
+      matchStatus = 'empty';
     } catch (err) {
       if (requestId !== matchRequestId) return;
       matchError = err instanceof Error ? err.message : 'Could not load match';
@@ -269,12 +261,6 @@
     }
   }
 
-  // The page resolved to no catalog posting: either nothing to show, or the ad-hoc text
-  // match, which carries no slug. That is when freehire has something to gain from being
-  // handed the page.
-  let unknownPage = $derived(
-    matchStatus === 'empty' || (matchStatus === 'ready' && matchJob?.public_slug === ''),
-  );
   let contributing = $state(false);
 
   /**
@@ -301,31 +287,6 @@
       notices.push(`Could not add this page: ${err instanceof Error ? err.message : 'error'}`);
     } finally {
       contributing = false;
-    }
-  }
-
-  async function readSnapshot(retries = 4): Promise<PageSnapshot | null> {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const reply = (await browser.runtime.sendMessage({
-          kind: 'GET_PAGE_SNAPSHOT',
-        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-        if (reply?.kind === 'PAGE_SNAPSHOT' && reply.snapshot.text) {
-          return reply.snapshot;
-        }
-      } catch {
-        // Content script not ready yet (e.g. just after an extension reload).
-      }
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    return null;
-  }
-
-  function hostOf(url: string): string {
-    try {
-      return new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      return '';
     }
   }
 
@@ -636,59 +597,54 @@
   <div class="tab-panel" role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, activeTab)}>
     {#if activeTab === 'match'}
       <div class="match-panel">
-        {#if user}
-          {#if matchStatus === 'ready' && matchJob && match}
-            <MatchCard job={matchJob} {match} />
-          {:else if matchStatus === 'loading'}
-            <div class="match-skeleton">
-              <Skeleton class="h-9 w-9 rounded-lg" />
-              <div class="match-skeleton-lines">
-                <Skeleton class="h-3 w-2/3 rounded" />
-                <Skeleton class="h-3 w-1/3 rounded" />
+        <div class="match-scroll">
+          {#if user}
+            {#if matchStatus === 'ready' && matchJob && match}
+              <MatchCard job={matchJob} {match} />
+            {:else if matchStatus === 'loading'}
+              <div class="match-skeleton">
+                <Skeleton class="h-9 w-9 rounded-lg" />
+                <div class="match-skeleton-lines">
+                  <Skeleton class="h-3 w-2/3 rounded" />
+                  <Skeleton class="h-3 w-1/3 rounded" />
+                </div>
               </div>
-            </div>
-          {:else if matchStatus === 'error'}
-            <EmptyState title="Match unavailable" description={matchError}>
-              {#snippet action()}
-                <Button variant="outline" size="sm" onclick={loadMatch}>Retry</Button>
-              {/snippet}
-            </EmptyState>
-          {:else if matchStatus === 'empty'}
-            <EmptyState title="No match yet" description="Open a job posting to see your match.">
-              {#snippet action()}
-                <Button variant="outline" size="sm" onclick={loadMatch}>Refresh</Button>
-              {/snippet}
-            </EmptyState>
-          {/if}
-          {#if unknownPage}
-            <p class="match-hint">
-              freehire doesn't have this posting.
-              <button class="link" onclick={contributePage} disabled={contributing}>
-                {contributing ? 'Adding…' : 'Add to freehire'}
-              </button>
-            </p>
-          {/if}
+            {:else if matchStatus === 'error'}
+              <EmptyState title="Match unavailable" description={matchError}>
+                {#snippet action()}
+                  <Button variant="outline" size="sm" onclick={loadMatch}>Retry</Button>
+                {/snippet}
+              </EmptyState>
+            {:else if matchStatus === 'empty'}
+              <EmptyState title="No vacancy" description="freehire doesn't recognise this page as a job posting.">
+                {#snippet action()}
+                  <Button variant="primary" size="sm" onclick={contributePage} disabled={contributing}>
+                    {contributing ? 'Adding…' : 'Add vacancy'}
+                  </Button>
+                {/snippet}
+              </EmptyState>
+            {/if}
 
-          <Button
-            class="w-full !h-16 !text-base !font-semibold"
-            variant="primary"
-            size="lg"
-            onclick={autofill}
-            disabled={autofilling}
-          >
-            {autofilling ? 'Filling…' : 'Autofill'}
-          </Button>
-
-          {#each notices as notice, i (i)}
-            <div class="message system">{notice}</div>
-          {/each}
-          {#if overrideFill}
-            <div class="message system">
-              <button class="link" onclick={runOverrideFill} disabled={autofilling}>Fill it anyway</button>
-            </div>
+            {#each notices as notice, i (i)}
+              <div class="message system">{notice}</div>
+            {/each}
+            {#if overrideFill}
+              <div class="message system">
+                <button class="link" onclick={runOverrideFill} disabled={autofilling}>Fill it anyway</button>
+              </div>
+            {/if}
+          {:else}
+            <p class="empty">Sign in to see your match for this page.</p>
           {/if}
-        {:else}
-          <p class="empty">Sign in to see your match for this page.</p>
+        </div>
+
+        {#if user && matchStatus === 'ready' && matchJob && matchJob.public_slug !== ''}
+          <div class="match-footer">
+            <Button class="w-full" variant="primary" size="lg" onclick={autofill} disabled={autofilling}>
+              {autofilling ? 'Filling…' : 'Autofill'}
+              <RectangleEllipsis class="size-4" />
+            </Button>
+          </div>
         {/if}
       </div>
     {:else}
@@ -836,16 +792,38 @@
    * shrinking no further than its content, which is what silently broke internal
    * scrolling here: without it this item grew to fit the transcript instead of
    * scrolling it, pushing the composer off screen. */
+  /* min-height AND min-width: 0 override a flex item's default of never
+   * shrinking below its content's intrinsic size, in either axis. The height
+   * half is what made the chat transcript scroll instead of pushing the
+   * composer off-screen (see .messages below); the width half is the same bug
+   * sideways — some un-wrapped child (a badge row, a long value) can otherwise
+   * inflate this column wider than the viewport, and everything sized against
+   * it with `width: 100%` — including the Autofill button — inflates to match
+   * and then gets silently clipped at .app's own edge, which reads as "no
+   * padding" even though the padding below is real. */
   .tab-panel {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
   }
 
+  /* Plain flex wrapper, same shape as .chat-panel: .match-scroll is the part
+   * that scrolls, .match-footer (the Autofill button) stays pinned below it,
+   * same split as .messages/.composer on the Chat tab. */
   .match-panel {
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .match-scroll {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
     overflow-y: auto;
     padding: 12px;
     display: flex;
@@ -853,16 +831,29 @@
     gap: 12px;
   }
 
+  /* :global — a direct child can be a component's own root (MatchCard's card),
+   * which carries that component's own scope hash, not this one; see the
+   * .tab-strip note above for the same reason. Without this, a flex column with
+   * `overflow-y: auto` still shrinks its children to fit before it scrolls —
+   * content taller than the visible area (a fully loaded MatchCard, well over a
+   * short skeleton) proportionally squashed every child's height. `flex-shrink:
+   * 0` makes .match-scroll actually scroll instead of squeezing its children. */
+  .match-scroll > :global(*) {
+    flex-shrink: 0;
+  }
+
+  .match-footer {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+
   .chat-panel {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  .match-hint {
-    font-size: 12px;
-    color: var(--muted-foreground);
   }
 
   .match-skeleton {
@@ -881,11 +872,18 @@
   .messages {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     overflow-y: auto;
     padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  /* Same fix as .match-panel above, same reason: without it a long transcript
+   * would squash individual messages instead of just scrolling past them. */
+  .messages > :global(*) {
+    flex-shrink: 0;
   }
 
   .empty {

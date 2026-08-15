@@ -122,14 +122,6 @@ export function getMatch(slug: string, token: string): Promise<JobMatch> {
   return getData<JobMatch>(`/api/v1/jobs/${encodeURIComponent(slug)}/match`, token);
 }
 
-/**
- * Ad-hoc match for a job posting scraped off any page — no catalog job needed.
- * The server extracts skills from title+text and scores them against the profile.
- */
-export function getMatchText(title: string, text: string, token: string): Promise<JobMatch> {
-  return postData<JobMatch>('/api/v1/me/match-text', { title, text }, token);
-}
-
 /** The signed-in user's interaction with a job — only the field the Save button reads. */
 export interface JobInteraction {
   saved_at: string | null;

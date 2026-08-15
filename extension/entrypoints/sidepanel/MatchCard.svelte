@@ -353,7 +353,7 @@
     background: var(--brand);
   }
   .dot.miss {
-    background: var(--muted-foreground);
+    background: var(--destructive);
   }
   .chips {
     display: flex;
@@ -373,9 +373,9 @@
     border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
   }
   .chip.miss {
-    background: var(--muted);
-    color: var(--muted-foreground);
-    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--destructive) 10%, transparent);
+    color: var(--destructive);
+    border: 1px solid color-mix(in srgb, var(--destructive) 30%, transparent);
   }
   .none {
     font-size: 12px;
