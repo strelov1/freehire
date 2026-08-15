@@ -8,7 +8,6 @@ Guidance for AI agents working in this repository.
 - **MVP stage — keep the architecture fluid.** The current structure is not load-bearing legacy. When a new feature doesn't fit cleanly, prefer reshaping the affected part over bolting on an awkward special case.
 - **Surgical changes.** Clean up what your change orphaned; leave pre-existing dead code alone. Prefer a library's intended API over a clever shim.
 - **English only.** All code, comments, identifiers, docs, and commits.
-- **Announce shipped work.** When a user-facing feature or fix lands, offer a changelog entry on the `/blog` feed, then a longer post if it warrants one (`.svx` files in `web/src/posts/`; the `write-changelog` skill drafts them). Skip for internal-only changes.
 
 ## What this is
 
