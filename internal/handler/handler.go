@@ -317,7 +317,16 @@ func Register(app *fiber.App, cfg Config) {
 	// Moderation is shared by the jobs surface and the submission queue, so it is built
 	// here rather than inside whichever of the two is constructed first.
 	moderationSvc := moderation.New(moderation.NewQueriesRepository(queries, cfg.Pool, enrich.Version))
-	jobsH := newJobsHandlers(queries, moderationSvc)
+	// One SSRF-guarded client for everything that fetches a user-supplied page: the imports
+	// below dial through it, it backs the ingest registry board coverage reads a vacancy
+	// through (so an import and a crawl of the same board share transport and rate limits),
+	// and the posting-URL resolver asks an ATS which posting an apply link is through it too.
+	ingestClient := sources.NewClient()
+	// Turning a link into the posting it is: offline for nearly every ATS, one platform call
+	// for the shapes that hide the posting behind a second id (see sources.PostingURLResolver).
+	// Shared by /jobs/find and the link intake, which must agree on what a page is.
+	postingURLs := sources.NewPostingURLResolver(ingestClient)
+	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs)
 	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
@@ -376,14 +385,11 @@ func Register(app *fiber.App, cfg Config) {
 	matchAnalyzer := matchanalysis.NewAnalyzer(cfg.LLM.WithTimeout(matchAnalysisLLMTimeout))
 	structuredExtractor := resumeextract.NewExtractor(cfg.LLM.WithTimeout(resumeExtractLLMTimeout), cfg.PIIDetector)
 	creditsStore := credits.NewStore(queries, cfg.Pool, cfg.Credits)
-	// Imports fetch a user-supplied page, so they dial through the same SSRF-guarded
-	// client the crawlers use (sources.NewClient). That one client also backs the ingest
-	// registry board coverage reads a vacancy through, so an import and a crawl of the same
-	// board share transport and rate limits. cfg.Search may be nil (no engine configured),
-	// which only skips the index push.
-	ingestClient := sources.NewClient()
+	// Imports fetch a user-supplied page, so they dial through ingestClient (built above,
+	// where the comment on it is). cfg.Search may be nil (no engine configured), which only
+	// skips the index push.
 	importer := linkimport.New(cfg.Pool, queries, cfg.Search, ingestClient, sources.All(ingestClient), boardresolve.New())
-	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer)
+	contributionsH := newContributionHandlers(contributionSvc, creditsStore, queries, importer, postingURLs)
 	// Prefill reuses the SAME importer (its Resolve half, which never writes) rather than
 	// a second parsing registry — see submissionHandlers.PrefillSubmission.
 	submissionsH := newSubmissionHandlers(queries, moderationSvc, importer)

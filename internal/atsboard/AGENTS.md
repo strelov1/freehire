@@ -19,7 +19,9 @@ nothing but the URL. No network, no database.
   exist, while one adapter serves both domains as `factorial`.
 - **Adding an ATS is one row plus one test case.** Extraction modes say where the tenant sits:
   `path` (first path segment), `pathlocale` (same, skipping a leading `xx-XX` locale),
-  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs),
+  `pathportal` (the segment before the posting, for SmartRecruiters' portal URLs — plus its
+  one-click apply form, `/oneclick-ui/company/<board>/publication/<uuid>`, which names the
+  employer mid-path and would otherwise be read as a board called `oneclick-ui`),
   `pathnumeric` (like `path`, but the segment must be an all-digit id — PageUp's board is a
   numeric institution id, so localisation/section segments like `/cw/en/search` are not
   boards), `subdomain`

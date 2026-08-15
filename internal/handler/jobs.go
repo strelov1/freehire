@@ -10,6 +10,7 @@ import (
 	"github.com/strelov1/freehire/internal/ghost"
 	"github.com/strelov1/freehire/internal/jobview"
 	"github.com/strelov1/freehire/internal/moderation"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // jobsHandlers serves the public job catalogue reads (list, detail, repost
@@ -19,10 +20,14 @@ import (
 type jobsHandlers struct {
 	queries    *db.Queries
 	moderation *moderation.Service
+	// postings canonicalises the URL /jobs/find is asked about. Its zero value is the
+	// offline rewrite, so a caller that hands over no client keeps every lookup that
+	// does not need one.
+	postings sources.PostingURLResolver
 }
 
-func newJobsHandlers(queries *db.Queries, moderation *moderation.Service) *jobsHandlers {
-	return &jobsHandlers{queries: queries, moderation: moderation}
+func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postings sources.PostingURLResolver) *jobsHandlers {
+	return &jobsHandlers{queries: queries, moderation: moderation, postings: postings}
 }
 
 func (h *jobsHandlers) register(api fiber.Router, mw middleware) {

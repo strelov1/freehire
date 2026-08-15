@@ -52,6 +52,10 @@ func TestRecognize(t *testing.T) {
 		{"smartrecruiters bare posting", "https://jobs.smartrecruiters.com/BHFT/744000139104759-senior-compliance-officer", "smartrecruiters", "BHFT", "https://jobs.smartrecruiters.com/BHFT/744000139104759-senior-compliance-officer", true},
 		{"smartrecruiters posting behind a portal segment", "https://jobs.smartrecruiters.com/ni/BHFT/6fc8fa0d-1447-4887-9bae-945406ca8500-talent-acquisition-manager", "smartrecruiters", "BHFT", "https://jobs.smartrecruiters.com/ni/BHFT/6fc8fa0d-1447-4887-9bae-945406ca8500-talent-acquisition-manager", true},
 		{"smartrecruiters board listing", "https://jobs.smartrecruiters.com/BHFT", "smartrecruiters", "BHFT", "https://jobs.smartrecruiters.com/BHFT", true},
+		// The Apply button leaves the posting for a one-click form addressed by publication
+		// uuid. Its employer is named in the path (/company/<board>/), and without this the
+		// first segment — "oneclick-ui", the product's own machinery — is read as the board.
+		{"smartrecruiters one-click apply form", "https://jobs.smartrecruiters.com/oneclick-ui/company/Blend360/publication/59957d76-615a-4809-a282-bcee1120ca7d?dcr_ci=Blend360", "smartrecruiters", "Blend360", "https://jobs.smartrecruiters.com/Blend360", true},
 
 		// pathlocale — Rippling: an optional leading xx-XX locale segment is skipped; canonical
 		// collapses to the board root so a locale-prefixed vacancy, a bare vacancy, and the

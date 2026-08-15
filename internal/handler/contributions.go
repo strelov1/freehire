@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/linkimport"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // contributionHandlers serves the crowdsourced paste-a-link flow: one intake endpoint every
@@ -24,7 +25,7 @@ type contributionHandlers struct {
 	intake *intakeService
 }
 
-func newContributionHandlers(contribution *contribution.Service, credits *credits.Store, queries *db.Queries, imports *linkimport.Importer) *contributionHandlers {
+func newContributionHandlers(contribution *contribution.Service, credits *credits.Store, queries *db.Queries, imports *linkimport.Importer, postings sources.PostingURLResolver) *contributionHandlers {
 	return &contributionHandlers{
 		contribution: contribution,
 		credits:      credits,
@@ -33,6 +34,7 @@ func newContributionHandlers(contribution *contribution.Service, credits *credit
 			contribution: contribution,
 			imports:      imports,
 			credits:      credits,
+			postings:     postings,
 		},
 	}
 }

@@ -235,7 +235,16 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return src, host + "/" + site, u.String(), true
 
 	case modePathPortal:
-		// SmartRecruiters: the employer is the segment immediately before the posting, which is
+		// SmartRecruiters' Apply button leads to a one-click form under the product's own
+		// path, which names the employer instead of leading with it. It is matched first
+		// because the generic rule below would read "oneclick-ui" as the board — a tenant
+		// that does not exist, which the contribution flow would record and pay for.
+		if m := smartrecruitersOneClick.FindStringSubmatch(u.Path); m != nil {
+			u.RawQuery, u.Fragment = "", ""
+			u.Path = "/" + m[1]
+			return src, m[1], u.String(), true
+		}
+		// Otherwise the employer is the segment immediately before the posting, which is
 		// the first segment on a bare URL and the second behind a portal segment. Only a
 		// recognizable posting segment shifts the board along; any other shape falls through to
 		// the first segment, so an unknown URL shape can't invent a board.
@@ -367,6 +376,11 @@ func platformHost(host string) bool {
 // smartrecruitersPosting matches a SmartRecruiters posting segment: the posting id (numeric or a
 // UUID) followed by the title slug.
 var smartrecruitersPosting = regexp.MustCompile(`^(?:[0-9]{6,}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-`)
+
+// smartrecruitersOneClick matches the one-click apply form the Apply button leads to, whose
+// path names the employer rather than starting with it:
+// /oneclick-ui/company/<board>/publication/<uuid>.
+var smartrecruitersOneClick = regexp.MustCompile(`^/oneclick-ui/company/([^/]+)/publication/[^/]+/?$`)
 
 // segmentBeforePosting returns the path segment immediately before the last segment when that
 // last segment is a posting (per isPosting), and the first segment otherwise — a board listing

@@ -31,7 +31,7 @@ import (
 //
 // It is a free function rather than a method because two feature handlers need it: the
 // public /jobs/find read and the extension's /jobs/resolve import.
-func catalogSlugForURL(ctx context.Context, queries *db.Queries, pageURL string) (string, error) {
+func catalogSlugForURL(ctx context.Context, queries *db.Queries, postings sources.PostingURLResolver, pageURL string) (string, error) {
 	if pageURL == "" {
 		return "", nil
 	}
@@ -51,8 +51,10 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, pageURL string)
 
 	// The apply form is the same posting under a different path, and it is where a
 	// candidate stands when they ask about a vacancy. The catalog stores only the
-	// detail page, so the form has to be rewritten to it before the match.
-	slug, err := queries.FindOpenJobByURL(ctx, sources.CanonicalPostingURL(pageURL))
+	// detail page, so the form has to be rewritten to it before the match. Most of
+	// that rewrite is offline; a SmartRecruiters one-click link identifies its posting
+	// by an id the catalogue never kept, so the resolver asks the platform.
+	slug, err := queries.FindOpenJobByURL(ctx, postings.CanonicalPostingURL(ctx, pageURL))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
@@ -67,7 +69,7 @@ func catalogSlugForURL(ctx context.Context, queries *db.Queries, pageURL string)
 // from the ad-hoc text match to the curated card. Public; returns {"data": null} whenever
 // the posting cannot be identified.
 func (h *jobsHandlers) FindJob(c *fiber.Ctx) error {
-	slug, err := catalogSlugForURL(c.Context(), h.queries, strings.TrimSpace(c.Query("url")))
+	slug, err := catalogSlugForURL(c.Context(), h.queries, h.postings, strings.TrimSpace(c.Query("url")))
 	if err != nil {
 		return err
 	}

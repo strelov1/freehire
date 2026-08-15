@@ -9,6 +9,7 @@ import (
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/linkimport"
+	"github.com/strelov1/freehire/internal/sources"
 )
 
 // intakeService is the one sequence every surface that accepts a job link runs — the website's
@@ -30,6 +31,9 @@ type intakeService struct {
 	contribution *contribution.Service
 	imports      *linkimport.Importer
 	credits      *credits.Store
+	// postings canonicalises the pasted link before the catalog lookup — see
+	// sources.PostingURLResolver. Zero value = the offline rewrite only.
+	postings sources.PostingURLResolver
 }
 
 // intakeOutcome is what happened to one link, in the vocabulary every surface renders from.
@@ -57,7 +61,7 @@ type intakeOutcome struct {
 // an error: the link is still worth keeping, so it degrades to the triage queue. A returned
 // error is a storage failure the caller should surface.
 func (s *intakeService) Resolve(ctx context.Context, userID int64, pageURL, surface string) (intakeOutcome, error) {
-	slug, err := catalogSlugForURL(ctx, s.queries, pageURL)
+	slug, err := catalogSlugForURL(ctx, s.queries, s.postings, pageURL)
 	if err != nil {
 		return intakeOutcome{}, err
 	}

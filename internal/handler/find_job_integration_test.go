@@ -10,6 +10,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,21 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/sources"
 )
+
+// stubPostingAPI serves one canned JSON body per URL, standing in for the ATS the
+// posting-URL resolver asks. An unlisted URL is an error, so a test that expects no call
+// fails loudly rather than silently resolving.
+type stubPostingAPI map[string]string
+
+func (s stubPostingAPI) GetJSON(_ context.Context, url string, v any) error {
+	body, ok := s[url]
+	if !ok {
+		return fmt.Errorf("stubPostingAPI: unexpected GET %s", url)
+	}
+	return json.Unmarshal([]byte(body), v)
+}
 
 // findSlug calls the endpoint and returns the resolved slug, or "" for {"data": null}.
 func findSlug(t *testing.T, app *fiber.App, url string) string {
@@ -62,11 +77,20 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		 ('himalayas', ':https://himalayas.app/companies/mindera/jobs/staff-java-backend-developer',
 		  'https://himalayas.app/companies/mindera/jobs/staff-java-backend-developer', 'Staff Java Backend Developer', 'staff-java-mindera'),
 		 ('ashby', 'truelogic:c6d2719d-3935-4e59-8446-26135d01957a',
-		  'https://jobs.ashbyhq.com/truelogic/c6d2719d-3935-4e59-8446-26135d01957a', 'Senior Go Engineer', 'senior-go-truelogic')`); err != nil {
+		  'https://jobs.ashbyhq.com/truelogic/c6d2719d-3935-4e59-8446-26135d01957a', 'Senior Go Engineer', 'senior-go-truelogic'),
+		 ('smartrecruiters', 'blend360:744000143615340',
+		  'https://jobs.smartrecruiters.com/Blend360/744000143615340-senior-ai-engineer', 'Senior AI Engineer', 'senior-ai-blend360')`); err != nil {
 		t.Fatalf("seed jobs: %v", err)
 	}
 
-	h := &jobsHandlers{queries: db.New(pool)}
+	h := &jobsHandlers{
+		queries: db.New(pool),
+		// SmartRecruiters answers which posting a publication uuid is; everything else in
+		// this test is canonicalised offline and never reaches the fake.
+		postings: sources.NewPostingURLResolver(stubPostingAPI{
+			"https://api.smartrecruiters.com/v1/companies/Blend360/postings/59957d76-615a-4809-a282-bcee1120ca7d": `{"postingUrl":"https://jobs.smartrecruiters.com/Blend360/744000143615340-senior-ai-engineer"}`,
+		}),
+	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/jobs/find", h.FindJob)
 
@@ -114,6 +138,16 @@ func TestFindJobResolvesByIdentityAndByURL(t *testing.T) {
 		const page = "https%3A%2F%2Fjobs.ashbyhq.com%2Ftruelogic%2Fc6d2719d"
 		if slug := findSlug(t, app, page); slug != "senior-full-stack-canonical" {
 			t.Errorf("slug = %q, want the canonical posting", slug)
+		}
+	})
+
+	// SmartRecruiters' Apply button leaves the posting for a one-click form addressed by a
+	// publication uuid the catalogue never stored — neither tier can match it on the URL
+	// alone, so the resolver asks the platform for the posting's own URL first.
+	t.Run("a smartrecruiters one-click form resolves to its posting", func(t *testing.T) {
+		const form = "https%3A%2F%2Fjobs.smartrecruiters.com%2Foneclick-ui%2Fcompany%2FBlend360%2Fpublication%2F59957d76-615a-4809-a282-bcee1120ca7d%3Fdcr_ci%3DBlend360"
+		if slug := findSlug(t, app, form); slug != "senior-ai-blend360" {
+			t.Errorf("slug = %q, want senior-ai-blend360", slug)
 		}
 	})
 
