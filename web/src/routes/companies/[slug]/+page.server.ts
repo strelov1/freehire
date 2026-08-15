@@ -5,37 +5,45 @@ import type { PageServerLoad } from './$types';
 
 const LIMIT = 20;
 
-// Server-render the company entity and stream its first page of search results.
-// The job list is search-backed and scoped to this company (company_slug), so it
-// carries a true total (the vacancy count) and supports the same URL filters as
-// /jobs. The company entity is fetched separately because search returns only jobs.
+// Server-render the company entity AND its first page of search results. The job
+// list is search-backed and scoped to this company (company_slug), so it carries a
+// true total (the vacancy count) and supports the same URL filters as /jobs. The
+// company entity is fetched separately because search returns only jobs.
 //
-// Only the company entity is awaited — it drives the header and SEO, and is cheap.
-// The job search is the slow call, so it is returned as an *unresolved* promise
-// that SvelteKit streams: the navigation completes as soon as the company resolves
-// and CompanyView renders a skeleton until the jobs land. A 404 (unknown company)
-// becomes a SvelteKit 404; other company failures bubble to the 500 page, and a
-// failed search surfaces in CompanyView's {:catch}.
+// Both are awaited, so the rows — and the /jobs/<slug> links on them — are in the
+// initial HTML. This list used to stream as an unresolved promise, which kept the
+// header fast but left the markup with no job links at all: the data arrived as a
+// trailing JSON chunk that only client-side JS turns into anchors. Link discovery
+// happens when a crawler parses HTML, so ~200k company pages advertised none of
+// their vacancies, and these pages exist mainly to be found in search. The two
+// calls still run concurrently, so the cost is the slower of the two rather than
+// their sum (measured: +0.64s median TTFB, +1.28s worst).
+//
+// A 404 (unknown company) becomes a SvelteKit 404; other company failures bubble
+// to the 500 page. A failed SEARCH must not take the page down with it — the
+// header, About and facts are still worth serving — so it resolves to null and
+// CompanyView renders the error state in place of the list.
 export const load: PageServerLoad = async ({ params, url, fetch }) => {
   const client = serverApi(fetch);
   const facets = new URLSearchParams(url.searchParams);
   facets.set('company_slug', params.slug);
 
-  // Start the search now so it runs concurrently with the company fetch, but
-  // don't await it — it streams to the client.
-  const initial = client.searchJobs(facets, LIMIT, 0);
+  // Start the search first so it overlaps the company fetch below.
+  const search = client.searchJobs(facets, LIMIT, 0).catch(() => null);
 
   try {
-    // Only `company` is used (the list comes from `initial`), so the returned job
+    // Only `company` is used (the list comes from `search`), so the returned job
     // is discarded. We can't ask for zero jobs: the API clamps `limit` to >= 1
     // (pageParams), so limit=1 is already the minimal fetch. Trimming this fully
     // needs a backend company-entity-only path — deferred to the latency follow-up.
     const { company, referral_available } = await client.getCompany(params.slug, 1, 0);
-    return { company, initial, slug: params.slug, referralAvailable: referral_available };
+    return {
+      company,
+      initial: await search,
+      slug: params.slug,
+      referralAvailable: referral_available,
+    };
   } catch (e) {
-    // The company load failed; mark the abandoned search promise handled so its
-    // eventual rejection isn't an unhandled rejection on the server.
-    initial.catch(() => {});
     if (e instanceof ApiError && e.status === 404) {
       error(404, 'Company not found');
     }

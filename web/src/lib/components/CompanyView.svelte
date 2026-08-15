@@ -8,13 +8,13 @@
   import CompanyFacts from './CompanyFacts.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
 
-  // The company entity is server-rendered (route `load`), so the header is in the
-  // initial HTML. The job list is *streamed*: `initial` is a promise the route
-  // returns unresolved, so the header shows immediately and the list fills in
-  // behind a skeleton rather than blocking the whole navigation on the (slower)
-  // search. The list reuses the same filterable, counted search view as /jobs,
-  // pinned to this company: `company_slug` is fixed (not a selectable facet) and
-  // the Source facet is hidden, since a single company's postings share one source.
+  // Both the company entity and its first page of jobs are server-rendered (route
+  // `load`), so the header AND the job rows — with their /jobs/<slug> links — are in
+  // the initial HTML for crawlers. The list reuses the same filterable, counted
+  // search view as /jobs, pinned to this company: `company_slug` is fixed (not a
+  // selectable facet) and the Source facet is hidden, since a single company's
+  // postings share one source. `initial` is null when the search call failed; the
+  // rest of the page still renders (see the route's load).
   let {
     company,
     initial,
@@ -22,7 +22,7 @@
     referralAvailable = false,
   }: {
     company: Company;
-    initial: Promise<Slice<Job>>;
+    initial: Slice<Job> | null;
     slug: string;
     referralAvailable?: boolean;
   } = $props();
@@ -45,16 +45,14 @@
 </div>
 
 <div class="mt-4">
-  {#await initial}
-    <States state="loading" />
-  {:then slice}
-    <JobsView initial={slice} scope={{ company_slug: slug }} excludeFacets={['source']}>
+  {#if initial}
+    <JobsView {initial} scope={{ company_slug: slug }} excludeFacets={['source']}>
       {#snippet sidebarTop()}
         <CompanyFacts {company} />
         <CompanyAbout {company} />
       {/snippet}
     </JobsView>
-  {:catch}
+  {:else}
     <States state="error" message="Couldn't load jobs for this company." />
-  {/await}
+  {/if}
 </div>
