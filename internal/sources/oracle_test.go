@@ -154,6 +154,46 @@ func TestOracleHasVisibleTextIgnoresEscapedTagLookalikes(t *testing.T) {
 	}
 }
 
+// TestOracleDetailKeepsEscapedTagLookalikeOverFallback exercises the same case through the
+// full detail path: an ExternalDescriptionStr whose only content is an HTML-escaped
+// tag-shaped string must count as visible text, so detail keeps it and does not fall back
+// to Corporate/OrganizationDescriptionStr.
+func TestOracleDetailKeepsEscapedTagLookalikeOverFallback(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("findReqs", `{"items": [{
+			"TotalJobsCount": 1,
+			"requisitionList": [
+				{"Id": "170200", "Title": "Support Engineer", "PostedDate": "2026-08-15",
+				 "PrimaryLocation": "Warsaw, Poland", "WorkplaceTypeCode": "ORA_ON_SITE"}
+			]
+		}]}`).
+		route("170200", `{"items": [{
+			"Id": "170200",
+			"ExternalDescriptionStr": "<p>&lt;tag&gt;</p>",
+			"ExternalResponsibilitiesStr": "",
+			"ExternalQualificationsStr": "",
+			"CorporateDescriptionStr": "<p>Fallback text that should not be used.</p>",
+			"OrganizationDescriptionStr": ""
+		}]}`)
+
+	jobs, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "oracle",
+		Board: "fa-test.fa.ocs.oraclecloud.com/CX_1",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "&lt;tag&gt;") {
+		t.Errorf("Description = %q, want it to keep the escaped literal <tag> text", jobs[0].Description)
+	}
+	if strings.Contains(jobs[0].Description, "Fallback text") {
+		t.Errorf("Description = %q, should not have fallen back to CorporateDescriptionStr", jobs[0].Description)
+	}
+}
+
 // TestOracleOffsetIsInsideFinder guards the pagination fix: Oracle ignores a top-level
 // &offset= query param (it only honors offset INSIDE the finder clause, alongside limit),
 // so a top-level offset silently re-fetches the first page forever. The fake routes each
