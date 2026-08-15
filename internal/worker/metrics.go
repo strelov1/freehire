@@ -58,20 +58,33 @@ freehire_worker_last_run_duration_seconds{%[1]s} %[3]f
 freehire_worker_last_run_success{%[1]s} %[4]d
 `, labels, time.Now().Unix(), runDuration.Seconds(), success)
 
-	// Write-then-rename: the textfile collector polls the directory on its own
-	// schedule and skips a file it fails to fully parse, but a half-written file
-	// (this worker killed mid-write) could still be picked up mid-write and read
-	// as garbage. Renaming into place is atomic on the same filesystem, so it
-	// only ever sees the old file or the complete new one.
-	path := filepath.Join(dir, name+".prom")
+	if err := WriteTextfile(dir, name+".prom", content); err != nil {
+		log.Printf("worker: %v", err)
+	}
+}
+
+// WriteTextfile publishes body as the textfile-collector file dir/name, the
+// mechanism a run-once worker uses to expose Prometheus metrics it has no
+// listener to serve (see PromTextfileDirEnv). Callers own the decision to
+// publish at all — this writes unconditionally, so a worker gated on an unset
+// PROM_TEXTFILE_DIR must return before calling it.
+//
+// Write-then-rename: the textfile collector polls the directory on its own
+// schedule and skips a file it fails to fully parse, but a half-written file
+// (the worker killed mid-write) could still be picked up mid-write and read as
+// garbage. Renaming into place is atomic on the same filesystem, so the
+// collector only ever sees the old file or the complete new one — and a failed
+// write leaves the last good file untouched rather than truncating it.
+func WriteTextfile(dir, name, body string) error {
+	path := filepath.Join(dir, name)
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
-		log.Printf("worker: write metrics file %s: %v", tmp, err)
-		return
+	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+		return fmt.Errorf("write metrics file %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		log.Printf("worker: rename metrics file %s: %v", tmp, err)
+		return fmt.Errorf("rename metrics file %s: %w", tmp, err)
 	}
+	return nil
 }
 
 // runInstance derives a metric instance label from a worker's command-line

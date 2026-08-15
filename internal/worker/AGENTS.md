@@ -42,6 +42,38 @@ the exit-code convention, a progress heartbeat, and a corruption-tolerant keyset
   (openspec/changes/drop-hybrid-search-pgvector-similar) — re-add the pattern if a future
   worker genuinely needs a scoped scan, rather than resurrecting the old one blind.
 
+## Prometheus metrics
+
+A run-once worker has no listener for Prometheus to scrape, so metrics go out as
+node_exporter textfile-collector files in `PROM_TEXTFILE_DIR` (unset disables it). Two
+kinds are published, and they answer different questions.
+
+**Per run, automatically** — `Main` calls `writeRunMetrics` for every worker
+(metrics.go:30), so `freehire_worker_last_run_{timestamp_seconds,duration_seconds,success}`
+exist without any worker opting in. The `job` label is the binary name and `instance` is a
+trailing board path if there is one, so ~140 ingest boards land in distinct series. This
+answers *is the worker alive*: a hung run never stamps a completion, so last-run age
+covers both "hung" and "timer stopped".
+
+**Per pipeline, by `cmd/queue-metrics`** — `freehire_queue_{depth,dead_letters,oldest_age_seconds}`
+labelled by `queue`, `freehire_boards_total` labelled by `state`, and
+`freehire_catalogue_newest_job_timestamp_seconds`. This answers *is the worker keeping up*.
+These names are a contract with the dashboard and alert rules in `freehire-ops`, which
+cannot be compiled against this repo — `cmd/queue-metrics/render_test.go` pins the exact
+exposition text so a rename is a visible edit rather than a silent breakage.
+
+**The `exported_job` trap.** node_exporter's textfile collector does not set
+`honor_labels`, so Prometheus keeps its own `job="host2-node"` and renames a worker's
+`job` label to `exported_job`. Any query against the per-run metrics must use
+`exported_job` and `exported_instance`; querying `job` returns an empty vector with no
+error, which reads exactly like a healthy silence. The queue metrics use `queue` and
+`state` labels specifically to stay clear of the collision.
+
+**Zero and absent differ.** A drained queue publishes `0`; an empty catalogue publishes
+nothing. A missing series is how an alert rule recognizes a dead exporter, so a real
+measurement of zero must never be omitted — while a zero *timestamp* would read as 1970,
+i.e. an infinitely stale catalogue, which a fresh install is not.
+
 ## Usage sketch
 Every `cmd/<worker>/main.go` is a variation on:
 

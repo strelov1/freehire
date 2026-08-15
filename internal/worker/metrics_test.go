@@ -31,6 +31,72 @@ func TestRunInstance(t *testing.T) {
 	}
 }
 
+func TestWriteTextfileWritesBodyAndLeavesNoTemp(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := WriteTextfile(dir, "queue-metrics.prom", "freehire_queue_depth{queue=\"search_outbox\"} 3\n"); err != nil {
+		t.Fatalf("WriteTextfile: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "queue-metrics.prom"))
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	if got, want := string(data), "freehire_queue_depth{queue=\"search_outbox\"} 3\n"; got != want {
+		t.Errorf("file body = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "queue-metrics.prom.tmp")); !os.IsNotExist(err) {
+		t.Errorf("expected the .tmp file to be gone after rename, stat err: %v", err)
+	}
+}
+
+func TestWriteTextfileReplacesPreviousContentWholesale(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := WriteTextfile(dir, "queue-metrics.prom", "old body, considerably longer\n"); err != nil {
+		t.Fatalf("first WriteTextfile: %v", err)
+	}
+	if err := WriteTextfile(dir, "queue-metrics.prom", "new\n"); err != nil {
+		t.Fatalf("second WriteTextfile: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "queue-metrics.prom"))
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	// A truncating in-place write would leave a tail of the longer previous body;
+	// the rename must swap the whole file.
+	if got := string(data); got != "new\n" {
+		t.Errorf("file body = %q, want %q", got, "new\n")
+	}
+}
+
+func TestWriteTextfileKeepsPreviousFileWhenWriteFails(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := WriteTextfile(dir, "queue-metrics.prom", "good body\n"); err != nil {
+		t.Fatalf("seed WriteTextfile: %v", err)
+	}
+	// Occupy the temp path with a directory so writing it cannot succeed. This is
+	// the collector's worst case: a failed refresh must leave the last good file
+	// readable rather than truncating it.
+	if err := os.Mkdir(filepath.Join(dir, "queue-metrics.prom.tmp"), 0o755); err != nil {
+		t.Fatalf("occupy temp path: %v", err)
+	}
+
+	if err := WriteTextfile(dir, "queue-metrics.prom", "body that cannot land\n"); err == nil {
+		t.Fatal("WriteTextfile succeeded, want an error when the temp path is unwritable")
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "queue-metrics.prom"))
+	if err != nil {
+		t.Fatalf("read previous file: %v", err)
+	}
+	if got := string(data); got != "good body\n" {
+		t.Errorf("previous file body = %q, want it left intact", got)
+	}
+}
+
 func TestWriteRunMetricsDisabledWithoutEnv(t *testing.T) {
 	// Explicitly empty (equivalent to unset for the dir == "" check): the
 	// write must be a no-op and, critically, must not touch os.Args[0]'s

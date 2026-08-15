@@ -1,0 +1,124 @@
+package main
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+// fullSnapshot is a populated collection pass, deliberately using distinct numbers per
+// field so a rendering that crossed two values would show up as a diff rather than a
+// coincidence.
+func fullSnapshot() snapshot {
+	return snapshot{
+		queues: []queueMetrics{
+			{name: "search_outbox", depth: 3, deadLetters: 2, oldestAgeSeconds: 21600.5},
+			{name: "enrichment_outbox", depth: 1049297, deadLetters: 41, oldestAgeSeconds: 5529600},
+			{name: "semantic_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
+		},
+		healthyBoards: 74894,
+		failingBoards: 7002,
+		cooledBoards:  1882,
+		newestJob:     time.Unix(1786821346, 0),
+	}
+}
+
+// The exact text below is the contract the freehire-ops dashboard and alert rules bind
+// to. Renaming a metric or a label here silently breaks queries in another repository
+// that cannot be compiled against this one, so the expected output is pinned in full
+// rather than spot-checked.
+const wantFullRender = `# HELP freehire_queue_depth Live entries waiting in a pipeline outbox queue.
+# TYPE freehire_queue_depth gauge
+freehire_queue_depth{queue="search_outbox"} 3
+freehire_queue_depth{queue="enrichment_outbox"} 1049297
+freehire_queue_depth{queue="semantic_outbox"} 0
+# HELP freehire_queue_dead_letters Entries a pipeline outbox queue has given up on.
+# TYPE freehire_queue_dead_letters gauge
+freehire_queue_dead_letters{queue="search_outbox"} 2
+freehire_queue_dead_letters{queue="enrichment_outbox"} 41
+freehire_queue_dead_letters{queue="semantic_outbox"} 0
+# HELP freehire_queue_oldest_age_seconds Age of the oldest live entry in a pipeline outbox queue.
+# TYPE freehire_queue_oldest_age_seconds gauge
+freehire_queue_oldest_age_seconds{queue="search_outbox"} 21600.500
+freehire_queue_oldest_age_seconds{queue="enrichment_outbox"} 5529600.000
+freehire_queue_oldest_age_seconds{queue="semantic_outbox"} 0.000
+# HELP freehire_boards_total Ingest boards by health state.
+# TYPE freehire_boards_total gauge
+freehire_boards_total{state="healthy"} 74894
+freehire_boards_total{state="failing"} 7002
+freehire_boards_total{state="cooled"} 1882
+# HELP freehire_catalogue_newest_job_timestamp_seconds Unix time the newest open job was created.
+# TYPE freehire_catalogue_newest_job_timestamp_seconds gauge
+freehire_catalogue_newest_job_timestamp_seconds 1786821346
+`
+
+func TestRenderMatchesThePublishedContract(t *testing.T) {
+	if got := render(fullSnapshot()); got != wantFullRender {
+		t.Errorf("render() mismatch\n--- got ---\n%s\n--- want ---\n%s", got, wantFullRender)
+	}
+}
+
+func TestRenderOmitsCatalogueFreshnessWhenEmpty(t *testing.T) {
+	s := fullSnapshot()
+	s.newestJob = time.Time{}
+
+	got := render(s)
+
+	// Zero would render as 1970, i.e. an infinitely stale catalogue. An empty
+	// catalogue is a fresh-install state, so the honest answer is no sample at all.
+	if strings.Contains(got, "freehire_catalogue_newest_job_timestamp_seconds") {
+		t.Errorf("render() published catalogue freshness for an empty catalogue:\n%s", got)
+	}
+	// The rest of the families must still be there — an empty catalogue is not a
+	// reason to publish nothing.
+	for _, want := range []string{"freehire_queue_depth", "freehire_boards_total"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() dropped %s along with catalogue freshness:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderPublishesExplicitZeroesForADrainedQueue(t *testing.T) {
+	s := snapshot{
+		queues: []queueMetrics{
+			{name: "search_outbox", depth: 0, deadLetters: 0, oldestAgeSeconds: 0},
+		},
+		newestJob: time.Unix(1786821346, 0),
+	}
+
+	got := render(s)
+
+	// A drained queue must still emit its series: the consuming alert rules read a
+	// MISSING series as a dead exporter, which is a different incident entirely.
+	for _, want := range []string{
+		`freehire_queue_depth{queue="search_outbox"} 0`,
+		`freehire_queue_dead_letters{queue="search_outbox"} 0`,
+		`freehire_queue_oldest_age_seconds{queue="search_outbox"} 0.000`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("render() missing %q for a drained queue:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderGroupsEachFamilyUnderOneHelpAndType(t *testing.T) {
+	got := render(fullSnapshot())
+
+	// Prometheus's text format requires every sample of a metric family to follow a
+	// single HELP/TYPE pair. Emitting queue-by-queue instead of family-by-family
+	// would interleave them and make the exposition invalid.
+	for _, family := range []string{
+		"freehire_queue_depth",
+		"freehire_queue_dead_letters",
+		"freehire_queue_oldest_age_seconds",
+		"freehire_boards_total",
+		"freehire_catalogue_newest_job_timestamp_seconds",
+	} {
+		if n := strings.Count(got, "# TYPE "+family+" "); n != 1 {
+			t.Errorf("family %s has %d TYPE lines, want exactly 1", family, n)
+		}
+		if n := strings.Count(got, "# HELP "+family+" "); n != 1 {
+			t.Errorf("family %s has %d HELP lines, want exactly 1", family, n)
+		}
+	}
+}
