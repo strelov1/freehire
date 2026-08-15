@@ -581,8 +581,6 @@
   board: maf-careers.factorial.it
 - company: Magazzini Bracchi
   board: magazzinobracchi.factorial.it
-- company: Magicmotorsport
-  board: magicmotorsport.factorial.it
 - company: Magis5
   board: magis5.factorialhr.com.br
 - company: Magnaghi Aeronautica
@@ -913,8 +911,6 @@
   board: veragroupsrl.factorial.it
 - company: Vermeiren
   board: vermeiren.factorialhr.de
-- company: vLex
-  board: vlex.factorial.es
 - company: OneTurn
   board: volcom.factorialhr.com
 - company: Voxcity Tecnologia
@@ -939,8 +935,6 @@
   board: wooptix.factorial.es
 - company: Work and Study Travel
   board: workandstudytravel.factorialhr.com
-- company: wTVision
-  board: wtvision.factorialhr.com
 - company: Xceed
   board: xceed.factorialhr.com
 - company: YCOM
@@ -998,3 +992,5 @@
   board: therestconsulting.factorialhr.com
 - company: URBANITAE
   board: urbanitae.factorialhr.com
+- company: Magicmotorsport (Magic Engineering Srl, Partinico, Italy)
+  board: magicengineering.factorial.it

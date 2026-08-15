@@ -249,8 +249,6 @@
   board: atob
 - company: Atomic
   board: atomic
-- company: Atomic Semi
-  board: AtomicSemi
 - company: atticus.com
   board: atticus
 - company: Attio
@@ -709,8 +707,6 @@
   board: hyperbound
 - company: Hyperhug
   board: hyperhug
-- company: IA Collaborative
-  board: iacollaborative
 - company: Ideogram
   board: ideogram
 - company: Idler
@@ -1069,8 +1065,6 @@
   board: poshmark
 - company: PostHog
   board: posthog
-- company: preludesecurity
-  board: preludesecurity
 - company: PrimeIntellect
   board: primeintellect
 - company: Prior Labs
@@ -1079,8 +1073,6 @@
   board: procurementsciences
 - company: Profound
   board: profound
-- company: Proof of Play
-  board: proofofplay
 - company: Propel
   board: propel
 - company: Protegrity
@@ -1547,8 +1539,6 @@
   board: livekit
 - company: Shepherd (Series B)
   board: shepherd
-- company: Fractional AI
-  board: fractional-ai
 - company: Zippymh
   board: zippymh
 - company: Turquoise
@@ -1941,8 +1931,6 @@
   board: backflip
 - company: backmarket
   board: backmarket
-- company: backpack
-  board: backpack
 - company: bankjoy
   board: bankjoy
 - company: bantamcommunications
@@ -2053,8 +2041,6 @@
   board: boam
 - company: bobyard
   board: bobyard
-- company: boomandbucket
-  board: boomandbucket
 - company: boon
   board: boon
 - company: botanictonics
@@ -2321,8 +2307,6 @@
   board: conscious-talent
 - company: contentoo
   board: contentoo
-- company: continue
-  board: continue
 - company: contoro
   board: contoro
 - company: conversion
@@ -3409,8 +3393,6 @@
   board: medscout
 - company: meetmarvin
   board: meetmarvin
-- company: membrane
-  board: membrane
 - company: meridianlink
   board: meridianlink
 - company: messa
@@ -4371,8 +4353,6 @@
   board: starknetfoundation
 - company: statista
   board: statista
-- company: statsig
-  board: statsig
 - company: stay22
   board: stay22
 - company: staycation
@@ -4939,8 +4919,6 @@
   board: ramielcapital
 - company: safe
   board: safe
-- company: yeifinance
-  board: yeifinance
 - company: Citizen Health
   board: Citizen%20Health
 - company: Flock Safety
@@ -5193,8 +5171,6 @@
   board: cowboyspace
 - company: craze
   board: craze
-- company: crewbloom
-  board: crewbloom
 - company: crisp
   board: crisp
 - company: cside
@@ -5453,8 +5429,6 @@
   board: morningconsult
 - company: multiplier-holdings
   board: multiplier-holdings
-- company: myvillage
-  board: myvillage
 - company: ncontracts
   board: ncontracts
 - company: nelly
@@ -5625,8 +5599,6 @@
   board: sensorfact
 - company: seon
   board: seon
-- company: serif
-  board: serif
 - company: sf-tensor
   board: sf-tensor
 - company: share
@@ -5871,8 +5843,6 @@
   board: cascade
 - company: codex
   board: codex
-- company: datasnipper.com
-  board: datasnipper.com
 - company: doctoralia-brasil
   board: doctoralia-brasil
 - company: dominion dynamics
@@ -5995,8 +5965,6 @@
   board: arcade-ai
 - company: arch.co
   board: arch.co
-- company: archerfaris
-  board: archerfaris
 - company: arizent
   board: arizent
 - company: aro.homes
@@ -6029,8 +5997,6 @@
   board: biograph
 - company: bivacor-inc
   board: bivacor-inc
-- company: bizly-com
-  board: bizly-com
 - company: Blacksmith Agency
   board: blacksmith%20agency
 - company: blank-metal
@@ -6411,8 +6377,6 @@
   board: odin-dynamics
 - company: onme
   board: onme
-- company: onyx games llc
-  board: onyx%20games%20llc
 - company: openart
   board: openart
 - company: openloophealth
@@ -7299,8 +7263,6 @@
   board: stayai
 - company: SquareFi
   board: stealth%20fintech
-- company: Teletactica
-  board: stealth%20startup
 - company: StemWave
   board: stemwave
 - company: Stotles
@@ -8182,3 +8144,21 @@
   board: quizlet-inc
 - company: Mural Group
   board: themuralgroup
+- company: Magnitude (formerly Archer Faris)
+  board: magnitude.ai
+- company: Onyx Odds (formerly Onyx Games LLC)
+  board: onyx-odds
+- company: Absci
+  board: absci
+- company: Affinity
+  board: affinity.co
+- company: Confusion Capital
+  board: confusioncapital
+- company: Fireworks AI
+  board: fireworks
+- company: RxVantage
+  board: rxvantage
+- company: Snackpass
+  board: snackpass
+- company: TransFICC
+  board: transficc

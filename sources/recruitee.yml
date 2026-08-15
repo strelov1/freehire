@@ -19,8 +19,6 @@
   board: curvgroup
 - company: Edelman
   board: edelman
-- company: Exigent
-  board: exigent
 - company: Focus Entertainment
   board: focusentertainment
 - company: Focus Home Interactive
@@ -43,8 +41,6 @@
   board: lucidgames
 - company: Lucid Reality Labs
   board: lucidrealitylabs
-- company: Mangopay
-  board: mangopay
 - company: Mitsogo
   board: mitsogo
 - company: MYR Games
@@ -61,8 +57,6 @@
   board: rocketwerkz
 - company: SaaS Labs
   board: saaslabs
-- company: Scorewarrior
-  board: scorewarrior
 - company: Sense
   board: sense
 - company: Spocket

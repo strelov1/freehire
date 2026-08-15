@@ -295,8 +295,6 @@
   board: atl
 - company: atlantarehab
   board: atlantarehab
-- company: atlantiscasino
-  board: atlantiscasino
 - company: atlas-aerospace
   board: atlas-aerospace
 - company: atlassian
@@ -2121,8 +2119,6 @@
   board: mobiledentists
 - company: model1
   board: model1
-- company: monarchblackhawk
-  board: monarchblackhawk
 - company: monarchps
   board: monarchps
 - company: monterosatx
@@ -3855,3 +3851,5 @@
 # icims board mined from remote.io (2026-08-09, live-validated; vanity host, careers-home product)
 - company: Avalara
   board: careers.avalara.com
+- company: Q-Centrix (now part of MRO Corporation)
+  board: careers-mrocorp.icims.com
