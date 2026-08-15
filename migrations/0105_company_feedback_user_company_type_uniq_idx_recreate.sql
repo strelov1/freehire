@@ -13,6 +13,11 @@
 -- matters. On an existing prod volume, build it by hand, detached from the
 -- SSH session (systemd-run or nohup) — a CONCURRENTLY build dies with its
 -- ssh session and leaves an INVALID index behind, the same warning
--- 0078/0081/0086 give.
+-- 0078/0081/0086 give. IF NOT EXISTS matches by name only, valid or not — if
+-- a prior attempt left an INVALID copy, re-running this file silently no-ops
+-- instead of building a usable one, and UpsertCompanyFeedback keeps 42P10ing
+-- with no working arbiter. Check `\d company_feedback` (or pg_index.indisvalid)
+-- before trusting a rerun; if it shows invalid, `DROP INDEX CONCURRENTLY
+-- company_feedback_user_company_type_uniq_idx;` first, then retry this file.
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS company_feedback_user_company_type_uniq_idx
     ON public.company_feedback (user_id, company_slug, feedback_type) WHERE user_id IS NOT NULL;
