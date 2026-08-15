@@ -79,25 +79,37 @@ export default defineContentScript({
     // listeners would have to be re-attached on every render (and leak the ones
     // they replaced). The panel is told only that something changed — it re-reads
     // the form, which is the one account that cannot drift.
-    const announce = debounce(() => {
+    const notifyPanel = () => {
       void browser.runtime.sendMessage({ kind: 'FORM_CHANGED' } satisfies RuntimeMessage).catch(() => {
         // No panel listening (it is closed, or this frame outlived it). Nothing
         // to do: the next open re-reads the form anyway.
       });
-    }, FORM_CHANGE_QUIET_MS);
+    };
+    const announce = debounce(notifyPanel, FORM_CHANGE_QUIET_MS);
     document.addEventListener('input', announce, true);
     document.addEventListener('change', announce, true);
 
     // A form the page renders later — the next step of an ATS application, an
     // "Apply" button expanding one in place — arrives with no page load and no
     // typing, so neither the panel's tab listeners nor the two above would ever
-    // notice it. Watching for controls entering or leaving the document covers
-    // both, through the same debounce, so a burst of DOM churn is one notice.
+    // notice it.
+    //
+    // Only a change in HOW MANY controls the page holds is announced. A React ATS
+    // form re-renders its inputs constantly, and announcing every re-render kept
+    // the panel re-reading the form without pause — which is what starved its
+    // reads and left the checklist permanently absent. Typing is already covered
+    // by the two listeners above, where the count does not change.
+    let controlCount = document.querySelectorAll('input, select, textarea').length;
+    const announceIfCountChanged = debounce(() => {
+      const count = document.querySelectorAll('input, select, textarea').length;
+      if (count === controlCount) return;
+      controlCount = count;
+      notifyPanel();
+    }, FORM_CHANGE_QUIET_MS);
     new MutationObserver((records) => {
       for (const record of records) {
-        const touched = [...record.addedNodes, ...record.removedNodes];
-        if (touched.some(holdsControl)) {
-          announce();
+        if ([...record.addedNodes, ...record.removedNodes].some(holdsControl)) {
+          announceIfCountChanged();
           return;
         }
       }

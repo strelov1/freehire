@@ -463,15 +463,20 @@
   let plan = $state<ApplyPlan | null>(null);
   /** The question a walk is filling right now, by label. */
   let fillingLabel = $state<string | null>(null);
-  /** Guards against an older read landing after a newer one — a page change and
-   *  the page's own FORM_CHANGED both start a read, and the slower answer would
-   *  otherwise replace the current form's plan with the previous one's. Same
-   *  pattern as `matchRequestId`. */
-  let planRequestId = 0;
+  // Reads of the form are serialised rather than raced. A request id (the
+  // `matchRequestId` pattern) was the first attempt and it deadlocked on a real
+  // ATS page: the page announces changes continuously, so every read found its id
+  // already superseded by the next one and returned before assigning anything —
+  // the checklist never appeared at all. One read at a time, with a re-read queued
+  // if anything arrived meanwhile, cannot starve and cannot land stale.
+  let planReading = false;
+  let planStale = false;
   /** How many labelled questions the last read found, whether or not they added
    *  up to an application. It is what the panel says when it shows no checklist,
    *  so "nothing appeared" can be told from "nothing was found". */
   let questionsSeen = $state(0);
+  /** Why the last read produced nothing, when it failed outright. */
+  let planError = $state('');
   /** True once a walk has written into this page's form. It outranks every guess
    *  about whether the page is showing an application: it accepted values. Reset
    *  by a page change, with the plan. */
@@ -481,16 +486,38 @@
    *  is not showing an application. */
   async function refreshPlan() {
     if (!user) return;
-    const requestId = ++planRequestId;
-    const reply = (await browser.runtime.sendMessage({
-      kind: 'GET_FRAMED_FORM',
-    } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-    if (requestId !== planRequestId) return;
-    questionsSeen = reply?.kind === 'FRAMED_FORM' ? reply.fields.filter((f) => f.label.trim() !== '').length : 0;
-    if (
-      reply?.kind !== 'FRAMED_FORM' ||
-      !showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })
-    ) {
+    if (planReading) {
+      planStale = true;
+      return;
+    }
+    planReading = true;
+    try {
+      do {
+        planStale = false;
+        const reply = (await browser.runtime.sendMessage({
+          kind: 'GET_FRAMED_FORM',
+        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+        applyRead(reply);
+      } while (planStale);
+    } catch (err) {
+      // A read that could not happen is not a page without a form: say so rather
+      // than clearing a checklist the user is looking at.
+      planError = err instanceof Error ? err.message : 'could not read the form';
+    } finally {
+      planReading = false;
+    }
+  }
+
+  /** Turns one form read into the plan, or into the reason there is none. */
+  function applyRead(reply: RuntimeMessage | undefined) {
+    planError = '';
+    if (reply?.kind !== 'FRAMED_FORM') {
+      questionsSeen = 0;
+      plan = null;
+      return;
+    }
+    questionsSeen = reply.fields.filter((f) => f.label.trim() !== '').length;
+    if (!showsApplicationForm(reply.fields, reply.uploads, { filled: formFilled })) {
       plan = null;
       return;
     }
@@ -843,7 +870,9 @@
                  independent of the match: a page can show an application freehire
                  does not carry a posting for, and the checklist is just as useful
                  there. -->
-            {#if !plan && questionsSeen > 0}
+            {#if !plan && planError}
+              <p class="no-plan">Could not read this page's form: {planError}</p>
+            {:else if !plan && questionsSeen > 0}
               <!-- The page asks questions but they did not add up to an
                    application. Saying so beats an empty space the user has to
                    guess about. -->
