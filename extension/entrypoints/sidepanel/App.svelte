@@ -601,7 +601,7 @@
         (frame === undefined || i.frame === frame) &&
         (form === undefined || i.form === form),
     );
-    if (item) plan = markAnswered(plan, item);
+    if (item) plan = markAnswered(plan, item.key);
   }
 
   /**

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPlan, markAnswered, showsApplicationForm } from './applyPlan';
 import type { FramedField } from './protocol';
+import { must } from './test-utils';
 
 /** A question as the page reported it. Overrides say what the case is about. */
 function field(label: string, over: Partial<FramedField> = {}): FramedField {
@@ -118,11 +119,11 @@ describe('buildPlan', () => {
 describe('markAnswered', () => {
   it('ticks one item off and moves the counter', () => {
     const plan = buildPlan([
-      field('First name', { required: true, value: 'Igor' }),
-      field('Email', { required: true }),
+      field('First name', { required: true, value: 'Igor', index: 0 }),
+      field('Email', { required: true, index: 1 }),
     ]);
 
-    const after = markAnswered(plan, { label: 'Email', frame: 0, form: 0 });
+    const after = markAnswered(plan, must(plan.items[1]).key);
 
     expect(after.items.map((i) => i.answered)).toEqual([true, true]);
     expect(after.required).toEqual({ answered: 2, total: 2, percent: 100 });
@@ -134,29 +135,29 @@ describe('markAnswered', () => {
   it('leaves a plan that does not carry the label alone', () => {
     const plan = buildPlan([field('Email', { required: true })]);
 
-    expect(markAnswered(plan, { label: 'Gone', frame: 0, form: 0 })).toEqual(plan);
+    expect(markAnswered(plan, '9:9')).toEqual(plan);
   });
 
-  // Two questions can carry the same label in different forms or frames — an
-  // application and a job-alert signup each have their own "Email". Ticking one
-  // off must not tick the other, or the counter reports progress that is not
-  // there.
-  it('ticks off the question at that address only', () => {
+  // Two questions can carry the same label — an application and a job-alert
+  // signup each have their own "Email", and one ATS form repeats "Years" under
+  // several headings. Ticking one off must not tick the other, or the counter
+  // reports progress that is not there.
+  it('ticks off that question only, where labels repeat', () => {
     const plan = buildPlan([
-      field('Email', { required: true, frame: 0, form: 0 }),
-      field('Email', { required: true, frame: 1, form: 0 }),
+      field('Email', { required: true, frame: 0, index: 0 }),
+      field('Email', { required: true, frame: 1, index: 0 }),
     ]);
 
-    const after = markAnswered(plan, { label: 'Email', frame: 1, form: 0 });
+    const after = markAnswered(plan, must(plan.items[1]).key);
 
     expect(after.items.map((i) => i.answered)).toEqual([false, true]);
     expect(after.required).toEqual({ answered: 1, total: 2, percent: 50 });
   });
 
   it('does not touch the optional side of the counter', () => {
-    const plan = buildPlan([field('Email', { required: true }), field('Website')]);
+    const plan = buildPlan([field('Email', { required: true, index: 0 }), field('Website', { index: 1 })]);
 
-    const after = markAnswered(plan, { label: 'Website', frame: 0, form: 0 });
+    const after = markAnswered(plan, must(plan.items[1]).key);
 
     expect(after.required).toEqual({ answered: 0, total: 1, percent: 0 });
   });

@@ -12,19 +12,17 @@
 
 import type { FramedField } from './protocol';
 
-/**
- * Which question, exactly. The label alone does not say: an application and a
- * job-alert signup on the same page each have their own "Email", and an ATS
- * serves the application from its own frame — so both narrowings travel with it.
- */
-export interface FieldAddress {
+/** One question in the checklist, addressed the way a fill addresses it. */
+export interface PlanItem {
+  /**
+   * Where the question is, for a fill or a reveal to reach it. The label alone
+   * does not say: an application and a job-alert signup on the same page each
+   * have their own "Email", and an ATS serves the application from its own frame
+   * — so both narrowings travel with it.
+   */
   label: string;
   frame: number;
   form: number;
-}
-
-/** One question in the checklist, addressed the way a fill addresses it. */
-export interface PlanItem extends FieldAddress {
   /**
    * Identity for rendering. NOT the address: two questions on one form can carry
    * the same label — an ATS repeats "Years" under several headings, and a page
@@ -54,17 +52,16 @@ export interface ApplyPlan {
 }
 
 /**
- * The plan with one question ticked off, by label.
+ * The plan with one question ticked off, named by its key.
  *
  * A walk knows what it just wrote, so it says so directly rather than re-reading
  * the whole page per step — the counter moves with the value, not 400ms later
- * when the page's own change notice arrives. A label the plan does not carry
+ * when the page's own change notice arrives. A key the plan does not carry
  * changes nothing.
  */
-export function markAnswered(plan: ApplyPlan, at: FieldAddress): ApplyPlan {
-  const isTarget = (i: PlanItem) => i.label === at.label && i.frame === at.frame && i.form === at.form;
-  if (!plan.items.some((i) => isTarget(i) && !i.answered)) return plan;
-  return recount(plan.items.map((i) => (isTarget(i) ? { ...i, answered: true } : i)));
+export function markAnswered(plan: ApplyPlan, key: string): ApplyPlan {
+  if (!plan.items.some((i) => i.key === key && !i.answered)) return plan;
+  return recount(plan.items.map((i) => (i.key === key ? { ...i, answered: true } : i)));
 }
 
 /**
