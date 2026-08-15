@@ -229,9 +229,15 @@
 </Card>
 
 <style>
+  /* No margin here: the card's outer inset comes from the sidepanel's own
+   * `.match-panel` padding, same as every other element it sits next to (the
+   * Autofill button, the "Add to freehire" hint). A margin here on top of that
+   * padding used to double the card's inset to 24px while its siblings stayed at
+   * 12px — visible as the card's content looking normally spaced and the
+   * Autofill button looking edge-to-edge by contrast, when neither actually had
+   * zero padding. */
   :global(.card) {
     padding: 14px;
-    margin: 12px;
   }
   .job {
     display: flex;

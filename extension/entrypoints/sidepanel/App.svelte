@@ -34,7 +34,8 @@
   import ToolGroupList from './ToolGroupList.svelte';
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
-  import { Alert, Badge, Button, EmptyState, Input, Skeleton } from 'freehire-design-system';
+  import { Alert, Badge, Button, EmptyState, Input, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
+  import { ArrowUp, Square } from '@lucide/svelte';
 
   let chat = $state<ChatState>(initChat());
   // Local action feedback (autofill results, errors) — not part of a turn.
@@ -48,6 +49,13 @@
   // one. Plain refs: neither is rendered directly.
   let sessionId: string | null = null;
   let turn: Turn | null = null;
+
+  // The page the CURRENT conversation is about (see `pageKey`). A job posting's
+  // chat has no reason to carry over to a different page — there is nothing left
+  // to continue — so this is compared against the active tab on every tab switch
+  // and reload, and a mismatch resets the conversation instead of resuming it.
+  // Null until the first page is known.
+  let chatPageKey: string | null = null;
 
   let user = $state<HireUser | null>(null);
   let authBusy = $state(false);
@@ -64,6 +72,13 @@
   let match = $state<JobMatch | null>(null);
   let matchError = $state('');
 
+  // "Match" carries the current page's job info and its page-scoped actions
+  // (Autofill, Add to freehire); "Chat" carries the conversation. Split into tabs
+  // because the chat transcript needs the whole panel height to itself to scroll
+  // — sharing it with the match card left too little room to reach the composer.
+  const PANEL_ID = 'sidepanel-panel';
+  let activeTab = $state<'match' | 'chat'>('match');
+
   onMount(() => {
     // The conversation is created lazily on the first message, so an idle panel
     // starts nothing; a conversation held earlier is repainted here.
@@ -71,8 +86,10 @@
 
     // Re-run the match when the user switches tabs or a page finishes loading,
     // so the card tracks whatever job page is in front — like the reference.
+    // The same event is what notices a genuine page change for the chat: see
+    // `handlePageChange`.
     const refresh = () => {
-      if (user) void loadMatch();
+      if (user) void handlePageChange();
     };
     browser.tabs.onActivated.addListener(refresh);
     const onUpdated = (_id: number, info: { status?: string }) => {
@@ -88,14 +105,60 @@
     };
   });
 
+  /** Identifies the page a conversation is about, for `chatPageKey`. The query
+   *  string is dropped so a tracking-parameter change on the same posting is not
+   *  read as a different one; the path is kept because that is what actually
+   *  distinguishes one job posting's URL from another's, on freehire's own job
+   *  pages and on an ATS's alike. */
+  function pageKey(url: string): string {
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return url;
+    }
+  }
+
+  async function currentPageKey(): Promise<string> {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    return pageKey(tab?.url ?? '');
+  }
+
+  /**
+   * Runs on every tab switch and page load. A genuine change of page clears
+   * whatever conversation is on screen — there is nothing on the new page for it
+   * to continue — before the match card is refreshed for the new page. The very
+   * first call (chatPageKey still null) only establishes the baseline; there is
+   * nothing yet to reset it against.
+   *
+   * The clear is local only (`resetChat`, not `newChat`): the page just left
+   * might still have a perfectly good remembered conversation, and switching
+   * away from it is not the user asking to discard it — only the Reset button
+   * and sign-out are. Immediately after, the new page's OWN remembered
+   * conversation (if any) is offered the normal restore path, so tabbing A → B →
+   * A resumes A's conversation rather than finding it erased.
+   */
+  async function handlePageChange() {
+    const key = await currentPageKey();
+    if (chatPageKey !== null && key !== chatPageKey) {
+      resetChat();
+      const token = await getToken();
+      if (token) void restoreConversation(token, key);
+    }
+    chatPageKey = key;
+    void loadMatch();
+  }
+
   async function restoreSession() {
     const token = await getToken();
     if (!token) return;
     user = await fetchMe(token);
     if (!user) return;
     tools.start(token);
+    const key = await currentPageKey();
+    chatPageKey = key;
     void loadMatch();
-    void restoreConversation(token);
+    void restoreConversation(token, key);
   }
 
   /**
@@ -103,22 +166,28 @@
    * through the same reducer a live turn folds through, so history and a running
    * turn cannot render differently.
    *
+   * A remembered conversation about a different page is not repainted here — it
+   * is simply not what this page's chat should show — but it is left in storage
+   * rather than forgotten: it is exactly right for whatever page it WAS about,
+   * and staying there is what lets tabbing back to that page resume it.
+   *
    * A conversation the server no longer has (deleted from the web) is not an error
    * the user can act on from here — forget it and let the next message start a
    * fresh one.
    */
-  async function restoreConversation(token: string) {
+  async function restoreConversation(token: string, key: string) {
     const remembered = await recallSession();
     if (!remembered) return;
+    if (remembered.pageKey !== key) return;
     restoring = true;
     try {
-      const { messages } = await getSession(remembered, token);
+      const { messages } = await getSession(remembered.id, token);
       // The composer unlocks as soon as the user is known, so a message can be
       // sent while this read is in flight — and that message created its own
       // conversation. Adopting the remembered one now would point the panel at A
       // while storage holds B, and lose the exchange the user just watched.
       if (sessionId) return;
-      sessionId = remembered;
+      sessionId = remembered.id;
       for (const event of eventsFromTranscript(messages)) {
         chat = reduceTurnEvent(chat, event);
       }
@@ -269,6 +338,7 @@
       if (!user) authError = 'Signed in, but could not load your account.';
       else {
         tools.start(token);
+        chatPageKey = await currentPageKey();
         void loadMatch();
       }
     } catch (err) {
@@ -286,6 +356,9 @@
     // Forget the conversation so a later sign-in never resumes the previous
     // user's, and clear what is on screen.
     await newChat();
+    // No page is "current" while signed out — re-established by restoreSession
+    // or handleSignIn on the next sign-in, same as on first mount.
+    chatPageKey = null;
   }
 
   /**
@@ -311,8 +384,10 @@
     }
     try {
       if (!sessionId) {
+        const key = chatPageKey ?? (await currentPageKey());
         sessionId = (await createSession(token)).id;
-        await rememberSession(sessionId);
+        await rememberSession(sessionId, key);
+        chatPageKey = key;
       }
       turn = sendTurn(sessionId, text, token, (event) => {
         chat = reduceTurnEvent(chat, event);
@@ -343,15 +418,25 @@
     turn?.cancel();
   }
 
-  /** Start over. The old conversation stays on the server — it is in the web's
-   *  session rail — so this forgets it rather than deleting it. */
-  async function newChat() {
+  /** Clears what the panel is showing, without touching the remembered session in
+   *  storage — used where the underlying conversation may still be worth keeping
+   *  (a page change; see `handlePageChange`). `newChat` below is the same clear
+   *  plus the deliberate forget. */
+  function resetChat() {
     if (sending) stopTurn();
     sessionId = null;
-    await forgetSession();
     chat = initChat();
     notices = [];
     chatError = '';
+  }
+
+  /** Start over — the Reset button. The old conversation stays on the server — it
+   *  is in the web's session rail — so this forgets the panel's local pointer to
+   *  it rather than deleting it. chatPageKey is left as-is: the button does not
+   *  navigate anywhere, so the current page is still the current page. */
+  async function newChat() {
+    resetChat();
+    await forgetSession();
   }
 
   function sendMessage() {
@@ -513,7 +598,10 @@
 <div class="app">
   <header>
     <div class="top">
-      <strong>freehire</strong>
+      <span class="brand">
+        <img src="/icon/32.png" alt="" class="brand-mark" width="18" height="18" />
+        <strong>freehire</strong>
+      </span>
       <Badge variant={sending ? 'brand' : 'outline'}>
         {sending ? 'working…' : user ? 'ready' : 'offline'}
       </Badge>
@@ -533,99 +621,146 @@
     {/if}
   </header>
 
-  {#if user}
-    {#if matchStatus === 'ready' && matchJob && match}
-      <MatchCard job={matchJob} {match} />
-    {:else if matchStatus === 'loading'}
-      <div class="match-skeleton">
-        <Skeleton class="h-9 w-9 rounded-lg" />
-        <div class="match-skeleton-lines">
-          <Skeleton class="h-3 w-2/3 rounded" />
-          <Skeleton class="h-3 w-1/3 rounded" />
-        </div>
-      </div>
-    {:else if matchStatus === 'error'}
-      <EmptyState title="Match unavailable" description={matchError}>
-        {#snippet action()}
-          <Button variant="outline" size="sm" onclick={loadMatch}>Retry</Button>
-        {/snippet}
-      </EmptyState>
-    {:else if matchStatus === 'empty'}
-      <EmptyState title="No match yet" description="Open a job posting to see your match.">
-        {#snippet action()}
-          <Button variant="outline" size="sm" onclick={loadMatch}>Refresh</Button>
-        {/snippet}
-      </EmptyState>
-    {/if}
-    {#if unknownPage}
-      <p class="match-hint">
-        freehire doesn't have this posting.
-        <button class="link" onclick={contributePage} disabled={contributing}>
-          {contributing ? 'Adding…' : 'Add to freehire'}
-        </button>
-      </p>
-    {/if}
-  {/if}
+  <TabStrip
+    class="tab-strip"
+    tabs={[
+      { id: 'match', label: 'Match' },
+      { id: 'chat', label: 'Chat' },
+    ]}
+    active={activeTab}
+    onSelect={(id) => (activeTab = id)}
+    label="Panel sections"
+    panelId={PANEL_ID}
+  />
 
-  <div class="messages">
-    {#each chat.messages as message, mi (mi)}
-      {@const split = splitPresentingCalls(message.tools, message.streaming)}
-      {#each split.decks as slot, di (di)}
-        <JobDeck {slot} />
-      {/each}
-      {#if split.rest.length > 0}
-        <ToolGroupList calls={split.rest} />
-      {/if}
-      {#if message.text || message.streaming}
-        <div class="message {message.role}" class:errored={message.errored}>
-          {message.text}{#if message.streaming && !message.text}<span class="dots">…</span>{/if}
-        </div>
-      {/if}
-    {/each}
-    {#each notices as notice, i (i)}
-      <div class="message system">{notice}</div>
-    {/each}
-    {#if overrideFill}
-      <div class="message system">
-        <button class="link" onclick={runOverrideFill} disabled={autofilling}>Fill it anyway</button>
-      </div>
-    {/if}
-    {#if chatError}
-      <div class="message system err">{chatError}</div>
-    {/if}
-    {#if chat.messages.length === 0 && notices.length === 0}
-      <p class="empty">
-        {#if restoring}
-          Loading your conversation…
-        {:else if user}
-          Ask about the page you're on — the agent can read it.
+  <div class="tab-panel" role="tabpanel" id={PANEL_ID} aria-labelledby={tabStripId(PANEL_ID, activeTab)}>
+    {#if activeTab === 'match'}
+      <div class="match-panel">
+        {#if user}
+          {#if matchStatus === 'ready' && matchJob && match}
+            <MatchCard job={matchJob} {match} />
+          {:else if matchStatus === 'loading'}
+            <div class="match-skeleton">
+              <Skeleton class="h-9 w-9 rounded-lg" />
+              <div class="match-skeleton-lines">
+                <Skeleton class="h-3 w-2/3 rounded" />
+                <Skeleton class="h-3 w-1/3 rounded" />
+              </div>
+            </div>
+          {:else if matchStatus === 'error'}
+            <EmptyState title="Match unavailable" description={matchError}>
+              {#snippet action()}
+                <Button variant="outline" size="sm" onclick={loadMatch}>Retry</Button>
+              {/snippet}
+            </EmptyState>
+          {:else if matchStatus === 'empty'}
+            <EmptyState title="No match yet" description="Open a job posting to see your match.">
+              {#snippet action()}
+                <Button variant="outline" size="sm" onclick={loadMatch}>Refresh</Button>
+              {/snippet}
+            </EmptyState>
+          {/if}
+          {#if unknownPage}
+            <p class="match-hint">
+              freehire doesn't have this posting.
+              <button class="link" onclick={contributePage} disabled={contributing}>
+                {contributing ? 'Adding…' : 'Add to freehire'}
+              </button>
+            </p>
+          {/if}
+
+          <Button
+            class="w-full !h-16 !text-base !font-semibold"
+            variant="primary"
+            size="lg"
+            onclick={autofill}
+            disabled={autofilling}
+          >
+            {autofilling ? 'Filling…' : 'Autofill'}
+          </Button>
+
+          {#each notices as notice, i (i)}
+            <div class="message system">{notice}</div>
+          {/each}
+          {#if overrideFill}
+            <div class="message system">
+              <button class="link" onclick={runOverrideFill} disabled={autofilling}>Fill it anyway</button>
+            </div>
+          {/if}
         {:else}
-          Sign in to chat with the agent.
+          <p class="empty">Sign in to see your match for this page.</p>
         {/if}
-      </p>
-    {/if}
-  </div>
-
-  <div class="composer">
-    {#if user}
-      <Button variant="secondary" size="sm" onclick={autofill} disabled={autofilling}>
-        {autofilling ? 'Filling…' : 'Autofill'}
-      </Button>
-    {/if}
-    {#if user && chat.messages.length > 0}
-      <Button variant="secondary" size="sm" onclick={newChat} disabled={sending}>New chat</Button>
-    {/if}
-    <Input
-      class="flex-1"
-      placeholder={user ? 'Message the agent…' : 'Sign in to chat'}
-      bind:value={draft}
-      disabled={!user || sending}
-      onkeydown={(e) => e.key === 'Enter' && sendMessage()}
-    />
-    {#if sending}
-      <Button variant="primary" size="sm" onclick={stopTurn}>Stop</Button>
+      </div>
     {:else}
-      <Button variant="primary" size="sm" onclick={sendMessage} disabled={!user}>Send</Button>
+      <div class="chat-panel">
+        {#if user}
+          <div class="chat-toolbar">
+            <Button variant="ghost" size="sm" onclick={newChat} disabled={sending}>Reset</Button>
+          </div>
+        {/if}
+        <div class="messages">
+          {#each chat.messages as message, mi (mi)}
+            {@const split = splitPresentingCalls(message.tools, message.streaming)}
+            {#each split.decks as slot, di (di)}
+              <JobDeck {slot} />
+            {/each}
+            {#if split.rest.length > 0}
+              <ToolGroupList calls={split.rest} />
+            {/if}
+            {#if message.text || message.streaming}
+              <div class="message {message.role}" class:errored={message.errored}>
+                {message.text}{#if message.streaming && !message.text}<span class="dots">…</span>{/if}
+              </div>
+            {/if}
+          {/each}
+          {#if chatError}
+            <div class="message system err">{chatError}</div>
+          {/if}
+          {#if chat.messages.length === 0}
+            <p class="empty">
+              {#if restoring}
+                Loading your conversation…
+              {:else if user}
+                Ask about the page you're on — the agent can read it.
+              {:else}
+                Sign in to chat with the agent.
+              {/if}
+            </p>
+          {/if}
+        </div>
+
+        <div class="composer">
+          <Input
+            class="flex-1"
+            placeholder={user ? 'Message the agent…' : 'Sign in to chat'}
+            bind:value={draft}
+            disabled={!user || sending}
+            onkeydown={(e) => e.key === 'Enter' && sendMessage()}
+          />
+          {#if sending}
+            <Button
+              class="rounded-full"
+              variant="primary"
+              size="icon"
+              aria-label="Stop the assistant"
+              onclick={stopTurn}
+            >
+              <Square class="size-3.5" fill="currentColor" />
+            </Button>
+          {:else}
+            <Button
+              class="rounded-full"
+              variant="primary"
+              size="icon"
+              aria-label="Send message"
+              onclick={sendMessage}
+              disabled={!user}
+            >
+              <ArrowUp class="size-4" strokeWidth={2.5} />
+            </Button>
+          {/if}
+        </div>
+      </div>
     {/if}
   </div>
 </div>
@@ -635,6 +770,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
     font-size: 14px;
   }
 
@@ -643,13 +779,22 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
   }
 
   .top {
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brand-mark {
+    border-radius: 4px;
   }
 
   .auth {
@@ -677,17 +822,53 @@
     padding: 0;
   }
 
+  /* :global — `class="tab-strip"` is forwarded onto TabStrip's own root element,
+   * which carries that component's scoping hash, not App.svelte's; a scoped
+   * selector here would silently match nothing, which is exactly what dropped
+   * the strip's inset. */
+  :global(.tab-strip) {
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+
+  /* The panel that actually has to fill the space between the tab strip and the
+   * viewport's bottom edge — min-height: 0 overrides a flex item's default of
+   * shrinking no further than its content, which is what silently broke internal
+   * scrolling here: without it this item grew to fit the transcript instead of
+   * scrolling it, pushing the composer off screen. */
+  .tab-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .match-panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
   .match-hint {
     font-size: 12px;
     color: var(--muted-foreground);
-    margin: 12px;
   }
 
   .match-skeleton {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 12px;
   }
 
   .match-skeleton-lines {
@@ -699,6 +880,7 @@
 
   .messages {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 12px;
     display: flex;
@@ -750,6 +932,13 @@
 
   .dots {
     opacity: 0.5;
+  }
+
+  .chat-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 6px 10px 0;
+    flex-shrink: 0;
   }
 
   .composer {
