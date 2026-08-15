@@ -42,13 +42,30 @@ describe('collectionPaths', () => {
 });
 
 describe('blogPaths', () => {
-  it('includes the /blog index followed by one path per post', () => {
-    const paths = blogPaths([{ slug: 'first' }, { slug: 'second' }]);
-    expect(paths).toEqual(['/blog', '/blog/first', '/blog/second']);
+  it('includes the /blog index followed by one entry per post', () => {
+    const paths = blogPaths([
+      { slug: 'first', date: '2026-01-02' },
+      { slug: 'second', date: '2026-01-05' },
+    ]);
+    expect(paths).toEqual([
+      // The index changes whenever its newest post does.
+      { path: '/blog', lastmod: '2026-01-05' },
+      { path: '/blog/first', lastmod: '2026-01-02' },
+      { path: '/blog/second', lastmod: '2026-01-05' },
+    ]);
   });
 
-  it('is just the index when there are no posts', () => {
-    expect(blogPaths([])).toEqual(['/blog']);
+  it('dates the index from the newest post regardless of input order', () => {
+    const paths = blogPaths([
+      { slug: 'older', date: '2025-11-30' },
+      { slug: 'newest', date: '2026-03-01' },
+      { slug: 'middle', date: '2026-01-15' },
+    ]);
+    expect(paths[0]).toEqual({ path: '/blog', lastmod: '2026-03-01' });
+  });
+
+  it('is just the index, undated, when there are no posts', () => {
+    expect(blogPaths([])).toEqual([{ path: '/blog', lastmod: undefined }]);
   });
 });
 

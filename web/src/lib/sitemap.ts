@@ -45,11 +45,21 @@ export function collectionPaths(): string[] {
   return collectionSlugs().map((slug) => `/collections/${slug}`);
 }
 
-/** Sitemap paths for the blog: the index (`/blog`) plus one path per published
- *  post. Takes the posts (from `listPosts()`) rather than reading them itself, so
- *  it stays pure/testable — the glob-backed loader is called by the route. */
-export function blogPaths(posts: { slug: string }[]): string[] {
-  return ['/blog', ...posts.map((post) => `/blog/${post.slug}`)];
+/** Sitemap entries for the blog: the index (`/blog`) plus one per published post,
+ *  each dated with the post's own publish date. Takes the posts (from
+ *  `listPosts()`) rather than reading them itself, so it stays pure/testable — the
+ *  glob-backed loader is called by the route.
+ *
+ *  The dates matter: without a `lastmod` a crawler has nothing to tell an edited
+ *  or newly published post from one it already has, and re-reads the whole set on
+ *  its own schedule. The index carries the newest post's date, since that is
+ *  exactly when its content last changed. */
+export function blogPaths(posts: { slug: string; date: string }[]): PathEntry[] {
+  const newest = posts.map((post) => post.date).toSorted().at(-1);
+  return [
+    { path: '/blog', lastmod: newest },
+    ...posts.map((post) => ({ path: `/blog/${post.slug}`, lastmod: post.date })),
+  ];
 }
 
 /** Sitemap paths for the insights pages: the hub plus salary/skills/roles for each
@@ -61,6 +71,15 @@ export function insightsPaths(categories: string[]): string[] {
     paths.push(`/insights/salary/${c}`, `/insights/skills/${c}`, `/insights/roles/${c}`);
   }
   return paths;
+}
+
+/** A sitemap path with the date its content last changed, before an origin is
+ *  prefixed. `lastmod` is undefined when there is no honest date to state — a
+ *  guessed one is worse than none, since a crawler that learns the dates are
+ *  noise stops using them. */
+export interface PathEntry {
+  path: string;
+  lastmod?: string;
 }
 
 export interface UrlEntry {
