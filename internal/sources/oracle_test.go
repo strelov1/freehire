@@ -102,6 +102,48 @@ func TestOracleFetchListsAndFetchesDetail(t *testing.T) {
 	}
 }
 
+// TestOracleFallsBackToCorporateDescriptionWhenExternalIsBlank covers the Campus/Summer-
+// Analyst template seen live on Goldman Sachs' board: the External* fields carry only a
+// lone "<br>" with nothing else, so detail must fall back to Corporate/OrganizationDescriptionStr
+// rather than yielding a description with no usable text for downstream skill extraction.
+func TestOracleFallsBackToCorporateDescriptionWhenExternalIsBlank(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("findReqs", `{"items": [{
+			"TotalJobsCount": 1,
+			"requisitionList": [
+				{"Id": "170159", "Title": "Summer Analyst", "PostedDate": "2026-08-15",
+				 "PrimaryLocation": "Warsaw, Poland", "WorkplaceTypeCode": "ORA_ON_SITE"}
+			]
+		}]}`).
+		route("170159", `{"items": [{
+			"Id": "170159",
+			"ExternalDescriptionStr": "<br>",
+			"ExternalResponsibilitiesStr": "",
+			"ExternalQualificationsStr": "",
+			"CorporateDescriptionStr": "<p>About the program.</p>",
+			"OrganizationDescriptionStr": "<p>About the division.</p>"
+		}]}`)
+
+	jobs, err := NewOracle(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Goldman Sachs", Provider: "oracle",
+		Board: "hdpc.fa.us2.oraclecloud.com/LateralHiring",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+	}
+	for _, want := range []string{"About the program.", "About the division."} {
+		if !strings.Contains(jobs[0].Description, want) {
+			t.Errorf("Description missing %q: %q", want, jobs[0].Description)
+		}
+	}
+	if strings.Contains(jobs[0].Description, "<br>") {
+		t.Errorf("Description = %q, should not fall back to the blank External* markup", jobs[0].Description)
+	}
+}
+
 // TestOracleOffsetIsInsideFinder guards the pagination fix: Oracle ignores a top-level
 // &offset= query param (it only honors offset INSIDE the finder clause, alongside limit),
 // so a top-level offset silently re-fetches the first page forever. The fake routes each

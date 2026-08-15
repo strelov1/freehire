@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
+	"html"
+	"regexp"
 	"strings"
 )
 
@@ -119,6 +121,8 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 			ExternalDescriptionStr      string `json:"ExternalDescriptionStr"`
 			ExternalResponsibilitiesStr string `json:"ExternalResponsibilitiesStr"`
 			ExternalQualificationsStr   string `json:"ExternalQualificationsStr"`
+			CorporateDescriptionStr     string `json:"CorporateDescriptionStr"`
+			OrganizationDescriptionStr  string `json:"OrganizationDescriptionStr"`
 			JobSchedule                 string `json:"JobSchedule"`
 		} `json:"items"`
 	}
@@ -128,8 +132,19 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 	d := resp.Items[0]
 	// The three external fields are block-level HTML fragments, so they concatenate
 	// directly (an empty field contributes nothing) before sanitizing.
-	description := sanitizeHTML(
-		d.ExternalDescriptionStr + d.ExternalResponsibilitiesStr + d.ExternalQualificationsStr)
+	external := d.ExternalDescriptionStr + d.ExternalResponsibilitiesStr + d.ExternalQualificationsStr
+
+	var description string
+	if oracleHasVisibleText(external) {
+		description = sanitizeHTML(external)
+	} else {
+		// Some requisition templates (seen live on Goldman Sachs' Campus/Summer-Analyst
+		// postings) leave the External* fields at essentially nothing ("<br>", "") and
+		// carry the real body in these two instead — falling back to them here is the
+		// difference between a usable description and one with nothing for downstream
+		// skill extraction to work from.
+		description = sanitizeHTML(d.CorporateDescriptionStr + d.OrganizationDescriptionStr)
+	}
 
 	workMode := oracleWorkMode(r.WorkplaceTypeCode)
 	return Job{
@@ -147,6 +162,17 @@ func (s oracle) detail(ctx context.Context, e CompanyEntry, b oracleBoard, r ora
 		// free-text employment-type parse.
 		EmploymentType: oracleEmploymentType(d.JobSchedule),
 	}, true
+}
+
+// oracleTagPattern matches an HTML tag, used to check whether the External* fields carry
+// any real content or are just markup ("<br>", "" ...) with nothing rendered inside it.
+var oracleTagPattern = regexp.MustCompile(`<[^>]*>`)
+
+// oracleHasVisibleText reports whether s renders any text once its tags are stripped. A
+// lone "<br>" or an empty string both fail this check, which is what should trigger the
+// CorporateDescriptionStr/OrganizationDescriptionStr fallback in detail.
+func oracleHasVisibleText(s string) bool {
+	return strings.TrimSpace(oracleTagPattern.ReplaceAllString(html.UnescapeString(s), "")) != ""
 }
 
 // oracleEmploymentType maps Oracle's JobSchedule ("Full time" / "Part time") onto the
