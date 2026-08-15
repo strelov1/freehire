@@ -461,9 +461,18 @@ export function createApi(
    *  Empty `facets`/`stats` are normalized to `{}` so callers never see null. */
   // `disjunctive` asks the endpoint to count each facet under the filter minus its
   // own selection (so a selected facet still shows its siblings) — the live-modal mode.
-  async function facetCounts(params: URLSearchParams, opts?: { disjunctive?: boolean }): Promise<FacetCounts> {
+  /** `facets` narrows the count to the named facet params. Counting is paid per
+   *  facet and the wide-valued ones (cities, skills) dominate — the full default
+   *  set measured 284ms on prod versus 10ms for one attribute — so a caller that
+   *  reads a specific key should name it. Cannot be combined with `disjunctive`,
+   *  which derives its queries from the selection rather than from this list. */
+  async function facetCounts(
+    params: URLSearchParams,
+    opts?: { disjunctive?: boolean; facets?: string[] }
+  ): Promise<FacetCounts> {
     const p = new URLSearchParams(params);
     if (opts?.disjunctive) p.set('disjunctive', '1');
+    if (opts?.facets?.length) p.set('facets', opts.facets.join(','));
     const res = await request<{ data: FacetCounts }>(`/api/v1/jobs/facets?${p}`);
     return { total: res.data.total, facets: res.data.facets ?? {}, stats: res.data.stats ?? {} };
   }

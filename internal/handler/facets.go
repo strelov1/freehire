@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -55,19 +56,70 @@ var facetsNoDistribution = map[string]bool{"company_slug": true}
 // ones in facetsNoDistribution, plus the extras. Sorted for a deterministic
 // request. This is the single source shared with the search filter vocabulary —
 // a new facet added to search.StringFacets is counted here automatically.
-func facetAttributes() []string {
+//
+// `only` narrows the set to the named public params. Counting a distribution is
+// paid per attribute and the expensive ones are the wide-valued ones: measured on
+// prod against `?work_mode=remote`, the full set costs 284ms and returns 99KB,
+// dropping `cities` takes it to 233ms, dropping `skills` too 148ms, and a single
+// attribute is 10ms. A caller that reads one number off the result — the job
+// page's "see also" block reads exactly one per collection — should not pay for
+// the other twenty-six.
+func facetAttributes(only ...string) []string {
+	var want map[string]bool
+	if len(only) > 0 {
+		want = make(map[string]bool, len(only))
+		for _, p := range only {
+			want[p] = true
+		}
+	}
+	keep := func(param string) bool { return want == nil || want[param] }
+
 	attrs := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
 	for param, attr := range search.StringFacets {
-		if facetsNoDistribution[param] {
+		if facetsNoDistribution[param] || !keep(param) {
 			continue
 		}
 		attrs = append(attrs, attr)
 	}
-	for _, e := range facetExtraParams {
+	for param, e := range facetExtraParams {
+		if !keep(param) {
+			continue
+		}
 		attrs = append(attrs, e.attr)
 	}
 	sort.Strings(attrs)
 	return attrs
+}
+
+// requestedFacets reads the optional `facets=` param: a comma-separated list of
+// public facet params to count, instead of all of them.
+//
+// An unknown name is an error rather than a silent no-op. The counts this
+// endpoint returns are read by key, so a typo would otherwise surface as a
+// missing count — indistinguishable from a value Meili's per-facet cap dropped,
+// which callers are expected to treat as "unknown" rather than as a bug.
+// company_slug is rejected for the same reason it is absent from the full set:
+// thousands of values, and the UI uses the typeahead instead.
+func requestedFacets(c *fiber.Ctx) ([]string, error) {
+	raw := c.Query("facets")
+	if raw == "" {
+		return nil, nil
+	}
+	params := strings.Split(raw, ",")
+	out := make([]string, 0, len(params))
+	for _, p := range params {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		_, isString := search.StringFacets[p]
+		_, isExtra := facetExtraParams[p]
+		if (!isString && !isExtra) || facetsNoDistribution[p] {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "unknown facet: "+p)
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 // locationFacetParams are the geography facets that share ONE OR-group in
@@ -140,19 +192,31 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 	}
 
 	q := c.Query("q")
+	only, err := requestedFacets(c)
+	if err != nil {
+		return err
+	}
+
 	var res search.FacetResult
-	var err error
 	if c.QueryBool("disjunctive") {
 		// Disjunctive: each facet counted under the full filter minus its own
 		// selection, so a selected facet still shows its siblings (the live-modal
 		// experience). The total stays the full-filter count.
+		//
+		// `facets=` is refused here rather than ignored. Disjunctive counting
+		// derives one query per facet from the SELECTION, so narrowing the output
+		// set would not save the queries — the caller would pay full price for a
+		// partial answer, which is the opposite of what asking for it means.
+		if len(only) > 0 {
+			return fiber.NewError(fiber.StatusBadRequest, "facets= cannot be combined with disjunctive")
+		}
 		vals := queryValues(c)
 		res, err = h.facets.DisjunctiveFacetCounts(c.Context(), q, facetReqs(vals), search.FilterFromValues(vals))
 	} else {
 		res, err = h.facets.FacetCounts(c.Context(), search.FacetParams{
 			Query:  q,
 			Filter: buildSearchFilter(c),
-			Facets: facetAttributes(),
+			Facets: facetAttributes(only...),
 		})
 	}
 	if err != nil {

@@ -53,18 +53,27 @@ async function buildSeeAlso(job: Job, api: Api): Promise<SeeAlsoCard[]> {
   const links = relatedCollectionLinks(jobFacetsFromJob(job));
   const resolvedLinks = links.map((link) => ({ link, resolved: collectionBySlug(link.slug) }));
 
-  const filterGroups = new Map<string, Record<string, string>>();
+  // Each group is one facetCounts() call, and every card in it reads exactly one
+  // key off the result — so ask for only the keys this group will read. The
+  // endpoint counts every facet by default, and that default is expensive:
+  // measured on prod, the full set costs 284ms against ?work_mode=remote (the
+  // wide-valued cities/skills distributions dominate) versus 10ms for a single
+  // attribute. This block was ~99% of the job page's render time because of it.
+  const filterGroups = new Map<string, { filter: Record<string, string>; keys: Set<string> }>();
   for (const { resolved } of resolvedLinks) {
     if (!resolved) continue;
-    const { filter } = splitParams(resolved.params);
-    filterGroups.set(new URLSearchParams(filter).toString(), filter);
+    const { filter, lastKey } = splitParams(resolved.params);
+    const groupKey = new URLSearchParams(filter).toString();
+    const group = filterGroups.get(groupKey) ?? { filter, keys: new Set<string>() };
+    group.keys.add(lastKey);
+    filterGroups.set(groupKey, group);
   }
   const groupedFacets = new Map<string, FacetCounts | null>(
     await Promise.all(
       [...filterGroups.entries()].map(
-        async ([groupKey, filter]): Promise<[string, FacetCounts | null]> => [
+        async ([groupKey, { filter, keys }]): Promise<[string, FacetCounts | null]> => [
           groupKey,
-          await api.facetCounts(new URLSearchParams(filter)).catch(() => null),
+          await api.facetCounts(new URLSearchParams(filter), { facets: [...keys] }).catch(() => null),
         ]
       )
     )

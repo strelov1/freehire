@@ -251,3 +251,70 @@ func contains(ss []string, want string) bool {
 	}
 	return false
 }
+
+// `facets=` exists because counting is paid per attribute: on prod the full set
+// costs 284ms against ?work_mode=remote (the wide-valued cities/skills
+// distributions dominate) versus 10ms for a single one. The job page's "see
+// also" block reads one key per collection, so it names it.
+func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
+	fake := &fakeFacetCounter{}
+	app := facetsApp(fake)
+
+	status, _ := doGet(t, app, "/jobs/facets?work_mode=remote&facets=seniority,regions")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+
+	want := []string{"enrichment.seniority", "regions"}
+	if len(fake.got.Facets) != len(want) {
+		t.Fatalf("Facets = %v, want exactly %v", fake.got.Facets, want)
+	}
+	for _, w := range want {
+		if !contains(fake.got.Facets, w) {
+			t.Errorf("Facets = %v, missing %q", fake.got.Facets, w)
+		}
+	}
+
+	// Narrowing the counted set must not narrow the FILTER — the counts still
+	// have to be "under ?work_mode=remote", or they answer a different question.
+	groups, ok := fake.got.Filter.([][]string)
+	if !ok {
+		t.Fatalf("Filter = %#v, want [][]string", fake.got.Filter)
+	}
+	if !filterHas(groups, `work_mode = "remote"`) {
+		t.Errorf("Filter lost the request's own filters: %#v", groups)
+	}
+}
+
+// A typo must not read as "that value has no count": callers cannot tell a
+// missing key from a value Meili's per-facet cap dropped, so silence would hide
+// the mistake indefinitely.
+func TestJobFacets_UnknownFacetIsRejected(t *testing.T) {
+	for _, name := range []string{"nonsense", "company_slug"} {
+		fake := &fakeFacetCounter{}
+		app := facetsApp(fake)
+		status, _ := doGet(t, app, "/jobs/facets?facets="+name)
+		if status != fiber.StatusBadRequest {
+			t.Errorf("facets=%s: status = %d, want 400", name, status)
+		}
+		if fake.got.Facets != nil {
+			t.Errorf("facets=%s: reached the counter with %v, want no call", name, fake.got.Facets)
+		}
+	}
+}
+
+// Disjunctive counting derives one query per facet from the SELECTION, so a
+// narrowed output set would not save any of them — the caller would pay full
+// price for a partial answer. Refuse rather than silently ignore.
+func TestJobFacets_FacetsParamRejectedWithDisjunctive(t *testing.T) {
+	fake := &fakeFacetCounter{}
+	app := facetsApp(fake)
+
+	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&facets=seniority")
+	if status != fiber.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", status)
+	}
+	if fake.gotReqs != nil {
+		t.Errorf("reached the counter with %d reqs, want no call", len(fake.gotReqs))
+	}
+}
