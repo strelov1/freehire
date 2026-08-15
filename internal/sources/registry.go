@@ -59,6 +59,22 @@ func AggregatorProviders(reg map[string]Source) []string {
 	return out
 }
 
+// BoardKeyedProviders returns the sorted provider names in reg whose adapter is addressed by
+// a board id — every adapter that is not boardless. A caller that wants to say something about
+// ONE board (cmd/harvest-boards validating a candidate) needs this: a boardless adapter serves
+// the same catalogue whatever board it is handed, so it would answer for a board that does not
+// exist, and confirm every candidate put to it.
+func BoardKeyedProviders(reg map[string]Source) []string {
+	var out []string
+	for name, src := range reg {
+		if _, boardless := src.(boardless); !boardless {
+			out = append(out, name)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // FilterableProviders returns the sorted provider keys the source facet offers.
 func FilterableProviders() []string { return filterableProviders(Taxonomy()) }
 

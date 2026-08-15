@@ -111,6 +111,20 @@ func TestAggregatorProvidersListsOnlyAggregators(t *testing.T) {
 	}
 }
 
+func TestBoardKeyedProvidersExcludesBoardless(t *testing.T) {
+	got := BoardKeyedProviders(reg(
+		fakeSource{"greenhouse"},         // board-based ATS → listed
+		fakeSource{"workable"},           // board-based ATS → listed
+		fakeBoardlessSource{"ozon"},      // single-company boardless → excluded
+		fakeAggregatorSource{"jobstash"}, // boardless aggregator → excluded
+	))
+
+	want := []string{"greenhouse", "workable"}
+	if !slices.Equal(got, want) {
+		t.Errorf("BoardKeyedProviders() = %v, want %v", got, want)
+	}
+}
+
 func TestSweepGraceWindowsListsOnlyDeclaringProviders(t *testing.T) {
 	got := SweepGraceWindows(reg(
 		fakeSource{"greenhouse"},                         // board-based, no window → absent (default applies)

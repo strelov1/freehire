@@ -15,6 +15,9 @@
 //
 // The id is the stronger claim — it identifies the board by evidence rather than by a name
 // resemblance — and is what makes a slug derived offline safe to propose at all.
+//
+// A platform with no prober of its own is probed by running its source adapter, so every
+// board-keyed platform we can crawl is one we can also harvest (see proberFor).
 package main
 
 import (
@@ -56,10 +59,18 @@ func run() int {
 		return 2
 	}
 
-	p, ok := probers[provider]
+	p, ok := proberFor(provider)
 	if !ok {
-		log.Printf("harvest-boards: no prober for provider %q", provider)
+		log.Printf("harvest-boards: no prober for provider %q, and no board-keyed adapter to fall "+
+			"back on", provider)
 		return 2
+	}
+	if a, viaAdapter := p.(adapterProber); viaAdapter {
+		// Say so: an adapter probe costs a whole crawl per candidate rather than one request,
+		// it publishes no employer name (so the corroboration gate stands down and liveness is
+		// the only evidence), and it answers outside the run's paced, counting client.
+		log.Printf("harvest-boards: %s has no prober of its own — probing by running its source "+
+			"adapter; no name gate, no pacing", a.provider)
 	}
 
 	ctx := context.Background()

@@ -39,3 +39,43 @@
   board: unique
 - company: Entrepreneur First
   board: entrepreneursfirst
+- company: BVGroup
+  board: bvgroup
+- company: CloudNC
+  board: cloudnc
+- company: CompassMSP
+  board: compassmsp
+- company: GetGo Technologies Pte Ltd
+  board: getgotechnologies
+- company: Gresham Technologies PLC
+  board: gresham
+- company: Hyve Group
+  board: hyvegroup
+- company: JUMO
+  board: jumo
+- company: K2 Integrity
+  board: k2integrity
+- company: Kiteworks
+  board: kiteworks
+- company: MPLC
+  board: mplc
+- company: ONWARD Medical
+  board: onwardmedical
+- company: SecurityBridge
+  board: securitybridge
+- company: Semarchy
+  board: semarchy
+- company: Snowplow
+  board: snowplow
+- company: Synpulse
+  board: synpulse
+- company: The Arena Group
+  board: thearenagroup
+- company: Tracsis
+  board: tracsis
+- company: WINT
+  board: wint
+- company: Zenzero Solutions Ltd
+  board: zenzero
+- company: Zepz
+  board: zepz

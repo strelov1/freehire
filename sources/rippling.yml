@@ -183,3 +183,277 @@
 # migrated from lever.yml — board moved off Lever (issue #1529), live-verified 2026-08-11
 - company: Battle Creek Church
   board: battlecreekchurch
+- company: 1nhealth
+  board: 1nhealth
+- company: Association of Asian Pacific Community Health Organizations
+  board: aapcho
+- company: AbsenceSoft, LLC
+  board: absencesoft
+- company: Accelint
+  board: accelintjobboardtest
+- company: Accommodations Plus International
+  board: accommodations-plus-international
+- company: Advanced Energy United
+  board: advanced-energy-united-career-opportunities
+- company: Aerwave
+  board: aerwavecareers
+- company: AgelessRx
+  board: agelessrx
+- company: Agora
+  board: agora
+- company: AI Technology Partners, Inc.
+  board: aitp
+- company: Ampersand Brands
+  board: ampersandbrands
+- company: Anthony & Sylvan Pools
+  board: anthony-sylvan-pools
+- company: Azira
+  board: azira-careers-page
+- company: Balto
+  board: balto
+- company: Bamboo Health
+  board: bamboo-health-careers
+- company: Bluefin Payment Systems
+  board: bluefin-payment-systems
+- company: Bodwé Group
+  board: bodwe-professional-services-group-companies
+- company: Bonusly
+  board: bonusly
+- company: BookNook
+  board: booknook-inc
+- company: BoomPop
+  board: boompop
+- company: Bowery Valuation
+  board: bowery-valuation
+- company: Bridge Defense
+  board: bridge-defense
+- company: Brightscout
+  board: brightscout
+- company: Button
+  board: button
+- company: Buxton
+  board: buxtoncocareers
+- company: CallRevu
+  board: callrevu
+- company: Capacity
+  board: capacity
+- company: Mindset Care
+  board: career-opportunities-at-mindset
+- company: Harver
+  board: careers-at-harver
+- company: Quartile
+  board: careers-quartile
+- company: CBTS
+  board: cbts
+- company: CData Software
+  board: cdata-software
+- company: ClearStar
+  board: clearstar
+- company: Clicklease
+  board: clicklease
+- company: Climate Power
+  board: climatepower
+- company: CommandLink
+  board: commandlink
+- company: Community Phone
+  board: community-phone-careers
+- company: Conductor
+  board: conductor
+- company: Corva
+  board: corva
+- company: Coterie Insurance
+  board: coterie-careers
+- company: Create Music Group
+  board: createmusicgroup
+- company: CrucialLogics
+  board: cruciallogics
+- company: Demand Chain
+  board: demand-chain
+- company: DemandPDX
+  board: demandpdx
+- company: Dental Intelligence
+  board: dental-intelligence-careers
+- company: DGR Systems LLC
+  board: dgrsystems
+- company: DLS Engineering Associates, Inc.
+  board: dlsengineering
+- company: eHouse Studio
+  board: ehouse-studio-llc
+- company: Element Risk Management
+  board: element-risk-management
+- company: Encamp
+  board: encamp
+- company: Escalon Services, LLC.
+  board: escalon-services
+- company: Everfi
+  board: everfi
+- company: Everflow Technologies Inc.
+  board: everflow
+- company: Gamesight
+  board: gamesight
+- company: Get Engaged
+  board: get-engaged
+- company: Graphite
+  board: gfg-career-page
+- company: Go Fish Digital
+  board: gofishdigital
+- company: Grifin, LLC
+  board: grifin
+- company: Growth Signals
+  board: growth-signals
+- company: Halborn
+  board: halborn-inc
+- company: Indivisible Project
+  board: indivisible-project-careers
+- company: InVita Healthcare Technologies
+  board: invita-healthcare-technologies
+- company: IP House
+  board: ip-house
+- company: Tuesday Health
+  board: jobs-at-tuesday-health
+- company: Johnson Lambert
+  board: johnson-lambert-careers
+- company: Root, Inc.
+  board: joinroot
+- company: Knotch
+  board: knotch-inc
+- company: Lavu
+  board: lavu-inc
+- company: LawVu
+  board: lawvu-careers
+- company: Lilac Solutions
+  board: lilac-solutions
+- company: Lisinski Law Firm
+  board: lisinski-law-firm
+- company: LocateAI
+  board: locateai
+- company: Lynx Software Technologies
+  board: lynx-software-technologies
+- company: Martello Re Limited
+  board: martello-re
+- company: Modern Campus
+  board: moderncampus
+- company: MoxiWorks
+  board: moxiworks-careers
+- company: N3XT
+  board: n3xt-jobs
+- company: nesto
+  board: nesto
+- company: Netwrix
+  board: netwrix-corporation
+- company: NOCD
+  board: nocd
+- company: O3 Solutions
+  board: o3-solutions
+- company: Obie
+  board: obie
+- company: OrthoPediatrics
+  board: orthopediatrics
+- company: Packetlabs Ltd.
+  board: packetlabs
+- company: ParentSquare
+  board: parentsquare
+- company: PDQ
+  board: pdq
+- company: Phase2 Technology
+  board: phase2-careers
+- company: Power TakeOff
+  board: power-takeoff-careers
+- company: Primary Diagnostics, Inc.
+  board: primary-diagnostics-inc
+- company: Pythian
+  board: pythian
+- company: Radian Generation
+  board: radian-generation
+- company: Rentsync
+  board: rentsync_careers
+- company: Resource Monitor
+  board: resourcemonitor
+- company: RightCrowd
+  board: rightcrowdcareers
+- company: Ritual
+  board: ritual
+- company: Robbins Research International
+  board: robbins-research-international
+- company: Roberts Civil Engineering, LLC
+  board: roberts-civil-engineering-careers
+- company: Routeware, Inc.
+  board: routeware-careers
+- company: RSA Security
+  board: rsa-security
+- company: Scentbird
+  board: scentbird
+- company: Scratch Financial
+  board: scratch-financial
+- company: SheerID
+  board: sheerid
+- company: SHELTER, Inc.
+  board: shelter-inc
+- company: Shiji Group
+  board: shiji-us-careers
+- company: Shipium
+  board: shipium
+- company: Sketchy Group LLC
+  board: sketchy
+- company: Sparq
+  board: sparq
+- company: SpreeAI
+  board: spreeai
+- company: Steno
+  board: steno-careers-page
+- company: Swoop
+  board: swoopishiring
+- company: Tenpoint Therapeutics GmbH
+  board: tenpointtx
+- company: Terra Energy
+  board: terra-energy
+- company: TheGuarantors
+  board: theguarantors-open-positions
+- company: Thrive Scholars
+  board: thrive-scholars-jobs
+- company: Tive
+  board: tive-careers
+- company: Tort Experts
+  board: tort-experts
+- company: TrueComp
+  board: truecomp
+- company: Unchained Capital, Inc.
+  board: unchained
+- company: UniUni Logistics
+  board: uniuni
+- company: Origin
+  board: useorigin
+- company: Vimachem
+  board: vimachem
+- company: Visio Lending
+  board: visio-lending-careers
+- company: Vouch Insurance
+  board: vouch-inc
+- company: Wanta Thome
+  board: wanta-thome
+- company: WarriorBabe
+  board: warriorbabe-careers
+- company: WellRight
+  board: wellright
+- company: Wenrix
+  board: wenrix
+- company: Workshop Digital
+  board: workshopdigital
+- company: WorkSpan
+  board: workspan-inc
+- company: WovenX Health
+  board: wovenx-health-inc
+- company: XWP
+  board: xwp
+- company: Youth Civic Accelerator
+  board: yca
+- company: Yembo
+  board: yembo
+- company: Young Americans for Liberty
+  board: young-americans-for-liberty
+- company: Zivian Health
+  board: zivian-health-inc
+- company: ZRG Partners LLC
+  board: zrg-partners-careers
+- company: Zymeworks
+  board: zymeworks-careers
