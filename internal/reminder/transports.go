@@ -1,13 +1,16 @@
 package reminder
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html"
+	"html/template"
 	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/emailnotify"
+	"github.com/strelov1/freehire/internal/mailtpl"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
 
@@ -56,24 +59,49 @@ type EmailNotifier struct {
 	sender     emailnotify.Sender
 	from       string
 	jobBaseURL string
+	layout     *mailtpl.Layout
 }
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // the job link rooted at jobBaseURL.
 func NewEmailNotifier(sender emailnotify.Sender, from, jobBaseURL string) *EmailNotifier {
-	return &EmailNotifier{sender: sender, from: from, jobBaseURL: strings.TrimRight(jobBaseURL, "/")}
+	base := strings.TrimRight(jobBaseURL, "/")
+	return &EmailNotifier{sender: sender, from: from, jobBaseURL: base, layout: mailtpl.New(base)}
 }
+
+// emailBody is what the reminder body template renders from. Job carries the source
+// data, escaped in context by html/template — the reason this notifier no longer
+// calls html.EscapeString by hand.
+type emailBody struct {
+	Job mailtpl.Job
+}
+
+// The saved job leads, rendered by the shared row so it looks the same here as in a
+// digest, with the company's logo; the sentence underneath only says why the mail
+// arrived.
+var emailTemplate = template.Must(mailtpl.Partials().New("reminder").Parse(`
+{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "p" "You saved this job and haven’t applied yet."}}
+{{template "button" (mailLink .Job.URL "Open the job and apply")}}`))
 
 // Send renders the reminder and delivers it to the address in dest.
 func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, m ReminderMessage) error {
 	url := n.jobBaseURL + "/jobs/" + m.Slug + "?utm_source=email"
 	subject := fmt.Sprintf("Reminder: %s at %s", m.JobTitle, m.Company)
-	title := html.EscapeString(m.JobTitle)
-	company := html.EscapeString(m.Company)
-	htmlBody := fmt.Sprintf(
-		`<p>You saved <strong>%s</strong> at <strong>%s</strong> and haven't applied yet.</p>`+
-			`<p><a href="%s">Open the job and apply →</a></p>`,
-		title, company, url)
+
+	var content bytes.Buffer
+	job := mailtpl.NewJob(m.JobTitle, m.Company, "", url)
+	if err := emailTemplate.Execute(&content, emailBody{Job: job}); err != nil {
+		return err
+	}
+	htmlBody := n.layout.Render(mailtpl.Body{
+		Preheader: "A job you saved is still open",
+		Heading:   "Still interested?",
+		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped both fields in context
+		Footer:    "You’re getting this because you saved this job on freehire.",
+	})
+
 	textBody := fmt.Sprintf("You saved %s at %s and haven't applied yet.\n\nOpen the job: %s\n",
 		m.JobTitle, m.Company, url)
 	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)

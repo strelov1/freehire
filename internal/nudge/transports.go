@@ -1,13 +1,16 @@
 package nudge
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html"
+	"html/template"
 	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/emailnotify"
+	"github.com/strelov1/freehire/internal/mailtpl"
 	"github.com/strelov1/freehire/internal/telegramnotify"
 )
 
@@ -71,12 +74,14 @@ type EmailNotifier struct {
 	sender emailnotify.Sender
 	from   string
 	origin string
+	layout *mailtpl.Layout
 }
 
 // NewEmailNotifier builds an EmailNotifier sending from `from` through sender, with
 // links rooted at origin.
 func NewEmailNotifier(sender emailnotify.Sender, from, origin string) *EmailNotifier {
-	return &EmailNotifier{sender: sender, from: from, origin: strings.TrimRight(origin, "/")}
+	base := strings.TrimRight(origin, "/")
+	return &EmailNotifier{sender: sender, from: from, origin: base, layout: mailtpl.New(base)}
 }
 
 // Send renders the nudge and delivers it to the address in dest.
@@ -85,38 +90,91 @@ func (n *EmailNotifier) Send(ctx context.Context, _ string, dest string, m Messa
 	return n.sender.Send(ctx, n.from, dest, subject, htmlBody, textBody)
 }
 
+// nudgeBody is what the body templates render from. Job carries the source data,
+// escaped in context by html/template.
+//
+// Job.URL is the job's own page — what the row links to — while URL is where the
+// call to action sends the reader, usually the tracking board. They differ because
+// the nudge is about the application, not the listing.
+type nudgeBody struct {
+	Job        mailtpl.Job
+	DaysSilent int
+	URL        string
+	CTA        string
+}
+
+// bodies holds one block per nudge kind, selected by name in render. Each renders
+// the lead sentence and the call to action; the heading and the chrome around them
+// belong to the shell.
+var bodies = template.Must(mailtpl.Partials().New("nudge").Parse(`
+{{define "followup"}}{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "p" (printf "Nothing has moved here in %d days." .DaysSilent)}}
+{{template "button" (mailLink .URL .CTA)}}{{end}}
+
+{{define "interview"}}{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "p" "Your interview is coming up. A rehearsal beats a re-read."}}
+{{template "button" (mailLink .URL .CTA)}}{{end}}
+
+{{define "closed"}}{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "p" "This listing was closed. It is off the board, so it is one less thing to wait on."}}
+{{template "button" (mailLink .URL .CTA)}}{{end}}
+
+{{define "plain"}}{{template "job-row" .Job}}
+<div style="height:18px;"></div>
+{{template "button" (mailLink .URL .CTA)}}{{end}}
+`))
+
 func (n *EmailNotifier) render(m Message) (subject, htmlBody, textBody string) {
-	title, company := html.EscapeString(m.JobTitle), html.EscapeString(m.Company)
 	trackingURL := n.origin + "/my/tracking?utm_source=email"
 	jobURL := n.origin + "/jobs/" + m.Slug + "?utm_source=email"
+
+	// block names the body template; head and pre are the shell's heading and the
+	// inbox preview line.
+	var block, head, pre string
+	data := nudgeBody{
+		Job:        mailtpl.NewJob(m.JobTitle, m.Company, "", jobURL),
+		DaysSilent: m.DaysSilent,
+		URL:        trackingURL,
+	}
+
 	switch m.Kind {
 	case KindFollowUp:
+		block, head, pre = "followup", "Worth a follow-up?", "Nothing has moved on this application"
 		subject = fmt.Sprintf("Time to follow up: %s at %s", m.JobTitle, m.Company)
-		htmlBody = fmt.Sprintf(
-			`<p>It's been %d days since anything moved on <strong>%s</strong> at <strong>%s</strong>.</p>`+
-				`<p><a href="%s">Open your tracking board and follow up →</a></p>`,
-			m.DaysSilent, title, company, trackingURL)
+		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("It's been %d days since anything moved on %s at %s.\n\nOpen your tracking board: %s\n",
 			m.DaysSilent, m.JobTitle, m.Company, trackingURL)
 	case KindInterviewPrep:
+		block, head, pre = "interview", "Ready to rehearse?", "Your interview is coming up"
 		subject = fmt.Sprintf("Prepare for your interview: %s at %s", m.JobTitle, m.Company)
-		htmlBody = fmt.Sprintf(
-			`<p>You're interviewing for <strong>%s</strong> at <strong>%s</strong>.</p>`+
-				`<p><a href="%s">Open your tracking board to rehearse →</a></p>`,
-			title, company, trackingURL)
+		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("You're interviewing for %s at %s.\n\nOpen your tracking board: %s\n",
 			m.JobTitle, m.Company, trackingURL)
 	case KindJobClosed:
+		block, head, pre = "closed", "This job was closed", "A job you were tracking has closed"
 		subject = fmt.Sprintf("Closed: %s at %s", m.JobTitle, m.Company)
-		htmlBody = fmt.Sprintf(
-			`<p><strong>%s</strong> at <strong>%s</strong> was closed.</p>`+
-				`<p><a href="%s">Open the job →</a></p>`,
-			title, company, jobURL)
+		data.URL, data.CTA = jobURL, "Open the job"
 		textBody = fmt.Sprintf("%s at %s was closed.\n\nOpen the job: %s\n", m.JobTitle, m.Company, jobURL)
 	default:
+		block, head, pre = "plain", fmt.Sprintf("%s at %s", m.JobTitle, m.Company), "An update on a job you are tracking"
 		subject = fmt.Sprintf("%s at %s", m.JobTitle, m.Company)
-		htmlBody = fmt.Sprintf(`<p><a href="%s">Open your tracking board →</a></p>`, trackingURL)
+		data.CTA = "Open your tracking board"
 		textBody = fmt.Sprintf("Open your tracking board: %s\n", trackingURL)
 	}
+
+	var content bytes.Buffer
+	// The templates are trusted constants and the data is escaped in context, so
+	// this fails only on a template bug — caught by the golden previews.
+	_ = bodies.ExecuteTemplate(&content, block, data)
+
+	htmlBody = n.layout.Render(mailtpl.Body{
+		Preheader: pre,
+		Heading:   head,
+		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted templates above
+		Footer:    "You’re getting this because you are tracking this application on freehire.",
+	})
 	return subject, htmlBody, textBody
 }

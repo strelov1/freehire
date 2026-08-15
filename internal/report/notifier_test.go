@@ -125,7 +125,11 @@ func TestNotice_EscapesModeratorAndReporterText(t *testing.T) {
 	// The tags must arrive as inert text, not as markup: escaping `<` is what disarms
 	// them, so assert on the delimiters rather than on words like "onerror" that survive
 	// harmlessly inside escaped text.
-	for _, raw := range []string{"<script", "<img", "<b>"} {
+	//
+	// The hostile fragments are matched whole rather than by tag name alone, because the
+	// branded shell contributes an <img> of its own for the logo — a bare "<img" probe
+	// would now flag our own markup.
+	for _, raw := range []string{"<script", "<img src=x", "<b>Web</b>"} {
 		if strings.Contains(got.html, raw) {
 			t.Errorf("unescaped %q reached the HTML body", raw)
 		}
@@ -155,8 +159,13 @@ func TestNotice_LongReportIsTruncated(t *testing.T) {
 	d.Details = strings.Repeat("x", 4000)
 	got := notice(t, d)
 
-	if len(got.html) > 3000 {
-		t.Errorf("HTML body is %d bytes; the quoted report should be capped", len(got.html))
+	// Assert on the quotation itself rather than on the size of the whole mail: the
+	// branded shell has a fixed cost of its own, so a byte budget for the document
+	// measures the layout as much as the truncation it is meant to check.
+	// 1000 is comfortably above the package's quotation cap and well below the 4000
+	// submitted, so the probe stays valid if the exact cap is retuned.
+	if strings.Contains(got.html, strings.Repeat("x", 1000)) {
+		t.Error("the full report reached the HTML body; the quotation should be capped")
 	}
 	if !strings.Contains(got.html, "…") {
 		t.Error("a truncated quotation should show that it was cut")

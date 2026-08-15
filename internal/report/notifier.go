@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/strelov1/freehire/internal/mailtpl"
 )
 
 // EmailSender is the slice of the SES transport the notifier needs; *emailnotify.Client
@@ -26,12 +28,14 @@ type MailNotifier struct {
 	sender  EmailSender
 	from    string
 	baseURL string
+	layout  *mailtpl.Layout
 }
 
 // NewMailNotifier builds a MailNotifier sending from `from` through sender. baseURL is the
 // site origin the reported job is linked under.
 func NewMailNotifier(sender EmailSender, from, baseURL string) *MailNotifier {
-	return &MailNotifier{sender: sender, from: from, baseURL: strings.TrimRight(baseURL, "/")}
+	base := strings.TrimRight(baseURL, "/")
+	return &MailNotifier{sender: sender, from: from, baseURL: base, layout: mailtpl.New(base)}
 }
 
 // maxQuotedDetails bounds how much of the original report is quoted back. The reporter wrote
@@ -50,29 +54,35 @@ type noticeMail struct {
 	Quoted   string
 }
 
-var noticeHTML = template.Must(template.New("notice").Parse(`
-<p>{{.Lead}}</p>
-{{if .Note}}<p>{{.Action}}</p>
-<blockquote style="margin:0 0 1em;padding-left:12px;border-left:3px solid #ddd">{{.Note}}</blockquote>{{end}}
-{{if .Quoted}}<p style="color:#666">You reported: {{.Quoted}}</p>{{end}}
-<p><a href="{{.JobURL}}">{{.JobTitle}}</a></p>
-<p style="color:#666">Thanks for flagging it — reports are how the listings stay honest.</p>
+var noticeHTML = template.Must(mailtpl.Partials().New("notice").Parse(`
+{{template "p" .Lead}}
+{{if .Note}}{{template "p" .Action}}
+{{template "quote" .Note}}{{end}}
+{{if .Quoted}}{{template "muted" (printf "You reported: %s" .Quoted)}}{{end}}
+{{template "button" (mailLink .JobURL "Open the listing")}}
+{{template "muted" "Thanks for flagging it — reports are how the listings stay honest."}}
 `))
 
 // NotifyDecision renders the outcome and sends it. A transport failure is returned as-is:
 // this type does not decide what a failed notice means, the use case does.
 func (m *MailNotifier) NotifyDecision(ctx context.Context, d Decision) error {
-	subject, mail := m.compose(d)
+	subject, heading, mail := m.compose(d)
 
-	var html bytes.Buffer
-	if err := noticeHTML.Execute(&html, mail); err != nil {
+	var content bytes.Buffer
+	if err := noticeHTML.Execute(&content, mail); err != nil {
 		return err
 	}
-	return m.sender.Send(ctx, m.from, d.Email, subject, html.String(), textBody(mail))
+	html := m.layout.Render(mailtpl.Body{
+		Preheader: subject,
+		Heading:   heading,
+		Content:   template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above, which escaped the reporter's own words in context
+		Footer:    "You’re getting this because you reported a listing on freehire.",
+	})
+	return m.sender.Send(ctx, m.from, d.Email, subject, html, textBody(mail))
 }
 
-// compose picks the subject and the prose for one outcome.
-func (m *MailNotifier) compose(d Decision) (string, noticeMail) {
+// compose picks the subject, the shell heading, and the prose for one outcome.
+func (m *MailNotifier) compose(d Decision) (string, string, noticeMail) {
 	title := d.JobTitle
 	if title == "" {
 		title = "the job you reported"
@@ -88,15 +98,15 @@ func (m *MailNotifier) compose(d Decision) (string, noticeMail) {
 	case d.Outcome == OutcomeDismissed:
 		mail.Lead = "We looked into your report on " + title + " and left the listing as it is."
 		mail.Action = "Why:"
-		return "Your report on " + title + " — no change", mail
+		return "Your report on " + title + " — no change", "We left the listing up", mail
 	case d.JobClosed:
 		mail.Lead = "You reported " + title + ", and we have removed it from the listings."
 		mail.Action = "What we found:"
-		return "We removed the job you reported", mail
+		return "We removed the job you reported", "We removed the listing", mail
 	default:
 		mail.Lead = "We looked into your report on " + title + " and acted on it. The listing is still up."
 		mail.Action = "What we did:"
-		return "We looked into your report on " + title, mail
+		return "We looked into your report on " + title, "We acted on your report", mail
 	}
 }
 

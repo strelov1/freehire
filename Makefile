@@ -1,4 +1,4 @@
-.PHONY: help run reindex build tidy sqlc gen-contracts gen-cities cv-previews up down logs migrate psql cover cover-html cover-integration
+.PHONY: help run reindex build tidy sqlc mail-preview gen-contracts gen-cities cv-previews up down logs migrate psql cover cover-html cover-integration
 
 # Prefer Docker; fall back to Podman when `docker` is missing. Override with
 # `make DOCKER=podman up` (or COMPOSE=…) when both are installed.
@@ -7,8 +7,13 @@ COMPOSE ?= $(DOCKER) compose
 
 # Coverage profiles land under coverage/ (gitignored). Informational only — no % gate.
 COVERAGE_DIR ?= coverage
+
 COVER_UNIT ?= $(COVERAGE_DIR)/unit.out
 COVER_INTEGRATION ?= $(COVERAGE_DIR)/integration.out
+
+# Where `make mail-preview` writes. Committed, because Storybook frames these files
+# and a test asserts they still match what the templates render.
+MAIL_PREVIEW_DIR ?= design-system/static/email-previews
 
 SQLC_VERSION ?= 1.31.1
 
@@ -29,6 +34,11 @@ tidy: ## Tidy up dependencies
 
 sqlc: ## Generate code from SQL (via Docker/Podman, no local sqlc needed)
 	$(DOCKER) run --rm -v "$(PWD):/src" -w /src docker.io/sqlc/sqlc:$(SQLC_VERSION) generate
+
+mail-preview: ## Render every outgoing email and open the contact sheet in a browser
+	@go run ./cmd/mail-preview
+	@(open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null || xdg-open $(MAIL_PREVIEW_DIR)/index.html 2>/dev/null) || \
+		echo "open $(MAIL_PREVIEW_DIR)/index.html"
 
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts
