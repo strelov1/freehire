@@ -38,6 +38,19 @@ export interface ApplyPlan {
   required: RequiredProgress | null;
 }
 
+/**
+ * The plan with one question ticked off, by label.
+ *
+ * A walk knows what it just wrote, so it says so directly rather than re-reading
+ * the whole page per step — the counter moves with the value, not 400ms later
+ * when the page's own change notice arrives. A label the plan does not carry
+ * changes nothing.
+ */
+export function markAnswered(plan: ApplyPlan, label: string): ApplyPlan {
+  if (!plan.items.some((i) => i.label === label && !i.answered)) return plan;
+  return recount(plan.items.map((i) => (i.label === label ? { ...i, answered: true } : i)));
+}
+
 /** The plan for the questions the page reported, in the order it asks them. */
 export function buildPlan(fields: FramedField[]): ApplyPlan {
   const items: PlanItem[] = fields
@@ -53,6 +66,12 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
       form: f.form,
     }));
 
+  return recount(items);
+}
+
+/** The counter, derived from the items. The one place the arithmetic lives, so a
+ *  plan built from a fresh read and one ticked off in place agree. */
+function recount(items: PlanItem[]): ApplyPlan {
   const required = items.filter((i) => i.required);
   if (required.length === 0) return { items, required: null };
   const answered = required.filter((i) => i.answered).length;

@@ -7,6 +7,7 @@ import {
   type FillOutcome,
   type ComboboxStep,
   type ComboboxReply,
+  type RevealRequest,
 } from '../lib/protocol';
 import { mergeComboboxReplies, mergeFrameOutcomes } from '../lib/tools/executor';
 import { fillsForFrame } from '../lib/form';
@@ -32,7 +33,9 @@ export default defineBackground(() => {
       case 'GET_FRAMED_FORM':
         return readFramedForm();
       case 'FILL_BY_LABEL':
-        return fillAcrossFrames(message.fills);
+        return fillAcrossFrames(message.fills, message.reveal);
+      case 'REVEAL_FIELD':
+        return revealAcrossFrames(message.request);
       case 'COMBOBOX_STEP':
         return comboboxAcrossFrames(message.step);
       default:
@@ -84,15 +87,29 @@ async function readFramedForm(): Promise<RuntimeMessage> {
  * broadcast would; a fill naming none — a `fill_simple` tool call — still goes
  * to every frame, and a frame that does not hold it reports `not_found`.
  */
-async function fillAcrossFrames(fills: LabelFill[]): Promise<RuntimeMessage> {
+async function fillAcrossFrames(fills: LabelFill[], reveal?: boolean): Promise<RuntimeMessage> {
   const perFrame: FillOutcome[][] = [];
   await eachFrame(
-    (frame) => ({ kind: 'FILL_BY_LABEL', fills: fillsForFrame(fills, frame) }),
+    (frame) => ({ kind: 'FILL_BY_LABEL', fills: fillsForFrame(fills, frame), reveal }),
     (reply) => {
       if (reply?.kind === 'FILL_OUTCOMES') perFrame.push(reply.outcomes);
     },
   );
   return { kind: 'FILL_OUTCOMES', outcomes: mergeFrameOutcomes(perFrame) };
+}
+
+/**
+ * Offers one reveal to every frame. Like a widget step, the question lives in
+ * exactly one of them; a frame that does not hold it answers `found: false`, and
+ * the panel needs to hear a yes from ANY frame — so the answers are folded with
+ * "some frame found it", not by whichever replied first.
+ */
+async function revealAcrossFrames(request: RevealRequest): Promise<RuntimeMessage> {
+  let found = false;
+  await eachFrame({ kind: 'REVEAL_FIELD', request }, (reply) => {
+    if (reply?.kind === 'REVEAL_RESULT' && reply.found) found = true;
+  });
+  return { kind: 'REVEAL_RESULT', found };
 }
 
 /**

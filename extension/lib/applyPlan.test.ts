@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPlan } from './applyPlan';
+import { buildPlan, markAnswered } from './applyPlan';
 import type { FramedField } from './protocol';
 
 /** A question as the page reported it. Overrides say what the case is about. */
@@ -97,5 +97,36 @@ describe('buildPlan', () => {
 
     expect(plan.items.map((i) => i.label)).toEqual(['Email']);
     expect(plan.required).toEqual({ answered: 0, total: 1, percent: 0 });
+  });
+});
+
+describe('markAnswered', () => {
+  it('ticks one item off and moves the counter', () => {
+    const plan = buildPlan([
+      field('First name', { required: true, value: 'Igor' }),
+      field('Email', { required: true }),
+    ]);
+
+    const after = markAnswered(plan, 'Email');
+
+    expect(after.items.map((i) => i.answered)).toEqual([true, true]);
+    expect(after.required).toEqual({ answered: 2, total: 2, percent: 100 });
+  });
+
+  // The walk ticks off what it wrote. A label the plan does not carry (the agent
+  // reported a question this page no longer asks) changes nothing rather than
+  // inventing a row.
+  it('leaves a plan that does not carry the label alone', () => {
+    const plan = buildPlan([field('Email', { required: true })]);
+
+    expect(markAnswered(plan, 'Gone')).toEqual(plan);
+  });
+
+  it('does not touch the optional side of the counter', () => {
+    const plan = buildPlan([field('Email', { required: true }), field('Website')]);
+
+    const after = markAnswered(plan, 'Website');
+
+    expect(after.required).toEqual({ answered: 0, total: 1, percent: 0 });
   });
 });

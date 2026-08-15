@@ -33,8 +33,9 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
     background.ts     service worker: opens the panel, relays panel <-> content
     content.ts        injected everywhere; reads the page into a PageSnapshot
     sidepanel/        Svelte chat app (owns the relay WebSocket)
-      App.svelte      chat UI + match card + page intake + Autofill
+      App.svelte      chat UI + match card + apply plan + page intake + Autofill
       MatchCard.svelte  profile-match card
+      ApplyPlan.svelte  the open form's questions, answered or not, + the counter
       ToolGroupList.svelte  what the agent is doing, mid-turn
       JobDeck.svelte / JobDeckCard.svelte  the `present_jobs` cards
       app.css         Tailwind + freehire-design-system/theme.css import
@@ -50,7 +51,10 @@ extension/            WXT + Svelte MV3 extension (npm-managed; the repo's other
     freehire.ts       hire API reads (job, match, autofill profile)
     protocol.ts       in-extension RuntimeMessage contract (+ test)
     scraper.ts        DOM -> PageSnapshot, pure over its Document arg (+ test)
-    form.ts           form observe/map/act for Autofill (+ test)
+    form.ts           form observe/map/act/reveal for Autofill (+ test)
+    applyPlan.ts      form fields -> the panel's checklist + required counter (+ test)
+    walk.ts           the order an autofill works through the form, as a value (+ test)
+    debounce.ts       one call after a burst goes quiet (+ test)
     combobox.ts       drives custom-widget comboboxes (open/options/select/verify);
                       pure over its Document like form.ts, but async (+ test)
   wxt.config.ts       manifest (permissions, side_panel, host_permissions) +
@@ -92,6 +96,22 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   (panel <-> background <-> content, discriminated by `kind`). Neither the chat's
   wire nor the browser-tool wire is here: they are `lib/assistant/wire.ts` and
   `lib/tools/wire.ts`, each mirroring a contract hire owns.
+- **Autofill is watched, not batched.** The panel walks the form one question at a
+  time (`lib/walk.ts` holds the order as a value; App.svelte supplies the ~300ms
+  pauses), each fill carrying `reveal` so the page scrolls to the question and
+  outlines it as the value lands. The pause is for the eye — the walk IS the audit
+  the user would otherwise have to do afterwards. The agent path fills server-side
+  as before and the panel plays its report back over the page, revealing each label
+  it reported without re-writing anything.
+- **The plan is the panel's standing account of the form**, computed by
+  `buildPlan` from what the page reported and rebuilt on every page change, after
+  every walk step, and on `FORM_CHANGED` — the page's own debounced notice that
+  someone typed into it. It counts REQUIRED questions only (they are what gates
+  submission) and is null for a page showing no application form.
+- **`revealField` borrows the page's style and gives it back.** The outline is
+  inline style, restored after ~600ms: the extension runs on pages freehire does
+  not own, where an injected class can collide with the ATS's own and a stylesheet
+  outlives our interest in the element.
 - **The agent's reading is bounded, and visible.** `read_page` refuses any tab that
   is not `http(s)` (`lib/tools/readable.ts`), decided from the url before the page
   is read — this extension is the only side that sees a url before scraping it. The

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { browser } from 'wxt/browser';
-  import { type RuntimeMessage } from '../../lib/protocol';
+  import { type RuntimeMessage, type LabelFill } from '../../lib/protocol';
   import { createSession, getSession, SessionNotFound } from '../../lib/assistant/api';
   import { sendTurn, type Turn } from '../../lib/assistant/client';
   import { initChat, reduceTurnEvent, type ChatState } from '../../lib/assistant/chat';
@@ -27,9 +27,12 @@
     scopeToApplication,
     formatAuthorizedCountries,
   } from '../../lib/form';
+  import { buildPlan, markAnswered, type ApplyPlan, type PlanItem } from '../../lib/applyPlan';
+  import { startWalk, nextStep, applyStep, skipStep, stopWalk, type Walk } from '../../lib/walk';
   import { ToolChannel } from '../../lib/tools/client';
   import { activeTabPage } from '../../lib/tools/page';
   import MatchCard from './MatchCard.svelte';
+  import ApplyPlanCard from './ApplyPlan.svelte';
   import ToolGroupList from './ToolGroupList.svelte';
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
@@ -96,11 +99,21 @@
     };
     browser.tabs.onUpdated.addListener(onUpdated);
 
+    // An answer the user types on the page themselves has to move the panel's
+    // counter, or the plan reports the form as less finished than it is. The page
+    // says only that something changed (debounced there); the plan is rebuilt from
+    // a fresh read, which is the one account that cannot drift.
+    const onPageMessage = (message: RuntimeMessage) => {
+      if (message.kind === 'FORM_CHANGED') void refreshPlan();
+    };
+    browser.runtime.onMessage.addListener(onPageMessage);
+
     return () => {
       turn?.cancel();
       tools.stop();
       browser.tabs.onActivated.removeListener(refresh);
       browser.tabs.onUpdated.removeListener(onUpdated);
+      browser.runtime.onMessage.removeListener(onPageMessage);
     };
   });
 
@@ -160,6 +173,7 @@
     }
     chatPageKey = key;
     void loadMatch();
+    void refreshPlan();
   }
 
   async function restoreSession() {
@@ -171,6 +185,7 @@
     const key = await currentPageKey();
     chatPageKey = key;
     void loadMatch();
+    void refreshPlan();
     void restoreConversation(token, key);
   }
 
@@ -320,6 +335,7 @@
         tools.start(token);
         chatPageKey = await currentPageKey();
         void loadMatch();
+        void refreshPlan();
       }
     } catch (err) {
       authError = err instanceof Error ? err.message : 'Sign-in failed';
@@ -428,6 +444,44 @@
 
   let autofilling = $state(false);
 
+  // ── The application-form plan ──────────────────────────────────────────────
+  //
+  // The panel's standing account of the form in front of the user: what it asks,
+  // what is answered, how far the required questions are along. It exists before
+  // any fill and outlives every one, which is the difference from the notices —
+  // those describe one action and are gone by the next.
+
+  let plan = $state<ApplyPlan | null>(null);
+  /** The question a walk is filling right now, by label. */
+  let fillingLabel = $state<string | null>(null);
+
+  /** Reads the page's form and rebuilds the plan, or clears it for a page that
+   *  is not showing an application. */
+  async function refreshPlan() {
+    if (!user) return;
+    const reply = (await browser.runtime.sendMessage({
+      kind: 'GET_FRAMED_FORM',
+    } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+    if (reply?.kind !== 'FRAMED_FORM' || !looksLikeApplication(reply.uploads)) {
+      plan = null;
+      return;
+    }
+    // One form, not every question on the page: an application and a job-alert
+    // signup each have their own "Email" — the same scoping the filler uses.
+    plan = buildPlan(scopeToApplication(reply.fields, reply.uploads));
+  }
+
+  /** Sends the user to one question: the page scrolls there and takes the cursor. */
+  async function revealItem(item: PlanItem) {
+    const reply = (await browser.runtime.sendMessage({
+      kind: 'REVEAL_FIELD',
+      request: { label: item.label, form: item.form, focus: true },
+    } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+    if (reply?.kind === 'REVEAL_RESULT' && !reply.found) {
+      notices.push(`"${item.label}" is no longer on this page — the form may have moved on.`);
+    }
+  }
+
   function profileToValues(p: AutofillProfile): Record<string, string> {
     return {
       fullName: p.full_name,
@@ -465,12 +519,89 @@
     return `${trimmed.slice(0, shown).join(', ')} and ${trimmed.length - shown} more`;
   }
 
+  /** How long each filled question stays in view before the walk moves on. It is
+   *  there for the eye: without it the walk is a flicker, which is the batch fill
+   *  this replaced. */
+  const WALK_STEP_MS = 300;
+
+  /** Set while a walk runs, so Stop can end it between steps. */
+  let walkStop = $state(false);
+
+  function pause(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Works through `fills` one question at a time, each one revealed as its value
+   * lands, ticking the plan off as it goes. Returns what it managed — the caller
+   * owns the closing sentence, because the two callers reach the walk from
+   * different places (its own plan, or the agent's report).
+   */
+  async function walkFills(fills: LabelFill[]): Promise<Walk> {
+    let walk = startWalk(fills.map((f) => f.label));
+    try {
+      // `nextStep` is the continuation test — it ends the walk both when the list
+      // runs out and when Stop has been pressed. The fill for the step is the one
+      // at the walk's own position, since the walk was started from these fills.
+      while (nextStep(walk) !== null) {
+        const fill = fills[walk.at];
+        if (!fill) break;
+        fillingLabel = fill.label;
+        const applied = (await browser.runtime.sendMessage({
+          kind: 'FILL_BY_LABEL',
+          fills: [fill],
+          reveal: true,
+        } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
+        const outcome = applied?.kind === 'FILL_OUTCOMES' ? applied.outcomes[0] : undefined;
+        if (outcome?.status === 'filled') {
+          walk = applyStep(walk, fill.label);
+          // Ticked off from what we just wrote, not from a fresh read: the page's
+          // own change notice is debounced, so re-reading here would move the
+          // counter a step behind the value the user is looking at.
+          if (plan) plan = markAnswered(plan, fill.label);
+        } else {
+          walk = skipStep(walk, fill.label);
+        }
+        if (walkStop) return stopWalk(walk);
+        await pause(WALK_STEP_MS);
+      }
+      return walk;
+    } finally {
+      fillingLabel = null;
+    }
+  }
+
+  /** Plays a list of labels the agent says it filled back over the page, so the
+   *  user sees what changed. Nothing is written — the agent already did that. */
+  async function walkReported(labels: string[]) {
+    try {
+      for (const label of labels) {
+        if (walkStop) return;
+        fillingLabel = label;
+        await browser.runtime.sendMessage({
+          kind: 'REVEAL_FIELD',
+          request: { label },
+        } satisfies RuntimeMessage);
+        if (plan) plan = markAnswered(plan, label);
+        await pause(WALK_STEP_MS);
+      }
+    } finally {
+      // Whatever ended the walk — the list, Stop, or a throw — no question is
+      // being filled once it is over, and a stuck spinner would say otherwise.
+      fillingLabel = null;
+    }
+  }
+
   async function autofill() {
     const token = await getToken();
     if (!token || autofilling) return;
     autofilling = true;
+    walkStop = false;
     try {
       const report = await runAgentAutofill(token);
+      // The agent filled the page itself, server-side. Play its report back so
+      // the user watches what changed rather than finding it later.
+      await walkReported(report.filled);
       const filled = report.filled.length;
       notices.push(
         filled > 0
@@ -554,19 +685,20 @@
         notices.push('Nothing matched your profile on this form.');
         return;
       }
-      const applied = (await browser.runtime.sendMessage({
-        kind: 'FILL_BY_LABEL',
-        fills,
-      } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
-      const outcomes = applied?.kind === 'FILL_OUTCOMES' ? applied.outcomes : [];
-      const n = outcomes.filter((o) => o.status === 'filled').length;
-      notices.push(`✓ Autofilled ${n} field${n === 1 ? '' : 's'} — review before submitting.`);
+      const walk = await walkFills(fills);
+      const n = walk.done.length;
+      notices.push(
+        walk.stopped
+          ? `Stopped after ${n} field${n === 1 ? '' : 's'} — what was filled stays.`
+          : `✓ Autofilled ${n} field${n === 1 ? '' : 's'} — review before submitting.`,
+      );
 
-      // A custom-widget combobox commits whatever its own listbox highlights, so
-      // the simple filler declines it rather than writing a wrong value.
-      const deferred = outcomes.filter((o) => o.status === 'deferred_combobox').map((o) => o.label);
-      if (deferred.length > 0) {
-        notices.push(`Not fillable yet (custom dropdowns): ${nameSome(deferred)}.`);
+      // A question the walk could not write: a custom-widget combobox (which
+      // commits whatever its own listbox highlights, so the simple filler
+      // declines it rather than writing a wrong value), or one the form dropped
+      // while the walk was running.
+      if (walk.skipped.length > 0) {
+        notices.push(`Left for you: ${nameSome(walk.skipped)}.`);
       }
     } catch (err) {
       notices.push(`Autofill failed: ${err instanceof Error ? err.message : 'error'}`);
@@ -653,6 +785,14 @@
               </Card>
             {/if}
 
+            <!-- The account of the form the user is standing in front of. It is
+                 independent of the match: a page can show an application freehire
+                 does not carry a posting for, and the checklist is just as useful
+                 there. -->
+            {#if plan}
+              <ApplyPlanCard {plan} filling={fillingLabel} onReveal={revealItem} />
+            {/if}
+
             {#each notices as notice, i (i)}
               <div class="message system">{notice}</div>
             {/each}
@@ -668,10 +808,21 @@
 
         {#if user && matchStatus === 'ready' && matchJob && matchJob.public_slug !== ''}
           <div class="match-footer">
-            <Button class="w-full" variant="primary" size="lg" onclick={autofill} disabled={autofilling}>
-              {autofilling ? 'Filling…' : 'Autofill'}
-              <RectangleEllipsis class="size-4" />
-            </Button>
+            {#if autofilling}
+              <!-- The same button, not a second one beside it: while a walk runs
+                   there is exactly one thing to do with it, and a disabled
+                   "Filling…" left the user watching something they could not
+                   call off. -->
+              <Button class="w-full" variant="outline" size="lg" onclick={() => (walkStop = true)} disabled={walkStop}>
+                {walkStop ? 'Stopping…' : 'Stop'}
+                <Square class="size-4" />
+              </Button>
+            {:else}
+              <Button class="w-full" variant="primary" size="lg" onclick={autofill}>
+                Autofill
+                <RectangleEllipsis class="size-4" />
+              </Button>
+            {/if}
           </div>
         {/if}
       </div>
