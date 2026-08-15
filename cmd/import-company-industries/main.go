@@ -102,7 +102,9 @@ func readSource(path string) (map[string][]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	// Read-only, so a close error carries nothing a caller could act on — but it is
+	// discarded explicitly rather than left for errcheck to flag.
+	defer func() { _ = f.Close() }()
 	return parseSource(f)
 }
 
