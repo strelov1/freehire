@@ -39,12 +39,10 @@ if (!IS_LOCAL && env('ALLOW_NONLOCAL', '') !== '1') {
   );
 }
 
-// Think-time (seconds) between page views. Models a real user reading a page
-// rather than machine-gunning the origin, and — crucially — stops a VU from
-// tight-looping into a request storm when a target starts failing fast.
-// Under an arrival-rate executor the pacing is the scenario's job, and a sleep
-// only inflates iteration duration (and so the VU count needed to sustain the
-// rate). Hence the 0 default there; the closed-model profiles keep the 1s.
+// Think-time (seconds) between page views. Models a real user reading a page,
+// and stops a VU tight-looping into a request storm when a target fails fast.
+// Zero under an arrival-rate executor, where pacing is the scenario's job and a
+// sleep only inflates the VU count needed to sustain the rate.
 export const THINK = Number(env('THINK', env('PROFILE', 'smoke') === 'saturation' ? 0 : 1));
 
 export const PROFILE = env('PROFILE', 'smoke');
@@ -54,23 +52,19 @@ if (!IS_LOCAL && PROFILE === 'load' && env('FORCE_LOAD', '') !== '1') {
   throw new Error(`PROFILE=load against a non-local origin needs FORCE_LOAD=1 (this stresses live infra).`);
 }
 
-// 'saturation' answers a question the other two profiles structurally cannot:
-// how many requests per second does this deployment accept before it stops
-// keeping up? `load` uses ramping-vus, where a VU waits for its response before
-// issuing the next one — so a slowing target quietly slows the test with it, and
-// the run converges on whatever the server can serve instead of overrunning it.
-// The 2026-08-14 incident was the opposite shape: arrivals outran accepts until
-// the kernel's accept queue filled and dropped SYNs. Reproducing that needs an
-// OPEN model, where the rate is imposed regardless of how the target is coping.
+// 'saturation' answers what the other profiles structurally cannot: how many
+// requests per second does this deployment accept before it stops keeping up?
+// `load` is a CLOSED model — a VU waits for its response before sending the next,
+// so a slowing target slows the test with it and the run converges on whatever
+// the server can serve. It cannot overrun anything, which is the failure being
+// reproduced: arrivals outrunning accepts until the kernel drops SYNs.
 //
-// Steps, not a ramp: each step is its own constant-arrival-rate scenario tagged
-// with its rate, so the summary carries a clean per-rate p95 and error rate and
-// the breaking point is a specific number rather than a slope to eyeball.
+// Steps rather than a ramp, each tagged with its rate, so the breaking point is a
+// number in the summary instead of a slope to eyeball.
 //
-// Its own latch, and no localhost exemption. The other latches key off IS_LOCAL,
-// which is exactly wrong here — the intended target IS a localhost port on the
-// prod host (the idle blue/green colour), where the danger is real: the idle
-// colour shares CPU, page cache and Postgres with the live one.
+// Its own latch, with no localhost exemption: the intended target IS a localhost
+// port on the prod host (the idle colour), which shares CPU, page cache and
+// Postgres with the live one.
 export const SATURATION_STEPS = env('SATURATION_STEPS', '25,50,100,200,400')
   .split(',')
   .map((s) => Number(s.trim()))
@@ -86,11 +80,11 @@ if (PROFILE === 'saturation') {
   if (SATURATION_STEPS.length === 0) throw new Error(`SATURATION_STEPS parsed to nothing`);
 }
 
-// Global request-rate ceiling. Off-local we default to a gentle cap so a smoke
-// against prod stays polite regardless of VU count; local defaults to unlimited.
-// Saturation defaults to no ceiling whatever the origin: a global cap would clamp
-// the very rate the profile exists to impose, and the run would report the cap as
-// the target's capacity. Its own FORCE_SATURATION latch is the safety here.
+// Global request-rate ceiling. Off-local defaults to a gentle cap so a smoke
+// against prod stays polite; local is unlimited. Saturation is uncapped whatever
+// the origin — a ceiling would clamp the rate the profile exists to impose, and
+// the run would report the cap as the target's capacity. FORCE_SATURATION is the
+// safety there.
 export const MAX_RPS = Number(env('MAX_RPS', PROFILE === 'saturation' || IS_LOCAL ? 0 : 20));
 
 // Identifies suite traffic in access logs / analytics so it's separable from
@@ -158,21 +152,19 @@ const P95 = {
 };
 
 export function thresholds() {
-  // The saturation profile is a measurement, not a gate: every step past the
-  // capacity ceiling is SUPPOSED to fail, and a red threshold there would say
-  // nothing. What it needs instead is a per-step breakdown in the summary — and
-  // k6 only prints a sub-metric that some threshold references. So each step
-  // gets a deliberately unfailable threshold whose only job is to make k6 report
-  // that step's p95 and error rate. Read the numbers; ignore the pass/fail.
+  // Saturation is a measurement, not a gate: every step past the ceiling is
+  // SUPPOSED to fail. It needs a per-step breakdown instead, and k6 only prints a
+  // sub-metric some threshold references — hence these unfailable thresholds.
+  // Read the numbers, ignore the pass/fail.
   if (PROFILE === 'saturation') {
     const t = {};
     for (const rate of SATURATION_STEPS) {
       t[`http_req_duration{step:${rate}}`] = ['p(95)>=0'];
       t[`http_req_failed{step:${rate}}`] = ['rate<=1'];
     }
-    // Iterations k6 could not start because no VU was free: the load generator
-    // itself fell behind, so numbers above this point describe the test, not the
-    // target. Non-zero here invalidates the step — raise preAllocatedVUs and rerun.
+    // Iterations k6 could not start for want of a free VU: the generator itself
+    // fell behind, so those numbers describe the test, not the target. Non-zero
+    // invalidates the step — raise preAllocatedVUs and rerun.
     t['dropped_iterations'] = [{ threshold: 'count<1', abortOnFail: false }];
     return t;
   }
@@ -203,10 +195,8 @@ export function buildScenarios() {
   if (PROFILE === 'saturation') {
     let start = 0;
     for (const rate of SATURATION_STEPS) {
-      // Headroom for slow iterations: at the ceiling, responses stretch, each
-      // iteration occupies its VU longer, and too few VUs makes k6 miss the rate
-      // and blame the target for the test's own shortfall. 4x the naive
-      // rate x 1s estimate, floored, has covered every observed stretch.
+      // Headroom: at the ceiling each iteration holds its VU longer, and too few
+      // VUs makes k6 miss the rate and blame the target for its own shortfall.
       const preAllocatedVUs = Math.max(50, rate * 4);
       scenarios[`saturation_${rate}rps`] = {
         executor: 'constant-arrival-rate',

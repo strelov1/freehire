@@ -461,11 +461,10 @@ export function createApi(
    *  Empty `facets`/`stats` are normalized to `{}` so callers never see null. */
   // `disjunctive` asks the endpoint to count each facet under the filter minus its
   // own selection (so a selected facet still shows its siblings) — the live-modal mode.
-  /** `facets` narrows the count to the named facet params. Counting is paid per
-   *  facet and the wide-valued ones (cities, skills) dominate — the full default
-   *  set measured 284ms on prod versus 10ms for one attribute — so a caller that
-   *  reads a specific key should name it. Cannot be combined with `disjunctive`,
-   *  which derives its queries from the selection rather than from this list. */
+  /** `facets` narrows the count to the named params. Counting is paid per facet
+   *  and the wide-valued ones (cities, skills) dominate, so a caller that reads a
+   *  specific key should name it. Cannot be combined with `disjunctive`, which
+   *  derives its queries from the selection rather than from this list. */
   async function facetCounts(
     params: URLSearchParams,
     opts?: { disjunctive?: boolean; facets?: string[] }

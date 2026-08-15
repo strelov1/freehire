@@ -57,22 +57,17 @@ var facetsNoDistribution = map[string]bool{"company_slug": true}
 // request. This is the single source shared with the search filter vocabulary —
 // a new facet added to search.StringFacets is counted here automatically.
 //
-// `only` narrows the set to the named public params. Counting a distribution is
-// paid per attribute and the expensive ones are the wide-valued ones: measured on
-// prod against `?work_mode=remote`, the full set costs 284ms and returns 99KB,
-// dropping `cities` takes it to 233ms, dropping `skills` too 148ms, and a single
-// attribute is 10ms. A caller that reads one number off the result — the job
-// page's "see also" block reads exactly one per collection — should not pay for
-// the other twenty-six.
+// `only` narrows the set to the named public params. A distribution is counted
+// per attribute and the wide-valued ones (cities, skills) dominate — on prod the
+// full set costs 284ms against ?work_mode=remote versus 10ms for one attribute —
+// so a caller that reads a single key should not pay for the other twenty-six.
 func facetAttributes(only ...string) []string {
-	var want map[string]bool
-	if len(only) > 0 {
-		want = make(map[string]bool, len(only))
-		for _, p := range only {
-			want[p] = true
-		}
+	want := make(map[string]bool, len(only))
+	for _, p := range only {
+		want[p] = true
 	}
-	keep := func(param string) bool { return want == nil || want[param] }
+	// No names given ⇒ every param is wanted.
+	keep := func(param string) bool { return len(want) == 0 || want[param] }
 
 	attrs := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
 	for param, attr := range search.StringFacets {
@@ -91,33 +86,31 @@ func facetAttributes(only ...string) []string {
 	return attrs
 }
 
-// requestedFacets reads the optional `facets=` param: a comma-separated list of
-// public facet params to count, instead of all of them.
+// requestedFacets reads the optional `facets=`: a comma-separated list of public
+// facet params to count instead of all of them.
 //
-// An unknown name is an error rather than a silent no-op. The counts this
-// endpoint returns are read by key, so a typo would otherwise surface as a
-// missing count — indistinguishable from a value Meili's per-facet cap dropped,
-// which callers are expected to treat as "unknown" rather than as a bug.
-// company_slug is rejected for the same reason it is absent from the full set:
-// thousands of values, and the UI uses the typeahead instead.
+// An unknown name is an error, not a silent no-op. Callers read counts by key and
+// already treat a missing one as "Meili's per-facet cap dropped this value", so a
+// typo would hide indefinitely. company_slug is refused for the reason it is
+// absent from the full set: thousands of values, and the UI uses the typeahead.
 func requestedFacets(c *fiber.Ctx) ([]string, error) {
 	raw := c.Query("facets")
 	if raw == "" {
 		return nil, nil
 	}
-	params := strings.Split(raw, ",")
-	out := make([]string, 0, len(params))
-	for _, p := range params {
-		p = strings.TrimSpace(p)
-		if p == "" {
+	names := strings.Split(raw, ",")
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
 			continue
 		}
-		_, isString := search.StringFacets[p]
-		_, isExtra := facetExtraParams[p]
-		if (!isString && !isExtra) || facetsNoDistribution[p] {
-			return nil, fiber.NewError(fiber.StatusBadRequest, "unknown facet: "+p)
+		_, isString := search.StringFacets[name]
+		_, isExtra := facetExtraParams[name]
+		if (!isString && !isExtra) || facetsNoDistribution[name] {
+			return nil, fiber.NewError(fiber.StatusBadRequest, "unknown facet: "+name)
 		}
-		out = append(out, p)
+		out = append(out, name)
 	}
 	return out, nil
 }
@@ -203,10 +196,9 @@ func (h *searchHandlers) JobFacets(c *fiber.Ctx) error {
 		// selection, so a selected facet still shows its siblings (the live-modal
 		// experience). The total stays the full-filter count.
 		//
-		// `facets=` is refused here rather than ignored. Disjunctive counting
-		// derives one query per facet from the SELECTION, so narrowing the output
-		// set would not save the queries — the caller would pay full price for a
-		// partial answer, which is the opposite of what asking for it means.
+		// `facets=` is refused, not ignored: disjunctive derives one query per
+		// facet from the SELECTION, so narrowing the output saves none of them —
+		// full price for a partial answer.
 		if len(only) > 0 {
 			return fiber.NewError(fiber.StatusBadRequest, "facets= cannot be combined with disjunctive")
 		}

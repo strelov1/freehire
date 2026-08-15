@@ -60,12 +60,10 @@ export function resolveSession() {
 // scenario is never hardcoded/brittle. It prefers a company with open jobs so
 // the streamed job list actually does work (the interesting latency path).
 export function pickCompanySlug() {
-  // An explicit slug skips the lookup entirely. That matters when the target is
-  // an SSR process addressed directly (http://127.0.0.1:<port>, the idle colour
-  // during a capacity run) rather than an origin that fronts both SSR and /api:
-  // the lookup 404s there, and the company-card scenario would then be silently
-  // skipped — quietly dropping the heaviest page from a capacity measurement and
-  // overstating the ceiling.
+  // An explicit slug skips the lookup, which 404s when the target is an SSR
+  // process addressed directly by port (the idle colour during a capacity run)
+  // rather than an origin fronting both SSR and /api. Without it the heaviest
+  // page is silently skipped and the measured ceiling comes out too high.
   if (COMPANY_SLUG) return COMPANY_SLUG;
 
   let res;

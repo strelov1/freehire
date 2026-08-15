@@ -252,10 +252,8 @@ func contains(ss []string, want string) bool {
 	return false
 }
 
-// `facets=` exists because counting is paid per attribute: on prod the full set
-// costs 284ms against ?work_mode=remote (the wide-valued cities/skills
-// distributions dominate) versus 10ms for a single one. The job page's "see
-// also" block reads one key per collection, so it names it.
+// Narrowing must map public params to index attributes and count nothing else —
+// that saving is the whole point of the param (see facetAttributes).
 func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
@@ -275,8 +273,8 @@ func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
 		}
 	}
 
-	// Narrowing the counted set must not narrow the FILTER — the counts still
-	// have to be "under ?work_mode=remote", or they answer a different question.
+	// Narrowing what is COUNTED must not narrow what it is counted UNDER, or the
+	// numbers answer a different question.
 	groups, ok := fake.got.Filter.([][]string)
 	if !ok {
 		t.Fatalf("Filter = %#v, want [][]string", fake.got.Filter)
@@ -287,8 +285,7 @@ func TestJobFacets_FacetsParamNarrowsTheRequest(t *testing.T) {
 }
 
 // A typo must not read as "that value has no count": callers cannot tell a
-// missing key from a value Meili's per-facet cap dropped, so silence would hide
-// the mistake indefinitely.
+// missing key from one Meili's per-facet cap dropped, so silence would hide it.
 func TestJobFacets_UnknownFacetIsRejected(t *testing.T) {
 	for _, name := range []string{"nonsense", "company_slug"} {
 		fake := &fakeFacetCounter{}
@@ -303,9 +300,8 @@ func TestJobFacets_UnknownFacetIsRejected(t *testing.T) {
 	}
 }
 
-// Disjunctive counting derives one query per facet from the SELECTION, so a
-// narrowed output set would not save any of them — the caller would pay full
-// price for a partial answer. Refuse rather than silently ignore.
+// Disjunctive derives its queries from the selection, so narrowing the output
+// saves none of them. Refuse rather than silently ignore.
 func TestJobFacets_FacetsParamRejectedWithDisjunctive(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
