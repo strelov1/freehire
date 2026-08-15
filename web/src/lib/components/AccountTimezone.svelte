@@ -15,10 +15,14 @@
   // lists Area/Location names) even though it's a real IANA zone Go's
   // time.LoadLocation accepts — prepend it so a stored/detected "UTC" has a
   // matching <option>, since a <select> silently shows nothing selected
-  // otherwise.
+  // otherwise. Newer engines (Chrome 118+, Safari 17+) DO list "UTC", so the
+  // Set collapses the prepend into their entry rather than keying two
+  // identical <option>s off it.
   const ZONES: string[] = [
-    'UTC',
-    ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []),
+    ...new Set([
+      'UTC',
+      ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : []),
+    ]),
   ];
 
   let detected = '';
