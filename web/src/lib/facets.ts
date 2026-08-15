@@ -16,13 +16,13 @@
 import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
-  COMPANY_TYPE_VALUES, DOMAIN_VALUES, ROLE_LABELS, ROLE_ALIASES,
+  COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, ROLE_LABELS, ROLE_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
-  CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
+  CATEGORY_LABELS, DOMAIN_LABELS, INDUSTRY_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
   RELOCATION_LABELS, AI_ARCHETYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
@@ -406,6 +406,11 @@ export const EMPLOYMENT_TYPE_OPTIONS: FacetOption[] = EMPLOYMENT;
 
 const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 
+// The curated company-industry vocabulary (internal/industrytag) — the level
+// beneath domains, for the companies whose domain lands in the coarse "other".
+// Generated, like DOMAINS, so the options cannot drift from the Go dictionary.
+const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
+
 // The job-reality classes (internal/jobreality) — a small closed set, spelled out
 // like CURRENCY (not a generated values array). Offered excludable so the common use
 // is "exclude Likely evergreen" to hide probable ghost postings; not hidden by default.
@@ -527,7 +532,10 @@ export const COMPANY_FACETS: FacetDef[] = [
   { param: 'regions', label: 'Region', control: 'pills', options: REGION, excludable: false },
   { param: 'remote_regions', label: 'Remote hiring', control: 'pills', options: REGION, excludable: false },
   { param: 'countries', label: 'Country', control: 'select', options: COUNTRY, excludable: false, placeholder: 'Search countries' },
-  { param: 'subindustries', label: 'Industry', control: 'remote', excludable: false, placeholder: 'Search industries', remote: subindustrySearch },
+  { param: 'industries', label: 'Industry', control: 'select', options: INDUSTRIES, excludable: false, placeholder: 'Search industries' },
+  // Written by the YC importer alone, so it never covered the catalogue. Named for
+  // what it is rather than holding the label the curated vocabulary earns.
+  { param: 'subindustries', label: 'YC industry', control: 'remote', excludable: false, placeholder: 'Search YC industries', remote: subindustrySearch },
   { param: 'domains', label: 'Domain', control: 'select', options: DOMAINS, excludable: false, placeholder: 'Search domains' },
   { param: 'company_type', label: 'Company type', control: 'pills', options: COMPANY_TYPE, excludable: false },
   { param: 'company_size', label: 'Company size', control: 'pills', options: COMPANY_SIZE, excludable: false },

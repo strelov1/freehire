@@ -29,8 +29,8 @@ breakdown; that plan is the how.
 - [x] 4.1 Add failing tests asserting `industries` appears in the company index's filterable attributes and in the facet param map
 - [x] 4.2 Add `industries` to `FilterableAttributes` and `companyFacets`, and accept the `industries` query parameter on `/companies`
 - [x] 4.3 Emit `INDUSTRY_VALUES`/`INDUSTRY_LABELS` from `cmd/gen-contracts` and regenerate the web contracts, so the UI options derive from the Go dictionary rather than a hand-typed copy
-- [ ] 4.4 Add the detailed-industry filter to the companies page, labelled distinctly from the coarse domain filter
-- [ ] 4.5 Verify in a browser that selecting an industry puts it in the URL and changes the result count
+- [x] 4.4 Add the industry filter to the companies page, and rename the YC-only `subindustries` facet to "YC industry" so the plain label goes to the facet that covers the catalogue
+- [ ] 4.5 Verify in a browser that selecting an industry puts it in the URL and changes the result count (needs real data — do it with 5.3, after the worker has run on prod)
 
 ## 5. Rollout
 
