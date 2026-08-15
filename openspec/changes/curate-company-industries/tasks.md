@@ -4,17 +4,17 @@ breakdown; that plan is the how.
 
 ## 1. The industry dictionary
 
-- [ ] 1.1 Create `internal/industrytag` with `Canonicalize([]string) []string`: normalize case, separators and `&`/`and` to one lookup key, resolve through the alias map, pass already-canonical values through, return sorted and de-duplicated
-- [ ] 1.2 Populate `dictionaries.go` and `labels.go` from the generated seed (100 canonical values, 155 aliases), hand-checking acronym casing
-- [ ] 1.3 Add dictionary invariant tests: every canonical is a well-formed slug, every alias target exists, every alias key is in normal form, every canonical has a non-empty label
-- [ ] 1.4 Add resolution tests: separator variants collapse, curated synonyms collapse, unknown labels emit nothing, canonical values are idempotent, blank input is safe
+- [x] 1.1 Create `internal/industrytag` with `Canonicalize([]string) []string`: normalize case, separators and `&`/`and` to one lookup key, resolve through the alias map, pass already-canonical values through, return sorted and de-duplicated
+- [x] 1.2 Populate `dictionaries.go` and `labels.go` from the generated seed (100 canonical values, 155 aliases), hand-checking acronym casing
+- [x] 1.3 Add dictionary invariant tests: every canonical is a well-formed slug, every alias target exists, every alias key is in normal form, every canonical has a non-empty label
+- [x] 1.4 Add resolution tests: separator variants collapse, curated synonyms collapse, unknown labels emit nothing, canonical values are idempotent, blank input is safe
 
 ## 2. Cooperative writes
 
-- [ ] 2.1 Add a failing integration test asserting `UpsertYCCompany` preserves an existing tagline, merges `company_info` keys without overwriting, and unions industries
-- [ ] 2.2 Change `UpsertYCCompany` to `COALESCE(NULLIF(...))` for tagline, `EXCLUDED.company_info || companies.company_info` for JSONB, and a sorted de-duplicated union for industries; regenerate with `make sqlc`
-- [ ] 2.3 Route `cmd/import-yc`'s mapped industries through `industrytag.Canonicalize`
-- [ ] 2.4 Update the query's leading comment, which currently claims company-info columns are refreshed
+- [x] 2.1 Add a failing integration test asserting `UpsertYCCompany` preserves an existing tagline, merges `company_info` keys without overwriting, and unions industries
+- [x] 2.2 Change `UpsertYCCompany` to `COALESCE(NULLIF(...))` for tagline, `EXCLUDED.company_info || companies.company_info` for JSONB, and a sorted de-duplicated union for industries; regenerate with `make sqlc`
+- [x] 2.3 Route `cmd/import-yc`'s mapped industries through `industrytag.Canonicalize`
+- [x] 2.4 Update the query's leading comment, which currently claims company-info columns are refreshed
 
 ## 3. The normalization and merge worker
 
