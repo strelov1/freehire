@@ -163,9 +163,8 @@ func (h *companyFeedbackHandlers) ListFeedback(c *fiber.Ctx) error {
 
 // GetMyFeedback returns all of the caller's own feedback on a company, across
 // every category they've reviewed it under (an empty array when they have not
-// left any yet) — the write form's prefill and its per-category "already
-// used" read, so it can only ever offer a genuinely new category alongside
-// editing an existing one.
+// left any yet) — the write form's per-category prefill, so picking a category
+// the caller has already used edits that review instead of starting a new one.
 func (h *companyFeedbackHandlers) GetMyFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

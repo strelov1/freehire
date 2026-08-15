@@ -134,8 +134,9 @@ func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource, cfg Config) 
 // checkRate rejects a new review once the caller is at or over their window
 // cap. An edit-by-resubmit never inserts a company_feedback row (see
 // CountRecentCompanyFeedback's doc comment), so the count this reads only
-// grows on genuinely new companies — callers only need to invoke it when
-// Upsert is about to create, not update, a row.
+// grows on genuinely new rows — a first review of a company, or a review in a
+// category the caller has not used on it yet. Callers only need to invoke it
+// when Upsert is about to create, not update, a row.
 func (s *Service) checkRate(ctx context.Context, userID int64) error {
 	n, err := s.q.CountRecentCompanyFeedback(ctx, db.CountRecentCompanyFeedbackParams{
 		UserID:    pgtype.Int8{Int64: userID, Valid: true},
@@ -259,10 +260,11 @@ func (s *Service) Delete(ctx context.Context, userID int64, slug, feedbackType s
 
 // Mine returns all of the caller's own feedback on a company, across every
 // category they've reviewed it under (possibly empty) — the write dialog's
-// read for prefilling an existing category's entry and excluding categories
-// already taken. ErrCompanyNotFound for a bad slug (checked first, so it's
-// never confused with "no feedback yet" the way an earlier single-feedback
-// version of this method conflated the two).
+// read for telling an edit from a new review: picking a category the caller
+// has already used prefills that entry, any other starts a blank one.
+// ErrCompanyNotFound for a bad slug (checked first, so it's never confused
+// with "no feedback yet" the way an earlier single-feedback version of this
+// method conflated the two).
 func (s *Service) Mine(ctx context.Context, userID int64, slug string) ([]Feedback, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
 		return nil, err
