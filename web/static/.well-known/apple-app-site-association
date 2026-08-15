@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appIDs": ["25U9HN34VM.me.freehire.mobile"],
+        "appIDs": ["25U9HN34VM.me.freehire.mobile", "WYHG3T94Q4.me.freehire.mobile"],
         "components": [
           { "/": "/jobs/*" },
           { "/": "/auth/mobile-callback*" }
@@ -12,6 +12,6 @@
     ]
   },
   "webcredentials": {
-    "apps": ["25U9HN34VM.me.freehire.mobile"]
+    "apps": ["25U9HN34VM.me.freehire.mobile", "WYHG3T94Q4.me.freehire.mobile"]
   }
 }
