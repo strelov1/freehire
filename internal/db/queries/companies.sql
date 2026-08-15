@@ -236,6 +236,25 @@ SELECT EXISTS(SELECT 1 FROM companies WHERE slug = $1);
 -- candidate per entry (the dataset runs several thousand entries deep).
 SELECT slug FROM companies;
 
+-- name: ListCompanyIndustriesPage :many
+-- Keyset page over every company, ordered by slug so a run resumes from the last
+-- slug it saw. Deliberately unfiltered: the normalization pass only cares about
+-- rows that already hold industries, but the merge pass must also reach companies
+-- with none, and one query serving both keeps the two walks identical.
+SELECT slug, industries
+FROM companies
+WHERE slug > sqlc.arg(after_slug)
+ORDER BY slug
+LIMIT sqlc.arg(page_limit);
+
+-- name: SetCompanyIndustries :execrows
+-- Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
+-- honest — a row already holding the wanted value is not rewritten — and makes the
+-- affected-row count real churn, so a second run reports zero.
+UPDATE companies
+SET industries = sqlc.arg(industries), updated_at = now()
+WHERE slug = sqlc.arg(slug) AND industries IS DISTINCT FROM sqlc.arg(industries);
+
 -- name: UpsertYCCompany :exec
 -- Apply one yc-oss directory entry, matched by slug. A new slug is inserted as a
 -- reference row (is_reference = true) with no jobs; an existing slug (job-backed or a

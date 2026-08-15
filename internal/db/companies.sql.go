@@ -514,6 +514,48 @@ func (q *Queries) ListCompanyCollections(ctx context.Context) ([]ListCompanyColl
 	return items, nil
 }
 
+const listCompanyIndustriesPage = `-- name: ListCompanyIndustriesPage :many
+SELECT slug, industries
+FROM companies
+WHERE slug > $1
+ORDER BY slug
+LIMIT $2
+`
+
+type ListCompanyIndustriesPageParams struct {
+	AfterSlug string `json:"after_slug"`
+	PageLimit int32  `json:"page_limit"`
+}
+
+type ListCompanyIndustriesPageRow struct {
+	Slug       string   `json:"slug"`
+	Industries []string `json:"industries"`
+}
+
+// Keyset page over every company, ordered by slug so a run resumes from the last
+// slug it saw. Deliberately unfiltered: the normalization pass only cares about
+// rows that already hold industries, but the merge pass must also reach companies
+// with none, and one query serving both keeps the two walks identical.
+func (q *Queries) ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyIndustriesPage, arg.AfterSlug, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyIndustriesPageRow{}
+	for rows.Next() {
+		var i ListCompanyIndustriesPageRow
+		if err := rows.Scan(&i.Slug, &i.Industries); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCompanySitemap = `-- name: ListCompanySitemap :many
 SELECT slug, updated_at
 FROM companies
@@ -831,6 +873,28 @@ type SetCompanyCollectionsParams struct {
 func (q *Queries) SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error {
 	_, err := q.db.Exec(ctx, setCompanyCollections, arg.Slug, arg.Collections)
 	return err
+}
+
+const setCompanyIndustries = `-- name: SetCompanyIndustries :execrows
+UPDATE companies
+SET industries = $1, updated_at = now()
+WHERE slug = $2 AND industries IS DISTINCT FROM $1
+`
+
+type SetCompanyIndustriesParams struct {
+	Industries []string `json:"industries"`
+	Slug       string   `json:"slug"`
+}
+
+// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
+// honest — a row already holding the wanted value is not rewritten — and makes the
+// affected-row count real churn, so a second run reports zero.
+func (q *Queries) SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCompanyIndustries, arg.Industries, arg.Slug)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const syncCompaniesFromJobs = `-- name: SyncCompaniesFromJobs :exec

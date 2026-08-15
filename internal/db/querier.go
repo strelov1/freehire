@@ -1698,6 +1698,11 @@ type Querier interface {
 	// does not need keyset paging. Hidden rows (a moderator's lever) are excluded,
 	// same as an open thread listing excludes closed ones.
 	ListCompanyFeedback(ctx context.Context, arg ListCompanyFeedbackParams) ([]ListCompanyFeedbackRow, error)
+	// Keyset page over every company, ordered by slug so a run resumes from the last
+	// slug it saw. Deliberately unfiltered: the normalization pass only cares about
+	// rows that already hold industries, but the merge pass must also reach companies
+	// with none, and one query serving both keeps the two walks identical.
+	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
 	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
 	// (first chunk keyed by the empty string, which sorts before every slug).
 	//
@@ -3042,6 +3047,10 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
+	// honest — a row already holding the wanted value is not rewritten — and makes the
+	// affected-row count real churn, so a second run reports zero.
+	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
 	// Persist the resolved link + classification and stamp classified_at + model in one
 	// write. job_id/suggested_job_id/link_source/match_confidence are nullable — an
 	// unlinked or suggestion-only email leaves job_id NULL.
