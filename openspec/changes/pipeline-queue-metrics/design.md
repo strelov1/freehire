@@ -112,14 +112,18 @@ per minute regardless of scrape activity. If it proves measurable against host-2
 existing I/O pressure, the timer interval is the single tuning knob and lives in
 `freehire-ops`.
 
-**`freehire_queue_oldest_age_seconds` for `search_outbox` is structurally unbounded, so
-it looks like a broken metric** → It is published and graphed but deliberately never
-alerted on, and the reason is recorded in the cross-repo design. `ClaimSearchOutboxBatch`
-(`internal/db/queries/search_outbox.sql:53`) orders `job_posted_at DESC`, so entries for
-jobs with an old `posted_at` sink to the tail and are never claimed while fresher work
-arrives; `DeleteSearchOutboxCreatedBefore` additionally requires `j.updated_at < before`
-(lines 84-86), and ingest keeps touching those jobs, so the purge skips them. 5,309 such
-rows were measured, all with `attempts = 0`. The metric is honest; the queue is not.
+**`freehire_queue_oldest_age_seconds` for `search_outbox` reads implausibly high, so it
+looks like a broken metric** → It is published and graphed but never alerted on. The
+metric was honest; the queue was not.
+
+*Post-ship correction.* This paragraph originally blamed `ClaimSearchOutboxBatch`'s
+`job_posted_at DESC` ordering for starving old postings. Checked against prod afterwards
+and that was wrong: of the entries older than a day, **zero** belonged to an open
+canonical job — 631 sat behind a `duplicate_of` and 138 behind a closed job. The claim
+skips exactly those, correctly, and nothing deleted them;
+`DeleteSearchOutboxCreatedBefore` also requires `jobs.updated_at` to predate the run, and
+a job demoted to a duplicate stays in its board's feed so ingest keeps touching it.
+Fixed by `DeleteIneligibleSearchOutbox`, which the drain runs before each pass.
 
 **The metric names become a contract with a repository that cannot enforce it** → A
 golden test over the rendered text pins the exact names, label sets, and `# HELP`/`# TYPE`

@@ -85,6 +85,34 @@ WHERE o.job_id = j.id
   AND o.created_at < sqlc.arg(before)
   AND j.updated_at < sqlc.arg(before);
 
+-- name: DeleteIneligibleSearchOutbox :execrows
+-- Reap live entries ClaimSearchOutboxBatch can never take: their job has closed, become
+-- a non-canonical repost, or gone. That query's EXISTS requires open AND canonical, so
+-- these rows are correctly skipped — there is nothing left to index — but until this
+-- existed nothing deleted them either, and they accumulated.
+--
+-- DeleteSearchOutboxCreatedBefore does not cover them. It additionally requires
+-- jobs.updated_at to predate the reindex, and a job demoted to a duplicate is still in
+-- its board's feed, so ingest keeps touching it and its updated_at keeps moving. Measured
+-- on prod 2026-08-15: 1,618 such rows, 631 of the day-old ones behind a duplicate_of and
+-- 138 behind a closed job, the oldest queued eight days earlier.
+--
+-- Dead-lettered rows (failed_at set) are deliberately left alone: they are a deliberate
+-- record of repeated failure and are surfaced as freehire_queue_dead_letters, so reaping
+-- them here would erase the evidence rather than the garbage.
+--
+-- Bounded by max_rows so one drain run cannot turn into an unbounded delete on the first
+-- pass over a long-accumulated backlog; the next run takes the next slice.
+DELETE FROM search_outbox
+WHERE id IN (
+    SELECT o.id
+    FROM search_outbox o
+    LEFT JOIN jobs j ON j.id = o.job_id
+    WHERE o.failed_at IS NULL
+      AND (j.id IS NULL OR j.closed_at IS NOT NULL OR j.duplicate_of IS NOT NULL)
+    LIMIT sqlc.arg(max_rows)
+);
+
 -- name: RecordSearchOutboxFailure :one
 -- Count a failed attempt: bump attempts, record the error, and dead-letter (set
 -- failed_at) once attempts reach the max. The lease (claimed_at) is intentionally

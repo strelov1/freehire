@@ -13,8 +13,15 @@
 // It mirrors internal/embed: the batch/fallback logic is unit-tested with fakes of
 // the Store + Indexer ports and cmd/search-drain wires the real adapters. Unlike
 // embed there is no open/closed split — a job that closed or became a non-canonical
-// repost after being queued is simply not claimed (see ClaimSearchOutboxBatch); that
-// reconciles on the next full reindex, same as before this queue existed.
+// repost after being queued is simply not claimed (see ClaimSearchOutboxBatch), since
+// there is nothing left to index.
+//
+// Those skipped entries used to be described here as reconciling "on the next full
+// reindex". They did not. The reindex purge also requires jobs.updated_at to predate
+// the run, and a job demoted to a duplicate is still in its board's feed, so ingest
+// keeps touching it and its updated_at keeps moving — the row was skipped by the claim
+// forever and deleted by nothing. Measured on prod 2026-08-15: 1,618 such rows, the
+// oldest queued eight days earlier. Each run now reaps them first (Store.Reap).
 package searchdrain
 
 import (
@@ -47,6 +54,9 @@ type Store interface {
 	Complete(ctx context.Context, entries []Claimed) error
 	// Fail records a failed attempt for one entry; it reports whether it dead-lettered.
 	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// Reap deletes up to maxRows live entries Claim can never take (their job closed,
+	// became a non-canonical repost, or is gone), returning how many it removed.
+	Reap(ctx context.Context, maxRows int) (int64, error)
 }
 
 // Indexer pushes a batch of jobs into the live facet index.
@@ -72,7 +82,17 @@ type Stats struct {
 	Indexed      int
 	Failed       int
 	DeadLettered int
+	// Reaped counts entries deleted because Claim could never take them — housekeeping,
+	// not indexing work.
+	Reaped int
 }
+
+// reapLimit bounds how many ineligible entries one run deletes. The backlog these
+// accumulate into is measured in thousands (1,618 on prod when this was written, the
+// oldest queued eight days earlier), so an unbounded first pass would turn a two-minute
+// drain tick into a long delete holding row locks the claim then waits on. A few runs
+// clearing it is fine; the queue is not urgent, only unbounded.
+const reapLimit = 2000
 
 // Runner drains the queue wave by wave until no claimable entries remain.
 type Runner struct {
@@ -84,6 +104,18 @@ type Runner struct {
 // entry is recorded and never aborts the run.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
 	rn := &run{store: r.Store, indexer: r.Indexer, opt: opt}
+
+	// Reap BEFORE claiming: these entries are pure garbage to the claim query, which
+	// pays an EXISTS probe per row only to skip them, and they inflate
+	// freehire_queue_depth with work nobody will ever do. Best-effort — housekeeping
+	// must never be the reason the queue stops draining.
+	if n, err := r.Store.Reap(ctx, reapLimit); err != nil {
+		log.Printf("search-drain: reap ineligible entries (continuing): %v", err)
+	} else if n > 0 {
+		rn.stats.Reaped = int(n)
+		log.Printf("search-drain: reaped %d entries whose job closed or became a repost", n)
+	}
+
 	_, err := outbox.RunBatch(ctx, r.Store, outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,

@@ -11,6 +11,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -182,6 +183,129 @@ func TestEnqueueSearchOutboxDenormalizesJobPostedAt(t *testing.T) {
 // it still skips (without claiming) a job that closed or became a non-canonical repost
 // after being queued — the same behavior the old jobs-join version had, now reached via an
 // index scan plus a per-row EXISTS check instead of a join-then-sort.
+func TestDeleteIneligibleSearchOutboxReapsWhatClaimCanNeverTake(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	open, err := ingestUpsert(ctx, q, ingestParams("acme:open", "Open"))
+	if err != nil {
+		t.Fatalf("upsert open: %v", err)
+	}
+	canon, err := ingestUpsert(ctx, q, ingestParams("acme:canon", "Canon"))
+	if err != nil {
+		t.Fatalf("upsert canon: %v", err)
+	}
+	closedJob, err := ingestUpsert(ctx, q, ingestParams("acme:closed", "Closed"))
+	if err != nil {
+		t.Fatalf("upsert closed: %v", err)
+	}
+	repost, err := ingestUpsert(ctx, q, ingestParams("acme:repost", "Repost"))
+	if err != nil {
+		t.Fatalf("upsert repost: %v", err)
+	}
+	deadLettered, err := ingestUpsert(ctx, q, ingestParams("acme:dead", "Dead"))
+	if err != nil {
+		t.Fatalf("upsert dead: %v", err)
+	}
+
+	for _, id := range []int64{open.ID, canon.ID, closedJob.ID, repost.ID, deadLettered.ID} {
+		if err := q.EnqueueSearchOutbox(ctx, id); err != nil {
+			t.Fatalf("enqueue job %d: %v", id, err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closedJob.ID); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET duplicate_of = $1 WHERE id = $2`, canon.ID, repost.ID); err != nil {
+		t.Fatalf("mark repost as duplicate: %v", err)
+	}
+	// A dead-lettered entry whose job ALSO closed: it is ineligible on both counts, and
+	// must still survive — failed_at is the record of repeated failure that
+	// freehire_queue_dead_letters reports, so reaping it would erase the evidence
+	// rather than the garbage.
+	if _, err := pool.Exec(ctx,
+		`UPDATE jobs SET closed_at = now() WHERE id = $1`, deadLettered.ID); err != nil {
+		t.Fatalf("close dead-lettered job: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`UPDATE search_outbox SET failed_at = now() WHERE job_id = $1`, deadLettered.ID); err != nil {
+		t.Fatalf("dead-letter entry: %v", err)
+	}
+
+	reaped, err := q.DeleteIneligibleSearchOutbox(ctx, 100)
+	if err != nil {
+		t.Fatalf("DeleteIneligibleSearchOutbox: %v", err)
+	}
+	if reaped != 2 {
+		t.Errorf("reaped %d rows, want 2 (the closed job's and the repost's)", reaped)
+	}
+
+	var surviving []int64
+	rows, err := pool.Query(ctx, `SELECT job_id FROM search_outbox ORDER BY job_id`)
+	if err != nil {
+		t.Fatalf("list surviving: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		surviving = append(surviving, id)
+	}
+
+	for _, id := range []int64{open.ID, canon.ID, deadLettered.ID} {
+		if !containsInt64(surviving, id) {
+			t.Errorf("job %d's entry was reaped; only entries claim can never take may go", id)
+		}
+	}
+	for _, id := range []int64{closedJob.ID, repost.ID} {
+		if containsInt64(surviving, id) {
+			t.Errorf("job %d's entry survived; claim skips it forever, so nothing else would ever remove it", id)
+		}
+	}
+}
+
+func TestDeleteIneligibleSearchOutboxRespectsItsBound(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// Five reapable entries, reaped two at a time: one drain run must not turn into an
+	// unbounded delete over a backlog that accumulated for weeks.
+	for i := range 5 {
+		job, err := ingestUpsert(ctx, q, ingestParams(fmt.Sprintf("acme:closed-%d", i), "Closed"))
+		if err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+		if err := q.EnqueueSearchOutbox(ctx, job.ID); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, job.ID); err != nil {
+			t.Fatalf("close %d: %v", i, err)
+		}
+	}
+
+	first, err := q.DeleteIneligibleSearchOutbox(ctx, 2)
+	if err != nil {
+		t.Fatalf("first reap: %v", err)
+	}
+	if first != 2 {
+		t.Errorf("first reap removed %d rows, want exactly the 2 it was bounded to", first)
+	}
+
+	var left int64
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_outbox`).Scan(&left); err != nil {
+		t.Fatalf("count remaining: %v", err)
+	}
+	if left != 3 {
+		t.Errorf("%d entries left, want 3 — the next run takes the next slice", left)
+	}
+}
+
 func TestClaimSearchOutboxBatchOrdersByJobPostedAtAndSkipsClosedOrDuplicate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
@@ -268,7 +392,9 @@ func TestClaimSearchOutboxBatchOrdersByJobPostedAtAndSkipsClosedOrDuplicate(t *t
 	}
 
 	// The two skipped entries (closed, repost) remain unclaimed — claimed_at stays NULL —
-	// so a later reconciliation (a full reindex) is what clears them, not this claim.
+	// so something else has to clear them. That used to be assumed to be the full
+	// reindex; it was not (see DeleteIneligibleSearchOutbox), and they accumulated for
+	// weeks. The drain now reaps them.
 	for _, id := range []int64{closedJob.ID, repost.ID} {
 		var claimedAt pgtype.Timestamptz
 		if err := pool.QueryRow(ctx, `SELECT claimed_at FROM search_outbox WHERE job_id = $1`, id).Scan(&claimedAt); err != nil {

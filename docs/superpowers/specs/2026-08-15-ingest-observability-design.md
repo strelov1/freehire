@@ -206,15 +206,23 @@ number is stale, and the number itself stays readable.
 
 ### Deliberately not alerted
 
-`freehire_queue_oldest_age_seconds{queue="search_outbox"}` is graphed but never
-alerted, because it is structurally unbounded. `ClaimSearchOutboxBatch`
-(`internal/db/queries/search_outbox.sql:53`) orders `job_posted_at DESC` — freshest
-first — so entries for jobs with an old `posted_at` sink to the tail and are never
-claimed while fresher work keeps arriving. The purge that would remove them,
-`DeleteSearchOutboxCreatedBefore`, additionally requires `j.updated_at < before`
-(lines 84-86), and ingest keeps touching those jobs, so their `updated_at` stays recent
-and the purge skips them. 5,309 such rows were measured, all with `attempts = 0` — never
-even claimed once. See "Known defect" below.
+`freehire_queue_oldest_age_seconds{queue="search_outbox"}` is graphed but never alerted,
+because a persistent tail sat in that queue.
+
+**Correction — the cause below is not what this document first claimed.** The first
+diagnosis blamed `ClaimSearchOutboxBatch`'s `job_posted_at DESC` ordering starving old
+postings. Checked against prod afterwards and that was wrong: of the entries older than a
+day, **zero** belonged to an open canonical job. 631 were behind a `duplicate_of` and 138
+behind a closed job. The claim skips exactly those — correctly, there is nothing to index
+— and nothing deleted them. `DeleteSearchOutboxCreatedBefore` does not, because it also
+requires `jobs.updated_at` to predate the run, and a job demoted to a duplicate is still
+in its board's feed, so ingest keeps touching it. 1,618 such rows in total, the oldest
+queued eight days earlier.
+
+Fixed by `DeleteIneligibleSearchOutbox`, which the drain runs once per pass before
+claiming. Dead-lettered entries are deliberately exempt — `failed_at` is the record
+`freehire_queue_dead_letters` reports, so reaping those would erase the evidence rather
+than the garbage.
 
 Depth alerts on `enrichment_outbox` and `semantic_outbox` are also omitted. Both are
 structurally underwater — enrichment against a billing-capped LLM key pool, embedding
@@ -248,14 +256,21 @@ It deliberately leaves its own `freehire-pipeline.prom` in place on failure rath
 deleting it, for the reasons under "Alert rules" above. The worker holds no locks and
 writes nothing to the database, so a hung run cannot block ingest, drain, or reindex.
 
-## Known defect, out of scope
+## Known defect — found here, fixed separately
 
-The `search_outbox` tail described above is a real defect: 5,309 entries that no code
-path will ever process. It follows from two individually reasonable decisions — index
-the freshest first, and do not purge what changed after the reindex began — meeting at
-an edge neither anticipated. It is pre-existing and unrelated to this change, and fixing
-it here would widen the scope past observability into queue semantics. It should be
-raised separately.
+The `search_outbox` tail was a real defect: entries no code path would ever process,
+1,618 of them, the oldest eight days old. It followed from two individually reasonable
+decisions — skip what cannot be indexed, and do not purge what changed after the reindex
+began — meeting at an edge neither anticipated: a job demoted to a duplicate is skipped
+by the claim forever *and* kept fresh by ingest, so neither side ever removes it.
+
+Fixed by `DeleteIneligibleSearchOutbox`, run by the drain before each pass.
+
+Worth recording how it was nearly mis-fixed. The first diagnosis, written into this
+document, blamed the claim's `job_posted_at DESC` ordering for starving old postings. It
+was plausible and wrong, and a fix built on it would have changed claim ordering — real
+risk, no benefit. What settled it was one query: of the entries older than a day, how
+many belonged to an open canonical job? **Zero.** The ordering was never involved.
 
 ## Out of scope
 

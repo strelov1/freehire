@@ -46,6 +46,10 @@ func (s *dbStore) Complete(ctx context.Context, entries []searchdrain.Claimed) e
 	return s.q.DeleteSearchOutboxEntries(ctx, ids)
 }
 
+func (s *dbStore) Reap(ctx context.Context, maxRows int) (int64, error) {
+	return s.q.DeleteIneligibleSearchOutbox(ctx, int32(maxRows))
+}
+
 func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (bool, error) {
 	row, err := s.q.RecordSearchOutboxFailure(ctx, db.RecordSearchOutboxFailureParams{
 		LastError:   errMsg,

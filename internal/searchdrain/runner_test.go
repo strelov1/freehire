@@ -27,6 +27,10 @@ type fakeStore struct {
 	completed       []int64   // all job ids Complete'd
 	failCalls       []failCall
 	attempts        map[int64]int // outbox id -> attempts so far
+
+	reapCalls []int // max_rows per Reap call
+	reaped    int64 // rows Reap reports removed
+	reapErr   error
 }
 
 type failCall struct {
@@ -96,6 +100,58 @@ func (s *fakeStore) Fail(_ context.Context, outboxID int64, msg string, maxAttem
 	return s.attempts[outboxID] >= maxAttempts, nil
 }
 
+func (s *fakeStore) Reap(_ context.Context, maxRows int) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reapCalls = append(s.reapCalls, maxRows)
+	return s.reaped, s.reapErr
+}
+
+func TestRunnerReapsIneligibleEntriesBeforeDraining(t *testing.T) {
+	store := newFakeStore()
+	store.reaped = 7
+	ix := newFakeIndexer()
+	seed(store, 1, 2)
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(store.reapCalls) != 1 {
+		t.Fatalf("Reap called %d times, want exactly once per run", len(store.reapCalls))
+	}
+	if stats.Reaped != 7 {
+		t.Errorf("stats.Reaped = %d, want 7", stats.Reaped)
+	}
+	// Reaping first means the claim does not have to scan past rows it would only
+	// skip, and the depth gauge stops counting work nobody will ever do.
+	if stats.Indexed != 2 {
+		t.Errorf("stats.Indexed = %d, want 2 — reaping must not disturb the drain", stats.Indexed)
+	}
+}
+
+func TestRunnerDrainsEvenWhenReapFails(t *testing.T) {
+	store := newFakeStore()
+	store.reapErr = errors.New("deadlock detected")
+	ix := newFakeIndexer()
+	seed(store, 1, 2, 3)
+
+	stats, err := Runner{Store: store, Indexer: ix}.Run(context.Background(), opt())
+
+	// Reaping is housekeeping. Letting it fail the run would trade a queue that is
+	// merely untidy for one that is not being drained at all.
+	if err != nil {
+		t.Fatalf("Run returned %v, want the reap failure to be logged and the drain to continue", err)
+	}
+	if stats.Indexed != 3 {
+		t.Errorf("stats.Indexed = %d, want 3", stats.Indexed)
+	}
+	if stats.Reaped != 0 {
+		t.Errorf("stats.Reaped = %d, want 0 when the reap failed", stats.Reaped)
+	}
+}
+
 // fakeIndexer records IndexBatch calls. batchFails makes any multi-job IndexBatch
 // fail (to exercise the per-item fallback); indexErr fails a specific job.
 type fakeIndexer struct {
@@ -143,6 +199,14 @@ func (ix *fakeIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 
 func opt() RunOptions {
 	return RunOptions{BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3}
+}
+
+// seed queues one claimable entry per job id, with the job row to match.
+func seed(s *fakeStore, ids ...int64) {
+	for _, id := range ids {
+		s.jobs[id] = db.Job{ID: id}
+		s.pending = append(s.pending, Claimed{OutboxID: id * 10, JobID: id})
+	}
 }
 
 func has(ids []int64, id int64) bool {
