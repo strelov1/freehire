@@ -6,8 +6,7 @@
   import { api } from '$lib/api';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
   import { routeTabClass, tablist } from '$lib/actions/tablist';
-  import AccountLanguage from '$lib/components/AccountLanguage.svelte';
-  import AccountTimezone from '$lib/components/AccountTimezone.svelte';
+  import AccountPreferences from '$lib/components/AccountPreferences.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import States from '$lib/components/States.svelte';
@@ -79,12 +78,6 @@
       if (currentUser()?.beta_tester) void loadTalentNetwork();
     }
   });
-
-  // The set-up form's own CV upload: reflect it at once, then confirm from the server.
-  function handleCvUploaded() {
-    resumeStore.markUploaded();
-    void resumeStore.refresh();
-  }
 </script>
 
 <svelte:head>
@@ -138,15 +131,9 @@
       <ProfileForm
         profile={null}
         hasCv={resumeStore.present}
-        onCvUploaded={handleCvUploaded}
+        onCvUploaded={() => resumeStore.noteUpload()}
       />
-      <!-- Same reasoning as the settings section's placement: set-up is that section
-           before there are sections, so account-level (not candidate-profile) settings
-           live here too rather than waiting on a CV upload. -->
-      <section class="mt-6 flex flex-col gap-5 rounded-xl border border-border bg-card p-4">
-        <AccountTimezone />
-        <AccountLanguage />
-      </section>
+      <AccountPreferences class="mt-6" />
       <!-- Set-up is the settings section before there are sections, so leaving is offered
            here too: someone who signed up, filled in nothing and wants out must not have to
            create a profile first to find the way back out. -->

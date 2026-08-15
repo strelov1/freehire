@@ -233,17 +233,11 @@ export function roleLabel(slug: string): string {
 
 // Skill facet values are canonical slugs (postgresql, ci-cd, nodejs); the live
 // distribution carries no display name, so map them through the generated SKILL_LABELS
-// catalog (the skilltag dictionary is the source of truth), falling back to the slug
-// title-cased on its hyphens for a value the catalog somehow lacks — a facet value that
-// outlived a dictionary edit still reads as words. Hyphens, not the underscores
-// `titleCase` splits on: skill slugs are the one vocabulary spelled that way.
+// catalog (the skilltag dictionary is the source of truth). The fallback title-cases the
+// slug the way companyLabel does, so a value that outlived a dictionary edit still reads
+// as words rather than as data.
 export function skillLabel(slug: string): string {
-  const curated = (SKILL_LABELS as Record<string, string>)[slug];
-  if (curated) return curated;
-  return slug
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  return (SKILL_LABELS as Record<string, string>)[slug] ?? titleCase(slug.replace(/-/g, '_'));
 }
 
 /** Display label for a dynamic facet value: country code → name, company slug →

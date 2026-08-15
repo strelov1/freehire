@@ -43,9 +43,12 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
     this.#justUploaded = false;
   }
 
-  /** Record that an upload succeeded, before its re-fetch lands. */
-  markUploaded(): void {
+  /** Record that an upload succeeded: reflect it at once, then confirm from the server.
+   *  One call rather than a flag and a re-fetch the caller has to remember to pair —
+   *  both places that upload a CV want exactly this. */
+  noteUpload(): void {
     this.#justUploaded = true;
+    void this.refresh();
   }
 
   /** Re-fetch after a write (upload, contacts edit, parse retry). `ensureLoaded` would

@@ -2,8 +2,7 @@
   import { Trash2 } from '@lucide/svelte';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
   import { savedSearches } from '$lib/savedSearches.svelte';
-  import AccountLanguage from '$lib/components/AccountLanguage.svelte';
-  import AccountTimezone from '$lib/components/AccountTimezone.svelte';
+  import AccountPreferences from '$lib/components/AccountPreferences.svelte';
   import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import ProfileForm from '$lib/components/ProfileForm.svelte';
   import { profileStore } from '$lib/profile.svelte';
@@ -37,13 +36,6 @@
     }
   }
 
-  // A résumé upload stores the CV server-side; reflect it at once, then confirm from
-  // the server (the structured parse follows in the background).
-  function handleCvUploaded() {
-    resumeStore.markUploaded();
-    void resumeStore.refresh();
-  }
-
   async function remove() {
     actionError = null;
     try {
@@ -68,17 +60,11 @@
       {profile}
       hasCv={resumeStore.present}
       onSaved={() => void syncProfileAlert()}
-      onCvUploaded={handleCvUploaded}
+      onCvUploaded={() => resumeStore.noteUpload()}
     />
   {/key}
 
-  <!-- Account settings: preferences about the account itself, not about the candidate
-       the profile describes. One card holds both — two separately boxed rows read as
-       two unrelated features when they are one group of preferences. -->
-  <section class="mt-6 flex flex-col gap-5 rounded-xl border border-border bg-card p-4">
-    <AccountTimezone />
-    <AccountLanguage />
-  </section>
+  <AccountPreferences class="mt-6" />
 
   <!-- Destructive actions live at the foot of the settings section, out of the page
        header (where they crowded the title on narrow viewports) and off the other
