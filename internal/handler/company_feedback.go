@@ -161,27 +161,31 @@ func (h *companyFeedbackHandlers) ListFeedback(c *fiber.Ctx) error {
 	return listResponse(c, out, total, limit, offset)
 }
 
-// GetMyFeedback returns the caller's own feedback on a company, or null data
-// when they have not left one yet — the edit form's prefill.
+// GetMyFeedback returns all of the caller's own feedback on a company, across
+// every category they've reviewed it under (an empty array when they have not
+// left any yet) — the write form's prefill and its per-category "already
+// used" read, so it can only ever offer a genuinely new category alongside
+// editing an existing one.
 func (h *companyFeedbackHandlers) GetMyFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	f, err := h.feedback.Mine(c.Context(), userID, c.Params("slug"))
+	items, err := h.feedback.Mine(c.Context(), userID, c.Params("slug"))
 	if err != nil {
-		if errors.Is(err, companyfeedback.ErrNotFound) {
-			return c.JSON(fiber.Map{"data": nil})
-		}
 		return companyFeedbackError(err)
 	}
-	return c.JSON(fiber.Map{"data": toCompanyFeedbackResponse(f)})
+	out := make([]companyFeedbackResponse, len(items))
+	for i, f := range items {
+		out[i] = toCompanyFeedbackResponse(f)
+	}
+	return c.JSON(fiber.Map{"data": out})
 }
 
-// UpsertFeedback creates or overwrites the caller's feedback on a company;
-// 400/404/422/429. The response's nested `company` field is the freshly
-// recomputed counters, so the caller can update its own view of the company
-// (e.g. a header badge) without a second round trip.
+// UpsertFeedback creates or overwrites the caller's feedback in one category
+// on a company; 400/404/422/429. The response's nested `company` field is the
+// freshly recomputed counters, so the caller can update its own view of the
+// company (e.g. a header badge) without a second round trip.
 func (h *companyFeedbackHandlers) UpsertFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -201,16 +205,17 @@ func (h *companyFeedbackHandlers) UpsertFeedback(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": out})
 }
 
-// DeleteFeedback removes the caller's own feedback on a company (no-op when
-// absent) and returns the company's freshly recomputed counters — the same
-// cast/clear-returns-the-tally shape as VoteControl's clear endpoints, so the
-// caller never needs a follow-up fetch to learn the new count.
+// DeleteFeedback removes the caller's own feedback in one category
+// (?feedback_type=) on a company (no-op when absent) and returns the
+// company's freshly recomputed counters — the same cast/clear-returns-the-tally
+// shape as VoteControl's clear endpoints, so the caller never needs a
+// follow-up fetch to learn the new count.
 func (h *companyFeedbackHandlers) DeleteFeedback(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	summary, err := h.feedback.Delete(c.Context(), userID, c.Params("slug"))
+	summary, err := h.feedback.Delete(c.Context(), userID, c.Params("slug"), c.Query("feedback_type"))
 	if err != nil {
 		return companyFeedbackError(err)
 	}

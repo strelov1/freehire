@@ -85,6 +85,7 @@ Each is self-contained and can be read independently.
 | Area | Reference |
 |---|---|
 | **System architecture** (the high-level map: topology, repo layout, the three main flows) — start here | [docs/architecture.md](docs/architecture.md) |
+| **Branch strategy** (base branch for merge/rebase, naming conventions) | [docs/branch-strategy.md](docs/branch-strategy.md) |
 | **HTTP handlers** (response shapes, error rendering, routes) | [internal/handler/AGENTS.md](internal/handler/AGENTS.md) |
 | **SQL layer** (sqlc, queries, migrations) | [internal/db/AGENTS.md](internal/db/AGENTS.md) |
 | **Search** (Meili index topology, rebuild swap, reindex hazards) | [internal/search/AGENTS.md](internal/search/AGENTS.md) |

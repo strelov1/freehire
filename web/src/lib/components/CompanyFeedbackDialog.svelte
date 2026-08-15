@@ -4,16 +4,18 @@
   import { api } from '$lib/api';
   import { communityFormError } from '$lib/community';
   import { companyFeedbackTypes, maxFeedbackBodyLength } from '$lib/companyFeedback';
-  import type { CompanyFeedbackSummary } from '$lib/types';
+  import type { CompanyFeedback, CompanyFeedbackSummary } from '$lib/types';
   import { Button, ConfirmDialog, Dialog } from '$lib/ui';
 
   // Company feedback: a 1-5 star rating + a category + free text, one per
-  // (caller, company), editable by resubmitting. The parent owns open/close;
-  // this component owns the form within, following ReportDialog's shape.
-  // `onSaved` fires after a successful submit/delete (not on plain cancel)
-  // with the company's freshly recomputed counters, so the parent can update
-  // its own rating summary directly — no follow-up fetch, so no window where
-  // that fetch can itself fail and leave a stale badge on screen.
+  // (caller, company, category), editable by resubmitting within that
+  // category — a different category is a separate review, not an overwrite.
+  // The parent owns open/close; this component owns the form within,
+  // following ReportDialog's shape. `onSaved` fires after a successful
+  // submit/delete (not on plain cancel) with the company's freshly
+  // recomputed counters, so the parent can update its own rating summary
+  // directly — no follow-up fetch, so no window where that fetch can itself
+  // fail and leave a stale badge on screen.
   let {
     slug,
     onClose,
@@ -25,9 +27,11 @@
     if (!open) onClose();
   });
 
-  // Prefilled from the caller's existing feedback, if any — 'edit' shows the
-  // delete action, 'create' does not.
-  let mode = $state<'loading' | 'create' | 'edit'>('loading');
+  // All of the caller's existing feedback on this company, across every
+  // category — fetched once so switching the category picker below can
+  // prefill (or not) without a round trip per category.
+  let loaded = $state(false);
+  let mine = $state<CompanyFeedback[]>([]);
   let rating = $state(0);
   let hoverRating = $state(0);
   let feedbackType = $state('');
@@ -38,20 +42,24 @@
 
   onMount(async () => {
     try {
-      const mine = await api.getMyCompanyFeedback(slug);
-      if (mine) {
-        rating = mine.rating;
-        feedbackType = mine.feedback_type;
-        body = mine.body;
-        mode = 'edit';
-      } else {
-        mode = 'create';
-      }
+      mine = await api.getMyCompanyFeedback(slug);
     } catch {
-      // A prefill failure just starts a blank form — the server re-validates
-      // (and re-upserts in place) on submit regardless.
-      mode = 'create';
+      // A prefill failure just starts with a blank form — the server
+      // re-validates (and re-upserts in place) on submit regardless.
+    } finally {
+      loaded = true;
     }
+  });
+
+  // The caller's existing review in the currently selected category, if any —
+  // 'edit' shows the delete action and prefills rating/body, 'create' does
+  // not. Re-syncs rating/body whenever the selected category changes, but
+  // leaves them alone while the caller is just typing within one.
+  const existing = $derived(mine.find((f) => f.feedback_type === feedbackType));
+  const isEdit = $derived(existing !== undefined);
+  $effect(() => {
+    rating = existing?.rating ?? 0;
+    body = existing?.body ?? '';
   });
 
   const canSubmit = $derived(rating > 0 && feedbackType !== '' && body.trim() !== '' && !submitting);
@@ -73,7 +81,7 @@
 
   async function remove() {
     try {
-      const summary = await api.deleteCompanyFeedback(slug);
+      const summary = await api.deleteCompanyFeedback(slug, feedbackType);
       onSaved?.(summary);
       open = false;
     } catch (err) {
@@ -85,8 +93,8 @@
   }
 </script>
 
-<Dialog bind:open title={mode === 'edit' ? 'Edit your feedback' : 'Leave feedback'} class="max-w-md">
-  {#if mode === 'loading'}
+<Dialog bind:open title={isEdit ? 'Edit your feedback' : 'Leave feedback'} class="max-w-md">
+  {#if !loaded}
     <p class="text-sm text-muted-foreground">Loading…</p>
   {:else}
     <form class="flex flex-col gap-4" onsubmit={submit}>
@@ -138,7 +146,7 @@
       {/if}
 
       <div class="flex items-center justify-between gap-2">
-        {#if mode === 'edit'}
+        {#if isEdit}
           <Button
             type="button"
             variant="ghost"
@@ -151,7 +159,7 @@
           <span></span>
         {/if}
         <Button type="submit" variant="primary" disabled={!canSubmit}>
-          {submitting ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Post feedback'}
+          {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Post feedback'}
         </Button>
       </div>
     </form>

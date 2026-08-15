@@ -44,11 +44,11 @@ type CountRecentCompanyFeedbackParams struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-// How many companies this user has newly reviewed since `since` — the rate-limit
-// check backing companyfeedback.Service.checkRate (mirrors
-// community.CountRecentThreads). An edit-by-resubmit never inserts a new row
-// (the ON CONFLICT DO UPDATE branch leaves created_at untouched), so this only
-// grows on genuine new-company writes.
+// How many new reviews (new company, or a new category on an already-reviewed
+// company) this user has left since `since` — the rate-limit check backing
+// companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
+// edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
+// leaves created_at untouched), so this only grows on genuinely new rows.
 func (q *Queries) CountRecentCompanyFeedback(ctx context.Context, arg CountRecentCompanyFeedbackParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countRecentCompanyFeedback, arg.UserID, arg.CreatedAt)
 	var count int64
@@ -57,17 +57,18 @@ func (q *Queries) CountRecentCompanyFeedback(ctx context.Context, arg CountRecen
 }
 
 const deleteCompanyFeedback = `-- name: DeleteCompanyFeedback :exec
-DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2
+DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3
 `
 
 type DeleteCompanyFeedbackParams struct {
-	UserID      pgtype.Int8 `json:"user_id"`
-	CompanySlug string      `json:"company_slug"`
+	UserID       pgtype.Int8 `json:"user_id"`
+	CompanySlug  string      `json:"company_slug"`
+	FeedbackType string      `json:"feedback_type"`
 }
 
-// Remove the caller's own feedback (no-op when absent).
+// Remove the caller's own feedback in one category on a company (no-op when absent).
 func (q *Queries) DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFeedbackParams) error {
-	_, err := q.db.Exec(ctx, deleteCompanyFeedback, arg.UserID, arg.CompanySlug)
+	_, err := q.db.Exec(ctx, deleteCompanyFeedback, arg.UserID, arg.CompanySlug, arg.FeedbackType)
 	return err
 }
 
@@ -87,19 +88,21 @@ func (q *Queries) GetCompanyFeedbackSlug(ctx context.Context, id int64) (string,
 }
 
 const getMyCompanyFeedback = `-- name: GetMyCompanyFeedback :one
-SELECT id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status FROM company_feedback WHERE user_id = $1 AND company_slug = $2
+SELECT id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3
 `
 
 type GetMyCompanyFeedbackParams struct {
-	UserID      pgtype.Int8 `json:"user_id"`
-	CompanySlug string      `json:"company_slug"`
+	UserID       pgtype.Int8 `json:"user_id"`
+	CompanySlug  string      `json:"company_slug"`
+	FeedbackType string      `json:"feedback_type"`
 }
 
-// The caller's own feedback on a company, for the edit form's prefill. No row
-// when they have not left one yet. Not filtered by status: the owner can still
-// see and edit their own review after a moderator hides it.
+// The caller's own feedback in one category on a company, for the edit form's
+// prefill and for Upsert to tell an edit from a genuinely new review. No row
+// when they have not left one in that category yet. Not filtered by status:
+// the owner can still see and edit their own review after a moderator hides it.
 func (q *Queries) GetMyCompanyFeedback(ctx context.Context, arg GetMyCompanyFeedbackParams) (CompanyFeedback, error) {
-	row := q.db.QueryRow(ctx, getMyCompanyFeedback, arg.UserID, arg.CompanySlug)
+	row := q.db.QueryRow(ctx, getMyCompanyFeedback, arg.UserID, arg.CompanySlug, arg.FeedbackType)
 	var i CompanyFeedback
 	err := row.Scan(
 		&i.ID,
@@ -215,6 +218,49 @@ func (q *Queries) ListCompanyFeedback(ctx context.Context, arg ListCompanyFeedba
 	return items, nil
 }
 
+const listMyCompanyFeedback = `-- name: ListMyCompanyFeedback :many
+SELECT id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status FROM company_feedback WHERE user_id = $1 AND company_slug = $2
+ORDER BY created_at DESC, id DESC
+`
+
+type ListMyCompanyFeedbackParams struct {
+	UserID      pgtype.Int8 `json:"user_id"`
+	CompanySlug string      `json:"company_slug"`
+}
+
+// All of the caller's own feedback on a company, across every category they've
+// reviewed it under — the write dialog's "which categories have I already
+// used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
+func (q *Queries) ListMyCompanyFeedback(ctx context.Context, arg ListMyCompanyFeedbackParams) ([]CompanyFeedback, error) {
+	rows, err := q.db.Query(ctx, listMyCompanyFeedback, arg.UserID, arg.CompanySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CompanyFeedback{}
+	for rows.Next() {
+		var i CompanyFeedback
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CompanySlug,
+			&i.Rating,
+			&i.FeedbackType,
+			&i.Body,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReportedCompanyFeedback = `-- name: ListReportedCompanyFeedback :many
 SELECT f.id, f.user_id, f.company_slug, f.rating, f.feedback_type, f.body, f.created_at, f.updated_at, f.status, p.handle AS author_handle,
        count(r.id) AS report_count,
@@ -306,9 +352,8 @@ const upsertCompanyFeedback = `-- name: UpsertCompanyFeedback :one
 
 INSERT INTO company_feedback (user_id, company_slug, rating, feedback_type, body)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id, company_slug) WHERE user_id IS NOT NULL DO UPDATE
-  SET rating = EXCLUDED.rating, feedback_type = EXCLUDED.feedback_type,
-      body = EXCLUDED.body, updated_at = now()
+ON CONFLICT (user_id, company_slug, feedback_type) WHERE user_id IS NOT NULL DO UPDATE
+  SET rating = EXCLUDED.rating, body = EXCLUDED.body, updated_at = now()
 RETURNING id, user_id, company_slug, rating, feedback_type, body, created_at, updated_at, status
 `
 
@@ -321,13 +366,17 @@ type UpsertCompanyFeedbackParams struct {
 }
 
 // Company feedback: one signed-in user's star rating + category + text per
-// company, upserted in place (edit-by-resubmit). LEFT JOIN community_personas
-// exactly like the community.sql read paths — content outlives its author (a
-// deleted account leaves user_id NULL), so a null handle means "no live author",
-// which the API renders as a deleted-member marker.
-// Insert or overwrite the caller's feedback on a company in place — the same
-// upsert-in-place shape as UpsertCompanyVote, but ON CONFLICT names the target
-// partial index directly since the unique index excludes NULL user_id.
+// (company, category) — a user may hold one review per category per company,
+// upserted in place (edit-by-resubmit) within that category, but may leave a
+// second review on the same company under a different category. LEFT JOIN
+// community_personas exactly like the community.sql read paths — content
+// outlives its author (a deleted account leaves user_id NULL), so a null
+// handle means "no live author", which the API renders as a deleted-member
+// marker.
+// Insert or overwrite the caller's feedback in one category on a company in
+// place — the same upsert-in-place shape as UpsertCompanyVote, but ON
+// CONFLICT names the target partial index directly since the unique index
+// excludes NULL user_id.
 func (q *Queries) UpsertCompanyFeedback(ctx context.Context, arg UpsertCompanyFeedbackParams) (CompanyFeedback, error) {
 	row := q.db.QueryRow(ctx, upsertCompanyFeedback,
 		arg.UserID,

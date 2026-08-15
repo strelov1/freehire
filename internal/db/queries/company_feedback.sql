@@ -1,29 +1,40 @@
 -- Company feedback: one signed-in user's star rating + category + text per
--- company, upserted in place (edit-by-resubmit). LEFT JOIN community_personas
--- exactly like the community.sql read paths — content outlives its author (a
--- deleted account leaves user_id NULL), so a null handle means "no live author",
--- which the API renders as a deleted-member marker.
+-- (company, category) — a user may hold one review per category per company,
+-- upserted in place (edit-by-resubmit) within that category, but may leave a
+-- second review on the same company under a different category. LEFT JOIN
+-- community_personas exactly like the community.sql read paths — content
+-- outlives its author (a deleted account leaves user_id NULL), so a null
+-- handle means "no live author", which the API renders as a deleted-member
+-- marker.
 
 -- name: UpsertCompanyFeedback :one
--- Insert or overwrite the caller's feedback on a company in place — the same
--- upsert-in-place shape as UpsertCompanyVote, but ON CONFLICT names the target
--- partial index directly since the unique index excludes NULL user_id.
+-- Insert or overwrite the caller's feedback in one category on a company in
+-- place — the same upsert-in-place shape as UpsertCompanyVote, but ON
+-- CONFLICT names the target partial index directly since the unique index
+-- excludes NULL user_id.
 INSERT INTO company_feedback (user_id, company_slug, rating, feedback_type, body)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id, company_slug) WHERE user_id IS NOT NULL DO UPDATE
-  SET rating = EXCLUDED.rating, feedback_type = EXCLUDED.feedback_type,
-      body = EXCLUDED.body, updated_at = now()
+ON CONFLICT (user_id, company_slug, feedback_type) WHERE user_id IS NOT NULL DO UPDATE
+  SET rating = EXCLUDED.rating, body = EXCLUDED.body, updated_at = now()
 RETURNING *;
 
 -- name: DeleteCompanyFeedback :exec
--- Remove the caller's own feedback (no-op when absent).
-DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2;
+-- Remove the caller's own feedback in one category on a company (no-op when absent).
+DELETE FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3;
 
 -- name: GetMyCompanyFeedback :one
--- The caller's own feedback on a company, for the edit form's prefill. No row
--- when they have not left one yet. Not filtered by status: the owner can still
--- see and edit their own review after a moderator hides it.
-SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2;
+-- The caller's own feedback in one category on a company, for the edit form's
+-- prefill and for Upsert to tell an edit from a genuinely new review. No row
+-- when they have not left one in that category yet. Not filtered by status:
+-- the owner can still see and edit their own review after a moderator hides it.
+SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2 AND feedback_type = $3;
+
+-- name: ListMyCompanyFeedback :many
+-- All of the caller's own feedback on a company, across every category they've
+-- reviewed it under — the write dialog's "which categories have I already
+-- used" read. Not filtered by status, same reasoning as GetMyCompanyFeedback.
+SELECT * FROM company_feedback WHERE user_id = $1 AND company_slug = $2
+ORDER BY created_at DESC, id DESC;
 
 -- name: ListCompanyFeedback :many
 -- A company's feedback, newest first, offset-paginated — the volume per company
@@ -53,11 +64,11 @@ WHERE slug = $1
 RETURNING feedback_count, feedback_rating_avg;
 
 -- name: CountRecentCompanyFeedback :one
--- How many companies this user has newly reviewed since `since` — the rate-limit
--- check backing companyfeedback.Service.checkRate (mirrors
--- community.CountRecentThreads). An edit-by-resubmit never inserts a new row
--- (the ON CONFLICT DO UPDATE branch leaves created_at untouched), so this only
--- grows on genuine new-company writes.
+-- How many new reviews (new company, or a new category on an already-reviewed
+-- company) this user has left since `since` — the rate-limit check backing
+-- companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
+-- edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
+-- leaves created_at untouched), so this only grows on genuinely new rows.
 SELECT count(*) FROM company_feedback WHERE user_id = $1 AND created_at >= $2;
 
 -- name: GetCompanyFeedbackSlug :one

@@ -1,8 +1,10 @@
 // Package companyfeedback owns a signed-in user's 1-5 star rating + a closed
 // category + free text about a company — shown under their site-wide
 // pseudonymous persona (internal/community's handle, not a real name), one row
-// per (user, company), editable by resubmitting (upsert-in-place, the same
-// shape internal/vote's company thumbs use).
+// per (user, company, category), editable by resubmitting within that category
+// (upsert-in-place, the same shape internal/vote's company thumbs use). A user
+// may hold at most one review per category on a given company, but may leave a
+// second review on the same company under a different category.
 //
 // A feedback write and the affected company's counter recompute run in one pgx
 // transaction, so a reader never sees a rating without its average. A moderator
@@ -54,8 +56,7 @@ var (
 	ErrEmptyBody = errors.New("companyfeedback: body is required")
 	// ErrBodyTooLong is feedback text over maxBodyRunes (422).
 	ErrBodyTooLong = errors.New("companyfeedback: body is too long")
-	// ErrNotFound is a caller with no feedback on the given company, or a review
-	// id naming no row (404).
+	// ErrNotFound is a review id naming no row (404).
 	ErrNotFound = errors.New("companyfeedback: not found")
 	// ErrRateLimited is a user over their new-review window cap (429).
 	ErrRateLimited = errors.New("companyfeedback: rate limit exceeded")
@@ -149,10 +150,11 @@ func (s *Service) checkRate(ctx context.Context, userID int64) error {
 	return nil
 }
 
-// Upsert validates and writes the caller's feedback on a company (inserting or
-// overwriting their existing one in place), minting their persona if needed,
-// and recomputes the company's materialized counters in the same transaction.
-// A brand-new review (the caller has none yet on this company) is subject to
+// Upsert validates and writes the caller's feedback in one category on a
+// company (inserting or overwriting their existing entry in that category in
+// place), minting their persona if needed, and recomputes the company's
+// materialized counters in the same transaction. A brand-new review (the
+// caller has none yet in this category on this company) is subject to
 // checkRate; editing an existing one never is — see checkRate's doc comment.
 func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating int16, feedbackType, body string) (Feedback, Summary, error) {
 	if rating < 1 || rating > 5 {
@@ -173,7 +175,7 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 	}
 
 	_, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
-		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
+		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug, FeedbackType: feedbackType,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		// A genuinely new review: throttle it.
@@ -219,9 +221,13 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 	return feedbackFromRow(row, handle), summaryFromCounts(counts), nil
 }
 
-// Delete removes the caller's own feedback (no-op when absent) and recomputes
-// the company's materialized counters in the same transaction.
-func (s *Service) Delete(ctx context.Context, userID int64, slug string) (Summary, error) {
+// Delete removes the caller's own feedback in one category on a company
+// (no-op when absent) and recomputes the company's materialized counters in
+// the same transaction.
+func (s *Service) Delete(ctx context.Context, userID int64, slug, feedbackType string) (Summary, error) {
+	if !slices.Contains(vocab.CompanyFeedbackTypeValues, feedbackType) {
+		return Summary{}, ErrInvalidFeedbackType
+	}
 	if err := s.requireCompany(ctx, slug); err != nil {
 		return Summary{}, err
 	}
@@ -237,7 +243,7 @@ func (s *Service) Delete(ctx context.Context, userID int64, slug string) (Summar
 		return Summary{}, err
 	}
 	if err := q.DeleteCompanyFeedback(ctx, db.DeleteCompanyFeedbackParams{
-		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
+		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug, FeedbackType: feedbackType,
 	}); err != nil {
 		return Summary{}, err
 	}
@@ -251,33 +257,39 @@ func (s *Service) Delete(ctx context.Context, userID int64, slug string) (Summar
 	return summaryFromCounts(counts), nil
 }
 
-// Mine returns the caller's own feedback on a company (for the edit form's
-// prefill), or ErrNotFound when they have not left one yet, or
-// ErrCompanyNotFound for a bad slug (checked first, so the two cases are never
-// confused the way an earlier version of this method conflated them).
-func (s *Service) Mine(ctx context.Context, userID int64, slug string) (Feedback, error) {
+// Mine returns all of the caller's own feedback on a company, across every
+// category they've reviewed it under (possibly empty) — the write dialog's
+// read for prefilling an existing category's entry and excluding categories
+// already taken. ErrCompanyNotFound for a bad slug (checked first, so it's
+// never confused with "no feedback yet" the way an earlier single-feedback
+// version of this method conflated the two).
+func (s *Service) Mine(ctx context.Context, userID int64, slug string) ([]Feedback, error) {
 	if err := s.requireCompany(ctx, slug); err != nil {
-		return Feedback{}, err
+		return nil, err
 	}
-	row, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
+	rows, err := s.q.ListMyCompanyFeedback(ctx, db.ListMyCompanyFeedbackParams{
 		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Feedback{}, ErrNotFound
-		}
-		return Feedback{}, err
+		return nil, err
 	}
-	// Unlike List's author handles (resolved once per page via a join), this is
-	// a single row, and it is always the caller's own — worth the extra lookup
-	// to get a real handle instead of leaving it blank, which the handler's
-	// shared personaOrDeleted would otherwise render as "[deleted]" for the
-	// caller's own, very much live, review.
+	if len(rows) == 0 {
+		return []Feedback{}, nil
+	}
+	// Unlike List's author handles (resolved once per page via a join), these
+	// rows are always the caller's own — worth the extra lookup to get a real
+	// handle instead of leaving it blank, which the handler's shared
+	// personaOrDeleted would otherwise render as "[deleted]" for the caller's
+	// own, very much live, reviews.
 	handle, err := s.personas.PersonaFor(ctx, userID)
 	if err != nil {
-		return Feedback{}, err
+		return nil, err
 	}
-	return feedbackFromRow(row, handle), nil
+	out := make([]Feedback, len(rows))
+	for i, row := range rows {
+		out[i] = feedbackFromRow(row, handle)
+	}
+	return out, nil
 }
 
 // List returns a company's feedback, newest first, offset-paginated. Hidden

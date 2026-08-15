@@ -88,6 +88,19 @@ func decodeFeedback(t *testing.T, resp *http.Response) feedbackResp {
 	return env.Data
 }
 
+func decodeFeedbackList(t *testing.T, resp *http.Response) []feedbackResp {
+	t.Helper()
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	var env struct {
+		Data []feedbackResp `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatalf("decode %s: %v", raw, err)
+	}
+	return env.Data
+}
+
 func TestCompanyFeedbackEndpoints(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
@@ -130,22 +143,35 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("create: want company summary {1, 5}, got %+v", created.Company)
 	}
 
-	// Mine: real handle, not "[deleted]" — the bug an earlier review caught.
-	mine := decodeFeedback(t, doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/acme/feedback/mine", cookie, ""))
-	if mine.Author == "" || strings.EqualFold(mine.Author, "[deleted]") {
+	// Mine: a one-item list, real handle, not "[deleted]" — the bug an earlier review caught.
+	mine := decodeFeedbackList(t, doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/acme/feedback/mine", cookie, ""))
+	if len(mine) != 1 || mine[0].Author == "" || strings.EqualFold(mine[0].Author, "[deleted]") {
 		t.Fatalf("mine: caller's own live review reported as deleted: %+v", mine)
 	}
 
-	// Mine on an unknown company: 404, not a silent {"data":null} — the other bug.
+	// Mine on an unknown company: 404, not a silent {"data":[]} — the other bug.
 	if resp := doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/ghost/feedback/mine", cookie, ""); resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("mine unknown company: want 404, got %d", resp.StatusCode)
 	}
 
-	// Edit-by-resubmit: still one row, updated rating, company summary reflects it.
+	// Edit-by-resubmit (same category): still one row, updated rating, company summary reflects it.
 	edited := decodeFeedback(t, doFeedbackRequest(t, app, fiber.MethodPost, "/api/v1/companies/acme/feedback", cookie,
 		`{"rating":3,"feedback_type":"culture","body":"actually mixed"}`))
 	if edited.Rating != 3 || edited.Company.Count != 1 || *edited.Company.RatingAvg != 3 {
 		t.Fatalf("edit: want rating 3, company {1,3}, got %+v", edited)
+	}
+
+	// A second review on the same company under a DIFFERENT category is a
+	// genuinely new row, not blocked or merged into the first — the behavior
+	// this test suite exists to lock in.
+	second := decodeFeedback(t, doFeedbackRequest(t, app, fiber.MethodPost, "/api/v1/companies/acme/feedback", cookie,
+		`{"rating":5,"feedback_type":"interview","body":"tough but fair"}`))
+	if second.Company.Count != 2 {
+		t.Fatalf("second category: want company count 2, got %+v", second.Company)
+	}
+	mine = decodeFeedbackList(t, doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/acme/feedback/mine", cookie, ""))
+	if len(mine) != 2 {
+		t.Fatalf("mine after second category: want 2 entries, got %+v", mine)
 	}
 
 	// Empty body -> 422; over-long body -> 422.
@@ -158,8 +184,9 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 		t.Fatalf("over-long body: want 422, got %d", resp.StatusCode)
 	}
 
-	// Delete: 200 with the recomputed (now empty) summary, not a bare 204.
-	delResp := doFeedbackRequest(t, app, fiber.MethodDelete, "/api/v1/companies/acme/feedback", cookie, "")
+	// Delete targets one category (?feedback_type=): removing "culture" leaves
+	// "interview" in place, not a bare 204.
+	delResp := doFeedbackRequest(t, app, fiber.MethodDelete, "/api/v1/companies/acme/feedback?feedback_type=culture", cookie, "")
 	if delResp.StatusCode != fiber.StatusOK {
 		t.Fatalf("delete: want 200, got %d", delResp.StatusCode)
 	}
@@ -173,8 +200,24 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 	if err := json.Unmarshal(raw, &delEnv); err != nil {
 		t.Fatalf("decode delete response %s: %v", raw, err)
 	}
-	if delEnv.Data.Count != 0 || delEnv.Data.RatingAvg != nil {
-		t.Fatalf("delete: want empty summary, got %+v", delEnv.Data)
+	if delEnv.Data.Count != 1 || delEnv.Data.RatingAvg == nil || *delEnv.Data.RatingAvg != 5 {
+		t.Fatalf("delete: want summary {1, 5} (interview left standing), got %+v", delEnv.Data)
+	}
+
+	// Deleting the remaining category empties the summary.
+	delResp2 := doFeedbackRequest(t, app, fiber.MethodDelete, "/api/v1/companies/acme/feedback?feedback_type=interview", cookie, "")
+	raw2, _ := io.ReadAll(delResp2.Body)
+	var delEnv2 struct {
+		Data struct {
+			Count     int32    `json:"feedback_count"`
+			RatingAvg *float32 `json:"feedback_rating_avg"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw2, &delEnv2); err != nil {
+		t.Fatalf("decode second delete response %s: %v", raw2, err)
+	}
+	if delEnv2.Data.Count != 0 || delEnv2.Data.RatingAvg != nil {
+		t.Fatalf("delete: want empty summary, got %+v", delEnv2.Data)
 	}
 }
 
@@ -327,8 +370,8 @@ func TestCompanyFeedbackReportAndHide(t *testing.T) {
 	}
 
 	// The owner can still see (and would still be able to edit) their own hidden review.
-	mine := decodeFeedback(t, doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/acme/feedback/mine", authorCookie, ""))
-	if mine.ID != created.ID {
+	mine := decodeFeedbackList(t, doFeedbackRequest(t, app, fiber.MethodGet, "/api/v1/companies/acme/feedback/mine", authorCookie, ""))
+	if len(mine) != 1 || mine[0].ID != created.ID {
 		t.Fatalf("owner's mine after hide: want their review still visible to them, got %+v", mine)
 	}
 }
