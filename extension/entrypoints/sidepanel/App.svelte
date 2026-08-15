@@ -33,8 +33,8 @@
   import ToolGroupList from './ToolGroupList.svelte';
   import JobDeck from './JobDeck.svelte';
   import { splitPresentingCalls } from '../../lib/assistant/deck';
-  import { Alert, Badge, Button, EmptyState, Input, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
-  import { ArrowUp, Square, RectangleEllipsis } from '@lucide/svelte';
+  import { Alert, Badge, Button, Card, EmptyState, Input, Skeleton, TabStrip, tabStripId } from 'freehire-design-system';
+  import { ArrowUp, Plus, Square, RectangleEllipsis } from '@lucide/svelte';
 
   let chat = $state<ChatState>(initChat());
   // Local action feedback (autofill results, errors) — not part of a turn.
@@ -630,13 +630,22 @@
                 {/snippet}
               </EmptyState>
             {:else if matchStatus === 'empty'}
-              <EmptyState title="No vacancy" description="freehire doesn't recognise this page as a job posting.">
-                {#snippet action()}
-                  <Button variant="primary" size="sm" onclick={contributePage} disabled={contributing}>
-                    {contributing ? 'Adding…' : 'Add vacancy'}
-                  </Button>
-                {/snippet}
-              </EmptyState>
+              <!-- Not an empty state but an offer: a page freehire does not carry yet is
+                   the one moment the panel can ask for something useful, so it leads with
+                   the action and says what it buys — rather than reporting a miss. -->
+              <Card class="add-job">
+                <Button
+                  class="add-job-cta"
+                  variant="primary"
+                  size="lg"
+                  onclick={contributePage}
+                  disabled={contributing}
+                >
+                  <Plus class="size-4" />
+                  {contributing ? 'Adding this job…' : 'Add this job in one click'}
+                </Button>
+                <p class="add-job-hint">See your match score and tailor your CV</p>
+              </Card>
             {/if}
 
             {#each notices as notice, i (i)}
@@ -868,6 +877,33 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+  }
+
+  /* :global — Card renders its own root, which carries the design system's scope
+   * hash rather than this component's; the same reason .tab-strip and
+   * .match-scroll > * are written this way. */
+  :global(.add-job) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 16px;
+    text-align: center;
+  }
+
+  /* A pill, not the square primary button: this is an invitation on an otherwise
+   * empty panel, and the panel's own committed action (Autofill, pinned below) is
+   * the squared one — keeping the shapes apart keeps the hierarchy readable. */
+  :global(.add-job-cta) {
+    border-radius: 9999px;
+    white-space: normal;
+    max-width: 100%;
+  }
+
+  .add-job-hint {
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.4;
   }
 
   .match-skeleton {
