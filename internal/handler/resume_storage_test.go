@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/db"
@@ -39,7 +39,9 @@ func (f *fakeResumeBlobs) Put(_ context.Context, key, _ string, r io.Reader, _ i
 func (f *fakeResumeBlobs) Get(_ context.Context, key string) (io.ReadCloser, error) {
 	b, ok := f.objs[key]
 	if !ok {
-		return nil, errors.New("not found")
+		// Mirrors the shape blobstore.IsNotFound actually recognizes, so this fake
+		// exercises the real translation to ErrNotStored rather than a stand-in error.
+		return nil, minio.ErrorResponse{Code: minio.NoSuchKey}
 	}
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
