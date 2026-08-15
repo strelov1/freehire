@@ -23,29 +23,21 @@ export function titleCase(value: string): string {
 }
 
 // Region code → display names, one row per vocab.RegionValues entry. `short`
-// is the compact UI label (filter pills, facet rows); `long` is the full place
-// name schema.org gets for applicantLocationRequirements. `global` has no
-// `long` — a worldwide reach intentionally carries no location requirement.
-export const REGIONS: { code: string; short: string; long?: string }[] = [
+// is the compact UI label (filter pills, facet rows).
+export const REGIONS: { code: string; short: string }[] = [
   { code: 'global', short: 'Worldwide' },
-  { code: 'north_america', short: 'North America', long: 'North America' },
-  { code: 'latam', short: 'LATAM', long: 'Latin America' },
-  { code: 'eu', short: 'Europe', long: 'European Union' },
-  { code: 'uk', short: 'UK', long: 'United Kingdom' },
-  { code: 'mena', short: 'MENA', long: 'MENA' },
-  { code: 'africa', short: 'Africa', long: 'Africa' },
-  { code: 'apac', short: 'APAC', long: 'Asia-Pacific' },
-  { code: 'cis', short: 'CIS', long: 'CIS' },
+  { code: 'north_america', short: 'North America' },
+  { code: 'latam', short: 'LATAM' },
+  { code: 'eu', short: 'Europe' },
+  { code: 'uk', short: 'UK' },
+  { code: 'mena', short: 'MENA' },
+  { code: 'africa', short: 'Africa' },
+  { code: 'apac', short: 'APAC' },
+  { code: 'cis', short: 'CIS' },
 ];
 
 export const REGION_LABELS: Record<string, string> = Object.fromEntries(
   REGIONS.map((r) => [r.code, r.short]),
-);
-
-// Full place names for schema.org (seo.ts); codes without one omit the
-// location requirement.
-export const REGION_NAMES: Record<string, string> = Object.fromEntries(
-  REGIONS.flatMap((r) => (r.long ? [[r.code, r.long]] : [])),
 );
 
 export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };

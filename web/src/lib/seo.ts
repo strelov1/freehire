@@ -4,7 +4,7 @@
 
 import type { PostMeta } from './blog';
 import { countryLabel } from './facets';
-import { REGION_NAMES } from './labels';
+import { COUNTRY_REGION_MAP } from './generated/contracts';
 import { companyLogoUrl } from './logo';
 import type { Company, Enrichment, Job } from './types';
 
@@ -100,9 +100,52 @@ const SALARY_UNIT: Record<string, string> = {
   year: 'YEAR',
 };
 
-// Full region names for applicantLocationRequirements come from the shared
-// REGIONS table (labels.ts). Broad or worldwide reaches ('global') carry no
-// name there and intentionally omit a requirement.
+// Countries of a region, inverted from the generated country→region map (the
+// same grouping internal/location keys the facet on). Built once at module load.
+const REGION_COUNTRIES: Record<string, string[]> = (() => {
+  const out: Record<string, string[]> = {};
+  for (const [code, region] of Object.entries(COUNTRY_REGION_MAP)) {
+    (out[region] ??= []).push(code);
+  }
+  return out;
+})();
+
+// ISO 3166-1 alpha-2 → English country name. Intl carries the list, so there is
+// no country table to keep in sync here; a code it doesn't know (e.g. the 'xk'
+// user-assigned code for Kosovo) comes back unchanged and is dropped rather than
+// emitted as a two-letter "name".
+const COUNTRY_DISPLAY = new Intl.DisplayNames(['en'], { type: 'region' });
+
+function countryName(iso: string): string | undefined {
+  const code = iso.toUpperCase();
+  let name: string | undefined;
+  try {
+    name = COUNTRY_DISPLAY.of(code);
+  } catch {
+    return undefined;
+  }
+  return name && name !== code ? name : undefined;
+}
+
+// Google resolves applicantLocationRequirements at Country or State level and
+// geocodes the name, so a supranational bloc ("North America", "APAC") is a value
+// it cannot place — and TELECOMMUTE without a usable companion is an invalid
+// combination. Emit countries instead: the posting's own `countries` when it has
+// them (the precise fact), else the countries its region groups. A worldwide
+// reach ('global') groups none and states no requirement, which is correct — it
+// restricts nobody.
+function applicantRegions(regions?: string[], countries?: string[]): unknown {
+  const iso = countries?.length
+    ? countries
+    : (regions ?? []).flatMap((r) => REGION_COUNTRIES[r] ?? []);
+  const named = [
+    ...new Set(iso.map(countryName).filter((n): n is string => Boolean(n))),
+  ].toSorted();
+  if (named.length === 0) return undefined;
+  const entries = named.map((name) => ({ '@type': 'Country', name }));
+  return entries.length === 1 ? entries[0] : entries;
+}
+
 function baseSalary(e: Enrichment): Record<string, unknown> {
   const value: Record<string, unknown> = { '@type': 'QuantitativeValue' };
   if (e.salary_min != null) value.minValue = e.salary_min;
@@ -113,15 +156,6 @@ function baseSalary(e: Enrichment): Record<string, unknown> {
     currency: e.salary_currency || 'USD',
     value,
   };
-}
-
-function applicantRegions(regions?: string[]): unknown {
-  const named = (regions ?? [])
-    .map((r) => REGION_NAMES[r])
-    .filter((name): name is string => Boolean(name))
-    .map((name) => ({ '@type': 'Country', name }));
-  if (named.length === 0) return undefined;
-  return named.length === 1 ? named[0] : named;
 }
 
 // schema.org jobLocation from the raw location string: Google accepts a
@@ -224,7 +258,7 @@ export function jobPostingJsonLd(job: Job, origin: string): Record<string, unkno
   if (empType) ld.employmentType = empType;
 
   if (job.work_mode === 'remote') {
-    const regions = applicantRegions(job.regions);
+    const regions = applicantRegions(job.regions, job.countries);
     if (regions) {
       // Google requires applicantLocationRequirements whenever jobLocationType is
       // TELECOMMUTE — set them together, never TELECOMMUTE alone.
