@@ -172,7 +172,7 @@ var oracleTagPattern = regexp.MustCompile(`<[^>]*>`)
 // lone "<br>" or an empty string both fail this check, which is what should trigger the
 // CorporateDescriptionStr/OrganizationDescriptionStr fallback in detail.
 func oracleHasVisibleText(s string) bool {
-	return strings.TrimSpace(oracleTagPattern.ReplaceAllString(html.UnescapeString(s), "")) != ""
+	return strings.TrimSpace(html.UnescapeString(oracleTagPattern.ReplaceAllString(s, ""))) != ""
 }
 
 // oracleEmploymentType maps Oracle's JobSchedule ("Full time" / "Part time") onto the

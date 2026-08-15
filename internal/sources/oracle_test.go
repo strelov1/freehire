@@ -144,6 +144,16 @@ func TestOracleFallsBackToCorporateDescriptionWhenExternalIsBlank(t *testing.T) 
 	}
 }
 
+// TestOracleHasVisibleTextIgnoresEscapedTagLookalikes guards against stripping tags after
+// unescaping: a field whose only content is an HTML-escaped tag-shaped string (e.g. someone
+// wrote "<tag>" as literal text) must still count as visible text, not be swallowed by the
+// tag stripper once unescaping turns it into something that looks like a real tag.
+func TestOracleHasVisibleTextIgnoresEscapedTagLookalikes(t *testing.T) {
+	if !oracleHasVisibleText("<p>&lt;tag&gt;</p>") {
+		t.Error("oracleHasVisibleText(`<p>&lt;tag&gt;</p>`) = false, want true")
+	}
+}
+
 // TestOracleOffsetIsInsideFinder guards the pagination fix: Oracle ignores a top-level
 // &offset= query param (it only honors offset INSIDE the finder clause, alongside limit),
 // so a top-level offset silently re-fetches the first page forever. The fake routes each
