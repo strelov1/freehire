@@ -105,9 +105,29 @@ content --PAGE_SNAPSHOT--> background --> panel --> relay --> the agent, mid-tur
   it reported without re-writing anything.
 - **The plan is the panel's standing account of the form**, computed by
   `buildPlan` from what the page reported and rebuilt on every page change, after
-  every walk step, and on `FORM_CHANGED` — the page's own debounced notice that
-  someone typed into it. It counts REQUIRED questions only (they are what gates
+  a walk, on `FORM_CHANGED`, on returning to the Match tab and on the panel
+  regaining focus. It counts REQUIRED questions only (they are what gates
   submission) and is null for a page showing no application form.
+- **Two different tests for "this is an application".** `looksLikeApplication`
+  (a CV upload) gates the FILLER — it is what stops a job-alert signup being
+  written into. `showsApplicationForm` gates the CHECKLIST and is deliberately
+  looser: an upload, OR four labelled questions, OR a form the panel has already
+  written into. The upload sits on step ONE of a multi-step ATS form, and every
+  step after it — the screening questions — has none, which is why the strict
+  test showed no checklist where it was most wanted. Nothing is written on the
+  strength of the looser one.
+- **`PlanItem.key` is `frame:index`, never the label.** Two questions on one form
+  can carry the same label, and a keyed `{#each}` over a duplicate throws
+  `each_key_duplicate` — which takes the whole card down and looks, from the
+  panel, like the feature simply not existing. That was the real reason the
+  checklist never appeared on a live ATS form.
+- **Form reads are serialised, not raced.** A request-id guard (the
+  `matchRequestId` pattern) starves here: an ATS page announces DOM changes
+  continuously, so every read finds its id already superseded and returns before
+  assigning. One read at a time with a re-read queued behind it cannot starve and
+  cannot land stale. For the same reason the page announces a mutation only when
+  the NUMBER of controls changes — typing is covered by the input/change
+  listeners, where it does not.
 - **`revealField` borrows the page's style and gives it back.** The outline is
   inline style, restored after ~600ms: the extension runs on pages freehire does
   not own, where an injected class can collide with the ATS's own and a stylesheet
