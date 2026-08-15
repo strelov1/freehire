@@ -1,0 +1,23 @@
+-- migrate: no-transaction
+--
+-- 0081_semantic_outbox_claim_idx.sql declared `job_posted_at DESC` without an explicit
+-- NULLS LAST — Postgres defaults a DESC column to NULLS FIRST, but ClaimSemanticBatch's
+-- ORDER BY explicitly asks for `job_posted_at DESC NULLS LAST` (defensive insurance for
+-- rows predating the backfill). That mismatch means the planner can never use the index
+-- to satisfy the ORDER BY — confirmed live on prod: even with a VALID index in place,
+-- EXPLAIN still chose a Parallel Seq Scan + Sort over the whole claimable set, the exact
+-- cost the index existed to avoid. (Separately, prod's copy of this index was ALSO
+-- invalid — an interrupted CONCURRENTLY build from 2026-08-09 — but fixing the null-order
+-- mismatch is required regardless of that; a validly-built copy of 0081's definition
+-- would carry this same defect.)
+--
+-- Drop it here so 0099 can recreate it with the correct column order — DROP INDEX
+-- CONCURRENTLY needs its own no-transaction file for the same reason CREATE INDEX
+-- CONCURRENTLY does (see 0081/0097's headers): Postgres forbids CONCURRENTLY inside a
+-- transaction block, and a multi-statement migration file runs as one implicit
+-- transaction regardless of the no-transaction marker.
+--
+-- Applied to a fresh volume by initdb after 0081 (immediately superseding it); on an
+-- existing prod volume already carrying 0081, run this by hand, detached from the SSH
+-- session (systemd-run or nohup) — the same warning 0081/0097 already give.
+DROP INDEX CONCURRENTLY IF EXISTS semantic_outbox_claim_idx;

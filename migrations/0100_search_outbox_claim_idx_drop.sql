@@ -1,0 +1,17 @@
+-- migrate: no-transaction
+--
+-- 0097_search_outbox_claim_idx.sql copied 0081_semantic_outbox_claim_idx.sql's shape
+-- verbatim, including its bug: `job_posted_at DESC` without an explicit NULLS LAST.
+-- Postgres defaults a DESC column to NULLS FIRST, but ClaimSearchOutboxBatch's ORDER BY
+-- explicitly asks for `job_posted_at DESC NULLS LAST` — so the planner can never use the
+-- index to satisfy the ORDER BY. Confirmed live on prod: EXPLAIN on the real claim query
+-- shape chose a Seq Scan + Sort even with a valid copy of 0097's index in place — see
+-- 0098/0099's fix for the semantic_outbox twin of this same defect.
+--
+-- Drop it here so 0101 can recreate it with the correct column order — DROP INDEX
+-- CONCURRENTLY needs its own no-transaction file, same reasoning as 0098/0081/0097.
+--
+-- Applied to a fresh volume by initdb after 0097 (immediately superseding it); on an
+-- existing prod volume already carrying 0097, run this by hand, detached from the SSH
+-- session — the same warning 0097/0081 already give.
+DROP INDEX CONCURRENTLY IF EXISTS search_outbox_claim_idx;
