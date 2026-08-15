@@ -66,7 +66,7 @@ silent drift is that pattern's normal failure mode.
 place, so the textfile collector never reads a half-written file. The new worker needs
 the identical guarantee for a different filename.
 
-Extract it as `worker.WriteTextfile(name, body string) error` and have the existing
+Extract it as `worker.WriteTextfile(dir, name, body string) error` and have the existing
 `writeRunMetrics` call it. Duplicating a subtle atomicity guard in a second file is how
 one of the two copies eventually loses it.
 

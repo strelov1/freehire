@@ -96,7 +96,7 @@ internal/worker/metrics.go       extract the atomic write into an exported helpe
 
 `internal/worker/metrics.go:66-74` already implements the write-then-rename that keeps
 node_exporter from reading a half-written file. Extract it as
-`worker.WriteTextfile(name, body string) error` and have `writeRunMetrics` call it too,
+`worker.WriteTextfile(dir, name, body string) error` and have `writeRunMetrics` call it too,
 rather than duplicating the pattern in the new worker.
 
 `cmd/queue-metrics` follows the standard shape from `internal/worker/AGENTS.md`:
