@@ -98,6 +98,21 @@ describe('buildPlan', () => {
     expect(plan.items.map((i) => i.label)).toEqual(['Email']);
     expect(plan.required).toEqual({ answered: 0, total: 1, percent: 0 });
   });
+
+  // Svelte keys the checklist by this, and a duplicate key is a hard render error
+  // — the whole card disappears. Two questions on one form CAN carry the same
+  // label (an ATS repeats "Years" under several headings, or leaves labels off
+  // and the page falls back to the same text), so the key cannot be the label.
+  it('gives every item a key of its own, even when labels repeat', () => {
+    const plan = buildPlan([
+      field('Years', { index: 0, frame: 0, form: 0 }),
+      field('Years', { index: 1, frame: 0, form: 0 }),
+      field('Years', { index: 0, frame: 1, form: 0 }),
+    ]);
+
+    const keys = plan.items.map((i) => i.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
 });
 
 describe('markAnswered', () => {

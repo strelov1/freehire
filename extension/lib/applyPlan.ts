@@ -25,6 +25,15 @@ export interface FieldAddress {
 
 /** One question in the checklist, addressed the way a fill addresses it. */
 export interface PlanItem extends FieldAddress {
+  /**
+   * Identity for rendering. NOT the address: two questions on one form can carry
+   * the same label — an ATS repeats "Years" under several headings, and a page
+   * that labels nothing falls back to the same text for each — and a list keyed
+   * by a duplicate is a hard render error in Svelte, which takes the whole card
+   * down with it. The page's own question index, scoped by frame, is unique by
+   * construction and stable between reads of an unchanged form.
+   */
+  key: string;
   required: boolean;
   answered: boolean;
 }
@@ -103,6 +112,7 @@ export function buildPlan(fields: FramedField[]): ApplyPlan {
     // cannot act on.
     .filter((f) => f.label.trim() !== '')
     .map((f) => ({
+      key: `${f.frame}:${f.index}`,
       label: f.label,
       required: f.required,
       answered: f.value.trim() !== '',

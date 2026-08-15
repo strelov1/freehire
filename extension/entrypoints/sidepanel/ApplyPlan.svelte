@@ -43,7 +43,7 @@
   {#if items.length > 0}
     <p class="group">{heading}</p>
     <ul>
-      {#each items as item (`${item.frame}:${item.form}:${item.label}`)}
+      {#each items as item (item.key)}
         <li>
           <button
             type="button"
