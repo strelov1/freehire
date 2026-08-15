@@ -54,8 +54,12 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	cookieAuth := auth.RequireAuth(iss, testVersions)
 	keyAuth := auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries})
-	app.Get("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnect)
-	app.Post("/api/v1/auth/extension/connect", cookieAuth, h.ExtensionConnectSubmit)
+	// optionalCookie, exactly as authHandlers.register mounts it: the flow runs in a
+	// browser window, so a sessionless visitor is sent to sign in rather than refused.
+	// Mounting RequireAuth here would test a route that does not exist.
+	optionalCookie := auth.OptionalCookieAuth(iss, testVersions)
+	app.Get("/api/v1/auth/extension/connect", optionalCookie, h.ExtensionConnect)
+	app.Post("/api/v1/auth/extension/connect", optionalCookie, h.ExtensionConnectSubmit)
 	app.Get("/api/v1/me/api-keys", cookieAuth, h.ListAPIKeys)
 	app.Delete("/api/v1/me/api-keys/:id", cookieAuth, h.RevokeAPIKey)
 	app.Post("/api/v1/jobs/:slug/apply", keyAuth, th.MarkApplied)
@@ -79,20 +83,67 @@ func TestExtensionConnectEndToEnd(t *testing.T) {
 		return len(rows)
 	}
 
-	// 4.1 Session-only: no cookie and Bearer-only are both rejected; nothing minted.
-	t.Run("anonymous GET is rejected", func(t *testing.T) {
-		resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, connectPath+"?redirect_uri="+url.QueryEscape(redirectURI), nil))
+	// 4.1 Session-only, but a browser navigation: a sessionless caller is sent to sign in
+	// (Chrome's auth window has its own cookie jar, so this is the normal first run) and
+	// a Bearer is still no session — neither issues anything.
+	t.Run("anonymous GET is sent to sign in", func(t *testing.T) {
+		resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, connectPath+"?redirect_uri="+url.QueryEscape(redirectURI)+"&state=s1", nil))
+		if resp.StatusCode != fiber.StatusFound {
+			t.Fatalf("status = %d, want 302", resp.StatusCode)
+		}
+		loc, err := url.Parse(resp.Header.Get("Location"))
+		if err != nil {
+			t.Fatalf("parse Location %q: %v", resp.Header.Get("Location"), err)
+		}
+		if loc.Path != "/extension/connect" {
+			t.Fatalf("sign-in path = %q, want /extension/connect", loc.Path)
+		}
+		// The extension's parameters survive the round trip, or the visitor comes back
+		// signed in to a flow that no longer knows where to send the token.
+		if got := loc.Query().Get("redirect_uri"); got != redirectURI {
+			t.Fatalf("redirect_uri = %q, want %q", got, redirectURI)
+		}
+		if got := loc.Query().Get("state"); got != "s1" {
+			t.Fatalf("state = %q, want s1", got)
+		}
+	})
+
+	// The loop stop: back from the web app and still no session. Bouncing again would
+	// spin forever, so this says so instead.
+	t.Run("anonymous GET back from the web app is refused, not bounced", func(t *testing.T) {
+		resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, connectPath+"?redirect_uri="+url.QueryEscape(redirectURI)+"&via=web", nil))
 		if resp.StatusCode != fiber.StatusUnauthorized {
 			t.Fatalf("status = %d, want 401", resp.StatusCode)
 		}
 	})
-	t.Run("bearer-only POST is rejected and mints nothing", func(t *testing.T) {
+
+	// An unlisted redirect is refused before the sign-in bounce: a crafted link must not
+	// ride a sign-in round trip, and a 302 would tell the caller it is a valid target.
+	t.Run("anonymous GET with an unlisted redirect is rejected", func(t *testing.T) {
+		resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, connectPath+"?redirect_uri="+url.QueryEscape("https://evil.example.com/"), nil))
+		if resp.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("status = %d, want 400", resp.StatusCode)
+		}
+	})
+
+	t.Run("bearer-only POST issues nothing", func(t *testing.T) {
 		before := keyCount()
 		r := form(url.Values{"redirect_uri": {redirectURI}, "decision": {"allow"}})
 		r.Header.Set("Authorization", "Bearer some-key-value")
 		resp, _ := app.Test(r)
-		if resp.StatusCode != fiber.StatusUnauthorized {
-			t.Fatalf("status = %d, want 401", resp.StatusCode)
+		// Sent to sign in, like any other sessionless navigation — and to the web app,
+		// never to the extension's own redirect, so no token can ride along.
+		if resp.StatusCode != fiber.StatusFound {
+			t.Fatalf("status = %d, want 302", resp.StatusCode)
+		}
+		loc, err := url.Parse(resp.Header.Get("Location"))
+		if err != nil {
+			t.Fatalf("parse Location %q: %v", resp.Header.Get("Location"), err)
+		}
+		// The extension's own redirect only ever appears as a parameter to carry through
+		// the sign-in, never as the destination — and nothing rides the fragment.
+		if loc.Host != "" || loc.Path != "/extension/connect" || loc.Fragment != "" {
+			t.Fatalf("sessionless POST redirected to %q, want the sign-in page", resp.Header.Get("Location"))
 		}
 		if after := keyCount(); after != before {
 			t.Fatalf("keys changed %d -> %d, want no mint", before, after)

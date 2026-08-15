@@ -35,11 +35,10 @@ OAuth sign-in (`internal/auth/oauth/`) adds a provider registry (Google/GitHub/L
 ### Browser-extension connect flow
 
 The browser extension signs in with `chrome.identity.launchWebAuthFlow`, which
-opens `GET /api/v1/auth/extension/connect` **in the freehire origin** (so the
-session cookie is present) and waits for a redirect to
-`https://<extension-id>.chromiumapp.org/`. Handlers live in
-`internal/handler/extension_connect.go`, both **cookie-only (`RequireAuth`)** like
-key management — a leaked key must not mint further keys:
+opens `GET /api/v1/auth/extension/connect` **in the freehire origin** and waits for
+a redirect to `https://<extension-id>.chromiumapp.org/`. Handlers live in
+`internal/handler/extension_connect.go`, both **cookie-only** like key management —
+a leaked key must not mint further keys — but mounted on `optionalCookie`:
 
 - `GET` validates `redirect_uri` (`validateExtensionRedirect`: https +
   `<id>.chromiumapp.org` + `<id>` on the allowlist) and renders a consent page.
@@ -47,6 +46,17 @@ key management — a leaked key must not mint further keys:
   (`Issuer.Issue`) and 302s to `redirect_uri#token=…&state=…` — the token rides the
   **fragment**, never the query, so it is not logged or sent in `Referer`. Any
   other decision issues nothing and 302s `#error=access_denied`.
+
+**A sessionless visitor is sent to sign in, not refused.** Chrome's auth window
+does not share the browsing profile's cookie jar, so arriving with no session is
+the normal first run — and a 401 body there is what Chrome reports as
+*"Authorization page could not be loaded"*, with no way forward. Both handlers 302
+to the web app's `/extension/connect` page instead, carrying `redirect_uri` and
+`state`; that page signs the visitor in through the usual `?auth=required` dialog
+and hands the window back with `via=web`. That marker is the loop stop: back here
+with it and still no session, the endpoint answers a plain HTML "not signed in"
+page rather than bouncing again. `redirect_uri` is validated **before** the bounce,
+so a crafted target never rides a sign-in round trip.
 
 The redirect target is bounded by `EXTENSION_REDIRECT_ALLOWLIST` (comma-separated
 extension ids, parsed in `internal/config`); an empty allowlist disables the flow.

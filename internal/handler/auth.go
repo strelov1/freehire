@@ -196,12 +196,16 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	authGroup.Post("/oauth/exchange", h.OAuthExchange)
 
 	// Browser-extension sign-in ("Sign in with freehire"): the extension opens
-	// this in the freehire origin via launchWebAuthFlow. Cookie-only (RequireAuth)
-	// like key management — a leaked key must not mint further keys. GET shows the
+	// this in the freehire origin via launchWebAuthFlow. Cookie-only — a leaked key
+	// must not mint further keys — but on optionalCookie, like the OAuth callbacks,
+	// because these are browser navigations too: Chrome's auth window has its own
+	// cookie jar, so arriving with no session is the normal first run, and a 401
+	// body there is what it reports as "Authorization page could not be loaded".
+	// Each handler sends a sessionless visitor to sign in instead. GET shows the
 	// consent screen; POST issues a session JWT and redirects the token in the
 	// fragment. Both refuse any redirect outside the configured allowlist.
-	authGroup.Get("/extension/connect", mw.cookie, h.ExtensionConnect)
-	authGroup.Post("/extension/connect", mw.cookie, h.ExtensionConnectSubmit)
+	authGroup.Get("/extension/connect", mw.optionalCookie, h.ExtensionConnect)
+	authGroup.Post("/extension/connect", mw.optionalCookie, h.ExtensionConnectSubmit)
 }
 
 func (h *authHandlers) requireRecentAuth(c *fiber.Ctx) error {
