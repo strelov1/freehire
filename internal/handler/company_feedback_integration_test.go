@@ -206,6 +206,9 @@ func TestCompanyFeedbackEndpoints(t *testing.T) {
 
 	// Deleting the remaining category empties the summary.
 	delResp2 := doFeedbackRequest(t, app, fiber.MethodDelete, "/api/v1/companies/acme/feedback?feedback_type=interview", cookie, "")
+	if delResp2.StatusCode != fiber.StatusOK {
+		t.Fatalf("delete remaining category: want 200, got %d", delResp2.StatusCode)
+	}
 	raw2, _ := io.ReadAll(delResp2.Body)
 	var delEnv2 struct {
 		Data struct {

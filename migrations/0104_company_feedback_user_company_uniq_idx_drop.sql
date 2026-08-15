@@ -1,0 +1,29 @@
+-- migrate: no-transaction
+--
+-- Company feedback moves from one row per (user, company) to one row per
+-- (user, company, feedback_type): a user may leave at most one review per
+-- category (interview, culture, ...) on a given company, but may now leave a
+-- second review on the same company under a different category instead of
+-- being forced to overwrite their only one. Edit-by-resubmit still applies,
+-- scoped to the (user, company, category) triple.
+--
+-- Drop the old (user, company) arbiter here so 0105 can create the new
+-- (user, company, feedback_type) one — DROP INDEX CONCURRENTLY needs its own
+-- no-transaction file for the same reason CREATE INDEX CONCURRENTLY does (see
+-- 0086/0098's headers): Postgres forbids CONCURRENTLY inside a transaction
+-- block, and a multi-statement migration file runs as one implicit
+-- transaction regardless of the no-transaction marker. A plain DROP INDEX
+-- here would also hold an ACCESS EXCLUSIVE lock blocking all access to
+-- company_feedback for the duration.
+--
+-- APPLY TO PROD MANUALLY BEFORE DEPLOY, together with 0105, in the same
+-- maintenance window, back-to-back: UpsertCompanyFeedback's new ON CONFLICT
+-- target (0105's index) does not exist until 0105 runs, so every feedback
+-- write 42P10s in the gap between this file and that one — same ordering
+-- requirement as 0088/0089, just spread across two statements instead of
+-- one because CONCURRENTLY forces the split. Keep that gap as short as
+-- possible; on an existing prod volume, run both by hand, detached from the
+-- SSH session (systemd-run or nohup) — a CONCURRENTLY build dies with its
+-- ssh session and leaves an INVALID index behind, the same warning
+-- 0078/0081/0086 give.
+DROP INDEX CONCURRENTLY IF EXISTS public.company_feedback_user_company_uniq_idx;
