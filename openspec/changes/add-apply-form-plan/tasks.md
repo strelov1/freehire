@@ -1,15 +1,15 @@
 ## 1. The plan projection
 
-- [ ] 1.1 `extension/lib/applyPlan.ts`: `PlanItem` + `buildPlan(fields: FramedField[]): ApplyPlan` — one item per question, required/optional split, `answered` from the field's current value, and the required counter (count, total, percent). Pure; no DOM, no messaging.
-- [ ] 1.2 `applyPlan.test.ts`: a grouped question counts once, an already-answered field counts answered, the counter counts required only, a form with no required questions yields no counter, an empty form yields an empty plan.
+- [x] 1.1 `extension/lib/applyPlan.ts`: `PlanItem` + `buildPlan(fields: FramedField[]): ApplyPlan` — one item per question, required/optional split, `answered` from the field's current value, and the required counter (count, total, percent). Pure; no DOM, no messaging.
+- [x] 1.2 `applyPlan.test.ts`: a grouped question counts once, an already-answered field counts answered, the counter counts required only, a form with no required questions yields no counter, an empty form yields an empty plan.
 
 ## 2. Page-side primitives
 
-- [ ] 2.1 `extension/lib/protocol.ts`: `REVEAL_FIELD { label, frame, form, focus }` / `REVEAL_RESULT { found }` / `FORM_CHANGED`, and an optional `reveal` on `FILL_BY_LABEL`. Document each in the wire contract's own idiom.
-- [ ] 2.2 `extension/lib/form.ts`: `revealField(doc, {label, form, focus})` — find the question (reusing `findQuestion`), scroll its first control into view centred, outline it inline for ~600 ms, restore the previous inline style, focus when asked. Returns whether it found the question.
-- [ ] 2.3 `form.test.ts`: reveal finds a question by label, restores the inline style it changed, focuses only when asked, and reports `found: false` for a label the document does not carry.
-- [ ] 2.4 `extension/entrypoints/content.ts`: handle `REVEAL_FIELD`; honour `reveal` on `FILL_BY_LABEL` (reveal, then fill).
-- [ ] 2.5 `extension/entrypoints/content.ts`: one delegated `input`/`change` listener, debounced 400 ms, posting `FORM_CHANGED` to the panel. Extract the debounce so it is testable.
+- [x] 2.1 `extension/lib/protocol.ts`: `REVEAL_FIELD { label, frame, form, focus }` / `REVEAL_RESULT { found }` / `FORM_CHANGED`, and an optional `reveal` on `FILL_BY_LABEL`. Document each in the wire contract's own idiom.
+- [x] 2.2 `extension/lib/form.ts`: `revealField(doc, {label, form, focus})` — find the question (reusing `findQuestion`), scroll its first control into view centred, outline it inline for ~600 ms, restore the previous inline style, focus when asked. Returns whether it found the question.
+- [x] 2.3 `form.test.ts`: reveal finds a question by label, restores the inline style it changed, focuses only when asked, and reports `found: false` for a label the document does not carry.
+- [x] 2.4 `extension/entrypoints/content.ts`: handle `REVEAL_FIELD`; honour `reveal` on `FILL_BY_LABEL` (reveal, then fill).
+- [x] 2.5 `extension/entrypoints/content.ts`: one delegated `input`/`change` listener, debounced 400 ms, posting `FORM_CHANGED` to the panel. Extract the debounce so it is testable.
 
 ## 3. The checklist in the panel
 

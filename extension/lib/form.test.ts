@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  revealField,
   extractForm,
   extractUploads,
   matchFieldKey,
@@ -800,5 +801,66 @@ describe('matchFieldKey', () => {
     // authorized countries — so answering it would put the wrong shape of
     // value into a Yes/No control. See the Roku case above.
     expect(matchFieldKey('Are you authorized to work in this country?')).toBeNull();
+  });
+});
+
+describe('revealField', () => {
+  beforeEach(reset);
+
+  /** A form whose control carries an inline style of its own, so a reveal that
+   *  fails to restore it is visible. */
+  function labelled(label: string, style = 'color: rebeccapurple') {
+    const form = document.createElement('form');
+    const el = document.createElement('input');
+    el.type = 'text';
+    el.id = 'reveal-target';
+    el.setAttribute('style', style);
+    const lab = document.createElement('label');
+    lab.setAttribute('for', el.id);
+    lab.textContent = label;
+    form.append(lab, el);
+    document.body.append(form);
+    return el;
+  }
+
+  it('scrolls the question it names into view', () => {
+    const el = labelled('Email');
+    let scrolled: ScrollIntoViewOptions | undefined;
+    el.scrollIntoView = (opts?: boolean | ScrollIntoViewOptions) => {
+      scrolled = opts as ScrollIntoViewOptions;
+    };
+
+    expect(revealField(document, { label: 'Email' })).toBe(true);
+    expect(scrolled?.block).toBe('center');
+  });
+
+  it('reports a label the page does not carry, and touches nothing', () => {
+    labelled('Email');
+
+    expect(revealField(document, { label: 'Favourite colour' })).toBe(false);
+  });
+
+  // The outline is written onto a page freehire does not own, so it has to leave
+  // the element exactly as it found it — including an inline style of its own.
+  it('restores the inline style it borrowed', async () => {
+    const el = labelled('Email', 'color: rebeccapurple');
+    el.scrollIntoView = () => {};
+
+    revealField(document, { label: 'Email', outlineMs: 5 });
+    expect(el.getAttribute('style')).not.toBe('color: rebeccapurple');
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(el.getAttribute('style')).toBe('color: rebeccapurple');
+  });
+
+  it('focuses the control only when asked', () => {
+    const el = labelled('Email');
+    el.scrollIntoView = () => {};
+
+    revealField(document, { label: 'Email' });
+    expect(document.activeElement).not.toBe(el);
+
+    revealField(document, { label: 'Email', focus: true });
+    expect(document.activeElement).toBe(el);
   });
 });

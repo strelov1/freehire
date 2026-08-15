@@ -135,6 +135,22 @@ export interface ComboboxReply {
   committed?: string;
 }
 
+/**
+ * Which question to bring into view, addressed exactly as a fill addresses one —
+ * by label, narrowed to a `form` when the page carries more than one. `focus`
+ * hands the cursor over, which is what the panel wants when the user is being
+ * sent to a question to answer it themselves, and not what a fill wants (taking
+ * focus mid-walk would fight the user typing elsewhere).
+ *
+ * `outlineMs` is the borrowed outline's lifetime; only tests set it.
+ */
+export interface RevealRequest {
+  label: string;
+  form?: number;
+  focus?: boolean;
+  outlineMs?: number;
+}
+
 /** Messages passed inside the extension via chrome.runtime. */
 export type RuntimeMessage =
   | { kind: 'GET_PAGE_SNAPSHOT' }
@@ -146,8 +162,20 @@ export type RuntimeMessage =
   // by whichever frame replied first — in practice the empty one.
   | { kind: 'GET_FRAMED_FORM' }
   | { kind: 'FRAMED_FORM'; fields: FramedField[]; uploads: FramedUpload[] }
-  | { kind: 'FILL_BY_LABEL'; fills: LabelFill[] }
+  // `reveal` makes a fill visible: the page scrolls to the question and outlines
+  // it as the value lands, which is how the panel's walk is watched. Absent for
+  // the agent's own tool-driven fills, which must stay silent.
+  | { kind: 'FILL_BY_LABEL'; fills: LabelFill[]; reveal?: boolean }
   | { kind: 'FILL_OUTCOMES'; outcomes: FillOutcome[] }
+  // Sending the user to one question — the panel's checklist acting on an item
+  // it could not answer. `found` is false when the page no longer carries it, so
+  // the panel can say so rather than appear to do nothing.
+  | { kind: 'REVEAL_FIELD'; request: RevealRequest }
+  | { kind: 'REVEAL_RESULT'; found: boolean }
+  // The page telling the panel that its form changed — the user typed an answer
+  // themselves. Carries nothing: the panel re-reads the form, which is the only
+  // account that cannot drift.
+  | { kind: 'FORM_CHANGED' }
   // Driving a custom-widget combobox: one step, offered to every frame, since
   // only the frame holding the widget can answer for it.
   | { kind: 'COMBOBOX_STEP'; step: ComboboxStep }
