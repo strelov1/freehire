@@ -2,7 +2,7 @@
   "Alert": 1,
   "Avatar": 0,
   "Badge": 14,
-  "Button": 60,
+  "Button": 62,
   "Card": 1,
   "Chip": 1,
   "ConfirmDialog": 13,
@@ -22,6 +22,6 @@
   "Skeleton": 1,
   "Table": 6,
   "Tabs": 0,
-  "TabStrip": 5,
+  "TabStrip": 4,
   "Tooltip": 0
 }
