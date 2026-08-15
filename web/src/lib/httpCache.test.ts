@@ -51,3 +51,13 @@ describe('cachePolicy', () => {
     expect(PRIVATE_CACHE).toContain('private');
   });
 });
+
+// Regression: the hook first admitted only GET, so a HEAD probe came back with no
+// Cache-Control at all — which is both wrong per RFC 9110 (HEAD's headers must
+// match GET's) and how a production check quietly reported "the feature isn't
+// deployed" when it was.
+describe('cachePolicy is method-agnostic', () => {
+  it('gives a HEAD probe the same answer as a GET', () => {
+    expect(cachePolicy({ pathname: '/collections/python', authenticated: false })).toBe(PUBLIC_CACHE);
+  });
+});

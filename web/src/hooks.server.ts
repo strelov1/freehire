@@ -28,7 +28,10 @@ if (env.PUBLIC_SENTRY_DSN) {
 // their own semantics and are none of this hook's business.
 const cacheControl: Handle = async ({ event, resolve }) => {
   const response = await resolve(event);
-  if (event.request.method !== 'GET') return response;
+  // HEAD too: it is the same read, and RFC 9110 requires its headers to match what
+  // GET would return — a crawler or monitor probing with HEAD must see the same
+  // cache policy, not none at all.
+  if (event.request.method !== 'GET' && event.request.method !== 'HEAD') return response;
   if (response.headers.has('cache-control')) return response;
   if (!response.headers.get('content-type')?.includes('text/html')) return response;
 
