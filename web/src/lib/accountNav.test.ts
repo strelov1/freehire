@@ -67,7 +67,7 @@ describe('visibleAccountNav', () => {
     expect(hrefs).toHaveLength(accountNav.length);
   });
 
-  it('shows Market Pulse to everyone, gate-free (the "Beta" pill is cosmetic only)', () => {
+  it('shows Market Pulse to everyone, gate-free', () => {
     for (const [mod, beta] of [
       [false, false],
       [true, false],

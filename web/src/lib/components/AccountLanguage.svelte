@@ -115,7 +115,10 @@
   }
 </script>
 
-<section class="rounded-xl border border-border bg-card p-4">
+<!-- One account setting's row: the heading, its save state, and the control. The card
+     around it belongs to the caller, which groups this with the other account settings
+     rather than boxing each one on its own. -->
+<div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
     <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
       <Globe class="size-4.5" aria-hidden="true" />
@@ -136,7 +139,7 @@
     {/if}
   </div>
 
-  <div class="relative mt-4 w-full max-w-sm border-t border-border pt-4">
+  <div class="relative w-full max-w-sm">
     <div class="relative">
       <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center">
         <CountryFlag code={selected.flag} label={selected.label} class="text-base" />
@@ -196,4 +199,4 @@
       </ul>
     {/if}
   </div>
-</section>
+</div>

@@ -19,9 +19,8 @@ export const accountNav = [
   // skills is moving, week over week. A check-in section, not a daily one — sits
   // with the occasional group below rather than the four everyday sections above.
   // Open to everyone now that the history is backfilled (cmd/backfill-skill-history)
-  // rather than starting thin; `beta` just keeps the "Beta" pill as a still-new-
-  // feature marker without gating access (my/+layout.svelte renders it off this flag).
-  { href: '/my/market-pulse', label: 'Market Pulse', beta: true },
+  // rather than starting thin.
+  { href: '/my/market-pulse', label: 'Market Pulse' },
   // The agent: open to every signed-in user. It runs in our backend, and unlike the CV
   // builder below, nothing meters its spend yet.
   { href: '/my/assistant', label: 'Agent' },

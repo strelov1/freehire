@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/location"
 	"github.com/strelov1/freehire/internal/mailclassify"
 	"github.com/strelov1/freehire/internal/roletag"
+	"github.com/strelov1/freehire/internal/skilltag"
 	"github.com/strelov1/freehire/internal/sources"
 	"github.com/strelov1/freehire/internal/userjob"
 	"github.com/strelov1/freehire/internal/vocab"
@@ -361,6 +362,11 @@ func genVocab() string {
 	// Role slug→label catalog for the role picker — the source of truth for role
 	// labels, derived from the roletag dictionary (composite + named roles).
 	b.WriteString(emitMap("RoleLabels", "ROLE_LABELS", roletag.Catalog()))
+	// Skill slug→display-name catalog. The skills facet is a slug vocabulary, and every
+	// surface showing one to a reader had the same choice to make: print "postgresql" or
+	// invent a prettifier. Generated from the skilltag dictionary that owns the canonical
+	// set, so one spelling serves them all and a new skill cannot arrive unlabelled.
+	b.WriteString(emitMap("SkillLabels", "SKILL_LABELS", skilltag.Labels()))
 	// Role slug→shorthand-aliases for the picker's search: the same curated terms
 	// used to tag titles, so typing "swe"/"sre"/"devrel" finds the role.
 	b.WriteString(emitMapOfSlices("RoleAliases", "ROLE_ALIASES", roleAliases()))

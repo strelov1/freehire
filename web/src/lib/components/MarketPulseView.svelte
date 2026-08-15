@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Search } from '@lucide/svelte';
   import { api, type SkillPulse } from '$lib/api';
+  import { skillLabel } from '$lib/facets';
   import { buildSparkline } from '$lib/skillPulseSparkline';
   import { trendDotClass } from '$lib/skillPulseFormat';
   import { Card, Button } from '$lib/ui';
@@ -18,12 +19,19 @@
 
   // A profile can hold up to 200 skills (see userprofile.maxSkills), so once a
   // caller has more than a handful of cards, finding one by scrolling stops
-  // scaling — a plain substring filter over the skill name.
+  // scaling — a plain substring filter over the skill name. Matched against both
+  // the slug and the display label, so typing what is on the card works and so does
+  // typing the slug ("nodejs" finds the "Node.js" card).
   let query = $state('');
+  // Kept as typed for the "no match" message, lowercased only for the comparison.
   const trimmedQuery = $derived(query.trim());
-  const filtered = $derived(
-    trimmedQuery ? data.filter((s) => s.skill.toLowerCase().includes(trimmedQuery.toLowerCase())) : data,
-  );
+  const matchesQuery = (s: SkillPulse) => {
+    const needle = trimmedQuery.toLowerCase();
+    return (
+      s.skill.toLowerCase().includes(needle) || skillLabel(s.skill).toLowerCase().includes(needle)
+    );
+  };
+  const filtered = $derived(trimmedQuery ? data.filter(matchesQuery) : data);
 
   $effect(() => {
     status = 'loading';
@@ -77,7 +85,7 @@
           <a href={resolve('/my/market-pulse/[skill]', { skill: skill.skill })}>
             <Card class="flex flex-col gap-3 p-4 transition-colors hover:border-brand/50 hover:bg-accent/40">
               <div class="flex items-start justify-between gap-2">
-                <span class="text-sm font-medium">{skill.skill}</span>
+                <span class="text-sm font-medium">{skillLabel(skill.skill)}</span>
                 <SkillDeltaBadge pct={skill.change_pct} />
               </div>
               <div class="flex items-baseline gap-1.5">
@@ -88,7 +96,7 @@
                 viewBox="0 0 {model.width} {model.height}"
                 class="h-8 w-full"
                 role="img"
-                aria-label="{skill.skill} demand over the retained history"
+                aria-label="{skillLabel(skill.skill)} demand over the retained history"
               >
                 {#if model.points}
                   <polyline

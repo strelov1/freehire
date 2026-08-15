@@ -105,13 +105,6 @@
             <Icon class="size-4 shrink-0" />
             {#if !iconOnly}
               {item.label}
-              {#if 'beta' in item && item.beta}
-                <span
-                  class="ml-auto rounded-full bg-brand-muted px-1.5 py-0.5 text-[10px] font-medium uppercase leading-none tracking-wide text-brand-strong"
-                >
-                  Beta
-                </span>
-              {/if}
             {/if}
           </a>
         {/each}

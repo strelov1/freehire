@@ -69,7 +69,10 @@
   }
 </script>
 
-<section class="rounded-xl border border-border bg-card p-4">
+<!-- One account setting's row: the heading, its save state, and the control. The card
+     around it belongs to the caller, which groups this with the other account settings
+     rather than boxing each one on its own. -->
+<div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
     <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
       <Clock class="size-4.5" aria-hidden="true" />
@@ -90,18 +93,16 @@
     {/if}
   </div>
 
-  <div class="mt-4 border-t border-border pt-4">
-    <select
-      bind:value
-      onchange={save}
-      class="w-full max-w-sm rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {#if !value}
-        <option value="" disabled selected>Select a timezone</option>
-      {/if}
-      {#each ZONES as zone (zone)}
-        <option value={zone}>{zone}</option>
-      {/each}
-    </select>
-  </div>
-</section>
+  <select
+    bind:value
+    onchange={save}
+    class="w-full max-w-sm rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  >
+    {#if !value}
+      <option value="" disabled selected>Select a timezone</option>
+    {/if}
+    {#each ZONES as zone (zone)}
+      <option value={zone}>{zone}</option>
+    {/each}
+  </select>
+</div>

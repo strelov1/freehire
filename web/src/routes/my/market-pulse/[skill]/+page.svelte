@@ -4,6 +4,7 @@
   import { resolve } from '$app/paths';
   import { api, type SkillPulse } from '$lib/api';
   import { isAuthenticated } from '$lib/auth.svelte';
+  import { skillLabel } from '$lib/facets';
   import { buildSkillDetailChart } from '$lib/skillDetailChart';
   import { pickTickIndices, formatCount } from '$lib/activityChart';
   import { Button } from '$lib/ui';
@@ -33,6 +34,9 @@
   });
 
   const skill = $derived(data.find((s) => s.skill === page.params.skill) ?? null);
+  // The route param is the canonical slug (that is what the card grid links); the
+  // heading, title and the "no trend" message name the skill the way a reader writes it.
+  const label = $derived(skillLabel(page.params.skill ?? ''));
   const model = $derived(skill ? buildSkillDetailChart(skill.series) : null);
   const ticks = $derived(model ? pickTickIndices(model.points.length) : []);
   // Points are evenly spaced from the first point's x — reused as the left/right
@@ -87,7 +91,7 @@
 </script>
 
 <svelte:head>
-  <title>{page.params.skill} · Market pulse — freehire</title>
+  <title>{label} · Market pulse — freehire</title>
 </svelte:head>
 
 {#if !isAuthenticated()}
@@ -107,7 +111,7 @@
       <States state="error" message="Couldn't load this skill's trend." />
     {:else if !skill || !model}
       <div class="flex flex-col items-center gap-3 py-16 text-center">
-        <p class="text-sm font-medium text-foreground">No trend for "{page.params.skill}"</p>
+        <p class="text-sm font-medium text-foreground">No trend for "{label}"</p>
         <p class="max-w-sm text-sm text-muted-foreground">
           Either it isn't one of your profile skills, or it hasn't shown up in an open role yet.
         </p>
@@ -116,7 +120,7 @@
     {:else}
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight">{skill.skill}</h1>
+          <h1 class="text-2xl font-semibold tracking-tight">{label}</h1>
           <div class="mt-1 flex items-baseline gap-2">
             <span class="text-3xl font-semibold tabular-nums">{skill.open_count}</span>
             <span class="text-sm text-muted-foreground">open roles</span>
@@ -128,7 +132,7 @@
       <div
         class="relative rounded-lg border border-border p-4"
         role="img"
-        aria-label="{skill.skill} demand over the retained history"
+        aria-label="{label} demand over the retained history"
         onpointermove={onMove}
         onpointerleave={() => (hovered = null)}
       >
