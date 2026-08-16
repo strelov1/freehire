@@ -290,14 +290,17 @@ func TestEnrichmentQueue(t *testing.T) {
 		}
 		id := claimed[0].ID
 
-		first, err := q.RecordEnrichmentFailure(ctx, RecordEnrichmentFailureParams{LastError: "boom", MaxAttempts: 2, ID: id})
+		// PostingAtFault: the attempt ceiling only governs failures the posting caused.
+		first, err := q.RecordEnrichmentFailure(ctx, RecordEnrichmentFailureParams{
+			LastError: "boom", MaxAttempts: 2, PostingAtFault: true, UpstreamGraceDays: 14, ID: id})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if first.Attempts != 1 || first.FailedAt.Valid {
 			t.Errorf("after 1st failure: attempts=%d failed=%v, want 1/not-dead", first.Attempts, first.FailedAt.Valid)
 		}
-		second, err := q.RecordEnrichmentFailure(ctx, RecordEnrichmentFailureParams{LastError: "boom", MaxAttempts: 2, ID: id})
+		second, err := q.RecordEnrichmentFailure(ctx, RecordEnrichmentFailureParams{
+			LastError: "boom", MaxAttempts: 2, PostingAtFault: true, UpstreamGraceDays: 14, ID: id})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -88,11 +88,13 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	return tx.Commit(ctx)
 }
 
-func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (bool, error) {
+func (s *dbStore) Fail(ctx context.Context, outboxID int64, errMsg string, policy enrich.FailurePolicy) (bool, error) {
 	row, err := s.q.RecordEnrichmentFailure(ctx, db.RecordEnrichmentFailureParams{
-		LastError:   errMsg,
-		MaxAttempts: int32(maxAttempts),
-		ID:          outboxID,
+		LastError:         errMsg,
+		PostingAtFault:    policy.PostingAtFault,
+		MaxAttempts:       int32(policy.MaxAttempts),
+		UpstreamGraceDays: int32(policy.UpstreamGraceDays),
+		ID:                outboxID,
 	})
 	if err != nil {
 		return false, err

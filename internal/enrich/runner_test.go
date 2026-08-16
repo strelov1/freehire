@@ -76,17 +76,18 @@ func (s *fakeStore) Complete(_ context.Context, entry Claimed, _ json.RawMessage
 	return nil
 }
 
-func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, maxAttempts int) (bool, error) {
+func (s *fakeStore) Fail(_ context.Context, outboxID int64, _ string, policy FailurePolicy) (bool, error) {
 	s.mu.Lock()
 	s.failed = append(s.failed, outboxID)
-	s.failMax = append(s.failMax, maxAttempts)
+	s.failMax = append(s.failMax, policy.MaxAttempts)
 	s.mu.Unlock()
-	// maxAttempts == 1 forces immediate dead-letter (the corrupted-row path).
-	return s.deadFor[outboxID] || maxAttempts == 1, nil
+	// MaxAttempts == 1 forces immediate dead-letter (the corrupted-row path), and only
+	// when the posting is at fault — the attempt ceiling does not apply otherwise.
+	return s.deadFor[outboxID] || (policy.PostingAtFault && policy.MaxAttempts == 1), nil
 }
 
 func opts() RunOptions {
-	return RunOptions{TargetVersion: Version, Concurrency: 4, LeaseSeconds: 300, MaxAttempts: 3}
+	return RunOptions{TargetVersion: Version, Concurrency: 4, LeaseSeconds: 300, MaxAttempts: 3, UpstreamGraceDays: 14}
 }
 
 // --- tests ------------------------------------------------------------------

@@ -33,8 +33,19 @@ type Store interface {
 	// Complete writes the enrichment payload + provenance stamp to the entry's job
 	// and deletes the outbox entry, atomically.
 	Complete(ctx context.Context, entry Claimed, payload json.RawMessage) error
-	// Fail records a failed attempt; it returns whether the entry was dead-lettered.
-	Fail(ctx context.Context, outboxID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// Fail records a failed attempt under the given policy; it returns whether the
+	// entry was dead-lettered.
+	Fail(ctx context.Context, outboxID int64, errMsg string, policy FailurePolicy) (deadLettered bool, err error)
+}
+
+// FailurePolicy is how one failure should be bounded. Which of the two bounds applies
+// is decided by PostingAtFault, and the two are not interchangeable: MaxAttempts counts
+// tries at a task that may be impossible, UpstreamGraceDays waits out a dependency that
+// is expected back. See postingAtFault and RecordEnrichmentFailure.
+type FailurePolicy struct {
+	PostingAtFault    bool
+	MaxAttempts       int
+	UpstreamGraceDays int
 }
 
 // RunOptions are the per-run knobs.
@@ -45,7 +56,10 @@ type RunOptions struct {
 	// (≈ one LLM call), so an overlapping run can't reclaim a still-in-flight entry.
 	Concurrency  int
 	LeaseSeconds int
-	MaxAttempts  int
+	// MaxAttempts bounds failures the posting caused; UpstreamGraceDays bounds every
+	// other failure, by the entry's queue age rather than by tries.
+	MaxAttempts       int
+	UpstreamGraceDays int
 }
 
 // Stats reports what a run did.
@@ -165,8 +179,10 @@ func (rn *run) enrich(ctx context.Context, job JobInput) (Enrichment, error) {
 		enr.Sanitize()
 		if err := enr.Validate(); err != nil {
 			// Sanitize already dropped out-of-vocab values, so a Validate failure
-			// is a structural problem a retry won't fix.
-			return Enrichment{}, err
+			// is a structural problem a retry won't fix. Wrapped so postingAtFault
+			// can recognise it — Validate itself stays a plain error, since the
+			// Sanitize+Validate gate has callers outside this runner.
+			return Enrichment{}, fmt.Errorf("%w: %w", errInvalidPayload, err)
 		}
 		return enr, nil
 	}
@@ -180,8 +196,18 @@ func (rn *run) fail(ctx context.Context, entry Claimed, cause error) outbox.Outc
 // failN records a failure with an explicit attempt ceiling. fail uses the run's
 // configured MaxAttempts; the corrupted-row path passes 1 to force an immediate
 // dead-letter (an unreadable row will never succeed on retry).
+//
+// The ceiling only applies when the posting is at fault — postingAtFault decides that
+// from the cause, so a caller cannot forget to. Everything else is bounded by the
+// entry's queue age instead, which is what lets an outage of any duration cost nothing
+// permanently.
 func (rn *run) failN(ctx context.Context, entry Claimed, cause error, maxAttempts int) outbox.Outcome {
-	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), maxAttempts)
+	policy := FailurePolicy{
+		PostingAtFault:    postingAtFault(cause),
+		MaxAttempts:       maxAttempts,
+		UpstreamGraceDays: rn.opt.UpstreamGraceDays,
+	}
+	dead, err := rn.store.Fail(ctx, entry.OutboxID, cause.Error(), policy)
 	if err != nil {
 		// The attempt still counts as a failure below, but log the cause: a
 		// bookkeeping outage (e.g. the DB going unreachable mid-drain) would

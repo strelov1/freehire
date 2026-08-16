@@ -96,6 +96,16 @@ func TestLoadEnrich_defaultsAndOverrides(t *testing.T) {
 	if got.Concurrency != 4 || got.LeaseSeconds != 300 || got.MaxAttempts != 3 {
 		t.Errorf("defaults wrong: concurrency=%d lease=%d max=%d", got.Concurrency, got.LeaseSeconds, got.MaxAttempts)
 	}
+	// The grace window bounds failures that are not the posting's fault. It must
+	// comfortably outlast a gateway outage: both July 2026 LiteLLM outages ran for
+	// days, and an entry at the head of the queue accrues an attempt every lease
+	// (300s), so an attempt ceiling never measured the right thing.
+	if got.UpstreamGraceDays != 14 {
+		t.Errorf("upstream grace default = %d days, want 14", got.UpstreamGraceDays)
+	}
+	if float64(got.UpstreamGraceDays)*24 <= 48 {
+		t.Errorf("upstream grace = %dd, too short to outlast a multi-day gateway outage", got.UpstreamGraceDays)
+	}
 
 	t.Setenv("ENRICH_CONCURRENCY", "8")
 	got, err = LoadEnrich()

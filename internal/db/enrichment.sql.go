@@ -118,17 +118,31 @@ UPDATE enrichment_outbox
 SET attempts   = attempts + 1,
     last_error = $1,
     failed_at  = CASE
-                     WHEN attempts + 1 >= $2::int THEN now()
-                     ELSE NULL
+                     WHEN $2::boolean
+                         THEN CASE WHEN attempts + 1 >= $3::int THEN now() END
+                     ELSE CASE
+                              -- A non-positive window means "never bury on age". Left
+                              -- as an arithmetic comparison it would mean the opposite:
+                              -- created_at < now() - 0 is true for every row, so a
+                              -- caller that forgot to set the window would dead-letter
+                              -- everything on its first failure — precisely the bug
+                              -- this statement exists to fix. A misconfiguration must
+                              -- cost retries, not postings.
+                              WHEN $4::int > 0
+                                  AND created_at < now() - make_interval(days => $4::int)
+                                  THEN now()
+                          END
                  END
-WHERE id = $3
+WHERE id = $5
 RETURNING attempts, failed_at
 `
 
 type RecordEnrichmentFailureParams struct {
-	LastError   string `json:"last_error"`
-	MaxAttempts int32  `json:"max_attempts"`
-	ID          int64  `json:"id"`
+	LastError         string `json:"last_error"`
+	PostingAtFault    bool   `json:"posting_at_fault"`
+	MaxAttempts       int32  `json:"max_attempts"`
+	UpstreamGraceDays int32  `json:"upstream_grace_days"`
+	ID                int64  `json:"id"`
 }
 
 type RecordEnrichmentFailureRow struct {
@@ -136,12 +150,34 @@ type RecordEnrichmentFailureRow struct {
 	FailedAt pgtype.Timestamptz `json:"failed_at"`
 }
 
-// Count a failed attempt: bump attempts, record the error, and dead-letter (set
-// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
-// left in place — its expiry gates the retry to a later run and doubles as the
-// crash reaper, so a failed entry is never reprocessed within the same run.
+// Count a failed attempt: bump attempts, record the error, and decide whether to
+// dead-letter (set failed_at). The lease (claimed_at) is intentionally left in place —
+// its expiry gates the retry to a later run and doubles as the crash reaper, so a
+// failed entry is never reprocessed within the same run.
+//
+// Which bound applies depends on who is at fault (internal/enrich.postingAtFault):
+//
+//	posting_at_fault  → the attempt ceiling. The posting cannot be enriched, so each
+//	                    try is a real try at something that may be impossible.
+//	otherwise         → the entry's queue age. A gateway error says nothing about the
+//	                    posting, and an attempt counter does not measure how long an
+//	                    outage lasts: a claimed entry is re-claimable once its lease
+//	                    expires, so an entry at the head of the queue accrues roughly
+//	                    twelve attempts an hour while the gateway is down. Three
+//	                    attempts is fifteen minutes. Both July 2026 LiteLLM outages ran
+//	                    for days and permanently dead-lettered 172,875 enrichable
+//	                    postings between them — every one of them then invisible to
+//	                    search, since an unenriched job has no category to index.
+//
+// The age bound still exists so an entry nothing can ever serve stops eventually.
 func (q *Queries) RecordEnrichmentFailure(ctx context.Context, arg RecordEnrichmentFailureParams) (RecordEnrichmentFailureRow, error) {
-	row := q.db.QueryRow(ctx, recordEnrichmentFailure, arg.LastError, arg.MaxAttempts, arg.ID)
+	row := q.db.QueryRow(ctx, recordEnrichmentFailure,
+		arg.LastError,
+		arg.PostingAtFault,
+		arg.MaxAttempts,
+		arg.UpstreamGraceDays,
+		arg.ID,
+	)
 	var i RecordEnrichmentFailureRow
 	err := row.Scan(&i.Attempts, &i.FailedAt)
 	return i, err

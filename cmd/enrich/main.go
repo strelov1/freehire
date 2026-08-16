@@ -50,10 +50,11 @@ func run() int {
 	runner := enrich.Runner{Provider: provider, Store: newDBStore(pool)}
 
 	stats, err := runner.Run(ctx, enrich.RunOptions{
-		TargetVersion: enrich.Version,
-		Concurrency:   ecfg.Concurrency,
-		LeaseSeconds:  ecfg.LeaseSeconds,
-		MaxAttempts:   ecfg.MaxAttempts,
+		TargetVersion:     enrich.Version,
+		Concurrency:       ecfg.Concurrency,
+		LeaseSeconds:      ecfg.LeaseSeconds,
+		MaxAttempts:       ecfg.MaxAttempts,
+		UpstreamGraceDays: ecfg.UpstreamGraceDays,
 	})
 	if err != nil {
 		log.Printf("enrich: %v", err)

@@ -2701,10 +2701,26 @@ type Querier interface {
 	// a fact worth keeping, it simply has no application to be paired with and never enters
 	// the response ratio, which counts only replies that answer an `applied` event.
 	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
-	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
-	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
-	// left in place — its expiry gates the retry to a later run and doubles as the
-	// crash reaper, so a failed entry is never reprocessed within the same run.
+	// Count a failed attempt: bump attempts, record the error, and decide whether to
+	// dead-letter (set failed_at). The lease (claimed_at) is intentionally left in place —
+	// its expiry gates the retry to a later run and doubles as the crash reaper, so a
+	// failed entry is never reprocessed within the same run.
+	//
+	// Which bound applies depends on who is at fault (internal/enrich.postingAtFault):
+	//
+	//   posting_at_fault  → the attempt ceiling. The posting cannot be enriched, so each
+	//                       try is a real try at something that may be impossible.
+	//   otherwise         → the entry's queue age. A gateway error says nothing about the
+	//                       posting, and an attempt counter does not measure how long an
+	//                       outage lasts: a claimed entry is re-claimable once its lease
+	//                       expires, so an entry at the head of the queue accrues roughly
+	//                       twelve attempts an hour while the gateway is down. Three
+	//                       attempts is fifteen minutes. Both July 2026 LiteLLM outages ran
+	//                       for days and permanently dead-lettered 172,875 enrichable
+	//                       postings between them — every one of them then invisible to
+	//                       search, since an unenriched job has no category to index.
+	//
+	// The age bound still exists so an entry nothing can ever serve stops eventually.
 	RecordEnrichmentFailure(ctx context.Context, arg RecordEnrichmentFailureParams) (RecordEnrichmentFailureRow, error)
 	// Record what a grant covers, as the provider reported it. Replacing rather than unioning,
 	// for the reason above: a list that only grows cannot express a scope the candidate took
