@@ -45,7 +45,7 @@
           <Languages class="size-3.5" />Languages
         </h3>
         <div class="flex flex-wrap gap-1.5">
-          {#each languages as lang (lang)}
+          {#each languages as lang, i (i)}
             <Chip>{lang}</Chip>
           {/each}
         </div>

@@ -46,7 +46,7 @@
           <Award class="size-4" />Certifications
         </h2>
         <div class="flex flex-wrap gap-1.5">
-          {#each certifications as cert (cert)}
+          {#each certifications as cert, i (i)}
             <Chip>{cert}</Chip>
           {/each}
         </div>

@@ -155,6 +155,7 @@
   async function deleteCv() {
     deletingCv = true;
     resumeError = null;
+    resumeNote = null;
     try {
       await api.deleteResume();
       onCvDeleted?.();

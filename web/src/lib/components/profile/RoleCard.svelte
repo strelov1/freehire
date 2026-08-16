@@ -28,6 +28,10 @@
   async function toggleSpecialization(value: string) {
     if (specBusy) return;
     const has = profile.specializations.includes(value);
+    if (has && profile.specializations.length === 1) {
+      specError = 'You need at least one role — add another before removing this one.';
+      return;
+    }
     if (!has && profile.specializations.length >= MAX_SPECIALIZATIONS) {
       specError = `You can pick at most ${MAX_SPECIALIZATIONS} specializations.`;
       return;

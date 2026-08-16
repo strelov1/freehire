@@ -33,10 +33,13 @@
   // remount, not a live reseed that would clobber an in-progress edit.
   // svelte-ignore state_referenced_locally
   let workModes = $state.raw<string[]>(value?.work_modes ?? []);
+  // Optional chaining past `value?.`: the block is stored whole as JSONB and echoed back
+  // verbatim (see internal/userprofile/location.go), so a row written before a sub-object
+  // existed in the schema can still lack it entirely.
   // svelte-ignore state_referenced_locally
-  let remoteRegions = $state.raw<string[]>(value?.remote.regions ?? []);
+  let remoteRegions = $state.raw<string[]>(value?.remote?.regions ?? []);
   // svelte-ignore state_referenced_locally
-  let remoteCountries = $state.raw<string[]>(value?.remote.countries ?? []);
+  let remoteCountries = $state.raw<string[]>(value?.remote?.countries ?? []);
   // Where the user IS. Seeded from what they stated, falling back to what their CV was read
   // to say — so someone who has uploaded a CV confirms a fact rather than retyping it. The
   // derivation only ever fills an UNSTATED field: a saved base always wins, and an ambiguous
@@ -46,17 +49,17 @@
   const derivedCountry = (derived0?.countries.length === 1 ? derived0.countries[0] : '') ?? '';
   const derivedCity = (derived0?.cities.length === 1 ? derived0.cities[0] : '') ?? '';
   // svelte-ignore state_referenced_locally
-  let baseCountry = $state<string>(value?.base.country ?? derivedCountry);
+  let baseCountry = $state<string>(value?.base?.country ?? derivedCountry);
   // svelte-ignore state_referenced_locally
-  let baseCity = $state<string>(value?.base.city ?? derivedCity);
+  let baseCity = $state<string>(value?.base?.city ?? derivedCity);
   // svelte-ignore state_referenced_locally
-  let relocOpen = $state<boolean>(value?.relocation.open ?? false);
+  let relocOpen = $state<boolean>(value?.relocation?.open ?? false);
   // svelte-ignore state_referenced_locally
-  let relocRegions = $state.raw<string[]>(value?.relocation.regions ?? []);
+  let relocRegions = $state.raw<string[]>(value?.relocation?.regions ?? []);
   // svelte-ignore state_referenced_locally
-  let relocCountries = $state.raw<string[]>(value?.relocation.countries ?? []);
+  let relocCountries = $state.raw<string[]>(value?.relocation?.countries ?? []);
   // svelte-ignore state_referenced_locally
-  let relocCities = $state.raw<string[]>(value?.relocation.cities ?? []);
+  let relocCities = $state.raw<string[]>(value?.relocation?.cities ?? []);
 
   // "Where you're based": one combined search field (city + country in one pick, like a
   // maps-style autocomplete) instead of a country dropdown beside a separate city search

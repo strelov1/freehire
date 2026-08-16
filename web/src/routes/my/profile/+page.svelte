@@ -311,7 +311,14 @@
       onSaved={() => void resumeStore.refresh()}
     />
   {:else if view === 'location'}
-    <LocationCard {profile} onProfileChanged={handleSaved} />
+    <!-- LocationPreferencesFields seeds its local edit state once from `profile`, on the
+         explicit contract that the caller remounts it on a genuinely different value (see
+         its own doc comment) — profileStore.refresh() (CV delete/upload) can replace
+         `profile` while this view is open, so key it the same way the Profile view keys
+         ProfileForm. -->
+    {#key profile.updated_at}
+      <LocationCard {profile} onProfileChanged={handleSaved} />
+    {/key}
   {:else if view === 'skills'}
     <SkillsCard />
   {:else if view === 'experience'}
