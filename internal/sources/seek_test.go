@@ -108,7 +108,7 @@ func seekTestJobID(body any) string {
 
 func TestSeekUnknownMarketFailsTheBoard(t *testing.T) {
 	fake := &seekFake{}
-	_, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{
+	_, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{
 		Company: "SEEK Nowhere", Region: "xx", Board: "6287",
 	})
 	if err == nil {
@@ -124,7 +124,7 @@ func TestSeekUnknownMarketFailsTheBoard(t *testing.T) {
 
 func TestSeekSearchURLCarriesMarketAndSlice(t *testing.T) {
 	fake := &seekFake{searchByPage: map[int][]seekPosting{1: {seekPost("1", "Dev", "Co")}}}
-	if _, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"}); err != nil {
+	if _, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(fake.searchURLs) == 0 {
@@ -163,7 +163,7 @@ func TestSeekWalksPagesUntilOneAddsNothingNew(t *testing.T) {
 		3: {seekPost("3", "C", "Co")},
 		4: {seekPost("4", "Never reached", "Co")},
 	}}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestSeekWalkIsBackstoppedByAPageCeiling(t *testing.T) {
 	for page := 1; page <= 50; page++ {
 		fake.searchByPage[page] = []seekPosting{seekPost(strconv.Itoa(page), "Endless", "Co")}
 	}
-	if _, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"}); err != nil {
+	if _, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	if len(fake.searchURLs) >= 50 {
@@ -203,7 +203,7 @@ func TestSeekFirstPageFailureFailsTheBoard(t *testing.T) {
 		searchByPage: map[int][]seekPosting{1: {seekPost("1", "A", "Co")}},
 		searchErr:    map[int]bool{1: true},
 	}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
 	if err == nil {
 		t.Fatalf("first page failing: want a board-level error, got %d jobs", len(jobs))
 	}
@@ -214,7 +214,7 @@ func TestSeekLaterPageFailureKeepsWhatItGathered(t *testing.T) {
 		searchByPage: map[int][]seekPosting{1: {seekPost("1", "A", "Co"), seekPost("2", "B", "Co")}},
 		searchErr:    map[int]bool{2: true},
 	}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6287"})
 	if err != nil {
 		t.Fatalf("later page failing must not fail the board: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestSeekMapsListingFieldsToAJob(t *testing.T) {
 	p.Locations = []seekLocation{{Label: "Smithfield, Sydney NSW", CountryCode: "AU"}}
 
 	fake := &seekFake{searchByPage: map[int][]seekPosting{1: {p}}}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestSeekResolvesEmployerPerPosting(t *testing.T) {
 	fake := &seekFake{searchByPage: map[int][]seekPosting{
 		1: {profiled, advertiserOnly, placeholder, nameless, noID},
 	}}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestSeekRemoteFlagTracksWorkMode(t *testing.T) {
 	onsite.WorkArrangements = seekArrangements("On-site")
 
 	fake := &seekFake{searchByPage: map[int][]seekPosting{1: {remote, onsite}}}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestSeekSalaryLabelIsFoldedIntoTheDescription(t *testing.T) {
 	silent := seekPost("2", "Silent", "Co")
 
 	fake := &seekFake{searchByPage: map[int][]seekPosting{1: {paid, silent}}}
-	jobs, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
+	jobs, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "au", Board: "6290"})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestSeekFetchNewHydratesOnlyPostingsTheCatalogueLacks(t *testing.T) {
 		searchByPage: map[int][]seekPosting{1: {fresh, known}},
 		detailByID:   map[string]string{"101": "<p>Full body</p>", "202": "<p>Should never be asked for</p>"},
 	}
-	src, ok := NewSeek(fake).(HydratingSource)
+	src, ok := NewSeek(fake, fake).(HydratingSource)
 	if !ok {
 		t.Fatal("seek must implement HydratingSource")
 	}
@@ -421,7 +421,7 @@ func TestSeekDetailIsAppendedAfterTheSalaryParagraph(t *testing.T) {
 		searchByPage: map[int][]seekPosting{1: {p}},
 		detailByID:   map[string]string{"101": "<p>What you will do</p>"},
 	}
-	jobs, err := NewSeek(fake).(HydratingSource).FetchNew(context.Background(),
+	jobs, err := NewSeek(fake, fake).(HydratingSource).FetchNew(context.Background(),
 		CompanyEntry{Region: "au", Board: "6290"}, func(string) bool { return false })
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
@@ -435,26 +435,51 @@ func TestSeekDetailIsAppendedAfterTheSalaryParagraph(t *testing.T) {
 	}
 }
 
-// A missing body is not a reason to lose a posting: the title, employer and facets are still worth
-// having, and the next crawl can hydrate it.
-func TestSeekFailedDetailKeepsTheListOnlyPosting(t *testing.T) {
+// Storing a posting whose detail failed is NOT recoverable: seen reports only row existence, so the
+// next crawl marks it SeenRefresh and it stays body-less forever. Deferring it by one crawl is
+// recoverable. Measured on prod, SEEK refuses details in bursts of thousands, so this is the common
+// case rather than the rare one, and the asymmetry decides it — unlike hh and the other hydrating
+// adapters, seek drops the posting.
+func TestSeekFailedDetailDefersThePostingInsteadOfStoringItBodyless(t *testing.T) {
 	fake := &seekFake{
-		searchByPage: map[int][]seekPosting{1: {seekPost("1", "Transport fails", "Co"), seekPost("2", "Empty body", "Co")}},
-		detailErr:    map[string]bool{"1": true},
-		detailByID:   map[string]string{"2": "   "},
+		searchByPage: map[int][]seekPosting{1: {
+			seekPost("1", "Transport fails", "Co"),
+			seekPost("2", "Empty body", "Co"),
+			seekPost("3", "Hydrates fine", "Co"),
+		}},
+		detailErr:  map[string]bool{"1": true},
+		detailByID: map[string]string{"2": "   ", "3": "<p>A real body</p>"},
 	}
-	jobs, err := NewSeek(fake).(HydratingSource).FetchNew(context.Background(),
+	jobs, err := NewSeek(fake, fake).(HydratingSource).FetchNew(context.Background(),
 		CompanyEntry{Region: "au", Board: "6290"}, func(string) bool { return false })
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if len(jobs) != 2 {
-		t.Fatalf("len(jobs) = %d, want 2 — a failed detail never drops a posting", len(jobs))
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1 — only the posting that hydrated is stored", len(jobs))
 	}
-	for _, j := range jobs {
-		if j.Description != "" {
-			t.Errorf("posting %s: want an empty body, got %q", j.ExternalID, j.Description)
-		}
+	if jobs[0].ExternalID != "3" || !strings.Contains(jobs[0].Description, "A real body") {
+		t.Errorf("wrong survivor: %q / %q", jobs[0].ExternalID, jobs[0].Description)
+	}
+}
+
+// The drop rule must not swallow a posting the catalogue already holds: that path spends no detail
+// request at all, so there is no failure to react to.
+func TestSeekSeenPostingSurvivesWithoutADetailRequest(t *testing.T) {
+	fake := &seekFake{
+		searchByPage: map[int][]seekPosting{1: {seekPost("42", "Known", "Co")}},
+		detailErr:    map[string]bool{"42": true}, // would fail if it were ever asked for
+	}
+	jobs, err := NewSeek(fake, fake).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Region: "au", Board: "6290"}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].SeenRefresh {
+		t.Fatalf("a seen posting must survive as a SeenRefresh, got %+v", jobs)
+	}
+	if len(fake.detailHits) != 0 {
+		t.Errorf("a seen posting must cost no detail request, got %v", fake.detailHits)
 	}
 }
 
@@ -462,7 +487,7 @@ func TestSeekFailedDetailKeepsTheListOnlyPosting(t *testing.T) {
 // be able to prefer the first-party copy. It still needs a board to bound the crawl, so unlike the
 // boardless aggregators it must NOT carry that marker.
 func TestSeekIsAnAggregatorButNotBoardless(t *testing.T) {
-	src := NewSeek(&seekFake{})
+	src := NewSeek(&seekFake{}, &seekFake{})
 	if _, ok := src.(aggregator); !ok {
 		t.Error("seek must be an aggregator so its copies lose to first-party ATS postings")
 	}
@@ -513,7 +538,7 @@ func TestSeekIsRegisteredAndItsBoardsValidate(t *testing.T) {
 
 func TestSeekNewZealandMarketUsesItsOwnHostAndScope(t *testing.T) {
 	fake := &seekFake{searchByPage: map[int][]seekPosting{1: {seekPost("1", "Dev", "Co")}}}
-	if _, err := NewSeek(fake).Fetch(context.Background(), CompanyEntry{Region: "nz", Board: "6287"}); err != nil {
+	if _, err := NewSeek(fake, fake).Fetch(context.Background(), CompanyEntry{Region: "nz", Board: "6287"}); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	pu, _ := url.Parse(fake.searchURLs[0])

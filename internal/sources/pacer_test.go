@@ -124,6 +124,45 @@ func TestConcurrencyLimitedJSONGetter_CancelledContextShortCircuits(t *testing.T
 	}
 }
 
+// recordingJSONPoster records the URLs it was asked to post to.
+type recordingJSONPoster struct{ urls []string }
+
+func (p *recordingJSONPoster) PostJSON(_ context.Context, url string, _, _ any) error {
+	p.urls = append(p.urls, url)
+	return nil
+}
+
+func TestRateLimitedJSONPoster_GatesThenDelegates(t *testing.T) {
+	waiter := &recordingWaiter{}
+	inner := &recordingJSONPoster{}
+	p := rateLimitedJSONPoster{inner: inner, limiter: waiter}
+
+	if err := p.PostJSON(context.Background(), "https://www.seek.com.au/graphql", nil, nil); err != nil {
+		t.Fatalf("PostJSON returned error: %v", err)
+	}
+	if waiter.calls != 1 {
+		t.Fatalf("limiter.Wait called %d times, want 1", waiter.calls)
+	}
+	if len(inner.urls) != 1 {
+		t.Fatalf("inner PostJSON called %d times, want 1", len(inner.urls))
+	}
+}
+
+func TestRateLimitedJSONPoster_WaitErrorShortCircuits(t *testing.T) {
+	sentinel := errors.New("rate wait cancelled")
+	waiter := &recordingWaiter{err: sentinel}
+	inner := &recordingJSONPoster{}
+	p := rateLimitedJSONPoster{inner: inner, limiter: waiter}
+
+	err := p.PostJSON(context.Background(), "https://www.seek.com.au/graphql", nil, nil)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("PostJSON error = %v, want %v", err, sentinel)
+	}
+	if len(inner.urls) != 0 {
+		t.Fatalf("inner PostJSON called despite Wait error (%d times)", len(inner.urls))
+	}
+}
+
 // challengingHTMLGetter always fails the fetch with a WAF ChallengeError.
 type challengingHTMLGetter struct{ url string }
 

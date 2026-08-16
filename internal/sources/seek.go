@@ -20,18 +20,17 @@ import (
 // not: /api/jobsearch/v5/search serves JSON to any client — no cookie, no credential and no
 // browser-shaped User-Agent.
 type seek struct {
-	http seekHTTP
+	http    JSONGetter
+	graphql JSONPoster
 }
 
-// seekHTTP is the transport role the adapter needs: a JSON GET for the search listing and a JSON
-// POST for the GraphQL detail.
-type seekHTTP interface {
-	JSONGetter
-	JSONPoster
+// NewSeek builds the SEEK adapter. The listing and the detail take SEPARATE transports because only
+// one of them needs pacing: the search listing is ~150 requests a run and has never been refused,
+// while the GraphQL detail is metered by a per-IP budget (see seekDetailInterval). sources.All hands
+// the bare client for the first and a paced poster for the second.
+func NewSeek(list JSONGetter, detail JSONPoster) Source {
+	return seek{http: list, graphql: detail}
 }
-
-// NewSeek builds the SEEK adapter over the shared HTTP client.
-func NewSeek(c seekHTTP) Source { return seek{http: c} }
 
 func (seek) Provider() string { return "seek" }
 
@@ -153,11 +152,19 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 			base.Description = "" // liveness refresh only: never rewrite the stored body
 			return base, true
 		}
-		if body, ok := s.detail(ctx, m, p.ID); ok {
-			base.Description += body // base.Description is the salary paragraph (or "")
-		} else {
-			log.Printf("seek: detail %s/%s failed; ingesting list-only", e.Region, p.ID)
+		body, ok := s.detail(ctx, m, p.ID)
+		if !ok {
+			// Defer rather than store body-less. seen reports only row existence, so a posting
+			// ingested without its body is marked SeenRefresh on every later crawl and never
+			// hydrates again — the loss pacer.go's emagine note calls permanent. Dropping it
+			// leaves it new, so the next crawl retries it. This is the opposite of what hh and the
+			// other hydrating adapters do, and it is deliberate: their rule assumes a rare failure,
+			// while SEEK's rate limiter refuses in bursts of thousands (measured on prod: 3,267
+			// refusals in 95 seconds, 87% of a first crawl stranded body-less).
+			log.Printf("seek: detail %s/%s failed; deferring the posting to the next crawl", e.Region, p.ID)
+			return Job{}, false
 		}
+		base.Description += body // base.Description is the salary paragraph (or "")
 		return base, true
 	}), nil
 }
@@ -244,7 +251,7 @@ func (s seek) detail(ctx context.Context, m seekMarket, id string) (string, bool
 		"variables":     map[string]any{"jobId": id},
 	}
 	var resp seekDetailResponse
-	if err := s.http.PostJSON(ctx, m.host+"/graphql", body, &resp); err != nil {
+	if err := s.graphql.PostJSON(ctx, m.host+"/graphql", body, &resp); err != nil {
 		return "", false
 	}
 	content := resp.Data.JobDetails.Job.Content
