@@ -21,6 +21,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -126,6 +127,18 @@ func run() int {
 		log.Printf("ingest: shard %d/%d — crawling %d of %d boards in %s", i, n, len(sourceCfg.Sources), full, path)
 	}
 
+	// Resolved before the DB is touched, like every other config read here: a bad value should
+	// stop the run, not produce a quiet ordinary crawl where a repair was intended.
+	hydrationWindow, err := hydrationRetryWindowFor(os.Getenv("HYDRATION_RETRY_DAYS"))
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if hydrationWindow != pipeline.HydrationRetryWindow {
+		log.Printf("ingest: hydration retry window widened to %v — body-less rows will be re-fetched",
+			hydrationWindow)
+	}
+
 	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
@@ -141,7 +154,7 @@ func run() int {
 	tally := newWriteTally()
 	runner := pipeline.Runner{
 		Registry:    registry,
-		Store:       newDBStore(pool, enrich.Version, crawled, tally),
+		Store:       newDBStore(pool, enrich.Version, crawled, tally, hydrationWindow),
 		BoardHealth: newBoardHealth(pool),
 		Coverage:    coverageLookup(cfg),
 	}
@@ -271,6 +284,32 @@ func sweepWindowFor(grace map[string]time.Duration, provider string) time.Durati
 		return w
 	}
 	return staleAfter
+}
+
+// hydrationRetryWindowFor resolves how long a stored row with no description keeps being
+// re-offered to a hydrating adapter for another detail fetch (see pipeline.SeenLookup). An
+// empty value means the default, pipeline.HydrationRetryWindow.
+//
+// HYDRATION_RETRY_DAYS widens it for a deliberate repair run: the default window is measured
+// from created_at, so a backlog that accumulated before the retry existed has already aged past
+// it and no ordinary crawl will ever re-fetch those bodies. `HYDRATION_RETRY_DAYS=365 ingest
+// sources/hh.yml` re-offers every body-less row of that provider instead. Expect the run to be
+// slower by one detail request per such row (hh's detail pages are ~1 MB), and expect to repeat
+// it: a run that hits its systemd timeout still persists what it hydrated, and the rows it
+// fixed leave the set, so successive runs shrink the backlog rather than redoing it.
+//
+// An unparseable or non-positive value is an error rather than a fallback to the default. This
+// is set by hand for a one-off, where silently ingesting with the default would look exactly
+// like a repair run that found nothing to repair.
+func hydrationRetryWindowFor(env string) (time.Duration, error) {
+	if env == "" {
+		return pipeline.HydrationRetryWindow, nil
+	}
+	days, err := strconv.Atoi(env)
+	if err != nil || days <= 0 {
+		return 0, fmt.Errorf("HYDRATION_RETRY_DAYS must be a positive number of days, got %q", env)
+	}
+	return time.Duration(days) * 24 * time.Hour, nil
 }
 
 // sweepProvider closes one provider's unseen jobs: the bulk UPDATE (CloseUnseenJobs or

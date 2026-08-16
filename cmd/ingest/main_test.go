@@ -102,3 +102,34 @@ func TestSweepBySource(t *testing.T) {
 		}
 	}
 }
+
+// HYDRATION_RETRY_DAYS widens the window during which a body-less row is re-offered for
+// detail hydration, so an operator can repair a backlog the ordinary two-week window has
+// already aged past (freehire#1866). Unset means the default; a value that is not a positive
+// number is a config error, not a silent fallback — a typo on a repair run would otherwise
+// look like a run that repaired nothing.
+func TestHydrationRetryWindowFor(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"unset keeps the default", "", pipeline.HydrationRetryWindow, false},
+		{"widened for a repair run", "365", 365 * 24 * time.Hour, false},
+		{"narrowed", "1", 24 * time.Hour, false},
+		{"not a number", "two weeks", 0, true},
+		{"zero", "0", 0, true},
+		{"negative", "-5", 0, true},
+	}
+	for _, tc := range cases {
+		got, err := hydrationRetryWindowFor(tc.env)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%s: hydrationRetryWindowFor(%q) err = %v, wantErr %v", tc.name, tc.env, err, tc.wantErr)
+			continue
+		}
+		if err == nil && got != tc.want {
+			t.Errorf("%s: hydrationRetryWindowFor(%q) = %v, want %v", tc.name, tc.env, got, tc.want)
+		}
+	}
+}

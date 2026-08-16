@@ -33,6 +33,10 @@ type dbStore struct {
 	targetVersion int32
 	crawled       *crawledSet
 	tally         *writeTally
+	// hydrationWindow is how long a stored row with no description keeps being withheld from
+	// the seen-set so a hydrating adapter re-attempts its detail fetch. See ExistingExternalIDs
+	// and cmd/ingest's hydrationRetryWindowFor.
+	hydrationWindow time.Duration
 }
 
 // dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
@@ -49,13 +53,14 @@ var (
 	_ pipeline.SeenLookup = (*dbStore)(nil)
 )
 
-func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally) *dbStore {
+func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, hydrationWindow time.Duration) *dbStore {
 	return &dbStore{
-		pool:          pool,
-		q:             db.New(pool),
-		targetVersion: int32(targetVersion),
-		crawled:       crawled,
-		tally:         tally,
+		pool:            pool,
+		q:               db.New(pool),
+		targetVersion:   int32(targetVersion),
+		crawled:         crawled,
+		tally:           tally,
+		hydrationWindow: hydrationWindow,
 	}
 }
 
@@ -331,7 +336,7 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // than treating the body-less row as finished.
 func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error) {
 	set := map[string]bool{}
-	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-pipeline.HydrationRetryWindow), Valid: true}
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.hydrationWindow), Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{
 			Source:          source,

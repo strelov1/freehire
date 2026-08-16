@@ -14,6 +14,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/testdb"
 )
 
@@ -45,7 +46,7 @@ func TestSave_ContentChangeRequeuesTheCanonForSearch(t *testing.T) {
 	ctx := context.Background()
 	q := db.New(pool)
 
-	store := newDBStore(pool, 1, nil, nil)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
 
 	// The same role crawled once per city: the first is the canon, the second a repost
 	// that is kept as a row but never queued for the index.

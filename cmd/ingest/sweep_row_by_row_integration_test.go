@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/testdb"
 )
 
@@ -82,7 +83,7 @@ func TestSweepRowByRow_SkipsOneUnclosableRowWithoutBlockingTheRest(t *testing.T)
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 	q := db.New(pool)
-	store := newDBStore(pool, 1, nil, nil)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
 
 	if err := store.Save(ctx, sweepTestPosting("greenhouse", "acme:blocked", "Blocked Role")); err != nil {
 		t.Fatalf("save blocked job: %v", err)

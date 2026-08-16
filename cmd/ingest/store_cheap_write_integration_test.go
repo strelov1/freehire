@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/job"
 	"github.com/strelov1/freehire/internal/jobderive"
+	"github.com/strelov1/freehire/internal/pipeline"
 	"github.com/strelov1/freehire/internal/testdb"
 )
 
@@ -85,7 +86,7 @@ func TestSave_UnchangedRecrawlWritesOnlyLiveness(t *testing.T) {
 	ctx := context.Background()
 	crawled := newCrawledSet()
 	tally := newWriteTally()
-	store := newDBStore(pool, 1, crawled, tally)
+	store := newDBStore(pool, 1, crawled, tally, pipeline.HydrationRetryWindow)
 	posting := cheapPosting("acme:cheap-1", "Backend Engineer")
 
 	if err := store.Save(ctx, posting); err != nil {
@@ -145,7 +146,7 @@ func TestSave_UnchangedRecrawlWritesOnlyLiveness(t *testing.T) {
 func TestSave_ClosedPostingReopensOnUnchangedRecrawl(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
 	posting := cheapPosting("acme:cheap-2", "Platform Engineer")
 
 	if err := store.Save(ctx, posting); err != nil {
@@ -185,7 +186,7 @@ func TestSave_ClosedPostingReopensOnUnchangedRecrawl(t *testing.T) {
 func TestSaveWithApplyForm_UnchangedRecrawlStillWritesTheForm(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
-	store := newDBStore(pool, 1, nil, nil)
+	store := newDBStore(pool, 1, nil, nil, pipeline.HydrationRetryWindow)
 	posting := cheapPosting("acme:cheap-3", "Data Engineer")
 
 	first := applyform.Form{Provider: "lever", Fields: []applyform.Field{{ID: "1", Label: "Old question", RawType: "string"}}}
@@ -226,7 +227,7 @@ func TestTouch_CountsAsACheapWrite(t *testing.T) {
 	pool := testdb.Pool(t)
 	ctx := context.Background()
 	tally := newWriteTally()
-	store := newDBStore(pool, 1, newCrawledSet(), tally)
+	store := newDBStore(pool, 1, newCrawledSet(), tally, pipeline.HydrationRetryWindow)
 
 	if err := store.Save(ctx, cheapPosting("acme:cheap-4", "Site Engineer")); err != nil {
 		t.Fatalf("Save: %v", err)
