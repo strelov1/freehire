@@ -25,7 +25,9 @@ actually change what the user reads, starting with English + Russian.
 - Migrate `/my/security` end-to-end as the reference page: every literal
   moves into a colocated `messages.ts` (`en`/`ru`), rendered through the new
   `t()` helper. Fix the now-stale "once interface translations ship" caveat
-  in `AccountLanguage.svelte`'s copy.
+  in `AccountLanguage.svelte`'s copy. Includes the "Danger zone" delete-account
+  section merged from `main` mid-task (#1996) — its own `DeleteAccountButton`
+  component gets a colocated catalog too, since it renders exclusively there.
 - Translate the shared account-section chrome (`my/+layout.svelte`,
   `AccountNavRail.svelte`, `accountNav.ts` labels) through the same
   mechanism, since every other `/my/**` page depends on it.

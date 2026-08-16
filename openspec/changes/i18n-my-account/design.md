@@ -88,6 +88,17 @@ forced to `en` before `transformPageChunk` runs. This makes "public pages are
 never translated" a structural property of one hook, not a convention each
 new page's author has to remember.
 
+### `Messages` leaves may be a `string[]`, not only a `string`
+
+`main` merged a "Danger zone" / delete-account section onto `/my/security`
+mid-task (#1996), whose confirmation dialog renders a bulleted list of what
+gets erased via `{#each erased as item}`. A plain string leaf can't represent
+a list without an unnatural join/split hack. `Messages` (`t.ts`) now allows
+`string | string[] | Messages` per key; `deepMerge` treats an array as a leaf
+(`Array.isArray` guards `isMessages`), so a translated list replaces the
+English one wholesale rather than merging element-by-element — the same
+whole-value-replacement semantics a string leaf already had.
+
 ### Root layout syncs `<html lang>` client-side on a live switch, not just at SSR
 
 `hooks.server.ts`'s `transformPageChunk` only fires on an actual SSR response.
