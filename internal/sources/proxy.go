@@ -89,6 +89,26 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	"wantedkr": func(c HTTPClient) Source { return NewWantedKR(c) },
 }
 
+// refusalRetryProviders is the second, weaker opt-in: providers that crawl on the DIRECT IP
+// and reach for the proxy only on a request the platform refused. proxiedProviders above is for
+// an IP that is blocked outright — there the direct path never works, so everything must egress
+// through the proxy. These two are the opposite case: the direct IP is served normally, and the
+// refusals are ours, produced by the hourly fleet's own burst.
+//
+// Measured on prod 2026-08-16: a direct request to a "failing" teamtailor board returned 200 on
+// demand, and 1207 of 1208 teamtailor board failures carried an error timestamp inside the
+// current crawl hour. Workable is the same shape one status code over (429 rather than 403),
+// and both grew by ~500 boards in the August harvest, so the burst is getting worse.
+//
+// Why not route them through the proxy wholesale: it is a single shared address (verified — six
+// calls, one exit IP), and it is what eightfold, djinni, 2gis and hh have INSTEAD of a direct
+// path. Moving ~3000 boards an hour onto it would concentrate the same burst on a weaker IP and
+// take the budget from the providers with nowhere else to go.
+var refusalRetryProviders = map[string]func(HTTPClient) Source{
+	"workable":   func(c HTTPClient) Source { return NewWorkable(c) },
+	"teamtailor": func(c HTTPClient) Source { return NewTeamtailor(c) },
+}
+
 // IsProxied reports whether provider is on the proxied-egress allowlist — the providers
 // ApplyProxyEgress routes through SOURCES_PROXY_URL. Callers outside the board crawl (the
 // single-URL resolve path in cmd/resolve-url) use it to route the same providers through
@@ -118,6 +138,14 @@ func ApplyProxyEgress(registry map[string]Source) error {
 	for name, build := range proxiedProviders {
 		if _, ok := registry[name]; ok {
 			registry[name] = build(proxied)
+		}
+	}
+	// The refusal-retry providers keep the direct IP and get the proxy only for what it turned
+	// away, so they are rewired over a different client than the wholly-proxied ones above.
+	refusalRetry := NewRefusalRetryClient(u)
+	for name, build := range refusalRetryProviders {
+		if _, ok := registry[name]; ok {
+			registry[name] = build(refusalRetry)
 		}
 	}
 	// Fingerprint-proxied providers need BOTH the Chrome fingerprint and the proxy IP, so they

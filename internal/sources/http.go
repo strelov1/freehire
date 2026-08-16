@@ -193,9 +193,15 @@ type Client struct {
 	// (JobStream) throttle to a trickle, so a full window read takes minutes — far past the
 	// 15s httpClient timeout. Same SSRF-guarded transport, just patient.
 	streamClient *http.Client
-	userAgent    string
-	maxRetries   int
-	retryDelay   time.Duration
+	// refusalClient is an optional second transport used ONLY after the direct one has been
+	// refused (429/403). It exists because a refusal is the one failure a different egress IP
+	// can actually fix, and because the proxy behind it is a single shared IP: routing a whole
+	// crawl through it would concentrate the same burst on a weaker address and starve the
+	// providers that are genuinely IP-blocked. Nil for every client but the opted-in few.
+	refusalClient *http.Client
+	userAgent     string
+	maxRetries    int
+	retryDelay    time.Duration
 	// maxBody overrides maxResponseBody; zero means the default. Only tests set it, so a
 	// cap-trip case need not stream tens of MiB through the loopback.
 	maxBody int64
@@ -218,6 +224,19 @@ func NewClient() *Client { return newClientWithProxy(nil) }
 // URL — including its host and credentials — comes entirely from configuration
 // (SOURCES_PROXY_URL); no proxy endpoint is hardcoded here.
 func NewProxyClient(proxy *url.URL) *Client { return newClientWithProxy(proxy) }
+
+// NewRefusalRetryClient builds a client that crawls on the DIRECT IP and falls back to proxy
+// only for a request the platform refused (429/403). It suits a platform that serves the prod
+// IP perfectly well until our own hourly fleet floods it — measured on teamtailor, where a
+// direct request returns 200 on demand and yet 1207 of 1208 board failures fell inside the
+// crawl hour. Routing such a platform entirely through the proxy (NewProxyClient) would move
+// that same flood onto one shared address; sending it only what was already refused spends the
+// proxy on requests that are otherwise pure loss.
+func NewRefusalRetryClient(proxy *url.URL) *Client {
+	c := NewClient()
+	c.refusalClient = safehttp.NewClientWithProxy(15*time.Second, proxy)
+	return c
+}
 
 // newClientWithProxy builds a Client with an optional egress proxy (nil = direct).
 func newClientWithProxy(proxy *url.URL) *Client {
@@ -509,6 +528,12 @@ type request struct {
 func (c *Client) do(ctx context.Context, r request) error {
 	var lastErr error
 	delay := c.retryDelay
+	// refusalTried records that the fallback egress has had its one turn. A refusal says the
+	// platform is there and is declining THIS IP, so a second IP is worth exactly one try;
+	// spending more of a shared proxy on a request the platform is refusing anyway would take
+	// the budget from the providers that have no direct path at all.
+	refusalTried := false
+	client := c.httpClient
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 && delay > 0 {
 			select {
@@ -544,7 +569,7 @@ func (c *Client) do(ctx context.Context, r request) error {
 			req.Header.Set("Content-Type", contentType)
 		}
 
-		resp, err := c.httpClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = err
 			continue // network error — transient
@@ -577,6 +602,16 @@ func (c *Client) do(ctx context.Context, r request) error {
 			delay = retryAfter(resp, c.retryDelay) // honor the rate-limit hint
 			resp.Body.Close()
 			lastErr = &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
+			if c.refusalClient != nil {
+				// Both egresses refusing is not a transient failure of either — it is the
+				// platform declining the request, and further attempts only spend a shared
+				// proxy budget that the IP-blocked providers have no alternative to.
+				if refusalTried {
+					return lastErr
+				}
+				c.switchToRefusalEgress(&client, &refusalTried)
+				delay = 0 // a fresh IP has no penalty to wait out
+			}
 			continue // rate limited — transient
 		case resp.StatusCode >= 500:
 			resp.Body.Close()
@@ -584,10 +619,32 @@ func (c *Client) do(ctx context.Context, r request) error {
 			continue // server error — transient
 		default:
 			resp.Body.Close()
-			return &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
+			lastErr = &StatusError{Method: r.method, Code: resp.StatusCode, URL: r.url}
+			// A 403 is final on this IP but not necessarily on another: it is the shape an edge
+			// uses to turn away an address it has judged, which is the one 4xx a different
+			// egress can fix. So it retries once through the fallback when there is one, and
+			// otherwise returns immediately exactly as before.
+			if resp.StatusCode == http.StatusForbidden && c.switchToRefusalEgress(&client, &refusalTried) {
+				delay = 0
+				continue
+			}
+			return lastErr
 		}
 	}
 	return fmt.Errorf("sources: %s %s failed after %d attempts: %w", r.method, r.url, c.maxRetries+1, lastErr)
+}
+
+// switchToRefusalEgress points client at the fallback transport for the remaining attempts,
+// once. It reports whether the switch happened, so the caller can drop the backoff it was
+// about to serve: the wait exists to let the refusing IP cool down, and the fallback is a
+// different IP that owes nothing.
+func (c *Client) switchToRefusalEgress(client **http.Client, tried *bool) bool {
+	if c.refusalClient == nil || *tried {
+		return false
+	}
+	*tried = true
+	*client = c.refusalClient
+	return true
 }
 
 // retryAfter is how long to wait before retrying a 429, honoring the response's
