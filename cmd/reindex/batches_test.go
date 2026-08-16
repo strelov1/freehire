@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,12 @@ func TestForCompanyBatchesStopsOnCancellation(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want it to carry context.Canceled so the caller can tell a deadline from a bad batch", err)
+	}
+	// The count must be the batches that COMPLETED, not the ones that failed: the
+	// cancellation branch runs before the failure is counted, so reporting failures
+	// there would always say zero and hide how far the pass actually got.
+	if !strings.Contains(err.Error(), "after 1 completed batches") {
+		t.Fatalf("err = %q, want it to report the 1 batch that completed before the cancellation", err)
 	}
 	// Work done before the cancellation is still reported: the pass is best-effort
 	// and its markers are already written.

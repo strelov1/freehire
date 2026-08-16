@@ -343,7 +343,7 @@ func foldCompanySlugs(slugs []string) []string {
 // catalogue scale — see companyBatchSize.
 func forCompanyBatches(ctx context.Context, companies []string, fn func(context.Context, []string) (int64, error)) (int64, error) {
 	var total int64
-	var failures int
+	var done, failures int
 	var lastErr error
 	for batch := range slices.Chunk(companies, companyBatchSize) {
 		n, err := fn(ctx, batch)
@@ -354,13 +354,17 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 			// batches. That is not cosmetic — it is what the 2026-08-16 investigation
 			// had to see through: the log said "75 batches failed", which reads as 75
 			// distinct problems rather than one timeout.
+			// `done`, not `failures`: this branch runs BEFORE the failure is counted,
+			// and what a cancellation needs to report is how far the pass got, not how
+			// many batches were already broken.
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return total, fmt.Errorf("cancelled after %d batches: %w", failures, ctxErr)
+				return total, fmt.Errorf("cancelled after %d completed batches: %w", done, ctxErr)
 			}
 			failures++
 			lastErr = fmt.Errorf("batch of %d companies (starting %q): %w", len(batch), batch[0], err)
 			continue
 		}
+		done++
 		total += n
 	}
 	if failures > 0 {

@@ -5,6 +5,10 @@ import "testing"
 func TestLoadReindex_Defaults(t *testing.T) {
 	t.Setenv("MEILI_DATA_DIR", "")
 	t.Setenv("REINDEX_MIN_FREE_GB", "")
+	// Cleared explicitly: without this the assertion below depends on the environment
+	// the test process inherited, and a developer (or CI job) with REINDEX_DEDUP set
+	// would see a failure that says nothing about the code.
+	t.Setenv("REINDEX_DEDUP", "")
 
 	r := LoadReindex()
 
