@@ -327,7 +327,6 @@ func Register(app *fiber.App, cfg Config) {
 	// Shared by /jobs/find and the link intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs)
-	sitemapH := newSitemapHandlers(queries)
 	statsH := newStatsHandlers(queries)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
@@ -451,11 +450,16 @@ func Register(app *fiber.App, cfg Config) {
 	var jobSearch searcher
 	var facets facetCounter
 	var companySearch companySearcher
+	// The job sitemap pages the index too, so it is wired here rather than beside the
+	// other Postgres-backed handlers — the company half of it still reads the table.
+	var sitemapJobs sitemapLister
 	if cfg.Search != nil {
 		jobSearch = cfg.Search
 		facets = cfg.Search
 		companySearch = cfg.Search
+		sitemapJobs = cfg.Search
 	}
+	sitemapH := newSitemapHandlers(queries, sitemapJobs)
 	searchH := newSearchHandlers(jobSearch, facets, queries)
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()

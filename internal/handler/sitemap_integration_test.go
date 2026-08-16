@@ -4,6 +4,11 @@
 // {slug, updated_at} wire shape, page by the keyset cursor, and — critically —
 // resolve as static routes rather than being swallowed by the /jobs/:slug and
 // /companies/:slug catch-alls. Run with: go test -tags=integration ./internal/handler/
+//
+// Only the company half needs Postgres. The job half reads the search index, so its
+// paging and clamping live in sitemap_test.go against a stub; what it still needs a
+// real router for is the route-shadowing check below, which is why the job endpoints
+// are mounted here too.
 package handler
 
 import (
@@ -51,7 +56,7 @@ func TestSitemapEndpoints(t *testing.T) {
 		t.Fatalf("RefreshCompanyFacets: %v", err)
 	}
 
-	h := &sitemapHandlers{queries: q}
+	h := &sitemapHandlers{queries: q, jobs: &stubSitemapIndex{docs: stubDocs(5)}}
 	jh := &jobsHandlers{queries: q}
 	ch := &companiesHandlers{queries: q}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
@@ -92,41 +97,28 @@ func TestSitemapEndpoints(t *testing.T) {
 		return d.Data
 	}
 
-	t.Run("job sitemap is slim, freshest-first, and not captured by :slug", func(t *testing.T) {
+	// The route-shadowing check the seeded /jobs/:slug rows exist for: a two-segment
+	// literal under /jobs must not be read as a slug. Its paging is covered by unit
+	// tests; all that matters here is that the request reaches JobSitemap at all.
+	t.Run("job sitemap is not captured by :slug", func(t *testing.T) {
 		got := decodeEntries(t, get(t, "/api/v1/jobs/sitemap"))
-		// Seeded job-01..job-05 with ascending ids -> newest id first.
-		if len(got) != 5 || got[0].Slug != "job-05" || got[4].Slug != "job-01" {
-			t.Fatalf("page = %+v, want job-05..job-01", got)
+		if len(got) != 5 {
+			t.Fatalf("page = %+v, want the stub index's five entries", got)
 		}
 		if got[0].UpdatedAt == "" {
 			t.Fatalf("entry missing updated_at: %+v", got[0])
 		}
 	})
 
-	t.Run("job slice pages by id cursor", func(t *testing.T) {
-		var ids struct {
+	t.Run("job boundaries are not captured by :slug", func(t *testing.T) {
+		var offsets struct {
 			Data []int64 `json:"data"`
 		}
-		if err := json.Unmarshal(get(t, "/api/v1/jobs/sitemap/boundaries?chunk=2"), &ids); err != nil {
+		if err := json.Unmarshal(get(t, "/api/v1/jobs/sitemap/boundaries?chunk=2"), &offsets); err != nil {
 			t.Fatalf("decode boundaries: %v", err)
 		}
-		if len(ids.Data) != 2 {
-			t.Fatalf("boundaries = %v, want two cursors for 5 jobs in chunks of 2", ids.Data)
-		}
-		// Following the first cursor must resume exactly after the first chunk.
-		got := decodeEntries(t, get(t, fmt.Sprintf("/api/v1/jobs/sitemap?after=%d&limit=2", ids.Data[0])))
-		if len(got) != 2 || got[0].Slug != "job-03" || got[1].Slug != "job-02" {
-			t.Fatalf("second chunk = %+v, want [job-03 job-02]", got)
-		}
-	})
-
-	// A crawler holding a stale sitemap index asks with a cursor we no longer know.
-	// It must get a valid page rather than an error, or a whole chunk drops out of
-	// the crawl until the index is refetched.
-	t.Run("an unparseable cursor serves the first chunk", func(t *testing.T) {
-		got := decodeEntries(t, get(t, "/api/v1/jobs/sitemap?after=not-a-number&limit=2"))
-		if len(got) != 2 || got[0].Slug != "job-05" {
-			t.Fatalf("page = %+v, want the first chunk (job-05 first)", got)
+		if len(offsets.Data) != 3 {
+			t.Fatalf("boundaries = %v, want three offsets for 5 documents in chunks of 2", offsets.Data)
 		}
 	})
 

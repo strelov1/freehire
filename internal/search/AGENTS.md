@@ -70,6 +70,14 @@ reads a precomputed pgvector lookup instead (`internal/similarjobs`,
   meilisearch-go always serializes a `rename` field that engine v1.13 rejects.
 - Indexed descriptions are capped at `maxIndexedDescriptionRunes`; `maxTotalHits` is the
   count-honesty cap, **not** the pagination guard (that's `maxSearchWindow` in the handler).
+- **The index is also what the job sitemap pages** (`sitemap.go` → `/api/v1/jobs/sitemap`),
+  which makes the "unresolved category never enters the index" rule above a decision about
+  what Google crawls, not only about what search returns. It reads through
+  `GET /indexes/jobs/documents` — offset-addressed, unaffected by `maxTotalHits` and
+  `maxSearchWindow` (both bound `/search`, not this route), and measured flat in the offset:
+  0 and 1.2M both answer under 0.25s on prod. It replaced a Postgres `row_number()` walk
+  that had grown to 64s over 3.4M rows and was timing out `/sitemap.xml` outright. The
+  practical consequence: an index outage is now a sitemap outage too.
 
 ## Adding a filterable attribute
 

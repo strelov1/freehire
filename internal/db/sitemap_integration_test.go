@@ -1,17 +1,17 @@
 //go:build integration
 
-// Integration tests for the sitemap read path: both the job and company slices page
-// by a keyset cursor (id and slug respectively), and each boundary query returns the
-// cursor at each Nth row so the sitemap index can enumerate chunks without walking
-// the table. The tiling test is the one that matters — chunks must join up exactly,
-// serving no row twice and skipping none between files. SQL behaviors,
+// Integration tests for the COMPANY sitemap read path: the slice pages by a slug
+// keyset cursor, and the boundary query returns the cursor at each Nth row so the
+// sitemap index can enumerate chunks without walking the table. SQL behaviors,
 // verifiable only against a real Postgres. Run with: go test -tags=integration ./internal/db/
+//
+// The job sitemap has no SQL to test — it pages the Meilisearch index instead (see
+// internal/search/sitemap.go), which is why only companies are covered here.
 package db
 
 import (
 	"context"
 	"fmt"
-	"math"
 	"testing"
 )
 
@@ -27,100 +27,6 @@ func seedOpenJob(ctx context.Context, t *testing.T, q *Queries, n int) Job {
 		t.Fatalf("seed job %d: %v", n, err)
 	}
 	return j
-}
-
-func TestJobSitemapKeyset(t *testing.T) {
-	pool := startPostgres(t)
-	q := New(pool)
-	ctx := context.Background()
-	truncate(t, pool)
-
-	var jobs []Job
-	for i := 1; i <= 5; i++ {
-		jobs = append(jobs, seedOpenJob(ctx, t, q, i)) // ascending ids
-	}
-	// A closed job must never appear in the sitemap.
-	closed := seedOpenJob(ctx, t, q, 6)
-	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed.ID); err != nil {
-		t.Fatalf("close job: %v", err)
-	}
-
-	// firstChunk is the cursor the handler opens the first chunk with: above every id.
-	const firstChunk = int64(math.MaxInt64)
-
-	t.Run("first chunk returns the newest jobs, newest id first", func(t *testing.T) {
-		got, err := q.ListJobSitemapChunk(ctx, ListJobSitemapChunkParams{AfterID: firstChunk, RowLimit: 3})
-		if err != nil {
-			t.Fatalf("ListJobSitemapChunk: %v", err)
-		}
-		want := []string{jobs[4].PublicSlug, jobs[3].PublicSlug, jobs[2].PublicSlug}
-		if fmt.Sprint(freshestSlugs(got)) != fmt.Sprint(want) {
-			t.Fatalf("first chunk = %v, want %v", freshestSlugs(got), want)
-		}
-	})
-
-	t.Run("caps at the limit and excludes closed jobs", func(t *testing.T) {
-		got, err := q.ListJobSitemapChunk(ctx, ListJobSitemapChunkParams{AfterID: firstChunk, RowLimit: 100})
-		if err != nil {
-			t.Fatalf("ListJobSitemapChunk: %v", err)
-		}
-		if len(got) != 5 {
-			t.Fatalf("got %d open jobs, want 5 (%v)", len(got), freshestSlugs(got))
-		}
-		for _, r := range got {
-			if r.PublicSlug == closed.PublicSlug {
-				t.Fatalf("closed job %q leaked into sitemap", closed.PublicSlug)
-			}
-		}
-	})
-
-	// The property the whole chunked scheme rests on: following a boundary cursor
-	// picks up exactly where the previous chunk stopped — no row served twice, none
-	// skipped between files.
-	t.Run("chunks tile the catalogue without gaps or repeats", func(t *testing.T) {
-		cursors, err := q.JobSitemapBoundaries(ctx, 2)
-		if err != nil {
-			t.Fatalf("JobSitemapBoundaries: %v", err)
-		}
-		var seen []string
-		for _, after := range append([]int64{firstChunk}, cursors...) {
-			page, err := q.ListJobSitemapChunk(ctx, ListJobSitemapChunkParams{AfterID: after, RowLimit: 2})
-			if err != nil {
-				t.Fatalf("chunk after %d: %v", after, err)
-			}
-			seen = append(seen, freshestSlugs(page)...)
-		}
-		want := []string{
-			jobs[4].PublicSlug, jobs[3].PublicSlug, jobs[2].PublicSlug,
-			jobs[1].PublicSlug, jobs[0].PublicSlug,
-		}
-		if fmt.Sprint(seen) != fmt.Sprint(want) {
-			t.Fatalf("walked %v, want %v", seen, want)
-		}
-	})
-
-	t.Run("boundaries return the id at each Nth job, excluding the last", func(t *testing.T) {
-		got, err := q.JobSitemapBoundaries(ctx, 2)
-		if err != nil {
-			t.Fatalf("JobSitemapBoundaries: %v", err)
-		}
-		want := []int64{jobs[3].ID, jobs[1].ID}
-		if fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("boundaries = %v, want %v", got, want)
-		}
-	})
-
-	// The chunk size divides the open count exactly, so the final row lands ON a
-	// chunk edge — its cursor would open a sub-sitemap with no URLs in it.
-	t.Run("boundaries exclude a final row that lands on a chunk edge", func(t *testing.T) {
-		got, err := q.JobSitemapBoundaries(ctx, 5)
-		if err != nil {
-			t.Fatalf("JobSitemapBoundaries: %v", err)
-		}
-		if len(got) != 0 {
-			t.Fatalf("boundaries = %v, want none (the 5th job is also the last)", got)
-		}
-	})
 }
 
 func TestCompanySitemapKeyset(t *testing.T) {
@@ -195,14 +101,6 @@ func TestCompanySitemapKeyset(t *testing.T) {
 			t.Fatalf("tail page = %v, want [co-05] — co-06 has nothing open", companySlugs(page))
 		}
 	})
-}
-
-func freshestSlugs(rows []ListJobSitemapChunkRow) []string {
-	out := make([]string, len(rows))
-	for i, r := range rows {
-		out[i] = r.PublicSlug
-	}
-	return out
 }
 
 func companySlugs(rows []ListCompanySitemapRow) []string {

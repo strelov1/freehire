@@ -635,14 +635,14 @@ export function createApi(
   // slice (one file); companies are keyset-paginated across chunks, with a boundary
   // endpoint returning the cursor ending each chunk so the index can enumerate them.
 
-  /** One chunk of job sitemap entries with id < `after` ('' for the first). */
-  async function sitemapJobs(after: string, limit: number): Promise<SitemapEntry[]> {
-    return requestData<SitemapEntry[]>(
-      `/api/v1/jobs/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
-    );
+  /** One page of job sitemap entries starting at `offset` in the search index. */
+  async function sitemapJobs(offset: number, limit: number): Promise<SitemapEntry[]> {
+    return requestData<SitemapEntry[]>(`/api/v1/jobs/sitemap?offset=${offset}&limit=${limit}`);
   }
 
-  /** The id ending each chunk of sitemap-eligible jobs — the sitemap index's cursors. */
+  /** The offset opening each `chunk`-sized page of jobs — every sub-sitemap's cursor,
+   *  including the first (0). Unlike the company boundaries below, which name the slug
+   *  each chunk ENDS at and so leave the opening cursor implicit. */
   async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
     return requestData<number[]>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
   }

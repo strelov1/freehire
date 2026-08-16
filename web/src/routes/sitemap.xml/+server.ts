@@ -17,10 +17,11 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
   ]);
 
   const locs = [`${origin}/sitemap-pages.xml`, `${origin}/sitemap-insights.xml`];
-  // Jobs page the same way companies do: the first chunk starts above every id
-  // (empty cursor), and each boundary id starts the next.
-  for (const after of ['', ...jobCursors]) {
-    locs.push(`${origin}/sitemap-jobs.xml?after=${encodeURIComponent(String(after))}`);
+  // Job cursors are offsets into the search index and already include the opening 0,
+  // so they are listed as they come — unlike the company cursors below, which name
+  // the slug each chunk ends at and so need an empty opening cursor prepended.
+  for (const offset of jobCursors) {
+    locs.push(`${origin}/sitemap-jobs.xml?offset=${offset}`);
   }
   // The first company chunk starts before every slug (empty string); each boundary
   // cursor starts the next chunk.
