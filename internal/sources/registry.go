@@ -280,7 +280,9 @@ func All(c HTTPClient) map[string]Source {
 		// SEEK: the dominant AU/NZ job board, multi-company aggregator enumerated by ICT
 		// subclassification (board) with the market in region, reading its frontend search API and
 		// hydrating descriptions from its GraphQL endpoint. Keyless.
-		NewSeek(c),
+		// Its GraphQL detail endpoint meters by a per-IP request budget, so only that path is
+		// rate-paced; the search listing stays on the bare client.
+		NewSeek(c, pacedSeekPoster(c)),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),

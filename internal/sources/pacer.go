@@ -77,6 +77,53 @@ const (
 	clinchRequestBurst    = 1
 )
 
+// rateLimitedJSONPoster is the JSON-POST counterpart of rateLimitedHTMLGetter: it wraps a
+// JSONPoster with a shared limiter so its aggregate PostJSON rate stays under the endpoint's
+// budget, independent of the caller's worker concurrency. It exists because a detail endpoint is
+// not always a GET — SEEK's is a GraphQL POST.
+type rateLimitedJSONPoster struct {
+	inner   JSONPoster
+	limiter waiter
+}
+
+// PostJSON blocks on the limiter before delegating, so a cancelled context surfaces as the Wait
+// error and the inner request is skipped.
+func (p rateLimitedJSONPoster) PostJSON(ctx context.Context, url string, body, v any) error {
+	if err := p.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	return p.inner.PostJSON(ctx, url, body, v)
+}
+
+// www.seek.com.au/graphql enforces a per-IP request BUDGET rather than degrading under load: an
+// unpaced first crawl fired 3,267 detail POSTs in 95 seconds (43 boards, each detail pool bursting
+// to defaultDetailWorkers) and was answered 429 on essentially all of them, stranding 87% of that
+// crawl's postings without a description — while a single identical request from the same host
+// returned 200 after two minutes idle. An immediate refusal that clears on idle is a window, not
+// saturation, which is why this is a rate limiter and not the in-flight cap trudvsem and emagine
+// use: eight fast requests a second from one worker is still eight a second.
+//
+// The rate is ~17x below the one that was refused, and conservative for the same reason every other
+// constant here is — the true budget is unknown, and under-shooting only lengthens a run while
+// over-shooting re-enters the penalty window. It does mean the ~7.8k first backfill no longer fits
+// one ingest window and accretes over a few runs, which is safe only because seek defers a posting
+// it could not hydrate instead of storing it body-less. Steady state is a few hundred new postings
+// a day and finishes in minutes. Tune from the observed description-fill rate.
+const (
+	seekDetailInterval = 500 * time.Millisecond // ~2 req/s
+	seekDetailBurst    = 2
+)
+
+// pacedSeekPoster wraps a poster with a fresh limiter shared across one registry build, so every
+// board's detail fan-out in a run competes for the same token bucket. Only the detail path is
+// wrapped — seek's search listing is ~150 requests a run and has never been refused.
+func pacedSeekPoster(c JSONPoster) JSONPoster {
+	return rateLimitedJSONPoster{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(seekDetailInterval), seekDetailBurst),
+	}
+}
+
 // concurrencyLimitedJSONGetter bounds how many GetJSON calls are in flight at once via a shared
 // semaphore, independent of the pipeline's board-worker pool. Unlike a rate limiter — which caps
 // the request START rate but lets slow requests pile up concurrently — this caps simultaneous
