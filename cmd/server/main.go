@@ -16,6 +16,7 @@ import (
 	appleauth "github.com/strelov1/freehire/internal/auth/apple"
 	"github.com/strelov1/freehire/internal/auth/oauth"
 	"github.com/strelov1/freehire/internal/blobstore"
+	"github.com/strelov1/freehire/internal/cache"
 	"github.com/strelov1/freehire/internal/config"
 	"github.com/strelov1/freehire/internal/credits"
 	"github.com/strelov1/freehire/internal/cv"
@@ -257,6 +258,7 @@ func main() {
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
 		Throttler:                   throttler,
+		Cache:                       cache.NewRedisCache(redisClient),
 		FrontendOrigin:              cfg.FrontendOrigin,
 		JWTSecret:                   cfg.JWTSecret,
 		JWTTTL:                      cfg.JWTTTL,

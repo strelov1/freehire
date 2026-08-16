@@ -32,17 +32,13 @@
     ])
   );
 
-  // Repo constants — the crawler covers this many ATS platforms and Telegram
-  // channels. Not DB rows; they change only when adapters/channels are added (i.e.
-  // on deploy), mirroring the homepage stat-strip. Recount on change:
-  //   ATS platforms   → registered adapters in internal/sources/source.go `All()`
-  //   Telegram channels → `- channel:` entries in sources/telegram.yml
-  const ATS_PLATFORMS = 166;
-  const TELEGRAM_CHANNELS = 88;
-
   const nf = new Intl.NumberFormat('en');
   const compactNf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-  const fmt = (n: number | null, fallback: string) => (n == null ? fallback : compactNf.format(n));
+  // A null fallback means "omit this stat entirely". This is the transparency page: a
+  // figure it cannot source should disappear from the strip rather than fall back to a
+  // number baked in at build time, which is exactly the habit this page exists to break.
+  const fmt = <F extends string | null>(n: number | null, fallback: F) =>
+    n == null ? fallback : compactNf.format(n);
 
   const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
   function countryName(code: string): string {
@@ -92,12 +88,27 @@
     return Math.round(((wm.remote ?? 0) / total) * 100);
   });
 
-  const stats = $derived([
-    { value: fmt(data.scale.jobs, '3.4M+'), label: 'open jobs', href: '/api/v1/jobs' },
-    { value: fmt(data.scale.companies, '200K+'), label: 'companies', href: '/api/v1/companies' },
-    { value: nf.format(ATS_PLATFORMS), label: 'ATS platforms', href: null },
-    { value: nf.format(TELEGRAM_CHANNELS), label: 'Telegram channels', href: null },
-  ]);
+  // Every figure here comes from the one catalogue-scale snapshot, so the strip cannot
+  // show numbers measured at different moments. The platform and channel counts used to
+  // be constants in this file and went stale between deploys; they are now derived from
+  // the source registry and the crawled channel config.
+  //
+  // A degraded snapshot (no published measurement yet, or Redis unreachable) carries
+  // only the approximate job count and the registry figures — the counts that exist
+  // solely in the database come back zero, and a zero is dropped rather than rendered as
+  // a real "0 companies".
+  const stats = $derived(
+    [
+      { value: fmt(data.scale.jobs, null), label: 'open jobs', href: '/api/v1/jobs' },
+      { value: fmt(data.scale.companies, null), label: 'companies', href: '/api/v1/companies' },
+      { value: fmt(data.scale.sources, null), label: 'sources', href: '/api/v1/stats/catalog' },
+      {
+        value: fmt(data.scale.telegramChannels, null),
+        label: 'Telegram channels',
+        href: '/api/v1/stats/catalog',
+      },
+    ].filter((s) => s.value !== null),
+  );
 
   const gh = $derived(data.github);
   const members = $derived.by(() => {
