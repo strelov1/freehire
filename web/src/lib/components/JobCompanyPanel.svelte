@@ -19,25 +19,29 @@
 
   let company = $state.raw<Company | null>(null);
   let failed = $state(false);
-  let loading = $state(false);
   // A plain variable, not $state: the effect below writes it, and a reactive read
   // would make the effect its own dependency. Nothing renders from it.
   let requested = false;
 
-  // Fetch once, on the first activation. The parent keys this component on the company
-  // slug, so navigating to a job at another company remounts it and resets the guard —
-  // there is no stale-company case to handle here.
+  // Fetch once, on the first activation. `limit=1` is the endpoint's floor — the API
+  // clamps it to at least 1, so a company-only read is not expressible and the single
+  // job that comes back is discarded (the same note companies/[slug]/+page.server.ts
+  // carries). The parent keys this component on the company slug, so navigating to a
+  // job at another company remounts it and resets the guard; there is no stale-company
+  // case to handle here.
   $effect(() => {
     if (!active || requested) return;
     requested = true;
-    loading = true;
     api
       .getCompany(slug, 1, 0)
       .then((r) => (company = r.company))
-      .catch(() => (failed = true))
-      .finally(() => (loading = false));
+      .catch(() => (failed = true));
   });
 
+  // In flight: activated, and neither answer has arrived. Derived rather than a third
+  // piece of state, which would have to be cleared on both the success and the failure
+  // path and could disagree with them if either were ever missed.
+  const pending = $derived(active && company == null && !failed);
   const empty = $derived(company != null && !hasCompanyDetails(company));
 </script>
 
@@ -52,7 +56,7 @@
   </a>
 {/snippet}
 
-{#if loading}
+{#if pending}
   <div class="flex flex-col gap-4">
     <Skeleton class="h-40 w-full rounded-xl" />
     <Skeleton class="h-28 w-full rounded-xl" />
