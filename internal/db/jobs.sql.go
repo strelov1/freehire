@@ -2531,8 +2531,7 @@ WITH ats AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            jobs.countries
     FROM jobs
-    WHERE replace(jobs.company_slug, '-', '') = ANY(
-              SELECT replace(c, '-', '') FROM unnest($1::text[]) AS c)
+    WHERE replace(jobs.company_slug, '-', '') = ANY($1::text[])
       AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
       AND NOT (jobs.source = ANY($2::text[]))
 ),
@@ -2549,8 +2548,7 @@ agg AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            a.countries
     FROM jobs a
-    WHERE replace(a.company_slug, '-', '') = ANY(
-              SELECT replace(c, '-', '') FROM unnest($1::text[]) AS c)
+    WHERE replace(a.company_slug, '-', '') = ANY($1::text[])
       AND a.closed_at IS NULL AND a.company_slug <> ''
       AND a.source = ANY($2::text[])
       AND (
@@ -2630,8 +2628,8 @@ WHERE j.id = t.id
 `
 
 type SuppressAggregatorDuplicatesForCompaniesParams struct {
-	Companies   []string `json:"companies"`
-	Aggregators []string `json:"aggregators"`
+	FoldedCompanies []string `json:"folded_companies"`
+	Aggregators     []string `json:"aggregators"`
 }
 
 // The batched slice of the cross-source aggregator suppression, driven over a CHUNK of
@@ -2648,6 +2646,17 @@ type SuppressAggregatorDuplicatesForCompaniesParams struct {
 // source spelling one employer "Cfoinsights", another "CFO Insights" — different
 // slugs that must still agree), just computed once per row instead of per query.
 //
+// The batch arrives ALREADY FOLDED (cmd/reindex's foldCompanySlugs), so the driving
+// predicate is a plain `= ANY($folded_companies)` rather than the
+// `= ANY(SELECT replace(c,'-',”) FROM unnest($companies))` it used to be. That
+// subquery is what made this pass unfinishable: the planner has no size estimate for
+// a subquery, defaults to 200 rows, and therefore drove each batch off the SOURCE
+// index instead of jobs_open_company_slug_folded_idx — reading ~927k aggregator rows
+// per batch of 500 companies. Measured on prod 2026-08-16: 271s per batch, ~23h over
+// the 306 batches, against a 12h unit timeout the run never survived (0 successful
+// reindexes in 3 days). With the folded array as a bare parameter the same batch is
+// 0.65s — the folded index answers in 1.4ms — so the pass fits in minutes.
+//
 // An open aggregator posting is marked duplicate_of an open CANONICAL ATS
 // (non-aggregator) posting of the same (folded) company, equal normalized title, and
 // compatible country (countries overlap, or either side empty — the geography
@@ -2660,7 +2669,7 @@ type SuppressAggregatorDuplicatesForCompaniesParams struct {
 // DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 // RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
 func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, suppressAggregatorDuplicatesForCompanies, arg.Companies, arg.Aggregators)
+	result, err := q.db.Exec(ctx, suppressAggregatorDuplicatesForCompanies, arg.FoldedCompanies, arg.Aggregators)
 	if err != nil {
 		return 0, err
 	}

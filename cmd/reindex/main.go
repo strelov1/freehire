@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -78,35 +79,12 @@ func run() int {
 		return 1
 	}
 
-	// Refresh the role-cluster canonical markers before reading jobs, so the collapse
-	// (splitJobs drops non-canonical reposts) reflects the current catalogue and a closed
-	// canon has failed over. Done per company in short transactions (never a table-wide
-	// lock that would stall ingest). Best-effort: a hiccup here must not block the reindex
-	// (which also owns settings/compaction), so it degrades to the prior markers.
-	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
-		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
-	}
-
-	// Then suppress aggregator postings that duplicate a first-party ATS posting, so the
-	// aggregator copy drops out of this rebuild (and out of embedding/enrichment). Run
-	// AFTER the role recompute so ATS reposts have collapsed to their canon first. Same
-	// per-company, best-effort discipline as the role pass.
-	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
-		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
-	}
-
-	// Finally collapse reposts whose descriptions are near-identical but not byte-identical —
-	// a role reposted per city with a localized salary or legal block, which the exact passes
-	// leave split. Runs LAST so it only ever claims what they did not, and shares their
-	// per-company, best-effort discipline.
-	if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
-		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
-	} else if n > 0 {
-		log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
+	// The duplicate-marker passes run only when asked for (REINDEX_DEDUP=1) — see
+	// config.Reindex.Dedup for why they are no longer part of every rebuild. Without
+	// them the rebuild still collapses reposts; it just uses the markers the last
+	// dedup invocation left, which is what "eventually consistent" already meant.
+	if rcfg.Dedup {
+		refreshDuplicateMarkers(ctx, q)
 	}
 
 	reader := worker.NewFullScanReader(q)
@@ -139,6 +117,36 @@ func run() int {
 		log.Printf("reindex: purged %d stale search_outbox entries queued before this run", n)
 	}
 	return 0
+}
+
+// refreshDuplicateMarkers runs the three duplicate-marker passes in the order they
+// depend on: role clusters first (so ATS reposts collapse to their canon), then
+// aggregator suppression (so an aggregator copy of an already-collapsed ATS posting
+// drops out), then the fuzzy collapse (which only ever claims what the exact passes
+// did not).
+//
+// Every pass is best-effort and logs rather than fails: a hiccup in a marker refresh
+// must not stop the rebuild that follows it, which also owns index settings and
+// compaction. Each is done per company in short transactions — never a table-wide
+// lock that would stall the ingest.
+func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) {
+	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: recompute role duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: recomputed role duplicates (%d rows re-marked)", n)
+	}
+
+	if n, err := suppressAggregatorDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: suppress aggregator duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
+	}
+
+	if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
+		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
+	} else if n > 0 {
+		log.Printf("reindex: collapsed fuzzy duplicates (%d rows re-marked)", n)
+	}
 }
 
 // rebuilder builds a brand-new index out of band and atomically swaps it into
@@ -296,10 +304,32 @@ func suppressAggregatorDuplicates(ctx context.Context, q *db.Queries) (int64, er
 	}
 	return forCompanyBatches(ctx, companies, func(ctx context.Context, batch []string) (int64, error) {
 		return q.SuppressAggregatorDuplicatesForCompanies(ctx, db.SuppressAggregatorDuplicatesForCompaniesParams{
-			Companies:   batch,
-			Aggregators: aggregators,
+			FoldedCompanies: foldCompanySlugs(batch),
+			Aggregators:     aggregators,
 		})
 	})
+}
+
+// foldCompanySlugs applies the `replace(slug, '-', ”)` fold the aggregator
+// suppression compares on, so the query receives an already-folded array instead of
+// folding a subquery itself.
+//
+// It exists for the planner, not for correctness. Folding inside the SQL meant the
+// driving predicate read `= ANY(SELECT replace(c,'-',”) FROM unnest($1))`, and a
+// subquery carries no size estimate — the planner assumed 200 rows and drove each
+// batch off the source index, scanning ~927k aggregator rows per batch of 500
+// companies (271s each on prod, ~23h for the pass, against a 12h unit timeout it
+// never survived). As a bare array parameter the same batch takes 0.65s.
+//
+// Duplicates are left in: a fold can collide ("cfo-insights" and "cfoinsights" both
+// fold to "cfoinsights"), and that collision is the POINT — those rows must match.
+// Deduplicating here would change nothing for the query and cost an allocation.
+func foldCompanySlugs(slugs []string) []string {
+	folded := make([]string, len(slugs))
+	for i, s := range slugs {
+		folded[i] = strings.ReplaceAll(s, "-", "")
+	}
+	return folded
 }
 
 // forCompanyBatches runs fn once per companyBatchSize-sized slice of companies, summing
@@ -318,6 +348,15 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 	for batch := range slices.Chunk(companies, companyBatchSize) {
 		n, err := fn(ctx, batch)
 		if err != nil {
+			// A cancelled context ends the pass instead of counting a failure: the
+			// remaining batches would each fail instantly against the same dead
+			// context, so continuing turns one deadline into hundreds of "failed"
+			// batches. That is not cosmetic — it is what the 2026-08-16 investigation
+			// had to see through: the log said "75 batches failed", which reads as 75
+			// distinct problems rather than one timeout.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return total, fmt.Errorf("cancelled after %d batches: %w", failures, ctxErr)
+			}
 			failures++
 			lastErr = fmt.Errorf("batch of %d companies (starting %q): %w", len(batch), batch[0], err)
 			continue

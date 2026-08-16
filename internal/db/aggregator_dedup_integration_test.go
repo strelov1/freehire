@@ -12,6 +12,7 @@ package db
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -37,7 +38,10 @@ func aggJob(externalID, title string, countries []string) UpsertJobParams {
 }
 
 // suppressAggregators drives the pass in one batched call across every candidate
-// company, as cmd/reindex does.
+// company, as cmd/reindex does — including the slug fold, which lives in the caller
+// (cmd/reindex's foldCompanySlugs) rather than in the query. Folding here too is what
+// keeps these tests exercising the same predicate production runs; passing the raw
+// slugs would quietly match nothing for any hyphenated company.
 func suppressAggregators(t *testing.T, q *Queries) {
 	t.Helper()
 	ctx := context.Background()
@@ -48,9 +52,13 @@ func suppressAggregators(t *testing.T, q *Queries) {
 	if len(companies) == 0 {
 		return
 	}
+	folded := make([]string, len(companies))
+	for i, c := range companies {
+		folded[i] = strings.ReplaceAll(c, "-", "")
+	}
 	if _, err := q.SuppressAggregatorDuplicatesForCompanies(ctx, SuppressAggregatorDuplicatesForCompaniesParams{
-		Companies:   companies,
-		Aggregators: aggregators,
+		FoldedCompanies: folded,
+		Aggregators:     aggregators,
 	}); err != nil {
 		t.Fatalf("suppress companies %v: %v", companies, err)
 	}
