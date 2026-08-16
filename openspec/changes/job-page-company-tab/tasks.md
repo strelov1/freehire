@@ -11,25 +11,25 @@
 
 ## 2. Company panel
 
-- [ ] 2.1 Create `web/src/lib/components/JobCompanyPanel.svelte` taking a company slug and
+- [x] 2.1 Create `web/src/lib/components/JobCompanyPanel.svelte` taking a company slug and
   name, with the `idle → loading → (loaded | empty | error)` state machine and a single
   `api.getCompany(slug, 1, 0)` call fired on first activation and cached thereafter.
   Document at the call site why `limit=1` and why the returned job is discarded.
-- [ ] 2.2 Render the loaded state: `CompanyFacts` and `CompanyAbout`, followed by an
+- [x] 2.2 Render the loaded state: `CompanyFacts` and `CompanyAbout`, followed by an
   "All jobs at <name> →" link resolving to `/companies/[slug]`.
-- [ ] 2.3 Render the loading skeleton, the empty state ("We don't have details on <name>
+- [x] 2.3 Render the loading skeleton, the empty state ("We don't have details on <name>
   yet." plus the link) and the error state ("Couldn't load company details" plus the
   link), choosing `empty` via `hasCompanyDetails`.
 
 ## 3. Tab strip on the job page
 
-- [ ] 3.1 In `web/src/lib/components/JobView.svelte`, wrap the content column's existing
+- [x] 3.1 In `web/src/lib/components/JobView.svelte`, wrap the content column's existing
   summary and description in a `Description` panel and add the `Company` panel beside it,
   rendering the strip only when `job.company_slug` is set.
-- [ ] 3.2 Wire the tab semantics: `role="tablist"`/`role="tab"`/`role="tabpanel"`,
+- [x] 3.2 Wire the tab semantics: `role="tablist"`/`role="tab"`/`role="tabpanel"`,
   `aria-selected`, `aria-controls` and `id` pairs from `$props.id()`, and left/right
   arrow-key movement between tabs.
-- [ ] 3.3 Toggle panel visibility with the Tailwind `hidden`/`block` utilities, keeping
+- [x] 3.3 Toggle panel visibility with the Tailwind `hidden`/`block` utilities, keeping
   both panels mounted — not `{#if}`, and not the `hidden` attribute. Key the company panel
   on the company slug so a client-side navigation to another job resets it.
 

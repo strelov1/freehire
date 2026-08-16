@@ -67,22 +67,31 @@ the same future backend company-entity-only path, not a new debt.
 and a click already feels immediate; hover prefetch spends requests on every passing
 cursor.
 
-### Both panels stay mounted; visibility is a class
+### The strip is the design system's `TabStrip`; both contents stay mounted
 
-The panels are toggled with `class={active ? 'block' : 'hidden'}`, never `{#if}`.
+`TabStrip` (`design-system/src/tab-strip.svelte`) already owns everything a hand-rolled
+row would have to re-earn: `role="tablist"`, a roving tabindex, arrow-key and Home/End
+movement, and an overflow-scrolling row that degrades on a narrow viewport. It is the
+component `/my/profile` uses. Writing a second tablist here would mean a second copy of
+that keyboard contract, and the two would diverge.
 
-`{#if}` would unmount the inactive panel, and each tab's `aria-controls` would then point
-at an id that resolves to nothing — the exact `aria-valid-attr-value` failure the repo hit
-in `GhostChecklist.svelte`. `display: none` removes an element from the accessibility tree
-and the tab order just as unmounting does, while keeping the IDREF live. The `hidden`
-attribute is not used: `[hidden] { display: none }` from preflight and a Tailwind display
-utility have equal specificity, and the utility is emitted later, so it wins.
+`TabStrip` points every tab's `aria-controls` at ONE panel id, which the call site owns.
+That is what disarms the `aria-valid-attr-value` failure the repo hit in
+`GhostChecklist.svelte`: the panel element is unconditional, so the IDREF cannot dangle.
+The id comes from `$props.id()` — Svelte's SSR-stable per-instance primitive — rather than
+a hardcoded string, so a second `JobView` on one page cannot claim the same panel. Note
+`$props.id()` is only legal as a variable declaration's initializer; it cannot be
+interpolated inline.
 
-Ids come from `$props.id()` (Svelte's SSR-stable per-instance id primitive) rather than
-being hardcoded, so a second instance on one page cannot claim the same id.
+Inside that panel, the two contents are toggled with `class={active ? 'block' : 'hidden'}`
+rather than `{#if}`. Unmounting the company content would discard a fetch the visitor
+already waited through, and re-render the description on every switch back. The `hidden`
+*attribute* is deliberately not used: `[hidden] { display: none }` from preflight and a
+Tailwind display utility have equal specificity, and the utility is emitted later, so the
+utility wins and the element stays visible.
 
-Keeping the description panel mounted has no SEO cost: it is the default-selected panel
-and is visible in the server-rendered HTML either way.
+Keeping the description mounted has no SEO cost: it is the default-selected content and
+is in the server-rendered HTML either way.
 
 ### The panel is keyed on the company slug
 

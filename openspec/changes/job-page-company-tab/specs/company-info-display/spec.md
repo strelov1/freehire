@@ -77,11 +77,14 @@ the two.
 
 ### Requirement: The tab strip is operable by keyboard and exposed to assistive technology
 
-The tab strip SHALL expose the standard tab pattern: a tab list, a tab per panel carrying
-its selected state, and a panel per tab. Each tab SHALL reference its panel by id, and
-that id SHALL resolve to an element in the document at every point in the page's life,
-including before either tab has been activated. Inactive panels SHALL be hidden by style
-rather than removed from the document.
+The tab strip SHALL expose the standard tab pattern: a tab list, one tab per selectable
+view carrying its selected state, and a tab panel the tabs drive. The panel id each tab
+references SHALL resolve to an element in the document at every point in the page's life,
+including before either tab has been activated.
+
+The content of the unselected tab SHALL remain in the document, hidden by style rather
+than removed, so that switching away from the Company tab does not discard a company the
+visitor has already waited for.
 
 The left and right arrow keys SHALL move the selection between tabs.
 
@@ -90,7 +93,7 @@ The left and right arrow keys SHALL move the selection between tabs.
 - **WHEN** a job page with a tab strip finishes its first render, before any tab is
   clicked
 - **THEN** each tab's referenced panel id resolves to an element in the document, and the
-  panel of the unselected tab is present but not displayed
+  content of the unselected tab is present but not displayed
 
 #### Scenario: Arrow keys move between tabs
 

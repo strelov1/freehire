@@ -10,10 +10,11 @@
   import { track } from '$lib/analytics';
   import type { Job, UserJob } from '$lib/types';
   import { companyLogoUrl } from '$lib/logo';
-  import { Badge, Button, Chip, EntityLogo } from '$lib/ui';
+  import { Badge, Button, Chip, EntityLogo, TabStrip, tabStripId } from '$lib/ui';
   import { formatDate } from '$lib/utils';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
+  import JobCompanyPanel from './JobCompanyPanel.svelte';
   import JobDescription from './JobDescription.svelte';
   import JobMatch from './JobMatch.svelte';
   import { supersedesReality } from '$lib/ghost';
@@ -64,6 +65,29 @@
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
   const views = $derived(job.view_count ?? 0);
   const applies = $derived(job.applied_count ?? 0);
+
+  // The content column is tabbed whenever we know the employer, so "who are these
+  // people?" is answerable without leaving the posting. Page state, not a route: the
+  // company copy already has a canonical home at /companies/<slug>, and a second URL
+  // serving it would be a thin duplicate we'd then have to keep out of the index.
+  const CONTENT_TABS = [
+    { id: 'description', label: 'Description' },
+    { id: 'company', label: 'Company' },
+  ] as const;
+  type ContentTab = (typeof CONTENT_TABS)[number]['id'];
+
+  const companySlug = $derived(job.company_slug ?? '');
+  let contentTab = $state<ContentTab>('description');
+  // Per-instance so a second JobView on one page can't claim the same panel, which
+  // would leave both strips' aria-controls pointing at the first one's panel.
+  const panelId = $props.id();
+  // Reset when the visitor navigates client-side to another job: JobView is not
+  // remounted on a param change, so the Company tab would otherwise stay selected
+  // over a company they never asked about.
+  $effect(() => {
+    void job.public_slug;
+    contentTab = 'description';
+  });
 
   // Funnel view — captured for everyone (unlike the authed-only server record
   // below). Keyed on the slug alone so it fires once per job and never re-emits
@@ -204,6 +228,22 @@
   >
     Show <ArrowRight class="size-4" />
   </Button>
+{/snippet}
+
+<!-- The posting itself. A snippet because it is rendered either inside the Description
+     tab panel or, on a job whose employer we don't know, straight into the column with
+     no tab strip above it at all. -->
+{#snippet descriptionContent()}
+  {#if e.summary}
+    <!-- Model-written synopsis (only on enriched jobs). Plain text, capped at
+         400 chars server-side — the headline above the full description. -->
+    <section class="flex flex-col gap-2">
+      <h2 class="text-base font-semibold">Summary</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
+    </section>
+  {/if}
+
+  <JobDescription html={job.description} />
 {/snippet}
 
 <!-- Wide layout mirroring /jobs. The company line spans the very top; below it a
@@ -449,16 +489,34 @@
       </div>
     {/if}
 
-    {#if e.summary}
-      <!-- Model-written synopsis (only on enriched jobs). Plain text, capped at
-           400 chars server-side — the headline above the full description. -->
-      <section class="flex flex-col gap-2">
-        <h2 class="text-base font-semibold">Summary</h2>
-        <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
-      </section>
+    {#if companySlug}
+      <TabStrip
+        tabs={CONTENT_TABS}
+        active={contentTab}
+        onSelect={(id) => (contentTab = id)}
+        label="Job details"
+        {panelId}
+      />
+      <!-- One panel for both tabs, its contents toggled by class rather than {#if}.
+           Unmounting the inactive one would throw away the company the visitor already
+           waited for, and re-render the description on every switch back. -->
+      <div id={panelId} role="tabpanel" aria-labelledby={tabStripId(panelId, contentTab)}>
+        <div class={contentTab === 'description' ? 'flex flex-col gap-6' : 'hidden'}>
+          {@render descriptionContent()}
+        </div>
+        <div class={contentTab === 'company' ? 'block' : 'hidden'}>
+          {#key companySlug}
+            <JobCompanyPanel
+              slug={companySlug}
+              name={job.company || 'this company'}
+              active={contentTab === 'company'}
+            />
+          {/key}
+        </div>
+      </div>
+    {:else}
+      {@render descriptionContent()}
     {/if}
-
-    <JobDescription html={job.description} />
   </div>
 
   <!-- Mobile apply CTA. It sticks to the bottom of the viewport while the job
