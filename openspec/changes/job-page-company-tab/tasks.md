@@ -1,12 +1,12 @@
 ## 1. Present-only conditions as a pure module
 
-- [ ] 1.1 Write `web/src/lib/companyDetails.test.ts` first: `companyFacts`,
+- [x] 1.1 Write `web/src/lib/companyDetails.test.ts` first: `companyFacts`,
   `companyBadges`, `companyDescription` and `hasCompanyDetails` over a company with
   everything, a company with nothing, and the partial cases in between (facts but no
   description, description but no facts, badges only, whitespace-only description).
-- [ ] 1.2 Add `web/src/lib/companyDetails.ts` until those tests pass, lifting the
+- [x] 1.2 Add `web/src/lib/companyDetails.ts` until those tests pass, lifting the
   derivations out of `CompanyFacts.svelte` and `CompanyAbout.svelte` unchanged.
-- [ ] 1.3 Rewire `CompanyFacts.svelte` and `CompanyAbout.svelte` to consume the module so
+- [x] 1.3 Rewire `CompanyFacts.svelte` and `CompanyAbout.svelte` to consume the module so
   there is one definition of "has anything to show", not three.
 
 ## 2. Company panel

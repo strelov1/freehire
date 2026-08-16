@@ -1,13 +1,14 @@
 <script lang="ts">
   import type { Company } from '$lib/types';
+  import { companyDescription } from '$lib/companyDetails';
 
   // The company's full description as an "About" card in the jobs sidebar, under
-  // Company facts. The header only shows the derived tagline (first sentence); this
-  // is the whole summary. Present-only: renders nothing when the company has no
-  // description, so the sidebar never leaves an empty box.
+  // Company facts, and in the job page's Company tab. The header only shows the derived
+  // tagline (first sentence); this is the whole summary. Present-only: renders nothing
+  // when the company has no description, so the sidebar never leaves an empty box.
   let { company }: { company: Company } = $props();
 
-  const description = $derived(company.company_info?.description?.trim() ?? '');
+  const description = $derived(companyDescription(company));
 
   // Collapsed to a few lines, expandable — a long summary shouldn't dominate the page
   // above the jobs. The toggle appears only when the text actually overflows the clamp,
