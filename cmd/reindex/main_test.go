@@ -19,7 +19,7 @@ import (
 // documents, closed ones become deletions so they leave the index (job-search
 // spec: the index contains only open jobs).
 func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
-	open := db.Job{ID: 1, Title: "Open", PublicSlug: "open-x", Category: "backend"}
+	open := db.Job{ID: 1, Title: "Open", PublicSlug: "open-x", Category: "backend", Description: "<p>Build things.</p>"}
 	closed := db.Job{ID: 2, Title: "Closed", PublicSlug: "closed-x",
 		ClosedAt: pgtype.Timestamptz{Time: open.CreatedAt.Time, Valid: true}}
 
@@ -38,7 +38,7 @@ func TestSplitJobs_OpenBecomeDocsClosedBecomeDeletions(t *testing.T) {
 // A non-canonical repost (duplicate_of set) must not be indexed, and is deleted from
 // the index so a previously-canonical row that got demoted leaves search.
 func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
-	canon := db.Job{ID: 1, Title: "Canon", PublicSlug: "canon-x", Category: "backend"}
+	canon := db.Job{ID: 1, Title: "Canon", PublicSlug: "canon-x", Category: "backend", Description: "<p>Build things.</p>"}
 	repost := db.Job{ID: 2, Title: "Repost", PublicSlug: "repost-x",
 		DuplicateOf: pgtype.Int8{Int64: 1, Valid: true}}
 
@@ -58,7 +58,7 @@ func TestSplitJobs_RepostsDeletedNotIndexed(t *testing.T) {
 // must never become a search document, whatever its open/closed state — see the job-search
 // capability delta in openspec/changes/jd-tailor-intake.
 func TestSplitJobs_PrivateJobsAreDeletedNotIndexed(t *testing.T) {
-	public := db.Job{ID: 1, Title: "Public", PublicSlug: "public-x", Category: "backend"}
+	public := db.Job{ID: 1, Title: "Public", PublicSlug: "public-x", Category: "backend", Description: "<p>Build things.</p>"}
 	private := db.Job{ID: 2, Title: "Private", PublicSlug: "private-x", IsPrivate: true}
 
 	docs, deleteIDs, err := splitJobs([]db.Job{public, private}, nil, nil, time.Now())
@@ -77,7 +77,7 @@ func TestSplitJobs_PrivateJobsAreDeletedNotIndexed(t *testing.T) {
 // be indexed, and is deleted so a stale pre-rule copy leaves the index (see
 // search.CategoryUnresolved and internal/search/AGENTS.md).
 func TestSplitJobs_CategoryUnresolvedDeletedNotIndexed(t *testing.T) {
-	categorized := db.Job{ID: 1, Title: "Backend Engineer", PublicSlug: "backend-x", Category: "backend"}
+	categorized := db.Job{ID: 1, Title: "Backend Engineer", PublicSlug: "backend-x", Category: "backend", Description: "<p>Build things.</p>"}
 	unresolved := db.Job{ID: 2, Title: "Overnight Stocking", PublicSlug: "stocking-x"}
 	llmOther := db.Job{ID: 3, Title: "Mystery Role", PublicSlug: "mystery-x",
 		Enrichment: []byte(`{"category":"other"}`)}
@@ -94,6 +94,29 @@ func TestSplitJobs_CategoryUnresolvedDeletedNotIndexed(t *testing.T) {
 	}
 }
 
+// A posting whose detail fetch never landed carries a title and nothing under it. It is a
+// legitimate row (a later crawl can still hydrate it) but not a listing anyone can read, so it
+// is kept out of the index and deleted from it — and re-enters by itself once the body arrives.
+// Markup with no words in it counts as empty. freehire#1866.
+func TestSplitJobs_BodylessJobsDeletedNotIndexed(t *testing.T) {
+	readable := db.Job{ID: 1, Title: "Backend Engineer", PublicSlug: "backend-x",
+		Category: "backend", Description: "<p>Build things.</p>"}
+	bodyless := db.Job{ID: 2, Title: "Backend Engineer", PublicSlug: "bodyless-x", Category: "backend"}
+	markupOnly := db.Job{ID: 3, Title: "Backend Engineer", PublicSlug: "markup-x",
+		Category: "backend", Description: "<p>&nbsp;</p>"}
+
+	docs, deleteIDs, err := splitJobs([]db.Job{readable, bodyless, markupOnly}, nil, nil, time.Now())
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	if len(docs) != 1 || docs[0].ID != 1 {
+		t.Fatalf("docs = %+v, want only the job with a body", docs)
+	}
+	if got, want := deleteIDs, []int64{2, 3}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("deleteIDs = %v, want %v", got, want)
+	}
+}
+
 // A canonical row's document is widened with its role cluster's geography union, so a
 // collapsed multi-country role stays findable by every country its (hidden) reposts hold.
 func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
@@ -101,7 +124,7 @@ func TestSplitJobs_CanonGetsClusterGeoUnion(t *testing.T) {
 		ID: 1, Title: "Senior Engineer", PublicSlug: "senior-engineer-acme-x",
 		CompanySlug: "acme", RoleFingerprint: pgtype.Text{String: "fp1", Valid: true},
 		Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
-		Category: "backend",
+		Category: "backend", Description: "<p>Build things.</p>",
 	}
 	geo := func(cs, fp string) ([]string, []string, []string) {
 		if cs == "acme" && fp == "fp1" {
@@ -163,10 +186,10 @@ func (f *fakeRebuilder) Cleanup(context.Context) error {
 // simply absent — the fresh index never held them, so there is nothing to
 // delete), then promotes exactly once at the end.
 func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
-	open1 := db.Job{ID: 1, Title: "A", PublicSlug: "a", Category: "backend"}
+	open1 := db.Job{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}
 	closed := db.Job{ID: 2, Title: "B", PublicSlug: "b",
 		ClosedAt: pgtype.Timestamptz{Time: time.Unix(1, 0), Valid: true}}
-	open3 := db.Job{ID: 3, Title: "C", PublicSlug: "c", Category: "backend"}
+	open3 := db.Job{ID: 3, Title: "C", PublicSlug: "c", Category: "backend", Description: "<p>Build things.</p>"}
 	page := []db.Job{open1, closed, open3}
 
 	reader := &fakePageReader{pages: map[int64][]db.Job{0: page}}
@@ -195,7 +218,7 @@ func TestReindexFull_PushesOpenDocsThenPromotes(t *testing.T) {
 // must drop its half-built rebuild index via the deferred Cleanup — otherwise the
 // orphan index eats disk until the next run's Prepare clears it.
 func TestReindexFull_CleansUpOnAbort(t *testing.T) {
-	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend"}}}}
+	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{pushErr: errors.New("push boom")}
 
 	_, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now())
@@ -213,7 +236,7 @@ func TestReindexFull_CleansUpOnAbort(t *testing.T) {
 // A successful rebuild swaps-and-drops in Promote, so the deferred Cleanup must NOT
 // run — a second drop of the (already-swapped) rebuild uid is pointless work.
 func TestReindexFull_NoCleanupOnSuccess(t *testing.T) {
-	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend"}}}}
+	reader := &fakePageReader{pages: map[int64][]db.Job{0: {{ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"}}}}
 	f := &fakeRebuilder{}
 
 	if _, _, err := reindexFull(context.Background(), reader, f, nil, nil, time.Now()); err != nil {
@@ -232,8 +255,8 @@ func TestReindexFull_SkipsCorruptedRowAndPromotes(t *testing.T) {
 		corruptAfter: map[int64]bool{0: true},
 		idPages:      map[int64][]int64{0: {1, 2, 3}},
 		rows: map[int64]db.Job{
-			1: {ID: 1, Title: "A", PublicSlug: "a", Category: "backend"},
-			3: {ID: 3, Title: "C", PublicSlug: "c", Category: "backend"},
+			1: {ID: 1, Title: "A", PublicSlug: "a", Category: "backend", Description: "<p>Build things.</p>"},
+			3: {ID: 3, Title: "C", PublicSlug: "c", Category: "backend", Description: "<p>Build things.</p>"},
 		},
 		rowCorrupt: map[int64]bool{2: true},
 	}

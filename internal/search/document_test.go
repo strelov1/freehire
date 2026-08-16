@@ -80,6 +80,30 @@ func TestCategoryUnresolved(t *testing.T) {
 	}
 }
 
+// A posting with no body is not a listing anyone can act on, so it stays out of the index.
+// Whitespace-only counts as empty — a source that serves "<p> </p>" has published nothing,
+// and sanitizing leaves the markup behind. freehire#1866.
+func TestDescriptionMissing(t *testing.T) {
+	tests := []struct {
+		name string
+		job  db.Job
+		want bool
+	}{
+		{"a real body", db.Job{Description: "<p>Build things.</p>"}, false},
+		{"empty", db.Job{}, true},
+		{"whitespace only", db.Job{Description: "   \n\t "}, true},
+		{"markup with no text", db.Job{Description: "<p> </p><br/>"}, true},
+		{"markup wrapping text", db.Job{Description: "<div><p>Hi</p></div>"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DescriptionMissing(tt.job); got != tt.want {
+				t.Errorf("DescriptionMissing(%q) = %v, want %v", tt.job.Description, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMergeClusterGeography_WidensCanonFacets(t *testing.T) {
 	doc := JobDocument{Job: jobview.Job{
 		Countries: []string{"de"},

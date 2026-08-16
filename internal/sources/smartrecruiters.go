@@ -118,6 +118,7 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		} `json:"typeOfEmployment"`
 		JobAd struct {
 			Sections struct {
+				CompanyDescription    srSection `json:"companyDescription"`
 				JobDescription        srSection `json:"jobDescription"`
 				Qualifications        srSection `json:"qualifications"`
 				AdditionalInformation srSection `json:"additionalInformation"`
@@ -128,9 +129,15 @@ func (s smartRecruiters) detail(ctx context.Context, e CompanyEntry, p smartRecr
 		return Job{}, false
 	}
 
-	// companyDescription is intentionally excluded — it is boilerplate, not the role.
+	// companyDescription is excluded while the role sections carry text — it is boilerplate,
+	// not the role. It is NOT excluded when they are all empty: some tenants write the whole
+	// ad into that one section, and dropping it there stores a posting with no body at all
+	// (freehire#1866). A preference for the role text, not a ban on the company text.
 	sec := d.JobAd.Sections
 	body := sec.JobDescription.Text + sec.Qualifications.Text + sec.AdditionalInformation.Text
+	if strings.TrimSpace(body) == "" {
+		body = sec.CompanyDescription.Text
+	}
 
 	return Job{
 		ExternalID:  p.ID,

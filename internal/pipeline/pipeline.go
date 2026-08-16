@@ -81,9 +81,23 @@ type Toucher interface {
 // Each id maps to whether its stored row carries tech evidence (is_tech). Membership drives the
 // hydration decision; the flag lets a liveness refresh face the catalogue filter on the same
 // evidence a write would, which a content-less listing cannot supply.
+//
+// A stored row whose detail fetch failed — no description — is withheld from the set for
+// HydrationRetryWindow, so the crawl retries the fetch instead of treating the half-ingested
+// posting as done.
 type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
+
+// HydrationRetryWindow is how long after a posting enters the catalogue its missing description
+// is still worth another detail request. Being stored is what makes a posting "seen", so without
+// a window a failed first hydration is permanent: the row keeps its empty body for life (that is
+// how ~3.3k live rows across the hydrating sources lost theirs, freehire#1866). The window is
+// bounded rather than open-ended because the other reason a body is missing is that the source
+// published none, and retrying those forever would spend a detail request per crawl on every one
+// of them. Two weeks covers a transient outage or a rate-limit stretch without funding a
+// permanent retry loop.
+const HydrationRetryWindow = 14 * 24 * time.Hour
 
 // BoardHealth is the optional per-board health port: it tells the Runner whether a
 // board is currently cooled down (skip it) and records each crawl's outcome so a

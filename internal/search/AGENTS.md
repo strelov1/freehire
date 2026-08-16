@@ -27,6 +27,18 @@ reads a precomputed pgvector lookup instead (`internal/similarjobs`,
   categorized by a dictionary update or a fresh LLM pass is picked up by the next full
   `cmd/reindex` run, not incrementally — `SetJobEnrichment` does not enqueue
   `search_outbox`, so there is no faster path today.
+- **A job with no posting body never enters the index.** `search.DescriptionMissing`
+  (`document.go`) tests the VISIBLE text — `stripToPlainText` — not the raw column, because a
+  source that publishes an empty rich-text field serves markup with no words in it
+  (`<p>&nbsp;</p>`) and the ingest sanitizer legitimately keeps those tags. An adapter
+  deliberately stores a posting whose detail fetch failed (the listing is authoritative for the
+  job existing, and a later crawl can hydrate it), so a body-less row is a recoverable ingest
+  state, not an error — but a vacancy page with a title and nothing under it is not a listing
+  anyone can act on. `cmd/reindex`'s `splitJobs`, `cmd/search-drain`'s `IndexBatch`, and
+  `internal/linkimport` all apply it, alongside `CategoryUnresolved`. Measured at 15,816 live
+  rows (0.48% of the open catalogue) when the rule was added (freehire#1866). The exclusion is
+  self-healing: a row re-enters the index the moment a crawl fills its description, with no
+  backfill or manual step.
 - **Meilisearch has ONE serial task queue.** Two rebuilds do not run concurrently — the
   second queues behind the first and looks like a hang while the engine is genuinely busy.
   Before triggering any rebuild, check `ps aux | grep reindex` and

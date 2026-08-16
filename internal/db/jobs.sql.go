@@ -510,8 +510,15 @@ func (q *Queries) EstimateOpenJobs(ctx context.Context) (int64, error) {
 }
 
 const existingExternalIDs = `-- name: ExistingExternalIDs :many
-SELECT external_id, is_tech FROM jobs WHERE source = $1
+SELECT external_id, is_tech FROM jobs
+WHERE source = $1
+  AND (description <> '' OR created_at < $2)
 `
+
+type ExistingExternalIDsParams struct {
+	Source          string             `json:"source"`
+	HydrationCutoff pgtype.Timestamptz `json:"hydration_cutoff"`
+}
 
 type ExistingExternalIDsRow struct {
 	ExternalID string      `json:"external_id"`
@@ -527,8 +534,16 @@ type ExistingExternalIDsRow struct {
 //
 // is_tech rides along because a hydrating crawl re-lists a posting without its description: it is
 // the evidence the catalogue filter reads, and only the stored row still has it.
-func (q *Queries) ExistingExternalIDs(ctx context.Context, source string) ([]ExistingExternalIDsRow, error) {
-	rows, err := q.db.Query(ctx, existingExternalIDs, source)
+//
+// A row with NO description is not fully ingested — its one detail fetch failed and, because
+// being stored is what makes a posting "seen", nothing would ever retry it: the body would be
+// missing for the row's whole life (freehire#1866 found ~3.3k such live rows across the
+// hydrating sources). Such a row is therefore withheld from the seen-set until
+// hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
+// counts as seen again, so a posting the source genuinely publishes with no body stops costing
+// a detail request every crawl forever.
+func (q *Queries) ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error) {
+	rows, err := q.db.Query(ctx, existingExternalIDs, arg.Source, arg.HydrationCutoff)
 	if err != nil {
 		return nil, err
 	}
@@ -548,12 +563,16 @@ func (q *Queries) ExistingExternalIDs(ctx context.Context, source string) ([]Exi
 }
 
 const existingExternalIDsByBoard = `-- name: ExistingExternalIDsByBoard :many
-SELECT external_id, is_tech FROM jobs WHERE source = $1 AND external_id LIKE $2
+SELECT external_id, is_tech FROM jobs
+WHERE source = $1
+  AND external_id LIKE $2
+  AND (description <> '' OR created_at < $3)
 `
 
 type ExistingExternalIDsByBoardParams struct {
-	Source  string `json:"source"`
-	Pattern string `json:"pattern"`
+	Source          string             `json:"source"`
+	Pattern         string             `json:"pattern"`
+	HydrationCutoff pgtype.Timestamptz `json:"hydration_cutoff"`
 }
 
 type ExistingExternalIDsByBoardRow struct {
@@ -571,8 +590,11 @@ type ExistingExternalIDsByBoardRow struct {
 // collation punctuation carries only a secondary weight, so that range returns nothing at all.
 // The caller passes an escaped pattern (sources.BoardIDPattern) — a board name may contain LIKE
 // syntax, and an unescaped underscore would match a sibling board.
+//
+// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
+// see ExistingExternalIDs for why.
 func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error) {
-	rows, err := q.db.Query(ctx, existingExternalIDsByBoard, arg.Source, arg.Pattern)
+	rows, err := q.db.Query(ctx, existingExternalIDsByBoard, arg.Source, arg.Pattern, arg.HydrationCutoff)
 	if err != nil {
 		return nil, err
 	}

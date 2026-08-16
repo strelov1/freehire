@@ -96,13 +96,14 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	for _, job := range jobs {
 		// A job whose category neither the title dictionary nor the LLM ever resolved
-		// (search.CategoryUnresolved) never enters the index — see cmd/reindex's splitJobs
-		// for the same rule applied to the full-rebuild path. This skips rather than
-		// deletes: if the row is a rare pre-existing index entry from before this rule
+		// (search.CategoryUnresolved), or one with no posting body at all
+		// (search.DescriptionMissing), never enters the index — see cmd/reindex's splitJobs
+		// for the same rules applied to the full-rebuild path. This skips rather than
+		// deletes: if the row is a rare pre-existing index entry from before these rules
 		// existed, it goes stale here the same way a closed job's does between drain
 		// waves (internal/searchdrain/AGENTS.md) — the next full reindex swap is the
 		// reconciler for both.
-		if search.CategoryUnresolved(job) {
+		if search.CategoryUnresolved(job) || search.DescriptionMissing(job) {
 			continue
 		}
 		doc, err := search.FromJob(job)

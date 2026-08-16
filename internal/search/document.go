@@ -105,6 +105,21 @@ func CategoryUnresolved(j db.Job) bool {
 	return e.Category == "" || e.Category == "other"
 }
 
+// DescriptionMissing reports whether a job carries no posting body at all. An adapter
+// keeps a posting whose detail fetch failed — the listing is authoritative for the job
+// existing, and a later crawl can still hydrate it — so a body-less row is a normal,
+// recoverable ingest state rather than an error. It is not something to SHOW: a vacancy
+// page with a title and nothing under it tells a candidate nothing and cannot be applied
+// to on its merits, so such a job is excluded from the index exactly like an
+// unresolved-category one, and re-enters it by itself the moment a crawl fills the body.
+//
+// The test is on the VISIBLE text, not the raw column: a source that publishes an empty
+// rich-text field serves markup with no words in it ("<p>&nbsp;</p>"), which the ingest
+// sanitizer keeps because those tags are legal.
+func DescriptionMissing(j db.Job) bool {
+	return stripToPlainText(j.Description) == ""
+}
+
 // MergeClusterGeography widens a canonical document's geography facets with the union
 // across its role cluster's open rows, so a collapsed multi-city/multi-country role
 // stays findable by every city and country it is open in — not only the canon's own.

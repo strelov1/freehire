@@ -221,6 +221,72 @@ func TestSmartRecruitersFetchPaginatesAndFetchesDetail(t *testing.T) {
 	}
 }
 
+// A tenant that puts the whole ad in companyDescription and leaves the three role sections
+// empty would otherwise be ingested with no description at all (1,066 such live rows on prod,
+// freehire#1866). The boilerplate exclusion is a preference, not a rule: with nothing else to
+// show, the company section IS the posting.
+func TestSmartRecruitersFallsBackToCompanyDescription(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("offset=0", `{"totalFound": 1, "content": [
+			{"id": "P1", "name": "Backend Engineer", "location": {"city": "Berlin", "country": "de"}}
+		]}`).
+		route("/postings/P1", `{
+			"id": "P1",
+			"postingUrl": "https://jobs.smartrecruiters.com/Acme/P1",
+			"jobAd": {"sections": {
+				"companyDescription": {"title": "Company", "text": "<p>Acme builds rockets. Join us.</p>"},
+				"jobDescription": {"title": "Job", "text": ""},
+				"qualifications": {"title": "Qualifications", "text": ""},
+				"additionalInformation": {"title": "More", "text": ""}
+			}}
+		}`)
+
+	jobs, err := NewSmartRecruiters(fake).Fetch(context.Background(), CompanyEntry{
+		Provider: "smartrecruiters", Board: "Acme", Company: "Acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if !strings.Contains(jobs[0].Description, "Acme builds rockets") {
+		t.Errorf("Description = %q, want the companyDescription fallback", jobs[0].Description)
+	}
+}
+
+// The fallback must not fire when the role sections carry text — a posting with a body keeps
+// excluding the boilerplate, which is the whole point of the exclusion.
+func TestSmartRecruitersFallbackDoesNotFireWhenRoleSectionsFilled(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("offset=0", `{"totalFound": 1, "content": [
+			{"id": "P1", "name": "Backend Engineer", "location": {"city": "Berlin", "country": "de"}}
+		]}`).
+		route("/postings/P1", `{
+			"id": "P1",
+			"postingUrl": "https://jobs.smartrecruiters.com/Acme/P1",
+			"jobAd": {"sections": {
+				"companyDescription": {"title": "Company", "text": "<p>boilerplate</p>"},
+				"jobDescription": {"title": "Job", "text": ""},
+				"qualifications": {"title": "Qualifications", "text": ""},
+				"additionalInformation": {"title": "More", "text": "<p>EEO notice.</p>"}
+			}}
+		}`)
+
+	jobs, err := NewSmartRecruiters(fake).Fetch(context.Background(), CompanyEntry{
+		Provider: "smartrecruiters", Board: "Acme", Company: "Acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if strings.Contains(jobs[0].Description, "boilerplate") {
+		t.Errorf("Description = %q, want companyDescription still excluded", jobs[0].Description)
+	}
+}
+
 func TestSmartRecruitersFetchSkipsFailedDetail(t *testing.T) {
 	// P2 has no detail route -> its detail fetch errors and the posting is skipped,
 	// but P1 still comes through.

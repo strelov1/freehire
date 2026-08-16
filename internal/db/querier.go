@@ -1002,7 +1002,15 @@ type Querier interface {
 	//
 	// is_tech rides along because a hydrating crawl re-lists a posting without its description: it is
 	// the evidence the catalogue filter reads, and only the stored row still has it.
-	ExistingExternalIDs(ctx context.Context, source string) ([]ExistingExternalIDsRow, error)
+	//
+	// A row with NO description is not fully ingested — its one detail fetch failed and, because
+	// being stored is what makes a posting "seen", nothing would ever retry it: the body would be
+	// missing for the row's whole life (freehire#1866 found ~3.3k such live rows across the
+	// hydrating sources). Such a row is therefore withheld from the seen-set until
+	// hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
+	// counts as seen again, so a posting the source genuinely publishes with no body stops costing
+	// a detail request every crawl forever.
+	ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error)
 	// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
 	// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
 	// in ~168s, against ~1.8s for a board's own 25k.
@@ -1013,6 +1021,9 @@ type Querier interface {
 	// collation punctuation carries only a secondary weight, so that range returns nothing at all.
 	// The caller passes an escaped pattern (sources.BoardIDPattern) — a board name may contain LIKE
 	// syntax, and an unescaped underscore would match a sibling board.
+	//
+	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
+	// see ExistingExternalIDs for why.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Record a failed attempt: bump attempts, store the error, and dead-letter (set
 	// failed_at) once attempts reach max_attempts. The lease (claimed_at) is

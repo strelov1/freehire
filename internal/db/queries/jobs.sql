@@ -1069,7 +1069,17 @@ WHERE closed_at IS NULL
 --
 -- is_tech rides along because a hydrating crawl re-lists a posting without its description: it is
 -- the evidence the catalogue filter reads, and only the stored row still has it.
-SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source);
+--
+-- A row with NO description is not fully ingested — its one detail fetch failed and, because
+-- being stored is what makes a posting "seen", nothing would ever retry it: the body would be
+-- missing for the row's whole life (freehire#1866 found ~3.3k such live rows across the
+-- hydrating sources). Such a row is therefore withheld from the seen-set until
+-- hydration_cutoff, which re-offers it for detail exactly as if it were new; past the cutoff it
+-- counts as seen again, so a posting the source genuinely publishes with no body stops costing
+-- a detail request every crawl forever.
+SELECT external_id, is_tech FROM jobs
+WHERE source = sqlc.arg(source)
+  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff));
 
 -- name: ExistingExternalIDsByBoard :many
 -- Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
@@ -1082,7 +1092,13 @@ SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source);
 -- collation punctuation carries only a secondary weight, so that range returns nothing at all.
 -- The caller passes an escaped pattern (sources.BoardIDPattern) — a board name may contain LIKE
 -- syntax, and an unescaped underscore would match a sibling board.
-SELECT external_id, is_tech FROM jobs WHERE source = sqlc.arg(source) AND external_id LIKE sqlc.arg(pattern);
+--
+-- hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried;
+-- see ExistingExternalIDs for why.
+SELECT external_id, is_tech FROM jobs
+WHERE source = sqlc.arg(source)
+  AND external_id LIKE sqlc.arg(pattern)
+  AND (description <> '' OR created_at < sqlc.arg(hydration_cutoff));
 
 -- name: TouchJob :one
 -- Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the

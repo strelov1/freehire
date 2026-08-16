@@ -10,11 +10,18 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/sources"
 )
+
+// farFuture is a hydration cutoff every row predates, which reduces the seen-set to its
+// pre-hydration-retry behaviour: everything stored counts as seen.
+func farFuture() pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true}
+}
 
 func TestExistingExternalIDsScopedToProvider(t *testing.T) {
 	pool := startPostgres(t)
@@ -34,7 +41,10 @@ func TestExistingExternalIDsScopedToProvider(t *testing.T) {
 		t.Fatalf("upsert lever: %v", err)
 	}
 
-	rows, err := q.ExistingExternalIDs(ctx, "greenhouse")
+	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:          "greenhouse",
+		HydrationCutoff: farFuture(),
+	})
 	if err != nil {
 		t.Fatalf("ExistingExternalIDs: %v", err)
 	}
@@ -87,8 +97,9 @@ func TestExistingExternalIDsScopedToBoard(t *testing.T) {
 		{"Capital_One", []string{"Capital_One:4"}, "Capital_One:4"},
 	} {
 		rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
-			Source:  "workday",
-			Pattern: sources.BoardIDPattern(tc.board),
+			Source:          "workday",
+			Pattern:         sources.BoardIDPattern(tc.board),
+			HydrationCutoff: farFuture(),
 		})
 		if err != nil {
 			t.Fatalf("ExistingExternalIDsByBoard(%s): %v", tc.board, err)
@@ -105,4 +116,102 @@ func TestExistingExternalIDsScopedToBoard(t *testing.T) {
 			t.Errorf("board %s: ids = %v, want %v", tc.board, ids, tc.want)
 		}
 	}
+}
+
+// A row stored without a description is half-ingested: its detail fetch failed, and because
+// being stored is what marks a posting seen, nothing would ever retry it. It is withheld from
+// the seen-set while it is younger than the cutoff (so the crawl hydrates it as if new) and
+// counts as seen once it is older (so a source that publishes no body stops costing a detail
+// request every crawl). freehire#1866.
+func TestExistingExternalIDsWithholdsUnhydratedRowsUntilCutoff(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	withBody := ingestParams("acme:hydrated", "Engineer")
+	empty := ingestParams("acme:empty", "Engineer")
+	empty.Description = ""
+	for _, p := range []UpsertJobParams{withBody, empty} {
+		if _, err := ingestUpsert(ctx, q, p); err != nil {
+			t.Fatalf("upsert %s: %v", p.ExternalID, err)
+		}
+	}
+
+	// Cutoff in the past: both rows are newer, so the body-less one is withheld for retry.
+	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:          "greenhouse",
+		HydrationCutoff: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs (fresh): %v", err)
+	}
+	ids := seenIDs(rows)
+	if !slices.Equal(ids, []string{"acme:hydrated"}) {
+		t.Errorf("within the window: ids = %v, want [acme:hydrated] (body-less row withheld)", ids)
+	}
+
+	// Cutoff in the future: the body-less row has outlived its retry window and is seen again.
+	rows, err = q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:          "greenhouse",
+		HydrationCutoff: farFuture(),
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs (aged out): %v", err)
+	}
+	ids = seenIDs(rows)
+	if !slices.Equal(ids, []string{"acme:empty", "acme:hydrated"}) {
+		t.Errorf("past the window: ids = %v, want both (retry given up)", ids)
+	}
+}
+
+// The board-scoped seen-set withholds a body-less row on the same rule as the provider-wide one.
+func TestExistingExternalIDsByBoardWithholdsUnhydratedRows(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	for _, ext := range []string{"acme:hydrated", "acme:empty"} {
+		p := ingestParams(ext, "Engineer")
+		p.Source = "workday"
+		if ext == "acme:empty" {
+			p.Description = ""
+		}
+		if _, err := ingestUpsert(ctx, q, p); err != nil {
+			t.Fatalf("upsert %s: %v", ext, err)
+		}
+	}
+
+	rows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
+		Source:          "workday",
+		Pattern:         sources.BoardIDPattern("acme"),
+		HydrationCutoff: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDsByBoard: %v", err)
+	}
+	if ids := seenBoardIDs(rows); !slices.Equal(ids, []string{"acme:hydrated"}) {
+		t.Errorf("ids = %v, want [acme:hydrated] (body-less row withheld)", ids)
+	}
+}
+
+// seenIDs collects a provider-wide seen-set result's external_ids, sorted for comparison.
+func seenIDs(rows []ExistingExternalIDsRow) []string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ExternalID
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// seenBoardIDs is seenIDs for the board-scoped result, which sqlc gives its own row type.
+func seenBoardIDs(rows []ExistingExternalIDsByBoardRow) []string {
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ExternalID
+	}
+	slices.Sort(ids)
+	return ids
 }

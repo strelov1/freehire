@@ -451,13 +451,15 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo clusterGeoLookup, now ti
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
 		// A closed job, a non-canonical repost (duplicate_of set), a private job (the
-		// jd-tailor-intake path — visible only to its creator), or a job whose category
-		// neither the title dictionary nor the LLM ever resolved (search.CategoryUnresolved)
-		// leaves the index: only the open, non-private, categorized canonical row of each
-		// role cluster is searchable. Deleting (not just skipping) removes a row that was
+		// jd-tailor-intake path — visible only to its creator), a job whose category
+		// neither the title dictionary nor the LLM ever resolved (search.CategoryUnresolved),
+		// or one with no posting body at all (search.DescriptionMissing) leaves the index:
+		// only the open, non-private, categorized, readable canonical row of each role
+		// cluster is searchable. Deleting (not just skipping) removes a row that was
 		// indexed before it was closed, demoted, marked private, or — for a job this run
 		// re-evaluates fresh every time — before this exclusion existed.
-		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate || search.CategoryUnresolved(j) {
+		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate ||
+			search.CategoryUnresolved(j) || search.DescriptionMissing(j) {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue
 		}
