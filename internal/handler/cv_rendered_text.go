@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/ledongthuc/pdf"
 
 	"github.com/strelov1/freehire/internal/cv"
 )
@@ -43,4 +46,49 @@ func (h *cvHandlers) renderedCVText(ctx context.Context, doc cv.Document, tmpl c
 		return "", fmt.Errorf("extract rendered cv text: %w", err)
 	}
 	return text, nil
+}
+
+// renderedCVPageCount renders a CV document and counts the pages Typst actually laid it out
+// onto — the number a length instruction in a prompt cannot see, since the model never
+// receives the rendered artifact, only the JSON document it wrote.
+//
+// Only the renderer is required, not the text extractor: a page count needs no text layer,
+// so this stays available exactly when RenderCVPDF itself would work.
+func (h *cvHandlers) renderedCVPageCount(ctx context.Context, doc cv.Document, tmpl cv.Template) (int, error) {
+	if h.cvRenderer == nil {
+		return 0, errNoRenderer
+	}
+	data, err := h.cvRenderer.Render(ctx, doc, tmpl, nil, cv.LinkHrefs{})
+	if err != nil {
+		return 0, fmt.Errorf("render cv for page count: %w", err)
+	}
+	return pdfPageCount(data)
+}
+
+// pdfPageCount reads a page count out of PDF bytes this process itself just produced (Typst's
+// own output, never a client upload), but ledongthuc/pdf panics — via bare `panic()` deep in
+// its xref and object parsing — on a malformed file rather than returning an error, and this
+// is the library's first production (non-test) caller. The recover keeps a Typst edge case
+// this parser mishandles from taking down the goroutine it runs in, which here is the
+// assistant tool loop's unrecovered SSE stream writer: nothing else in that call chain catches
+// a panic.
+//
+// A zero or negative count reads the same as a parse failure: NumPage() derives it by walking
+// Root -> Pages -> Count and returns 0 on a page-tree shape it does not expect, with no error
+// of its own — trusting that silently would tell the model an empty CV is a one-page CV.
+func pdfPageCount(data []byte) (pages int, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			pages, err = 0, fmt.Errorf("parse rendered cv pdf: %v", r)
+		}
+	}()
+	rd, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return 0, fmt.Errorf("read rendered cv pdf: %w", err)
+	}
+	n := rd.NumPage()
+	if n <= 0 {
+		return 0, fmt.Errorf("rendered cv pdf reports %d pages", n)
+	}
+	return n, nil
 }

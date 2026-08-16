@@ -66,6 +66,7 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchI
 		h.requestConfirmationTool(),
 		h.cvJobMatchTool(cvID, jobID),
 		h.cvEvidenceFidelityTool(),
+		h.cvPageCountTool(cvID),
 	}
 }
 
@@ -246,6 +247,41 @@ func (h *assistantHandlers) cvJobMatchTool(cvID uuid.UUID, jobID int64) assistan
 				return map[string]any{"available": false, "reason": "nothing about this vacancy could be matched automatically"}, nil
 			}
 			return map[string]any{"available": true, "score": score}, nil
+		},
+	}
+}
+
+// cvPageCountTool renders the CV exactly as the candidate would download it and reports how
+// many pages Typst actually laid it out onto — the number the "keep it to one or two pages"
+// instruction cannot verify on its own, since the model never sees the rendered artifact, only
+// the JSON document it is writing. Call it after a batch of edits, the same way job_match
+// checks the score: no write, one render.
+func (h *assistantHandlers) cvPageCountTool(cvID uuid.UUID) assistant.Tool {
+	return assistant.Tool{
+		Name: "cv_page_count",
+		Description: "Render the CV as it currently stands and report how many pages it actually fills. Call " +
+			"this after a batch of edits that might have pushed the CV over its page target — trimming or " +
+			"tightening bullets does not always shorten a page the way it looks like it would from the text " +
+			"alone. No model call.",
+		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
+		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
+			var in struct{}
+			if err := assistant.DecodeArgs(raw, &in); err != nil {
+				return nil, err
+			}
+			rec, err := h.cv.cvStore.GetForModel(ctx, cvID, userID)
+			if err != nil {
+				return nil, cvToolError(err)
+			}
+			tmpl, err := cv.ResolveTemplate(rec.TemplateID)
+			if err != nil {
+				return nil, cvToolError(err)
+			}
+			pages, err := h.cv.renderedCVPageCount(ctx, rec.Document, tmpl)
+			if err != nil {
+				return map[string]any{"available": false, "reason": "could not render the CV right now"}, nil
+			}
+			return map[string]any{"available": true, "pages": pages}, nil
 		},
 	}
 }
