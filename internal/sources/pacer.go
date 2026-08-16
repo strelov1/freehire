@@ -165,6 +165,11 @@ const (
 // (see refusalRetryProviders) recovered only a quarter of the failures, because a reputation
 // 403 follows the volume onto whatever address carries it.
 //
+// Since FetchNew, a normal run costs a request per NEW posting rather than per posting, so the
+// rate matters far less than it did — but the pace stays, sized for the worst case it still has
+// to survive: the Fetch fallback, used whenever the pipeline cannot supply a seen set, which
+// hydrates everything exactly as before.
+//
 // The interval is set by the run budget, not by a guess at Teamtailor's window: ~37k requests
 // must finish inside the ingest unit's TimeoutStartSec (3000s), so the floor is ~12 req/s and
 // this sits above it with room — a full run near 31 minutes. It is the first deliberate rate
