@@ -44,8 +44,10 @@ type tailorCVResponse struct {
 // TailorCV bootstraps a tailoring session for a vacancy: it ensures the user has a base CV
 // (seeding one from their résumé, 409 when they have none), creates a vacancy-bound tailored
 // copy, mints the CLI credential, and returns the ids plus the cached analysis if one already
-// exists — no cached analysis is required to start. Cookie-only (the browser starts tailoring);
-// never calls the LLM.
+// exists — no cached analysis is required to start. Cookie or API key: the browser starts
+// tailoring, and so does a CLI holding the caller's own key, which is what lets an agent
+// enter the cycle instead of being handed a CV id copied out of a browser URL. Never calls
+// the LLM.
 func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {

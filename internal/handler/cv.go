@@ -25,11 +25,13 @@ import (
 )
 
 // CV-builder HTTP surface: per-user structured CVs (CRUD + seed) and on-demand PDF
-// rendering. Mutations are cookie-only (RequireAuth); the read + render endpoints also
-// accept an API key (RequireAuthOrKey) so the tailoring agent's CLI can fetch a CV and its
-// PDF. All routes are open to every signed-in user (the beta gate was lifted when tailoring
-// went public; AI credits meter the LLM spend). Every operation is owner-scoped — a foreign
-// id is a 404, never a leak.
+// rendering. Whole-document authoring (create, replace, delete) and the scoring/undo
+// surface are cookie-only (RequireAuth); everything the tailoring cycle itself needs —
+// list, read, render, field-level patch, context, and the bootstrap that creates the
+// vacancy-bound copy — also accepts an API key (RequireAuthOrKey), so a CLI can run the
+// whole cycle rather than half of it. All routes are open to every signed-in user (the
+// beta gate was lifted when tailoring went public; AI credits meter the LLM spend). Every
+// operation is owner-scoped — a foreign id is a 404, never a leak.
 
 // cvHandlers serves the CV builder + AI tailoring routes. The renderer is nil when no
 // typst binary is configured; the PDF endpoint then returns 501 while the rest of the
@@ -167,7 +169,10 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// binary is configured; the rest still works.
 	api.Get("/cv-templates", mw.cookie, h.ListCVTemplates)
 	api.Get("/cv-fonts", mw.cookie, h.ListCVFonts)
-	api.Get("/me/cvs", mw.cookie, h.ListCVs)
+	// Listing takes a key: it is a read of the caller's own tailored copies, and it is where
+	// a CLI learns the CV id every other keyed route here is addressed by. Creating a blank
+	// CV stays cookie-only — authoring a whole document is the browser's.
+	api.Get("/me/cvs", mw.key, h.ListCVs)
 	api.Post("/me/cvs", mw.cookie, h.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
@@ -182,9 +187,11 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/cvs/:id/tracer-links", mw.cookie, h.ListCVTracerLinks)
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
-	// Tailoring: the browser starts a session (cookie-only bootstrap); the agent's CLI drives
-	// the edit + context/get/render reads with its minted API key (keyAuth = cookie or Bearer).
-	api.Post("/me/cvs/tailor", mw.cookie, h.TailorCV)
+	// Tailoring: the bootstrap takes a key as well as a cookie, so a CLI can start the cycle
+	// it was already able to drive (edit + context/get/render all accept a key). It creates a
+	// copy of the caller's own CV and debits their own credits — both of which a full-scope
+	// key already does through the fit analysis and the assistant — and never calls the LLM.
+	api.Post("/me/cvs/tailor", mw.key, h.TailorCV)
 	api.Post("/me/cvs/:id/tailor-session", mw.cookie, h.StartTailorSession)
 	// Literal `/base/` before `:id` — otherwise Fiber treats "base" as a CV uuid.
 	api.Post("/me/cvs/base/reset-from-resume", mw.cookie, h.ResetBaseCVFromResume)
