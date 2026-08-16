@@ -255,8 +255,8 @@
         </div>
         <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
         <div class="chips">
-          {#each match.matched as s (s)}<span class="chip good">{s}</span>{/each}
-          {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
+          {#each match.matched as s (s)}<span class="chip good" aria-label="{s} — you have this skill">{s}</span>{/each}
+          {#each match.missing as s (s)}<span class="chip miss" aria-label="{s} — missing">{s}</span>{/each}
         </div>
       </div>
 

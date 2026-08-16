@@ -56,8 +56,12 @@
           ></div>
         </div>
         <div class="flex flex-wrap gap-1.5">
-          {#each matched as skill (skill)}<span class={haveChipClass}>{skill}</span>{/each}
-          {#each missing as skill (skill)}<span class={missingChipClass}>{skill}</span>{/each}
+          {#each matched as skill (skill)}
+            <span class={haveChipClass} aria-label="{skill} — you have this skill">{skill}</span>
+          {/each}
+          {#each missing as skill (skill)}
+            <span class={missingChipClass} aria-label="{skill} — missing">{skill}</span>
+          {/each}
         </div>
       </div>
 
