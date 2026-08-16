@@ -61,7 +61,17 @@
   let para = $state<HTMLParagraphElement>();
 
   $effect(() => {
-    if (para && !expanded) clampable = para.scrollHeight > para.clientHeight + 1;
+    const el = para;
+    if (!el || expanded) return;
+    const measure = () => (clampable = el.scrollHeight > el.clientHeight + 1);
+    measure();
+    // Re-measure on resize rather than only on mount. This column is viewport-driven —
+    // the same summary fits on a desktop and overflows at a phone width — so a single
+    // measurement leaves the toggle missing from text that has since outgrown the clamp.
+    // A late web-font swap moves the line count too, without the element ever resizing.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   });
 </script>
 
