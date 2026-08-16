@@ -16,8 +16,8 @@
   import { Paginator } from '$lib/paginated.svelte';
   import { canFetchMore, pageCount, pageOffset } from '$lib/pagination';
   import Pagination from './Pagination.svelte';
-  import { FilterStore, filtersToParams, activeFilterCount, canonicalQuery } from '$lib/filters';
-  import { loadJobFilters, hasChangedFilters, DEFAULT_JOB_FILTERS } from '$lib/filterStorage';
+  import { FilterStore, filtersToParams, activeFilterCount } from '$lib/filters';
+  import { loadJobFilters } from '$lib/filterStorage';
   import {
     bannerVisible,
     loadOnboardingState,
@@ -57,11 +57,11 @@
   // `sidebarTop` renders above the filter summary in the desktop sidebar (e.g. the
   // company page's facts card); the standalone /jobs list omits it.
   //
-  // `initialParams` overrides the seed below with a param string that doesn't
-  // appear in the address bar — the homepage's first-visit default (see
-  // +page.server.ts): `initial` was searched with it, so the client must seed
-  // off the same string, not the (bare) URL, or the two would disagree and the
-  // mount effect would immediately discard the SSR page and refetch.
+  // `initialParams` overrides the seed below with the exact param string the
+  // route's `load` searched with (page.url.searchParams minus `page`, see
+  // +page.server.ts): the client must seed off that same string, not the raw
+  // URL, or the two would disagree and the mount effect would immediately
+  // discard the SSR page and refetch.
   //
   // `currentPage` is set by a route whose `load` honours `?page=N` — it both seeds
   // the paginator at the right offset (so scrolling on continues the result set
@@ -164,19 +164,6 @@
   // didn't change the filters (a back/forward re-seed) doesn't emit a spurious
   // funnel event.
   let lastSearchKey = '';
-  // The visitor is on our server-seeded first-visit default (remote / worldwide, see
-  // +page.server.ts) rather than filters they chose: true only while this browser has
-  // never changed filters and the applied set still equals the default. Those filters
-  // are ours, not the user's choice, so the onboarding banner keeps treating the feed
-  // as "unfiltered" and still shows. Flips to false the moment they touch a filter
-  // (the set diverges and hasChangedFilters latches), retiring the banner as normal.
-  const DEFAULT_FILTERS_CANON = canonicalQuery(DEFAULT_JOB_FILTERS);
-  const seededDefault = $derived(
-    browser &&
-      standalone &&
-      !hasChangedFilters() &&
-      canonicalQuery(filtersToParams(filters.value).toString()) === DEFAULT_FILTERS_CANON,
-  );
 
   // Onboarding: the one-time nudge banner + wizard, standalone-only. The lifecycle
   // lives in localStorage (client-only); seed it at init on the client so a returning
@@ -194,7 +181,7 @@
   const showBanner = $derived(
     browser &&
       standalone &&
-      bannerVisible(onboardingState, !seededDefault && (filters.active > 0 || filters.value.q.trim() !== '')),
+      bannerVisible(onboardingState, filters.active > 0 || filters.value.q.trim() !== ''),
   );
 
   function dismissBanner() {
@@ -367,9 +354,8 @@
       if (firstRun) {
         started = true;
         // Keep the SSR `initial` page unless it was loaded for a different URL than
-        // the address bar (stale shallow-routing restore). The first-visit default is
-        // server-rendered (see +page.server.ts), so `initial` already matches the URL
-        // here — no forced reload needed.
+        // the address bar (stale shallow-routing restore) — otherwise `initial`
+        // already matches the URL here, so no forced reload is needed.
         if (!initialStale) return;
       }
       // Funnel search — only when the applied filters actually changed: not the
