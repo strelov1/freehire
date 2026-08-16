@@ -15,7 +15,7 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'How do I start tailoring?',
     answer:
-      'From a job. Run the AI fit analysis on a vacancy, then tailor from its result — the analysis is what the tailored CV reframes toward, so the flow needs one first. freehire copies your base CV into a new one bound to that vacancy; your original is never edited.',
+      'From a job. Run the AI match analysis on a vacancy, then tailor from its result — the analysis is what the tailored CV reframes toward, so the flow needs one first. freehire copies your base CV into a new one bound to that vacancy; your original is never edited.',
   },
   {
     question: 'What does it actually change?',
@@ -35,6 +35,6 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'What does it cost?',
     answer:
-      'AI credits, the same currency the fit analysis uses. Every account gets a monthly grant, and contributing a company board we do not track yet earns more. Your balance and what each action spent are on your credits page.',
+      'AI credits, the same currency the match analysis uses. Every account gets a monthly grant, and contributing a company board we do not track yet earns more. Your balance and what each action spent are on your credits page.',
   },
 ];

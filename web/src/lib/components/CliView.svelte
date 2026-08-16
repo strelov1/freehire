@@ -244,14 +244,14 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
     <div class="mt-8 max-w-2xl rounded-lg border border-border bg-secondary/40 p-4">
       <h3 class="text-sm font-semibold">Tailor a CV to a vacancy</h3>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-        After a fit analysis, <a href={resolve('/features/tailor')} class="font-medium text-foreground underline-offset-4 hover:underline">reframe your CV</a> toward one job — grounded in what you actually did, never
+        After a match analysis, <a href={resolve('/features/tailor')} class="font-medium text-foreground underline-offset-4 hover:underline">reframe your CV</a> toward one job — grounded in what you actually did, never
         fabricated — then export an ATS-ready PDF. <code class="font-mono text-foreground">cv context</code>
         is the honest part: it splits the job's requirements into the ones your history already covers but
         buries (reframe those) and the ones it doesn't (ask, don't invent), so an agent editing your CV
         knows which is which.
       </p>
       <pre
-        class="mt-3 overflow-x-auto rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"><span class="text-muted-foreground">freehire</span> cv context &lt;id&gt;        <span class="text-muted-foreground"># the fit analysis to reframe toward</span>
+        class="mt-3 overflow-x-auto rounded-md border border-border bg-background/60 p-3 font-mono text-sm leading-relaxed"><span class="text-muted-foreground">freehire</span> cv context &lt;id&gt;        <span class="text-muted-foreground"># the match analysis to reframe toward</span>
 <span class="text-muted-foreground">freehire</span> cv get &lt;id&gt;            <span class="text-muted-foreground"># the CV document as JSON</span>
 <span class="text-muted-foreground">freehire</span> cv edit &lt;id&gt; --set …   <span class="text-muted-foreground"># one edit by path (--ops for a batch)</span>
 <span class="text-muted-foreground">freehire</span> cv render &lt;id&gt; --out cv.pdf</pre>

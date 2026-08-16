@@ -142,7 +142,10 @@
     ['history', 'History'],
     ['jd', 'Job'],
   ];
-  let mobileView = $state<MobileView>('chat');
+  // Defaults to the same tab the desktop right panel opens on (artifactTab above), so a
+  // cold start's match-analysis animation is the first thing a mobile visitor sees too,
+  // not hidden behind Chat.
+  let mobileView = $state<MobileView>('jobmatch');
 
   // Below lg the account icon rail collapses into a drawer opened by the burger in the mobile tab
   // bar; AccountNavRail owns the drawer and binds this open flag.
@@ -479,9 +482,10 @@
       void loadRevisions(true);
       void refreshAtsDelta();
       void refreshJobMatch();
-      // A cold-start run computes the fit analysis inline as its own first step (see
-      // internal/handler.PostAssistantAutopilot); the bootstrap response predates that, so the
-      // Job Match tab is still showing its empty/pending state until this picks it up.
+      // A cold start's own visible match-analysis stream (in ArtifactPanel) normally lands the
+      // analysis well before this fires — this is only a fallback for the rare case that
+      // stream lost the lead race and is showing a synthesized burst read straight from the
+      // cache; that cache is exactly what this re-fetches.
       if (!analysis) {
         analysis = (await api.getMatchAnalysis(slug).catch(() => null))?.analysis ?? null;
       }
@@ -696,6 +700,13 @@
               </section>
             </div>
           </div>
+          <!-- Mounts before ArtifactPanel's MatchAnalysisFull (below, in the right panel) —
+               deliberately: on a cold start MatchAnalysisFull opens its match-analysis SSE
+               stream synchronously from its own onMount, while this chat's autopilot kickoff
+               needs a network round trip (listSessions) before it fires, so the visible stream
+               reliably wins the race to lead the match-analysis compute (see
+               match_analysis_coordinator.go). Correctness never depends on this order — the
+               backend coordinator does — this only keeps the common case looking right. -->
           <div class="flex min-h-0 h-full" class:hidden={leftTab !== 'chat'}>
             <AssistantChat
               bind:this={chatRef}
@@ -766,6 +777,7 @@
       <ArtifactPanel
         job={must(job, 'job')}
         {analysis}
+        autoRunAnalysis={coldStartRunning}
         {autopilotReport}
         autopilotBusy={turnActive || runActive}
         {atsDelta}

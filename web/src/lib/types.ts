@@ -37,7 +37,7 @@ export interface ATSResponse {
   report: ATSReportContract | null;
 }
 
-// The on-demand LLM job-fit analysis wire shapes (five scored dimensions + the
+// The on-demand LLM job-match analysis wire shapes (five scored dimensions + the
 // ATS-style requirement match), generated from internal/matchanalysis.
 export type {
   Analysis as MatchAnalysis,
@@ -79,7 +79,7 @@ export interface CreditHistoryEntry {
   created_at: string;
 }
 
-/** The job-fit analysis response: `has_cv` is false when the caller has no stored CV
+/** The job-match analysis response: `has_cv` is false when the caller has no stored CV
  *  (the block prompts an upload); `analysis` is null when none is cached yet or the LLM
  *  is unconfigured; `stale` marks a cached analysis whose CV or job changed since (the
  *  block then offers a recompute); `credits` reports the points balance on reads (omitted
@@ -91,7 +91,7 @@ export interface MatchAnalysisResponse {
   credits?: AiCredits;
 }
 
-/** One row of the Tracking → AI fit tab: a compact projection of a cached fit analysis
+/** One row of the Activity → Matches tab: a compact projection of a cached match analysis
  *  (not the full analysis). `closed` marks a job that has since closed; `stale` marks an
  *  analysis whose CV/job/model changed since it ran. `analysed_at` is an ISO timestamp. */
 export interface MyAnalysisItem {

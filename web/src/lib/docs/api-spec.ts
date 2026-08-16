@@ -350,7 +350,7 @@ export const GROUPS: Group[] = [
     intro:
       'Personalized signals computed against the caller’s profile or stored CV. ' +
       'All accept the session cookie or an API key. The skill-match endpoint is ' +
-      'deterministic (no LLM); the fit endpoints run the LLM chain and cost AI ' +
+      'deterministic (no LLM); the match-analysis endpoints run the LLM chain and cost AI ' +
       'credits. All take the same facet filter params as search where they narrow a ' +
       'market or candidate set.',
     endpoints: [
@@ -381,7 +381,7 @@ export const GROUPS: Group[] = [
         method: 'GET',
         path: '/jobs/{slug}/match-analysis',
         auth: 'cookie-or-key',
-        summary: 'The cached AI fit analysis for the job (never runs the LLM).',
+        summary: 'The cached AI match analysis for the job (never runs the LLM).',
         description:
           'Returns the cached analysis, flagged `stale` when your CV or the job ' +
           'changed since it was computed, or a null analysis when none is cached. ' +
@@ -410,9 +410,9 @@ export const GROUPS: Group[] = [
         method: 'POST',
         path: '/jobs/{slug}/match-analysis',
         auth: 'cookie-or-key',
-        summary: 'Run the three-stage AI fit analysis and cache it.',
+        summary: 'Run the three-stage AI match analysis and cache it.',
         description:
-          'Runs the fit prompt-chain over your stored CV and the job, caches the ' +
+          'Runs the match prompt-chain over your stored CV and the job, caches the ' +
           'result, and returns it fresh (no `credits` on this response). Analysing a new ' +
           'job costs one AI credit; if you have none left it is a `402`, and recomputing ' +
           'an already-analyzed job is free. `has_cv` is false when no CV is stored; a ' +
@@ -431,13 +431,13 @@ export const GROUPS: Group[] = [
         method: 'GET',
         path: '/jobs/{slug}/match-analysis/stream',
         auth: 'cookie-or-key',
-        summary: 'Run the fit analysis over Server-Sent Events.',
+        summary: 'Run the match analysis over Server-Sent Events.',
         description:
           'The same three-stage chain as `POST /jobs/{slug}/match-analysis`, streamed as SSE ' +
           '(`text/event-stream`) rather than a single JSON body. Each event’s `kind` ' +
           'is one of `stage_start`, `stage_done`, `thinking`, `requirements`, ' +
           '`dimensions`, `final`; the `final` event carries the completed `analysis` ' +
-          '(the same shape as the fit endpoints). Not a JSON endpoint.',
+          '(the same shape as the match-analysis endpoints). Not a JSON endpoint.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.' }],
         curl: `curl -N "${BASE_URL}/jobs/<slug>/match-analysis/stream" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `data: {"kind":"stage_start","stage":1,"label":"Extracting requirements"}
@@ -885,7 +885,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'GET',
         path: '/me/tracking/analyses',
         auth: 'cookie-or-key',
-        summary: 'Jobs you have run the AI fit analysis on.',
+        summary: 'Jobs you have run the AI match analysis on.',
         description:
           'Newest first, closed jobs included (with `closed: true`). Each item carries the ' +
           'overall score and verdict; `stale` marks an analysis whose CV, job, or model has ' +
@@ -914,7 +914,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         summary: 'Your current AI-credits balance.',
         description:
           'The points left this month (`remaining`) and when the monthly grant renews ' +
-          '(`resets_at`). AI credits are spent on the fit analysis (1) and CV tailoring (3), ' +
+          '(`resets_at`). AI credits are spent on the match analysis (1) and CV tailoring (3), ' +
           'topped up by the monthly grant and by accepted board contributions. Never runs the LLM.',
         curl: `curl "${BASE_URL}/me/credits" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{
@@ -1627,7 +1627,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         path: '/me/credits/history',
         auth: 'cookie-or-key',
         summary: 'Your AI-credit ledger, newest first.',
-        description: 'Each debit is labelled with what it bought — the job a fit analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.',
+        description: 'Each debit is labelled with what it bought — the job a match analysis was run on, the vacancy a CV was tailored for — rather than an opaque reference.',
         query: [
           { name: 'limit', type: 'integer', description: 'Page size.' },
           { name: 'offset', type: 'integer', description: 'Page offset.' },
@@ -2299,7 +2299,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         summary: 'Start tailoring a CV toward one vacancy.',
         description:
           'Copies your base CV into a vacancy-bound tailored one and mints the ' +
-          'short-lived credential its agent session runs on. Requires a cached fit ' +
+          'short-lived credential its agent session runs on. Requires a cached match ' +
           'analysis for the job (409 otherwise) and a base CV — one is seeded from ' +
           'your stored history when you have none, and it is a 409 when there is ' +
           'nothing to seed from. Calls no LLM itself.',
@@ -2350,7 +2350,7 @@ ${BASE_URL}/auth/oauth/google/start`,
         method: 'GET',
         path: '/me/cvs/{id}/tailor-context',
         auth: 'cookie-or-key',
-        summary: 'The fit analysis a tailored CV should reframe toward.',
+        summary: 'The match analysis a tailored CV should reframe toward.',
         description:
           'The split that keeps tailoring honest: `missing_have` are requirements ' +
           'your history already covers but the CV buries — reframe those — and ' +

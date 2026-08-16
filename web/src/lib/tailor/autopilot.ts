@@ -26,7 +26,7 @@ export function openingActions(): OpeningAction[] {
     {
       label: 'Walk me through it',
       kind: 'message',
-      text: "Let's tailor my CV for this role — review the fit analysis and walk me through the gaps.",
+      text: "Let's tailor my CV for this role — review the match analysis and walk me through the gaps.",
     },
   ];
 }

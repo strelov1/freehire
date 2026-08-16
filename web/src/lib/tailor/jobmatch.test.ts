@@ -127,7 +127,7 @@ describe('impactOf', () => {
 });
 
 describe('scoreTone', () => {
-  it('grades a score the way the fit verdict does', () => {
+  it('grades a score the way the match verdict does', () => {
     expect(scoreTone(85)).toBe('strong');
     expect(scoreTone(60)).toBe('moderate');
     expect(scoreTone(20)).toBe('poor');

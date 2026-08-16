@@ -409,21 +409,21 @@ export function createApi(
     return requestData<JobMatchResult>(`/api/v1/jobs/${slug}/match`);
   }
 
-  /** The cached LLM fit analysis for a job (never runs the model). `has_cv` is false
+  /** The cached LLM match analysis for a job (never runs the model). `has_cv` is false
    *  when no CV is stored; `analysis` is null when none is cached yet; `stale` marks a
    *  cached analysis whose CV or job changed since. Safe to call on expand. */
   async function getMatchAnalysis(slug: string): Promise<MatchAnalysisResponse> {
     return requestData<MatchAnalysisResponse>(`/api/v1/jobs/${slug}/match-analysis`);
   }
 
-  /** Run the three-stage fit prompt-chain over the caller's CV and this job, cache it
+  /** Run the three-stage match prompt-chain over the caller's CV and this job, cache it
    *  per (user, job), and return it fresh. Bound to the explicit compute/recompute
    *  action. With no LLM configured this returns `has_cv` with a null analysis. */
   async function runMatchAnalysis(slug: string): Promise<MatchAnalysisResponse> {
     return requestData<MatchAnalysisResponse>(`/api/v1/jobs/${slug}/match-analysis`, { method: 'POST' });
   }
 
-  /** The same-origin URL for the fit SSE stream — the fit page opens an EventSource on
+  /** The same-origin URL for the match SSE stream — the tailoring workspace opens an EventSource on
    *  it (EventSource takes a URL, not our fetch wrapper; the session cookie rides along). */
   function matchAnalysisStreamUrl(slug: string): string {
     return `${baseUrl}/api/v1/jobs/${slug}/match-analysis/stream`;
@@ -927,8 +927,8 @@ export function createApi(
     );
   }
 
-  /** The jobs the current user has run the AI fit analysis on (newest first), plus their
-   *  AI-credits balance — powers the Tracking → AI fit tab. Never triggers the LLM. */
+  /** The jobs the current user has run the AI match analysis on (newest first), plus their
+   *  AI-credits balance — powers the Activity → Matches tab. Never triggers the LLM. */
   async function myAnalyses(): Promise<{ items: MyAnalysisItem[]; credits: AiCredits | null }> {
     const res = await request<{ data: MyAnalysisItem[]; meta: { credits: AiCredits | null } }>(
       '/api/v1/me/tracking/analyses',
@@ -1877,7 +1877,7 @@ export function createApi(
   /**
    * Bootstrap a tailoring session for a vacancy: seeds/creates the base CV, makes a
    * vacancy-bound tailored copy, and returns its id plus the cached analysis. Requires a
-   * cached fit analysis and a stored résumé (409 otherwise); beta-gated.
+   * cached match analysis and a stored résumé (409 otherwise); beta-gated.
    */
   async function tailorCv(jobSlug: string): Promise<TailorResult> {
     return requestData<TailorResult>('/api/v1/me/cvs/tailor', jsonBody('POST', { job_slug: jobSlug }));

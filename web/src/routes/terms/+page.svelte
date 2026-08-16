@@ -42,7 +42,7 @@
       <p class="text-sm leading-relaxed text-muted-foreground">
         We aggregate job postings from public company career boards and other public sources,
         normalise and deduplicate them, and let you search, filter, save, and track them. We also
-        offer optional AI features — CV matching and fit analysis — that you choose to run.
+        offer optional AI features — CV matching and match analysis — that you choose to run.
       </p>
     </section>
 
@@ -79,7 +79,7 @@
     <section class="flex flex-col gap-3">
       <h2 class="text-xl font-semibold tracking-tight">AI features</h2>
       <p class="text-sm leading-relaxed text-muted-foreground">
-        Features like fit analysis and CV matching use a language model and can be wrong. They're
+        Features like match analysis and CV matching use a language model and can be wrong. They're
         a research aid, not career or legal advice — use your own judgment before acting on them.
       </p>
     </section>

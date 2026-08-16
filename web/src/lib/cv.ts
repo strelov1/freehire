@@ -71,7 +71,7 @@ export interface CvTailoredItem extends CvMeta {
 
 /**
  * Result of bootstrapping a tailoring session: the ids of the new vacancy-bound CV and the
- * base it was copied from, the cached fit analysis, and the id of the tailoring conversation
+ * base it was copied from, the cached match analysis, and the id of the tailoring conversation
  * the backend minted and bound to that CV. There is no credential — the agent runs inside the
  * backend as the caller.
  */

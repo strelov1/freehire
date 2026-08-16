@@ -1,7 +1,7 @@
 <script lang="ts">
   // How well the CV being edited matches this vacancy — measured on the rendered PDF's text
-  // layer, against the vacancy and nothing else. Unlike the fit analysis below it in the same
-  // tab, this number moves as the candidate types: it is deterministic, costs no AI credits,
+  // layer, against the vacancy and nothing else. Unlike the match analysis below it in the
+  // same tab, this number moves as the candidate types: it is deterministic, costs no AI credits,
   // and is recomputed after every saved edit.
   //
   // An unavailable score renders nothing at all. A panel that says "score unavailable"
@@ -111,7 +111,7 @@
               <span>
                 {req.text}
                 {#if req.cached_status}
-                  <span class="text-muted-foreground/70">— the earlier fit analysis read this as {req.cached_status}</span>
+                  <span class="text-muted-foreground/70">— the earlier match analysis read this as {req.cached_status}</span>
                 {/if}
               </span>
             </li>

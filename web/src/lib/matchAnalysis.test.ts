@@ -51,6 +51,22 @@ describe('reduceMatchEvent', () => {
     expect(s.stages.every((x) => x.state === 'done')).toBe(true);
   });
 
+  it('folds a synthesized "already computed" burst: meta → stage_done×3 (no stage_start) → final', () => {
+    // The shape internal/handler's followMatchAnalysis sends when this reader lost the race
+    // to lead the compute (some concurrent caller — almost always the cold-start autopilot's
+    // own pre-run — got there first): no stage_start/thinking/requirements/dimensions, just
+    // the three stages marked done and the cached result.
+    let s = initMatchStream();
+    s = reduceMatchEvent(s, 'meta', { has_cv: true });
+    s = reduceMatchEvent(s, 'stage_done', { stage: 1 });
+    s = reduceMatchEvent(s, 'stage_done', { stage: 2 });
+    s = reduceMatchEvent(s, 'stage_done', { stage: 3 });
+    expect(s.stages.every((x) => x.state === 'done')).toBe(true);
+    s = reduceMatchEvent(s, 'final', { analysis: { overall_score: 71, verdict: 'Good Fit', dimensions: [], requirement_match: [], strengths: [], gaps: [], recommendation: 'Apply.' } });
+    expect(s.done).toBe(true);
+    expect(s.analysis?.overall_score).toBe(71);
+  });
+
   it('records has_cv=false from meta', () => {
     const s = reduceMatchEvent(initMatchStream(), 'meta', { has_cv: false });
     expect(s.hasCV).toBe(false);

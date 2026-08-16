@@ -1,5 +1,5 @@
 <script lang="ts">
-  // What an unattended run did, shown above the fit analysis: one row per requirement with
+  // What an unattended run did, shown above the match analysis: one row per requirement with
   // how it was closed, plus the two things to do next — run again, or undo the whole run.
   //
   // The block renders whether or not a run has happened. Hiding it behind "has a report"
@@ -7,7 +7,7 @@
   // (which clears the report by design), and after a run that stopped before reporting.
   //
   // This is the run's own account of itself, not a re-scored verdict: nothing here recomputes
-  // the fit analysis underneath, which still measures the BASE CV against the vacancy.
+  // the match analysis underneath, which still measures the BASE CV against the vacancy.
   import { RotateCcw } from '@lucide/svelte';
   import { summarizeRun, statusMeta } from './autopilot';
   import type { AutopilotEntry } from '$lib/generated/contracts';

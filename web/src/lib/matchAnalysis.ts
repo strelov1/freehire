@@ -1,4 +1,4 @@
-// Pure presentation logic for the AI fit-analysis block and page. Kept out of the
+// Pure presentation logic for the AI match-analysis block and page. Kept out of the
 // components so it is unit-testable (vitest) without a DOM: the verdict/score → colour
 // tone, the ATS requirement-status → label + tone, and the SSE stream reducer. The wire
 // shapes come from the Go contract.
@@ -38,7 +38,7 @@ export function requirementStatusMeta(status: string): { label: string; tone: To
 }
 
 // ── SSE stream state ────────────────────────────────────────────────────────────
-// The page consumes the fit stream (server-sent events) and folds each event into this
+// The page consumes the match stream (server-sent events) and folds each event into this
 // state via reduceMatchEvent — pure and DOM-free so the accumulation is unit-tested.
 
 export type StageState = 'pending' | 'active' | 'done';

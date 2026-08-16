@@ -9,7 +9,7 @@
   import { EntityLogo } from '$lib/ui';
   import States from './States.svelte';
 
-  // The Tracking → AI fit tab: the jobs the caller has run the AI fit analysis on. Read-only —
+  // The Activity → Matches tab: the jobs the caller has run the AI match analysis on. Read-only —
   // never triggers the LLM (each row links to the Tailor workspace, which owns compute/recompute).
   // The AI-credits balance lives on its own page (/my/credits), not inline here.
   let status = $state<'loading' | 'error' | 'ready'>('loading');
@@ -46,7 +46,7 @@
 {:else if status === 'error'}
   <States state="error" message="Couldn't load your analyses." />
 {:else if items.length === 0}
-  <States state="empty" message="No AI fit analyses yet. Open a job and run “Analyse fit with AI”." />
+  <States state="empty" message="No AI match analyses yet. Open a job and run “Analyse match with AI”." />
 {:else}
   <ul class="flex flex-col gap-3">
     {#each items as it (it.slug)}

@@ -39,8 +39,8 @@
   const steps = [
     {
       n: '01',
-      title: 'Analyse the fit',
-      body: 'Run the AI fit analysis on the vacancy. It scores the match dimension by dimension and names what is missing — the reasoning the tailored CV will work from.',
+      title: 'Analyse the match',
+      body: 'Run the AI match analysis on the vacancy. It scores the match dimension by dimension and names what is missing — the reasoning the tailored CV will work from.',
     },
     {
       n: '02',
@@ -138,7 +138,7 @@
         It knows the difference between burying something and not having it.
       </h2>
       <p class="mt-5 leading-relaxed text-muted-foreground">
-        Before the agent writes a word, it reads the fit analysis for this vacancy and sorts the
+        Before the agent writes a word, it reads the match analysis for this vacancy and sorts the
         job's requirements into two piles. That split is the whole feature: one pile is editing,
         the other is a question.
       </p>
@@ -283,7 +283,7 @@ freehire <span class="text-foreground">cv render &lt;cv-id&gt; --out cv.pdf</spa
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop sending the same CV everywhere.</h2>
       <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Find a job worth the effort, run the fit analysis, and tailor from it. Ten minutes per
+        Find a job worth the effort, run the match analysis, and tailor from it. Ten minutes per
         application, and nothing on the page that you did not do.
       </p>
       <div class="flex flex-wrap gap-3">

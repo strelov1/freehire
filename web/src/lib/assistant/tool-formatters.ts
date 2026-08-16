@@ -34,7 +34,7 @@ const LABELS: Record<string, string> = {
   apply_job: 'Marking as applied',
   track_job: 'Updating your board',
   my_jobs: 'Reading your tracked jobs',
-  cv_context: 'Reading the fit analysis',
+  cv_context: 'Reading the match analysis',
   cv_get: 'Reading your CV',
   cv_edit: 'Updating your CV',
 };

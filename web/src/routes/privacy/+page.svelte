@@ -56,8 +56,8 @@
         </li>
         <li>
           <span class="font-medium text-foreground">CV / résumé.</span> If you upload a CV for skill
-          matching or AI fit analysis, we store the file and the text we extract from it. Running an
-          AI fit analysis sends the relevant parts of your CV, together with the job posting, to our
+          matching or AI match analysis, we store the file and the text we extract from it. Running an
+          AI match analysis sends the relevant parts of your CV, together with the job posting, to our
           language-model provider (see “Third-party services”).
         </li>
         <li>
@@ -116,7 +116,7 @@
       <ul class="flex flex-col gap-2 text-sm leading-relaxed text-muted-foreground">
         <li>
           <span class="font-medium text-foreground">A language-model provider</span> — processes CV
-          and job text to produce AI fit analysis, only when you request it.
+          and job text to produce AI match analysis, only when you request it.
         </li>
         <li>
           <span class="font-medium text-foreground">Product analytics (Google Analytics, PostHog)</span>

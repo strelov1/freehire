@@ -17,14 +17,19 @@
   import { renderMarkdown } from '$lib/markdown';
   import { Button } from '$lib/ui';
 
-  // The full AI fit report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab (seeded,
-  // read-only, `autoRun=false`) — the tailoring workspace's own cold start computes the analysis
-  // inline as part of its autopilot run rather than through this component's stream.
-  // `initial` seeds from an SSR-cached fit for an instant paint when the caller has one; when
-  // absent, the cached fit is fetched on mount. `autoRun` starts the stream on a cold start —
-  // the "never silently recompute a cached analysis" gate. `stacked` forces every multi-column
-  // section into a single column regardless of viewport width — for callers narrower than the
-  // viewport-based `lg:`/`sm:` breakpoints assume (the tailoring artifact panel).
+  // The full AI match report + live SSE stream. Caller: `ArtifactPanel`'s Job Match tab, with
+  // `autoRun` wired to the tailoring workspace's own `coldStartRunning` — a cold start opens
+  // this component's stream immediately, in parallel with the autopilot's CV-edit run, so the
+  // stage stepper actually animates instead of the compute happening invisibly elsewhere. A
+  // concurrent invisible compute (autopilot's pre-run) can still win the race on occasion; see
+  // internal/handler/match_analysis_coordinator.go for how that's kept from double-running the
+  // chain, and its `followMatchAnalysis` for what this component renders when it does.
+  // `initial` seeds from an SSR-cached analysis for an instant paint when the caller has one;
+  // when absent, the cached analysis is fetched on mount. `autoRun` starts the stream on a
+  // cold start — the "never silently recompute a cached analysis" gate. `stacked` forces
+  // every multi-column section into a single column regardless of viewport width — for
+  // callers narrower than the viewport-based `lg:`/`sm:` breakpoints assume (the tailoring
+  // artifact panel).
   let {
     job,
     initial = null,
@@ -167,7 +172,7 @@
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  // Poll the cached fit after a dropped stream: the server's background compute lands the
+  // Poll the cached analysis after a dropped stream: the server's background compute lands the
   // analysis in the cache even with no client attached, so a re-read recovers it without a
   // fresh (charged) recompute. Attempts are spent only while the tab is visible, so a long
   // background freeze on mobile doesn't exhaust the budget before the user returns; stop()
@@ -198,14 +203,14 @@
   }
 
   onMount(async () => {
-    // The card has no SSR fit — fetch the cache, then seed from it (the stream was
+    // The card has no SSR analysis — fetch the cache, then seed from it (the stream was
     // seeded from a null `initial`, so there is nothing to preserve).
     if (!fit && isAuthenticated()) {
       try {
         fit = await api.getMatchAnalysis(job.public_slug);
         stream = seedFrom(fit);
       } catch {
-        /* best-effort: an unconfigured/failing fit endpoint leaves the empty state */
+        /* best-effort: an unconfigured/failing match-analysis endpoint leaves the empty state */
       }
     }
     // Read the cache fields directly rather than via $derived: onMount is not a reactive
@@ -278,12 +283,12 @@
 <div class="flex flex-col gap-8">
   {#if !isAuthenticated()}
     <p class="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-      Sign in to analyse your fit for this role.
+      Sign in to analyse your match for this role.
     </p>
   {:else if !stream.hasCV}
     <div class="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card p-10 text-center">
       <FileText class="size-8 text-muted-foreground" />
-      <p class="text-sm text-muted-foreground">Upload a CV to analyse your fit for this role.</p>
+      <p class="text-sm text-muted-foreground">Upload a CV to analyse your match for this role.</p>
       <Button variant="primary" size="sm" href={resolve('/my/profile')}>Upload CV</Button>
     </div>
   {:else}
@@ -370,9 +375,10 @@
       </div>
     {/if}
 
-    <!-- Streaming: stage stepper + thinking. Idle cold starts used to render the same
-         pending stepper with nothing driving it (tailor sets autoRun=false), which looked
-         like Extract & Match / Recruiter verdict were hung. Show an explicit Run when idle. -->
+    <!-- Streaming: stage stepper + thinking. An idle cold start (autoRun=false — a resumed
+         CV, the standalone page) used to render the same pending stepper with nothing driving
+         it, which looked like Extract & Match / Recruiter verdict were hung. Show an explicit
+         Run when idle. -->
     {#if !blockedNew && (streaming || recovering)}
       <section class="rounded-2xl border border-border bg-card p-6 sm:px-8">
         <!-- Stage stepper: evenly-spaced nodes over a single connecting rail. -->
@@ -417,7 +423,7 @@
     {:else if !blockedNew && !analysis && !stream.error}
       <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card p-8 text-center">
         <p class="text-sm text-muted-foreground">
-          Run the three-stage fit analysis — Extract &amp; Match, Recruiter verdict, then Adversarial audit.
+          Run the three-stage match analysis — Extract &amp; Match, Recruiter verdict, then Adversarial audit.
         </p>
         <Button variant="primary" size="sm" onclick={start} disabled={streaming || recovering}>
           <RefreshCw class="size-3.5" /> Run analysis

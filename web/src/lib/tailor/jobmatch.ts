@@ -92,7 +92,7 @@ export function impactOf(weight: number): string {
 
 export type JobMatchTone = 'strong' | 'moderate' | 'poor';
 
-/** scoreTone grades an overall on the same bands the fit verdict uses, so two scores in one
+/** scoreTone grades an overall on the same bands the match verdict uses, so two scores in one
  *  workspace never colour the same number differently. */
 export function scoreTone(overall: number): JobMatchTone {
   if (overall >= 75) return 'strong';

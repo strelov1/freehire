@@ -3,7 +3,7 @@
   // each one MEASURES, so no tab mixes numbers taken against different baselines.
   //
   //  - Job Match — the live, deterministic score of the document being edited against this
-  //    vacancy, with the cached LLM fit analysis beneath it — refreshed by every autopilot
+  //    vacancy, with the cached LLM match analysis beneath it — refreshed by every autopilot
   //    run, not a frozen snapshot.
   //  - Score — what tailoring did to the CV's ATS readability against the base CV, and the
   //    last autopilot run's log.
@@ -12,8 +12,8 @@
   // Every tab here MEASURES the document or is the thing it is measured against; what CHANGES
   // the document — its text, its template, its typography — lives in the left panel.
   //
-  // JD and the fit analysis reuse the SAME components the job page / fit page use, so they
-  // read identically. Splitter width is clamped by the vitest-covered clampWidth.
+  // JD and the match analysis reuse the SAME components the job page / match page use, so
+  // they read identically. Splitter width is clamped by the vitest-covered clampWidth.
   import { resolve } from '$app/paths';
   import { ExternalLink, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
   import { clampWidth } from './geometry';
@@ -41,6 +41,7 @@
     mobileVisible = false,
     autopilotReport = undefined,
     autopilotBusy = false,
+    autoRunAnalysis = false,
     atsDelta = null,
     jobMatch = null,
     onRerunAutopilot,
@@ -56,10 +57,16 @@
     analysis: Analysis | null;
     tab?: Tab;
     mobileVisible?: boolean;
-    /** The last unattended run's log, shown in the Score tab. The fit analysis (Job Match
+    /** The last unattended run's log, shown in the Score tab. The match analysis (Job Match
      *  tab) is refreshed by every run — see prepareAutopilotRun on the server. */
     autopilotReport?: AutopilotEntry[];
     autopilotBusy?: boolean;
+    /** True only for the tailoring workspace's own cold start — see `+page.svelte`'s
+     *  `coldStartRunning`. Opens the match analysis's own visible SSE stream (the stage
+     *  stepper) at the same moment the autopilot's CV-edit run starts, instead of leaving
+     *  it to autopilot's invisible pre-run compute (see match_analysis_coordinator.go for
+     *  how the two are kept from both running the chain). */
+    autoRunAnalysis?: boolean;
     /** What tailoring did to the CV's ATS readiness. Null renders nothing — an unavailable
      *  delta is an absence, not an error state. */
     atsDelta?: CvAtsDelta | null;
@@ -250,10 +257,10 @@
     {:else}
       <div class="p-4">
         <JobMatch data={jobMatch} />
-        <!-- The fit analysis used to be a frozen base-profile snapshot; it is now refreshed
+        <!-- The match analysis used to be a frozen base-profile snapshot; it is now refreshed
              by every autopilot run, so it says that instead of implying it never moves. -->
         <div class="mb-3 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
-          <h3 class="text-sm font-semibold text-foreground">Fit analysis</h3>
+          <h3 class="text-sm font-semibold text-foreground">Match analysis</h3>
           <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
             Refreshed automatically after every autopilot run. You can also run or recompute it
             here any time.
@@ -261,11 +268,12 @@
         </div>
         <!-- Keyed on whether an analysis is present: MatchAnalysisFull seeds its internal state
              from `initial` once, on mount, and does not re-read it if the prop changes later —
-             so when a cold-start run's inline analysis step lands after the tab first rendered
-             empty, this forces a clean remount to pick it up rather than staying stuck showing
-             the pending stepper forever. -->
+             so once the visible stream (or, on the rare race it loses, autopilot's invisible
+             pre-run) lands an analysis after the tab first rendered empty, this forces a clean
+             remount to pick it up rather than staying stuck showing the pending stepper
+             forever. -->
         {#key !!analysis}
-          <MatchAnalysisFull {job} initial={fit} autoRun={false} stacked />
+          <MatchAnalysisFull {job} initial={fit} autoRun={autoRunAnalysis} stacked />
         {/key}
       </div>
     {/if}

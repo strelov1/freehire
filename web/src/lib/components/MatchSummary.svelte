@@ -10,7 +10,7 @@
   import type { MatchAnalysisResponse } from '$lib/types';
   import { Button } from '$lib/ui';
 
-  // A compact fit summary in the Profile-match sidebar: the overall %, verdict, and the
+  // A compact match summary in the Profile-match sidebar: the overall %, verdict, and the
   // single biggest gap when an analysis is cached, with a link to the full-page analysis
   // (which runs the live streaming compute). It never computes inline.
   //

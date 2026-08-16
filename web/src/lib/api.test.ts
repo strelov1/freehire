@@ -32,7 +32,7 @@ describe('createApi request timeout', () => {
   });
 
   // The browser client is built without a timeout: it drives the LLM-backed calls
-  // (fit analysis, tailoring), which legitimately run for minutes.
+  // (match analysis, tailoring), which legitimately run for minutes.
   it('leaves the call unbounded when no timeout is configured', async () => {
     const seen: { init?: RequestInit } = {};
     await createApi(okFetch(seen), '', {}).ingestStatus();
