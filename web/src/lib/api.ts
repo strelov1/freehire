@@ -635,9 +635,9 @@ export function createApi(
 
   // --- Sitemap --------------------------------------------------------------
   //
-  // Feeds behind the sitemap index (server routes only). Jobs ship their freshest
-  // slice (one file); companies are keyset-paginated across chunks, with a boundary
-  // endpoint returning the cursor ending each chunk so the index can enumerate them.
+  // Feeds behind the sitemap index (server routes only). Both halves are offset-paged
+  // over a search index, and each boundary endpoint returns the offset that OPENS every
+  // chunk — including the first, 0 — so the index lists those cursors as they come.
 
   /** One page of job sitemap entries starting at `offset` in the search index. */
   async function sitemapJobs(offset: number, limit: number): Promise<SitemapEntry[]> {

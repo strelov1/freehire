@@ -95,9 +95,19 @@ type sitemapEntry struct {
 	UpdatedAt time.Time `json:"updated_at,omitzero"`
 }
 
-// sitemapChunk clamps ?chunk= to [1, sitemapMaxURLs], defaulting to `fallback`.
+// minSitemapChunk floors ?chunk= so the boundary list stays small. Without a floor,
+// an unauthenticated `?chunk=1` asks for one offset per indexed document — 1.26M
+// int64s allocated and serialized in a single public response, scaling with the
+// catalogue. At this floor the same request yields ~1.3k offsets and still covers
+// the whole index, which is also well inside the sitemap index's own 50,000-entry
+// cap. It is below every chunk size we actually serve (10k companies, 25k jobs), so
+// it only ever binds a hand-crafted request.
+const minSitemapChunk = 1000
+
+// sitemapChunk clamps ?chunk= to [minSitemapChunk, sitemapMaxURLs], defaulting to
+// `fallback`.
 func sitemapChunk(c *fiber.Ctx, fallback int) int64 {
-	return int64(min(max(c.QueryInt("chunk", fallback), 1), sitemapMaxURLs))
+	return int64(min(max(c.QueryInt("chunk", fallback), minSitemapChunk), sitemapMaxURLs))
 }
 
 // servePage serves one page of sitemap entries at ?offset=<n> from `idx`.

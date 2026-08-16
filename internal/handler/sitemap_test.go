@@ -91,7 +91,11 @@ func decodeOffsets(t *testing.T, body []byte) []int64 {
 	return d.Data
 }
 
+// The chunk sizes here are multiples of minSitemapChunk because anything smaller is
+// clamped up to it (see TestSitemapChunkIsFloored) — a test asking for ?chunk=2 would
+// silently be answered for 1000 and prove nothing.
 func TestJobSitemapBoundaries(t *testing.T) {
+	const chunk = minSitemapChunk
 	tests := []struct {
 		name  string
 		total int
@@ -100,12 +104,12 @@ func TestJobSitemapBoundaries(t *testing.T) {
 	}{
 		// Every page gets an offset INCLUDING the first, so the sitemap index lists
 		// the cursors exactly as they come — no opening cursor to prepend.
-		{"exact multiple", 6, "?chunk=2", []int64{0, 2, 4}},
+		{"exact multiple", 3 * chunk, "?chunk=1000", []int64{0, chunk, 2 * chunk}},
 		// A partial trailing page still needs its own file, or its jobs never get crawled.
-		{"partial trailing page", 7, "?chunk=2", []int64{0, 2, 4, 6}},
-		{"one short page", 1, "?chunk=2", []int64{0}},
+		{"partial trailing page", 3*chunk + 1, "?chunk=1000", []int64{0, chunk, 2 * chunk, 3 * chunk}},
+		{"one short page", 1, "?chunk=1000", []int64{0}},
 		// No documents means no sub-sitemaps — not one empty file.
-		{"empty index", 0, "?chunk=2", nil},
+		{"empty index", 0, "?chunk=1000", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -187,6 +191,24 @@ func TestJobSitemapClampsLimit(t *testing.T) {
 	}
 }
 
+// ?chunk= is floored, because the boundary list's length is total/chunk: without a
+// floor an unauthenticated ?chunk=1 makes the server allocate and serialize one
+// offset per indexed document — 1.26M of them at current catalogue size, growing with
+// it. The response must stay proportional to the file count, not the document count.
+func TestSitemapChunkIsFloored(t *testing.T) {
+	app := newSitemapTestApp(&stubSitemapIndex{docs: stubDocs(4 * minSitemapChunk)})
+	_, body := sitemapGet(t, app, "/api/v1/jobs/sitemap/boundaries?chunk=1")
+	got := decodeOffsets(t, body)
+	if len(got) != 4 {
+		t.Fatalf("offsets = %d entries, want 4 — ?chunk=1 must be floored to %d, not honoured", len(got), minSitemapChunk)
+	}
+	// Floored, not truncated: the last offset still opens the final page, so the
+	// whole index stays covered.
+	if got[len(got)-1] != int64(3*minSitemapChunk) {
+		t.Fatalf("last offset = %d, want %d — coverage must not be cut short", got[len(got)-1], 3*minSitemapChunk)
+	}
+}
+
 // With no search engine configured the job sitemap has no source at all, so it must
 // say so rather than serve an empty sitemap that reads as "this site has no jobs".
 func TestJobSitemapWithoutSearchEngine(t *testing.T) {
@@ -224,22 +246,20 @@ func TestJobSitemapPropagatesIndexFailure(t *testing.T) {
 // catch them being wired to the same one — the endpoints would answer, just with the
 // wrong catalogue. Distinct stubs are what makes that visible.
 func TestSitemapHalvesReadTheirOwnIndex(t *testing.T) {
-	jobs := &stubSitemapIndex{docs: stubDocs(4)}
-	companies := &stubSitemapIndex{docs: stubDocs(9)}
+	jobs := &stubSitemapIndex{docs: stubDocs(2 * minSitemapChunk)}
+	companies := &stubSitemapIndex{docs: stubDocs(5*minSitemapChunk - 1)}
 	app := newSitemapTestAppWith(jobs, companies)
 
-	// Chunk sizes are the endpoints' own defaults, so the offsets also prove each
-	// half applied its own constant rather than the other's.
-	_, body := sitemapGet(t, app, "/api/v1/jobs/sitemap/boundaries?chunk=2")
+	_, body := sitemapGet(t, app, "/api/v1/jobs/sitemap/boundaries?chunk=1000")
 	if got := decodeOffsets(t, body); len(got) != 2 {
-		t.Fatalf("job offsets = %v, want 2 for the 4-document jobs index", got)
+		t.Fatalf("job offsets = %v, want 2 for the 2000-document jobs index", got)
 	}
-	_, body = sitemapGet(t, app, "/api/v1/companies/sitemap/boundaries?chunk=2")
+	_, body = sitemapGet(t, app, "/api/v1/companies/sitemap/boundaries?chunk=1000")
 	if got := decodeOffsets(t, body); len(got) != 5 {
-		t.Fatalf("company offsets = %v, want 5 for the 9-document companies index", got)
+		t.Fatalf("company offsets = %v, want 5 for the 4999-document companies index", got)
 	}
 
-	if _, body = sitemapGet(t, app, "/api/v1/companies/sitemap?offset=8"); true {
+	if _, body = sitemapGet(t, app, "/api/v1/companies/sitemap?offset=4998"); true {
 		var d struct {
 			Data []struct {
 				Slug string `json:"slug"`
@@ -249,7 +269,7 @@ func TestSitemapHalvesReadTheirOwnIndex(t *testing.T) {
 			t.Fatalf("decode %s: %v", body, err)
 		}
 		if len(d.Data) != 1 {
-			t.Fatalf("company tail page = %+v, want the single 9th document", d.Data)
+			t.Fatalf("company tail page = %+v, want the single last document", d.Data)
 		}
 	}
 }

@@ -11,8 +11,9 @@ import (
 // SitemapDocument is the slim projection a sitemap URL needs — the slug the page is
 // addressed by and a lastmod. Both indexes project onto it; the slug attribute they
 // project FROM differs (jobs key their public URL on public_slug, companies on the
-// slug that is also their primary key), which is why the field is read by position
-// in the requested `fields` rather than by a shared JSON name.
+// slug that is also their primary key), which is why the response is decoded into a
+// map and the slug read by its per-index key rather than by a struct tag, which
+// could only ever name one of the two.
 type SitemapDocument struct {
 	Slug      string
 	UpdatedAt time.Time
