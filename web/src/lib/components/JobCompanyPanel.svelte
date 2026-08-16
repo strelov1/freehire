@@ -1,9 +1,18 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { companyBadges, companyDescription, companyFacts, hasCompanyDetails } from '$lib/companyDetails';
+  import { Globe } from '@lucide/svelte';
+  import {
+    companyBadges,
+    companyDescription,
+    companyFacts,
+    companyLocations,
+    companySocials,
+    hasCompanyDetails,
+  } from '$lib/companyDetails';
   import type { Company } from '$lib/types';
-  import { Badge, CountryFlag, EmptyState, Skeleton } from '$lib/ui';
+  import { Badge, CountryFlag, EmptyState, ProviderIcon, Skeleton } from '$lib/ui';
+  import CountryFlagStack from './CountryFlagStack.svelte';
 
   // The employer behind a posting, as the job page's second tab. Deliberately NOT
   // server-rendered: inlining a company's summary into every one of its postings would
@@ -51,6 +60,8 @@
   const badges = $derived(company ? companyBadges(company) : []);
   const facts = $derived(company ? companyFacts(company) : []);
   const description = $derived(company ? companyDescription(company) : '');
+  const socials = $derived(company ? companySocials(company) : []);
+  const offices = $derived(company ? companyLocations(company) : []);
 
   // The summary is clamped until asked for — a few hundred words of company boilerplate
   // should not push the link to their other roles off the screen. The toggle appears only
@@ -97,12 +108,44 @@
   <EmptyState title="We don't have details on {name} yet." variant="muted" action={companyLink} />
 {:else if company}
   <div class="flex flex-col gap-6">
-    {#if badges.length}
-      <ul class="flex flex-wrap gap-1.5">
-        {#each badges as badge (badge)}
-          <li><Badge variant="secondary">{badge}</Badge></li>
-        {/each}
-      </ul>
+    {#if badges.length || socials.length}
+      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        {#if badges.length}
+          <ul class="flex flex-wrap gap-1.5">
+            {#each badges as badge (badge)}
+              <li><Badge variant="secondary">{badge}</Badge></li>
+            {/each}
+          </ul>
+        {/if}
+
+        <!-- The company's own links, as marks. nofollow for the same reason the Apply
+             CTA carries it (JobView): these destinations are whatever the importer
+             recorded, and the catalogue never vetted them — a followed link from every
+             posting a company has open is exactly what an SEO submission is after.
+             The icon carries no text, so each link is named for a screen reader. -->
+        <ul class="flex flex-wrap items-center gap-1">
+          {#each socials as social (social.key)}
+            <li>
+              <!-- eslint-disable svelte/no-navigation-without-resolve -- the company's own off-site link, scheme-checked in companySocials; not an internal route -->
+              <a
+                href={social.href}
+                target="_blank"
+                rel="nofollow noopener noreferrer"
+                aria-label={social.label}
+                title={social.label}
+                class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                {#if social.key === 'website'}
+                  <Globe class="size-4" aria-hidden="true" />
+                {:else}
+                  <ProviderIcon provider={social.key} />
+                {/if}
+              </a>
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+            </li>
+          {/each}
+        </ul>
+      </div>
     {/if}
 
     <!-- Facts as columns rather than rows: in a column this wide a right-aligned
@@ -123,6 +166,17 @@
           </div>
         {/each}
       </dl>
+    {/if}
+
+    <!-- Offices, as an overlapping flag cluster. Its own row rather than a fifth column
+         in the grid above: Meta lists 35 countries, which no fixed-width column holds.
+         `link` is off — these are the employer's sites, and sending a reader to the
+         jobs filter for a country would promise roles there that may not exist. -->
+    {#if offices.length}
+      <div class="flex flex-col gap-2">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Offices</p>
+        <CountryFlagStack codes={offices} max={12} />
+      </div>
     {/if}
 
     {#if description}

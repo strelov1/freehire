@@ -4,6 +4,8 @@ import {
   companyBadges,
   companyDescription,
   companyFacts,
+  companyLocations,
+  companySocials,
   hasCompanyDetails,
 } from './companyDetails';
 
@@ -81,6 +83,16 @@ describe('companyFacts', () => {
     ]);
   });
 
+  test('places the CEO between headquarters and organisation type', () => {
+    expect(
+      companyFacts(company({ hq_country: 'US', organization_type: 'Private' }, { ceo: 'Ada Lovelace' }))
+    ).toEqual([
+      { term: 'Headquarters', value: 'United States', flag: 'US' },
+      { term: 'CEO', value: 'Ada Lovelace' },
+      { term: 'Type', value: 'Private' },
+    ]);
+  });
+
   test('composes a stock listing from exchange and symbol', () => {
     expect(companyFacts(company({}, { stock: { exchange: 'NASDAQ', symbol: 'ACME' } }))).toEqual([
       { term: 'Listed', value: 'NASDAQ: ACME' },
@@ -130,6 +142,110 @@ describe('companyFacts', () => {
   });
 });
 
+describe('companySocials', () => {
+  test('orders the links site, LinkedIn, X, Facebook, Instagram', () => {
+    const socials = companySocials(
+      company(
+        {},
+        {
+          instagram: 'https://instagram.com/acme',
+          website: 'https://acme.com',
+          facebook: 'https://facebook.com/acme',
+          linkedin: 'https://linkedin.com/company/acme',
+          twitter: 'https://twitter.com/acme',
+        }
+      )
+    );
+    expect(socials.map((s) => s.key)).toEqual([
+      'website',
+      'linkedin',
+      'twitter',
+      'facebook',
+      'instagram',
+    ]);
+  });
+
+  test('names each link for a screen reader', () => {
+    expect(companySocials(company({}, { website: 'https://acme.com' }))).toEqual([
+      { key: 'website', label: 'Acme website', href: 'https://acme.com' },
+    ]);
+  });
+
+  test('is empty for a company with no links', () => {
+    expect(companySocials(company())).toEqual([]);
+  });
+
+  test('skips blank and whitespace-only entries', () => {
+    expect(companySocials(company({}, { website: '   ', linkedin: '' }))).toEqual([]);
+  });
+
+  test('trims surrounding whitespace off a link', () => {
+    expect(companySocials(company({}, { website: '  https://acme.com  ' }))[0]?.href).toBe(
+      'https://acme.com'
+    );
+  });
+
+  // company_info comes from an external importer, and these values land in an href.
+  // A javascript: or data: URL there is script execution on our origin, so the scheme
+  // is allow-listed rather than sanitised.
+  test('drops any link that is not http or https', () => {
+    expect(
+      companySocials(
+        company(
+          {},
+          {
+            website: 'javascript:alert(1)',
+            linkedin: 'data:text/html;base64,PHNjcmlwdD4=',
+            twitter: 'file:///etc/passwd',
+            facebook: '//evil.example.com',
+            instagram: 'https://instagram.com/acme',
+          }
+        )
+      ).map((s) => s.key)
+    ).toEqual(['instagram']);
+  });
+
+  test('accepts plain http as well as https', () => {
+    expect(companySocials(company({}, { website: 'http://acme.com' }))).toHaveLength(1);
+  });
+
+  test('drops a value that is not a URL at all', () => {
+    expect(companySocials(company({}, { twitter: '@acme' }))).toEqual([]);
+  });
+});
+
+describe('companyLocations', () => {
+  test('is the ISO codes of the offices, upper-cased', () => {
+    expect(
+      companyLocations(
+        company({}, { locations: [{ code: 'us', name: 'United States' }, { code: 'JP' }] })
+      )
+    ).toEqual(['US', 'JP']);
+  });
+
+  test('drops duplicates while keeping the first position', () => {
+    expect(
+      companyLocations(company({}, { locations: [{ code: 'US' }, { code: 'DE' }, { code: 'us' }] }))
+    ).toEqual(['US', 'DE']);
+  });
+
+  test('ignores entries with no code', () => {
+    expect(companyLocations(company({}, { locations: [{ name: 'Nowhere' }, { code: 'FR' }] }))).toEqual([
+      'FR',
+    ]);
+  });
+
+  test('ignores anything that is not a two-letter code', () => {
+    expect(
+      companyLocations(company({}, { locations: [{ code: 'USA' }, { code: 'X' }, { code: 'GB' }] }))
+    ).toEqual(['GB']);
+  });
+
+  test('is empty when the company lists no offices', () => {
+    expect(companyLocations(company())).toEqual([]);
+  });
+});
+
 describe('hasCompanyDetails', () => {
   test('is false when the company has no facts, no badges and no description', () => {
     expect(hasCompanyDetails(company())).toBe(false);
@@ -149,5 +265,17 @@ describe('hasCompanyDetails', () => {
 
   test('is false when the only description is whitespace', () => {
     expect(hasCompanyDetails(company({}, { description: '  ' }))).toBe(false);
+  });
+
+  test('is true on an outbound link alone', () => {
+    expect(hasCompanyDetails(company({}, { website: 'https://acme.com' }))).toBe(true);
+  });
+
+  test('is true on an office location alone', () => {
+    expect(hasCompanyDetails(company({}, { locations: [{ code: 'US' }] }))).toBe(true);
+  });
+
+  test('is false when the only link has a scheme we refuse', () => {
+    expect(hasCompanyDetails(company({}, { website: 'javascript:alert(1)' }))).toBe(false);
   });
 });

@@ -133,6 +133,18 @@ export interface CompanyInfo {
   is_hiring?: boolean;
   yc_url?: string;
   logo?: string;
+  // The rest of what the hirebase importer stores. These have always been on the wire
+  // — the API serves `company_info` as raw JSON, so an undeclared key still reaches the
+  // browser — they were simply never typed or rendered. Sampled across 40 YC companies
+  // on 2026-08-16: ceo 25, twitter 22, facebook 21, instagram 5, locations 27.
+  ceo?: string;
+  twitter?: string;
+  facebook?: string;
+  instagram?: string;
+  /** Countries the company has an office in, as ISO 3166-1 alpha-2 plus a display
+   *  name. Distinct from a job's location: these are the employer's sites, not where
+   *  any particular role sits. */
+  locations?: { code?: string; name?: string }[];
 }
 
 export interface Company {

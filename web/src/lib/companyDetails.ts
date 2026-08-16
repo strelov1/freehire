@@ -13,6 +13,67 @@ import type { Company } from './types';
  *  the ISO country code whose flag precedes the value. */
 export type CompanyFact = { term: string; value: string; flag?: string };
 
+/** One outbound link, ready for an icon. `key` picks the mark, `label` names the link
+ *  for a screen reader, since the icon alone carries no accessible text. */
+export type CompanySocial = {
+  key: 'website' | 'linkedin' | 'twitter' | 'facebook' | 'instagram';
+  label: string;
+  href: string;
+};
+
+// Fixed display order. Site first — it is the one most people want and the one most
+// companies have — then the networks by how often they are filled in.
+const SOCIAL_ORDER = [
+  ['website', 'website'],
+  ['linkedin', 'on LinkedIn'],
+  ['twitter', 'on X'],
+  ['facebook', 'on Facebook'],
+  ['instagram', 'on Instagram'],
+] as const;
+
+/** Whether a stored link may be put in an href.
+ *
+ *  `company_info` is written by an external importer, not by us, and these values go
+ *  straight into an anchor. `javascript:` and `data:` there execute script on our own
+ *  origin, so the scheme is allow-listed rather than cleaned up: anything that is not
+ *  plain http(s) is dropped entirely. A protocol-relative `//host` is refused too —
+ *  `URL` cannot parse it without a base, which is exactly the ambiguity we don't want. */
+function isSafeUrl(raw: string): boolean {
+  try {
+    const { protocol } = new URL(raw);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/** The company's outbound links, in display order. Present-only, and silently short of
+ *  any link whose scheme we refuse. */
+export function companySocials(company: Company): CompanySocial[] {
+  const info = company.company_info ?? {};
+  const out: CompanySocial[] = [];
+  for (const [key, suffix] of SOCIAL_ORDER) {
+    const href = info[key]?.trim();
+    if (!href || !isSafeUrl(href)) continue;
+    out.push({ key, label: `${company.name} ${suffix}`, href });
+  }
+  return out;
+}
+
+/** The countries the company has an office in, as upper-cased ISO 3166-1 alpha-2 codes,
+ *  deduplicated in first-seen order. Anything that is not a two-letter code is dropped:
+ *  the importer's `locations` is free-form enough to carry country names too, and a
+ *  flag component given "USA" would render nothing useful. */
+export function companyLocations(company: Company): string[] {
+  const seen = new Set<string>();
+  for (const loc of company.company_info?.locations ?? []) {
+    const code = loc.code?.trim().toUpperCase();
+    if (!code || !/^[A-Z]{2}$/.test(code)) continue;
+    seen.add(code);
+  }
+  return [...seen];
+}
+
 /** The company's full summary, or '' when it holds none. */
 export function companyDescription(company: Company): string {
   return company.company_info?.description?.trim() ?? '';
@@ -59,6 +120,7 @@ export function companyFacts(company: Company): CompanyFact[] {
     company.hq_country
       ? { term: 'Headquarters', value: countryLabel(company.hq_country), flag: company.hq_country }
       : null,
+    info.ceo ? { term: 'CEO', value: info.ceo } : null,
     company.organization_type ? { term: 'Type', value: company.organization_type } : null,
     stock ? { term: 'Listed', value: stock } : null,
     funding ? { term: 'Funding', value: funding } : null,
@@ -73,6 +135,8 @@ export function hasCompanyDetails(company: Company): boolean {
   return (
     companyFacts(company).length > 0 ||
     companyBadges(company).length > 0 ||
+    companySocials(company).length > 0 ||
+    companyLocations(company).length > 0 ||
     companyDescription(company) !== ''
   );
 }
