@@ -50,6 +50,6 @@
 - [x] 4.3 Record the retry policy in `internal/enrich/AGENTS.md`: which failures
       are the posting's fault, why the default is the other way, and why our
       faults are bounded by time rather than attempts.
-- [ ] 4.4 Put the one-off requeue statement in the PR description with the
+- [x] 4.4 Put the one-off requeue statement in the PR description with the
       measurement that justifies its `WHERE`, and state that it runs only after
       the policy is deployed.
