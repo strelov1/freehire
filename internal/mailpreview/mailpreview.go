@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/strelov1/freehire/internal/broadcast"
 	"github.com/strelov1/freehire/internal/emailnotify"
 	"github.com/strelov1/freehire/internal/mailtpl"
 	"github.com/strelov1/freehire/internal/notify"
@@ -79,6 +80,8 @@ func Samples(baseURL string) ([]Sample, error) {
 // renderers is the list of mails. Each drives the real notifier through the capture
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
+	phHeadsUpSample,
+	phLiveSample,
 	welcomeSample,
 	noAlertSample,
 	openSourceSample,
@@ -131,6 +134,27 @@ func sample(name, title string, send func(*capture) error) (Sample, error) {
 		Name: name, Title: title, Subject: c.subject,
 		HTML: c.html, LightHTML: light, DarkHTML: dark, Text: c.text,
 	}, nil
+}
+
+// One-off campaigns. They live here for the same reason the sequence does: the
+// copy is the deliverable, and it should be readable before it reaches anyone.
+func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
+	return sample(name, title, func(c *capture) error {
+		campaign, ok := broadcast.Lookup(campaignName)
+		if !ok {
+			return fmt.Errorf("campaign %q is not registered", campaignName)
+		}
+		return broadcast.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL).
+			Send(context.Background(), campaign, "someone@example.com")
+	})
+}
+
+func phHeadsUpSample(baseURL string) (Sample, error) {
+	return campaignSample("campaign-ph-heads-up", "Campaigns / Product Hunt: heads-up", "ph-heads-up", baseURL)
+}
+
+func phLiveSample(baseURL string) (Sample, error) {
+	return campaignSample("campaign-ph-live", "Campaigns / Product Hunt: live", "ph-live", baseURL)
 }
 
 // The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —

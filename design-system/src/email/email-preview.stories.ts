@@ -32,6 +32,9 @@ type Story = StoryObj<typeof meta>;
 /** The contact sheet: all mails side by side, generated from the Go sample list. */
 export const Gallery: Story = { args: { name: 'index', height: 900 } };
 
+export const CampaignProductHuntHeadsUp: Story = { args: { name: 'campaign-ph-heads-up', height: 700 } };
+export const CampaignProductHuntLive: Story = { args: { name: 'campaign-ph-live', height: 700 } };
+
 export const OnboardingWelcome: Story = { args: { name: 'onboarding-welcome', height: 720 } };
 export const OnboardingNoAlert: Story = { args: { name: 'onboarding-no-alert', height: 560 } };
 export const OnboardingOpenSource: Story = { args: { name: 'onboarding-open-source', height: 760 } };

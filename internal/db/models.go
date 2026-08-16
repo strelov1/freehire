@@ -184,6 +184,14 @@ type BoardHealth struct {
 	Region              string             `json:"region"`
 }
 
+// Send ledger for one-off campaigns. PK (user_id, campaign) = one send per pair, ever.
+type BroadcastEmail struct {
+	UserID   int64              `json:"user_id"`
+	Campaign string             `json:"campaign"`
+	SentAt   pgtype.Timestamptz `json:"sent_at"`
+	Error    string             `json:"error"`
+}
+
 type CommunityPersona struct {
 	UserID    int64              `json:"user_id"`
 	Handle    string             `json:"handle"`

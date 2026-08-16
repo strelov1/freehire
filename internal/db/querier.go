@@ -469,6 +469,9 @@ type Querier interface {
 	// Promote a suggested link to a confirmed one: the suggestion becomes job_id with
 	// link_source 'manual'. No-op (0 rows) when there is no pending suggestion.
 	ConfirmEmailLink(ctx context.Context, arg ConfirmEmailLinkParams) (int64, error)
+	// How many people a campaign would reach right now. Read before sending: a campaign
+	// is irreversible and goes to everyone, so the number is worth seeing first.
+	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).
@@ -1657,6 +1660,20 @@ type Querier interface {
 	// everything, not a trimmed window — see ListRecentAssistantMessages for the bounded
 	// read the model's own history is rebuilt from.
 	ListAssistantMessages(ctx context.Context, sessionID uuid.UUID) ([]AssistantMessage, error)
+	// Audience reader and ledger writer for one-off campaigns (internal/broadcast).
+	// Everyone who can be mailed and has not received this campaign yet.
+	//
+	// No signup window, unlike the onboarding queries: a campaign is addressed to the
+	// whole audience by definition, and the launch it announces matters as much to
+	// someone who joined in June as to someone who joined last week. The cap is
+	// therefore the only bound on a run, which is why the caller passes it explicitly
+	// rather than relying on a default.
+	//
+	// The two exclusions are the same as everywhere else, for the same reasons:
+	// an unverified address was never proven to belong to anyone, and an explicit
+	// notification_settings.enabled = false is an opt-out. A missing settings row means
+	// the account never touched the setting and still hears from us.
+	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -2665,6 +2682,8 @@ type Querier interface {
 	// A successful crawl clears the failure state and stamps freshness. Upsert so a
 	// first-ever crawl creates the row.
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
+	// Closes out one (user, campaign) whether or not the send worked.
+	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
 	// Step 2: record the event when the message is LINKED and no live event exists for it.
 	// Run RetractSupersededEmailEvent first.
 	//
