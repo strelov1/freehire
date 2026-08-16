@@ -4,6 +4,27 @@ import type { Handle } from '@sveltejs/kit';
 import * as Sentry from '@sentry/sveltekit';
 import { hasSessionCookie } from '$lib/authCookie';
 import { cachePolicy } from '$lib/httpCache';
+import { LOCALE_COOKIE } from '$lib/locale';
+
+// Resolves the account-section locale for `<html lang>` before the response
+// streams. Path-gated: only `/my/**` may render non-English — every other route
+// is forced to `en` here, so "public pages are never translated" is a structural
+// property of this one hook rather than a convention each page has to remember.
+//
+// `'ru'` is the only value that renders as anything but English — matches
+// `t()`'s own fallback rule exactly (any account preference that isn't `ru`,
+// including a valid-but-untranslated one like `es`, renders English content),
+// so the attribute never disagrees with what's actually on the page. Reads the
+// cookie synchronously (no DB/network); `+layout.server.ts` keeps it in sync
+// with the account's actual `users.language`.
+const locale: Handle = async ({ event, resolve }) => {
+  const onAccountSection = event.url.pathname === '/my' || event.url.pathname.startsWith('/my/');
+  const resolved = onAccountSection && event.cookies.get(LOCALE_COOKIE) === 'ru' ? 'ru' : 'en';
+  event.locals.locale = resolved;
+  return resolve(event, {
+    transformPageChunk: ({ html }) => html.replace('%lang%', resolved),
+  });
+};
 
 // Same opt-in, env-gated init as the client: no PUBLIC_SENTRY_DSN ⇒ no init, and
 // SSR runs unchanged. Errors-only, PII off. The server reports to the same
@@ -50,7 +71,7 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 };
 
 // sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
-export const handle = sequence(Sentry.sentryHandle(), cacheControl);
+export const handle = sequence(Sentry.sentryHandle(), locale, cacheControl);
 
 // Reports uncaught SSR errors to Sentry; inert when init was skipped above.
 export const handleError = Sentry.handleErrorWithSentry();

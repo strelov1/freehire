@@ -5,6 +5,9 @@
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { messages, navLabel } from '$lib/i18n/shell';
+  import { t } from '$lib/i18n/t';
   import { cn } from '$lib/ui';
 
   // A compact, icon-only mirror of the account-section navigation (see
@@ -22,6 +25,7 @@
   let { open = $bindable(false), collapsible = false }: { open?: boolean; collapsible?: boolean } =
     $props();
 
+  const s = $derived(t(messages, locale()));
   const path = $derived(page.url.pathname);
   const navItems = $derived(
     visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
@@ -36,10 +40,11 @@
 {#snippet navLink(item: ReturnType<typeof visibleAccountNav>[number], withLabel: boolean)}
   {@const active = isSectionActive(path, item.href)}
   {@const Icon = accountNavIcons[item.href]}
+  {@const label = navLabel(s, item.href, item.label)}
   <a
     href={resolve(item.href)}
     aria-current={active ? 'page' : undefined}
-    title={withLabel ? undefined : item.label}
+    title={withLabel ? undefined : label}
     onclick={withLabel ? close : undefined}
     class={cn(
       'flex items-center rounded-md transition-colors',
@@ -51,9 +56,9 @@
   >
     <Icon class="size-4 shrink-0" />
     {#if withLabel}
-      <span class="text-sm">{item.label}</span>
+      <span class="text-sm">{label}</span>
     {:else}
-      <span class="sr-only">{item.label}</span>
+      <span class="sr-only">{label}</span>
     {/if}
   </a>
 {/snippet}
@@ -64,7 +69,7 @@
   {#if collapsible}
     <!-- Desktop icon rail (lg+): identical to the non-collapsible rail. -->
     <nav
-      aria-label="Account sections"
+      aria-label={s.shell.accountSections}
       class="hidden w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:flex"
     >
       {#each navItems as item (item.href)}
@@ -76,19 +81,19 @@
     {#if open}
       <button
         type="button"
-        aria-label="Close menu"
+        aria-label={s.rail.closeMenu}
         onclick={close}
         class="fixed inset-0 z-40 bg-black/40 lg:hidden"
       ></button>
       <nav
-        aria-label="Account sections"
+        aria-label={s.shell.accountSections}
         class="fixed left-0 top-0 z-50 flex h-full w-64 flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:hidden"
       >
         <div class="mb-1 flex items-center justify-between px-2 py-1.5">
-          <span class="text-sm font-semibold text-foreground">Menu</span>
+          <span class="text-sm font-semibold text-foreground">{s.rail.menu}</span>
           <button
             type="button"
-            aria-label="Close menu"
+            aria-label={s.rail.closeMenu}
             onclick={close}
             class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
@@ -102,7 +107,7 @@
     {/if}
   {:else}
     <nav
-      aria-label="Account sections"
+      aria-label={s.shell.accountSections}
       class="flex w-14 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2"
     >
       {#each navItems as item (item.href)}

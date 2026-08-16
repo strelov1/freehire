@@ -7,6 +7,9 @@
   import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
   import { isAuthenticated, currentUser } from '$lib/auth.svelte';
   import { openAuthDialog } from '$lib/auth-dialog.svelte';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { messages, navLabel } from '$lib/i18n/shell';
+  import { t } from '$lib/i18n/t';
   import { Button, cn } from '$lib/ui';
   import { visibleAccountNav, isSectionActive } from '$lib/accountNav';
   import { accountNavIcons } from '$lib/accountNavIcons';
@@ -20,6 +23,7 @@
 
   let { children }: { children: Snippet } = $props();
 
+  const s = $derived(t(messages, locale()));
   const path = $derived(page.url.pathname);
 
   // Collapsible sidebar (lg+), persisted so it stays across navigations/sessions.
@@ -86,8 +90,8 @@
   <div class="mx-auto w-full max-w-6xl px-4 py-6">
     {#if !isAuthenticated()}
       <div class="flex flex-col items-center gap-3 py-12 text-center">
-        <p class="text-sm text-muted-foreground">Sign in to access your account.</p>
-        <Button variant="primary" onclick={() => openAuthDialog()}>Sign in</Button>
+        <p class="text-sm text-muted-foreground">{s.shell.signInPrompt}</p>
+        <Button variant="primary" onclick={() => openAuthDialog()}>{s.shell.signIn}</Button>
       </div>
     {:else}
       <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
@@ -96,29 +100,30 @@
         {#each navItems as item (item.href)}
           {@const active = isSectionActive(path, item.href)}
           {@const Icon = accountNavIcons[item.href]}
+          {@const label = navLabel(s, item.href, item.label)}
           <a
             href={resolve(item.href)}
             aria-current={active ? 'page' : undefined}
-            title={iconOnly ? item.label : undefined}
+            title={iconOnly ? label : undefined}
             class={cn(itemClass(active), iconOnly && 'justify-center', extra)}
           >
             <Icon class="size-4 shrink-0" />
             {#if !iconOnly}
-              {item.label}
+              {label}
             {/if}
           </a>
         {/each}
       {/snippet}
 
       <!-- Below lg: a horizontal, scrollable strip above the content. -->
-      <nav aria-label="Account sections" class="mb-4 flex gap-1 overflow-x-auto lg:hidden">
+      <nav aria-label={s.shell.accountSections} class="mb-4 flex gap-1 overflow-x-auto lg:hidden">
         {@render navLinks('shrink-0 whitespace-nowrap')}
       </nav>
 
       <div class="lg:flex lg:gap-8">
         <!-- lg and up: a collapsible vertical sidebar beside the content. -->
         <aside
-          aria-label="Account sections"
+          aria-label={s.shell.accountSections}
           class={cn(
             'hidden shrink-0 transition-[width] duration-200 lg:block',
             collapsed ? 'lg:w-14' : 'lg:w-56',
@@ -128,8 +133,8 @@
             <button
               type="button"
               onclick={toggleNav}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
+              aria-label={collapsed ? s.shell.expandSidebar : s.shell.collapseSidebar}
               class={cn(
                 'mb-1 flex items-center rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
                 collapsed && 'justify-center',
@@ -141,7 +146,7 @@
                 <PanelLeftClose class="size-4" />
               {/if}
             </button>
-            <nav aria-label="Account sections" class="flex flex-col gap-1">
+            <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
               {@render navLinks('', collapsed)}
             </nav>
           </div>

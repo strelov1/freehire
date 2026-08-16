@@ -43,6 +43,14 @@
     registerPwaServiceWorker();
   });
 
+  // hooks.server.ts sets `<html lang>` on the initial SSR response, but a live
+  // language switch (updateLanguage() -> invalidateAll(), no reload) only
+  // refreshes `page.data` — it doesn't re-run SSR, so the attribute would
+  // otherwise go stale the moment the translated content flips.
+  $effect(() => {
+    document.documentElement.lang = page.data.locale;
+  });
+
   // `injectRegister: null` in vite.config.ts (the CSP has no 'unsafe-inline'
   // script-src, so an auto-injected inline registration script would be blocked)
   // — register from this real module import instead. In dev, `devOptions` is
