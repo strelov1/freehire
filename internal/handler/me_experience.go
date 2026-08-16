@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/experience"
 )
 
@@ -59,19 +60,28 @@ func (h *experienceHandlers) withRequireContext(r experienceRequireContext) *exp
 
 func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
 	// The read takes a key, like the profile read, so a programmatic consumer can ground
-	// itself in what the candidate has actually done. Correcting, merging or removing an
-	// EXISTING entry stays cookie-only: a key that leaks out of a script's environment
-	// must not edit or erase someone's career. Creating a new one takes a key too — it is
+	// itself in what the candidate has actually done. Creating takes a key too — it is
 	// additive-only, and a full-scope key already reaches everything more destructive than
-	// this (cv edit, apply) through the rest of the CLI's surface, so gating this narrower
-	// than that would protect a boundary the same key crosses everywhere else.
+	// this (cv edit, apply) through the rest of the CLI's surface.
+	//
+	// Correcting takes a key as well, but only because UpdateAtom below keeps a keyed
+	// caller's edit from moving the claim's provenance. Without that, a key reaching this
+	// route would be a laundering step rather than a correction — see provenanceForUpdate.
+	// A caller able to ADD an achievement from a script and unable to fix a typo in it has
+	// a bank it can only make worse: the duplicate check refuses the corrected retry.
+	//
+	// What DESTROYS stays cookie-only, and that is the enforcement rather than a
+	// preference. The bank has no undo. Deleting an employment cascades to every
+	// achievement under it (migration 0047), and a merge folds one atom's numbers into
+	// another across the provenance line. None of that belongs to a credential that lives
+	// in a script's environment.
 	api.Get("/me/experience", mw.key, h.ListExperience)
 	api.Post("/me/experience/employments", mw.key, h.AddEmployment)
-	api.Put("/me/experience/employments/:id", mw.cookie, h.UpdateEmployment)
+	api.Put("/me/experience/employments/:id", mw.key, h.UpdateEmployment)
 	api.Delete("/me/experience/employments/:id", mw.cookie, h.DeleteEmployment)
 	api.Post("/me/experience/atoms", mw.key, h.AddAtom)
 	api.Post("/me/experience/atoms/merge", mw.cookie, h.MergeAtoms)
-	api.Put("/me/experience/atoms/:id", mw.cookie, h.UpdateAtom)
+	api.Put("/me/experience/atoms/:id", mw.key, h.UpdateAtom)
 	api.Delete("/me/experience/atoms/:id", mw.cookie, h.DeleteAtom)
 }
 
@@ -321,7 +331,14 @@ func (h *experienceHandlers) UpdateAtom(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	in.Provenance = experience.ProvenanceManual
+	// Read the standing of the claim before overwriting its words: a keyed caller may
+	// change what an achievement says and may not change who is held to have said it.
+	// The read also owner-scopes the write, so a foreign id is a 404 before any update.
+	existing, err := h.bank.GetAtom(c.Context(), id, userID)
+	if err != nil {
+		return experienceError(err)
+	}
+	in.Provenance = provenanceForUpdate(auth.ViaAPIKey(c), existing.Provenance)
 	updated, err := h.bank.UpdateAtom(c.Context(), id, userID, in)
 	if err != nil {
 		return experienceError(err)
@@ -360,6 +377,28 @@ func (h *experienceHandlers) checkContextRequired(ctx context.Context, userID in
 
 // ownedEntry resolves the caller and the addressed entry id together, since every route
 // here needs both and neither is useful alone.
+// provenanceForUpdate answers what an edit does to a claim's standing, and it is the reason
+// correcting an achievement can be reached with an API key at all.
+//
+// A candidate editing their own entry IS asserting it — that is what `manual` records, and
+// it is why the browser path stamps every correction with it regardless of where the row
+// came from. The tailoring agent holds a key, and the same stamp on its path would let it
+// promote its own reading: bank an inference as `agent_inferred` (which the CV evidence
+// gate refuses), PUT it, read back `manual`, and cite it. So a keyed edit rewrites the
+// words and leaves the label untouched.
+//
+// An unlabelled row falls to `agent_inferred` on the keyed path rather than to the strongest
+// claim, because a missing label is not evidence that anyone said anything.
+func provenanceForUpdate(viaKey bool, existing experience.Provenance) experience.Provenance {
+	if !viaKey {
+		return experience.ProvenanceManual
+	}
+	if !existing.Valid() {
+		return experience.ProvenanceAgentInferred
+	}
+	return existing
+}
+
 func ownedEntry(c *fiber.Ctx) (int64, uuid.UUID, error) {
 	userID, err := requireUserID(c)
 	if err != nil {
