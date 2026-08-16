@@ -1,17 +1,21 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { api } from '$lib/api';
-  import { hasCompanyDetails } from '$lib/companyDetails';
+  import { companyBadges, companyDescription, companyFacts, hasCompanyDetails } from '$lib/companyDetails';
   import type { Company } from '$lib/types';
-  import { EmptyState, Skeleton } from '$lib/ui';
-  import CompanyAbout from './CompanyAbout.svelte';
-  import CompanyFacts from './CompanyFacts.svelte';
+  import { Badge, CountryFlag, EmptyState, Skeleton } from '$lib/ui';
 
   // The employer behind a posting, as the job page's second tab. Deliberately NOT
   // server-rendered: inlining a company's summary into every one of its postings would
   // put hundreds of near-identical pages in competition with /companies/<slug>, which
   // is the page that should rank for it. The job page's server-rendered link to that
   // page (JobView's company row) is what carries the crawlable path between the two.
+  //
+  // Renders the same facts as the company page's sidebar cards, but laid out for a wide
+  // column instead of a narrow one: no card chrome, the facts as a row of columns rather
+  // than a stacked definition list, and the summary given the full width. The shared
+  // derivations live in $lib/companyDetails so the two layouts cannot disagree about
+  // what the company actually has.
   //
   // `active` is the tab's selected state, not its visibility — the panel stays mounted
   // either way so the tab's aria-controls always resolves. The fetch is what waits.
@@ -43,6 +47,22 @@
   // path and could disagree with them if either were ever missed.
   const pending = $derived(active && company == null && !failed);
   const empty = $derived(company != null && !hasCompanyDetails(company));
+
+  const badges = $derived(company ? companyBadges(company) : []);
+  const facts = $derived(company ? companyFacts(company) : []);
+  const description = $derived(company ? companyDescription(company) : '');
+
+  // The summary is clamped until asked for — a few hundred words of company boilerplate
+  // should not push the link to their other roles off the screen. The toggle appears only
+  // when the text actually overflows, measured against the clamped height once the
+  // paragraph is in the DOM (the same treatment CompanyAbout gives it in the sidebar).
+  let expanded = $state(false);
+  let clampable = $state(false);
+  let para = $state<HTMLParagraphElement>();
+
+  $effect(() => {
+    if (para && !expanded) clampable = para.scrollHeight > para.clientHeight + 1;
+  });
 </script>
 
 <!-- Offered in every terminal state, empty and failed included, so the click is never a
@@ -57,22 +77,67 @@
 {/snippet}
 
 {#if pending}
-  <div class="flex flex-col gap-4">
-    <Skeleton class="h-40 w-full rounded-xl" />
-    <Skeleton class="h-28 w-full rounded-xl" />
+  <div class="flex flex-col gap-6">
+    <Skeleton class="h-14 w-full" />
+    <Skeleton class="h-24 w-full" />
   </div>
 {:else if failed}
-  <EmptyState
-    title="Couldn't load company details."
-    variant="destructive"
-    action={companyLink}
-  />
+  <EmptyState title="Couldn't load company details." variant="destructive" action={companyLink} />
 {:else if empty}
   <EmptyState title="We don't have details on {name} yet." variant="muted" action={companyLink} />
 {:else if company}
-  <div class="flex flex-col gap-4">
-    <CompanyFacts {company} />
-    <CompanyAbout {company} />
+  <div class="flex flex-col gap-6">
+    {#if badges.length}
+      <ul class="flex flex-wrap gap-1.5">
+        {#each badges as badge (badge)}
+          <li><Badge variant="secondary">{badge}</Badge></li>
+        {/each}
+      </ul>
+    {/if}
+
+    <!-- Facts as columns rather than rows: in a column this wide a right-aligned
+         definition list strands each value an inch from its own term. Two columns on a
+         phone, four once there is room; `auto-cols` is not used because a company with
+         only two facts should not stretch them across the whole width. -->
+    {#if facts.length}
+      <dl class="grid grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-4">
+        {#each facts as fact (fact.term)}
+          <div class="flex min-w-0 flex-col gap-1">
+            <dt class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {fact.term}
+            </dt>
+            <dd class="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+              {#if fact.flag}<CountryFlag code={fact.flag} label={fact.value} class="shrink-0" />{/if}
+              <span class="truncate" title={fact.value}>{fact.value}</span>
+            </dd>
+          </div>
+        {/each}
+      </dl>
+    {/if}
+
+    {#if description}
+      <div class="flex flex-col gap-2 border-t border-border pt-6 first:border-t-0 first:pt-0">
+        <p
+          bind:this={para}
+          class={[
+            'whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground',
+            !expanded && 'line-clamp-5',
+          ]}
+        >
+          {description}
+        </p>
+        {#if clampable || expanded}
+          <button
+            type="button"
+            class="self-start text-sm font-medium text-primary hover:underline"
+            onclick={() => (expanded = !expanded)}
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     <div>{@render companyLink()}</div>
   </div>
 {/if}
