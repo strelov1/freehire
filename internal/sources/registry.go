@@ -277,6 +277,10 @@ func All(c HTTPClient) map[string]Source {
 		// SolidJobs: Polish job board, multi-company aggregator enumerated by division (board),
 		// same keyword-as-board shape as whatjobs.
 		NewSolidJobs(c),
+		// SEEK: the dominant AU/NZ job board, multi-company aggregator enumerated by ICT
+		// subclassification (board) with the market in region, reading its frontend search API and
+		// hydrating descriptions from its GraphQL endpoint. Keyless.
+		NewSeek(c),
 		// RU-domestic single-company adapters (boardless, except Yandex which selects
 		// host+language by board).
 		NewYandex(c),

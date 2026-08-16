@@ -48,6 +48,16 @@ Source ingest: board list, provider registry, board-file parsing/validation, per
 
 **Telegram ingest** is a two-stage queue (crawl then LLM-extract): `cmd/tg-ingest` crawls `sources/telegram.yml` channels into `telegram_posts`; `cmd/tg-extract` drains via the LLM. Both are run-once-and-exit cron workers.
 
+**SEEK traps** (all verified live on 2026-08-16, AU and NZ):
+
+- **The bot protection guards the pages, not the API.** A plain request to a SEEK search page or to a `/job/<id>` page answers **403** behind a Cloudflare interstitial ("Just a moment..."), and browser-shaped headers do not clear it. `GET /api/jobsearch/v5/search` — the site's own frontend endpoint — is not gated at all: it answers 200 JSON with no cookie, no credential and no browser-shaped User-Agent (confirmed with no UA, `curl/8.7.1`, `Go-http-client/2.0` and the project's own `freehire/0.1`). Descriptions come from `POST /graphql`, operation `jobDetails`, on the same terms. The consequence for the lifecycle: SEEK postings **cannot be liveness-probed**, because that path fetches the gated job page — which is why the adapter leans on `sweepGrace` instead.
+- **`totalCount` is a function of `pageSize`.** The same query answered **36** at `pageSize=1`, **688** at `pageSize=20`, 680 at 50 and 666 at 100. It can neither drive pagination nor detect truncation, so the adapter's response struct does not even declare the field and the walk stops on the repo's usual `added == 0`. This is the same class of bug as WhatJobs' `limit=1` below — a listing's self-reported total is not evidence.
+- **The result window ends near 550.** `pageSize=100` serves pages 1–5 and answers page 6 empty; `pageSize=50` serves through page 11 (offset 550) and page 12 empty. `pageSize` above 100 returns nothing. A slice larger than the window has a tail no crawl can reach — five of Australia's 22 ICT subclassifications, the largest at ~746 postings.
+- **`where` is load-bearing and omitting it does NOT mean "everywhere".** Dropping it collapsed a 688-posting slice to 36. It travels with the market's host and `siteKey` as one unit.
+- **`www.seek.com.au` now 308-redirects its HTML routes to `au.seek.com`**, and the older `chalice-search` API paths are gone. `api/jobsearch/v5/search` is the live one, and it answers on the `www.seek.com.au` host without a redirect.
+- **`companyName` is empty on roughly one posting in thirty**, where `advertiser.description` carries the name the employer typed — including SEEK's **`"Private Advertiser"`** placeholder, which is not a company. Such a posting is dropped rather than filed under a placeholder that would otherwise collect anonymous postings from both markets.
+- **`salaryLabel` is free text, and about a tenth of the postings that fill it use it for marketing copy** ("Strong remuneration", "Optional 9 day fortnight | Career Growth") rather than a salary. It is folded into the description verbatim; it never populates the structured salary fields.
+
 **WhatJobs FeedAPI traps** (its documentation is wrong in several places; all of the below was verified against the live API):
 
 - A `/` in the `user_agent` query value makes the edge redirect with the value corrupted (`Mozilla/5.0` → `Mozilla%215.0`), which is why every code sample in the vendor's docs fails. The adapter sends no `user_agent` at all.
