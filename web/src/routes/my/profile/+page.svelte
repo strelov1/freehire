@@ -4,17 +4,14 @@
     ClipboardList,
     Contact,
     GraduationCap,
-    Globe,
     MapPin,
     Settings as SettingsIcon,
     Tags,
     User,
-    VenetianMask,
   } from '@lucide/svelte';
-  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
-  import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import { isAuthenticated } from '$lib/auth.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
   import { savedSearches } from '$lib/savedSearches.svelte';
@@ -34,9 +31,7 @@
   import { api } from '$lib/api';
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '$lib/cvRefreshOffer';
   import { askCvRefresh } from '$lib/cvRefreshDialog.svelte';
-  import type { TalentNetworkVisibility } from '$lib/types';
   import type { Answers } from '$lib/generated/contracts';
-  import { Button } from '$lib/ui';
   import { messages } from './messages';
 
   const s = $derived(t(messages, locale()));
@@ -84,11 +79,6 @@
     actionError = null;
   });
 
-  // Status-aware Talent Network entry point, next to the tab row — `null` means "not
-  // yet loaded", which reads as the "off" (join) state until the fetch resolves, same
-  // fail-safe posture as a load failure below.
-  let talentNetworkVisibility = $state<TalentNetworkVisibility | null>(null);
-
   async function load() {
     status = 'loading';
     try {
@@ -111,25 +101,9 @@
     }
   }
 
-  // Seeds the header's Talent Network pill only — never blocking, and no error surfaced
-  // here. A failure defaults it to the "off" (join) state; the panel's own fetch (on open)
-  // is the informative path if the setting genuinely can't be read.
-  async function loadTalentNetwork() {
-    try {
-      const setting = await api.getTalentNetwork();
-      talentNetworkVisibility = setting.talent_network_visibility;
-    } catch {
-      talentNetworkVisibility = 'off';
-    }
-  }
-
-  // (Re)load once the session resolves. Talent Network is beta-gated: skip its fetch
-  // entirely for a non-beta account, same as the pill being hidden for one.
+  // (Re)load once the session resolves.
   $effect(() => {
-    if (isAuthenticated()) {
-      void load();
-      if (currentUser()?.beta_tester) void loadTalentNetwork();
-    }
+    if (isAuthenticated()) void load();
   });
 
   // Fired after any Role/Skills/Location change, wherever it happens now (ProfileForm's
@@ -263,24 +237,6 @@
         </button>
       {/each}
     </div>
-    {#if currentUser()?.beta_tester}
-      <Button
-        variant={talentNetworkVisibility === 'public' || talentNetworkVisibility === 'anonymous'
-          ? 'outline'
-          : 'primary'}
-        size="sm"
-        class="mb-2 shrink-0"
-        href={resolve('/my/talent-network')}
-      >
-        {#if talentNetworkVisibility === 'public'}
-          <Globe class="size-4" aria-hidden="true" /> Talent Network: Public
-        {:else if talentNetworkVisibility === 'anonymous'}
-          <VenetianMask class="size-4" aria-hidden="true" /> Talent Network: Anonymous
-        {:else}
-          Join Talent Network
-        {/if}
-      </Button>
-    {/if}
   </div>
 
   {#if actionError}
