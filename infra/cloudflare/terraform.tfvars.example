@@ -1,4 +1,0 @@
-# Copy to terraform.tfvars (gitignored) and fill in.
-# Create the token at https://dash.cloudflare.com/profile/api-tokens with
-# Zone:Zone Settings:Edit, Zone:DNS:Edit, Zone:Cache Rules:Edit, scoped to freehire.me.
-cloudflare_api_token = ""
