@@ -40,3 +40,18 @@ describe('defineMessages / t', () => {
     expect(t(messages, 'pt')).toEqual(t(messages, 'en'));
   });
 });
+
+describe('defineMessages / t with a string-list leaf', () => {
+  const messages = defineMessages(
+    { items: ['One', 'Two', 'Three'] },
+    { items: ['Один', 'Два', 'Три'] },
+  );
+
+  it('replaces the whole list for a locale that provides one', () => {
+    expect(t(messages, 'ru').items).toEqual(['Один', 'Два', 'Три']);
+  });
+
+  it('falls back to the English list when untranslated', () => {
+    expect(t(messages, 'es').items).toEqual(['One', 'Two', 'Three']);
+  });
+});

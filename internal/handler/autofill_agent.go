@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/autofillagent"
 )
 
@@ -12,10 +13,21 @@ import (
 //
 // The extension triggers this and then watches its own socket do the work — the
 // agent never touches the DOM itself, it only drives the primitives.
+//
+// internal/browsertools.Hub is keyed by user id, not session id, so this call reaches
+// whatever browser the caller's extension currently has attached — regardless of
+// which surface issued THIS request. Unlike read_current_page (see the
+// confine-browse-preset-to-extension change), there is no degraded mode to fall back
+// to: autofill WRITES into the live form on that page, so a request that did not
+// authenticate as the extension's own Bearer session JWT is refused outright rather
+// than run against a browser the caller on this surface never opened.
 func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
+	}
+	if !auth.IsExtensionBearer(c) {
+		return fiber.NewError(fiber.StatusForbidden, "autofill runs only from the browser extension's own connection")
 	}
 
 	profile, err := h.autofillProfile(c.Context(), userID)

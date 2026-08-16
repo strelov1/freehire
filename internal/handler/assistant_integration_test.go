@@ -322,20 +322,23 @@ func TestCreateAssistantSessionTakesThePresetTheClientAsksFor(t *testing.T) {
 
 // A conversation begun on a vacancy in the side panel is one the candidate can
 // pick up at their desk, so it belongs in the same rail as their chats.
-func TestSessionListSpansBrowsingConversations(t *testing.T) {
+func TestSessionListSpansRehearsalsButExcludesBrowsing(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	app, h := newAssistantApp(pool, iss, nil)
 	userID, cookie := assistantUser(t, pool, iss, "rail@example.test", true)
 
+	// A browsing conversation's one distinguishing tool, read_current_page, only works
+	// over the extension's own connection — see the confine-browse-preset-to-extension
+	// change — so it stays out of the rail this endpoint serves, the same as tailoring.
 	browsing, err := h.store.CreateSession(context.Background(), userID, assistant.PresetBrowse, nil, nil)
 	if err != nil {
 		t.Fatalf("create browsing session: %v", err)
 	}
-	// The other half of the same predicate: widening it must not have swept tailoring
-	// conversations in. Only a real query can prove that — the store's own unit tests
-	// run against a fake that never sees the WHERE clause. The binding is left unset
-	// because what is on trial here is the preset filter, not the CV it points at.
+	// The other half of the same predicate: excluding browse and tailor must not have
+	// swept a rehearsal out too. Only a real query can prove that — the store's own unit
+	// tests run against a fake that never sees the WHERE clause. The binding is left
+	// unset because what is on trial here is the preset filter, not the CV it points at.
 	tailoring, err := h.store.CreateSession(context.Background(), userID, assistant.PresetTailor, nil, nil)
 	if err != nil {
 		t.Fatalf("create tailoring session: %v", err)
@@ -359,20 +362,17 @@ func TestSessionListSpansBrowsingConversations(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	var sawBrowsing, sawRehearsal bool
+	var sawRehearsal bool
 	for _, s := range list.Data {
-		if s.ID == browsing.ID.String() {
-			sawBrowsing = true
-		}
 		if s.ID == rehearsal.ID.String() {
 			sawRehearsal = true
 		}
 		if s.ID == tailoring.ID.String() {
 			t.Errorf("the rail contains the tailoring session %s; it is reached through its CV, not here", tailoring.ID)
 		}
-	}
-	if !sawBrowsing {
-		t.Errorf("the rail = %+v, want it to contain the browsing session %s", list.Data, browsing.ID)
+		if s.ID == browsing.ID.String() {
+			t.Errorf("the rail contains the browsing session %s; read_current_page only works from the extension", browsing.ID)
+		}
 	}
 	if !sawRehearsal {
 		t.Errorf("the rail = %+v, want it to contain the rehearsal %s", list.Data, rehearsal.ID)

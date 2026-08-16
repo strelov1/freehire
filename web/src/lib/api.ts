@@ -111,10 +111,14 @@ interface Page<T> {
 }
 
 /** One entry in a sitemap sub-file: the public slug and its lastmod. Kept slim
- *  on purpose — the sitemap never needs the full job/company row. */
+ *  on purpose — the sitemap never needs the full job/company row.
+ *
+ *  `updated_at` is optional because a document indexed before the attribute joined
+ *  the shape has none; such a URL ships without a <lastmod> rather than dropping
+ *  out of the sitemap. */
 export interface SitemapEntry {
   slug: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 /** Aggregate market-insight wire shapes (the /api/v1/insights/* reads). */
@@ -631,32 +635,31 @@ export function createApi(
 
   // --- Sitemap --------------------------------------------------------------
   //
-  // Feeds behind the sitemap index (server routes only). Jobs ship their freshest
-  // slice (one file); companies are keyset-paginated across chunks, with a boundary
-  // endpoint returning the cursor ending each chunk so the index can enumerate them.
+  // Feeds behind the sitemap index (server routes only). Both halves are offset-paged
+  // over a search index, and each boundary endpoint returns the offset that OPENS every
+  // chunk — including the first, 0 — so the index lists those cursors as they come.
 
-  /** One chunk of job sitemap entries with id < `after` ('' for the first). */
-  async function sitemapJobs(after: string, limit: number): Promise<SitemapEntry[]> {
-    return requestData<SitemapEntry[]>(
-      `/api/v1/jobs/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
-    );
+  /** One page of job sitemap entries starting at `offset` in the search index. */
+  async function sitemapJobs(offset: number, limit: number): Promise<SitemapEntry[]> {
+    return requestData<SitemapEntry[]>(`/api/v1/jobs/sitemap?offset=${offset}&limit=${limit}`);
   }
 
-  /** The id ending each chunk of sitemap-eligible jobs — the sitemap index's cursors. */
+  /** The offset opening each `chunk`-sized page of jobs — every sub-sitemap's cursor,
+   *  including the first (0). */
   async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
     return requestData<number[]>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
   }
 
-  /** One chunk of company sitemap entries with slug > `after` ('' for the first). */
-  async function sitemapCompanies(after: string, limit: number): Promise<SitemapEntry[]> {
+  /** One page of company sitemap entries starting at `offset` in the search index. */
+  async function sitemapCompanies(offset: number, limit: number): Promise<SitemapEntry[]> {
     return requestData<SitemapEntry[]>(
-      `/api/v1/companies/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
+      `/api/v1/companies/sitemap?offset=${offset}&limit=${limit}`,
     );
   }
 
-  /** The slug cursor ending each `chunk`-sized page of companies. */
-  async function sitemapCompanyBoundaries(chunk: number): Promise<string[]> {
-    return requestData<string[]>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
+  /** The offset opening each `chunk`-sized page of companies, including the first (0). */
+  async function sitemapCompanyBoundaries(chunk: number): Promise<number[]> {
+    return requestData<number[]>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
   }
 
   // --- Auth -----------------------------------------------------------------
@@ -1188,11 +1191,6 @@ export function createApi(
     );
   }
 
-  /** Clear the user's profile. Idempotent. */
-  async function deleteProfile(): Promise<void> {
-    await call('/api/v1/me/profile', { method: 'DELETE' });
-  }
-
   // The candidate's own screening answers — the handful of questions that repeat across
   // ATS application forms (visa, salary, notice period, relocation, …) and no CV states.
   // Distinct from the profile above: a different lifecycle, see
@@ -1291,6 +1289,11 @@ export function createApi(
    *  résumé is a normal state the profile renders). */
   async function getResume(): Promise<ResumeMeta> {
     return requestData<ResumeMeta>('/api/v1/me/resume');
+  }
+
+  /** Delete the stored CV file and its structured extract. Owned contacts survive. */
+  async function deleteResume(): Promise<void> {
+    await call('/api/v1/me/resume', { method: 'DELETE' });
   }
 
   /** Replace candidate-owned contacts without re-uploading a CV. */
@@ -2109,7 +2112,6 @@ export function createApi(
     updateExperienceEmployment,
     getProfile,
     saveProfile,
-    deleteProfile,
     getScreeningAnswers,
     updateScreeningAnswers,
     getTalentNetwork,
@@ -2118,6 +2120,7 @@ export function createApi(
     deleteAccount,
     extractResumeProfile,
     getResume,
+    deleteResume,
     putResumeContacts,
     replaceResumeContactsFromCV,
     retryResumeParse,

@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { currentUser } from '$lib/auth.svelte';
+  import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import { locale } from '$lib/i18n/currentLocale.svelte';
   import { t } from '$lib/i18n/t';
   import { Button } from '$lib/ui';
@@ -136,4 +137,10 @@
   <Button variant="outline" disabled={signingOut} onclick={signOutEverywhere}>
     {signingOut ? s.sessions.signingOut : s.sessions.signOut}
   </Button>
+</section>
+
+<section class="mt-8 rounded-lg border border-destructive/30 p-4">
+  <h2 class="mb-1 text-sm font-semibold">{s.dangerZone.heading}</h2>
+  <p class="mb-4 text-sm text-muted-foreground">{s.dangerZone.description}</p>
+  <DeleteAccountButton />
 </section>

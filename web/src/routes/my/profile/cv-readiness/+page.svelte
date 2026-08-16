@@ -15,9 +15,9 @@
   import { Button } from '$lib/ui';
 
   // CV readiness: the ATS-readiness score and the optional AI review, scored against a
-  // role the reader picks. Reachable by URL only — it is deliberately not one of the
-  // profile's tabs (see the TABS list in ../+layout.svelte), kept because the report is
-  // still worth having, not because anything links to it.
+  // role the reader picks. Reachable by URL only — not one of the profile's views (see
+  // /my/profile's toolbar), and not linked from anywhere in the product yet. Kept because
+  // the report is still worth having, not because anything points to it.
   const profile = $derived(profileStore.profile);
 
   // Skills are the measured set (from the profile), never a market filter — hide the

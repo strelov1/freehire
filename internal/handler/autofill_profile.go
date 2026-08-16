@@ -95,7 +95,9 @@ func (h *autofillHandlers) register(api fiber.Router, mw middleware) {
 	// extension to write into application forms. keyAuth (Bearer).
 	api.Get("/me/autofill-profile", mw.key, h.AutofillProfile)
 	// Agent-driven autofill: the caller's own browser is driven over the browser-tool
-	// wire. keyAuth (Bearer) so the extension can trigger it.
+	// wire. keyAuth admits the cookie too, same as every other mw.key route — the
+	// handler itself refuses anything but the extension's own Bearer session JWT,
+	// because unlike a read this one writes into a live form.
 	api.Post("/me/autofill/run", mw.key, h.RunAgentAutofill)
 }
 

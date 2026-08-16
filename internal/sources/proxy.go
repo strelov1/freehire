@@ -105,8 +105,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 // path. Moving ~3000 boards an hour onto it would concentrate the same burst on a weaker IP and
 // take the budget from the providers with nowhere else to go.
 var refusalRetryProviders = map[string]func(HTTPClient) Source{
-	"workable":   func(c HTTPClient) Source { return NewWorkable(c) },
-	"teamtailor": func(c HTTPClient) Source { return NewTeamtailor(c) },
+	"workable": func(c HTTPClient) Source { return NewWorkable(c) },
+	// Paced as well as refusal-retried: the proxy recovers a refused request, the pacer stops
+	// producing them. Without the pacer this entry alone moved only a quarter of the failures.
+	"teamtailor": func(c HTTPClient) Source {
+		return NewTeamtailor(pacedHTMLGetter(c, teamtailorRequestInterval, teamtailorRequestBurst))
+	},
 }
 
 // IsProxied reports whether provider is on the proxied-egress allowlist — the providers

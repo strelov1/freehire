@@ -83,18 +83,19 @@ export function entryFromQuery(params: URLSearchParams): AssistantEntry {
  * Whether this surface may open a conversation running under `preset`.
  *
  * Stated as a refusal, not a whitelist, and that is the point: `ListAssistantSessions`
- * decides what the rail carries (chat, profile and browse today), and a client that
- * whitelists presets goes stale the moment the backend gains one. It did — `browse`
- * arrived with the extension's side panel and this check did not follow, so anyone whose
- * newest conversation came from the extension landed on the dead-link panel, which
- * replaces the rail they would have escaped through.
+ * decides what the rail carries (chat, profile, interview and debrief today), and a
+ * client that whitelists presets goes stale the moment the backend gains one.
  *
- * Only a conversation BOUND to another artifact is refused: a tailoring chat belongs to
- * the CV that owns it, is reached through the tailoring workspace, and its tools close
- * over ids this surface knows nothing about.
+ * Two presets are refused, for two different reasons. A tailoring chat belongs to the
+ * CV that owns it, is reached through the tailoring workspace, and its tools close over
+ * ids this surface knows nothing about. A browsing chat's one distinguishing tool,
+ * `read_current_page`, only works over the extension's own connection — the backend
+ * already excludes it from `ListAssistantSessions`, and this refuses it here too, so a
+ * bookmarked or guessed link to one shows the same "chat unavailable" state rather than
+ * silently opening a chat that lost its reason to exist.
  */
 export function opensInRail(preset: string): boolean {
-  return preset !== 'tailor';
+  return preset !== 'tailor' && preset !== 'browse';
 }
 
 /**

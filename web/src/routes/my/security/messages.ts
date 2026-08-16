@@ -28,6 +28,10 @@ export const messages = defineMessages(
       signingOut: 'Signing out…',
       signOut: 'Sign out everywhere',
     },
+    dangerZone: {
+      heading: 'Danger zone',
+      description: 'Permanently erase your account and everything in it. This cannot be undone.',
+    },
   },
   {
     headTitle: 'Безопасность · freehire',
@@ -56,6 +60,10 @@ export const messages = defineMessages(
         'Выйдите из всех устройств, включая это. Используйте, если думаете, что кто-то ещё получил доступ. Ваши API-ключи продолжат работать — отзывайте их по отдельности.',
       signingOut: 'Выход…',
       signOut: 'Выйти везде',
+    },
+    dangerZone: {
+      heading: 'Опасная зона',
+      description: 'Безвозвратно удалите аккаунт и всё, что с ним связано. Это действие нельзя отменить.',
     },
   },
 );

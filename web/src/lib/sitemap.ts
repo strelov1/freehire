@@ -5,17 +5,16 @@
 
 import { collectionSlugs } from './collections';
 
-// Must equal the backend's companySitemapChunk — the chunk size the boundary
-// cursors are computed with — so each sub-sitemap holds exactly one keyset chunk.
-// Well under the protocol's 50,000-URL cap on purpose: these reads compete with the
-// ingest for Postgres' buffer cache, and a 50k chunk measured both 0.9s warm and
-// past the 60s proxy timeout during an ingest run (see internal/handler/sitemap.go).
+// Must equal the backend's companySitemapChunk — the page size the offsets are
+// computed with — so each sub-sitemap holds exactly one index page. Well under the
+// protocol's 50,000-URL cap, and left at the size the Postgres-backed version used
+// so the existing sub-sitemap URLs keep pointing at the same tiling.
 export const SITEMAP_CHUNK = 10000;
 
-// Must equal the backend's jobSitemapChunk. Larger than the company chunk because
-// jobs_sitemap_idx (migration 0107) covers everything the job sitemap queries read,
-// so a chunk is an index-only scan rather than the heap walk that once capped the
-// whole job sitemap at a single 15,000-URL file.
+// Must equal the backend's jobSitemapChunk. Job chunks are pages of the search
+// index, not of the jobs table: the index already holds exactly the postings worth
+// crawling, and it can address any offset in it directly — which is what let the
+// sitemap stop asking Postgres to number 3.4M rows on every render.
 export const JOB_SITEMAP_CHUNK = 25000;
 
 /** The site's static, always-present pages (relative paths). */

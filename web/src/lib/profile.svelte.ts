@@ -47,6 +47,19 @@ class ProfileStore extends UserResource<UserProfile | null> {
     this.#profile = null;
   }
 
+  /** Re-fetch the profile from the server without going through the write path — what a
+   *  CV delete/upload triggers, since those change server-derived fields (`cv`) that no
+   *  profile-store write method touches. Best-effort: a failure leaves the previous copy
+   *  in place. */
+  async refresh(): Promise<void> {
+    try {
+      this.#profile = await api.getProfile();
+      this.markLoaded();
+    } catch {
+      // best-effort — keep whatever was last read.
+    }
+  }
+
   /** Create-or-replace the profile. `excludedSkills` are the skills to avoid (may be empty).
    *  `location` is the optional location-preferences block (null clears it). Throws on a bad
    *  specialization, empty skills, or an out-of-vocabulary location value (the caller shows
@@ -107,6 +120,26 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.#queue(() => this.#writeSkills((sets) => withoutAvoidedSkill(sets, skill)));
   }
 
+  /** Re-save the profile with an edited specializations list — what the Roles card
+   *  writes when you add or remove one. Rejects when there is no profile. */
+  updateSpecializations(specializations: string[]): Promise<UserProfile> {
+    return this.#queue(() => {
+      const current = this.#profile;
+      if (!current) return Promise.reject(new Error('No profile to edit.'));
+      return this.save(specializations, current.skills, current.excluded_skills, current.location_preferences);
+    });
+  }
+
+  /** Re-save the profile with an edited location-preferences block — what the Location
+   *  view writes on every change. Rejects when there is no profile. */
+  updateLocation(location: LocationPreferences | null): Promise<UserProfile> {
+    return this.#queue(() => {
+      const current = this.#profile;
+      if (!current) return Promise.reject(new Error('No profile to edit.'));
+      return this.save(current.specializations, current.skills, current.excluded_skills, location);
+    });
+  }
+
   /** Re-save the profile with edited skill sets. Reads `#profile` at call time — inside the
    *  queue — so it sees whatever the preceding write applied rather than a copy that
    *  predates it. */
@@ -120,12 +153,6 @@ class ProfileStore extends UserResource<UserProfile | null> {
       next.excluded_skills,
       current.location_preferences,
     );
-  }
-
-  /** Clear the profile. */
-  async clear(): Promise<void> {
-    await api.deleteProfile();
-    this.#profile = null;
   }
 }
 

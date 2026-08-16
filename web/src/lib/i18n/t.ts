@@ -1,14 +1,17 @@
 import type { Locale } from '$lib/locale';
 
-// A message catalog: string leaves, nested per section (e.g. `password.heading`).
-export type Messages = { [key: string]: string | Messages };
+// A message catalog: string or string-list leaves, nested per section (e.g.
+// `password.heading`, `erased` list items).
+export type Messages = { [key: string]: string | string[] | Messages };
 
 type DeepPartial<T extends Messages> = {
-  [K in keyof T]?: T[K] extends string ? string : DeepPartial<Extract<T[K], Messages>>;
+  [K in keyof T]?: T[K] extends string | string[] ? T[K] : DeepPartial<Extract<T[K], Messages>>;
 };
 
+// Only a plain nested catalog recurses — an array is always a leaf, replaced
+// whole by a translation rather than merged element-by-element.
 function isMessages(value: unknown): value is Messages {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Merges `ru` over a full copy of `en`, per key, at any nesting depth — a key

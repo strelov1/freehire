@@ -22,7 +22,7 @@ func protectedApp(iss *Issuer) *fiber.App {
 		if !ok {
 			return fiber.NewError(fiber.StatusInternalServerError, "user id missing from context")
 		}
-		return c.JSON(fiber.Map{"id": id})
+		return c.JSON(fiber.Map{"id": id, "via_cookie": ViaCookie(c)})
 	})
 	return app
 }
@@ -54,6 +54,32 @@ func TestRequireAuth_ValidTokenGrantsAccessAndPropagatesID(t *testing.T) {
 	}
 	if body.ID != 7 {
 		t.Errorf("handler saw user id %d, want 7", body.ID)
+	}
+}
+
+// The extension gates read_current_page on this flag (see the
+// confine-browse-preset-to-extension change): ViaCookie must be true for the
+// website's own carrier so the tool stays confined to the extension's Bearer JWT.
+func TestRequireAuth_FlagsCookieAuth(t *testing.T) {
+	iss := NewIssuer("secret", time.Hour)
+	token, _ := iss.Issue(7, 1)
+
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/me", nil)
+	req.AddCookie(&http.Cookie{Name: CookieName, Value: token})
+
+	resp, err := protectedApp(iss).Test(req)
+	if err != nil {
+		t.Fatalf("Test: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		ViaCookie bool `json:"via_cookie"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.ViaCookie {
+		t.Error("ViaCookie should be true for RequireAuth's cookie path")
 	}
 }
 

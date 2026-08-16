@@ -31,6 +31,54 @@ const (
 )
 
 func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	urls, err := t.jobURLs(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+
+	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.
+	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
+		return t.detail(ctx, e, u)
+	}), nil
+}
+
+// FetchNew is the hydrating crawl: it enumerates the whole board, but fetches a posting's detail
+// page only for an id the catalogue does not already have. A seen posting is emitted as a
+// liveness refresh (identity only, no detail request, no content rewrite); an unseen one is
+// hydrated as before.
+//
+// This is the difference between a run that costs a request per POSTING and one that costs a
+// request per NEW posting, and on this platform the two are worlds apart: measured on prod
+// 2026-08-16, the board file holds ~40k live postings and about one an hour is genuinely new, so
+// the old crawl spent ~36.7k detail fetches to discover ~100. That volume is what Teamtailor's
+// edge turned away — nearly half the fleet 403'd — and what pacing could only spread out.
+func (t teamtailor) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	urls, err := t.jobURLs(ctx, e)
+	if err != nil {
+		return nil, err
+	}
+
+	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
+		id := ttJobID(u)
+		if id == "" {
+			return Job{}, false // no native id → would collide on the dedup key; skip it
+		}
+		// Already ingested: refresh liveness by identity only. Re-upserting it content-less
+		// would wipe the description and the facets derived from it, so the pipeline routes a
+		// SeenRefresh to a liveness touch instead of a write.
+		if seen(id) {
+			// Identity only: the pipeline resolves the row by (provider, board-namespaced id),
+			// and it judges an empty-titled refresh on the STORED evidence rather than on this
+			// content-less listing — so no title is the honest thing to send, not a defect.
+			return Job{ExternalID: id, URL: u, Company: e.Company, SeenRefresh: true}, true
+		}
+		return t.detail(ctx, e, u)
+	}), nil
+}
+
+// jobURLs enumerates every posting URL on a board — the listing walk shared by Fetch and
+// FetchNew, which differ only in what they do with the result.
+func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, error) {
 	// base carries the scheme+host; relative job hrefs resolve against it (an absolute
 	// href resolves to itself), so it is parsed once rather than per listing page.
 	base, err := url.Parse(fmt.Sprintf("https://%s/", e.Board))
@@ -76,11 +124,7 @@ func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			break
 		}
 	}
-
-	// Each job's posting comes from its own page fetch, fanned out under a bounded pool.
-	return fetchDetails(urls, defaultDetailWorkers, func(u string) (Job, bool) {
-		return t.detail(ctx, e, u)
-	}), nil
+	return urls, nil
 }
 
 // detail fetches one job page and maps its JobPosting ld+json to a Job, returning ok=false

@@ -23,8 +23,12 @@ const (
 	// PresetProfile is the experience interviewer: the same tools as a chat session, and a
 	// prompt that goes looking for what the bank does not yet know.
 	PresetProfile = "profile"
-	// PresetBrowse is a conversation held from the browser extension's side panel.
-	// It is the only preset whose agent can see the page the candidate is on.
+	// PresetBrowse is a conversation meant to be held from the browser extension's
+	// side panel. It is the only preset whose agent can EVER see the page the
+	// candidate is on — but only when the turn itself authenticated as the
+	// extension's own Bearer session JWT; reached any other way (a stale rail entry,
+	// an API key) it runs as a plain chat instead. See internal/handler's
+	// effectivePreset and internal/assistant/AGENTS.md.
 	PresetBrowse = "browse"
 	// PresetInterview is the mock interview held against one application. Like a
 	// tailoring session it is bound to a vacancy, but to no CV: it reads the CV and

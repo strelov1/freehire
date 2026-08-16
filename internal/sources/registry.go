@@ -133,7 +133,9 @@ func All(c HTTPClient) map[string]Source {
 		NewHiBob(c),
 		NewGem(c),
 		NewSuccessFactors(c),
-		NewTeamtailor(c),
+		// Paced: its per-posting detail fan-out fired ~37k requests in 10 minutes and Teamtailor
+		// 403'd nearly half the fleet (see teamtailorRequestInterval).
+		NewTeamtailor(pacedHTMLGetter(c, teamtailorRequestInterval, teamtailorRequestBurst)),
 		NewHurma(c),
 		NewICIMS(c),
 		// careerspage is rate-paced (pacedHTMLGetter); the proxied path paces it too.

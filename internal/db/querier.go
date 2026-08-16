@@ -432,17 +432,6 @@ type Querier interface {
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
 	CompanyJobCountBySlug(ctx context.Context, slug string) (int32, error)
-	// The slug ending every full chunk of `chunk_size` hiring companies (ordered by
-	// slug), excluding the final row, so the sitemap index can list each company
-	// sub-sitemap's keyset cursor. Same `job_count > 0` scope as ListCompanySitemap, or
-	// the cursors would not line up with the chunks they open.
-	//
-	// The last-row guard is a max(slug) probe, not the `count(*) OVER ()` this query
-	// used to compare `rn` against: that count is exact only by materializing every row
-	// of the walk in a tuplestore, while max(slug) over the same partial index is one
-	// backward index probe. Both exclude exactly the row whose rn = total — the maximum
-	// slug — whose cursor would open an empty trailing chunk.
-	CompanySitemapBoundaries(ctx context.Context, chunkSize int64) ([]string, error)
 	// Whether a company with this slug exists — the cheap existence check the vote
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
 	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).
@@ -1540,17 +1529,6 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
-	// The id ending every full chunk of `chunk_size` sitemap-eligible jobs (newest
-	// first), excluding the last row, so the sitemap index can list each chunk's cursor.
-	// Same scope as ListJobSitemapChunk, or the cursors would not line up with the
-	// chunks they open.
-	//
-	// The last-row guard is a min(id) probe rather than a count: over ~1.1M rows an
-	// exact `count(*) OVER ()` has to materialize the whole walk in a tuplestore, while
-	// min(id) over the same partial index is one forward probe. Both exclude exactly the
-	// row whose rank is the total — the smallest id — whose cursor would open an empty
-	// trailing chunk.
-	JobSitemapBoundaries(ctx context.Context, chunkSize int64) ([]int64, error)
 	// Whether the catalogue already crawls this board — any job whose external_id is "<board>:…".
 	// Matched with a LIKE-prefix so the (source, external_id text_pattern_ops) index serves it as
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
@@ -1642,18 +1620,23 @@ type Querier interface {
 	// The caller's session rail: their unbound conversations, most recently active first.
 	// Owner-scoped by construction — another user's sessions can never appear.
 	//
-	// The rail carries every conversation that can be continued on its own: chat, profile,
-	// browse, interview and debrief alike. An experience interview is resumable and would
-	// otherwise be lost the moment its author navigated away; a browsing conversation begun in
-	// the extension's side panel is one the candidate can pick up at their desk, where it
-	// simply cannot see a page any more; a rehearsal is opened days before the interview and
-	// closed again, and a debrief is written in one sitting and reread before the next round.
+	// The rail carries every conversation that works when reopened here: chat, profile,
+	// interview and debrief alike. An experience interview is resumable and would otherwise
+	// be lost the moment its author navigated away; a rehearsal is opened days before the
+	// interview and closed again, and a debrief is written in one sitting and reread before
+	// the next round.
 	//
 	// A rehearsal and a debrief are bound to a vacancy, so the test is not "binds to nothing"
 	// — it is whether the conversation still works when reopened from here. It does: their
-	// context tool closes over the vacancy id the session already carries. Tailoring
-	// conversations are excluded for exactly that reason inverted — they belong to the CV that
-	// owns them, are reached through the tailoring workspace, and cannot be continued without it.
+	// context tool closes over the vacancy id the session already carries.
+	//
+	// Tailoring conversations are excluded because they belong to the CV that owns them and
+	// are reached through the tailoring workspace, not this rail. Browsing conversations are
+	// excluded for a sharper reason: read_current_page — the one tool that makes a browsing
+	// session worth having — only works over the extension's own connection, so listing one
+	// here would offer a chat that silently loses its distinguishing capability the moment it
+	// is opened. It stays reachable from the extension, which holds its id directly rather
+	// than listing it. See the confine-browse-preset-to-extension change.
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error)
 	// A session's whole transcript in order, for the client to replay. Tool calls and tool
 	// results are included. Unbounded by design: the client's own message list must show
@@ -1762,16 +1745,6 @@ type Querier interface {
 	// rows that already hold industries, but the merge pass must also reach companies
 	// with none, and one query serving both keeps the two walks identical.
 	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
-	// Slim keyset page of companies for the sitemap, cursored by the slug primary key
-	// (first chunk keyed by the empty string, which sorts before every slug).
-	//
-	// Scoped to hiring companies (job_count > 0), the same scope the /companies catalog
-	// lists: a company with no open role has nothing on its page for a crawler to rank,
-	// and ~90k of the ~299k rows are job-less reference imports (YC, company-info), so
-	// listing them spends crawl budget on thin pages. Rides companies_sitemap_hiring_idx
-	// (0057), which covers the predicate, the order and updated_at — without it the
-	// predicate alone sends every candidate row to the heap.
-	ListCompanySitemap(ctx context.Context, arg ListCompanySitemapParams) ([]ListCompanySitemapRow, error)
 	// Every company slug, unfiltered. cmd/import-yc loads this once into an
 	// in-memory set to resolve each yc-oss directory entry's current-name and
 	// former-name slug candidates, instead of one CompanyExists round trip per
@@ -1989,16 +1962,6 @@ type Querier interface {
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
-	// One keyset page of open, non-duplicate jobs for the sitemap, newest id first and
-	// cursored by id (the caller passes the largest possible id for the first chunk, so
-	// the comparison stays a plain index bound rather than an OR over NULL).
-	//
-	// Rides jobs_sitemap_idx (0107), which covers the order, both predicate columns and
-	// the two payload columns — so a chunk is an index-only range scan and never visits
-	// the 2.5M-row heap. That is what makes paging the whole open catalogue affordable;
-	// before it, the sitemap could only ship its freshest slice (see 0107 for the
-	// measurements that forced that cap).
-	ListJobSitemapChunk(ctx context.Context, arg ListJobSitemapChunkParams) ([]ListJobSitemapChunkRow, error)
 	// Newest-added first: created_at is when the job entered the catalogue (stable
 	// across re-ingests), so fresh ingests surface on top regardless of how old the
 	// platform's posted_at is. id breaks ties within one ingest batch.

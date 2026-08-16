@@ -25,6 +25,13 @@ const localsViaAPIKey = "auth.viaAPIKey"
 // are unscoped by construction — a browser session is the owner themselves.
 const localsKeyScope = "auth.keyScope"
 
+// localsViaCookie is set true whenever the request authenticated with the website's own
+// session cookie, as opposed to a Bearer credential (a session JWT — the browser
+// extension's carrier — or an API key). Handlers read it via ViaCookie to confine a
+// capability to the extension's own connection, the same way localsViaAPIKey narrows one
+// to a programmatic caller.
+const localsViaCookie = "auth.viaCookie"
+
 // Scopes an API key can carry. ScopeFull is everything a key may do and is what a
 // user-created key gets; ScopeCV is the CV surface a tailoring agent needs and nothing
 // else, so a credential handed to an external agent cannot reach the rest of the account.
@@ -46,6 +53,30 @@ func ViaAPIKey(c *fiber.Ctx) bool {
 func KeyScope(c *fiber.Ctx) string {
 	scope, _ := c.Locals(localsKeyScope).(string)
 	return scope
+}
+
+// ViaCookie reports whether the request authenticated via the website's session cookie,
+// as opposed to a Bearer credential. False for a Bearer session JWT, false for an API
+// key, and false for a request that did not pass through RequireAuth or
+// RequireAuthOrScopedKey.
+func ViaCookie(c *fiber.Ctx) bool {
+	via, _ := c.Locals(localsViaCookie).(bool)
+	return via
+}
+
+// IsExtensionBearer reports whether the request authenticated as a Bearer session
+// JWT — neither the website's cookie nor an API key. That carrier is the browser
+// extension's own: it holds the session JWT the connect flow minted and presents it
+// as a Bearer header because a browser cannot send a cross-origin cookie.
+//
+// This is the single definition every caller that must confine a capability to the
+// extension's own connection shares (the assistant's browse-preset page tool,
+// agent-driven autofill — both reach a browser-tool channel keyed by user id, not by
+// how the request that reached it authenticated). Re-deriving "not cookie, not API
+// key" inline at each call site is exactly the kind of duplication that drifts the
+// moment one of them is edited and the other is not.
+func IsExtensionBearer(c *fiber.Ctx) bool {
+	return !ViaCookie(c) && !ViaAPIKey(c)
 }
 
 type sessionResult int
@@ -81,6 +112,7 @@ func RequireAuth(iss *Issuer, versions TokenVersionLoader) fiber.Handler {
 			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired session")
 		}
 		c.Locals(LocalsUserID, id)
+		c.Locals(localsViaCookie, true)
 		return c.Next()
 	}
 }
@@ -174,6 +206,7 @@ func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKe
 			id, res, _ := resolveSession(c, iss, versions, token)
 			if res == sessionOK {
 				c.Locals(LocalsUserID, id)
+				c.Locals(localsViaCookie, true)
 				return c.Next()
 			}
 			if res == sessionInfraError {

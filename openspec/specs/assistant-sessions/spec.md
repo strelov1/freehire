@@ -145,18 +145,21 @@ the caller authenticated.
 ### Requirement: The session list spans every conversation the user can return to
 
 The session list SHALL contain every conversation of the caller's except a tailoring
-one, most recently active first — general chats, experience interviews, browsing
-sessions, rehearsals and debriefs alike. A conversation begun in the extension's side
-panel is one the candidate can pick up at their desk, so it belongs in the same rail;
-only tailoring sessions stay out, because each is reached through the CV that owns it.
+or a browsing one, most recently active first — general chats, experience
+interviews, rehearsals and debriefs alike. Tailoring sessions stay out because each
+is reached through the CV that owns it; browsing sessions stay out because their
+only useful reading — `read_current_page` — works solely over the extension's own
+Bearer-JWT connection, so surfacing them on the website would list a conversation
+that degrades to an ordinary chat the moment it is opened there.
 
-A rehearsal and a debrief bind to a vacancy rather than to nothing, and are still listed:
-what keeps a conversation out of the rail is having its own way in, not having a binding.
+A rehearsal and a debrief bind to a vacancy rather than to nothing, and are still
+listed: what keeps a conversation out of the rail is having its own way in (the
+extension, for browsing; the CV, for tailoring), not having a binding.
 
 #### Scenario: A browsing session appears in the rail
 
 - **WHEN** the caller has held a conversation from the extension's side panel and requests the session list
-- **THEN** that conversation is in the response alongside their general chats
+- **THEN** that conversation is absent from the response; it remains reachable from the extension, which holds its id directly rather than listing it
 
 #### Scenario: A debrief appears in the rail
 
@@ -241,5 +244,6 @@ step in the user's history.
 
 #### Scenario: A dead link explains itself
 
-- **WHEN** the URL names a conversation the caller cannot open — deleted, another user's, or a tailoring conversation that belongs to a CV
-- **THEN** the page says the chat is unavailable and offers a way back to the chat list, rather than silently opening a different conversation
+- **WHEN** the URL names a conversation the caller cannot open on this surface — deleted, another user's, a tailoring conversation that belongs to a CV, or a browsing conversation held from the extension
+- **THEN** the page says the chat is unavailable and offers a way back to the chat list, rather than silently opening a different conversation or opening it here with reduced capability
+
