@@ -249,14 +249,22 @@ to `other`. The worker sanitizes because it persists raw model output derived fr
 attacker's body; the tool carries a judgement the candidate asked for, and silently
 rewriting it would record a verdict nobody chose.
 
-A `browse` session is one held from the browser extension. It is the only preset whose
-agent can see something outside this process: `read_current_page` attaches to the
-caller's browser-tool channel (`internal/browsertools`) as an in-process harness for the
-length of one call, the same way `/me/autofill/run` does. That tool is deliberately
-absent from every other preset — nothing is attached to their channel, and a tool that
-can only fail teaches the model to stop calling tools. Reaching no browser is a tool
-error naming the remedy, never a failed turn; the call carries its own deadline, because
-it is the only tool whose completion depends on a client we do not control.
+A `browse` session is meant to be held from the browser extension, but the preset
+recorded on the session does not by itself prove that: `internal/browsertools.Hub` is
+keyed by user id, not session id, so a browse session reached any other way would still
+find a browser attached the moment the caller's extension is open elsewhere. The
+`preset` a turn's request carries is therefore not the last word — `effectivePreset`
+(`internal/handler/assistant.go`) demotes a browse session to plain chat, for BOTH the
+prompt and the tool set, unless the turn itself authenticated as the extension's own
+Bearer session JWT (`auth.ViaCookie`/`auth.ViaAPIKey` both false). Only a session that
+clears that gate is the one preset whose agent can see something outside this process:
+`read_current_page` attaches to the caller's browser-tool channel (`internal/browsertools`)
+as an in-process harness for the length of one call, the same way `/me/autofill/run`
+does. That tool is deliberately absent from every other preset, and from a browse turn
+that fails the carrier check — nothing is attached to their channel, and a tool that can
+only fail teaches the model to stop calling tools. Reaching no browser is a tool error
+naming the remedy, never a failed turn; the call carries its own deadline, because it is
+the only tool whose completion depends on a client we do not control.
 
 **History trimming.** `trim` keeps the most recent N messages and then drops any
 leading tool results whose originating call was trimmed away — providers reject a

@@ -73,6 +73,54 @@ func TestOnlyTheBrowsePresetOffersThePageTool(t *testing.T) {
 	}
 }
 
+// effectivePreset is the one place that decides whether a browse session is running
+// over the extension's own connection. Both the prompt and the tool set are built
+// from its answer — never from sess.Preset directly — or the two could disagree
+// about what preset actually governs the turn.
+func TestEffectivePresetDemotesBrowseWithoutTheExtension(t *testing.T) {
+	if got := effectivePreset(assistant.PresetBrowse, false); got != assistant.PresetChat {
+		t.Errorf("effectivePreset(browse, asExtension=false) = %q, want chat", got)
+	}
+	if got := effectivePreset(assistant.PresetBrowse, true); got != assistant.PresetBrowse {
+		t.Errorf("effectivePreset(browse, asExtension=true) = %q, want browse", got)
+	}
+}
+
+func TestEffectivePresetLeavesOtherPresetsAlone(t *testing.T) {
+	for _, preset := range []string{assistant.PresetChat, assistant.PresetTailor, assistant.PresetProfile, assistant.PresetInterview, assistant.PresetDebrief} {
+		for _, asExtension := range []bool{true, false} {
+			if got := effectivePreset(preset, asExtension); got != preset {
+				t.Errorf("effectivePreset(%q, asExtension=%v) = %q, want it unchanged", preset, asExtension, got)
+			}
+		}
+	}
+}
+
+// The website authenticates by cookie; the extension by Bearer session JWT (never an
+// API key — a key is never the extension's own credential either). Preset alone is
+// not enough — a browse session reached any other way (a stale rail entry, a direct
+// URL, an API key) must degrade to an ordinary chat, PROMPT AND TOOLS BOTH, rather
+// than expose the one tool that only works over the extension's connection while
+// still being told to call it first. See the confine-browse-preset-to-extension
+// change.
+func TestBrowsePresetOverCookieRunsAsAnOrdinaryChat(t *testing.T) {
+	resolved := effectivePreset(assistant.PresetBrowse, false)
+
+	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: resolved}, uuid.New())
+	if slices.Contains(reg.Names(), "read_current_page") {
+		t.Error("a demoted browse session still offers read_current_page")
+	}
+	// It still degrades to an ordinary, working chat rather than losing everything.
+	if !slices.Contains(reg.Names(), "search_jobs") {
+		t.Errorf("a demoted browse session lost the discovery tools too; registered: %v", reg.Names())
+	}
+
+	if assistant.SystemPrompt(resolved, "en") != assistant.SystemPrompt(assistant.PresetChat, "en") {
+		t.Error("a demoted browse session must run under the chat prompt, not one that opens by " +
+			"insisting on a tool it was never given")
+	}
+}
+
 func TestChatPresetHasNoCVTools(t *testing.T) {
 	reg := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetChat}, uuid.New())
 

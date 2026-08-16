@@ -8,7 +8,7 @@
 export const BASE_URL = 'https://freehire.me/api/v1';
 
 /** Authentication requirement for an endpoint, rendered as a badge. */
-export type Auth = 'none' | 'cookie-or-key' | 'cookie' | 'moderator';
+export type Auth = 'none' | 'cookie-or-key' | 'cookie' | 'moderator' | 'extension';
 
 /** Human-readable label for an auth level. */
 export const AUTH_LABELS: Record<Auth, string> = {
@@ -16,6 +16,7 @@ export const AUTH_LABELS: Record<Auth, string> = {
   'cookie-or-key': 'Session or API key',
   cookie: 'Session only',
   moderator: 'Moderator',
+  extension: 'Browser extension only',
 };
 
 /** A single request parameter (path, query, or body field). */
@@ -1699,13 +1700,15 @@ ${BASE_URL}/auth/oauth/google/start`,
       {
         method: 'POST',
         path: '/me/autofill/run',
-        auth: 'cookie-or-key',
+        auth: 'extension',
         summary: 'Drive your own browser to fill an application form.',
         description:
           'Runs the autofill agent over the browser-tool wire — your extension on ' +
           'one end, the agent on the other, routed strictly within your own channel. ' +
-          'Requires the extension to be connected.',
-        curl: `curl -X POST "${BASE_URL}/me/autofill/run" -H "Authorization: Bearer fhk_…"`,
+          "Requires the extension to be connected, and authenticates only as the " +
+          'extension itself — a session cookie or an API key gets a 403, since this ' +
+          'call writes into whatever form your browser has open, not just reads it.',
+        curl: `curl -X POST "${BASE_URL}/me/autofill/run" -H "Authorization: Bearer <extension session token>"`,
         responseExample: `{ "data": { "filled": 11, "skipped": 2 } }`,
       },
     ],

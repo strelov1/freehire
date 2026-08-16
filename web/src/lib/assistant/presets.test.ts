@@ -105,19 +105,24 @@ describe('profileKickoff', () => {
 
 describe('opensInRail', () => {
   it('opens every conversation the rail lists', () => {
-    // These are the presets ListAssistantSessions returns. A browsing conversation
-    // started in the extension's side panel is meant to be picked up here — refusing it
-    // stranded anyone whose newest chat came from the extension, because boot() opens
-    // the newest and the dead-link panel replaces the rail that would let them escape.
+    // These are the presets ListAssistantSessions returns.
     expect(opensInRail('chat')).toBe(true);
     expect(opensInRail('profile')).toBe(true);
-    expect(opensInRail('browse')).toBe(true);
   });
 
   it('refuses a conversation bound to an artifact', () => {
     // A tailoring chat belongs to the CV that owns it and is reached through the
     // tailoring workspace; opening one here shows a conversation the rail cannot list.
     expect(opensInRail('tailor')).toBe(false);
+  });
+
+  it('refuses a browsing conversation', () => {
+    // read_current_page — the one thing that makes a browsing session worth having —
+    // only works over the extension's own connection. The backend already excludes
+    // `browse` from ListAssistantSessions; this refuses it here too, so a bookmarked or
+    // guessed link to one shows the same "chat unavailable" state a tailoring link does,
+    // rather than silently opening a chat with no page tool.
+    expect(opensInRail('browse')).toBe(false);
   });
 
   it('admits a preset it has not heard of', () => {

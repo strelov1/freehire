@@ -18,6 +18,7 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/assistant"
+	"github.com/strelov1/freehire/internal/auth"
 	"github.com/strelov1/freehire/internal/browsertools"
 	"github.com/strelov1/freehire/internal/cv"
 	"github.com/strelov1/freehire/internal/db"
@@ -549,6 +550,25 @@ func (h *assistantHandlers) userLanguage(ctx context.Context, userID int64) stri
 	return lang
 }
 
+// effectivePreset resolves the preset a turn actually runs under. A browse session's
+// one distinguishing tool, read_current_page, only works over the extension's own
+// connection (internal/browsertools.Hub is keyed by user id, not session id, so ANY
+// turn of the caller's could otherwise reach a browser they never opened on this
+// surface) — reached any other way, the session must run as an ordinary chat.
+//
+// This is called ONCE, before either the prompt or the registry is built, and both
+// are built from its answer rather than from sess.Preset directly. Deciding the same
+// question twice — once for the prompt, once for the tools — is exactly what
+// assistant.NormalizePreset's own doc comment warns against: the two could disagree,
+// and a model told to always open by calling a tool it was never given just reports
+// "unknown tool" instead of running the plain chat it degraded to.
+func effectivePreset(preset string, asExtension bool) string {
+	if assistant.NormalizePreset(preset) == assistant.PresetBrowse && !asExtension {
+		return assistant.PresetChat
+	}
+	return preset
+}
+
 // streamSSE owns the SSE headers, turn claim/queue, keepalive and writer. start is the
 // one difference between a fresh message and a retry.
 func (h *assistantHandlers) streamSSE(
@@ -556,13 +576,22 @@ func (h *assistantHandlers) streamSSE(
 	sess assistant.Session,
 	start func(context.Context, *assistant.Runner, *assistant.Registry, string, func(assistant.Event)) error,
 ) error {
+	asExtension := auth.IsExtensionBearer(c)
+	turnSess := sess
+	turnSess.Preset = effectivePreset(sess.Preset, asExtension)
+
 	// One batch per turn. Every CV edit the agent makes in this turn is filed under it, so
 	// the history can group them and "undo the run" is undoing a batch — which is what
 	// retires the single pre-run snapshot and the edge two concurrent runs used to create.
-	registry := h.registry(sess, uuid.New())
-	system := assistant.SystemPrompt(sess.Preset, h.userLanguage(c.Context(), sess.UserID))
+	registry := h.registry(turnSess, uuid.New())
+	system := assistant.SystemPrompt(turnSess.Preset, h.userLanguage(c.Context(), sess.UserID))
 
-	turnRunner := h.boundRunner(c.Context(), sess)
+	// Tagged from turnSess, not sess: a demoted browse turn spends like a chat turn — no
+	// page tool, the chat prompt — so it must be billed as one. Tagging it "browse" would
+	// pollute that preset's cost bucket with turns that never touched its one distinguishing
+	// tool, defeating the reason the tag exists (AGENTS.md: "the preset is what makes them
+	// comparable").
+	turnRunner := h.boundRunner(c.Context(), turnSess)
 
 	sseHeaders(c)
 

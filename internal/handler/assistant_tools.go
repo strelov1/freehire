@@ -347,6 +347,15 @@ const assistantResultCap = 60_000
 // whenever they happen to, and a version of this that only listens in one surface
 // would miss most of what they say. The page tool is the opposite case: it is scoped,
 // because only a browsing session has a browser on the other end of the relay.
+//
+// sess.Preset is trusted as-is here — it is the caller's job (streamSSE, via
+// effectivePreset) to have already demoted a browse session that is not running over
+// the extension's own connection to plain chat, BEFORE calling this. Deciding that
+// here too, from a second signal this function would have to take on its own, is
+// exactly the split answer assistant.NormalizePreset's doc comment warns against: the
+// prompt and the tool set must resolve from the SAME preset value or the model is
+// told to always call a tool it was never given. See the
+// confine-browse-preset-to-extension change.
 func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) *assistant.Registry {
 	// One normaliser answers the preset for BOTH the prompt and the tools. Comparing
 	// against the constants directly would let an unrecognised preset fall back to the

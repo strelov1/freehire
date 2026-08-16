@@ -157,7 +157,7 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions
-WHERE user_id = $1 AND preset IN ('chat', 'profile', 'browse', 'interview', 'debrief')
+WHERE user_id = $1 AND preset IN ('chat', 'profile', 'interview', 'debrief')
 ORDER BY updated_at DESC, id DESC
 `
 
@@ -175,18 +175,23 @@ type ListAssistantChatSessionsRow struct {
 // The caller's session rail: their unbound conversations, most recently active first.
 // Owner-scoped by construction — another user's sessions can never appear.
 //
-// The rail carries every conversation that can be continued on its own: chat, profile,
-// browse, interview and debrief alike. An experience interview is resumable and would
-// otherwise be lost the moment its author navigated away; a browsing conversation begun in
-// the extension's side panel is one the candidate can pick up at their desk, where it
-// simply cannot see a page any more; a rehearsal is opened days before the interview and
-// closed again, and a debrief is written in one sitting and reread before the next round.
+// The rail carries every conversation that works when reopened here: chat, profile,
+// interview and debrief alike. An experience interview is resumable and would otherwise
+// be lost the moment its author navigated away; a rehearsal is opened days before the
+// interview and closed again, and a debrief is written in one sitting and reread before
+// the next round.
 //
 // A rehearsal and a debrief are bound to a vacancy, so the test is not "binds to nothing"
 // — it is whether the conversation still works when reopened from here. It does: their
-// context tool closes over the vacancy id the session already carries. Tailoring
-// conversations are excluded for exactly that reason inverted — they belong to the CV that
-// owns them, are reached through the tailoring workspace, and cannot be continued without it.
+// context tool closes over the vacancy id the session already carries.
+//
+// Tailoring conversations are excluded because they belong to the CV that owns them and
+// are reached through the tailoring workspace, not this rail. Browsing conversations are
+// excluded for a sharper reason: read_current_page — the one tool that makes a browsing
+// session worth having — only works over the extension's own connection, so listing one
+// here would offer a chat that silently loses its distinguishing capability the moment it
+// is opened. It stays reachable from the extension, which holds its id directly rather
+// than listing it. See the confine-browse-preset-to-extension change.
 func (q *Queries) ListAssistantChatSessions(ctx context.Context, userID int64) ([]ListAssistantChatSessionsRow, error) {
 	rows, err := q.db.Query(ctx, listAssistantChatSessions, userID)
 	if err != nil {

@@ -105,7 +105,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `countries` | Countries | Open vocabulary — call /jobs/facets for live values |
 | `cities` | City | Open vocabulary — call /jobs/facets for live values |
 | `relocation` | Relocation | not_supported, supported, required |
-| `employment_type` | Employment | full_time, part_time, contract, internship |
+| `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |
 | `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |
 | `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |
 | `reality` | Posting reality | fresh, stale, likely-evergreen |
@@ -1229,7 +1229,6 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
   "data": {
     "applications": 12,
     "stages": {
-      "preparing": 0,
       "applied": 4,
       "screening": 2,
       "responded": 1,
@@ -1237,8 +1236,7 @@ curl "https://freehire.me/api/v1/me/tracking/pipeline" -H "Authorization: Bearer
       "offer": 1,
       "accepted": 1,
       "rejected": 1,
-      "withdrawn": 0,
-      "expired": 0
+      "withdrawn": 0
     }
   }
 }
@@ -2294,14 +2292,14 @@ curl "https://freehire.me/api/v1/me/autofill-profile" -H "Authorization: Bearer 
 
 ### `POST /me/autofill/run`
 
-**Auth:** Session or API key
+**Auth:** Browser extension only
 
 Drive your own browser to fill an application form.
 
-Runs the autofill agent over the browser-tool wire — your extension on one end, the agent on the other, routed strictly within your own channel. Requires the extension to be connected.
+Runs the autofill agent over the browser-tool wire — your extension on one end, the agent on the other, routed strictly within your own channel. Requires the extension to be connected, and authenticates only as the extension itself — a session cookie or an API key gets a 403, since this call writes into whatever form your browser has open, not just reads it.
 
 ```bash
-curl -X POST "https://freehire.me/api/v1/me/autofill/run" -H "Authorization: Bearer fhk_…"
+curl -X POST "https://freehire.me/api/v1/me/autofill/run" -H "Authorization: Bearer <extension session token>"
 ```
 
 ```json
