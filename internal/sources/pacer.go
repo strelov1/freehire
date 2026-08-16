@@ -165,10 +165,12 @@ func limitedTrudvsemGetter(c JSONGetter) JSONGetter {
 // back-to-back at 8-way all returned 200), but a whole-catalogue hydration — 1025 details in one
 // run — starts refusing CONNECTIONS near the end: `dial tcp: i/o timeout`, already past the
 // client's own three attempts, on ~1% of postings clustered in the run's tail. So the trigger is
-// sustained concurrency over a long run, not rate, and the loss is permanent: a posting ingested
-// list-only is seen on the next crawl and never re-fetches its detail. Four in flight halves the
-// pressure while keeping a full first crawl inside the ingest window; later crawls hydrate only
-// new postings, so the cap costs nothing in steady state. Tune from the observed loss rate.
+// sustained concurrency over a long run, not rate, and the loss outlives the run: a posting
+// ingested list-only is re-offered for hydration only while it is younger than
+// pipeline.HydrationRetryWindow (14 days), and is seen like any other row after that. Four in
+// flight halves the pressure while keeping a full first crawl inside the ingest window; later
+// crawls hydrate only new postings, so the cap costs nothing in steady state. Tune from the
+// observed loss rate.
 const emagineMaxInFlight = 4
 
 // limitedEmagineGetter wraps a getter with a fresh semaphore shared across one registry build, so

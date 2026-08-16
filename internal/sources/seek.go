@@ -154,13 +154,15 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 		}
 		body, ok := s.detail(ctx, m, p.ID)
 		if !ok {
-			// Defer rather than store body-less. seen reports only row existence, so a posting
-			// ingested without its body is marked SeenRefresh on every later crawl and never
-			// hydrates again — the loss pacer.go's emagine note calls permanent. Dropping it
-			// leaves it new, so the next crawl retries it. This is the opposite of what hh and the
-			// other hydrating adapters do, and it is deliberate: their rule assumes a rare failure,
-			// while SEEK's rate limiter refuses in bursts of thousands (measured on prod: 3,267
-			// refusals in 95 seconds, 87% of a first crawl stranded body-less).
+			// Defer rather than store body-less. A stored row without a body is re-offered for
+			// hydration only until it is pipeline.HydrationRetryWindow (14 days) old — after
+			// that `seen` reports it like any other row and it is marked SeenRefresh forever.
+			// Dropping it leaves it new, so EVERY later crawl retries it, with no deadline. This
+			// is the opposite of what hh and the other hydrating adapters do, and it is
+			// deliberate: their rule assumes a rare failure that the retry window absorbs, while
+			// SEEK's rate limiter refuses in bursts of thousands (measured on prod: 3,267
+			// refusals in 95 seconds, 87% of a first crawl stranded body-less) — a backlog large
+			// enough that a bounded window would time out before clearing it.
 			log.Printf("seek: detail %s/%s failed; deferring the posting to the next crawl", e.Region, p.ID)
 			return Job{}, false
 		}
