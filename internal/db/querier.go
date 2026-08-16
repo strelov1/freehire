@@ -63,6 +63,18 @@ type Querier interface {
 	// runs before any posting has been cleared out from under the events it is repairing, and
 	// a row whose job_id is already NULL is skipped rather than guessed at.
 	BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error)
+	// Fill jobs.company_slug_folded for one id range. The column is maintained by every
+	// write path (see migrations/0109), but the rows that predate it need this pass.
+	//
+	// Ranged by id rather than keyset-cursored on the column itself: the whole point is
+	// that the column is not yet indexed while this runs, so a WHERE on it would be a seq
+	// scan per chunk. The primary key is what makes each chunk a bounded, cheap slice, and
+	// it lets a resumed run pick up at a known number instead of a NULL frontier.
+	//
+	// The IS DISTINCT FROM guard makes re-runs free: a chunk whose rows are already correct
+	// writes nothing, so no dead tuples and no bloat for repeating the pass. That matters
+	// on a 7.4M-row table where an unguarded UPDATE would rewrite every row it touches.
+	BackfillCompanySlugFoldedChunk(ctx context.Context, arg BackfillCompanySlugFoldedChunkParams) (int64, error)
 	// The same for mail. A thread linked to a posting must end up linked to the application,
 	// or the first deletion detaches it from a record that is still standing.
 	BackfillEmailApplicationLinks(ctx context.Context, batchSize int32) (int64, error)
@@ -436,6 +448,10 @@ type Querier interface {
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
 	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).
 	CompanySlugExists(ctx context.Context, slug string) (bool, error)
+	// The id range the backfill walks, plus how many rows still need it. The remaining
+	// count is what makes a run's progress legible; it is an exact count on purpose (the
+	// pass is run by hand, rarely, and a wrong "0 remaining" would end it early).
+	CompanySlugFoldedBackfillBounds(ctx context.Context) (CompanySlugFoldedBackfillBoundsRow, error)
 	// Distinct non-NULL subindustry values with their company counts, most common first
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
@@ -3307,16 +3323,25 @@ type Querier interface {
 	// source spelling one employer "Cfoinsights", another "CFO Insights" — different
 	// slugs that must still agree), just computed once per row instead of per query.
 	//
-	// The batch arrives ALREADY FOLDED (cmd/reindex's foldCompanySlugs), so the driving
-	// predicate is a plain `= ANY($folded_companies)` rather than the
-	// `= ANY(SELECT replace(c,'-','') FROM unnest($companies))` it used to be. That
-	// subquery is what made this pass unfinishable: the planner has no size estimate for
-	// a subquery, defaults to 200 rows, and therefore drove each batch off the SOURCE
-	// index instead of jobs_open_company_slug_folded_idx — reading ~927k aggregator rows
-	// per batch of 500 companies. Measured on prod 2026-08-16: 271s per batch, ~23h over
-	// the 306 batches, against a 12h unit timeout the run never survived (0 successful
-	// reindexes in 3 days). With the folded array as a bare parameter the same batch is
-	// 0.65s — the folded index answers in 1.4ms — so the pass fits in minutes.
+	// The batch arrives ALREADY FOLDED (cmd/reindex's foldCompanySlugs) and is compared
+	// against the STORED jobs.company_slug_folded column, not against
+	// `replace(company_slug,'-','')`. That distinction is the whole reason this pass is
+	// finishable. Against the expression the planner has no usable selectivity estimate
+	// once the values arrive as a parameter: measured on prod 2026-08-16 it expected 1.4M
+	// rows and got 734, drove each batch off the SOURCE index, and read ~927k aggregator
+	// rows per batch of 500 companies — 271s each, ~23h over the 306 batches, against a
+	// 12h unit timeout the run never survived (0 successful reindexes in 3 days).
+	//
+	// Rewriting the query does not help (array parameter 259s, JOIN over unnest 315s,
+	// LATERAL per company 300s), and neither does more statistics (raising the functional
+	// index's target moved n_distinct 16,817 -> 147,101, query unchanged at 298s). A plain
+	// column does: the same predicate shape over the existing company_slug column measured
+	// 491ms. See migrations/0109 for why the column is maintained by the write paths
+	// rather than GENERATED, and folded_slug_rule_test.go for the test that keeps them
+	// honest.
+	//
+	// A row whose folded column is still NULL (the backfill is chunked and online) simply
+	// does not match, so the pass suppresses less until it completes — never wrongly.
 	//
 	// An open aggregator posting is marked duplicate_of an open CANONICAL ATS
 	// (non-aggregator) posting of the same (folded) company, equal normalized title, and

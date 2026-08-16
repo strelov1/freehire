@@ -218,14 +218,14 @@ company_upsert AS (
     WHERE companies.name IS DISTINCT FROM EXCLUDED.name
 )
 INSERT INTO jobs (
-    source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
+    source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
     content_hash, role_fingerprint
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
-    sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
+    sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
@@ -243,6 +243,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     title        = EXCLUDED.title,
     company      = EXCLUDED.company,
     company_slug = EXCLUDED.company_slug,
+    company_slug_folded = EXCLUDED.company_slug_folded,
     location     = EXCLUDED.location,
     remote       = EXCLUDED.remote,
     -- description comes from a separate, best-effort detail fetch (some adapters,
@@ -598,16 +599,25 @@ WHERE closed_at IS NULL AND company_slug <> ''
 -- source spelling one employer "Cfoinsights", another "CFO Insights" — different
 -- slugs that must still agree), just computed once per row instead of per query.
 --
--- The batch arrives ALREADY FOLDED (cmd/reindex's foldCompanySlugs), so the driving
--- predicate is a plain `= ANY($folded_companies)` rather than the
--- `= ANY(SELECT replace(c,'-','') FROM unnest($companies))` it used to be. That
--- subquery is what made this pass unfinishable: the planner has no size estimate for
--- a subquery, defaults to 200 rows, and therefore drove each batch off the SOURCE
--- index instead of jobs_open_company_slug_folded_idx — reading ~927k aggregator rows
--- per batch of 500 companies. Measured on prod 2026-08-16: 271s per batch, ~23h over
--- the 306 batches, against a 12h unit timeout the run never survived (0 successful
--- reindexes in 3 days). With the folded array as a bare parameter the same batch is
--- 0.65s — the folded index answers in 1.4ms — so the pass fits in minutes.
+-- The batch arrives ALREADY FOLDED (cmd/reindex's foldCompanySlugs) and is compared
+-- against the STORED jobs.company_slug_folded column, not against
+-- `replace(company_slug,'-','')`. That distinction is the whole reason this pass is
+-- finishable. Against the expression the planner has no usable selectivity estimate
+-- once the values arrive as a parameter: measured on prod 2026-08-16 it expected 1.4M
+-- rows and got 734, drove each batch off the SOURCE index, and read ~927k aggregator
+-- rows per batch of 500 companies — 271s each, ~23h over the 306 batches, against a
+-- 12h unit timeout the run never survived (0 successful reindexes in 3 days).
+--
+-- Rewriting the query does not help (array parameter 259s, JOIN over unnest 315s,
+-- LATERAL per company 300s), and neither does more statistics (raising the functional
+-- index's target moved n_distinct 16,817 -> 147,101, query unchanged at 298s). A plain
+-- column does: the same predicate shape over the existing company_slug column measured
+-- 491ms. See migrations/0109 for why the column is maintained by the write paths
+-- rather than GENERATED, and folded_slug_rule_test.go for the test that keeps them
+-- honest.
+--
+-- A row whose folded column is still NULL (the backfill is chunked and online) simply
+-- does not match, so the pass suppresses less until it completes — never wrongly.
 --
 -- An open aggregator posting is marked duplicate_of an open CANONICAL ATS
 -- (non-aggregator) posting of the same (folded) company, equal normalized title, and
@@ -622,7 +632,7 @@ WHERE closed_at IS NULL AND company_slug <> ''
 -- RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
 WITH ats AS (
     SELECT jobs.id,
-           replace(jobs.company_slug, '-', '') AS fcompany,
+           jobs.company_slug_folded AS fcompany,
            btrim(regexp_replace(lower(jobs.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
@@ -633,13 +643,13 @@ WITH ats AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            jobs.countries
     FROM jobs
-    WHERE replace(jobs.company_slug, '-', '') = ANY(sqlc.arg(folded_companies)::text[])
+    WHERE jobs.company_slug_folded = ANY(sqlc.arg(folded_companies)::text[])
       AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
       AND NOT (jobs.source = ANY(sqlc.arg(aggregators)::text[]))
 ),
 agg AS (
     SELECT a.id,
-           replace(a.company_slug, '-', '') AS fcompany,
+           a.company_slug_folded AS fcompany,
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
              regexp_replace(
@@ -650,7 +660,7 @@ agg AS (
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
            a.countries
     FROM jobs a
-    WHERE replace(a.company_slug, '-', '') = ANY(sqlc.arg(folded_companies)::text[])
+    WHERE a.company_slug_folded = ANY(sqlc.arg(folded_companies)::text[])
       AND a.closed_at IS NULL AND a.company_slug <> ''
       AND a.source = ANY(sqlc.arg(aggregators)::text[])
       AND (
@@ -764,7 +774,7 @@ WITH company_upsert AS (
         updated_at = now()
 )
 INSERT INTO jobs (
-    source, external_id, url, title, company, company_slug, location, remote, description, posted_at,
+    source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description, posted_at,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, enrichment,
@@ -772,7 +782,7 @@ INSERT INTO jobs (
     created_by
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
-    sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
+    sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
@@ -800,6 +810,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     title        = EXCLUDED.title,
     company      = EXCLUDED.company,
     company_slug = EXCLUDED.company_slug,
+    company_slug_folded = EXCLUDED.company_slug_folded,
     location     = EXCLUDED.location,
     remote       = EXCLUDED.remote,
     description  = EXCLUDED.description,
@@ -873,14 +884,14 @@ RETURNING *;
 -- write path does (job.Fields.UpsertParams), so a private job's fingerprints are
 -- comparable if it were ever to matter, even though it is never indexed or clustered.
 INSERT INTO jobs (
-    source, external_id, url, title, company, company_slug, location, remote, description,
+    source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description,
     public_slug, countries, regions, cities, work_mode, skills, seniority, category, is_tech,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     content_hash, role_fingerprint,
     created_by, is_private
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
-    sqlc.arg(company), sqlc.arg(company_slug), sqlc.arg(location), sqlc.arg(remote),
+    sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
     sqlc.arg(description),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'),
@@ -1422,3 +1433,29 @@ WHERE j.closed_at IS NULL
   )
 GROUP BY j.company_slug
 ORDER BY count(*) DESC, j.company_slug;
+
+-- name: BackfillCompanySlugFoldedChunk :execrows
+-- Fill jobs.company_slug_folded for one id range. The column is maintained by every
+-- write path (see migrations/0109), but the rows that predate it need this pass.
+--
+-- Ranged by id rather than keyset-cursored on the column itself: the whole point is
+-- that the column is not yet indexed while this runs, so a WHERE on it would be a seq
+-- scan per chunk. The primary key is what makes each chunk a bounded, cheap slice, and
+-- it lets a resumed run pick up at a known number instead of a NULL frontier.
+--
+-- The IS DISTINCT FROM guard makes re-runs free: a chunk whose rows are already correct
+-- writes nothing, so no dead tuples and no bloat for repeating the pass. That matters
+-- on a 7.4M-row table where an unguarded UPDATE would rewrite every row it touches.
+UPDATE jobs
+SET company_slug_folded = replace(company_slug, '-', '')
+WHERE id >= sqlc.arg(from_id) AND id < sqlc.arg(to_id)
+  AND company_slug_folded IS DISTINCT FROM replace(company_slug, '-', '');
+
+-- name: CompanySlugFoldedBackfillBounds :one
+-- The id range the backfill walks, plus how many rows still need it. The remaining
+-- count is what makes a run's progress legible; it is an exact count on purpose (the
+-- pass is run by hand, rarely, and a wrong "0 remaining" would end it early).
+SELECT COALESCE(min(id), 0)::bigint AS min_id,
+       COALESCE(max(id), 0)::bigint AS max_id,
+       count(*) FILTER (WHERE company_slug_folded IS DISTINCT FROM replace(company_slug, '-', ''))::bigint AS remaining
+FROM jobs;

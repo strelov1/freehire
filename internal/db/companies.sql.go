@@ -755,7 +755,14 @@ func (q *Queries) RefreshCompanyFacets(ctx context.Context) (int64, error) {
 
 const renameSlugCompany = `-- name: RenameSlugCompany :execrows
 UPDATE jobs
-SET company = $1, company_slug = $2, updated_at = now()
+SET company = $1,
+    company_slug = $2,
+    -- Kept in step with company_slug by hand, like every other write path that sets
+    -- it — see migrations/0109 for why the folded value is a stored column at all,
+    -- and internal/db/folded_slug_rule_test.go for the test that catches a new write
+    -- path forgetting this line.
+    company_slug_folded = replace($2, '-', ''),
+    updated_at = now()
 WHERE company_slug = $3
   AND company ~ '^[a-z0-9._-]+$'
 `

@@ -181,7 +181,14 @@ ORDER BY company_slug, created_at DESC;
 -- derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
 -- The name guard keeps a re-run from overwriting a name that is no longer a slug.
 UPDATE jobs
-SET company = @name, company_slug = @new_slug, updated_at = now()
+SET company = @name,
+    company_slug = @new_slug,
+    -- Kept in step with company_slug by hand, like every other write path that sets
+    -- it — see migrations/0109 for why the folded value is a stored column at all,
+    -- and internal/db/folded_slug_rule_test.go for the test that catches a new write
+    -- path forgetting this line.
+    company_slug_folded = replace(@new_slug, '-', ''),
+    updated_at = now()
 WHERE company_slug = @old_slug
   AND company ~ '^[a-z0-9._-]+$';
 
