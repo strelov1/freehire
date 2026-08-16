@@ -62,17 +62,26 @@ it.
 
 `hooks.server.ts` runs before any load function, so it cannot itself call
 `.me()` (that would double the session round trip already performed by the
-root layout). Instead: the root `+layout.server.ts`'s existing `.me()` call
-additionally computes `locale` from `user.language` and syncs a dedicated,
-non-httpOnly `hire_lang` cookie (`event.cookies.set`, not the auth session
-cookie). `hooks.server.ts` reads that cookie synchronously on every request —
-no DB/network — to resolve the locale for `<html lang>` and for
-`event.locals`. The cookie is self-healing: any request that runs the root
-layout load re-syncs it to the account's current `language`, so staleness
-(a value changed on another device, or a first-ever request with no cookie
-yet) never persists past one full page load. First-load-ever (no cookie)
-falls back to `en` for that single response, which is acceptable — a fresh
-session's default `language` is `en` anyway.
+root layout, on every request site-wide). Instead: the root
+`+layout.server.ts`'s existing `.me()` call additionally computes `locale`
+from `user.language` and syncs a dedicated, non-httpOnly `hire_lang` cookie
+(`event.cookies.set`, not the auth session cookie), for the *next* request.
+`hooks.server.ts` reads that cookie synchronously (no DB/network) to seed
+`event.locals.locale` with a best-effort guess *for this request*.
+
+That guess would still be wrong on the very first request of a session (no
+cookie yet) if it were the only source `transformPageChunk` read — but
+`event.locals` is one mutable object for the whole request. The root layout
+load runs (as part of `resolve()`) before any HTML streams, so it overwrites
+`event.locals.locale` with the fresh, authoritative value it just computed
+from `user.language` — gated to `/my/**` the same way the hook itself gates
+non-account routes. `transformPageChunk` reads `event.locals.locale` lazily,
+after the load has run, not a value captured before it — so the very first
+response already carries the correct `<html lang>`, with no extra network
+round trip and no lag. (Caught in code review: an earlier version captured
+the hook's pre-load guess into a closure, so the first-ever response could
+show `<html lang="en">` with already-Russian content — see spec.md's "correct
+on first byte" scenario, which this closes exactly.)
 
 Alternative considered: read `page.data.user.language` only, no cookie,
 resolving `<html lang>` client-side after hydration. Rejected — it would
@@ -87,6 +96,21 @@ how a returning user's session already looks stable end to end.
 forced to `en` before `transformPageChunk` runs. This makes "public pages are
 never translated" a structural property of one hook, not a convention each
 new page's author has to remember.
+
+The same gate must be applied a second time in `+layout.server.ts`, for
+`page.data.locale` — the value `locale()`/`t()` actually read in every
+component (`AccountNavRail`, `DeleteAccountButton`, ...), as opposed to
+`event.locals.locale`, which only feeds `<html lang>`. **Caught in code
+review**: an earlier version returned the ungated preference as page data, so
+a Russian-preference signed-in user would see `AccountNavRail` (rendered on
+the public, non-`/my/**` route `/tailor/[slug]`) in Russian, and the root
+layout's `<html lang>` `$effect` would flip the public document to `lang="ru"`
+client-side after hydration — silently defeating the hook's own gate for
+every consumer that reads `page.data.locale` instead of `event.locals.locale`.
+Fixed by computing the same `onAccountSection` check in `+layout.server.ts`
+and gating the returned `locale` there too, so there is exactly one path-gated
+value (mirrored into both `locals` and `page.data`), not two independently
+gated ones that can drift apart.
 
 ### `Messages` leaves may be a `string[]`, not only a `string`
 
@@ -123,13 +147,12 @@ untranslated, and lets `es`/`pt`/`de`/`fr` (no catalog file at all) render
 
 ## Risks / Trade-offs
 
-- [Risk] A signed-in user's very first request after registration (or after
-  changing language on a different, cookie-less device) briefly shows English
-  on `/my/**` before the cookie syncs. → Mitigation: the root layout's load
-  already runs on that same request and re-syncs the cookie before the
-  response completes, so it self-corrects within one full page load; a
-  client-side navigation immediately after shows the correct locale via
-  `page.data.locale`.
+- [Resolved risk] A signed-in user's very first request after registration (or
+  after changing language on a different, cookie-less device) could briefly
+  show English on `/my/**` before the cookie synced. → No longer a risk: the
+  `event.locals` refinement described under "Locale carried via a dedicated
+  `hire_lang` cookie" makes the very first response correct too, not just
+  "self-correcting within one more load."
 - [Risk] Hand-rolled `t()` has no compile-time guarantee that every `en` key
   has a `ru` counterpart (TypeScript's structural typing on `Partial<T>`
   silently accepts a missing key). → Mitigation: acceptable at this scale

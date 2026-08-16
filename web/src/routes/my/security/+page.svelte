@@ -23,25 +23,29 @@
   let password = $state('');
   let confirmation = $state('');
   let saving = $state(false);
-  let changeError = $state<string | null>(null);
+  // Stores which message to show, not the resolved string — so a language switch
+  // while an error is visible re-renders it in the new language instead of
+  // leaving behind a snapshot from whichever locale was active when it occurred.
+  type PasswordErrorKey = 'mismatchError' | 'wrongCurrentPassword' | 'weakPassword' | 'genericError';
+  let changeErrorKey = $state<PasswordErrorKey | null>(null);
   let changed = $state(false);
 
   let signingOut = $state(false);
 
-  function messageFor(e: unknown): string {
+  function keyFor(e: unknown): PasswordErrorKey {
     if (e instanceof ApiError) {
-      if (e.status === 401) return s.password.wrongCurrentPassword;
-      if (e.status === 400) return s.password.weakPassword;
+      if (e.status === 401) return 'wrongCurrentPassword';
+      if (e.status === 400) return 'weakPassword';
     }
-    return s.password.genericError;
+    return 'genericError';
   }
 
   async function changePassword(e: SubmitEvent) {
     e.preventDefault();
-    changeError = null;
+    changeErrorKey = null;
     changed = false;
     if (password !== confirmation) {
-      changeError = s.password.mismatchError;
+      changeErrorKey = 'mismatchError';
       return;
     }
     saving = true;
@@ -51,7 +55,7 @@
       changed = true;
       currentPassword = password = confirmation = '';
     } catch (err) {
-      changeError = messageFor(err);
+      changeErrorKey = keyFor(err);
     } finally {
       saving = false;
     }
@@ -117,8 +121,8 @@
         />
       </label>
 
-      {#if changeError}
-        <p class="text-sm text-destructive">{changeError}</p>
+      {#if changeErrorKey}
+        <p class="text-sm text-destructive">{s.password[changeErrorKey]}</p>
       {/if}
       {#if changed}
         <p class="text-sm text-muted-foreground">{s.password.changed}</p>

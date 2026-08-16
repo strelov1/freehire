@@ -14,15 +14,21 @@ import { LOCALE_COOKIE } from '$lib/locale';
 // `'ru'` is the only value that renders as anything but English — matches
 // `t()`'s own fallback rule exactly (any account preference that isn't `ru`,
 // including a valid-but-untranslated one like `es`, renders English content),
-// so the attribute never disagrees with what's actually on the page. Reads the
-// cookie synchronously (no DB/network); `+layout.server.ts` keeps it in sync
-// with the account's actual `users.language`.
+// so the attribute never disagrees with what's actually on the page.
+//
+// Seeds `event.locals.locale` from the cookie synchronously (no DB/network) as
+// a best-effort guess, but `transformPageChunk` reads it lazily rather than
+// capturing it here — `event.locals` is the same object for the whole request,
+// and the root `+layout.server.ts` load (which runs during `resolve()`, before
+// any HTML streams) overwrites it with the fresh, authoritative value once it
+// resolves the account's real `users.language`. That closes the one gap a
+// cookie-only guess can't: the very first request of a session, before any
+// cookie exists.
 const locale: Handle = async ({ event, resolve }) => {
   const onAccountSection = event.url.pathname === '/my' || event.url.pathname.startsWith('/my/');
-  const resolved = onAccountSection && event.cookies.get(LOCALE_COOKIE) === 'ru' ? 'ru' : 'en';
-  event.locals.locale = resolved;
+  event.locals.locale = onAccountSection && event.cookies.get(LOCALE_COOKIE) === 'ru' ? 'ru' : 'en';
   return resolve(event, {
-    transformPageChunk: ({ html }) => html.replace('%lang%', resolved),
+    transformPageChunk: ({ html }) => html.replace('%lang%', event.locals.locale),
   });
 };
 

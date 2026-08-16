@@ -127,7 +127,8 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Language</h2>
       <p class="text-xs text-muted-foreground">
-        Your preferred language for the assistant, CV, and the account section's interface.
+        Your preferred language for the assistant and CV. The account interface is available in
+        English and Russian.
       </p>
     </div>
 
