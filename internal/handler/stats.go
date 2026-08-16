@@ -7,6 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/cache"
+	"github.com/strelov1/freehire/internal/catalogstats"
 	"github.com/strelov1/freehire/internal/db"
 )
 
@@ -16,16 +18,29 @@ import (
 // aggregate-only reads — no record-level field or user identifier is exposed.
 type statsHandlers struct {
 	queries *db.Queries
+
+	// cache and estimator back the catalogue-scale read. The cache holds the snapshot
+	// the rollup worker publishes; the estimator is the approximate open-job count
+	// served when no snapshot is available. Neither is required — a nil cache degrades
+	// to the estimate, which is the same path a cold or unreachable cache takes.
+	cache     cache.Cache
+	estimator catalogstats.Estimator
 }
 
-func newStatsHandlers(queries *db.Queries) *statsHandlers {
-	return &statsHandlers{queries: queries}
+func newStatsHandlers(queries *db.Queries, c cache.Cache) *statsHandlers {
+	return &statsHandlers{queries: queries, cache: c, estimator: queries}
 }
 
 func (h *statsHandlers) register(api fiber.Router) {
 	// Public catalogue-activity time series (added vs. removed vacancies per period),
 	// unauthenticated like the other public reads. Served from the job_daily_stats
 	// rollup (cmd/rollup-stats); the /trends SPA page renders it as a bar chart.
+	// Public catalogue-scale figures, unauthenticated like the other public reads.
+	// One response carries every number a surface quotes about how big the catalogue
+	// is, so /about and /open render the same snapshot instead of taking their own
+	// totals at their own moments and disagreeing.
+	api.Get("/stats/catalog", h.CatalogScale)
+
 	api.Get("/stats/jobs-activity", h.JobsActivity)
 
 	// Public member-growth time series (cumulative registrations per UTC day),
@@ -178,6 +193,30 @@ func (h *statsHandlers) UserGrowth(c *fiber.Ctx) error {
 // connected, and searches saved. Aggregate-only — the query selects nothing but
 // integer totals, so no per-user field can leak. An empty database yields all
 // zeros (200).
+// CatalogScale serves the catalogue-scale snapshot: how many open postings the
+// catalogue holds, from how many companies, across how many sources, ATS platforms and
+// Telegram channels.
+//
+// It never fails. A cold cache (before the first rollup run), an unreachable one, and a
+// payload left by an older build all degrade to the approximate open-job count, and
+// `exact` reports which of the two the caller holds — a transparency page showing a
+// labelled estimate beats one showing a 500.
+func (h *statsHandlers) CatalogScale(c *fiber.Ctx) error {
+	result := catalogstats.Load(c.Context(), h.cache, h.estimator)
+
+	return c.JSON(fiber.Map{
+		"data": fiber.Map{
+			"open_jobs":         result.OpenJobs,
+			"companies":         result.Companies,
+			"sources":           result.Sources,
+			"ats_platforms":     result.ATSPlatforms,
+			"telegram_channels": result.TelegramChannels,
+			"computed_at":       result.ComputedAt,
+			"exact":             result.Exact,
+		},
+	})
+}
+
 func (h *statsHandlers) EngagementStats(c *fiber.Ctx) error {
 	s, err := h.queries.GetEngagementStats(c.Context())
 	if err != nil {

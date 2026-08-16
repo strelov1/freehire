@@ -76,16 +76,16 @@
 
 ## 5. Serve it
 
-- [ ] 5.1 Write the failing handler test for `GET /api/v1/stats/catalog`:
+- [x] 5.1 Write the failing handler test for `GET /api/v1/stats/catalog`:
       `{"data": {...}}` carrying all four figures plus `computed_at`, and
       unauthenticated access.
-- [ ] 5.2 Implement the handler and register the route alongside the existing
+- [x] 5.2 Implement the handler and register the route alongside the existing
       `/stats/*` routes in `internal/handler/stats.go`.
-- [ ] 5.3 Write the failing test that `GET /api/v1/jobs` `meta.total` prefers the
+- [x] 5.3 Write the failing test that `GET /api/v1/jobs` `meta.total` prefers the
       snapshot's exact count and falls back to the estimate when the cache is
       empty or unreachable, returning 200 in both cases.
-- [ ] 5.4 Switch the jobs-list total to `catalogstats.Load`.
-- [ ] 5.5 Construct the cache in `cmd/server` from the `*redis.Client` it already
+- [x] 5.4 Switch the jobs-list total to `catalogstats.Load`.
+- [x] 5.5 Construct the cache in `cmd/server` from the `*redis.Client` it already
       builds, and inject it into the handlers.
 
 ## 6. Frontend

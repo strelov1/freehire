@@ -125,6 +125,20 @@ func TestLoadDegradesOnAnEmptyCache(t *testing.T) {
 	}
 }
 
+// Running the API without Redis is a supported deployment, not a misconfiguration.
+func TestLoadDegradesWithNoCacheConfigured(t *testing.T) {
+	est := &countingEstimator{value: 3_150_000}
+
+	got := Load(context.Background(), nil, est)
+
+	if got.Exact {
+		t.Error("Exact = true with no cache configured")
+	}
+	if got.OpenJobs != 3_150_000 {
+		t.Errorf("OpenJobs = %d, want the estimate", got.OpenJobs)
+	}
+}
+
 func TestLoadDegradesOnAnUnreachableCache(t *testing.T) {
 	est := &countingEstimator{value: 3_150_000}
 

@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/blobstore"
 	"github.com/strelov1/freehire/internal/boardresolve"
 	"github.com/strelov1/freehire/internal/browsertools"
+	"github.com/strelov1/freehire/internal/cache"
 	"github.com/strelov1/freehire/internal/companyfeedback"
 	"github.com/strelov1/freehire/internal/contribution"
 	"github.com/strelov1/freehire/internal/credits"
@@ -191,7 +192,12 @@ type Config struct {
 	// Throttler backs every rate-limited route in the API (internal/ratelimit).
 	// Required — there is no degraded/nil mode, unlike the optional dependencies
 	// below.
-	Throttler           ratelimit.Throttler
+	Throttler ratelimit.Throttler
+	// Cache holds values that are expensive to compute and identical for every
+	// caller — today the catalogue-scale snapshot (internal/catalogstats). Optional:
+	// nil degrades the figures it backs to their approximations, exactly as an
+	// unreachable backend does.
+	Cache               cache.Cache
 	FrontendOrigin      string
 	JWTSecret           string
 	JWTTTL              time.Duration
@@ -326,8 +332,8 @@ func Register(app *fiber.App, cfg Config) {
 	// for the shapes that hide the posting behind a second id (see sources.PostingURLResolver).
 	// Shared by /jobs/find and the link intake, which must agree on what a page is.
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
-	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs)
-	statsH := newStatsHandlers(queries)
+	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
+	statsH := newStatsHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
 	// Feedback reuses communityH's persona minting (via the communityPersonas

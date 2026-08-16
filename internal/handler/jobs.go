@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/auth"
+	"github.com/strelov1/freehire/internal/cache"
+	"github.com/strelov1/freehire/internal/catalogstats"
 	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/ghost"
 	"github.com/strelov1/freehire/internal/jobview"
@@ -24,10 +27,15 @@ type jobsHandlers struct {
 	// offline rewrite, so a caller that hands over no client keeps every lookup that
 	// does not need one.
 	postings sources.PostingURLResolver
+	// cache and estimator resolve the list's meta.total: the published
+	// catalogue-scale snapshot when there is one, the approximate estimate when there
+	// is not. See openJobTotal.
+	cache     cache.Cache
+	estimator catalogstats.Estimator
 }
 
-func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postings sources.PostingURLResolver) *jobsHandlers {
-	return &jobsHandlers{queries: queries, moderation: moderation, postings: postings}
+func newJobsHandlers(queries *db.Queries, moderation *moderation.Service, postings sources.PostingURLResolver, c cache.Cache) *jobsHandlers {
+	return &jobsHandlers{queries: queries, moderation: moderation, postings: postings, cache: c, estimator: queries}
 }
 
 func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
@@ -53,9 +61,9 @@ func (h *jobsHandlers) register(api fiber.Router, mw middleware) {
 // ListJobs returns a page of jobs using limit/offset pagination. Jobs are
 // served in the shared jobview wire shape (public_slug, no internal id) — the
 // same shape the detail and search endpoints use. The page rides the partial
-// index jobs_open_created_idx (no full-table sort) and meta.total is an
-// approximate planner estimate (EstimateOpenJobs), so neither query scans the
-// whole open-job set at catalogue scale.
+// index jobs_open_created_idx (no full-table sort) and meta.total comes from the
+// precomputed catalogue-scale snapshot (see openJobTotal), so neither query scans
+// the whole open-job set at catalogue scale.
 func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 	limit, offset := pageParams(c)
 
@@ -67,10 +75,7 @@ func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 		return err
 	}
 
-	total, err := h.queries.EstimateOpenJobs(c.Context())
-	if err != nil {
-		return err
-	}
+	total := h.openJobTotal(c.Context())
 
 	views, err := jobview.FromRows(jobs)
 	if err != nil {
@@ -79,6 +84,16 @@ func (h *jobsHandlers) ListJobs(c *fiber.Ctx) error {
 	h.attachGhostToRows(c, jobs, views)
 
 	return listResponse(c, views, total, limit, offset)
+}
+
+// openJobTotal resolves the list's meta.total: the exact count from the published
+// snapshot, or the approximate estimate when none is available.
+//
+// It cannot fail. The page of jobs is this endpoint's actual payload, and losing it to a
+// 500 because a count was unavailable — which is what the previous EstimateOpenJobs call
+// did — trades the whole response for one number.
+func (h *jobsHandlers) openJobTotal(ctx context.Context) int64 {
+	return catalogstats.Load(ctx, h.cache, h.estimator).OpenJobs
 }
 
 // GetJob returns a single job addressed by its public slug.

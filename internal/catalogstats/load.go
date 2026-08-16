@@ -55,6 +55,13 @@ func Store(ctx context.Context, c cache.Cache, s Snapshot) error {
 // missing figure beats a failed response, so there is no decision left to delegate.
 // Failures are logged here instead.
 func Load(ctx context.Context, c cache.Cache, est Estimator) Result {
+	// No cache configured is the same situation as a cache with nothing in it, and it
+	// is a real deployment: the API can run without Redis, it just never sees a
+	// snapshot. Silently, because unlike a failure there is nothing to report.
+	if c == nil {
+		return Result{Snapshot: degraded(ctx, est), Exact: false}
+	}
+
 	readCtx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
 
