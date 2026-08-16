@@ -15,6 +15,8 @@
   import { page } from '$app/state';
   import { filtersFromProfile, filtersToParams } from '$lib/filters';
   import { currentUser, isAuthenticated } from '$lib/auth.svelte';
+  import { locale } from '$lib/i18n/currentLocale.svelte';
+  import { t } from '$lib/i18n/t';
   import { savedSearches } from '$lib/savedSearches.svelte';
   import { resumeStore } from '$lib/resume.svelte';
   import AccountPreferences from '$lib/components/AccountPreferences.svelte';
@@ -35,7 +37,9 @@
   import type { TalentNetworkVisibility } from '$lib/types';
   import type { Answers } from '$lib/generated/contracts';
   import { Button } from '$lib/ui';
+  import { messages } from './messages';
 
+  const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
 
@@ -53,14 +57,14 @@
   // works at /my/profile/cv-readiness for anyone who holds the link (see that route),
   // same "unlisted, not deleted" posture as before; nothing in this page links to it.
   const VIEWS = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'contacts', label: 'Contacts', icon: Contact },
-    { id: 'location', label: 'Location', icon: MapPin },
-    { id: 'skills', label: 'Skills', icon: Tags },
-    { id: 'experience', label: 'Experience', icon: Briefcase },
-    { id: 'education', label: 'Education', icon: GraduationCap },
-    { id: 'screening', label: 'Screening answers', icon: ClipboardList },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    { id: 'profile', icon: User },
+    { id: 'contacts', icon: Contact },
+    { id: 'location', icon: MapPin },
+    { id: 'skills', icon: Tags },
+    { id: 'experience', icon: Briefcase },
+    { id: 'education', icon: GraduationCap },
+    { id: 'screening', icon: ClipboardList },
+    { id: 'settings', icon: SettingsIcon },
   ] as const;
   type ViewId = (typeof VIEWS)[number]['id'];
   function isViewId(id: string | null): id is ViewId {
@@ -255,7 +259,7 @@
             : 'border-transparent text-muted-foreground hover:text-foreground'}"
         >
           <Icon class="size-4" aria-hidden="true" />
-          {v.label}
+          {s.tabs[v.id]}
         </button>
       {/each}
     </div>
