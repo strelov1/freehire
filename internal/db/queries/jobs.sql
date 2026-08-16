@@ -162,6 +162,24 @@ SELECT similar_job_ids
 FROM jobs
 WHERE id = sqlc.arg(id)::bigint;
 
+-- name: CountCatalogueScale :one
+-- Exact open-job and company totals for the published catalogue-scale snapshot
+-- (internal/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
+-- this is a full scan and belongs only in the scheduled rollup worker, never on a
+-- request path.
+--
+-- Both figures come from ONE statement so they describe the same instant. Counting them
+-- separately would let an ingest land between the two reads and publish a company count
+-- for a catalogue the job count beside it no longer describes.
+--
+-- The predicate is the one the public listings apply, so the totals describe exactly the
+-- set a visitor can page through.
+SELECT
+    COUNT(*)::bigint AS open_jobs,
+    COUNT(DISTINCT company_slug)::bigint AS companies
+FROM jobs
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private;
+
 -- name: EstimateOpenJobs :one
 -- Fast approximate open-job total for the DB-backed /jobs list's meta.total. An
 -- exact count(*) over ~millions of open rows was a per-request full scan; the

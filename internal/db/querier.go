@@ -461,6 +461,18 @@ type Querier interface {
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
+	// Exact open-job and company totals for the published catalogue-scale snapshot
+	// (internal/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
+	// this is a full scan and belongs only in the scheduled rollup worker, never on a
+	// request path.
+	//
+	// Both figures come from ONE statement so they describe the same instant. Counting them
+	// separately would let an ingest land between the two reads and publish a company count
+	// for a catalogue the job count beside it no longer describes.
+	//
+	// The predicate is the one the public listings apply, so the totals describe exactly the
+	// set a visitor can page through.
+	CountCatalogueScale(ctx context.Context) (CountCatalogueScaleRow, error)
 	// Total companies matching the same optional name + facet filters as ListCompanies,
 	// so search/filter pagination reports the filtered total. Keep this WHERE identical
 	// to ListCompanies (including the job_count > 0 hiring scope).

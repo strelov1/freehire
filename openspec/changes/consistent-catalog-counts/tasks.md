@@ -36,24 +36,29 @@
 
 ## 3. `internal/catalogstats` — the figures
 
-- [ ] 3.1 Write the failing unit test for the derived counts: the ATS-platform
+- [x] 3.1 Write the failing unit test for the derived counts: the ATS-platform
       count comes from `sources.Taxonomy()` and the Telegram-channel count from
       the parsed channel config, so adding an entry moves the number with no
       literal to edit.
-- [ ] 3.2 Define `Snapshot` (open jobs, companies, ATS platforms, Telegram
-      channels, `ComputedAt`) and the derived-count half of `Compute`.
-- [ ] 3.3 Write the failing integration test for the exact counts: seed open,
+- [x] 3.2 Define `Snapshot` (open jobs, companies, sources, ATS platforms,
+      Telegram channels, `ComputedAt`) and the derived-count half of `Compute`.
+      `Sources` was added on top of the planned fields: /open's "166 ATS
+      platforms" was really the whole registry mislabelled, and the honest ATS
+      count is 93 — so the strip leads with total reach (227) under an accurate
+      label and the narrower figure stays available in the API.
+- [x] 3.3 Write the failing integration test for the exact counts: seed open,
       closed, duplicate-suppressed and private jobs plus their companies, assert
       `Compute` counts exactly the set `GET /api/v1/jobs` paginates.
-- [ ] 3.4 Add the sqlc query for the exact open-job and company counts and wire
+- [x] 3.4 Add the sqlc query for the exact open-job and company counts and wire
       it into `Compute` (`make sqlc`; edit `internal/db/queries/*.sql`, never the
       generated code).
-- [ ] 3.5 Write the failing test for `Load`: a cached snapshot returns exact; an
+- [x] 3.5 Write the failing test for `Load`: a cached snapshot returns exact; an
       empty cache and an erroring cache both return the estimate flagged as
       degraded; neither returns an error to the caller.
-- [ ] 3.6 Implement `Load` and `Store`. `Load` must never invoke `Compute` —
-      assert that in the test with a `Compute` dependency that fails the test if
-      called.
+- [x] 3.6 Implement `Load` and `Store`. `Load` must never invoke `Compute` —
+      made structural instead of asserted: `Load` takes no `ExactCounter`, so no
+      read path can reach the catalogue-wide scan even by mistake. A runtime
+      assertion would have been the weaker guarantee.
 
 ## 4. Publish the snapshot
 
