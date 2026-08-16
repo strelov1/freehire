@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/meilisearch/meilisearch-go"
 
@@ -64,6 +65,10 @@ type CompanyDocument struct {
 	// alongside the reindex it requires.
 	FeedbackCount     int32   `json:"feedback_count"`
 	FeedbackRatingAvg float32 `json:"feedback_rating_avg"`
+	// UpdatedAt is the row's last write, carried solely so the company sitemap —
+	// which pages this index (see sitemap.go) — can emit a <lastmod>. Neither
+	// searchable, filterable, nor sortable: a crawler hint, not a query surface.
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FromCompany maps a stored company row to its index document. The pgtype.Text
@@ -96,6 +101,8 @@ func FromCompany(c db.Company) CompanyDocument {
 		// exactly the "no rating" sentinel this document already wants, so no
 		// explicit NULL handling is needed here.
 		FeedbackRatingAvg: c.FeedbackRatingAvg.Float32,
+		// companies.updated_at is NOT NULL, so .Time is always a real instant.
+		UpdatedAt: c.UpdatedAt.Time,
 	}
 }
 

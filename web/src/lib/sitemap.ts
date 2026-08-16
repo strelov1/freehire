@@ -5,11 +5,10 @@
 
 import { collectionSlugs } from './collections';
 
-// Must equal the backend's companySitemapChunk — the chunk size the boundary
-// cursors are computed with — so each sub-sitemap holds exactly one keyset chunk.
-// Well under the protocol's 50,000-URL cap on purpose: these reads compete with the
-// ingest for Postgres' buffer cache, and a 50k chunk measured both 0.9s warm and
-// past the 60s proxy timeout during an ingest run (see internal/handler/sitemap.go).
+// Must equal the backend's companySitemapChunk — the page size the offsets are
+// computed with — so each sub-sitemap holds exactly one index page. Well under the
+// protocol's 50,000-URL cap, and left at the size the Postgres-backed version used
+// so the existing sub-sitemap URLs keep pointing at the same tiling.
 export const SITEMAP_CHUNK = 10000;
 
 // Must equal the backend's jobSitemapChunk. Job chunks are pages of the search

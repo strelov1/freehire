@@ -111,10 +111,14 @@ interface Page<T> {
 }
 
 /** One entry in a sitemap sub-file: the public slug and its lastmod. Kept slim
- *  on purpose — the sitemap never needs the full job/company row. */
+ *  on purpose — the sitemap never needs the full job/company row.
+ *
+ *  `updated_at` is optional because a document indexed before the attribute joined
+ *  the shape has none; such a URL ships without a <lastmod> rather than dropping
+ *  out of the sitemap. */
 export interface SitemapEntry {
   slug: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 /** Aggregate market-insight wire shapes (the /api/v1/insights/* reads). */
@@ -641,22 +645,21 @@ export function createApi(
   }
 
   /** The offset opening each `chunk`-sized page of jobs — every sub-sitemap's cursor,
-   *  including the first (0). Unlike the company boundaries below, which name the slug
-   *  each chunk ENDS at and so leave the opening cursor implicit. */
+   *  including the first (0). */
   async function sitemapJobBoundaries(chunk: number): Promise<number[]> {
     return requestData<number[]>(`/api/v1/jobs/sitemap/boundaries?chunk=${chunk}`);
   }
 
-  /** One chunk of company sitemap entries with slug > `after` ('' for the first). */
-  async function sitemapCompanies(after: string, limit: number): Promise<SitemapEntry[]> {
+  /** One page of company sitemap entries starting at `offset` in the search index. */
+  async function sitemapCompanies(offset: number, limit: number): Promise<SitemapEntry[]> {
     return requestData<SitemapEntry[]>(
-      `/api/v1/companies/sitemap?after=${encodeURIComponent(after)}&limit=${limit}`,
+      `/api/v1/companies/sitemap?offset=${offset}&limit=${limit}`,
     );
   }
 
-  /** The slug cursor ending each `chunk`-sized page of companies. */
-  async function sitemapCompanyBoundaries(chunk: number): Promise<string[]> {
-    return requestData<string[]>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
+  /** The offset opening each `chunk`-sized page of companies, including the first (0). */
+  async function sitemapCompanyBoundaries(chunk: number): Promise<number[]> {
+    return requestData<number[]>(`/api/v1/companies/sitemap/boundaries?chunk=${chunk}`);
   }
 
   // --- Auth -----------------------------------------------------------------

@@ -450,16 +450,17 @@ func Register(app *fiber.App, cfg Config) {
 	var jobSearch searcher
 	var facets facetCounter
 	var companySearch companySearcher
-	// The job sitemap pages the index too, so it is wired here rather than beside the
-	// other Postgres-backed handlers — the company half of it still reads the table.
-	var sitemapJobs sitemapLister
+	// Both sitemaps page an index, so they are wired here rather than beside the
+	// Postgres-backed handlers above.
+	var sitemapJobs, sitemapCompanies sitemapLister
 	if cfg.Search != nil {
 		jobSearch = cfg.Search
 		facets = cfg.Search
 		companySearch = cfg.Search
 		sitemapJobs = cfg.Search
+		sitemapCompanies = companySitemapIndex{c: cfg.Search}
 	}
-	sitemapH := newSitemapHandlers(queries, sitemapJobs)
+	sitemapH := newSitemapHandlers(sitemapJobs, sitemapCompanies)
 	searchH := newSearchHandlers(jobSearch, facets, queries)
 	companiesH := newCompaniesHandlers(queries, companySearch)
 	geoH := newGeoHandlers()
