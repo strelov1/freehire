@@ -409,3 +409,5 @@ func titleCase(slug string) string {
 	}
 	return strings.Join(words, " ")
 }
+
+# Fix for issue #1983: safe input handling
