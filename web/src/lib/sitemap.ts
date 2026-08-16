@@ -15,7 +15,10 @@ export const SITEMAP_CHUNK = 10000;
 // index, not of the jobs table: the index already holds exactly the postings worth
 // crawling, and it can address any offset in it directly — which is what let the
 // sitemap stop asking Postgres to number 3.4M rows on every render.
-export const JOB_SITEMAP_CHUNK = 25000;
+//
+// 10k rather than 25k because the deepest 25k page measured 8s against this route's
+// 10s fetch timeout under load — see the backend constant for the trade.
+export const JOB_SITEMAP_CHUNK = 10000;
 
 /** The site's static, always-present pages (relative paths). */
 export const STATIC_PATHS = [

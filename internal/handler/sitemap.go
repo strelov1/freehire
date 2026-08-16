@@ -76,11 +76,16 @@ const companySitemapChunk = 10000
 // ?limit= and ?chunk=, and the value web/src/lib/sitemap.ts JOB_SITEMAP_CHUNK must
 // equal so each offset in the index opens exactly one file's worth.
 //
-// Kept below the protocol's 50k cap with room to spare: a 25k page measured ~2.5s
-// against the prod index, and doubling it would put a single sub-sitemap's render
-// near the SSR timeout for no gain — a sitemap index carries the extra files for
-// free (its own cap is 50k entries).
-const jobSitemapChunk = 25000
+// Sized by the SSR fetch timeout, not by the protocol cap. At 25k a page measured
+// ~2.5s warm against the prod index but 8s on the deepest offset with the host under
+// load — against a 10s timeout, i.e. a file that renders fine until the box is busy
+// and then 500s. 10k restores the margin at ~1-3s per page.
+//
+// The cost is 127 sub-sitemaps instead of 51, which a sitemap index carries for free
+// (its own cap is 50,000 entries). Cheap files beat a narrow deadline: a slow page is
+// one missing file, but there is no partial credit — the crawler either gets it or
+// gets an error.
+const jobSitemapChunk = 10000
 
 // sitemapEntry is the slim wire shape a sitemap URL needs — the slug and a lastmod.
 // Nothing wider (no full job or company document) crosses the wire.
