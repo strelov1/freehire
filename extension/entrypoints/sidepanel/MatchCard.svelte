@@ -249,18 +249,15 @@
     <div class="confirm-body">
       <div class="confirm-section">
         <div class="confirm-label">Skills coverage</div>
-        {#if match.missing.length > 0}
-          <div class="confirm-row">
-            <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
-            <span class="confirm-pct {tone}">{pct}%</span>
-          </div>
-          <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
-          <div class="chips">
-            {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
-          </div>
-        {:else}
-          <p class="confirm-clear"><Check class="icon-sm" />You match all {match.total} required skills</p>
-        {/if}
+        <div class="confirm-row">
+          <span class="confirm-count">{match.matched.length} of {match.total} required skills</span>
+          <span class="confirm-pct {tone}">{pct}%</span>
+        </div>
+        <div class="bar"><div class="fill {tone}" style="width:{pct}%"></div></div>
+        <div class="chips">
+          {#each match.matched as s (s)}<span class="chip good">{s}</span>{/each}
+          {#each match.missing as s (s)}<span class="chip miss">{s}</span>{/each}
+        </div>
       </div>
 
       {#if blockers.unmet.length > 0 || blockers.met.length > 0}
@@ -276,10 +273,6 @@
           </ul>
         </div>
       {/if}
-
-      <p class="confirm-footnote">
-        Deterministic check against your CV and profile — no AI used, no credit spent yet.
-      </p>
     </div>
 </ConfirmDialog>
 
@@ -611,15 +604,6 @@
   .confirm-pct.bad {
     color: var(--destructive);
   }
-  .confirm-clear {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--brand-strong);
-    margin: 0;
-  }
   .confirm-checklist {
     list-style: none;
     margin: 0;
@@ -643,12 +627,5 @@
   }
   .confirm-check.good :global(.icon-sm) {
     color: var(--brand-strong);
-  }
-  .confirm-footnote {
-    font-size: 11px;
-    color: var(--muted-foreground);
-    margin: 0;
-    padding-top: 4px;
-    border-top: 1px solid var(--border);
   }
 </style>

@@ -8,13 +8,14 @@
   // something looks off, so the check is a habit rather than a surprise.
   import { Check, TriangleAlert } from '@lucide/svelte';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '$lib/confirmTailorDialog.svelte';
-  import { partitionBlockers, toneText, missingChipClass } from '$lib/jobMatch';
+  import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '$lib/jobMatch';
   import { ConfirmDialog } from '$lib/ui';
 
   const match = $derived(confirmTailorDialog.match);
   const blockers = $derived(partitionBlockers(match?.blockers));
   const missing = $derived(match?.missing ?? []);
-  const matchedCount = $derived(match?.matched.length ?? 0);
+  const matched = $derived(match?.matched ?? []);
+  const matchedCount = $derived(matched.length);
   const total = $derived(match?.total ?? 0);
   const pct = $derived(match?.coverage_percent ?? 0);
   const hasGaps = $derived(missing.length > 0 || blockers.unmet.length > 0);
@@ -44,22 +45,20 @@
     <div class="flex flex-col gap-4">
       <div class="flex flex-col gap-1.5">
         <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills coverage</p>
-        {#if missing.length > 0}
-          <div class="flex items-baseline justify-between gap-2">
-            <span class="text-xs text-muted-foreground">{matchedCount} of {total} required skills</span>
-            <span class="text-sm font-bold tabular-nums">{pct}%</span>
-          </div>
-          <div class="h-1.5 overflow-hidden rounded bg-secondary">
-            <div class="h-full rounded bg-warning" style="width: {pct}%"></div>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            {#each missing as skill (skill)}<span class={missingChipClass}>{skill}</span>{/each}
-          </div>
-        {:else}
-          <p class="flex items-center gap-1.5 text-sm font-medium text-brand-strong">
-            <Check class="size-4 shrink-0" aria-hidden="true" />You match all {total} required skills
-          </p>
-        {/if}
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-xs text-muted-foreground">{matchedCount} of {total} required skills</span>
+          <span class="text-sm font-bold tabular-nums">{pct}%</span>
+        </div>
+        <div class="h-1.5 overflow-hidden rounded bg-secondary">
+          <div
+            class="h-full rounded {missing.length > 0 ? 'bg-warning' : 'bg-brand'}"
+            style="width: {pct}%"
+          ></div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          {#each matched as skill (skill)}<span class={haveChipClass}>{skill}</span>{/each}
+          {#each missing as skill (skill)}<span class={missingChipClass}>{skill}</span>{/each}
+        </div>
       </div>
 
       {#if blockers.unmet.length || blockers.met.length}
@@ -81,10 +80,6 @@
           </ul>
         </div>
       {/if}
-
-      <p class="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
-        Deterministic check against your CV and profile — no AI used, no credit spent yet.
-      </p>
     </div>
   {:else}
     <p class="text-sm text-muted-foreground">
