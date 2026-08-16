@@ -100,8 +100,30 @@ func TestRecognize(t *testing.T) {
 		// Workday's public URL may prefix the site with an xx-XX locale the CXS API omits — skip it
 		{"workday locale-prefixed site", "https://gm.wd5.myworkdayjobs.com/en-US/Careers_GM/job/x/Eng_JR-1", "workday", "gm.wd5.myworkdayjobs.com/Careers_GM", "https://gm.wd5.myworkdayjobs.com/Careers_GM", true},
 
+		// CatsOne's adapter fetches "https://<board>/careers", so the board is the WHOLE host —
+		// the same shape catsone.yml stores. Reading the leftmost label instead handed back
+		// "authoritypartnersinc", which no crawl can resolve.
+		{"catsone vacancy", "https://authoritypartnersinc.catsone.com/careers/12345-senior-engineer", "catsone", "authoritypartnersinc.catsone.com", "https://authoritypartnersinc.catsone.com", true},
+		{"catsone board listing", "https://bfc.catsone.com/careers", "catsone", "bfc.catsone.com", "https://bfc.catsone.com", true},
+
+		// host+tenant+board mode — UKG: the board is "<host>/<tenant>/<guid>", the three parts
+		// the adapter needs to reach LoadSearchResults. The old rule took the first path segment
+		// alone, which the adapter rejects outright ("board must be <host>/<tenant>/<guid>"), and
+		// pinned one of the four host families. Codes are folded to lower case: UKG answers either
+		// spelling (verified live) and the catalogue holds them lower-case, so preserving a link's
+		// upper-case spelling would file a board we already crawl as a new one.
+		{"ukg vacancy", "https://recruiting.ultipro.com/AAL1000AIPSA/JobBoard/90e3e14e-26e3-46c0-affc-329a34699e20/OpportunityDetail?opportunityId=5d5", "ukg", "recruiting.ultipro.com/aal1000aipsa/90e3e14e-26e3-46c0-affc-329a34699e20", "https://recruiting.ultipro.com/AAL1000AIPSA/JobBoard/90e3e14e-26e3-46c0-affc-329a34699e20", true},
+		{"ukg board listing", "https://recruiting.ultipro.com/aam1000aam/JobBoard/c5a88c41-a6d1-4e5d-bf94-4d0432a0df30", "ukg", "recruiting.ultipro.com/aam1000aam/c5a88c41-a6d1-4e5d-bf94-4d0432a0df30", "https://recruiting.ultipro.com/aam1000aam/JobBoard/c5a88c41-a6d1-4e5d-bf94-4d0432a0df30", true},
+		{"ukg second us pod", "https://recruiting2.ultipro.com/abc1000abc/JobBoard/11111111-2222-3333-4444-555555555555/OpportunityDetail", "ukg", "recruiting2.ultipro.com/abc1000abc/11111111-2222-3333-4444-555555555555", "https://recruiting2.ultipro.com/abc1000abc/JobBoard/11111111-2222-3333-4444-555555555555", true},
+		{"ukg canadian residency host", "https://recruiting.ultipro.ca/CAN5000/JobBoard/1f3e7f92-2b60-4b8d-a893-c948a630e8a8", "ukg", "recruiting.ultipro.ca/can5000/1f3e7f92-2b60-4b8d-a893-c948a630e8a8", "https://recruiting.ultipro.ca/CAN5000/JobBoard/1f3e7f92-2b60-4b8d-a893-c948a630e8a8", true},
+		{"ukg per-tenant rec.pro host", "https://accessiblespace.rec.pro.ukg.net/acc1507asei/JobBoard/1f3e7f92-2b60-4b8d-a893-c948a630e8a8/OpportunityDetail?opportunityId=9", "ukg", "accessiblespace.rec.pro.ukg.net/acc1507asei/1f3e7f92-2b60-4b8d-a893-c948a630e8a8", "https://accessiblespace.rec.pro.ukg.net/acc1507asei/JobBoard/1f3e7f92-2b60-4b8d-a893-c948a630e8a8", true},
+
 		// declined
 		{"workday bare host no site", "https://generalmotors.wd5.myworkdayjobs.com", "", "", "", false},
+		// A UKG URL that names no board: the tenant alone is not enough for the adapter, so a
+		// tenant-only link must decline rather than hand back a board id the crawl will reject.
+		{"ukg tenant without a board guid", "https://recruiting.ultipro.com/AAL1000AIPSA", "", "", "", false},
+		{"ukg bare host", "https://recruiting.ultipro.com", "", "", "", false},
 		// a URL carrying only a locale has no derivable site — unrecognized, not a false "en-US" board
 		{"workday locale only no site", "https://salesforce.wd12.myworkdayjobs.com/en-US", "", "", "", false},
 		// Both halves of these were wrong before atsdetect.FromURL was folded into this table:

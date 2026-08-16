@@ -56,6 +56,12 @@ const (
 	// numeric institution id, so its localisation and section segments (/cw/en/search) are not
 	// boards — reading one as a board names an institution that does not exist.
 	modePathNumeric = "pathnumeric"
+	// hosttenantboard: board = "<host>/<tenant>/<guid>" from <host>/<tenant>/JobBoard/<guid>/….
+	// UKG addresses a board by all three: the host carries the data-residency TLD, the tenant is
+	// its customer code and the guid picks one of the tenant's boards. The adapter needs the same
+	// three (internal/sources/ukg.go), so anything less is not a shorter board id — it is one the
+	// crawl rejects outright.
+	modeHostTenantBoard = "hosttenantboard"
 )
 
 // atsBoards lists the supported multi-tenant ATS: a host (exact or subdomain-suffix match) →
@@ -79,7 +85,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.pageuppeople.com", "pageup", modePathNumeric},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
-	{"recruiting.ultipro.com", "ukg", modePath},
 	// Manatal's hosted career-page domain is PATH-based (careers-page.com/<tenant>/job/<id>),
 	// not a tenant subdomain, and its source is manatal: careerspage.yml is deliberately empty
 	// because every careers-page.com tenant is served by the Manatal adapter.
@@ -107,7 +112,6 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"applicantpro.com", "applicantpro", modeSubdomain},
 	{"isolvedhire.com", "isolvedhire", modeSubdomain},
 	{"careerplug.com", "careerplug", modeSubdomain},
-	{"catsone.com", "catsone", modeSubdomain},
 	{"csod.com", "cornerstone", modeSubdomain},
 	{"enlizt.me", "enlizt", modeSubdomain},
 	{"hurma.work", "hurma", modeSubdomain},
@@ -128,9 +132,23 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"teamtailor", "teamtailor", modeHost}, // <tenant>.teamtailor.com; custom-domain career sites are absent (not URL-derivable)
 	{"factorial", "factorial", modeHost},   // <tenant>.factorial.<tld>
 	{"factorialhr", "factorial", modeHost}, // the .com.br/.pt/… base-domain variant — ONE ingest adapter serves both, and it reports "factorial"
+	// CatsOne's adapter fetches https://<board>/careers, so the board is the whole host, exactly
+	// as catsone.yml stores it. It was listed as a subdomain, which yields the bare label — a
+	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
+	// underivable from a URL, like every other custom-domain ATS here.)
+	{"catsone", "catsone", modeHost},
 
 	// --- hostpath: board = "<host>/<site>" (Workday tenant host + first-path-segment site) ---
 	{"myworkdayjobs.com", "workday", modeHostPath},
+
+	// --- hosttenantboard: board = "<host>/<tenant>/<guid>" (UKG) ---
+	// All four host families, because the board id embeds the host: two US pods, the Canadian
+	// data-residency TLD, and the per-tenant rec.pro host. The catalogue holds 2166 boards on
+	// *.ultipro.com, 709 on *.rec.pro.ukg.net and 164 on *.ultipro.ca; a rule naming one host
+	// leaves the other three unrecognised.
+	{"ultipro.com", "ukg", modeHostTenantBoard},
+	{"ultipro.ca", "ukg", modeHostTenantBoard},
+	{"rec.pro.ukg.net", "ukg", modeHostTenantBoard},
 }
 
 // apiBoards lists each ATS's OWN API host, where the board sits behind a fixed path prefix
@@ -233,6 +251,26 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = "/" + site
 		return src, host + "/" + site, u.String(), true
+
+	case modeHostTenantBoard:
+		// UKG: <host>/<tenant>/JobBoard/<guid>/… → board "<host>/<tenant>/<guid>". The literal
+		// "JobBoard" segment between the two is what proves the URL names a board at all; without
+		// it the path is some other part of the tenant's site (a login, an OpportunityDetail
+		// shortlink) and there is no guid to take. Declining is the only safe reading — the
+		// tenant alone is a board id the adapter rejects, and a rejected board still costs a
+		// contribution row and a crawl slot.
+		tenant, guid, ok := ukgTenantBoard(u)
+		if !ok {
+			return "", "", "", false
+		}
+		// Lower-cased: UKG answers either spelling (verified live against a real tenant, upper and
+		// lower, both 200) and every board in the catalogue is stored lower-case, so keeping a
+		// link's own casing would file a board we already crawl as a new one. This is the opposite
+		// of Workday above, whose site segment is a human-chosen name the ingest stores verbatim.
+		board = strings.ToLower(host + "/" + tenant + "/" + guid)
+		u.RawQuery, u.Fragment = "", ""
+		u.Path = "/" + tenant + "/JobBoard/" + guid
+		return src, board, u.String(), true
 
 	case modePathPortal:
 		// SmartRecruiters' Apply button leads to a one-click form under the product's own
@@ -409,6 +447,21 @@ var localeSegment = regexp.MustCompile(`^[a-z]{2}-[A-Za-z]{2}$`)
 // firstSegmentAfterLocale returns the first path segment that isn't a leading xx-XX locale — the
 // tenant board in ats.rippling.com/<locale?>/<board>/… (Rippling) or the site in a Workday
 // host/<locale?>/<site> URL. "" when the path is empty or carries only a locale.
+// ukgTenantBoard pulls the tenant and board guid out of a UKG path,
+// "<tenant>/JobBoard/<guid>[/…]". ok is false unless all three parts are present and in that
+// order: the "JobBoard" marker is the only thing that distinguishes a board URL from the rest
+// of a tenant's site, and both ids must be non-empty.
+func ukgTenantBoard(u *url.URL) (tenant, guid string, ok bool) {
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segs) < 3 || !strings.EqualFold(segs[1], "JobBoard") {
+		return "", "", false
+	}
+	if segs[0] == "" || segs[2] == "" {
+		return "", "", false
+	}
+	return segs[0], segs[2], true
+}
+
 func firstSegmentAfterLocale(u *url.URL) string {
 	p := strings.Trim(u.Path, "/")
 	if p == "" {
