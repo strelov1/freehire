@@ -154,3 +154,23 @@ const (
 	hhRequestInterval = 250 * time.Millisecond // ~4 req/s
 	hhRequestBurst    = 4
 )
+
+// Teamtailor 403s the crawl in bulk, and the 403 is ours: a "failing" board answers 200 on
+// demand from the same IP, and 1207 of 1208 failures carried a timestamp inside the crawl hour.
+// The cause is the shape of the adapter — every posting's description is its own page fetch — so
+// a run is ~4k listing requests plus ~33k detail ones, and it fired them in 10 minutes: about
+// 62 req/s at one career-site vendor. Nearly half the fleet was turned away.
+//
+// Pacing is the lever that removes the burst rather than moving it: the refusal-retry proxy
+// (see refusalRetryProviders) recovered only a quarter of the failures, because a reputation
+// 403 follows the volume onto whatever address carries it.
+//
+// The interval is set by the run budget, not by a guess at Teamtailor's window: ~37k requests
+// must finish inside the ingest unit's TimeoutStartSec (3000s), so the floor is ~12 req/s and
+// this sits above it with room — a full run near 31 minutes. It is the first deliberate rate
+// this platform has had; tune from observed convergence, downward while boards are still
+// refused and upward only while they are not.
+const (
+	teamtailorRequestInterval = 50 * time.Millisecond // ~20 req/s
+	teamtailorRequestBurst    = 8
+)
