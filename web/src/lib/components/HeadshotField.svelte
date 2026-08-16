@@ -1,14 +1,18 @@
 <script lang="ts">
-  import { Trash2 } from '@lucide/svelte';
+  import { Camera, Trash2 } from '@lucide/svelte';
   import { api, ApiError, PHOTO_ACCEPT, PHOTO_MAX_MB } from '$lib/api';
   import type { PhotoMeta } from '$lib/types';
-  import { Button } from '$lib/ui';
   import HeadshotSilhouette from './HeadshotSilhouette.svelte';
 
   // The profile's headshot control: preview, upload/replace, remove. One photo per member,
   // reused by every CV whose template prints a portrait — so it lives here rather than in
   // the CV builder. The server normalizes whatever is uploaded to a square JPEG; this side
   // only pre-checks type and size so an obvious mistake costs no upload.
+  //
+  // The circle itself is the upload control — a camera badge overlays its corner rather
+  // than a separate "Upload photo" button beside it, the same click-the-avatar pattern
+  // most profile photos use. Remove stays a distinct small action underneath, since it is
+  // destructive and must not share a hit target with "change it".
   //
   // Nothing renders at all when object storage is unconfigured: an upload control that can
   // only fail is worse than no control.
@@ -82,44 +86,49 @@
   <div class="flex flex-col gap-1.5">
     <span class="text-sm font-medium">Your photo</span>
     <div class="flex items-center gap-4">
-      {#if imageSrc}
-        <img
-          src={imageSrc}
-          alt="Your headshot"
-          class="size-20 shrink-0 rounded-lg border border-border object-cover"
-        />
-      {:else}
-        <HeadshotSilhouette class="size-20 shrink-0 rounded-lg border border-border" />
-      {/if}
+      <input
+        type="file"
+        accept={PHOTO_ACCEPT}
+        class="hidden"
+        bind:this={fileInput}
+        onchange={onFile}
+      />
+      <div class="relative size-20 shrink-0">
+        {#if imageSrc}
+          <img src={imageSrc} alt="Your headshot" class="size-20 rounded-full border border-border object-cover" />
+        {:else}
+          <HeadshotSilhouette class="size-20 rounded-full border border-border" />
+        {/if}
+        <button
+          type="button"
+          disabled={busy}
+          onclick={() => fileInput?.click()}
+          aria-label={meta.present ? 'Replace photo' : 'Upload photo'}
+          class="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border-2 border-background bg-brand text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-70"
+        >
+          <Camera class="size-3.5" />
+        </button>
+      </div>
       <div class="flex flex-col items-start gap-2">
-        <input
-          type="file"
-          accept={PHOTO_ACCEPT}
-          class="hidden"
-          bind:this={fileInput}
-          onchange={onFile}
-        />
-        <div class="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={busy} onclick={() => fileInput?.click()}>
-            {busy ? 'Working…' : meta.present ? 'Replace photo' : 'Upload photo'}
-          </Button>
-          {#if meta.present}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onclick={remove}
-              aria-label="Remove photo"
-            >
-              <Trash2 class="size-4" />
-            </Button>
-          {/if}
-        </div>
         <span class="text-xs text-muted-foreground">
-          JPEG, PNG, or WebP up to {PHOTO_MAX_MB} MB · cropped to a square. Printed only by the CV
-          templates that show a photo.
+          {#if busy}
+            Working…
+          {:else}
+            JPEG, PNG, or WebP up to {PHOTO_MAX_MB} MB · cropped to a square. Printed only by
+            the CV templates that show a photo.
+          {/if}
         </span>
+        {#if meta.present}
+          <button
+            type="button"
+            disabled={busy}
+            onclick={remove}
+            class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-70"
+          >
+            <Trash2 class="size-3.5" />
+            Remove photo
+          </button>
+        {/if}
       </div>
     </div>
     {#if error}

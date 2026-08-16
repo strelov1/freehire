@@ -111,7 +111,7 @@
   }
 </script>
 
-<section class="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+<section class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
     <h3 class="text-sm font-semibold">Your contacts</h3>
     <p class="text-xs text-muted-foreground">

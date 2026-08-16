@@ -13,7 +13,13 @@
   import ExperienceAssistantPanel from '$lib/components/ExperienceAssistantPanel.svelte';
   import States from '$lib/components/States.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
-  import type { ExperienceAtom, ExperienceBank, ExperienceEmployment, ExperienceProvenance } from '$lib/types';
+  import type {
+    ExperienceAtom,
+    ExperienceBank,
+    ExperienceEmployment,
+    ExperienceEmploymentWithAtoms,
+    ExperienceProvenance,
+  } from '$lib/types';
   import { must } from '$lib/utils';
 
   /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
@@ -32,6 +38,10 @@
   let selected = $state<string[]>([]);
   let editingEmploymentId = $state<string | null>(null);
   let empName = $state('');
+  let empRole = $state('');
+  let empLocation = $state('');
+  let empSummary = $state('');
+  let empStack = $state('');
   let empLink = $state('');
   let empStart = $state('');
   let empEnd = $state('');
@@ -122,6 +132,8 @@
   const allAtoms = $derived(
     bank ? [...bank.employments.flatMap((e) => e.atoms), ...bank.unplaced] : [],
   );
+  const jobs = $derived(bank?.employments.filter((e) => e.kind === 'job') ?? []);
+  const projects = $derived(bank?.employments.filter((e) => e.kind === 'project') ?? []);
   const atomById = $derived(new Map(allAtoms.map((a) => [a.id, a])));
 
   const totalAtoms = $derived(allAtoms.length);
@@ -160,9 +172,21 @@
       employment.kind === 'project'
         ? employment.name || ''
         : employment.company || employment.role || '';
+    empRole = employment.role || '';
+    empLocation = employment.location || '';
+    empSummary = employment.summary || '';
+    empStack = (employment.stack ?? []).join(', ');
     empLink = employment.link || '';
     empStart = employment.start || '';
     empEnd = employment.end || '';
+  }
+
+  function parseStack(raw: string): string[] | undefined {
+    const items = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return items.length ? items : undefined;
   }
 
   async function saveEmployment(employment: ExperienceEmployment) {
@@ -174,12 +198,15 @@
         start: empStart.trim() || undefined,
         end: empEnd.trim() || undefined,
         link: empLink.trim() || undefined,
+        summary: empSummary.trim() || undefined,
+        stack: parseStack(empStack),
       };
       if (employment.kind === 'project') {
         body.name = empName.trim();
       } else {
         body.company = empName.trim();
-        body.role = employment.role;
+        body.role = empRole.trim() || undefined;
+        body.location = empLocation.trim() || undefined;
       }
       await api.updateExperienceEmployment(employment.id, body);
       editingEmploymentId = null;
@@ -187,6 +214,30 @@
       onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not update.';
+    } finally {
+      busy = false;
+    }
+  }
+
+  let removeEmploymentTarget = $state<ExperienceEmployment | null>(null);
+  let confirmRemoveEmploymentOpen = $state(false);
+
+  function requestRemoveEmployment(employment: ExperienceEmployment) {
+    if (busy) return;
+    removeEmploymentTarget = employment;
+    confirmRemoveEmploymentOpen = true;
+  }
+
+  async function removeEmployment() {
+    const employment = removeEmploymentTarget;
+    if (!employment) return;
+    busy = true;
+    try {
+      await api.deleteExperienceEmployment(employment.id);
+      await load();
+      onBankMutated?.();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not remove that entry.';
     } finally {
       busy = false;
     }
@@ -387,6 +438,15 @@
   onConfirm={removeAtom}
 />
 
+<ConfirmDialog
+  bind:open={confirmRemoveEmploymentOpen}
+  title={`Remove ${removeEmploymentTarget?.kind === 'project' ? removeEmploymentTarget?.name : removeEmploymentTarget?.company || removeEmploymentTarget?.role || 'this entry'}?`}
+  description="Its achievements are removed with it."
+  confirmLabel="Remove"
+  variant="destructive"
+  onConfirm={removeEmployment}
+/>
+
 <div class="min-w-0">
     {#if loading}
       <States state="loading" />
@@ -497,70 +557,23 @@
           </div>
         {/if}
 
-        {#each bank.employments as employment (employment.id)}
-          {@const placeLabel =
-            employment.kind === 'project'
-              ? employment.name || employment.role
-              : employment.role || employment.company}
-          {@const placeSecondary =
-            employment.kind === 'project'
-              ? employment.link
-              : employment.role && employment.company
-                ? employment.company
-                : ''}
-          <section class="flex flex-col gap-2">
-            <header class="flex flex-wrap items-baseline gap-x-2">
-              {#if editingEmploymentId === employment.id}
-                <div class="flex w-full flex-col gap-2">
-                  <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empName} placeholder={employment.kind === 'project' ? 'Project name' : 'Company'} />
-                  {#if employment.kind === 'project'}
-                    <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empLink} placeholder="https://…" />
-                  {/if}
-                  <div class="flex gap-2">
-                    <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empStart} placeholder="Start" />
-                    <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empEnd} placeholder="End" />
-                  </div>
-                  <div class="flex gap-2">
-                    <Button size="sm" disabled={busy} onclick={() => saveEmployment(employment)}>Save</Button>
-                    <Button size="sm" variant="ghost" onclick={() => (editingEmploymentId = null)}>Cancel</Button>
-                  </div>
-                </div>
-              {:else}
-                <h3 class="text-sm font-semibold text-foreground">
-                  {placeLabel}
-                </h3>
-                {#if placeSecondary}
-                  <span class="text-sm text-muted-foreground">{placeSecondary}</span>
-                {/if}
-                {#if employment.start || employment.end}
-                  <span class="text-xs text-muted-foreground">
-                    {employment.start}{employment.end ? ` – ${employment.end}` : ''}
-                  </span>
-                {/if}
-                <Button size="sm" variant="ghost" class="ml-auto" onclick={() => startEditEmployment(employment)}>
-                  <Pencil class="size-3.5" />
-                  Edit
-                </Button>
-              {/if}
-            </header>
+        {#if jobs.length > 0}
+          <div class="flex flex-col gap-6">
+            <h2 class="text-sm font-semibold text-foreground">Work history</h2>
+            {#each jobs as employment (employment.id)}
+              {@render employmentSection(employment)}
+            {/each}
+          </div>
+        {/if}
 
-            {#if employment.atoms.length === 0}
-              <p class="text-sm text-muted-foreground">
-                {#if employment.kind === 'project'}
-                  Nothing recorded for this project yet — the assistant can help you fill it in.
-                {:else}
-                  Nothing recorded for this role yet — the assistant can help you fill it in.
-                {/if}
-              </p>
-            {:else}
-              <ul class="flex flex-col gap-1.5">
-                {#each needsAttentionFirst(employment.atoms) as atom (atom.id)}
-                  {@render achievement(atom)}
-                {/each}
-              </ul>
-            {/if}
-          </section>
-        {/each}
+        {#if projects.length > 0}
+          <div class="flex flex-col gap-6">
+            <h2 class="text-sm font-semibold text-foreground">Projects</h2>
+            {#each projects as employment (employment.id)}
+              {@render employmentSection(employment)}
+            {/each}
+          </div>
+        {/if}
 
         {#if bank.unplaced.length > 0}
           <section class="flex flex-col gap-2">
@@ -580,6 +593,108 @@
       </div>
     {/if}
 </div>
+
+{#snippet employmentSection(employment: ExperienceEmploymentWithAtoms)}
+  {@const placeLabel =
+    employment.kind === 'project'
+      ? employment.name || employment.role
+      : employment.role || employment.company}
+  {@const placeSecondary =
+    employment.kind === 'project'
+      ? employment.link
+      : employment.role && employment.company
+        ? employment.company
+        : ''}
+  <section class="flex flex-col gap-2">
+    <header class="flex flex-wrap items-baseline gap-x-2">
+      {#if editingEmploymentId === employment.id}
+        <div class="flex w-full flex-col gap-2">
+          <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empName} placeholder={employment.kind === 'project' ? 'Project name' : 'Company'} />
+          {#if employment.kind === 'job'}
+            <div class="flex gap-2">
+              <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empRole} placeholder="Role" />
+              <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empLocation} placeholder="Location" />
+            </div>
+          {:else}
+            <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empLink} placeholder="https://…" />
+          {/if}
+          <div class="flex gap-2">
+            <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empStart} placeholder="Start" />
+            <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empEnd} placeholder="End" />
+          </div>
+          <textarea
+            class="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+            rows="2"
+            bind:value={empSummary}
+            placeholder="Summary (optional)"
+          ></textarea>
+          <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={empStack} placeholder="Stack, comma-separated (optional)" />
+          <div class="flex gap-2">
+            <Button size="sm" disabled={busy} onclick={() => saveEmployment(employment)}>Save</Button>
+            <Button size="sm" variant="ghost" onclick={() => (editingEmploymentId = null)}>Cancel</Button>
+          </div>
+        </div>
+      {:else}
+        <h3 class="text-sm font-semibold text-foreground">
+          {placeLabel}
+        </h3>
+        {#if placeSecondary}
+          <span class="text-sm text-muted-foreground">{placeSecondary}</span>
+        {/if}
+        {#if employment.location}
+          <span class="text-sm text-muted-foreground">· {employment.location}</span>
+        {/if}
+        {#if employment.start || employment.end}
+          <span class="text-xs text-muted-foreground">
+            {employment.start}{employment.end ? ` – ${employment.end}` : ''}
+          </span>
+        {/if}
+        <div class="ml-auto flex gap-1">
+          <Button size="sm" variant="ghost" onclick={() => startEditEmployment(employment)}>
+            <Pencil class="size-3.5" />
+            Edit
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onclick={() => requestRemoveEmployment(employment)}
+            aria-label={`Remove ${placeLabel}`}
+            class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 class="size-3.5" />
+          </Button>
+        </div>
+      {/if}
+    </header>
+
+    {#if employment.summary}
+      <p class="text-sm text-foreground">{employment.summary}</p>
+    {/if}
+    {#if employment.stack?.length}
+      <div class="flex flex-wrap gap-1.5">
+        {#each employment.stack as tech (tech)}
+          <span class="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tech}</span>
+        {/each}
+      </div>
+    {/if}
+
+    {#if employment.atoms.length === 0}
+      <p class="text-sm text-muted-foreground">
+        {#if employment.kind === 'project'}
+          Nothing recorded for this project yet — the assistant can help you fill it in.
+        {:else}
+          Nothing recorded for this role yet — the assistant can help you fill it in.
+        {/if}
+      </p>
+    {:else}
+      <ul class="flex flex-col gap-1.5">
+        {#each needsAttentionFirst(employment.atoms) as atom (atom.id)}
+          {@render achievement(atom)}
+        {/each}
+      </ul>
+    {/if}
+  </section>
+{/snippet}
 
 <!-- The way into the interviewer. The label names what the owner gets, not the machine
      that produces it, and the example carries the rest: it shows the grain of an answer

@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '$lib/api';
   import { currentUser } from '$lib/auth.svelte';
+  import DeleteAccountButton from '$lib/components/DeleteAccountButton.svelte';
   import { Button } from '$lib/ui';
 
   // Password + sessions. Both actions are cookie-only server-side: an API key can
@@ -143,4 +144,12 @@
   <Button variant="outline" disabled={signingOut} onclick={signOutEverywhere}>
     {signingOut ? 'Signing out…' : 'Sign out everywhere'}
   </Button>
+</section>
+
+<section class="mt-8 rounded-lg border border-destructive/30 p-4">
+  <h2 class="mb-1 text-sm font-semibold">Danger zone</h2>
+  <p class="mb-4 text-sm text-muted-foreground">
+    Permanently erase your account and everything in it. This cannot be undone.
+  </p>
+  <DeleteAccountButton />
 </section>

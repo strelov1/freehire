@@ -1188,11 +1188,6 @@ export function createApi(
     );
   }
 
-  /** Clear the user's profile. Idempotent. */
-  async function deleteProfile(): Promise<void> {
-    await call('/api/v1/me/profile', { method: 'DELETE' });
-  }
-
   // The candidate's own screening answers — the handful of questions that repeat across
   // ATS application forms (visa, salary, notice period, relocation, …) and no CV states.
   // Distinct from the profile above: a different lifecycle, see
@@ -1291,6 +1286,11 @@ export function createApi(
    *  résumé is a normal state the profile renders). */
   async function getResume(): Promise<ResumeMeta> {
     return requestData<ResumeMeta>('/api/v1/me/resume');
+  }
+
+  /** Delete the stored CV file and its structured extract. Owned contacts survive. */
+  async function deleteResume(): Promise<void> {
+    await call('/api/v1/me/resume', { method: 'DELETE' });
   }
 
   /** Replace candidate-owned contacts without re-uploading a CV. */
@@ -2109,7 +2109,6 @@ export function createApi(
     updateExperienceEmployment,
     getProfile,
     saveProfile,
-    deleteProfile,
     getScreeningAnswers,
     updateScreeningAnswers,
     getTalentNetwork,
@@ -2118,6 +2117,7 @@ export function createApi(
     deleteAccount,
     extractResumeProfile,
     getResume,
+    deleteResume,
     putResumeContacts,
     replaceResumeContactsFromCV,
     retryResumeParse,
