@@ -35,12 +35,12 @@
 
 ## 4. Verification
 
-- [ ] 4.1 `pnpm --dir web test` green (the 1006-test baseline plus the new module's), then
+- [x] 4.1 `pnpm --dir web test` green (the 1006-test baseline plus the new module's), then
   `pnpm --dir web check` and the repo's eslint over the touched files, clean of new issues.
-- [ ] 4.2 Visually verify in headless Chrome against a locally served job page: the strip
+- [x] 4.2 Visually verify in headless Chrome against a locally served job page: the strip
   renders, the Company tab loads and shows facts plus About, a job with no company slug
   shows no strip, and the empty-company case reads correctly.
-- [ ] 4.3 Assert over CDP, before any click, that each tab's `aria-controls` resolves to a
+- [x] 4.3 Assert over CDP, before any click, that each tab's `aria-controls` resolves to a
   real element and that the inactive panel computes to `display: none`.
-- [ ] 4.4 Confirm the server-rendered HTML of a job page contains no company description
+- [x] 4.4 Confirm the server-rendered HTML of a job page contains no company description
   or facts, and still contains the link to `/companies/<slug>`.

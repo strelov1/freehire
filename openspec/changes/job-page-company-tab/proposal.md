@@ -45,5 +45,8 @@ None. This adds a second surface for a capability that already exists.
 - No backend change. The panel calls the existing `GET /api/v1/companies/:slug` through
   `api.getCompany`.
 - No change to canonical URLs, `robots`, sitemaps, or the job route's `+page.svelte`.
-- Verification is by `svelte-check` and headless-Chrome inspection: the web package has
-  no test runner.
+- Verification is by `pnpm --dir web test` over the lifted derivations, then
+  `svelte-check` and headless-Chrome inspection for the markup and wiring. `web`'s vitest
+  runs in `environment: 'node'` with no Svelte compilation, so a component itself cannot
+  be rendered in a test — which is why the feature's only real logic was lifted into a
+  plain module where it can be.
