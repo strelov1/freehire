@@ -24,7 +24,7 @@
 
 ## 4. Production recovery
 
-- [ ] 4.1 Deploy, then `cmd/prune` the `seek` rows so the paced crawl re-ingests them complete.
-- [ ] 4.2 Run the paced crawl and confirm the description-fill rate and the refusal count before
+- [x] 4.1 Deploy, then `cmd/prune` the `seek` rows so the paced crawl re-ingests them complete.
+- [x] 4.2 Run the paced crawl and confirm the description-fill rate and the refusal count before
       enabling the hourly timer.
-- [ ] 4.3 Enable `freehire-ingest@seek.timer` once a run has verified clean.
+- [x] 4.3 Enable `freehire-ingest@seek.timer` once a run has verified clean.

@@ -29,11 +29,14 @@ carries a body, so nothing downstream can repair it.
 - **WHEN** the crawl yields a posting the catalogue already holds
 - **THEN** the adapter returns it marked `SeenRefresh` and issues no detail request for it
 
-#### Scenario: Failed detail defers the posting to the next crawl
+#### Scenario: Failed detail never drops a posting
 
 - **WHEN** a posting's detail request fails or returns no content
-- **THEN** the adapter omits that posting from the run, so it is not stored body-less and the next
-  crawl retries it as new
+- **THEN** the adapter omits that posting from THIS run rather than storing it body-less, so the
+  next crawl still reports it as new and retries the fetch — the posting is deferred, not lost.
+  This reverses the behaviour this scenario originally described (ingest the posting list-only):
+  a body-less row is unrecoverable past the hydration retry window, while a deferred posting is
+  retried by every later crawl
 
 #### Scenario: Detail requests are paced across the whole run
 
