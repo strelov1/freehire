@@ -49,6 +49,17 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   (`authH.*` config fields, `assistantH.realtime`, the `resumeH.llm`/`matchH.llm`
   bindings). Two same-typed clients go in a named struct (`assistantModels`), not as
   adjacent parameters — a swap there compiles.
+- **Catalogue scale is read, never counted** (`stats.go` `CatalogScale`, `jobs.go`
+  `openJobTotal`). Every figure describing how big the catalogue is —
+  `GET /stats/catalog` and the jobs list's `meta.total` — comes from the snapshot
+  `cmd/rollup-stats` publishes (`internal/catalogstats`). Both call
+  `catalogstats.Load`, which takes no exact counter, so no request path can reach a
+  catalogue-wide scan even by mistake. Neither read can fail: a cold cache, an
+  unreachable Redis, a payload from an older build and no `cfg.Cache` at all all
+  degrade to the approximate estimate with `exact: false`. Add a new consumer by
+  calling `Load`, not by counting — and pass `exact` through to whatever renders it,
+  because a degraded snapshot zeroes the figures that exist only in the database and a
+  zero must not reach a page as if it were a measurement.
 - Tests construct the feature struct directly with fakes/stubs (e.g.
   `&trackingHandlers{tracking: ...}`) and mount routes on a bare `fiber.App`.
 - Central `handler.RenderError` (wired in `cmd/server` via `fiber.Config{ErrorHandler: handler.RenderError}`) renders JSON envelope: a `codedError`→its status with a `code` field, `*fiber.Error`→its code, `pgx.ErrNoRows`→404, FK-violation (SQLSTATE 23503)→404, `inbox.ErrNotFound`→404, `inbox.InvalidError`/`inbox.ErrSlugRequired`/`search.ErrBadQuery`→400, `inbox.ErrPendingSuggestion`→409, `context.Canceled`→499 (client closed request), everything else→500.

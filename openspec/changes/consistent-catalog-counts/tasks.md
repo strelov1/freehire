@@ -113,10 +113,14 @@
 
 ## 7. Finish
 
-- [ ] 7.1 `gofmt -w` the touched Go files, then `go vet ./...`, `go test ./...`,
+- [x] 7.1 `gofmt -w` the touched Go files, then `go vet ./...`, `go test ./...`,
       and `go vet -tags=integration ./...`.
-- [ ] 7.2 Run the tagged suite for the packages whose behaviour changed
+- [x] 7.2 Run the tagged suite for the packages whose behaviour changed
       (`go test -tags=integration ./internal/db/ ./internal/handler/
       ./internal/catalogstats/`).
-- [ ] 7.3 Update `internal/handler/AGENTS.md` with the new route, and note the
+- [x] 7.3 Update `internal/handler/AGENTS.md` with the new route, and note the
       snapshot's ownership and fallback rule wherever the module map wants it.
+      Recorded as a root AGENTS.md convention rather than a new per-package
+      AGENTS.md: the rule is cross-cutting (every scale figure reads one
+      snapshot, nothing counts on a request path) and `internal/catalogstats` is
+      too small to carry a module file of its own.
