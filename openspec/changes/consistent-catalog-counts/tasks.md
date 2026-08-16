@@ -62,13 +62,15 @@
 
 ## 4. Publish the snapshot
 
-- [ ] 4.1 Write the failing test that `rollup-stats`'s snapshot step stores a
-      computed snapshot through the cache with the intended TTL.
-- [ ] 4.2 Call `catalogstats.Compute` + `Store` from `cmd/rollup-stats`, after
+- [x] 4.1 Write the failing test that `rollup-stats`'s snapshot step stores a
+      computed snapshot through the cache with the intended TTL. The TTL is
+      asserted in `catalogstats` against a recording cache — the retention
+      decision belongs next to the constant that encodes it, not in the worker.
+- [x] 4.2 Call `catalogstats.Compute` + `Store` from `cmd/rollup-stats`, after
       the existing rollups. A snapshot failure must not fail the run's exit code
       — the rollups are the worker's primary job and already have their own
       transaction semantics.
-- [ ] 4.3 Construct the cache in `cmd/rollup-stats` from `cfg.RedisURL`
+- [x] 4.3 Construct the cache in `cmd/rollup-stats` from `cfg.RedisURL`
       (`cmd/server` already builds a client for rate limiting — follow that
       wiring, do not duplicate parsing logic).
 

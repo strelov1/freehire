@@ -21,6 +21,43 @@ func (e *countingEstimator) EstimateOpenJobs(context.Context) (int64, error) {
 	return e.value, e.err
 }
 
+// recordingCache captures what Store asked for, so the retention decision can be
+// asserted rather than left in a constant nobody reads.
+type recordingCache struct {
+	cache.Cache
+	key string
+	ttl time.Duration
+}
+
+func (r *recordingCache) Set(ctx context.Context, key string, val []byte, ttl time.Duration) error {
+	r.key, r.ttl = key, ttl
+	return r.Cache.Set(ctx, key, val, ttl)
+}
+
+// The snapshot must outlive the worker's schedule by a wide margin. A TTL near the cron
+// interval means one skipped or slow run drops every surface back to the estimate; the
+// whole point of publishing an exact figure is that a missed run degrades to
+// stale-but-exact instead of fresh-but-wrong.
+func TestStoreRetainsTheSnapshotBeyondTheWorkerSchedule(t *testing.T) {
+	rec := &recordingCache{Cache: cache.NewMemory()}
+
+	if err := Store(context.Background(), rec, storedSnapshot()); err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+
+	// rollup-stats runs intra-day, every few hours. Anything under half a day would
+	// make a single missed run visible to users.
+	const workerSchedule = 12 * time.Hour
+	if rec.ttl <= workerSchedule {
+		t.Errorf("Store TTL = %s, want comfortably more than the %s worker schedule — "+
+			"a skipped run would otherwise drop every surface back to the estimate",
+			rec.ttl, workerSchedule)
+	}
+	if rec.key != snapshotKey {
+		t.Errorf("Store wrote %q, want %q — readers look under one shared key", rec.key, snapshotKey)
+	}
+}
+
 // brokenCache reports a backend failure on every operation.
 type brokenCache struct{}
 

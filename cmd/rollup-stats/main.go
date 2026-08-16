@@ -47,7 +47,7 @@ func main() {
 }
 
 func run() int {
-	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
+	ctx, cfg, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
 		log.Printf("database: %v", err)
 		return 1
@@ -97,7 +97,40 @@ func run() int {
 	}
 
 	log.Printf("rollup-stats: rebuilt job_daily_stats (%d active day rows) and insights_* rollups", days)
+
+	// The catalogue-scale snapshot rides along after the rollups have committed. It is
+	// a separate concern with its own failure mode, so it neither joins their
+	// transaction nor changes this run's exit code: the rollups are the worker's job,
+	// and they are already done.
+	publish(ctx, cfg.RedisURL, db.New(pool))
+
 	return 0
+}
+
+// publish measures the catalogue and stores the snapshot every public surface reads.
+// Every failure here is logged and swallowed — see the call site.
+func publish(ctx context.Context, redisURL string, q *db.Queries) {
+	c, closeCache, err := snapshotCache(redisURL)
+	if err != nil {
+		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
+		return
+	}
+	defer closeCache()
+
+	// A missing or unreadable channel file costs one stat, not the snapshot. The
+	// counts are why this exists; publishing them with a zero channel count beats
+	// publishing nothing and leaving every surface on the estimate.
+	channels, err := configuredTelegramChannels()
+	if err != nil {
+		log.Printf("rollup-stats: telegram channel count unavailable, publishing without it: %v", err)
+	}
+
+	if err := publishSnapshot(ctx, q, c, channels); err != nil {
+		log.Printf("rollup-stats: catalogue snapshot not published: %v", err)
+		return
+	}
+
+	log.Printf("rollup-stats: published the catalogue-scale snapshot")
 }
 
 // rebuildInsights clears and recomputes the four insights_* rollups inside the
