@@ -5,9 +5,11 @@
   import { NumberedGrid, SectionLabel } from '$lib/ui';
   import { HOME_FAQ } from '$lib/homeFaq';
 
-  // Live catalogue totals from the page's server load; either may be null on an
-  // API hiccup, so each has a static fallback (see `figures`).
-  const { stats }: { stats: { jobs: number | null; companies: number | null } } = $props();
+  // Live catalogue figures from the page's server load, all from one snapshot. Any may
+  // be null when the API is unreachable, so each has a static fallback (see `figures`).
+  const {
+    stats,
+  }: { stats: { jobs: number | null; companies: number | null; sources: number | null } } = $props();
 
   // Compact display for the live figures (2,939,967 → "2.9M+"). The fallbacks are
   // rounded DOWN from the last measured totals: the catalogue does not only grow
@@ -16,13 +18,16 @@
   const nf = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
   const compact = (n: number | null, fallback: string) => (n == null ? fallback : `${nf.format(n)}+`);
 
-  // The under-the-fold stats strip: two live totals, then the two constants —
-  // ATS breadth and licensing — that don't need a query. The ATS count mirrors the
-  // /open stat-strip: registered adapters in internal/sources/source.go `All()`.
+  // The under-the-fold stats strip: three live figures plus the licensing constant.
+  //
+  // "sources" counts every registered adapter, not just ATS platforms. It was labelled
+  // "ATS platforms" while carrying the whole registry — and of today's 227 adapters, 104
+  // are aggregators and 30 are single-company career feeds, so the label was counting
+  // things it did not describe. It is live now, so it also stops going stale.
   const figures = $derived([
-    { value: compact(stats.jobs, '3.4M+'), label: 'open jobs' },
-    { value: compact(stats.companies, '200K+'), label: 'companies' },
-    { value: '166', label: 'ATS platforms' },
+    { value: compact(stats.jobs, '3.3M+'), label: 'open jobs' },
+    { value: compact(stats.companies, '290K+'), label: 'companies' },
+    { value: stats.sources == null ? '220+' : String(stats.sources), label: 'sources' },
     { value: '100%', label: 'open source' },
   ]);
 

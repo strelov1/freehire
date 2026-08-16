@@ -79,6 +79,7 @@ import type {
   ActivityGranularity,
   ActivityPoint,
   UserGrowthPoint,
+  CatalogScale,
   EngagementStats,
   IngestStatus,
   LocationPreferences,
@@ -519,6 +520,17 @@ export function createApi(
   async function statsFacets(): Promise<FacetCounts['facets']> {
     const res = await request<{ data: { facets: FacetCounts['facets'] } }>(`/api/v1/stats/facets`);
     return res.data.facets ?? {};
+  }
+
+  /** How big the catalogue is, as one snapshot: open postings, companies, sources,
+   *  ATS platforms and Telegram channels. Every surface quoting catalogue scale reads
+   *  this one call, so /about and /open cannot show different numbers — which they
+   *  could when each took its own list total at its own moment.
+   *
+   *  Never fails: with no published snapshot the backend answers with an approximate
+   *  open-job count and `exact: false`. Aggregate-only, unauthenticated. */
+  async function catalogScale(): Promise<CatalogScale> {
+    return requestData<CatalogScale>(`/api/v1/stats/catalog`);
   }
 
   /** The public ingest-fleet status: a per-provider health rollup with a derived
@@ -2030,6 +2042,7 @@ export function createApi(
     userGrowth,
     engagementStats,
     statsFacets,
+    catalogScale,
     ingestStatus,
     listCompanies,
     getCompany,

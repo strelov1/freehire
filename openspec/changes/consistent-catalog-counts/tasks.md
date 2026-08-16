@@ -90,20 +90,26 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 Add the `/api/v1/stats/catalog` client method (check whether the
+- [x] 6.1 Add the `/api/v1/stats/catalog` client method (check whether the
       contract is codegen'd — `cmd/gen-contracts` — and regenerate rather than
       hand-writing the type if so).
-- [ ] 6.2 Switch `web/src/routes/about/+page.server.ts` to the single snapshot
+- [x] 6.2 Switch `web/src/routes/about/+page.server.ts` to the single snapshot
       call, replacing the two `limit=1` list reads.
-- [ ] 6.3 Switch `web/src/routes/open/+page.server.ts` to the snapshot call and
+- [x] 6.3 Switch `web/src/routes/open/+page.server.ts` to the snapshot call and
       delete `ATS_PLATFORMS = 166` / `TELEGRAM_CHANNELS = 88` from
       `+page.svelte`, reading both from the snapshot.
-- [ ] 6.4 Update the API-down fallbacks in `web/src/lib/components/HomeView.svelte`
+- [x] 6.4 Update the API-down fallbacks in `web/src/lib/components/HomeView.svelte`
       (`3.4M+` → `3.3M+`, `200K+` → `290K+`) and take the ATS-platform figure
       from the snapshot instead of the hardcoded `'166'`.
-- [ ] 6.5 Verify `/about` and `/open` render the same figures, headless, against
+- [x] 6.5 Verify `/about` and `/open` render the same figures, headless, against
       a running stack — the numbers agreeing is the whole point of the change,
-      so it needs looking at rather than asserting.
+      so it needs looking at rather than asserting. Done against a local stack
+      seeded with 40 listed + 40 excluded postings: API, /about and /open all
+      reported 40/1/227/95. The degraded path was exercised too (cache flushed,
+      then Redis stopped): both endpoints stayed 200, and it caught a real bug —
+      /open rendered a static "290K+" companies figure when the backend had said
+      it could not measure one. Fixed by mapping database-only figures to null
+      instead of zero, so "not measured" stops looking like a value.
 
 ## 7. Finish
 

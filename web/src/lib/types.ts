@@ -736,6 +736,27 @@ export interface EngagementStats {
   saved_searches: number;
 }
 
+/** How big the catalogue is, as one snapshot.
+ *
+ *  Every surface that quotes catalogue scale reads this, so two pages rendered from
+ *  the same response cannot disagree. `open_jobs` and `companies` are exact counts over
+ *  the set the public listings paginate; `sources`, `ats_platforms` and
+ *  `telegram_channels` describe reach — what the crawler can read, whether or not each
+ *  currently holds an open posting.
+ *
+ *  `exact` is false when the backend had no published snapshot and fell back to an
+ *  approximate open-job count. On that path only `open_jobs`, `sources` and
+ *  `ats_platforms` are meaningful; the rest are zero. */
+export interface CatalogScale {
+  open_jobs: number;
+  companies: number;
+  sources: number;
+  ats_platforms: number;
+  telegram_channels: number;
+  computed_at: string;
+  exact: boolean;
+}
+
 /** The derived health verdict for a provider (and the fleet) on the public
  *  /status page. */
 export type HealthStatus = 'operational' | 'degraded' | 'down';

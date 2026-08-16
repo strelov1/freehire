@@ -71,9 +71,11 @@ let pageCache: { at: number; data: OpenPayload } | null = null;
 
 async function buildPayload(fetchImpl: typeof fetch) {
   const api = serverApi(fetchImpl);
-  const [jobs, companies, activity, facets, growth, engagement, github] = await Promise.allSettled([
-    api.listJobs(1, 0),
-    api.listCompanies('', 1, 0),
+  // One call for the whole scale strip instead of two list totals: the figures come
+  // from a single published snapshot, so this page and /about cannot show numbers
+  // measured at different moments.
+  const [scale, activity, facets, growth, engagement, github] = await Promise.allSettled([
+    api.catalogScale(),
     api.jobsActivity('day'),
     api.statsFacets(),
     api.userGrowth(),
@@ -84,10 +86,20 @@ async function buildPayload(fetchImpl: typeof fetch) {
   const value = <T>(r: PromiseSettledResult<T>): T | null =>
     r.status === 'fulfilled' ? r.value : null;
 
+  const catalog = value(scale);
+  // A degraded snapshot carries the approximate job count and the registry figures;
+  // the counts that exist only in the database come back as zero. Map those to null
+  // rather than passing the zero on: "we could not measure this" and "we measured
+  // zero" must not look the same to a renderer, or a page ends up printing a figure
+  // nobody stands behind.
+  const dbOnly = (n: number | undefined) => (catalog?.exact && n != null ? n : null);
+
   return {
     scale: {
-      jobs: value(jobs)?.total ?? null,
-      companies: value(companies)?.total ?? null,
+      jobs: catalog?.open_jobs ?? null,
+      companies: dbOnly(catalog?.companies),
+      sources: catalog?.sources ?? null,
+      telegramChannels: dbOnly(catalog?.telegram_channels),
     },
     activity: value(activity) ?? [],
     facets: value(facets) ?? null,
