@@ -56,6 +56,12 @@ func TestDedupKeyOf(t *testing.T) {
 	if dedupKeyOf(smartRecruitersProber{})("ArchirodonGroup") != "archirodongroup" {
 		t.Error("smartrecruiters key must fold case")
 	}
+	// Paycom client keys are hex, and the portal serves the same employer whichever case they
+	// are written in (confirmed live: a harvest proposed 30 upper-case spellings of client keys
+	// the board file already held in lower case, and every one probed live).
+	if dedupKeyOf(paycomProber{})("0E35BF4CDCD4FEE99D33D853E535BD83") != "0e35bf4cdcd4fee99d33d853e535bd83" {
+		t.Error("paycom key must fold case")
+	}
 }
 
 func TestWorkdayBoardID(t *testing.T) {

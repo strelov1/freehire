@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 // paycomProber validates a Paycom portal "<clientkey>" by reading the per-portal session JWT
@@ -15,6 +16,12 @@ var (
 	paycomProbeJWT  = regexp.MustCompile(`"sessionJWT":"([^"]+)"`)
 	paycomProbeHost = regexp.MustCompile(`portal-applicant-tracking\.[a-z0-9-]+\.paycomonline\.net`)
 )
+
+// dedupKey folds a Paycom client key to lower case. The key is hex and the portal serves the
+// same employer in either case, so an upper-case spelling of a board the file already holds is
+// the same board — without this it probes live, passes the name gate against its own employer,
+// and is appended a second time.
+func (paycomProber) dedupKey(clientkey string) string { return strings.ToLower(clientkey) }
 
 func (paycomProber) probe(ctx context.Context, c httpClient, clientkey string) (string, int, error) {
 	page, err := c.GetText(ctx, fmt.Sprintf("https://www.paycomonline.net/v4/ats/web.php/portal/%s/jobs/1", clientkey))

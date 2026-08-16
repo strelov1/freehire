@@ -99,3 +99,7 @@
   board: helprise
 - company: Yes&
   board: "yes"
+- company: Shares
+  board: shares
+- company: Survicate
+  board: survicate
