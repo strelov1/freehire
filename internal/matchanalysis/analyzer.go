@@ -134,6 +134,11 @@ type Event struct {
 
 var stageLabels = map[int]string{1: "Extract & Match", 2: "Recruiter verdict", 3: "Adversarial audit"}
 
+// StageLabel names one of the three chain stages (1-3) for a caller that describes a stage
+// without running the chain (e.g. synthesizing a stage_done burst for a reader who joined
+// after the chain already finished elsewhere). Empty for an unknown stage.
+func StageLabel(stage int) string { return stageLabels[stage] }
+
 // Analyze runs the three-stage chain and returns the final analysis, discarding the
 // stream. Returns (nil, nil) when the LLM is unconfigured. It is a thin collector over
 // AnalyzeStream — one chain implementation, no duplication.

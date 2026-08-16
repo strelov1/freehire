@@ -16,6 +16,7 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/credits"
+	"github.com/strelov1/freehire/internal/db"
 	"github.com/strelov1/freehire/internal/hardconstraint"
 	"github.com/strelov1/freehire/internal/jobmatch"
 	"github.com/strelov1/freehire/internal/matchanalysis"
@@ -27,6 +28,12 @@ import (
 // The stream always opens with a `meta` event (has_cv); when no CV is stored it closes
 // after that. Everything the stream needs is captured before the body writer starts,
 // because the fiber ctx is released once this handler returns.
+//
+// Coalesced through h.coalesce: this is also what the tailoring workspace's cold start now
+// opens to animate the fit analysis, at the same moment the autopilot's own invisible
+// ensureCachedAnalysis may be racing for the identical (user, job). Whichever claims
+// leadership runs the chain for real; the other becomes a follower and replays the result via
+// followMatchAnalysis instead of paying for a second chain.
 func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -41,6 +48,16 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// out-of-credits new job returns a real 402 instead of an SSE error). Only a CV-backed
 	// request would run the LLM; without one the stream just reports has_cv. A recompute is
 	// free — only a new analysis is charged, and only after it persists (in the writer).
+	//
+	// Every caller runs this gate for ITSELF, whether it ends up leading or following the
+	// compute below — not just the leader. A follower still spends a real credit on a
+	// genuinely new job (two tabs open on the same never-analysed job is not a discount),
+	// and an out-of-credits caller must still 402 even when someone else is already
+	// computing the same analysis for free reasons (ensureCachedAnalysis never reaches this
+	// gate at all — see prepareAutopilotRun). Debiting twice for one job is safe: h.debitMatch
+	// is idempotent per (user, feature, job) — see credits.Store.Debit's DebitExists check —
+	// so a leader and a follower that both decide "I owe one credit here" collapse into a
+	// single ledger row, whichever of them reaches it first.
 	isNew := false
 	if hasCV {
 		var err error
@@ -53,6 +70,18 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			}
 		}
 	}
+
+	// Leadership for (user, job) is claimed after the gate above, not before: nothing here
+	// can fail, so there is no path where a caller becomes leader and then has to immediately
+	// hand leadership back. A follower (almost always the cold-start autopilot's own invisible
+	// ensureCachedAnalysis, racing for the same pair) runs neither the LLM nor the reads below
+	// — see matchAnalysisCoordinator and followMatchAnalysis.
+	var done func(bool)
+	var run *analysisRun
+	isLeader := true
+	if hasCV {
+		done, run, isLeader = h.coalesce.lead(userID, job.ID)
+	}
 	profile, _ := h.userProfile.Get(c.Context(), userID)
 
 	// Compute the hard-constraint blockers exactly as the POST path does: the unmet
@@ -61,32 +90,41 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// the served response — so the ceiling has to be applied here, not skipped on the
 	// assumption a later GET will do it. The cache still holds the uncapped analysis,
 	// exactly as the POST path leaves it, so a dictionary change still takes effect
-	// on a later GET with no cache invalidation.
+	// on a later GET with no cache invalidation. Needed by both roles: a follower caps
+	// the same way before replaying the leader's cached analysis.
 	blockers := h.jobBlockers(c.Context(), userID, job, profile)
 
-	// Bound before the stream opens: minting a credential is a network call, and making
-	// it after the headers are out would stall a stream the client is already reading.
-	analyzer := h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
+	// Everything below is the leader's own compute setup — a follower runs neither the LLM
+	// nor these reads, and reaches its own path (followMatchAnalysis) once the body-writer
+	// opens.
+	var analyzer *matchanalysis.Analyzer
+	var language string
+	var input matchanalysis.Input
+	if isLeader {
+		// Bound before the stream opens: minting a credential is a network call, and making
+		// it after the headers are out would stall a stream the client is already reading.
+		analyzer = h.matchAnalysis.As(h.llm.bind(c.Context(), userID, tagMatchAnalysis))
 
-	// Captured up front, same as cvUploadedAt above: the cache write happens after the
-	// stream's own goroutine outlives this request, so the language it stamps must be
-	// the one the chain actually ran under, not whatever a profile edit changes it to
-	// mid-stream.
-	language := h.callerLanguage(c.Context(), userID)
-	input := matchanalysis.Input{
-		JobTitle:            job.Title,
-		JobDescription:      job.Description,
-		CompanyInfo:         h.companyInfo(c, job.CompanySlug),
-		StructuredResume:    h.candidateProfile(c, userID),
-		Match:               jobmatch.Compute(job.Skills, profile.Skills),
-		JobWorkMode:         job.WorkMode,
-		JobRemote:           job.Remote,
-		JobLocation:         job.Location,
-		JobRegions:          job.Regions,
-		JobCountries:        job.Countries,
-		LocationPreferences: string(profile.LocationPreferences),
-		Blockers:            blockers,
-		Language:            language,
+		// Captured up front, same as cvUploadedAt above: the cache write happens after the
+		// stream's own goroutine outlives this request, so the language it stamps must be
+		// the one the chain actually ran under, not whatever a profile edit changes it to
+		// mid-stream.
+		language = h.callerLanguage(c.Context(), userID)
+		input = matchanalysis.Input{
+			JobTitle:            job.Title,
+			JobDescription:      job.Description,
+			CompanyInfo:         h.companyInfo(c, job.CompanySlug),
+			StructuredResume:    h.candidateProfile(c, userID),
+			Match:               jobmatch.Compute(job.Skills, profile.Skills),
+			JobWorkMode:         job.WorkMode,
+			JobRemote:           job.Remote,
+			JobLocation:         job.Location,
+			JobRegions:          job.Regions,
+			JobCountries:        job.Countries,
+			LocationPreferences: string(profile.LocationPreferences),
+			Blockers:            blockers,
+			Language:            language,
+		}
 	}
 
 	sseHeaders(c)
@@ -107,7 +145,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		stream := newSSEStream(w, conn, sseWriteTimeout)
 		start := time.Now()
-		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v", userID, job.ID, hasCV)
+		log.Printf("matchanalysis: stream start user=%d job=%d has_cv=%v leader=%v", userID, job.ID, hasCV, isLeader)
 		stream.event("meta", map[string]bool{"has_cv": hasCV})
 		if !hasCV {
 			return
@@ -122,8 +160,25 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		// the routes that reach here (matchAnalysisLimiter), not the lifetime of a TCP
 		// connection — a limit a reload could reset would bound nothing at all.
 		ctx := context.Background()
-		events := 0
 
+		if !isLeader {
+			// Someone else — almost always the cold-start autopilot's own invisible
+			// ensureCachedAnalysis — already claimed this pair. Wait for it and replay its
+			// result rather than running a second chain.
+			h.followMatchAnalysis(ctx, stream, run, userID, job, blockers, isNew)
+			return
+		}
+
+		// succeeded reports to any follower whether the cache is left in a trustworthy state
+		// by the time done runs. Deferred (not called ad hoc at each return below) so a panic
+		// between here and the end — anywhere in AnalyzeStream, the cache write, or the debit
+		// — still releases a waiting follower instead of stranding that (user, job) pair
+		// behind a leader that never finishes; see matchAnalysisCoordinator's own comment on
+		// why a bare, non-deferred done() was a real hazard here.
+		succeeded := false
+		defer func() { done(succeeded) }()
+
+		events := 0
 		// A long stage (a silent LLM call with no thinking tokens) would let the
 		// connection go quiet long enough for nginx's proxy_read_timeout to sever it
 		// mid-analysis — the client sees a bare "Connection lost". A periodic SSE comment
@@ -147,12 +202,61 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 			return
 		}
 		h.cacheAnalysis(ctx, userID, job, cvUploadedAt, language, analysis)
+		succeeded = true
 		if isNew {
 			h.debitMatch(ctx, userID, job.ID)
 		}
 		log.Printf("matchanalysis: stream DONE user=%d job=%d dur=%s events=%d overall=%d", userID, job.ID, time.Since(start).Round(time.Millisecond), events, analysis.OverallScore)
 	}))
 	return nil
+}
+
+// followMatchAnalysis is the graceful degrade for the rare race a visible stream loses: some
+// concurrent caller for the same (user, job) — almost always the cold-start autopilot's own
+// invisible ensureCachedAnalysis — claimed the compute first. It waits on run.done, then
+// replays whatever landed in the cache as one synthesized burst — stage_done for all three
+// stages (there is nothing to show progressing through) followed by final — so this reader's
+// stepper still resolves instead of hanging on "pending" forever.
+//
+// run.succeeded is checked before trusting the cache at all: a leader whose attempt failed
+// leaves an OLDER (or absent) row behind, not a fresh one, and reading it unconditionally would
+// serve a stale analysis dressed up as this run's live result — a follower must report the
+// same failure the leader saw, not paper over it.
+//
+// The wait runs on ctx (StreamMatchAnalysis's background context, taken after the fiber ctx is
+// gone): the same disconnect-proof posture the leader's own compute already runs under, so a
+// client that leaves during the wait costs nothing extra. Never emits
+// stage_start/thinking/requirements/dimensions: those describe progress this caller never
+// watched. isNew is THIS caller's own credits gate result (see StreamMatchAnalysis) — debiting
+// here when the leader was the free ensureCachedAnalysis pre-run is exactly the case that must
+// still charge a genuinely new analysis; h.debitMatch's idempotency (by user, feature, job) is
+// what keeps two callers that both decide to debit from charging twice.
+func (h *matchHandlers) followMatchAnalysis(ctx context.Context, stream *sseStream, run *analysisRun, userID int64, job db.Job, blockers []hardconstraint.Blocker, isNew bool) {
+	stopHeartbeat := stream.keepalive(sseKeepalive) // the wait can run as long as a full chain
+	<-run.done
+	stopHeartbeat()
+
+	if !run.succeeded {
+		stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
+		return
+	}
+	row, err := h.matchAnalysisCache.GetUserJobAnalysis(ctx, db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID})
+	analysis := decodeAnalysis(row.Analysis)
+	if err != nil || analysis == nil {
+		stream.event("stream_error", map[string]string{"message": "analysis unavailable"})
+		return
+	}
+	served := *analysis
+	applyBlockers(&served, blockers)
+	for n := 1; n <= 3; n++ {
+		stream.event(string(matchanalysis.EventStageDone), matchanalysis.Event{
+			Kind: matchanalysis.EventStageDone, Stage: n, Label: matchanalysis.StageLabel(n),
+		})
+	}
+	stream.event(string(matchanalysis.EventFinal), matchanalysis.Event{Kind: matchanalysis.EventFinal, Analysis: &served})
+	if isNew {
+		h.debitMatch(ctx, userID, job.ID)
+	}
 }
 
 // capFinalEvent applies the caller's hard-constraint blockers to the audited `final`

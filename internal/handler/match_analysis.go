@@ -51,6 +51,12 @@ type matchHandlers struct {
 	// bank supplies the candidate's work history. Nil when there are no queries to build
 	// it over, which reads as an empty bank — and an empty bank means no analysis.
 	bank candidateProfiler
+	// coalesce ensures at most one fit-analysis compute runs at a time for a given (user, job)
+	// — see matchAnalysisCoordinator for why the cold-start autopilot's invisible pre-run and
+	// the workspace's visible stream can both reach ensureCachedAnalysis/StreamMatchAnalysis
+	// for the identical pair. Billing is decided per caller, not by who leads — see
+	// StreamMatchAnalysis's own comment.
+	coalesce matchAnalysisCoordinator
 }
 
 func newMatchHandlers(queries *db.Queries, userProfile *userprofile.Service, resumeStore *resume.Store, analyzer *matchanalysis.Analyzer, creditsStore *credits.Store) *matchHandlers {
@@ -278,10 +284,27 @@ func (h *matchHandlers) runAnalysis(c *fiber.Ctx, userID int64, job db.Job, prof
 // logged and left uncached, exactly as PostMatchAnalysis already degrades. No credits debit — this
 // path is unmetered, tracked only by the same LLM spend attribution every call already carries
 // (see the tailor-coldstart-autopilot design's "no new metering" decision).
+//
+// Coalesced through h.coalesce: the tailoring workspace's visible match-analysis stream now
+// starts at the same cold start this runs at, so both routinely race for the identical
+// (user, job) — see matchAnalysisCoordinator for why only one of them ever actually computes.
 func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.Job) {
+	done, run, isLeader := h.coalesce.lead(userID, job.ID)
+	if !isLeader {
+		// The visible stream (or another concurrent call for this pair) already claimed the
+		// compute — wait for it rather than spending a second three-stage chain on the same
+		// input. Best-effort either way, exactly as before this coalescing existed: whether
+		// the leader actually cached anything is not this function's concern.
+		<-run.done
+		return
+	}
+	succeeded := false
+	defer func() { done(succeeded) }()
+
 	if _, err := h.matchAnalysisCache.GetUserJobAnalysis(c.Context(),
 		db.GetUserJobAnalysisParams{UserID: userID, JobID: job.ID}); err == nil {
-		return // already cached
+		succeeded = true // already cached — nothing to compute, and it's a good row for a follower to read
+		return
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("matchanalysis: checking cache before an autopilot run, user %d job %d: %v", userID, job.ID, err)
 		return
@@ -299,6 +322,7 @@ func (h *matchHandlers) ensureCachedAnalysis(c *fiber.Ctx, userID int64, job db.
 	}
 	cvUploadedAt, _ := h.cvUploadedAt(c, userID)
 	h.cacheAnalysis(c.Context(), userID, job, cvUploadedAt, language, analysis)
+	succeeded = true
 }
 
 // prepareAutopilotRun ensures the fit analysis is cached before an autopilot run starts —
