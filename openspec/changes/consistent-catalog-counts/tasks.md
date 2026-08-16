@@ -15,23 +15,23 @@
 
 ## 2. `internal/cache` — the layer
 
-- [ ] 2.1 Write the failing test for `Memory`: `Set` then `Get` round-trips,
+- [x] 2.1 Write the failing test for `Memory`: `Set` then `Get` round-trips,
       a missing key reports `found == false` with no error, and an entry past
       its TTL reports a miss.
-- [ ] 2.2 Define `Cache` (`Get(ctx, key) ([]byte, bool, error)`,
+- [x] 2.2 Define `Cache` (`Get(ctx, key) ([]byte, bool, error)`,
       `Set(ctx, key, val []byte, ttl time.Duration) error`) and implement
       `Memory` (map + mutex). Document on the interface that a returned error is
       the caller's cue to treat the read as a miss — mirroring how
       `ratelimit.Throttler` leaves the fail-open decision to one caller.
-- [ ] 2.3 Write the failing test for `RedisCache` against `miniredis` (already a
+- [x] 2.3 Write the failing test for `RedisCache` against `miniredis` (already a
       dependency): round-trip, miss, TTL honoured, and an error surfaced when
       the backend is closed.
-- [ ] 2.4 Implement `RedisCache` over the existing `*redis.Client`.
-- [ ] 2.5 Write the failing test for `GetJSON[T]`/`SetJSON`: round-trip of a
+- [x] 2.4 Implement `RedisCache` over the existing `*redis.Client`.
+- [x] 2.5 Write the failing test for `GetJSON[T]`/`SetJSON`: round-trip of a
       struct, a miss on an absent key, and a decode failure reported as a miss
       rather than a hard error (a stale incompatible payload must not wedge a
       caller).
-- [ ] 2.6 Implement `GetJSON`/`SetJSON` as free generic functions — Go does not
+- [x] 2.6 Implement `GetJSON`/`SetJSON` as free generic functions — Go does not
       allow type parameters on methods.
 
 ## 3. `internal/catalogstats` — the figures
