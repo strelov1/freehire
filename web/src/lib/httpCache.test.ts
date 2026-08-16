@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PRIVATE_CACHE, PUBLIC_CACHE, cachePolicy } from './httpCache';
+import { PRIVATE_CACHE, PUBLIC_CACHE, PUBLIC_DETAIL_CACHE, cachePolicy } from './httpCache';
 
 describe('cachePolicy', () => {
   it('lets a shared cache hold an anonymous public page', () => {
-    expect(cachePolicy({ pathname: '/companies/acme', authenticated: false })).toBe(PUBLIC_CACHE);
     expect(cachePolicy({ pathname: '/', authenticated: false })).toBe(PUBLIC_CACHE);
     expect(cachePolicy({ pathname: '/collections/python', authenticated: false })).toBe(PUBLIC_CACHE);
   });
@@ -49,6 +48,58 @@ describe('cachePolicy', () => {
   it('tells a shared cache to store nothing at all for a private response', () => {
     expect(PRIVATE_CACHE).toContain('no-store');
     expect(PRIVATE_CACHE).toContain('private');
+  });
+});
+
+// A page about ONE entity is not re-rendered by an ingest run the way a listing is,
+// and there are hundreds of thousands of them — the long tail is where a five-minute
+// lifetime costs the most, because each page is seen once or twice per data centre
+// per window and pays for a revalidation every time.
+describe('cachePolicy holds an entity page longer than a listing', () => {
+  it('gives a detail page the longer shared-cache lifetime', () => {
+    for (const pathname of [
+      '/jobs/senior-go-engineer-acme-1a2b',
+      '/companies/acme',
+      '/blog/why-we-built-this',
+    ]) {
+      expect(cachePolicy({ pathname, authenticated: false })).toBe(PUBLIC_DETAIL_CACHE);
+    }
+  });
+
+  // These move with every ingest run: counts, newest-first ordering, which jobs a
+  // filter now matches. They keep the short lifetime.
+  it('leaves listings and index pages on the short lifetime', () => {
+    for (const pathname of [
+      '/',
+      '/jobs',
+      '/companies',
+      '/collections/python',
+      '/insights/skills/backend',
+    ]) {
+      expect(cachePolicy({ pathname, authenticated: false })).toBe(PUBLIC_CACHE);
+    }
+  });
+
+  // A detail page's CHILDREN are a different thing: discussion carries
+  // user-submitted comments, which should not sit at the edge for an hour.
+  it('does not extend the lifetime to a detail page sub-route', () => {
+    for (const pathname of ['/jobs/some-slug/discussion', '/companies/acme/discussion']) {
+      expect(cachePolicy({ pathname, authenticated: false })).toBe(PUBLIC_CACHE);
+    }
+  });
+
+  // The lifetime split must never weaken the rule it sits next to.
+  it('still refuses to store a signed-in detail page', () => {
+    expect(cachePolicy({ pathname: '/jobs/some-slug', authenticated: true })).toBe(PRIVATE_CACHE);
+    expect(cachePolicy({ pathname: '/companies/acme', authenticated: true })).toBe(PRIVATE_CACHE);
+  });
+
+  it('differs from the listing policy only in the shared-cache lifetime', () => {
+    expect(PUBLIC_DETAIL_CACHE).toContain('s-maxage=3600');
+    // Same two guarantees as PUBLIC_CACHE: the browser keeps revalidating, and the
+    // edge may keep serving while it refreshes.
+    expect(PUBLIC_DETAIL_CACHE).toContain('max-age=0');
+    expect(PUBLIC_DETAIL_CACHE).toContain('stale-while-revalidate=86400');
   });
 });
 
