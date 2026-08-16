@@ -108,6 +108,17 @@ board-swept, not liveness-probed.
   remedies.
 - **`"Private Advertiser"` postings are dropped** → a real, if small, coverage loss, taken because a
   placeholder company would pollute the company dimension for every such posting across both markets.
+- **A posting whose detail failed is ingested body-less and never retried** → accepted, and NOT
+  fixable in this adapter. `seen` is `func(externalID string) bool` over
+  `ExistingExternalIDs`, which reports row existence (and `is_tech`), never whether the stored row
+  carries a description — so an adapter cannot tell a hydrated row from a body-less one, and every
+  `HydratingSource` in the repository shares the behaviour. The alternative available at adapter
+  level is to drop the posting on a detail failure so the next crawl sees it as new, which trades a
+  permanent body-less row for a temporarily absent one and contradicts the documented rule that a
+  posting is never lost over a missing detail. Closing the hole properly means a seen-set that
+  excludes description-less rows — a change to the hydration contract and its SQL, shared by every
+  hydrating adapter, not something to fork inside SEEK. Rare in practice: 31 of 31 details succeeded
+  on the live verification run.
 
 ## Migration Plan
 
