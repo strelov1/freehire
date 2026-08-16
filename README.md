@@ -9,7 +9,7 @@
 
 ### Every IT job, straight from the source.
 
-**3.4M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**3.3M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -36,7 +36,7 @@
 
 <br>
 
-<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.4M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
+<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.3M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
 
@@ -57,9 +57,9 @@
   workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
   Use the hosted site, run your own, or build on top.
 
-Aggregating **3.4M+ live postings** from **220,000+ companies** across **80+ ATS
-platforms** and a long tail of aggregators and direct feeds — see
-[Sources](#sources) for the full breakdown.
+Aggregating **3.3M+ live postings** from **294,000+ companies** across **92 ATS
+platforms** and a long tail of aggregators and direct feeds — **225 live sources**
+in all, see [Sources](#sources) for the full breakdown.
 
 > If freehire saves you time — or you just like the idea of jobs straight from the
 > source — a ⭐ helps other people find it.
@@ -85,16 +85,19 @@ which draw on AI credits.
 ## Stack
 
 - **Go** + [Fiber v2](https://gofiber.io/) — HTTP server
-- **PostgreSQL** — storage and filtering
+- **PostgreSQL** + [pgvector](https://github.com/pgvector/pgvector) — storage, filtering, semantic embeddings
 - **[sqlc](https://sqlc.dev/)** — type-safe DB access from SQL (no ORM)
 - **[Meilisearch](https://www.meilisearch.com/)** — full-text and faceted job search
 - **[langchaingo](https://github.com/tmc/langchaingo)** — LLM access over any OpenAI-compatible endpoint (no vendor baked in)
+- **[SvelteKit](https://kit.svelte.dev/) 2** (Svelte 5 runes) + **Tailwind 4** — the server-rendered frontend under `web/`
+- **Redis** — rate limiting and realtime fan-out · **S3-compatible object storage** — CVs, headshots, previews
 - **Docker Compose** — local development
 
 ## Quick start
 
 ```bash
-make up        # build + start app, postgres, and meilisearch in Docker
+make up        # build + start the whole stack in Docker:
+               # api, web, postgres, meilisearch, redis, minio
 curl localhost:8080/health
 curl localhost:8080/api/v1/jobs
 ```
@@ -135,17 +138,27 @@ make migrate   # apply migrations manually to an existing DB volume
 
 ## Workers
 
-The server only serves the API. Ingest and enrichment are standalone, run-once
-workers meant for cron — each crawls or drains its queue and exits.
+The server only serves the API. Everything else — crawling, enrichment, indexing,
+notifications — is a standalone, run-once worker meant for cron: it crawls or
+drains its queue and exits. `ls cmd/` for the full list; the ones you are most
+likely to run:
 
 ```bash
+go run ./cmd/migrate       # apply pending migrations (run before deploying code that reads new schema)
 go run ./cmd/ingest sources/greenhouse.yml  # crawl one board file and upsert jobs (path also via SOURCES_FILE)
 go run ./cmd/enrich        # drain the enrichment queue (LLM); needs LLM_* config
+go run ./cmd/embed         # drain the semantic queue into pgvector chunks
+go run ./cmd/search-drain  # push queued job writes into the live search index (run every 1-2 min)
+go run ./cmd/reindex       # rebuild the Meilisearch index from Postgres (full swap)
 go run ./cmd/tg-ingest     # crawl the Telegram channels in sources/telegram.yml
 go run ./cmd/tg-extract    # LLM-extract vacancies from crawled Telegram posts
-go run ./cmd/reindex       # rebuild the Meilisearch index from Postgres
-go run ./cmd/backfill-derive  # re-derive all six dictionary facets on existing jobs (follow with make reindex)
+go run ./cmd/capture-apply-form  # fetch queued postings' ATS application forms
+go run ./cmd/backfill-derive     # re-derive every deterministic column — facets, fingerprints,
+                                 # slugs — in one keyset pass (follow with make reindex)
 ```
+
+Every worker needs `DATABASE_URL` and exits non-zero on failure. `prune` is the
+only hard-delete path in the system, and it is dry-run by default.
 
 ## Layout
 
@@ -153,27 +166,35 @@ go run ./cmd/backfill-derive  # re-derive all six dictionary facets on existing 
 cmd/                 entry points: server + the standalone workers above
 sources/             board files, one per provider (e.g. greenhouse.yml = company + board id),
                      plus a mixed custom.yml and telegram.yml (Telegram channels to crawl)
-internal/
+migrations/          SQL schema (source for both sqlc and initdb)
+web/                 the SvelteKit frontend
+extension/           the Chrome side-panel extension
+design-system/       shared tokens and components, linked into web/ and extension/
+internal/            ~130 domain packages; the load-bearing ones:
   config/            env configuration
-  database/          pgxpool connection pool
-  db/                generated sqlc code + queries/*.sql
+  database/ db/      pgxpool pool; generated sqlc code + queries/*.sql
   handler/           HTTP handlers
   auth/              auth primitives (JWT cookie, API keys) + OAuth sign-in
-  sources/           ATS source adapters (greenhouse / lever / ashby) + registry
+  sources/           source adapters (greenhouse / lever / adzuna / …) + registry
+  pipeline/          ingest runner (fetch → normalize → dedup → upsert)
   linksource/        resolves outbound job links found in Telegram posts
   telegram/          Telegram-channel crawl + LLM vacancy extraction
-  pipeline/          ingest runner (fetch → normalize → dedup → upsert)
   enrich/            typed AI-enrichment contract + queue-draining runner
-  search/            Meilisearch indexing and query
-  location/          geography parsed from free-text ATS location strings
+  search/ searchdrain/  Meilisearch indexing and query; incremental drain of the write queue
+  embed/             semantic chunk embeddings into pgvector
+  location/ classify/ skilltag/  the curated facet dictionaries — never guess, emit nothing
+  ghost/             the posting-reality signal behind "is this job real?"
   jobview/           the single public wire shape of a job
-  normalize/         slug normalization
   cv/ cvedit/        structured CVs + PDF rendering; cvedit is their only writer
   experience/        durable employments + evidence atoms behind every CV claim
-  userjob/           per-user job tracking (view / apply / save / stages)
+  cvmatch/ matchanalysis/  deterministic CV↔vacancy score; the LLM fit analysis on top
+  applyform/         captured ATS application forms, in the platform's own vocabulary
+  userjob/ appevent/ per-user tracking (view / apply / save / stages) + the event ledger
   inbox/             recruiter mail → classify → link to an application
   assistant/         the in-process agent: turn loop, tools, transcripts
-migrations/          SQL schema (source for both sqlc and initdb)
+  browsertools/      relays tool frames between the agent and the browser extension
+  referral/ collections/  employee referrals; curated company tags
+  llm/ llmkey/       provider-agnostic LLM client + per-user spend attribution
 ```
 
 ## Architecture
@@ -197,22 +218,26 @@ search-filter vocabulary: [freehire.me/docs/api](https://freehire.me/docs/api).*
 
 ## Sources
 
-Live catalogue snapshot — **3,445,246 open postings** across **223,685 companies**.
-Counts are open postings unless noted; a company crawled from two sources is
-counted under each. Every source is one of three kinds:
+Live catalogue snapshot — **3,300,615 open postings** across **294,282 companies**,
+crawled from **225 live sources**. Counts are open postings unless noted; a
+company crawled from two sources is counted under each. Every source is one of
+three kinds:
 
 - **ATS platforms** — one adapter per multi-tenant applicant-tracking system,
   each serving many companies (Workday, Greenhouse, Lever, iCIMS…).
-  **84 platforms · 2,797,390 open postings.**
+  **92 platforms · 157,399 companies · 2,644,796 open postings.**
 - **Aggregators & job boards** — third-party feeds that republish many
-  companies' postings (mycareersfuture, himalayas, jobtech, Telegram…).
-  **47 sources · 612,690 open postings.**
+  companies' postings (Adzuna, trudvsem, himalayas, Telegram channels…).
+  **100 sources · 172,884 companies · 629,571 open postings.**
 - **Company career sites** — direct single-company feeds crawled from a
   company's own careers page (Amazon, Apple, Google, Yandex, Sber…).
-  **36 feeds · 35,160 open postings.**
+  **30 feeds · 59 companies · 26,222 open postings.**
 
-Full per-source breakdown — every one of the 167 sources with its own
-companies/open-jobs count — lives on its own page: [docs/sources.md](docs/sources.md).
+A source's kind is not configuration but a property of the adapter's own Go type,
+so `internal/sources` classifies every provider without a network call.
+
+Full per-source breakdown — every source with its own companies/open-jobs
+count — lives on its own page: [docs/sources.md](docs/sources.md).
 
 ## Adding a source
 
@@ -232,8 +257,11 @@ new provider before any code.
 
 ## Frontend
 
-A Svelte SPA lives under `web/` and consumes the API (same-origin; a dev Vite
-proxy forwards `/api` to the backend).
+A server-rendered SvelteKit 2 app (Svelte 5 runes, Tailwind 4, `adapter-node`)
+lives under `web/` and consumes the API same-origin; a dev Vite proxy forwards
+`/api` to the backend. Shared tokens and components come from the sibling
+`design-system/` package — install it before building `web/` or `extension/`,
+since it is symlinked, not copied. See [web/AGENTS.md](web/AGENTS.md).
 
 ## Browser extension
 
