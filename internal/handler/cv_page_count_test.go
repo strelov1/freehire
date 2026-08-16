@@ -192,7 +192,10 @@ func TestRenderedCVPageCount_RealToolchain(t *testing.T) {
 	}
 
 	long := short
-	long.Experience = make([]cv.ExperienceItem, 12)
+	// 16 of these dense entries is the observed tipping point into a 2nd page at
+	// classic-ats's default 9.5pt/0.5in-margin layout; 20 keeps headroom so a small
+	// template tweak doesn't make this borderline.
+	long.Experience = make([]cv.ExperienceItem, 20)
 	for i := range long.Experience {
 		long.Experience[i] = cv.ExperienceItem{
 			Role: "Senior Engineer", Company: "Analytical Engines", Start: "2010", End: "2020",
