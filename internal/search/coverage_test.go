@@ -46,6 +46,78 @@ func TestNonAggregatorCompanies_QueryShape(t *testing.T) {
 	}
 }
 
+// A hyphenated slug is looked up under its hyphen-stripped spelling too, and a hit on that
+// spelling answers for the slug the caller asked about — the caller's key, not the spelling's.
+// This is the 77% case: the aggregator writes "reid-health" where the employer's own ATS
+// writes "reidhealth".
+func TestNonAggregatorCompanies_MatchesTheHyphenStrippedSpelling(t *testing.T) {
+	var gotFilter any
+	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
+		gotFilter = filter
+		// Only the folded spelling exists in the index.
+		dist, _ := json.Marshal(map[string]map[string]int64{"company_slug": {"reidhealth": 4}})
+		return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
+	}
+
+	covered, err := nonAggregatorCompanies(context.Background(), []string{"reid-health"}, nil, searcher)
+	if err != nil {
+		t.Fatalf("nonAggregatorCompanies: %v", err)
+	}
+	if !covered["reid-health"] || len(covered) != 1 {
+		t.Fatalf("covered = %v, want the caller's own slug reid-health", covered)
+	}
+	if filterStr := fmt.Sprintf("%v", gotFilter); !strings.Contains(filterStr, `"reid-health", "reidhealth"`) {
+		t.Errorf("filter %v should ask about both spellings, exact first", gotFilter)
+	}
+}
+
+// A slug with no hyphens is asked about exactly once — the expansion must not double every
+// query on a board whose companies are mostly unhyphenated.
+func TestNonAggregatorCompanies_UnhyphenatedSlugAsksOneSpelling(t *testing.T) {
+	var gotFilter any
+	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
+		gotFilter = filter
+		return &meilisearch.SearchResponse{}, nil
+	}
+	if _, err := nonAggregatorCompanies(context.Background(), []string{"acme"}, nil, searcher); err != nil {
+		t.Fatalf("nonAggregatorCompanies: %v", err)
+	}
+	if got := companySlugCount(t, gotFilter); got != 1 {
+		t.Errorf("asked about %d spellings, want 1", got)
+	}
+}
+
+// Two slugs that fold together ("q-tech" and "qtech") share the folded spelling, which must be
+// asked about ONCE and credited to BOTH — a naive expansion would duplicate the query value
+// and drop one of the two owners.
+func TestNonAggregatorCompanies_SharedSpellingAnswersEveryAsker(t *testing.T) {
+	var gotFilter any
+	searcher := func(_ context.Context, _ string, filter any, _ []string) (*meilisearch.SearchResponse, error) {
+		gotFilter = filter
+		dist, _ := json.Marshal(map[string]map[string]int64{"company_slug": {"qtech": 2}})
+		return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
+	}
+
+	covered, err := nonAggregatorCompanies(context.Background(), []string{"q-tech", "qtech"}, nil, searcher)
+	if err != nil {
+		t.Fatalf("nonAggregatorCompanies: %v", err)
+	}
+	if !covered["q-tech"] || !covered["qtech"] || len(covered) != 2 {
+		t.Fatalf("covered = %v, want both askers credited", covered)
+	}
+	if got := companySlugCount(t, gotFilter); got != 2 {
+		t.Errorf("asked about %d spellings, want 2 (q-tech, qtech — not qtech twice)", got)
+	}
+}
+
+// A slug that is nothing but hyphens folds to "", which would match every document with no
+// company. It must not be asked about.
+func TestCoverageSpellingsKeepsAnAllHyphenSlugIntact(t *testing.T) {
+	if got := coverageSpellings("---"); !slices.Equal(got, []string{"---"}) {
+		t.Errorf("coverageSpellings(\"---\") = %v, want the slug alone — an empty spelling matches everything", got)
+	}
+}
+
 // TestNonAggregatorCompanies_EmptyAggregatorsOmitsNotInClause proves an empty aggregators
 // list produces a filter with ONLY the company_slug IN clause — no stray `NOT IN [] `
 // fragment (NotInStrings' empty-input guard is applied before the group is appended, not

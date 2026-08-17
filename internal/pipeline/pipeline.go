@@ -128,23 +128,24 @@ type BoardHealth interface {
 // without a per-run table scan. Optional: nil disables the gate entirely (ATS board files,
 // test fakes) — the same shape as BoardHealth.
 //
-// companySlugs are EXACT, unfolded company_slug values (normalize.Slug's output, as-is) —
-// deliberately NOT the folded, hyphen-stripped form cmd/reindex's
-// aggregator-ats-dedup suppression pass compares. A live Meili filter cannot compute that
-// fold at query time (it matches a stored field's literal value, with no equivalent of a SQL
-// expression index), and folding the query value instead would break even an exact,
-// correctly-spelled match against the stored value. An implementation MUST compare
-// companySlugs and its own stored company_slug EXACTLY, with no folding on either side; the
-// returned map's keys are expected back in that same unfolded form. A same-employer pair that
-// only agrees after folding (e.g. "cfoinsights" vs "cfo-insights") is coverage this port will
-// miss by design — aggregator-ats-dedup's periodic reindex pass remains the mechanism that
-// catches it.
+// companySlugs are company_slug values as normalize.Slug produced them, and the returned
+// map's keys are expected back in exactly that form — a lookup may consult other SPELLINGS of
+// a slug internally, but that is its own business and never leaks into the answer.
+//
+// A live Meili filter matches a stored field's literal value and has no equivalent of a SQL
+// expression index, so it cannot compute the hyphen-stripping fold cmd/reindex's
+// aggregator-ats-dedup suppression pass compares on. The search implementation gets most of
+// the way there by asking about the folded SPELLING alongside the exact one (see
+// search.coverageSpellings), which keeps every comparison an exact match against a stored
+// value. What that still cannot reach — an employer whose ATS is the side using hyphens,
+// where there is no way to guess where they go — remains coverage this port misses by design,
+// and aggregator-ats-dedup's periodic pass remains the mechanism that catches it.
 type CoverageLookup interface {
 	NonAggregatorCompanies(ctx context.Context, companySlugs, aggregators []string) (map[string]bool, error)
 }
 
-// aggregatorCoverage answers whether a company (EXACT company_slug — see CoverageLookup's doc
-// comment for why this is not folded) is already covered by a non-aggregator source, for the
+// aggregatorCoverage answers whether a company (keyed by the company_slug normalize.Slug
+// produced, whatever spelling the lookup matched) is already covered by a non-aggregator source, for the
 // board currently being ingested. nil means the gate does not apply — saveOne treats a nil
 // resolver as "never covered". Two callers build one: the buffered path (ingestFetched)
 // resolves the whole board's companies in one batched CoverageLookup call up front; the
@@ -594,10 +595,10 @@ func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.Compan
 	return func(companySlug string) bool { return covered[companySlug] }
 }
 
-// distinctCompanySlugs returns the distinct company slugs raw's postings will normalize to,
-// EXACT (no folding -- a live Meili lookup cannot compute the reindex pass's hyphen-stripping
-// fold at query time; see CoverageLookup's doc comment), so the coverage lookup can be asked
-// about exactly the companies this board might skip. normalizeJob itself is not called here
+// distinctCompanySlugs returns the distinct company slugs raw's postings will normalize to, so
+// the coverage lookup can be asked about exactly the companies this board might skip. They go
+// out as normalize.Slug produced them; widening a slug to its other spellings is the lookup's
+// own business (see CoverageLookup). normalizeJob itself is not called here
 // (it can fail, and its result would be discarded) -- just normalize.Slug(j.Company), the same
 // derivation jobderive uses for job.Fields().CompanySlug, on the same input (j.Company, with no
 // fallback to the entry's company -- normalizeJob has none either), so the two agree.
