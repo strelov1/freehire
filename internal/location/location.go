@@ -62,12 +62,8 @@ func Parse(location string) Geo {
 	// ("Tel Aviv, IL" vs "Chicago, IL"). Updated at the end of the loop body.
 	prevTok := ""
 	// cityFallback is the country of the first unambiguous long-tail city seen, held
-	// back until the whole string has been read. A city is the WEAKEST geographic
-	// statement in a location line: "Anna, Illinois, United States" names a town in
-	// Russia AND the state that actually places it, and "Crossroads - London" names a
-	// US locality next to the city that matters. Applying the city only when nothing
-	// else stated a country keeps those strings correct while still rescuing the
-	// lines that carry no other signal at all ("Colorado Springs", "Benidorm").
+	// back until the whole string has been read and applied only if nothing else
+	// stated one. See its use below the loop for why a city is the weakest signal.
 	cityFallback := ""
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)

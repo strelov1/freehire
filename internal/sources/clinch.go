@@ -148,34 +148,37 @@ func clinchSplitSlug(slug string) (title, locationText string) {
 func clinchFormatLocation(tokens []string) string {
 	var segs []string
 	for i := 0; i < len(tokens); {
-		// A window that is ITSELF a city name wins outright, longest first: "san
-		// francisco" is one place even though "san" alone also resolves (a town in
-		// Mali). The whole-name test is what keeps this from over-reaching — "mountain
-		// view california" resolves geography but is not a city name, so it does not
-		// qualify and cannot swallow the trailing subdivision.
-		n := 1
-		for k := 3; k >= 2; k-- {
-			if i+k <= len(tokens) && clinchNamesCity(strings.Join(tokens[i:i+k], " ")) {
-				n = k
-				break
-			}
-		}
-		// Otherwise take the SHORTEST window that resolves, so a multi-word place name
-		// ("mountain view") groups but a city+state phrase does not swallow the next
-		// segment.
-		for k := 2; n == 1 && k <= 3 && i+k <= len(tokens); k++ {
-			if clinchResolves(strings.Join(tokens[i:i+1], " ")) {
-				break // single token already resolves — don't extend
-			}
-			if clinchResolves(strings.Join(tokens[i:i+k], " ")) {
-				n = k
-				break
-			}
-		}
+		n := clinchSegmentLen(tokens, i)
 		segs = append(segs, titleCase(strings.Join(tokens[i:i+n], " ")))
 		i += n
 	}
 	return strings.Join(segs, ", ")
+}
+
+// clinchSegmentLen returns how many tokens starting at i form one location segment.
+func clinchSegmentLen(tokens []string, i int) int {
+	// A window that is ITSELF a city name wins outright, longest first: "san francisco"
+	// is one place even though "san" alone also resolves (a town in Mali). The
+	// whole-name test is what keeps this from over-reaching — "mountain view california"
+	// resolves geography but is not a city name, so it does not qualify and cannot
+	// swallow the trailing subdivision.
+	for k := 3; k >= 2; k-- {
+		if i+k <= len(tokens) && clinchNamesCity(strings.Join(tokens[i:i+k], " ")) {
+			return k
+		}
+	}
+	// Otherwise the SHORTEST window that resolves, so a multi-word place name
+	// ("mountain view") groups but a city+state phrase does not swallow the next
+	// segment.
+	if clinchResolves(tokens[i]) {
+		return 1
+	}
+	for k := 2; k <= 3 && i+k <= len(tokens); k++ {
+		if clinchResolves(strings.Join(tokens[i:i+k], " ")) {
+			return k
+		}
+	}
+	return 1
 }
 
 // clinchNamesCity reports whether cand is itself the name of a city — not merely a

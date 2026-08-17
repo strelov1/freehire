@@ -60,11 +60,11 @@ const statingPopulation = 15000
 // rather than inferred.
 func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEntry {
 	dict := map[string]cityEntry{}
-	contested := map[string]struct{}{}
-	// seenCountry tracks the country of the first place to claim an alias INCLUDING
-	// the small ones that never register, so two hamlets in different countries still
-	// contest a name no large city claims.
-	seenCountry := map[string]string{}
+	// claims records the one country holding an alias, or "" once a second country
+	// turns up. It counts EVERY row including the sub-threshold ones that never
+	// register, so two hamlets in different countries still contest a name no large
+	// city claims.
+	claims := map[string]string{}
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) // the widest alias row (Shanghai) is a few KB
 	for sc.Scan() {
@@ -72,22 +72,19 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEnt
 		if line == "" || line[0] == '#' {
 			continue
 		}
+		// Four columns are the format, not a suggestion: a row without population would
+		// otherwise read as population zero and silently register nothing at all.
 		parts := strings.SplitN(line, "\t", 4)
-		if len(parts) < 3 {
+		if len(parts) < 4 {
 			continue
 		}
-		var pop int64
-		if len(parts) > 3 {
-			pop, _ = strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
-		}
+		pop, _ := strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
 		entry := cityEntry{Name: parts[0], Country: parts[1]}
 		for _, alias := range strings.Split(parts[2], "|") {
-			if prevCountry, seen := seenCountry[alias]; seen {
-				if prevCountry != entry.Country {
-					contested[alias] = struct{}{}
-				}
-			} else {
-				seenCountry[alias] = entry.Country
+			if prev, seen := claims[alias]; !seen {
+				claims[alias] = entry.Country
+			} else if prev != "" && prev != entry.Country {
+				claims[alias] = ""
 			}
 			if pop < statingPopulation {
 				continue // evidence only: contests, never claims
@@ -98,16 +95,13 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEnt
 		}
 	}
 	// Marking is a separate pass because a third row can contest an alias the second
-	// row agreed with, and the flag must end up set either way. Contested aliases that
-	// no registered place claims are skipped rather than inserted — a name known only
-	// to hamlets stays absent from the dictionary entirely.
-	for alias := range contested {
-		e, ok := dict[alias]
-		if !ok {
-			continue
+	// row agreed with, and the flag must end up set either way. Walking dict rather
+	// than claims also skips names known only to hamlets — those stay absent entirely.
+	for alias, e := range dict {
+		if claims[alias] == "" {
+			e.Contested = true
+			dict[alias] = e
 		}
-		e.Contested = true
-		dict[alias] = e
 	}
 	for alias, e := range overrides {
 		dict[alias] = e
