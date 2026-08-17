@@ -1313,18 +1313,6 @@ export function createApi(
     return requestData<CandidateContacts>('/api/v1/me/resume/contacts', jsonBody('PUT', contacts));
   }
 
-  /** Overwrite owned contacts from the current structured extract. */
-  async function replaceResumeContactsFromCV(): Promise<CandidateContacts> {
-    return requestData<CandidateContacts>('/api/v1/me/resume/contacts/replace-from-cv', {
-      method: 'POST',
-    });
-  }
-
-  /** Re-run structured parse for the stored CV (no re-upload). */
-  async function retryResumeParse(): Promise<{ parse_status: string }> {
-    return requestData<{ parse_status: string }>('/api/v1/me/resume/parse', { method: 'POST' });
-  }
-
   /** The market-coverage verdict for the caller's profile: how many open vacancies the
    *  profile's skills reach for the selected role, and which missing skill unlocks the
    *  most new ones. `params` carries the same facet filters as job search, so the caller
@@ -2135,8 +2123,6 @@ export function createApi(
     getResume,
     deleteResume,
     putResumeContacts,
-    replaceResumeContactsFromCV,
-    retryResumeParse,
     getProfileVerdict,
     getATSReport,
     runATSReview,

@@ -7,12 +7,14 @@
    * claims is a trust problem before it is a compliance one — so provenance is shown on
    * every entry, and the assistant's own readings are surfaced first rather than buried.
    */
-  import { Trash2, Pencil, Check, X } from '@lucide/svelte';
+  import { Trash2, Pencil, Check, X, Briefcase, FolderKanban, Plus, Sparkles } from '@lucide/svelte';
+  import type { Component } from 'svelte';
   import { api } from '$lib/api';
-  import { Button, ConfirmDialog } from '$lib/ui';
+  import { Button, ConfirmDialog, EntityLogo } from '$lib/ui';
   import ExperienceAssistantPanel from '$lib/components/ExperienceAssistantPanel.svelte';
   import States from '$lib/components/States.svelte';
   import { profileKickoff } from '$lib/assistant/presets';
+  import { companyLogoUrl } from '$lib/logo';
   import type {
     ExperienceAtom,
     ExperienceBank,
@@ -53,6 +55,14 @@
   let projLink = $state('');
   let projStart = $state('');
   let projEnd = $state('');
+  // Same reasoning as addingProject above, kept separate from it: the two forms open
+  // independently (one per section) and must not blank each other.
+  let addingJob = $state(false);
+  let jobCompany = $state('');
+  let jobRole = $state('');
+  let jobLocation = $state('');
+  let jobStart = $state('');
+  let jobEnd = $state('');
   /** Unplaced achievement being promoted into a new project employment. */
   let promotingAtomId = $state<string | null>(null);
   let promoteName = $state('');
@@ -263,6 +273,33 @@
       onBankMutated?.();
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not create project.';
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function createJob() {
+    if (busy || !jobCompany.trim()) return;
+    busy = true;
+    try {
+      await api.createExperienceEmployment({
+        kind: 'job',
+        company: jobCompany.trim(),
+        role: jobRole.trim() || undefined,
+        location: jobLocation.trim() || undefined,
+        start: jobStart.trim() || undefined,
+        end: jobEnd.trim() || undefined,
+      });
+      addingJob = false;
+      jobCompany = '';
+      jobRole = '';
+      jobLocation = '';
+      jobStart = '';
+      jobEnd = '';
+      await load();
+      onBankMutated?.();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not create experience.';
     } finally {
       busy = false;
     }
@@ -483,39 +520,9 @@
           <div
             class="flex basis-full flex-col items-start gap-1.5 text-left sm:max-w-[16rem] sm:basis-auto sm:shrink-0 sm:items-end sm:text-right"
           >
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onclick={() => {
-                addingProject = true;
-                projName = '';
-                projLink = '';
-                projStart = '';
-                projEnd = '';
-              }}
-            >
-              Add project
-            </Button>
             {@render interviewEntry('bank-example')}
           </div>
         </div>
-
-        {#if addingProject}
-          <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-            <p class="text-sm font-medium">New project</p>
-            <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projName} placeholder="Name" />
-            <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projLink} placeholder="https://…" />
-            <div class="flex gap-2">
-              <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projStart} placeholder="Start" />
-              <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projEnd} placeholder="End" />
-            </div>
-            <div class="flex gap-2">
-              <Button size="sm" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
-              <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
-            </div>
-          </div>
-        {/if}
 
         {#if needsConfirming > 0}
           <div class="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
@@ -544,7 +551,7 @@
               disabled={turnActive}
               onclick={() => launchInterview(selected)}
             >
-              Tailor with assistant
+              <Sparkles class="size-3.5" />Tailor with assistant
             </Button>
             <Button size="sm" variant="ghost" onclick={() => (selected = [])}>
               Clear
@@ -557,23 +564,75 @@
           </div>
         {/if}
 
-        {#if jobs.length > 0}
-          <div class="flex flex-col gap-6">
-            <h2 class="text-sm font-semibold text-foreground">Work history</h2>
-            {#each jobs as employment (employment.id)}
-              {@render employmentSection(employment)}
-            {/each}
-          </div>
-        {/if}
+        <div class="flex flex-col gap-4">
+          {@render sectionHeader(Briefcase, 'Work history', 'Add experience', () => {
+            addingJob = true;
+            jobCompany = '';
+            jobRole = '';
+            jobLocation = '';
+            jobStart = '';
+            jobEnd = '';
+          })}
 
-        {#if projects.length > 0}
-          <div class="flex flex-col gap-6">
-            <h2 class="text-sm font-semibold text-foreground">Projects</h2>
-            {#each projects as employment (employment.id)}
-              {@render employmentSection(employment)}
-            {/each}
-          </div>
-        {/if}
+          {#if addingJob}
+            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p class="text-sm font-medium">New experience</p>
+              <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobCompany} placeholder="Company" />
+              <div class="flex gap-2">
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobRole} placeholder="Role" />
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobLocation} placeholder="Location" />
+              </div>
+              <div class="flex gap-2">
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobStart} placeholder="Start" />
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={jobEnd} placeholder="End" />
+              </div>
+              <div class="flex gap-2">
+                <Button size="sm" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button>
+                <Button size="sm" variant="ghost" onclick={() => (addingJob = false)}>Cancel</Button>
+              </div>
+            </div>
+          {/if}
+
+          {#each jobs as employment (employment.id)}
+            {@render employmentSection(employment)}
+          {/each}
+          {#if jobs.length === 0 && !addingJob}
+            <p class="text-sm text-muted-foreground">Nothing here yet.</p>
+          {/if}
+        </div>
+
+        <div class="flex flex-col gap-4">
+          {@render sectionHeader(FolderKanban, 'Projects', 'Add project', () => {
+            addingProject = true;
+            projName = '';
+            projLink = '';
+            projStart = '';
+            projEnd = '';
+          })}
+
+          {#if addingProject}
+            <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p class="text-sm font-medium">New project</p>
+              <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projName} placeholder="Name" />
+              <input class="rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projLink} placeholder="https://…" />
+              <div class="flex gap-2">
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projStart} placeholder="Start" />
+                <input class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" bind:value={projEnd} placeholder="End" />
+              </div>
+              <div class="flex gap-2">
+                <Button size="sm" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
+                <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
+              </div>
+            </div>
+          {/if}
+
+          {#each projects as employment (employment.id)}
+            {@render employmentSection(employment)}
+          {/each}
+          {#if projects.length === 0 && !addingProject}
+            <p class="text-sm text-muted-foreground">Nothing here yet.</p>
+          {/if}
+        </div>
 
         {#if bank.unplaced.length > 0}
           <section class="flex flex-col gap-2">
@@ -594,6 +653,26 @@
     {/if}
 </div>
 
+{#snippet sectionHeader(icon: Component<{ class?: string }>, title: string, addLabel: string, onAdd: () => void)}
+  {@const Icon = icon}
+  <div class="flex items-center justify-between gap-2">
+    <h2 class="flex items-center gap-2 text-base font-semibold text-foreground">
+      <Icon class="size-4.5" />{title}
+    </h2>
+    <Button
+      size="icon"
+      variant="ghost"
+      class="text-muted-foreground"
+      disabled={busy}
+      title={addLabel}
+      aria-label={addLabel}
+      onclick={onAdd}
+    >
+      <Plus class="size-4" />
+    </Button>
+  </div>
+{/snippet}
+
 {#snippet employmentSection(employment: ExperienceEmploymentWithAtoms)}
   {@const placeLabel =
     employment.kind === 'project'
@@ -605,7 +684,17 @@
       : employment.role && employment.company
         ? employment.company
         : ''}
-  <section class="flex flex-col gap-2">
+  <section class="flex gap-3">
+    {#if employment.kind === 'job' && editingEmploymentId !== employment.id}
+      <EntityLogo
+        name={employment.company || placeLabel || 'Unknown company'}
+        src={companyLogoUrl(employment.company ?? '') ?? undefined}
+        shape="square"
+        size="md"
+        class="shrink-0"
+      />
+    {/if}
+    <div class="flex min-w-0 flex-1 flex-col gap-2">
     <header class="flex flex-wrap items-baseline gap-x-2">
       {#if editingEmploymentId === employment.id}
         <div class="flex w-full flex-col gap-2">
@@ -693,6 +782,7 @@
         {/each}
       </ul>
     {/if}
+    </div>
   </section>
 {/snippet}
 
@@ -711,7 +801,7 @@
     onclick={() => launchInterview([])}
     aria-describedby={id}
   >
-    Add an achievement
+    <Sparkles class="size-3.5" />Add an achievement
   </Button>
   <p {id} class="text-xs text-muted-foreground">
     Tell the assistant what you did — “I cut checkout latency by 40% in one quarter.”
@@ -824,12 +914,14 @@
               {/each}
             </p>
           {/if}
-          <p class="mt-1 text-xs text-muted-foreground">
-            {provenanceLabel[atom.provenance]}
-            {#if atom.skills?.length}
-              · {atom.skills.join(', ')}
-            {/if}
-          </p>
+          <p class="mt-1 text-xs text-muted-foreground">{provenanceLabel[atom.provenance]}</p>
+          {#if atom.skills?.length}
+            <p class="mt-1 flex flex-wrap gap-1.5">
+              {#each atom.skills as skill (skill)}
+                <span class="rounded-full bg-brand-muted px-1.5 py-0.5 text-xs font-medium text-brand-strong">{skill}</span>
+              {/each}
+            </p>
+          {/if}
           {#if atom.cluster_id || atom.needs_context || atom.needs_metrics}
             <p class="mt-1 flex flex-wrap gap-1.5">
               {#if atom.cluster_id}

@@ -1,55 +1,129 @@
 <script lang="ts">
-  // Read-only projection of the structured CV — headline, summary, the CV-stated location
-  // (a different fact from the job-search "where you're based" preference on the Location
-  // view — see internal/resume/AGENTS.md's three-layer table) and languages. Education and
-  // certifications have their own view (EducationCard) rather than living here. None of
-  // this has a write path today (internal/resumeextract stores it read-only, regenerated
-  // wholesale on every CV re-upload) — the only way to change it is a new upload, which is
-  // why there is no edit control here; the upload/replace control sits right above this
-  // card instead.
+  // The flat part of the semantic body the candidate can own: headline and summary. The
+  // CV-stated location is shown read-only here (a different fact from the job-search
+  // "where you're based" preference on the Location view — see
+  // internal/resume/AGENTS.md's three-layer table) — edit it in Contacts, which owns
+  // identity. Languages, Certifications, and Education itself live on the Education view
+  // instead (EducationCard) — grouped there because that's where a candidate looks for
+  // them.
   //
-  // Renders nothing until there is something to show — no separate "still parsing"
-  // placeholder, since a CV can sit pending indefinitely (no LLM configured, a stuck
-  // job) and a permanent-looking stuck message reads as broken rather than as progress.
-  import { Languages } from '@lucide/svelte';
-  import type { Professional } from '$lib/generated/contracts';
-  import { Chip } from '$lib/ui';
+  // Backed by the same owned-overlay PUT /me/resume/contacts as the Contacts view (see
+  // internal/resume/owned.go) — a PUT replaces the whole block, so saving here spreads
+  // the current `contacts` object first and only overrides the fields this card owns,
+  // exactly as CandidateContactsEditor does for identity fields.
+  //
+  // `structured` (GET /me/resume's `structured`) is non-null whenever there is anything
+  // worth showing — a current CV parse, OR owned overrides alone (they survive a CV
+  // delete, see internal/resume/AGENTS.md), so this stays reachable for editing even with
+  // no file on record. No separate "still parsing" placeholder: a CV can sit pending
+  // indefinitely (no LLM configured, a stuck job) and a permanent-looking stuck message
+  // reads as broken rather than as progress.
+  import { Pencil } from '@lucide/svelte';
+  import { api } from '$lib/api';
+  import type { CandidateContacts, ResumeStructured } from '$lib/types';
+  import { Button, Input } from '$lib/ui';
 
-  let { cv }: { cv: Professional | null } = $props();
+  let {
+    structured,
+    contacts = null,
+    onSaved,
+  }: {
+    structured: ResumeStructured | null;
+    contacts?: CandidateContacts | null;
+    onSaved?: () => void;
+  } = $props();
 
-  const languages = $derived(cv?.languages ?? []);
-  const hasAnything = $derived(
-    Boolean(cv?.headline || cv?.summary || cv?.location || languages.length),
-  );
+  // A current structured CV is the entry point, even if this particular parse had neither
+  // field — the candidate can still add them by hand once a CV is on file.
+  const showCard = $derived(structured !== null);
+
+  let editing = $state(false);
+  let headline = $state('');
+  let summary = $state('');
+  let busy = $state(false);
+  let error = $state<string | null>(null);
+
+  function startEdit() {
+    headline = structured?.headline ?? '';
+    summary = structured?.summary ?? '';
+    error = null;
+    editing = true;
+  }
+
+  function cancelEdit() {
+    editing = false;
+    error = null;
+  }
+
+  async function save() {
+    busy = true;
+    error = null;
+    try {
+      await api.putResumeContacts({
+        ...contacts,
+        headline: headline.trim(),
+        summary: summary.trim(),
+      });
+      editing = false;
+      onSaved?.();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Could not save.';
+    } finally {
+      busy = false;
+    }
+  }
 </script>
 
-{#if hasAnything}
+{#if showCard}
   <div class="flex flex-col gap-4">
-    <h2 class="text-sm font-semibold">Your CV</h2>
+    <div class="flex items-center justify-between">
+      <h2 class="text-sm font-semibold">Summary</h2>
+      {#if !editing}
+        <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEdit}>
+          <Pencil class="size-3.5" />Edit
+        </Button>
+      {/if}
+    </div>
 
-    {#if cv?.headline}
-      <p class="text-sm font-medium">{cv.headline}</p>
-    {/if}
-
-    {#if cv?.summary}
-      <p class="text-sm leading-relaxed">{cv.summary}</p>
-    {/if}
-
-    {#if cv?.location}
-      <p class="text-xs text-muted-foreground">As stated on your CV: {cv.location}</p>
-    {/if}
-
-    {#if languages.length}
-      <div class="flex flex-col gap-2">
-        <h3 class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Languages class="size-3.5" />Languages
-        </h3>
-        <div class="flex flex-wrap gap-1.5">
-          {#each languages as lang, i (i)}
-            <Chip>{lang}</Chip>
-          {/each}
-        </div>
+    {#if editing}
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="text-muted-foreground">Headline</span>
+        <Input bind:value={headline} placeholder="e.g. Staff Backend Engineer" class="w-full" />
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="text-muted-foreground">Summary</span>
+        <textarea
+          bind:value={summary}
+          rows="4"
+          class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          placeholder="A short professional summary…"
+        ></textarea>
+      </label>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="primary" disabled={busy} onclick={save}>Save</Button>
+        <Button size="sm" variant="ghost" class="text-muted-foreground" disabled={busy} onclick={cancelEdit}>
+          Cancel
+        </Button>
       </div>
+      {#if error}
+        <p class="text-sm text-destructive">{error}</p>
+      {/if}
+    {:else}
+      {#if structured?.headline}
+        <p class="text-sm font-medium">{structured.headline}</p>
+      {/if}
+
+      {#if structured?.summary}
+        <p class="text-sm leading-relaxed">{structured.summary}</p>
+      {/if}
+
+      {#if structured?.location}
+        <p class="text-xs text-muted-foreground">As stated on your CV: {structured.location}</p>
+      {/if}
+
+      {#if !structured?.headline && !structured?.summary}
+        <p class="text-sm text-muted-foreground">Nothing here yet — add a headline or summary.</p>
+      {/if}
     {/if}
   </div>
 {/if}

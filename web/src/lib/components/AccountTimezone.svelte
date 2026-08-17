@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Clock } from '@lucide/svelte';
+  import { Check } from '@lucide/svelte';
   import { currentUser, updateTimezone } from '$lib/auth.svelte';
   import { ApiError } from '$lib/api';
 
@@ -78,9 +78,6 @@
      rather than boxing each one on its own. -->
 <div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
-    <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
-      <Clock class="size-4.5" aria-hidden="true" />
-    </div>
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Timezone</h2>
       <p class="text-xs text-muted-foreground">

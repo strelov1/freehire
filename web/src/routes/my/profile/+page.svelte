@@ -157,9 +157,10 @@
 
   function handleCvDeleted() {
     void resumeStore.refresh();
-    // The deleted CV's headline/summary/education/certifications live on profile.cv,
-    // sourced from resume_structured — clearing the file server-side does not touch
-    // user_profiles, so this store has to re-fetch too or those sections stay stale.
+    // Education lives on profile.cv, sourced from resume_structured — clearing the file
+    // server-side does not touch user_profiles, so this store has to re-fetch too or that
+    // section stays stale. (Headline/summary/languages/certifications come from
+    // resumeStore instead — see CvSummaryCard — so the refresh above already covers them.)
     void profileStore.refresh();
   }
 
@@ -202,6 +203,7 @@
     <ProfileForm
       profile={null}
       hasCv={resumeStore.present}
+      uploadedAt={resumeMeta?.uploaded_at}
       onSaved={handleSaved}
       onCvUploaded={handleCvUploaded}
       onCvDeleted={handleCvDeleted}
@@ -249,6 +251,7 @@
       <ProfileForm
         {profile}
         hasCv={resumeStore.present}
+        uploadedAt={resumeMeta?.uploaded_at}
         onSaved={handleSaved}
         onCvUploaded={handleCvUploaded}
         onCvDeleted={handleCvDeleted}
@@ -256,7 +259,11 @@
     {/key}
 
     <div class="mt-4">
-      <CvSummaryCard cv={profile.cv} />
+      <CvSummaryCard
+        structured={resumeMeta?.structured ?? null}
+        contacts={resumeMeta?.contacts ?? null}
+        onSaved={() => void resumeStore.refresh()}
+      />
     </div>
 
     <div class="mt-4">
@@ -265,9 +272,6 @@
   {:else if view === 'contacts'}
     <CandidateContactsEditor
       contacts={resumeMeta?.contacts ?? null}
-      parseStatus={resumeMeta?.parse_status ?? ''}
-      parseDetail={resumeMeta?.parse_detail ?? ''}
-      structurePending={Boolean(resumeMeta?.structure_pending)}
       onSaved={() => void resumeStore.refresh()}
     />
   {:else if view === 'location'}
@@ -286,7 +290,11 @@
          place they can correct or remove it. -->
     <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
   {:else if view === 'education'}
-    <EducationCard cv={profile.cv} />
+    <EducationCard
+      structured={resumeMeta?.structured ?? null}
+      contacts={resumeMeta?.contacts ?? null}
+      onSaved={() => void resumeStore.refresh()}
+    />
   {:else if view === 'screening'}
     <ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
   {:else}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Check, Globe } from '@lucide/svelte';
+  import { Check } from '@lucide/svelte';
   import { CountryFlag } from '$lib/ui';
   import { currentUser, updateLanguage } from '$lib/auth.svelte';
   import { ApiError } from '$lib/api';
@@ -121,9 +121,6 @@
      rather than boxing each one on its own. -->
 <div class="flex flex-col gap-3">
   <div class="flex items-center gap-3">
-    <div class="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-muted text-brand-strong">
-      <Globe class="size-4.5" aria-hidden="true" />
-    </div>
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Language</h2>
       <p class="text-xs text-muted-foreground">

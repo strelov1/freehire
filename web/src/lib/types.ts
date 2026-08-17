@@ -10,6 +10,7 @@ import type {
   Stage,
   Report as ATSReportContract,
   Analysis as MatchAnalysisContract,
+  Education as ResumeEducation,
 } from './generated/contracts';
 export type { Job, Enrichment, Verdict, Gap, SkillRow } from './generated/contracts';
 // The list-row projection of a job: the same names and derivations as Job, minus the posting
@@ -1002,17 +1003,28 @@ export interface ResumeProfile {
 export type {
   Structured as ResumeStructured,
   Experience as ResumeExperience,
-  Education as ResumeEducation,
 } from './generated/contracts';
+export type { ResumeEducation };
 
-/** Candidate-owned contact fields, editable independently of the CV parse that seeded
- *  them (`GET /me/resume`'s `contacts`, and the body of `PUT /me/resume/contacts`). */
+/** Candidate-owned overrides, editable independently of the CV parse that seeded them
+ *  (`GET /me/resume`'s `contacts`, and the body of `PUT /me/resume/contacts`). Despite
+ *  the name (kept for the route/wire field, `contacts`), this covers identity
+ *  (full_name/email/phone/location/links) *and* the flat part of the semantic body
+ *  (headline/summary/languages/certifications/education) — see
+ *  `internal/resume/owned.go`. A PUT replaces the whole block, so a caller editing only
+ *  some of these fields must spread the current object first (see
+ *  CandidateContactsEditor.svelte / CvSummaryCard.svelte / EducationCard.svelte). */
 export interface CandidateContacts {
   full_name?: string;
   email?: string;
   phone?: string;
   location?: string;
   links?: string[];
+  headline?: string;
+  summary?: string;
+  languages?: string[];
+  certifications?: string[];
+  education?: ResumeEducation[];
 }
 
 /** The résumé status (`GET /me/resume`): storage flags, owned contacts, parse status,

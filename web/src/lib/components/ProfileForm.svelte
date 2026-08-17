@@ -27,18 +27,29 @@
   let {
     profile,
     hasCv,
+    uploadedAt = null,
     onSaved,
     onCvUploaded,
     onCvDeleted,
   }: {
     profile: UserProfile | null;
     hasCv: boolean;
+    /** When the stored CV was uploaded (ISO). Shown in the uploaded-state box instead of
+     *  the bare "CV on file" a candidate had no way to act on — a date at least answers
+     *  "is this current". */
+    uploadedAt?: string | null;
     onSaved?: () => void;
     onCvUploaded?: () => void;
     /** Fired after the stored CV is deleted, so the parent can refresh `hasCv`/the
      *  résumé meta it reads elsewhere on the page. */
     onCvDeleted?: () => void;
   } = $props();
+
+  const uploadedAtLabel = $derived(
+    uploadedAt
+      ? `Uploaded ${new Date(uploadedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`
+      : 'CV on file',
+  );
 
   const editing = $derived(profile !== null);
 
@@ -279,7 +290,7 @@
           <Check class="size-5" />
         </span>
         <span class="flex flex-col items-start gap-1.5 text-left">
-          <span class="text-sm font-semibold">{resumeBusy ? 'Analyzing…' : 'CV on file'}</span>
+          <span class="text-sm font-semibold">{resumeBusy ? 'Analyzing…' : uploadedAtLabel}</span>
           <span class="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={resumeBusy} onclick={() => fileInput?.click()}>
               Replace
