@@ -43,7 +43,7 @@ mail-preview: ## Render every outgoing email and open the contact sheet in a bro
 gen-contracts: ## Regenerate web/src/lib/generated/contracts.ts from Go contracts
 	go run ./cmd/gen-contracts
 
-gen-cities: ## Regenerate internal/location/cities15000.tsv from the GeoNames dump
+gen-cities: ## Regenerate internal/location/cities1000.tsv from the GeoNames dump
 	go run ./cmd/gen-cities
 
 cv-previews: ## Regenerate web/static/cv-previews/*.svg from the CV templates (needs typst)

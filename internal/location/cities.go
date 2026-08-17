@@ -3,6 +3,7 @@ package location
 import (
 	"bufio"
 	_ "embed"
+	"strconv"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ import (
 // Rows are population-sorted (most-populous first) so the loader's first-wins alias
 // registration picks the largest place for a shared name.
 //
-//go:embed cities15000.tsv
+//go:embed cities1000.tsv
 var citiesTSV string
 
 // cityEntry is a resolved city: its canonical display name (feeds the cities facet),
@@ -36,15 +37,34 @@ type cityEntry struct {
 // at init from the embedded dataset with the curated overrides layered on top.
 var cityDict = loadCityDict(citiesTSV, cityOverrides)
 
+// statingPopulation is the population a place must have before the dictionary lets it
+// STATE anything — a canonical city name or a country. Below it a place is evidence
+// only: it can mark an alias contested, but never claims it.
+//
+// The split exists because the two jobs want opposite datasets. Contest detection
+// wants every hamlet: the Taft in California (pop. 9,000) is what stops the Iranian
+// Taft from confidently mislabelling a US posting, and the same holds for "Somerset",
+// "San" and "Young". Stating wants only real places: GeoNames at pop>=1,000 contains
+// villages named "Engineer", "California" and "Attica", and letting those claim a
+// name put junk into the cities facet and made unrelated slug fragments look like
+// locations. 15,000 is where the dataset used to be cut, so what the parser asserts
+// is exactly what it asserted before — only its scepticism grew.
+const statingPopulation = 15000
+
 // loadCityDict parses the embedded TSV into the alias lookup. An alias already seen
 // keeps its first entry (first-wins → most-populous, since the file is population
 // sorted), but seeing it again under a different country marks it Contested: a name
-// two countries share cannot state one. Comment/blank lines are skipped. Overrides
-// are applied last and win outright, uncontested — they are hand-pinned spellings, so
-// their country is asserted rather than inferred.
+// two countries share cannot state one. A place below statingPopulation contests but
+// never registers. Comment/blank lines are skipped. Overrides are applied last and win
+// outright, uncontested — they are hand-pinned spellings, so their country is asserted
+// rather than inferred.
 func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEntry {
 	dict := map[string]cityEntry{}
 	contested := map[string]struct{}{}
+	// seenCountry tracks the country of the first place to claim an alias INCLUDING
+	// the small ones that never register, so two hamlets in different countries still
+	// contest a name no large city claims.
+	seenCountry := map[string]string{}
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) // the widest alias row (Shanghai) is a few KB
 	for sc.Scan() {
@@ -52,26 +72,40 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEnt
 		if line == "" || line[0] == '#' {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 3)
+		parts := strings.SplitN(line, "\t", 4)
 		if len(parts) < 3 {
 			continue
 		}
+		var pop int64
+		if len(parts) > 3 {
+			pop, _ = strconv.ParseInt(strings.TrimSpace(parts[3]), 10, 64)
+		}
 		entry := cityEntry{Name: parts[0], Country: parts[1]}
 		for _, alias := range strings.Split(parts[2], "|") {
-			prev, seen := dict[alias]
-			if !seen {
-				dict[alias] = entry
-				continue
+			if prevCountry, seen := seenCountry[alias]; seen {
+				if prevCountry != entry.Country {
+					contested[alias] = struct{}{}
+				}
+			} else {
+				seenCountry[alias] = entry.Country
 			}
-			if prev.Country != entry.Country {
-				contested[alias] = struct{}{}
+			if pop < statingPopulation {
+				continue // evidence only: contests, never claims
+			}
+			if _, seen := dict[alias]; !seen {
+				dict[alias] = entry
 			}
 		}
 	}
 	// Marking is a separate pass because a third row can contest an alias the second
-	// row agreed with, and the flag must end up set either way.
+	// row agreed with, and the flag must end up set either way. Contested aliases that
+	// no registered place claims are skipped rather than inserted — a name known only
+	// to hamlets stays absent from the dictionary entirely.
 	for alias := range contested {
-		e := dict[alias]
+		e, ok := dict[alias]
+		if !ok {
+			continue
+		}
 		e.Contested = true
 		dict[alias] = e
 	}

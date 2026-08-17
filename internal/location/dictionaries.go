@@ -98,7 +98,7 @@ var nameToCountry = map[string]string{
 	"kyiv": "ua", "kiev": "ua",
 	// Other Ukrainian oblast centres, added with the Telegram UA cohort, in the
 	// Ukrainian and the Russian transliteration. Every key here is Ukraine-only in
-	// cities15000.tsv. Omitted because GeoNames lists the alias in more than one
+	// cities1000.tsv. Omitted because GeoNames lists the alias in more than one
 	// country, the same reason "georgia" is omitted above: "odesa"/"odessa" (also
 	// Odessa, Texas), "lutsk" (Belarus), "cherkasy"/"cherkassy" and "donetsk"
 	// (Russia), "nikolaev" (Bulgaria, Russia). Those keep resolving to a bare city

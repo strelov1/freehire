@@ -5,9 +5,12 @@ import "testing"
 func TestLoadCityDict(t *testing.T) {
 	tsv := "# header comment\n" +
 		"# second comment\n" +
-		"Moscow\tru\tmoscow|москва\n" +
-		"Moscow\tus\tmoscow|paradise valley\n" + // lower-pop duplicate: first-wins keeps ru
-		"Florianópolis\tbr\tflorianópolis|floripa\n"
+		"Moscow\tru\tmoscow|москва\t12000000\n" +
+		"Moscow\tus\tmoscow|paradise valley\t5000000\n" + // lower-pop duplicate: first-wins keeps ru
+		"Florianópolis\tbr\tflorianópolis|floripa\t500000\n" +
+		// Below statingPopulation: contests "floripa" without ever claiming it, and
+		// its own alias never enters the dictionary at all.
+		"Floripa\tpt\tfloripa|tiny hamlet\t900\n"
 	overrides := map[string]cityEntry{
 		"zurich": {Name: "Zurich", Country: "ch"}, // override wins even though absent from the TSV
 	}
@@ -26,8 +29,13 @@ func TestLoadCityDict(t *testing.T) {
 	if got := dict["paradise valley"]; got.Country != "us" || got.Contested {
 		t.Errorf(`dict["paradise valley"] = %+v, want {us, uncontested}`, got)
 	}
-	if got := dict["floripa"]; got.Name != "Florianópolis" || got.Country != "br" || got.Contested {
-		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br uncontested}`, got)
+	// A hamlet in another country contests the alias even though it never registers.
+	if got := dict["floripa"]; got.Name != "Florianópolis" || got.Country != "br" || !got.Contested {
+		t.Errorf(`dict["floripa"] = %+v, want {Florianópolis br contested by the hamlet}`, got)
+	}
+	// ...and the hamlet's own alias is absent entirely: it is evidence, not a claim.
+	if _, ok := dict["tiny hamlet"]; ok {
+		t.Error(`dict["tiny hamlet"] exists; a sub-threshold place must never register an alias`)
 	}
 	// An override is hand-asserted, so it lands uncontested even for a shared name.
 	if got := dict["zurich"]; got.Name != "Zurich" || got.Country != "ch" || got.Contested {
