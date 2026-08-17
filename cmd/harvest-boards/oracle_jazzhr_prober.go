@@ -15,6 +15,17 @@ import (
 // seed-supplied company; see internal/sources/oracle.go for the board-id shape.
 type oracleProber struct{}
 
+// dedupKey folds an Oracle board's site segment to lower case. Oracle answers a requisition
+// listing for any spelling of the site — CX_2001, cx_2001 and Cx_2001 all return the same 51
+// jobs on tenant eetz.fa.us6 (checked live) — so two spellings are one board, and a candidate
+// derived from a job URL carries whatever case that URL happened to use. Without folding it is
+// filed beside the board we already crawl, which is the same defect Paycom's hex keys had.
+//
+// The HOST half is folded too: DNS is case-insensitive, so it cannot distinguish boards either.
+// This does not collapse a tenant's several real sites (CX, CX_1, CX_2001 are different names,
+// not different spellings) — only the case of one name.
+func (oracleProber) dedupKey(boardID string) string { return strings.ToLower(boardID) }
+
 func (oracleProber) probe(ctx context.Context, c httpClient, boardID string) (string, int, error) {
 	host, site, ok := strings.Cut(boardID, "/")
 	if !ok || host == "" || site == "" {

@@ -54,3 +54,24 @@ func TestJazzHRProbe(t *testing.T) {
 		t.Errorf("gone: got n=%d err=%v, want 0,nil", n, err)
 	}
 }
+
+// TestOracleDedupKey: Oracle serves the same board under any spelling of its site segment, so
+// the dedup key must fold case — otherwise a candidate taken from a job URL lands beside the
+// board we already crawl. Different site NAMES on one tenant stay different boards.
+func TestOracleDedupKey(t *testing.T) {
+	p := oracleProber{}
+	same := []string{
+		"eetz.fa.us6.oraclecloud.com/CX_2001",
+		"eetz.fa.us6.oraclecloud.com/cx_2001",
+		"EETZ.fa.us6.oraclecloud.com/Cx_2001",
+	}
+	want := p.dedupKey(same[0])
+	for _, id := range same[1:] {
+		if got := p.dedupKey(id); got != want {
+			t.Errorf("dedupKey(%q) = %q, want %q", id, got, want)
+		}
+	}
+	if p.dedupKey("eetz.fa.us6.oraclecloud.com/CX_1") == want {
+		t.Error("CX_1 and CX_2001 are different sites, not different spellings of one")
+	}
+}
