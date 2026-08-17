@@ -218,23 +218,50 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- one perfectly-matching paragraph outranks a job that is merely "somewhat close"
 -- everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
 -- of a multi-vector document's vectors"), kept intentionally the same across the
--- storage-engine change. j1 (the source job) is joined once, not re-looked-up per c1
--- row via a correlated subquery, to read its company_slug for the exclusion below —
--- functionally identical to design.md's draft (which used
--- `company_slug IS DISTINCT FROM (SELECT company_slug FROM jobs WHERE id = c1.job_id)`)
--- but avoids re-executing a subquery per source-chunk row. Excludes: the source job
--- itself (c2.job_id <> c1.job_id), closed candidates, and — unless the source job has
--- no resolved company (company_slug = '', this repo's "unknown company" sentinel, see
--- jobs.company_slug NOT NULL DEFAULT '') — any candidate sharing the source's exact
--- company_slug, so two different companies that both merely lack a resolved slug don't
--- spuriously exclude each other.
-SELECT j2.id AS job_id, MIN(c2.embedding <=> c1.embedding)::float8 AS distance
-FROM job_semantic_chunks c1
-JOIN jobs j1 ON j1.id = c1.job_id
-JOIN job_semantic_chunks c2 ON c2.job_id <> c1.job_id
-JOIN jobs j2 ON j2.id = c2.job_id AND j2.closed_at IS NULL
-WHERE c1.job_id = sqlc.arg(job_id)::bigint
-  AND (j1.company_slug = '' OR j2.company_slug IS DISTINCT FROM j1.company_slug)
+-- storage-engine change.
+--
+-- Rewritten from a plain GROUP BY over the full (source chunk × every other chunk)
+-- cross join to a LATERAL join, one ANN probe per source chunk — measured live on prod
+-- at 730k total chunk rows (a fraction of the eventual target): the cross-join form
+-- took 152.7s for a SINGLE job (confirmed via EXPLAIN ANALYZE), because pgvector's
+-- HNSW index only accelerates `ORDER BY embedding <=> const LIMIT k`, a shape the
+-- cross-join's `MIN(...) ... GROUP BY` never produces — Postgres has no choice but to
+-- compute every pairwise distance before it can take a minimum. Each source chunk's
+-- LATERAL subquery is exactly that index-servable shape (see migration 0110's HNSW
+-- index): it asks for the `over_fetch` nearest chunks to ONE source chunk, over-fetching
+-- past `limit_count` to absorb whatever the closed/same-company filters below discard.
+-- over_fetch too small under-fills the final top-N; too large gives back the cross-join
+-- query's own cost — cmd/similar-backfill picks it as a multiple of limit_count.
+--
+-- The company/closed exclusion moves to the outer SELECT (against jobs, not repeated per
+-- LATERAL probe) — unless the source job has no resolved company (company_slug = '',
+-- this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ''),
+-- any candidate sharing the source's exact company_slug is excluded, so two different
+-- companies that both merely lack a resolved slug don't spuriously exclude each other.
+WITH source_chunks AS (
+    SELECT embedding
+    FROM job_semantic_chunks
+    WHERE job_id = sqlc.arg(job_id)::bigint
+),
+source_job AS (
+    SELECT company_slug FROM jobs WHERE id = sqlc.arg(job_id)::bigint
+),
+nearest AS (
+    SELECT n.job_id, n.distance
+    FROM source_chunks sc
+    CROSS JOIN LATERAL (
+        SELECT c2.job_id, (c2.embedding <=> sc.embedding)::float8 AS distance
+        FROM job_semantic_chunks c2
+        WHERE c2.job_id <> sqlc.arg(job_id)::bigint
+        ORDER BY c2.embedding <=> sc.embedding
+        LIMIT sqlc.arg(over_fetch)::int
+    ) n
+)
+SELECT j2.id AS job_id, MIN(nearest.distance)::float8 AS distance
+FROM nearest
+JOIN jobs j2 ON j2.id = nearest.job_id AND j2.closed_at IS NULL
+CROSS JOIN source_job sj
+WHERE (sj.company_slug = '' OR j2.company_slug IS DISTINCT FROM sj.company_slug)
 GROUP BY j2.id
 ORDER BY distance
 LIMIT sqlc.arg(limit_count)::int;

@@ -249,7 +249,7 @@ func TestNearestJobsToJob(t *testing.T) {
 	farAway := insertChunkTestJob(t, pool, "far-away", "delta-co")
 	insertChunks(t, farAway, []int16{0}, []int{6})
 
-	rows, err := q.NearestJobsToJob(ctx, NearestJobsToJobParams{JobID: source, LimitCount: 10})
+	rows, err := q.NearestJobsToJob(ctx, NearestJobsToJobParams{JobID: source, LimitCount: 10, OverFetch: 100})
 	if err != nil {
 		t.Fatalf("NearestJobsToJob: %v", err)
 	}

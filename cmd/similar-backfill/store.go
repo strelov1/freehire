@@ -37,12 +37,21 @@ func (s *dbStore) JobGeneration(ctx context.Context, jobID int64) (string, error
 	return hash.String, nil
 }
 
+// overFetchMultiplier bounds how many nearest chunks NearestJobsToJob's per-source-chunk
+// LATERAL probe asks pgvector for, past the final limit — headroom to absorb whatever
+// the closed-job/same-company filters discard, without falling back to the whole-table
+// scan the pre-rewrite query needed (see that query's comment). 10x is a starting
+// heuristic, not a measured value; widen it if a source job in a company-dense cluster
+// starts coming back under-filled.
+const overFetchMultiplier = 10
+
 // NearestJobs wraps db.NearestJobsToJob, which already returns rows ordered nearest
 // (lowest distance) first — this just projects out the job ids in that same order.
 func (s *dbStore) NearestJobs(ctx context.Context, jobID int64, limit int) ([]int64, error) {
 	rows, err := s.q.NearestJobsToJob(ctx, db.NearestJobsToJobParams{
 		JobID:      jobID,
 		LimitCount: int32(limit),
+		OverFetch:  int32(limit * overFetchMultiplier),
 	})
 	if err != nil {
 		return nil, err

@@ -2437,16 +2437,26 @@ type Querier interface {
 	// one perfectly-matching paragraph outranks a job that is merely "somewhat close"
 	// everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
 	// of a multi-vector document's vectors"), kept intentionally the same across the
-	// storage-engine change. j1 (the source job) is joined once, not re-looked-up per c1
-	// row via a correlated subquery, to read its company_slug for the exclusion below —
-	// functionally identical to design.md's draft (which used
-	// `company_slug IS DISTINCT FROM (SELECT company_slug FROM jobs WHERE id = c1.job_id)`)
-	// but avoids re-executing a subquery per source-chunk row. Excludes: the source job
-	// itself (c2.job_id <> c1.job_id), closed candidates, and — unless the source job has
-	// no resolved company (company_slug = '', this repo's "unknown company" sentinel, see
-	// jobs.company_slug NOT NULL DEFAULT '') — any candidate sharing the source's exact
-	// company_slug, so two different companies that both merely lack a resolved slug don't
-	// spuriously exclude each other.
+	// storage-engine change.
+	//
+	// Rewritten from a plain GROUP BY over the full (source chunk × every other chunk)
+	// cross join to a LATERAL join, one ANN probe per source chunk — measured live on prod
+	// at 730k total chunk rows (a fraction of the eventual target): the cross-join form
+	// took 152.7s for a SINGLE job (confirmed via EXPLAIN ANALYZE), because pgvector's
+	// HNSW index only accelerates `ORDER BY embedding <=> const LIMIT k`, a shape the
+	// cross-join's `MIN(...) ... GROUP BY` never produces — Postgres has no choice but to
+	// compute every pairwise distance before it can take a minimum. Each source chunk's
+	// LATERAL subquery is exactly that index-servable shape (see migration 0110's HNSW
+	// index): it asks for the `over_fetch` nearest chunks to ONE source chunk, over-fetching
+	// past `limit_count` to absorb whatever the closed/same-company filters below discard.
+	// over_fetch too small under-fills the final top-N; too large gives back the cross-join
+	// query's own cost — cmd/similar-backfill picks it as a multiple of limit_count.
+	//
+	// The company/closed exclusion moves to the outer SELECT (against jobs, not repeated per
+	// LATERAL probe) — unless the source job has no resolved company (company_slug = '',
+	// this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ''),
+	// any candidate sharing the source's exact company_slug is excluded, so two different
+	// companies that both merely lack a resolved slug don't spuriously exclude each other.
 	NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error)
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.
