@@ -575,6 +575,34 @@ export function cliApplicationJsonLd(
   };
 }
 
+/** schema.org SoftwareApplication for the browser-extension landing. `installUrl`
+ *  is passed in rather than written here so it comes from the same constant the
+ *  page's buttons use (`extensionLinks.ts`) — structured data must not name a
+ *  destination the page does not offer. `browserRequirements` is the honest
+ *  bound: the panel is built on Chrome's `sidePanel` API, which Firefox and
+ *  Safari do not have. */
+export function extensionApplicationJsonLd(
+  origin: string,
+  installUrl: string
+): Record<string, unknown> {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'freehire browser extension',
+    description:
+      "A job-application agent in Chrome's side panel: it reads the posting you are on, scores it against your CV, and fills the application form from your profile — you press Submit.",
+    url: `${origin}/features/extension`,
+    applicationCategory: 'BrowserApplication',
+    operatingSystem: 'Chrome',
+    browserRequirements: 'Requires Chrome 114 or a Chromium browser with side-panel support',
+    installUrl,
+    isAccessibleForFree: true,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    softwareHelp: { '@type': 'CreativeWork', url: `${origin}/features/extension` },
+    publisher: { '@type': 'Organization', name: SITE, url: `${origin}/` },
+  };
+}
+
 /** schema.org Blog for the feed index, listing each post as a `BlogPosting`. A
  *  `Blog` (rather than a bare CollectionPage) is what ties the index to the
  *  `Article` on each post page, so engines read the feed as one publication.

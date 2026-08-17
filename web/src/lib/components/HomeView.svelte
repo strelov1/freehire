@@ -104,6 +104,12 @@
   // rather than only in the footer so the story on / and /about has a doorway.
   const features = [
     {
+      href: resolve('/features/extension'),
+      title: 'Browser extension',
+      body: "A job-application agent in Chrome's side panel: it reads the posting you are on, scores it against your CV, and fills the form from your profile — on any site, not just the ones we track.",
+      cta: 'How the extension works',
+    },
+    {
       href: resolve('/features/inbox'),
       title: 'Inbox',
       body: 'Connect your mail and every recruiter reply is tagged with what it says, attached to the application it belongs to, and walked forward on your board.',
@@ -363,7 +369,12 @@
   <!-- The feature landings. Each has a page of its own; this is the doorway. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="features" />
-    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+    <!-- An odd number of cards would leave the last row half empty, and in a hairline
+         grid that empty half renders as a slab of border colour rather than as nothing.
+         The last card fills the row instead when the count is odd. -->
+    <div
+      class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 sm:[&>*:last-child:nth-child(odd)]:col-span-2"
+    >
       {#each features as f (f.href)}
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- internal route already passed through resolve() when building `features`; the linter can't trace it via the variable -->
         <a href={f.href} class="group bg-background p-6 transition-colors hover:bg-secondary/40 sm:p-7">

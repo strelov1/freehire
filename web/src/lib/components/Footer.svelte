@@ -19,6 +19,7 @@
     {
       title: 'Features',
       links: [
+        { label: 'Browser extension', href: resolve('/features/extension') },
         { label: 'Inbox', href: resolve('/features/inbox') },
         { label: 'CV tailoring', href: resolve('/features/tailor') },
         { label: 'Referrals', href: resolve('/features/referrals') },

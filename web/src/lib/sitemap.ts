@@ -28,6 +28,7 @@ export const STATIC_PATHS = [
   '/collections',
   '/for-companies',
   '/recruiters',
+  '/features/extension',
   '/features/inbox',
   '/features/referrals',
   '/features/tailor',
