@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -70,19 +71,24 @@ func (h *experienceHandlers) register(api fiber.Router, mw middleware) {
 	// A caller able to ADD an achievement from a script and unable to fix a typo in it has
 	// a bank it can only make worse: the duplicate check refuses the corrected retry.
 	//
-	// What DESTROYS stays cookie-only, and that is the enforcement rather than a
-	// preference. The bank has no undo. Deleting an employment cascades to every
-	// achievement under it (migration 0047), and a merge folds one atom's numbers into
-	// another across the provenance line. None of that belongs to a credential that lives
-	// in a script's environment.
+	// Deleting takes a key, but the CASCADE does not come with it. Removing an achievement
+	// removes the row named and nothing else. Removing a place takes every achievement
+	// under it (experience_atoms.employment_id is ON DELETE CASCADE, migration 0047), and
+	// the bank has no undo — so DeleteEmployment refuses a keyed caller while the place is
+	// still occupied. Move the achievements first, then remove the shell.
+	//
+	// The merge stays cookie-only, and unlike the deletes it cannot simply be widened:
+	// unionForMerge folds the discarded atom's metrics and skills into the kept one while
+	// the kept one's provenance stands, so a `manual` atom can absorb numbers an agent
+	// invented. That has to be settled before the gate moves.
 	api.Get("/me/experience", mw.key, h.ListExperience)
 	api.Post("/me/experience/employments", mw.key, h.AddEmployment)
 	api.Put("/me/experience/employments/:id", mw.key, h.UpdateEmployment)
-	api.Delete("/me/experience/employments/:id", mw.cookie, h.DeleteEmployment)
+	api.Delete("/me/experience/employments/:id", mw.key, h.DeleteEmployment)
 	api.Post("/me/experience/atoms", mw.key, h.AddAtom)
 	api.Post("/me/experience/atoms/merge", mw.cookie, h.MergeAtoms)
 	api.Put("/me/experience/atoms/:id", mw.key, h.UpdateAtom)
-	api.Delete("/me/experience/atoms/:id", mw.cookie, h.DeleteAtom)
+	api.Delete("/me/experience/atoms/:id", mw.key, h.DeleteAtom)
 }
 
 // experienceResponse is the bank as its owner sees it: the places, and the achievements
@@ -312,10 +318,63 @@ func (h *experienceHandlers) DeleteEmployment(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if auth.ViaAPIKey(c) {
+		if err := h.refuseKeyedCascade(c.Context(), userID, id); err != nil {
+			return err
+		}
+	}
 	if err := h.bank.DeleteEmployment(c.Context(), id, userID); err != nil {
 		return experienceError(err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// refuseKeyedCascade is the one thing a keyed caller may not do to the bank: take a place
+// down and every achievement recorded under it with it.
+//
+// The cascade lives in the schema (migration 0047), so nothing downstream will stop it and
+// nothing can put the rows back. A candidate doing this in the browser has been told what
+// they are about to lose; a credential in a script's environment has not, and one wrong id
+// there erases years of someone's record in a single request.
+//
+// Confining the keyed form to an already-empty place keeps the route useful — move the
+// achievements with PUT, then remove the shell — while the destructive form stays where its
+// consequence is visible. Unknown or foreign ids resolve to 404 here, before the count, so
+// the refusal never doubles as a way to probe which ids exist.
+func (h *experienceHandlers) refuseKeyedCascade(ctx context.Context, userID int64, id uuid.UUID) error {
+	employments, err := h.bank.ListEmployments(ctx, userID)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, e := range employments {
+		if e.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fiber.NewError(fiber.StatusNotFound, "not found")
+	}
+	atoms, err := h.bank.ListAtoms(ctx, userID)
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, a := range atoms {
+		if a.EmploymentID != nil && *a.EmploymentID == id {
+			n++
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	// The message names the way out, because the caller reading it is usually an agent and
+	// this is its only route to correcting itself inside the turn.
+	return fiber.NewError(fiber.StatusConflict, fmt.Sprintf(
+		"this place still holds %d achievement(s), and deleting it would delete them too. "+
+			"Move them first (PUT /me/experience/atoms/:id with another employment_id, or "+
+			"delete them one by one), or remove the place from the experience page on the site.", n))
 }
 
 // UpdateAtom rewrites one achievement. Editing it makes it the owner's own statement —

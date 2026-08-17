@@ -57,10 +57,9 @@ func TestProvenanceForUpdate(t *testing.T) {
 // cannot fix a typo in it is left with a bank it can only make worse, since the duplicate
 // check refuses the corrected retry.
 //
-// Everything that DESTROYS stays cookie-only, and that is the enforcement rather than a
-// preference. The bank has no undo. Deleting an employment cascades to every achievement
-// under it (migration 0047), and a merge folds one atom's numbers into another across the
-// provenance line. None of that belongs to a credential living in a script's environment.
+// The deletes take a key too, but the cascade does not come with them: DeleteEmployment
+// refuses a keyed caller while achievements still hang off the row (migration 0047 deletes
+// them with it). See TestKeyedEmploymentDeleteRefusesToCascade.
 func TestExperienceRegister_Gates(t *testing.T) {
 	const id = "/00000000-0000-0000-0000-000000000001"
 	for _, tc := range []struct {
@@ -73,8 +72,12 @@ func TestExperienceRegister_Gates(t *testing.T) {
 		{http.MethodPost, "/me/experience/atoms", "key"},
 		{http.MethodPut, "/me/experience/employments" + id, "key"},
 		{http.MethodPut, "/me/experience/atoms" + id, "key"},
-		{http.MethodDelete, "/me/experience/employments" + id, "cookie"},
-		{http.MethodDelete, "/me/experience/atoms" + id, "cookie"},
+		{http.MethodDelete, "/me/experience/employments" + id, "key"},
+		{http.MethodDelete, "/me/experience/atoms" + id, "key"},
+		// The merge stays cookie-only, and unlike the deletes it cannot simply be widened:
+		// unionForMerge folds the discarded atom's metrics and skills into the kept one
+		// while the kept one's provenance stands, so a `manual` atom can absorb numbers an
+		// agent invented. Opening it needs that settled first, not a gate change.
 		{http.MethodPost, "/me/experience/atoms/merge", "cookie"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
