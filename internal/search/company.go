@@ -9,6 +9,7 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 
 	"github.com/strelov1/freehire/internal/db"
+	"github.com/strelov1/freehire/internal/industrytag"
 )
 
 const (
@@ -144,8 +145,9 @@ var companyFacets = []struct{ param, attr string }{
 	{"regions", "regions"},
 	{"countries", "countries"},
 	{"domains", "domains"},
-	// The finer level beneath domains: domains names ~20 coarse verticals from job
-	// enrichment, industries names what a company does when that lands in "other".
+	// Not a finer level beneath domains but the same question of a second source:
+	// this attribute holds what an importer said, `domains` what the company's own
+	// postings imply. CompanyFilterFromValues reads both for this one param.
 	{"industries", "industries"},
 	{"company_type", "company_types"},
 	{"company_size", "company_sizes"},
@@ -163,6 +165,12 @@ var companyFacets = []struct{ param, attr string }{
 // ANDed across groups. An absent facet adds no constraint; no facet at all yields
 // nil (no filter). A NULL scalar (empty maturity/subindustry in the document)
 // matches no value, since the fragment is an equality against the requested value.
+//
+// The industries facet is the one that reads two attributes, described below. The
+// Postgres path in internal/handler widens the same facet the same way; a test
+// runs one filter through both and compares the matched sets, because a company
+// matching on one backend and not the other would make a page's list disagree with
+// its own meta.total.
 func CompanyFilterFromValues(v url.Values) any {
 	var g [][]string
 	for _, f := range companyFacets {
@@ -170,9 +178,20 @@ func CompanyFilterFromValues(v url.Values) any {
 		if len(included) == 0 {
 			continue
 		}
-		group := make([]string, len(included))
-		for i, val := range included {
-			group[i] = Eq(f.attr, val)
+		group := make([]string, 0, len(included))
+		for _, val := range included {
+			group = append(group, Eq(f.attr, val))
+		}
+		// An industry names a company whoever said so: the curated column an importer
+		// wrote, or the coarse domain the company's own postings imply. Both arms join
+		// the SAME group, so they OR — a company needs to satisfy only one. Curated
+		// only reaches 27% of the catalogue, so without the second arm the filter
+		// misses most of what it is asked for. Requested industries the mapping does
+		// not cover add nothing here, leaving the curated arm to answer alone.
+		if f.param == "industries" {
+			for _, domain := range industrytag.DomainsForIndustries(included) {
+				group = append(group, Eq("domains", domain))
+			}
 		}
 		g = append(g, group)
 	}

@@ -15,25 +15,67 @@ func TestCompanySettingsMakesIndustriesFilterable(t *testing.T) {
 	}
 }
 
-// The attribute being filterable is not enough: a query parameter has to be mapped
-// onto it, or the filter is unreachable from the API.
+// The facet reaches a company through either vocabulary, so one requested industry
+// becomes two fragments in one OR group: the curated column, and the job-derived
+// domain that means the same thing. Here the two vocabularies spell it the same.
 func TestCompanyFilterFromValuesAcceptsIndustries(t *testing.T) {
 	f := CompanyFilterFromValues(url.Values{"industries": {"fintech"}})
 
 	gs := groups(t, f)
-	if !hasGroup(gs, `industries = "fintech"`) {
-		t.Errorf("industries filter missing, got %v", gs)
+	if !hasGroup(gs, `industries = "fintech"`, `domains = "fintech"`) {
+		t.Errorf("industries filter missing its domain arm, got %v", gs)
+	}
+}
+
+// The spellings differ more often than not, which is the whole reason a mapping
+// exists rather than a string comparison.
+func TestCompanyFilterFromValuesTranslatesIndustryToItsDomain(t *testing.T) {
+	f := CompanyFilterFromValues(url.Values{"industries": {"developer-tools"}})
+
+	gs := groups(t, f)
+	if !hasGroup(gs, `industries = "developer-tools"`, `domains = "devtools"`) {
+		t.Errorf("developer-tools should also match the devtools domain, got %v", gs)
 	}
 }
 
 // Several values of one facet are an OR within a single group, the same shape the
 // other array facets use. Values arrive as a repeated parameter, not a
-// comma-separated list — the company facets never split on commas.
+// comma-separated list — the company facets never split on commas. The curated
+// fragments keep request order; the domain fragments follow, sorted.
 func TestCompanyFilterFromValuesOrsSeveralIndustries(t *testing.T) {
-	f := CompanyFilterFromValues(url.Values{"industries": {"fintech", "healthcare"}})
+	f := CompanyFilterFromValues(url.Values{"industries": {"healthcare", "fintech"}})
 
 	gs := groups(t, f)
-	if !hasGroup(gs, `industries = "fintech"`, `industries = "healthcare"`) {
+	if !hasGroup(gs,
+		`industries = "healthcare"`, `industries = "fintech"`,
+		`domains = "fintech"`, `domains = "healthcare"`,
+	) {
 		t.Errorf("industries values should OR within one group, got %v", gs)
+	}
+}
+
+// An industry the mapping deliberately does not cover must not widen the filter.
+// Emitting a fragment for it would either match nothing (harmless but noisy) or,
+// worse, match a domain that misdescribes the company.
+func TestCompanyFilterFromValuesLeavesUnmappedIndustryAlone(t *testing.T) {
+	f := CompanyFilterFromValues(url.Values{"industries": {"entertainment"}})
+
+	gs := groups(t, f)
+	if !hasGroup(gs, `industries = "entertainment"`) {
+		t.Errorf("an unmapped industry should filter on the curated column alone, got %v", gs)
+	}
+}
+
+// Widening industries must not leak into the facet it borrows from: `domains` still
+// filters the raw job-derived value, including the ones no industry names.
+func TestCompanyFilterFromValuesLeavesDomainsFacetAlone(t *testing.T) {
+	f := CompanyFilterFromValues(url.Values{"domains": {"other"}})
+
+	gs := groups(t, f)
+	if !hasGroup(gs, `domains = "other"`) {
+		t.Errorf("the domains facet should be untouched, got %v", gs)
+	}
+	if len(gs) != 1 {
+		t.Errorf("no other group should appear, got %v", gs)
 	}
 }

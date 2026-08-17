@@ -11,10 +11,10 @@
 
 ## 2. Meilisearch path
 
-- [ ] 2.1 Widen the `industries` group in `CompanyFilterFromValues` with `Eq` fragments
+- [x] 2.1 Widen the `industries` group in `CompanyFilterFromValues` with `Eq` fragments
       over the `domains` attribute for the mapped domains, keeping the group a plain OR
       and every other facet untouched
-- [ ] 2.2 Tests: an `industries` filter emits fragments over both attributes; an
+- [x] 2.2 Tests: an `industries` filter emits fragments over both attributes; an
       industry that maps to no domain emits only the curated fragment; the facets that
       do not translate produce the filter they produced before
 
