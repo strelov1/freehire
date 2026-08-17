@@ -9,6 +9,11 @@
   // links, and a button it cannot press advertises nothing. The two were both called
   // Pagination, which read as duplication and invited a merge that would have traded
   // that away; this one is `Pager` now, after what it actually is.
+  //
+  // Dormant, and unhardened because of it: nothing has ever rendered this, so `perPage`
+  // is taken on trust. A `0` makes `totalPages` Infinity and leaves Next enabled
+  // forever. Guard it — and test the clamp effect at runtime, not only at init —
+  // before the first consumer lands, rather than after it finds out.
   import type { Snippet } from 'svelte';
   import { cn } from './cn.js';
 
