@@ -61,10 +61,10 @@ func Parse(location string) Geo {
 	// disambiguating context resolveGeoToken needs for a colliding subdivision code
 	// ("Tel Aviv, IL" vs "Chicago, IL"). Updated at the end of the loop body.
 	prevTok := ""
-	// cityFallback is the country of the first unambiguous long-tail city seen, held
-	// back until the whole string has been read and applied only if nothing else
-	// stated one. See its use below the loop for why a city is the weakest signal.
-	cityFallback := ""
+	// cityFallbackCountries collects the countries of the unambiguous long-tail cities
+	// seen, held back until the whole string has been read and applied only if nothing
+	// else stated one AND they agree. See its use below the loop.
+	cityFallbackCountries := map[string]struct{}{}
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
@@ -108,8 +108,8 @@ func Parse(location string) Geo {
 				// and only if nothing else stated a country — see cityFallback below.
 				citySet[ce.Name] = struct{}{}
 				resolved = true
-				if !ce.Contested && ce.Country != "" && cityFallback == "" {
-					cityFallback = ce.Country
+				if !ce.Contested && ce.Country != "" {
+					cityFallbackCountries[ce.Country] = struct{}{}
 				}
 			}
 		}
@@ -152,14 +152,24 @@ func Parse(location string) Geo {
 		}
 	}
 
-	// Nothing in the line stated a country, so the long-tail city gets to. This is
-	// deliberately the last word and never a contributing one: it cannot add a second
-	// country beside a stated one, which is what keeps "Anna, Illinois, United States"
-	// from picking up Russia.
-	if len(countrySet) == 0 && cityFallback != "" {
-		countrySet[cityFallback] = struct{}{}
-		if r, ok := countryToRegion[cityFallback]; ok {
-			regionSet[r] = struct{}{}
+	// Nothing in the line stated a country, so the long-tail cities get to — but only
+	// with one voice. Two guards, and the change is wrong without either:
+	//
+	// The country must be unstated. A city is the WEAKEST geographic statement in a
+	// location line, so it never contributes alongside a stated country: "Anna,
+	// Illinois, United States" names a town in Russia AND the state that actually
+	// places the job, and "Crossroads - London" names a US locality beside the city
+	// that matters.
+	//
+	// The cities must agree. Each is individually unambiguous, but a line naming two
+	// of them ("Recife, Benidorm") is not, and picking the first would make the answer
+	// depend on word order — a guess wearing a determinism costume.
+	if len(countrySet) == 0 && len(cityFallbackCountries) == 1 {
+		for country := range cityFallbackCountries {
+			countrySet[country] = struct{}{}
+			if r, ok := countryToRegion[country]; ok {
+				regionSet[r] = struct{}{}
+			}
 		}
 	}
 

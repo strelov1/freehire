@@ -635,6 +635,27 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs"}},
 		},
 		{
+			// Two individually-unambiguous cities in different countries make the LINE
+			// ambiguous. Taking the first would make the answer depend on word order,
+			// so they cancel and state nothing. Both orders are asserted because
+			// order-dependence is exactly the bug being guarded against.
+			name:     "disagreeing long-tail cities state no country",
+			location: "Recife, Benidorm",
+			want:     Geo{Cities: []string{"Benidorm", "Recife"}},
+		},
+		{
+			name:     "disagreeing long-tail cities state no country, reversed",
+			location: "Benidorm, Recife",
+			want:     Geo{Cities: []string{"Benidorm", "Recife"}},
+		},
+		{
+			// Agreement is about the country, not the name: two different cities in the
+			// same country still speak with one voice.
+			name:     "agreeing long-tail cities still state their shared country",
+			location: "Colorado Springs, Eden Prairie",
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Colorado Springs", "Eden Prairie"}},
+		},
+		{
 			// "usa" appears among a Japanese city's GeoNames alternate names; the
 			// country-agreement guard must reject that city while keeping the country.
 			name:     "GeoNames alternate-name noise is rejected",
