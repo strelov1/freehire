@@ -602,10 +602,21 @@ func (r Runner) aggregatorCoverageForBatch(ctx context.Context, e sources.Compan
 // derivation jobderive uses for job.Fields().CompanySlug, on the same input (j.Company, with no
 // fallback to the entry's company -- normalizeJob has none either), so the two agree.
 func distinctCompanySlugs(raw []sources.Job) []string {
+	names := make([]string, len(raw))
+	for i, j := range raw {
+		names[i] = j.Company
+	}
+	return distinctSlugs(names)
+}
+
+// distinctSlugs is distinctCompanySlugs over bare company names, for the coverage probe a
+// CoverageGated adapter consults before it has any Jobs to speak of. Both callers must slug
+// the same way, so neither does it itself.
+func distinctSlugs(companies []string) []string {
 	seen := make(map[string]bool)
 	var slugs []string
-	for _, j := range raw {
-		slug := normalize.Slug(j.Company)
+	for _, c := range companies {
+		slug := normalize.Slug(c)
 		if slug == "" || seen[slug] {
 			continue
 		}
@@ -687,8 +698,54 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		_, ok := set[sources.NamespaceExternalID(e.Board, externalID)]
 		return ok
 	}
+	// An adapter that can spend its hydration budget better when it knows which employers the
+	// coverage gate will discard gets the resolver, but only when that gate actually applies
+	// to this board — otherwise the answer would be a meaningless "nothing is covered".
+	if cg, gated := src.(sources.CoverageGated); gated {
+		if covered := r.coverageProbe(ctx, e); covered != nil {
+			jobs, err := cg.FetchNewGated(ctx, e, seen, covered)
+			return jobs, set, err
+		}
+	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
 	return jobs, set, err
+}
+
+// coverageProbe builds the resolver a CoverageGated adapter consults mid-crawl: given the
+// companies it has listed, which are already covered by a non-aggregator source. It is the
+// same lookup aggregatorCoverageForBatch runs after the fetch, moved to where it can still
+// save a request, and it is keyed by the company NAMES the adapter passed rather than by the
+// slugs the lookup speaks — the adapter states what the platform told it and does not have to
+// know freehire's slug rules.
+//
+// nil means the gate does not apply to this board, and the caller then uses the plain
+// hydrating path. A failed lookup answers "nothing is covered" rather than nil: by then the
+// crawl is already under way, and reporting no coverage costs a wasted request per posting
+// where reporting coverage wrongly would cost a body the catalogue needed.
+func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func([]string) map[string]bool {
+	aggregators, applies := r.aggregatorGate(e)
+	if !applies {
+		return nil
+	}
+	return func(companies []string) map[string]bool {
+		slugs := distinctSlugs(companies)
+		if len(slugs) == 0 {
+			return nil
+		}
+		covered, err := r.Coverage.NonAggregatorCompanies(ctx, slugs, aggregators)
+		if err != nil {
+			log.Printf("ingest: %s board %q (%s): coverage probe failed, hydrating every posting: %v",
+				e.Provider, e.Board, e.Company, err)
+			return nil
+		}
+		out := make(map[string]bool, len(covered))
+		for _, c := range companies {
+			if covered[normalize.Slug(c)] {
+				out[c] = true
+			}
+		}
+		return out
+	}
 }
 
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,

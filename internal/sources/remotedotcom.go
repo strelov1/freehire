@@ -156,6 +156,34 @@ func (s remotedotcom) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 	if err != nil {
 		return nil, err
 	}
+	return s.hydrate(ctx, postings, seen, nil), nil
+}
+
+// FetchNewGated is FetchNew told which employers the coverage gate will discard. It matters
+// more here than it would on most aggregators: remote.com curates postings from employers who
+// overwhelmingly run their own ATS, and prod measured ~4.1k of its ~5.7k listings already
+// covered. Those postings are never stored, so they are never seen, so the plain hydrating
+// crawl bought — and threw away — 4.1k bodies every hour.
+func (s remotedotcom) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool,
+	covered func(companies []string) map[string]bool) ([]Job, error) {
+	postings, err := s.crawl(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(postings))
+	for _, p := range postings {
+		if p.usable() {
+			names = append(names, p.CompanyProfile.Name)
+		}
+	}
+	return s.hydrate(ctx, postings, seen, covered(names)), nil
+}
+
+// hydrate maps the crawled listing to Jobs, buying a body only for a posting that needs one.
+// skip names the employers the pipeline's coverage gate will discard (nil when nothing is
+// gated); such a posting is still yielded, body-less, so the gate still sees and counts it.
+func (s remotedotcom) hydrate(ctx context.Context, postings []remotedotcomPosting,
+	seen func(externalID string) bool, skip map[string]bool) []Job {
 	return fetchDetails(postings, defaultDetailWorkers, func(p remotedotcomPosting) (Job, bool) {
 		base, ok := p.toJob()
 		if !ok {
@@ -164,6 +192,9 @@ func (s remotedotcom) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 		if seen(p.Slug) {
 			base.SeenRefresh = true
 			return base, true
+		}
+		if skip[p.CompanyProfile.Name] {
+			return base, true // covered by the employer's own ATS; a body would be pure loss
 		}
 		body, ok := s.body(ctx, p)
 		if !ok {
@@ -174,7 +205,7 @@ func (s remotedotcom) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 		}
 		base.Description = sanitizeHTML(body)
 		return base, true
-	}), nil
+	})
 }
 
 // crawl walks the listing and returns every posting. It obeys the repo-wide paginated-walk
@@ -244,11 +275,18 @@ func (p remotedotcomPosting) url() string {
 	return fmt.Sprintf(remotedotcomJobURL, p.CompanyProfile.Slug, p.Slug)
 }
 
-// toJob maps a listed posting to a Job, without a body. ok=false for a posting that is not
-// published, or that lacks the slug (the dedup key) or the employer (which the slug is built
-// from).
+// usable reports whether the listing states enough for this posting to become a Job: it must
+// be published, carry the slug the dedup key is built on, and name the employer the catalogue
+// slug is built from. Both the mapping and the coverage probe read it, so the probe never asks
+// about a company whose only posting is about to be dropped.
+func (p remotedotcomPosting) usable() bool {
+	return p.Status == "published" && p.Slug != "" && p.CompanyProfile.Name != ""
+}
+
+// toJob maps a listed posting to a Job, without a body. ok=false for a posting the listing
+// does not state fully enough to file — see usable.
 func (p remotedotcomPosting) toJob() (Job, bool) {
-	if p.Status != "published" || p.Slug == "" || p.CompanyProfile.Name == "" {
+	if !p.usable() {
 		return Job{}, false
 	}
 	job := Job{

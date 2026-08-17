@@ -585,6 +585,144 @@ func TestNormalizeJobDerivesClassification(t *testing.T) {
 	}
 }
 
+// fakeCoverageGatedSource implements sources.CoverageGated on top of the hydrating fake. It
+// records the companies the probe was asked about and the answer it got, so a test can prove
+// the runner routed to the gated path and handed it a resolver that actually resolves.
+type fakeCoverageGatedSource struct {
+	fakeHydratingSource
+	gatedCalled  bool
+	askedAbout   []string
+	coveredBack  map[string]bool
+	probeReturns bool // set once the probe has answered, so nil vs empty is distinguishable
+}
+
+func (f *fakeCoverageGatedSource) FetchNewGated(_ context.Context, _ sources.CompanyEntry,
+	seen func(string) bool, covered func([]string) map[string]bool) ([]sources.Job, error) {
+	f.gatedCalled = true
+	for _, j := range f.jobs {
+		f.askedAbout = append(f.askedAbout, j.Company)
+	}
+	f.coveredBack = covered(f.askedAbout)
+	f.probeReturns = true
+
+	out := make([]sources.Job, len(f.jobs))
+	for i, j := range f.jobs {
+		j.SeenRefresh = seen(j.ExternalID)
+		out[i] = j
+	}
+	return out, nil
+}
+
+// TestRunPrefersCoverageGatedFetchForAnAggregatorBoard proves the runner routes a
+// CoverageGated adapter through FetchNewGated and hands it a resolver keyed by the company
+// NAMES it asked about — the whole point being that the adapter learns a posting is doomed
+// before it pays for that posting's detail.
+func TestRunPrefersCoverageGatedFetchForAnAggregatorBoard(t *testing.T) {
+	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
+		provider: "himalayas",
+		jobs: []sources.Job{
+			{ExternalID: "1", Title: "Backend Engineer", Company: "Acme", Description: "<p>x</p>"},
+			{ExternalID: "2", Title: "Backend Engineer", Company: "Beta Corp", Description: "<p>y</p>"},
+		},
+	}}
+	store := &fakeStore{}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !src.gatedCalled {
+		t.Fatal("FetchNewGated was not called — a CoverageGated adapter must take the gated path")
+	}
+	if src.fetchNewCalled {
+		t.Error("FetchNew was also called; the gated path replaces it, it does not precede it")
+	}
+	// Keyed by the name the adapter passed, not by the slug the lookup speaks.
+	if !src.coveredBack["Acme"] {
+		t.Errorf("covered = %v, want Acme covered under its own name", src.coveredBack)
+	}
+	if src.coveredBack["Beta Corp"] {
+		t.Errorf("covered = %v, want Beta Corp uncovered", src.coveredBack)
+	}
+}
+
+// The probe answers a board's companies in ONE lookup, not one per posting — the cost the
+// gated path saves must not reappear as a lookup storm.
+func TestCoverageProbeAsksOnceForTheWholeBoard(t *testing.T) {
+	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
+		provider: "himalayas",
+		jobs: []sources.Job{
+			{ExternalID: "1", Title: "Backend Engineer", Company: "Acme", Description: "<p>x</p>"},
+			{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme", Description: "<p>y</p>"},
+			{ExternalID: "3", Title: "Backend Engineer", Company: "Beta Corp", Description: "<p>z</p>"},
+		},
+	}}
+	coverage := &fakeCoverage{covered: map[string]bool{}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: coverage}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(coverage.calls) == 0 {
+		t.Fatal("coverage was never consulted")
+	}
+	if got := coverage.calls[0]; len(got) != 2 {
+		t.Errorf("first probe asked about %v, want the 2 DISTINCT companies", got)
+	}
+}
+
+// A provider the gate does not apply to must keep the plain hydrating path: handing it a
+// resolver that can only answer "nothing is covered" would be a lie dressed as an answer.
+func TestCoverageGatedFallsBackToFetchNewWhenTheGateDoesNotApply(t *testing.T) {
+	// greenhouse is an ATS, not an aggregator, so aggregatorGate declines.
+	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
+		provider: "greenhouse",
+		jobs:     []sources.Job{{ExternalID: "1", Title: "Backend Engineer", Company: "Acme", Description: "<p>x</p>"}},
+	}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: &fakeCoverage{}}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "greenhouse", Board: "acme"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if src.gatedCalled {
+		t.Error("FetchNewGated was called for a non-aggregator board; the gate does not apply there")
+	}
+	if !src.fetchNewCalled {
+		t.Error("FetchNew was not called; a CoverageGated adapter is still a HydratingSource")
+	}
+}
+
+// A failed probe must not read as "everything is covered" — that would starve the catalogue of
+// bodies over a transient Meili hiccup. It reads as "nothing is covered": the run costs what it
+// used to, which is the recoverable direction.
+func TestCoverageProbeFailureHydratesEverything(t *testing.T) {
+	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
+		provider: "himalayas",
+		jobs:     []sources.Job{{ExternalID: "1", Title: "Backend Engineer", Company: "Acme", Description: "<p>x</p>"}},
+	}}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}, err: errors.New("meili down")}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: coverage}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !src.probeReturns {
+		t.Fatal("the probe was never consulted")
+	}
+	if len(src.coveredBack) != 0 {
+		t.Errorf("covered = %v, want empty — a failed probe must not claim coverage", src.coveredBack)
+	}
+}
+
 // TestRunSkipsAggregatorPostingForATSCoveredCompany proves the ingest-time coverage gate:
 // a posting from an aggregator-classified provider (himalayas) is not saved when its company
 // already has open coverage from a non-aggregator source, per the wired fakeCoverage.

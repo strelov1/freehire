@@ -144,6 +144,31 @@ type HydratingSource interface {
 	FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error)
 }
 
+// CoverageGated is a HydratingSource that can also skip a posting's detail when the pipeline's
+// aggregator-coverage gate is going to discard that posting anyway — the employer is already
+// covered by a non-aggregator source.
+//
+// It exists because `seen` alone cannot bound the work on such a board. A discarded posting is
+// never stored, so it is never seen, so the ordinary hydrating crawl pays for its body on
+// EVERY run and throws the body away every time. That is a rounding error on most aggregators
+// (measured on prod across the twelve hydrating ones: 0-3% for all but three) and it is the
+// whole board on one: remote.com lists ~5.7k postings of which ~4.1k are already covered, so
+// 71% of its hydration budget bought nothing, hourly, forever.
+//
+// covered is called ONCE with every company the crawl listed and answers which of them are
+// already covered, keyed by the SAME strings passed in — the adapter states company names and
+// never has to know how freehire slugs them. The pipeline passes a resolver only when the gate
+// actually applies to this board, so an adapter that gets here can trust the answer.
+//
+// The contract is about COST, not about the result: a covered posting is still yielded, just
+// without a body. Dropping it instead would be the adapter quietly making the gate's decision,
+// which is the pipeline's to make and to count (Stats.ATSCovered).
+type CoverageGated interface {
+	HydratingSource
+	FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool,
+		covered func(companies []string) map[string]bool) ([]Job, error)
+}
+
 // boardless marks an adapter whose API has no per-tenant board id, so config
 // validation lets its entries omit board. A boardless adapter may serve one company
 // (greenhouse/lever and the other multi-tenant ATS adapters are NOT boardless and

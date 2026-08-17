@@ -89,6 +89,9 @@ func TestRemotedotcomIsBoardlessAggregatorHydrating(t *testing.T) {
 	if _, ok := s.(HydratingSource); !ok {
 		t.Error("remotedotcom should be a HydratingSource (the listing carries no body)")
 	}
+	if _, ok := s.(CoverageGated); !ok {
+		t.Error("remotedotcom should be CoverageGated (most of its board is already ATS-covered)")
+	}
 }
 
 func TestRemotedotcomRegisteredAndFilterable(t *testing.T) {
@@ -284,6 +287,92 @@ func TestRemotedotcomFetchNewHydratesOnlyUnseenPostings(t *testing.T) {
 	// rewrite the content it hydrated when the posting was new.
 	if got := byID["tax-analyst-j1b"]; !got.SeenRefresh || got.Description != "" {
 		t.Errorf("seen posting: SeenRefresh=%v Description=%q", got.SeenRefresh, got.Description)
+	}
+}
+
+// The gated crawl's job is to not BUY a body the pipeline will discard — while still handing
+// the posting over, so the gate remains the thing that decides and counts.
+func TestRemotedotcomFetchNewGatedSkipsBodiesForCoveredEmployers(t *testing.T) {
+	fake := remotedotcomTwoPageFake()
+	var asked []string
+	covered := func(companies []string) map[string]bool {
+		asked = companies
+		return map[string]bool{"Colibri Group": true}
+	}
+
+	jobs, err := NewRemotedotcom(fake).(CoverageGated).FetchNewGated(
+		context.Background(), CompanyEntry{}, func(string) bool { return false }, covered)
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if len(asked) != 3 {
+		t.Errorf("probe asked about %v, want one entry per published posting", asked)
+	}
+
+	slices.Sort(fake.gotPostings)
+	want := []string{"senior-backend-developer-j1a", "support-engineer-j1d"}
+	if !slices.Equal(fake.gotPostings, want) {
+		t.Errorf("fetched posting pages %v, want %v (the covered employer costs no request)", fake.gotPostings, want)
+	}
+
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("got %d jobs, want 3 — a covered posting is still yielded, just body-less", len(jobs))
+	}
+	covedJob := byID["tax-analyst-j1b"]
+	if covedJob.Description != "" || covedJob.SeenRefresh {
+		t.Errorf("covered posting: Description=%q SeenRefresh=%v, want empty/false",
+			covedJob.Description, covedJob.SeenRefresh)
+	}
+	if covedJob.Title == "" || covedJob.Company == "" {
+		t.Errorf("covered posting lost its identity: %+v", covedJob)
+	}
+	if got := byID["senior-backend-developer-j1a"]; got.Description != "<p>Build services.</p>" {
+		t.Errorf("uncovered posting: Description=%q, want its body", got.Description)
+	}
+}
+
+// A seen posting costs no request whether or not its employer is covered — the two gates
+// compose rather than competing.
+func TestRemotedotcomFetchNewGatedStillRefreshesSeenPostings(t *testing.T) {
+	fake := remotedotcomTwoPageFake()
+	seen := func(id string) bool { return id == "senior-backend-developer-j1a" }
+	covered := func([]string) map[string]bool { return map[string]bool{"Colibri Group": true} }
+
+	jobs, err := NewRemotedotcom(fake).(CoverageGated).FetchNewGated(
+		context.Background(), CompanyEntry{}, seen, covered)
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if !slices.Equal(fake.gotPostings, []string{"support-engineer-j1d"}) {
+		t.Errorf("fetched %v, want only the posting that is neither seen nor covered", fake.gotPostings)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "senior-backend-developer-j1a" && !j.SeenRefresh {
+			t.Error("a seen posting must still be a liveness refresh under the gated path")
+		}
+	}
+}
+
+// A nil answer from the probe must hydrate everything, exactly as the ungated crawl does.
+func TestRemotedotcomFetchNewGatedWithNoCoverageHydratesEverything(t *testing.T) {
+	fake := remotedotcomTwoPageFake()
+	jobs, err := NewRemotedotcom(fake).(CoverageGated).FetchNewGated(
+		context.Background(), CompanyEntry{}, func(string) bool { return false },
+		func([]string) map[string]bool { return nil })
+	if err != nil {
+		t.Fatalf("FetchNewGated: %v", err)
+	}
+	if len(fake.gotPostings) != 3 {
+		t.Errorf("fetched %d posting pages, want all 3", len(fake.gotPostings))
+	}
+	for _, j := range jobs {
+		if j.Description == "" {
+			t.Errorf("%s has no body under a no-coverage probe", j.ExternalID)
+		}
 	}
 }
 
