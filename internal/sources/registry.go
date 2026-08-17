@@ -257,7 +257,6 @@ func All(c HTTPClient) map[string]Source {
 		NewArbeitsagentur(c),
 		// International single-company adapters (boardless).
 		NewTelegramCareers(c),
-		NewUber(c),
 		NewAmazon(c),
 		NewGoogle(c),
 		NewApple(c),
@@ -354,22 +353,25 @@ func All(c HTTPClient) map[string]Source {
 	registry["aijobs"] = cookieSessionSource[aijobsHTTP](c, func(h aijobsHTTP) Source {
 		return NewAijobs(h, aijobsMaxNewPerRun)
 	})
-	// meta is NOT served by the shared client: Meta's edge 400s the default Go TLS+HTTP/2
-	// fingerprint, so it needs the shared Chrome-fingerprint transport (fingerprintHTTP, also used
-	// by the bayt/gulftalent aggregators). Build it only when there is a real client to serve (the
-	// c == nil marker/listing path — e.g. FilterableProviders — must stay transport-free, so meta
-	// registers with a nil client there; Provider()/boardless() never touch it). If the
-	// deterministic transport build ever fails, meta is left unregistered so config validation
-	// fails fast on the "meta" entry, rather than registering a client guaranteed to be rejected by
-	// Meta's edge.
+	// meta/uber are NOT served by the shared client: Meta's edge 400s the default Go TLS+HTTP/2
+	// fingerprint and Uber's Cloudflare edge challenges it, so both need the shared
+	// Chrome-fingerprint transport (fingerprintHTTP, also used by the bayt/gulftalent
+	// aggregators). Build it only when there is a real client to serve (the c == nil
+	// marker/listing path — e.g. FilterableProviders — must stay transport-free, so these
+	// register with a nil client there; Provider()/boardless() never touch it). If the
+	// deterministic transport build ever fails, all four are left unregistered so config
+	// validation fails fast on their board entries, rather than registering a client guaranteed
+	// to be rejected by the edge.
 	if c == nil {
 		registry["meta"] = NewMetaCareers(nil)
 		registry["bayt"] = NewBayt(nil)
 		registry["gulftalent"] = NewGulfTalent(nil)
+		registry["uber"] = NewUber(nil)
 	} else if fp, err := newFingerprintHTTP(); err == nil {
 		registry["meta"] = NewMetaCareers(fp)
 		registry["bayt"] = NewBayt(fp)
 		registry["gulftalent"] = NewGulfTalent(fp)
+		registry["uber"] = NewUber(fp)
 	}
 	return registry
 }

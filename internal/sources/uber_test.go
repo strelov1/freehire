@@ -2,159 +2,44 @@ package sources
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
 )
 
-// uberHTTP is a body-aware test JSONPoster: Uber pages its search results by the page
-// number in the POST body (the URL is constant), so this fake routes a canned response
-// on req.Page. An unknown page returns an empty, successful result set — the natural
-// "past the end" response that ends pagination.
-type uberHTTP struct {
-	pages      map[int]string
-	fail       bool
-	gotURL     string
-	gotPages   []int
-	gotHeaders map[string]string
+// uberDetailHTML renders a job page the way jobs.uber.com does: a single
+// application/ld+json JobPosting whose identifier is a PropertyValue{value: "<id>"}.
+func uberDetailHTML(title, datePosted, employmentType string, locations ...[3]string) string {
+	var locs strings.Builder
+	for _, l := range locations {
+		locs.WriteString(`{"@type":"Place","name":"` + l[0] + `","address":{"@type":"PostalAddress","addressLocality":"` +
+			l[0] + `","addressRegion":"` + l[1] + `","addressCountry":"` + l[2] + `"}},`)
+	}
+	loc := strings.TrimSuffix(locs.String(), ",")
+	return `<html><head><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting",
+"title":"` + title + `",
+"description":"<p>Build the future of movement.<\/p><script>alert(1)<\/script>",
+"identifier":{"@type":"PropertyValue","name":"Uber","value":"149574"},
+"datePosted":"` + datePosted + `",
+"employmentType":"` + employmentType + `",
+"jobLocation":[` + loc + `]}
+</script></head><body>page</body></html>`
 }
 
-func (f *uberHTTP) PostJSONWithHeaders(_ context.Context, url string, headers map[string]string, body, v any) error {
-	f.gotURL = url
-	f.gotHeaders = headers
-	req, ok := body.(uberRequest)
-	if !ok {
-		return errors.New("uberHTTP: body is not a uberRequest")
+func uberSitemapXML(entries ...[2]string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0"?><urlset>`)
+	for _, e := range entries {
+		b.WriteString(`<url><loc>` + e[0] + `</loc><lastmod>` + e[1] + `</lastmod></url>`)
 	}
-	f.gotPages = append(f.gotPages, req.Page)
-	if f.fail {
-		return errors.New("uberHTTP: boom")
-	}
-	raw, ok := f.pages[req.Page]
-	if !ok {
-		raw = `{"status":"success","data":{"results":[],"totalResults":{"low":0}}}`
-	}
-	return json.Unmarshal([]byte(raw), v)
+	b.WriteString(`</urlset>`)
+	return b.String()
 }
 
 func TestUberProvider(t *testing.T) {
 	if got := NewUber(nil).Provider(); got != "uber" {
 		t.Errorf("Provider() = %q, want %q", got, "uber")
-	}
-}
-
-func TestUberFetchPaginatesAndMaps(t *testing.T) {
-	fake := &uberHTTP{pages: map[int]string{
-		0: `{"status":"success","data":{"totalResults":{"low":3},"results":[
-			{"id":153366,"title":"Engineering Manager","description":"**Hybrid** role\n\n<script>alert(1)</script>","location":{"city":"Seattle","region":"Washington","countryName":"United States"},"creationDate":"2026-01-08T22:29:00.000Z"},
-			{"id":159903,"title":"Solutions Architect","description":"About the role","location":{"city":"Sao Paulo","region":"Sao Paulo","countryName":"Brazil"},"creationDate":"2026-06-12T17:50:00.000Z"}
-		]}}`,
-		1: `{"status":"success","data":{"totalResults":{"low":3},"results":[
-			{"id":160000,"title":"Data Scientist","description":"Numbers","location":{"city":"","region":"","countryName":"India"},"creationDate":""}
-		]}}`,
-	}}
-
-	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber", Provider: "uber"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 3 {
-		t.Fatalf("got %d jobs, want 3 (two pages)", len(jobs))
-	}
-
-	byID := map[string]Job{}
-	for _, j := range jobs {
-		byID[j.ExternalID] = j
-	}
-
-	j := byID["153366"]
-	if j.Title != "Engineering Manager" {
-		t.Errorf("Title = %q", j.Title)
-	}
-	if j.Company != "Uber" {
-		t.Errorf("Company = %q, want Uber", j.Company)
-	}
-	if want := "https://www.uber.com/global/en/careers/list/153366/"; j.URL != want {
-		t.Errorf("URL = %q, want %q", j.URL, want)
-	}
-	if want := "Seattle, Washington, United States"; j.Location != want {
-		t.Errorf("Location = %q, want %q", j.Location, want)
-	}
-	if !strings.Contains(j.Description, "<strong>Hybrid</strong>") {
-		t.Errorf("Description not rendered from Markdown: %q", j.Description)
-	}
-	if strings.Contains(j.Description, "<script>") {
-		t.Errorf("Description not sanitized: %q", j.Description)
-	}
-	if j.PostedAt == nil || !j.PostedAt.Equal(time.Date(2026, 1, 8, 22, 29, 0, 0, time.UTC)) {
-		t.Errorf("PostedAt = %v, want 2026-01-08T22:29:00Z", j.PostedAt)
-	}
-
-	// Empty city/region collapse to just the country; empty creationDate -> nil PostedAt.
-	jd := byID["160000"]
-	if jd.Location != "India" {
-		t.Errorf("Location = %q, want India (blank city/region skipped)", jd.Location)
-	}
-	if jd.PostedAt != nil {
-		t.Errorf("PostedAt = %v, want nil (blank creationDate)", jd.PostedAt)
-	}
-}
-
-func TestUberStopsAtEmptyPage(t *testing.T) {
-	// totalResults says 5 but the source only returns 1 then an empty page: the adapter
-	// must stop on the empty page rather than loop forever chasing the count.
-	fake := &uberHTTP{pages: map[int]string{
-		0: `{"status":"success","data":{"totalResults":{"low":5},"results":[
-			{"id":1,"title":"Only One","description":"x","location":{"countryName":"US"},"creationDate":""}
-		]}}`,
-	}}
-	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1 (stop at empty page)", len(jobs))
-	}
-}
-
-func TestUberPostsToSearchURL(t *testing.T) {
-	fake := &uberHTTP{pages: map[int]string{}}
-	if _, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"}); err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if !strings.HasPrefix(fake.gotURL, "https://www.uber.com/api/loadSearchJobsResults") {
-		t.Errorf("posted to %q, want the loadSearchJobsResults endpoint", fake.gotURL)
-	}
-}
-
-func TestUberSendsCSRFHeader(t *testing.T) {
-	// Uber's search API 403s without an x-csrf-token header (any value is accepted); the
-	// adapter must send it or every board fails.
-	fake := &uberHTTP{pages: map[int]string{}}
-	if _, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"}); err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if fake.gotHeaders["x-csrf-token"] == "" {
-		t.Errorf("missing x-csrf-token header; sent %v", fake.gotHeaders)
-	}
-}
-
-func TestUberNonSuccessFailsBoard(t *testing.T) {
-	// A 200 whose status is not "success" must fail the board, not read as empty.
-	fake := &uberHTTP{pages: map[int]string{
-		0: `{"status":"error","data":{"results":null,"totalResults":{"low":0}}}`,
-	}}
-	if _, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"}); err == nil {
-		t.Fatal("Fetch: want error on non-success status, got nil")
-	}
-}
-
-func TestUberTransportErrorFailsBoard(t *testing.T) {
-	fake := &uberHTTP{fail: true}
-	if _, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"}); err == nil {
-		t.Fatal("Fetch: want transport error, got nil")
 	}
 }
 
@@ -165,5 +50,110 @@ func TestUberRegisteredInAllAndBoardless(t *testing.T) {
 	}
 	if _, isBoardless := s.(boardless); !isBoardless {
 		t.Error("uber should be boardless (single company, no board id)")
+	}
+}
+
+func TestUberFetchSitemapThenDetailAndMaps(t *testing.T) {
+	loc := "https://jobs.uber.com/en/jobs/149574/"
+	fake := (&routedHTTP{}).
+		route("/en/jobs/sitemap.xml", uberSitemapXML([2]string{loc, "2026-06-06T19:38:59Z"})).
+		route("/en/jobs/149574", uberDetailHTML("Sr Staff Engineer", "2026-06-19", "FULL_TIME",
+			[3]string{"Sao Paulo", "SP", "Brazil"}))
+
+	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber", Provider: "uber"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	j := jobs[0]
+	if j.ExternalID != "149574" {
+		t.Errorf("ExternalID = %q, want 149574", j.ExternalID)
+	}
+	if j.URL != loc {
+		t.Errorf("URL = %q, want %q", j.URL, loc)
+	}
+	if j.Title != "Sr Staff Engineer" {
+		t.Errorf("Title = %q", j.Title)
+	}
+	if j.Company != "Uber" {
+		t.Errorf("Company = %q, want Uber", j.Company)
+	}
+	if want := "Sao Paulo, SP, Brazil"; j.Location != want {
+		t.Errorf("Location = %q, want %q", j.Location, want)
+	}
+	if strings.Contains(j.Description, "<script>") || !strings.Contains(j.Description, "Build the future") {
+		t.Errorf("Description not sanitized: %q", j.Description)
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time", j.EmploymentType)
+	}
+	// datePosted ("2026-06-19", date-only) wins over the sitemap <lastmod>.
+	if j.PostedAt == nil || !j.PostedAt.Equal(time.Date(2026, 6, 19, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("PostedAt = %v, want 2026-06-19", j.PostedAt)
+	}
+	if j.WorkMode != "" {
+		t.Errorf("WorkMode = %q, want empty (no structured signal, only the Remote heuristic)", j.WorkMode)
+	}
+}
+
+func TestUberPostedAtFallsBackToLastmod(t *testing.T) {
+	loc := "https://jobs.uber.com/en/jobs/999/"
+	fake := (&routedHTTP{}).
+		route("/en/jobs/sitemap.xml", uberSitemapXML([2]string{loc, "2026-05-05T12:00:00Z"})).
+		route("/en/jobs/999", uberDetailHTML("Eng", "", "FULL_TIME", [3]string{"Remote", "", "US"}))
+	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if jobs[0].PostedAt == nil || !jobs[0].PostedAt.Equal(time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)) {
+		t.Errorf("PostedAt = %v, want lastmod fallback 2026-05-05T12:00:00Z", jobs[0].PostedAt)
+	}
+}
+
+func TestUberEmptyLocationWhenNoJobLocation(t *testing.T) {
+	loc := "https://jobs.uber.com/en/jobs/888/"
+	fake := (&routedHTTP{}).
+		route("/en/jobs/sitemap.xml", uberSitemapXML([2]string{loc, "2026-06-06T00:00:00Z"})).
+		route("/en/jobs/888", uberDetailHTML("Eng", "2026-04-14", "FULL_TIME"))
+	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Location != "" {
+		t.Fatalf("want empty location, got %v", jobs)
+	}
+}
+
+func TestUberFailedDetailDropsOnlyThatPosting(t *testing.T) {
+	ok := "https://jobs.uber.com/en/jobs/111/"
+	bad := "https://jobs.uber.com/en/jobs/222/"
+	// No route for /en/jobs/222 → GetHTML errors → that posting drops.
+	fake := (&routedHTTP{}).
+		route("/en/jobs/sitemap.xml", uberSitemapXML(
+			[2]string{ok, "2026-06-06T00:00:00Z"}, [2]string{bad, "2026-06-06T00:00:00Z"})).
+		route("/en/jobs/111", uberDetailHTML("Kept", "2026-04-14", "FULL_TIME", [3]string{"Remote", "", "US"}))
+
+	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].Title != "Kept" {
+		t.Fatalf("got %v, want only the kept posting", jobs)
+	}
+}
+
+func TestUberEmptySitemapYieldsNoJobsNoError(t *testing.T) {
+	fake := (&routedHTTP{}).route("/en/jobs/sitemap.xml", uberSitemapXML())
+	jobs, err := NewUber(fake).Fetch(context.Background(), CompanyEntry{Company: "Uber"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("got %d jobs, want 0", len(jobs))
 	}
 }

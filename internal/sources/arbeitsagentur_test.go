@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,22 +11,37 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"golang.org/x/net/html"
 )
 
-// arbeitsagenturFake routes search calls by their page param and detail calls by the refnr in
-// the URL, so a single fake drives both stages (paginated JSON search + per-posting SSR detail).
+// arbeitsagenturFake routes search calls by their page param and detail calls by the base64
+// referenznummer suffix of the URL, so a single fake drives both stages (paginated JSON search +
+// per-posting JSON detail).
 type arbeitsagenturFake struct {
 	searchByPage map[int]string    // page -> search JSON body ("" => empty page)
-	detailByRef  map[string]string // refnr -> detail HTML ("" => no ng-state)
-	detailErr    map[string]bool   // refnr -> GetHTML returns an error
+	detailByRef  map[string]string // refnr -> detail JSON body ("" => empty detail)
+	detailErr    map[string]bool   // refnr -> detail fetch returns an error
 	gotHeaders   map[string]string
 	searchPages  []int // pages requested, in order
 }
 
 func (f *arbeitsagenturFake) GetJSONWithHeaders(_ context.Context, u string, headers map[string]string, v any) error {
 	f.gotHeaders = headers
+	if strings.Contains(u, arbeitsagenturDetailAPIURL) {
+		enc := u[strings.LastIndex(u, "/")+1:]
+		raw, err := base64.StdEncoding.DecodeString(enc)
+		if err != nil {
+			return err
+		}
+		ref := string(raw)
+		if f.detailErr[ref] {
+			return errors.New("detail boom")
+		}
+		body := f.detailByRef[ref]
+		if body == "" {
+			body = `{}`
+		}
+		return json.Unmarshal([]byte(body), v)
+	}
 	page := 1
 	if pu, err := url.Parse(u); err == nil {
 		if p, err := strconv.Atoi(pu.Query().Get("page")); err == nil {
@@ -35,37 +51,28 @@ func (f *arbeitsagenturFake) GetJSONWithHeaders(_ context.Context, u string, hea
 	f.searchPages = append(f.searchPages, page)
 	body := f.searchByPage[page]
 	if body == "" {
-		body = `{"stellenangebote":[],"maxErgebnisse":0}`
+		body = `{"ergebnisliste":[],"maxErgebnisse":0}`
 	}
 	return json.Unmarshal([]byte(body), v)
 }
 
-func (f *arbeitsagenturFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
-	ref := u[strings.LastIndex(u, "/")+1:]
-	if f.detailErr[ref] {
-		return nil, errors.New("detail boom")
-	}
-	return html.Parse(strings.NewReader(f.detailByRef[ref]))
-}
-
-// detailHTML wraps an ng-state script carrying the given description and home-office flag,
-// mirroring the real SSR page.
-func detailHTML(desc string, homeOffice bool) string {
-	return `<html><body><script id="ng-state" type="application/json">{"jobdetail":{"stellenangebotsBeschreibung":` +
-		strconv.Quote(desc) + `,"homeofficemoeglich":` + strconv.FormatBool(homeOffice) + `}}</script></body></html>`
+// arbeitsagenturDetailJSON builds a jobdetails response carrying only the description this adapter reads.
+func arbeitsagenturDetailJSON(desc string) string {
+	b, _ := json.Marshal(map[string]string{"stellenangebotsBeschreibung": desc})
+	return string(b)
 }
 
 func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
-	const page1 = `{"maxErgebnisse":2,"stellenangebote":[
-	  {"refnr":"20177-44320844-717-S","titel":"Fachinformatiker*in","arbeitgeber":"Boehringer Ingelheim Pharma GmbH & Co. KG","arbeitsort":{"ort":"Biberach an der Riß","region":"Baden-Württemberg","land":"Deutschland","strasse":"null"},"aktuelleVeroeffentlichungsdatum":"2026-07-18"},
-	  {"refnr":"EXT-1","titel":"Re-listed","arbeitgeber":"Other","arbeitsort":{"ort":"Berlin"},"aktuelleVeroeffentlichungsdatum":"2026-07-10","externeUrl":"https://aubi-plus.de/x"},
-	  {"refnr":"AC-2","titel":"DevOps Engineer","arbeitgeber":"Acme GmbH","arbeitsort":{"ort":"München","region":"Bayern","land":"Deutschland"},"aktuelleVeroeffentlichungsdatum":"2026-07-15"}
+	const page1 = `{"maxErgebnisse":2,"ergebnisliste":[
+	  {"referenznummer":"20177-44320844-717-S","stellenangebotsTitel":"Fachinformatiker*in","firma":"Boehringer Ingelheim Pharma GmbH & Co. KG","stellenlokationen":[{"adresse":{"ort":"Biberach an der Riß","region":"Baden-Württemberg","land":"Deutschland"}}],"datumErsteVeroeffentlichung":"2026-07-18","homeofficemoeglich":true},
+	  {"referenznummer":"EXT-1","stellenangebotsTitel":"Re-listed","firma":"Other","stellenlokationen":[{"adresse":{"ort":"Berlin"}}],"datumErsteVeroeffentlichung":"2026-07-10","externeURL":"https://aubi-plus.de/x"},
+	  {"referenznummer":"AC-2","stellenangebotsTitel":"DevOps Engineer","firma":"Acme GmbH","stellenlokationen":[{"adresse":{"ort":"München","region":"Bayern","land":"Deutschland"}}],"datumErsteVeroeffentlichung":"2026-07-15","homeofficemoeglich":false}
 	]}`
 	fake := &arbeitsagenturFake{
 		searchByPage: map[int]string{1: page1},
 		detailByRef: map[string]string{
-			"20177-44320844-717-S": detailHTML("Bei Boehringer Ingelheim entwickeln wir <b>bahnbrechende</b> Therapien.", true),
-			"AC-2":                 detailHTML("Wir suchen einen DevOps Engineer.", false),
+			"20177-44320844-717-S": arbeitsagenturDetailJSON("Bei Boehringer Ingelheim entwickeln wir bahnbrechende Therapien."),
+			"AC-2":                 arbeitsagenturDetailJSON("Wir suchen einen DevOps Engineer."),
 		},
 	}
 	jobs, err := NewArbeitsagentur(fake).Fetch(context.Background(), CompanyEntry{
@@ -74,12 +81,12 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	// The externeUrl re-list is dropped; two first-party postings map.
+	// The externeURL re-list is dropped; two first-party postings map.
 	if len(jobs) != 2 {
-		t.Fatalf("len(jobs) = %d, want 2 (externeUrl dropped)", len(jobs))
+		t.Fatalf("len(jobs) = %d, want 2 (externeURL dropped)", len(jobs))
 	}
 	// Header carried the static public key.
-	if fake.gotHeaders["X-API-Key"] != "jobboerse-jobsuche" {
+	if fake.gotHeaders["X-API-Key"] != arbeitsagenturAPIKey {
 		t.Errorf("X-API-Key header = %q", fake.gotHeaders["X-API-Key"])
 	}
 	byID := map[string]Job{}
@@ -102,7 +109,7 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-07-18" {
 		t.Errorf("PostedAt = %v, want 2026-07-18", j.PostedAt)
 	}
-	// homeofficemoeglich:true → remote; the non-home-office posting stays unset.
+	// homeofficemoeglich:true (carried directly on the search result) → remote.
 	if !j.Remote || j.WorkMode != "remote" {
 		t.Errorf("home-office job: Remote=%v WorkMode=%q, want true/remote", j.Remote, j.WorkMode)
 	}
@@ -112,17 +119,17 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 }
 
 func TestArbeitsagenturScrapesDescription(t *testing.T) {
-	const page1 = `{"maxErgebnisse":2,"stellenangebote":[
-	  {"refnr":"OK-1","titel":"A","arbeitgeber":"Co","arbeitsort":{"ort":"Berlin"},"aktuelleVeroeffentlichungsdatum":"2026-07-18"},
-	  {"refnr":"NODESC-2","titel":"B","arbeitgeber":"Co","arbeitsort":{"ort":"Berlin"},"aktuelleVeroeffentlichungsdatum":"2026-07-18"},
-	  {"refnr":"ERR-3","titel":"C","arbeitgeber":"Co","arbeitsort":{"ort":"Berlin"},"aktuelleVeroeffentlichungsdatum":"2026-07-18"}
+	const page1 = `{"maxErgebnisse":3,"ergebnisliste":[
+	  {"referenznummer":"OK-1","stellenangebotsTitel":"A","firma":"Co","stellenlokationen":[{"adresse":{"ort":"Berlin"}}],"datumErsteVeroeffentlichung":"2026-07-18"},
+	  {"referenznummer":"NODESC-2","stellenangebotsTitel":"B","firma":"Co","stellenlokationen":[{"adresse":{"ort":"Berlin"}}],"datumErsteVeroeffentlichung":"2026-07-18"},
+	  {"referenznummer":"ERR-3","stellenangebotsTitel":"C","firma":"Co","stellenlokationen":[{"adresse":{"ort":"Berlin"}}],"datumErsteVeroeffentlichung":"2026-07-18"}
 	]}`
 	fake := &arbeitsagenturFake{
 		searchByPage: map[int]string{1: page1},
 		detailByRef: map[string]string{
 			// The real Stellenbeschreibung is plain text with newline paragraphs, no markup.
-			"OK-1":     detailHTML("Bei uns arbeitest du remote.\n\nZweiter Absatz mit Details.", false),
-			"NODESC-2": `<html><body><p>no ng-state here</p></body></html>`,
+			"OK-1": arbeitsagenturDetailJSON("Bei uns arbeitest du remote.\n\nZweiter Absatz mit Details."),
+			// NODESC-2 has no entry, so the fake serves "{}" — an empty description.
 		},
 		detailErr: map[string]bool{"ERR-3": true},
 	}
@@ -130,7 +137,7 @@ func TestArbeitsagenturScrapesDescription(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	// A detail error or a page without a description must not drop the posting.
+	// A detail error or an empty description must not drop the posting.
 	if len(jobs) != 3 {
 		t.Fatalf("len(jobs) = %d, want 3 (missing/failed descriptions still emit)", len(jobs))
 	}
@@ -143,14 +150,10 @@ func TestArbeitsagenturScrapesDescription(t *testing.T) {
 		t.Errorf("OK-1 description = %q, want both paragraphs with rebuilt <p> structure", d)
 	}
 	if d := byID["NODESC-2"].Description; d != "" {
-		t.Errorf("NODESC-2 description = %q, want empty (no ng-state block)", d)
+		t.Errorf("NODESC-2 description = %q, want empty (no description in detail response)", d)
 	}
 	if d := byID["ERR-3"].Description; d != "" {
 		t.Errorf("ERR-3 description = %q, want empty (detail fetch failed)", d)
-	}
-	// A failed/blockless detail leaves the remote flag unset.
-	if byID["ERR-3"].Remote || byID["NODESC-2"].Remote {
-		t.Error("postings with no usable detail should not be marked remote")
 	}
 }
 
@@ -177,9 +180,9 @@ func TestArbeitsagenturPaginates(t *testing.T) {
 func arbeitsagenturPage(n, base int) string {
 	items := make([]string, n)
 	for i := range items {
-		items[i] = fmt.Sprintf(`{"refnr":"R-%d","titel":"T","arbeitgeber":"Co","arbeitsort":{"ort":"Berlin"},"aktuelleVeroeffentlichungsdatum":"2026-07-18"}`, base+i)
+		items[i] = fmt.Sprintf(`{"referenznummer":"R-%d","stellenangebotsTitel":"T","firma":"Co","stellenlokationen":[{"adresse":{"ort":"Berlin"}}],"datumErsteVeroeffentlichung":"2026-07-18"}`, base+i)
 	}
-	return `{"maxErgebnisse":100000,"stellenangebote":[` + strings.Join(items, ",") + `]}`
+	return `{"maxErgebnisse":100000,"ergebnisliste":[` + strings.Join(items, ",") + `]}`
 }
 
 func TestArbeitsagenturProviderRegistered(t *testing.T) {
