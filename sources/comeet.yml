@@ -104,3 +104,131 @@
   board: webbing/46.00E
 - company: Zenity
   board: zenity/19.000
+- company: Ceragon Networks
+  board: Ceragon/D3.003
+- company: Claroty
+  board: Claroty/F2.004
+- company: Nagomi Security
+  board: NagomiSecurity/89.00B
+- company: Surecomp
+  board: Surecomp/24.00E
+- company: Anchor Fintech
+  board: anchorfintech/87.00D
+- company: anecdotes
+  board: anecdotes/F9.00B
+- company: Appdome
+  board: appdome/E6.005
+- company: AudioCodes Limited
+  board: audiocodes/85.004
+- company: BlinkOps
+  board: blinkops/C7.004
+- company: Buildots
+  board: buildots/36.004
+- company: Cardo Systems
+  board: cardosystems/F2.003
+- company: Chaos Labs
+  board: chaoslabs/E8.007
+- company: Chargeflow
+  board: chargeflow/29.001
+- company: Classiq
+  board: classiq/F7.008
+- company: CTERA
+  board: ctera/A0.003
+- company: DoorLoop
+  board: doorloop/0A.006
+- company: DriveNets
+  board: drivenets/72.006
+- company: Enlight
+  board: enlightenergy/99.006
+- company: Exodigo
+  board: exodigo/89.005
+- company: Firebolt
+  board: firebolt/26.004
+- company: EverC
+  board: g2risksolutions/C9.003
+- company: Global-e
+  board: global-e/62.002
+- company: Grain
+  board: grain/4A.000
+- company: Halon
+  board: halon/B5.00E
+- company: Holganix
+  board: holganix/8A.00F
+- company: Imagene AI
+  board: imagene-ai/D7.000
+- company: Incredibuild
+  board: incredibuild/66.00F
+- company: INFINIDAT
+  board: infinidat/D6.003
+- company: Indero
+  board: innovaderm/15.003
+- company: Inspired HR
+  board: inspiredhr/7A.008
+- company: Intuition Robotics
+  board: intuitionrobotics/B3.00B
+- company: Investing
+  board: investing/42.002
+- company: IRONSCALES
+  board: ironscales/1A.007
+- company: Island
+  board: island/09.00A
+- company: IT Solutions Consulting
+  board: itsolutions/B2.00F
+- company: Keter EU
+  board: keter/E9.00E
+- company: Landa Corporation
+  board: landacorp/A4.000
+- company: Ledgebrook
+  board: ledgebrook/D9.006
+- company: Linx Security
+  board: linxsecurity/99.00C
+- company: Matrix Global
+  board: matrix-ifs/19.00F
+- company: Minute Media
+  board: minutemedia/45.00A
+- company: Medical Review Institute of America
+  board: mrioa/39.004
+- company: NimbleWay
+  board: nimbleway/09.00F
+- company: Odigos
+  board: odigos/5A.001
+- company: Oligo Security
+  board: oligosecurity/5A.00B
+- company: Pentera
+  board: pentera/C5.00D
+- company: Pipl
+  board: pipl/22.008
+- company: PlainID
+  board: plainid/C4.00C
+- company: Push Operations
+  board: pushoperations/3A.006
+- company: Qedma
+  board: qedma/7A.006
+- company: Quantum Machines
+  board: quantummachines/D6.000
+- company: Retym
+  board: retym/C6.003
+- company: ROI Agency
+  board: roiagency/CA.00A
+- company: Silverfort
+  board: silverfort/54.007
+- company: Solidus Tech
+  board: solidus-tech/B8.006
+- company: Solidus Labs
+  board: soliduslabs/E6.007
+- company: Start.io
+  board: start.io/B2.004
+- company: SysAid Technologies
+  board: sysaid/43.00A
+- company: TailorMed
+  board: tailormed/E5.009
+- company: Team8
+  board: team8/61.003
+- company: Thetaray
+  board: thetaray/72.00F
+- company: Upwind Security
+  board: upwind/49.004
+- company: Utila
+  board: utila/D9.00F
+- company: Vertu Agent
+  board: vertuagent/D9.00D
