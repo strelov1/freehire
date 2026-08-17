@@ -26,6 +26,7 @@
   "web/src/lib/components/DocsEndpoint.svelte": 6,
   "web/src/lib/components/DocsNav.svelte": 6,
   "web/src/lib/components/ExperienceBankView.svelte": 1,
+  "web/src/lib/components/ExtensionLandingView.svelte": 23,
   "web/src/lib/components/FacetBreakdown.svelte": 1,
   "web/src/lib/components/facets/FacetSection.svelte": 1,
   "web/src/lib/components/facets/TokenInput.svelte": 1,

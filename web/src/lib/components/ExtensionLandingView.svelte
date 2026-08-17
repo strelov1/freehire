@@ -208,7 +208,7 @@
             <p class="text-sm text-muted-foreground">19 of 25 skills covered</p>
           </div>
           <div class="mt-5">
-            <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// you have</p>
+            <SectionLabel text="you have" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Distributed systems', 'Kafka', 'Postgres', 'AWS', 'Go'] as skill (skill)}
                 <span class="rounded-md border border-emerald-400/50 px-2 py-0.5 font-mono text-xs text-emerald-600 dark:text-emerald-400">
@@ -218,7 +218,7 @@
             </div>
           </div>
           <div class="mt-5">
-            <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// they want, you don't</p>
+            <SectionLabel text="they want, you don't" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Scala', 'JVM tuning'] as skill (skill)}
                 <span class="rounded-md border border-warning/50 px-2 py-0.5 font-mono text-xs text-warning-strong">
