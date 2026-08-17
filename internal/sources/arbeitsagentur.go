@@ -92,11 +92,10 @@ func (d arbeitsagenturDetail) description() string {
 }
 
 func (a arbeitsagentur) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	headers := map[string]string{"X-API-Key": arbeitsagenturAPIKey}
 	var kept []arbeitsagenturPosting
 	for page := 1; page <= arbeitsagenturMaxPages; page++ {
 		var resp arbeitsagenturSearch
-		if err := a.http.GetJSONWithHeaders(ctx, a.searchURL(e.Board, page), headers, &resp); err != nil {
+		if err := a.http.GetJSONWithHeaders(ctx, a.searchURL(e.Board, page), arbeitsagenturHeaders(), &resp); err != nil {
 			return nil, fmt.Errorf("arbeitsagentur: search board %q page %d: %w", e.Board, page, err)
 		}
 		for _, p := range resp.Ergebnisliste {
@@ -143,13 +142,17 @@ func (a arbeitsagentur) toJob(ctx context.Context, p arbeitsagenturPosting) Job 
 // base64 of its own referenznummer. Any failure (fetch error, bad JSON) yields the zero detail
 // rather than an error — the posting is still worth emitting, just without a description.
 func (a arbeitsagentur) detail(ctx context.Context, refnr string) arbeitsagenturDetail {
-	headers := map[string]string{"X-API-Key": arbeitsagenturAPIKey}
 	url := arbeitsagenturDetailAPIURL + base64.StdEncoding.EncodeToString([]byte(refnr))
 	var d arbeitsagenturDetail
-	if err := a.http.GetJSONWithHeaders(ctx, url, headers, &d); err != nil {
+	if err := a.http.GetJSONWithHeaders(ctx, url, arbeitsagenturHeaders(), &d); err != nil {
 		return arbeitsagenturDetail{}
 	}
 	return d
+}
+
+// arbeitsagenturHeaders is the X-API-Key header both the search and detail requests carry.
+func arbeitsagenturHeaders() map[string]string {
+	return map[string]string{"X-API-Key": arbeitsagenturAPIKey}
 }
 
 // arbeitsagenturLocation joins the non-empty parts of a posting's first location entry,
