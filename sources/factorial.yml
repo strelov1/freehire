@@ -37,6 +37,8 @@
   board: ahembo.factorial.es
 - company: Banca AideXa
   board: aidexa.factorial.it
+- company: Becloser Group
+  board: beclosergroup.factorial.it
 - company: Tecnofast
   board: airfix.factorialhr.com.br
 - company: Akibara Xpress
@@ -893,8 +895,6 @@
   board: unicredix.factorial.mx
 - company: Unimed Dourados
   board: unimeddourados.factorialhr.com.br
-- company: Uniting Group
-  board: uniting.factorial.it
 - company: Universiis
   board: universiis.factorial.it
 - company: Univet
@@ -903,8 +903,6 @@
   board: uniwareunilab.factorialhr.com.br
 - company: UNRWA España
   board: unrwa.factorial.es
-- company: Valeria
-  board: valeria-careers.factorial.es
 - company: Venuu
   board: venuu.factorialhr.com
 - company: Ve.Ra. Group Srl

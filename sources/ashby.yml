@@ -1,6 +1,8 @@
 # ashby boards. Provider is the filename; each entry is company + board.
 # board = platform-specific id (see internal/sources/ashby.go).
 
+- company: ABC Labs
+  board: reserve
 - company: Adaptive Innovations
   board: adaptive-innovations
 - company: Allegheny Science & Technology
@@ -155,6 +157,10 @@
   board: inspiren
 - company: Investa
   board: investa
+- company: MacroHealth
+  board: macrohealth
+- company: Poetic
+  board: poetic
 - company: Ujwal Inc.
   board: level-ai
 - company: Luma
@@ -461,8 +467,6 @@
   board: dandy
 - company: Dash0
   board: dash0
-- company: Datacurve
-  board: datacurve
 - company: Dataleap
   board: dataleap
 - company: DatologyAI
@@ -595,8 +599,6 @@
   board: Flock
 - company: Fluidstack
   board: fluidstack
-- company: Forge
-  board: forge
 - company: Formance
   board: formance
 - company: Fortuna Health
@@ -2141,8 +2143,6 @@
   board: carwow
 - company: cas
   board: cas
-- company: casap
-  board: casap
 - company: casca
   board: casca
 - company: casdin-capital
@@ -2433,8 +2433,6 @@
   board: delphina
 - company: delphos-labs
   board: delphos-labs
-- company: deltia
-  board: deltia
 - company: demandbase
   board: demandbase
 - company: dentology
@@ -5839,8 +5837,6 @@
   board: b2spin
 - company: brodie rec league
   board: brodie%20rec%20league
-- company: cascade
-  board: cascade
 - company: codex
   board: codex
 - company: doctoralia-brasil

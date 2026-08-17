@@ -1,6 +1,8 @@
 # paylocity boards. Provider is the filename; each entry is company + board.
 # board = the company GUID in recruiting.paylocity.com/Recruiting/Jobs/All/<board>
 # (see internal/sources/paylocity.go).
+- company: "Cabot Properties, Inc."
+  board: 7186761b-1318-47f2-b709-d7e7995cd3f3
 - company: Paquin & Carroll Insurance
   board: 0074dae6-e7c6-4b3e-80b7-5006355028a4
 - company: Allan Aircraft Supply

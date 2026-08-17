@@ -19,6 +19,8 @@
   board: kevel-careers
 - company: Klir
   board: klir
+- company: Pine Park Health
+  board: pineparkhealth
 - company: Positron AI
   board: positron
 - company: GoTu
@@ -43,6 +45,10 @@
   board: gaiias-open-positions
 - company: Mytra
   board: mytra
+- company: Seamless.AI
+  board: seamless
+- company: Selkirk Sport
+  board: selkirk-sport
 - company: Thrive Global
   board: thriveglobal
 - company: OneOrigin
@@ -85,6 +91,8 @@
   board: bad-birdie
 - company: The Digital Shelf Institute
   board: the-shelf-careers
+- company: UPSIDE Foods
+  board: upside-group
 - company: Wine Enthusiast
   board: wineenthusiast
 - company: Booster Juice

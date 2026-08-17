@@ -157,8 +157,6 @@
   board: aluminumdynamics
 - company: alumus
   board: alumus
-- company: amanet
-  board: amanet
 - company: americafirst
   board: americafirst
 - company: americanaddictioncenters
@@ -1405,8 +1403,6 @@
   board: group1auto
 - company: groupsrecovertogether
   board: groupsrecovertogether
-- company: gsi
-  board: gsi
 - company: gtsx
   board: gtsx
 - company: guard
@@ -1997,8 +1993,6 @@
   board: magaero
 - company: magnera
   board: magnera
-- company: mahaskahealth
-  board: mahaskahealth
 - company: makingspace
   board: makingspace
 - company: malanai
@@ -2647,8 +2641,6 @@
   board: riyadhair
 - company: rmrgroup
   board: rmrgroup
-- company: roadguard-gsi
-  board: roadguard-gsi
 - company: roadrunnersports
   board: roadrunnersports
 - company: robertgraham
