@@ -31,7 +31,19 @@ export async function respondTo(data: unknown, page: PageBridge): Promise<string
   return JSON.stringify(await executeTool(call, page));
 }
 
-export type ChannelStatus = 'idle' | 'connecting' | 'open' | 'closed';
+export type ChannelStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'unreachable';
+
+// A rejected handshake (expired/revoked token, relay down, ...) reaches the client
+// as the same opaque close event a network blip would — the WebSocket API never
+// exposes the HTTP status a failed upgrade got, so there is no way to tell "stop
+// retrying this token" apart from "try again in a moment" from here. Retrying
+// forever is still right (this is what makes a restarting relay self-heal), but
+// retrying SILENTLY forever is not: a stale token would otherwise fail every 30s
+// with nothing on screen to explain why autofill and the browse tool never work.
+// After this many consecutive failures, 'unreachable' fires once so the panel can
+// tell the user, without breaking off the retry loop that recovers a transient
+// outage on its own.
+const GIVE_UP_NOTICE_AFTER_ATTEMPTS = 5;
 
 /**
  * Keeps the extension attached to the relay, answering tool calls for as long as
@@ -43,6 +55,7 @@ export class ToolChannel {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private attempt = 0;
   private stopped = true;
+  private notifiedUnreachable = false;
 
   constructor(
     private readonly page: PageBridge,
@@ -52,6 +65,8 @@ export class ToolChannel {
   /** Attaches, and keeps re-attaching, until `stop()`. */
   start(token: string): void {
     this.stopped = false;
+    this.attempt = 0;
+    this.notifiedUnreachable = false;
     this.open(token);
   }
 
@@ -71,6 +86,7 @@ export class ToolChannel {
 
     ws.onopen = () => {
       this.attempt = 0;
+      this.notifiedUnreachable = false;
       this.onStatus('open');
     };
     ws.onmessage = async (ev) => {
@@ -88,7 +104,12 @@ export class ToolChannel {
 
   private retry(token: string): void {
     if (this.stopped) return;
-    const delay = Math.min(30_000, 1_000 * 2 ** this.attempt++);
+    this.attempt++;
+    if (this.attempt >= GIVE_UP_NOTICE_AFTER_ATTEMPTS && !this.notifiedUnreachable) {
+      this.notifiedUnreachable = true;
+      this.onStatus('unreachable');
+    }
+    const delay = Math.min(30_000, 1_000 * 2 ** (this.attempt - 1));
     this.timer = setTimeout(() => this.open(token), delay);
   }
 }

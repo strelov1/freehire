@@ -66,7 +66,11 @@
   // The browser-tool wire: while the panel is open this holds the socket the
   // agent drives this browser through. It lives here rather than in the service
   // worker because only the panel stays alive.
-  const tools = new ToolChannel(activeTabPage);
+  const tools = new ToolChannel(activeTabPage, (status) => {
+    if (status === 'unreachable') {
+      notices.push('Could not connect the browsing tools — try signing out and back in.');
+    }
+  });
 
   type MatchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'empty';
   let matchStatus = $state<MatchStatus>('idle');
